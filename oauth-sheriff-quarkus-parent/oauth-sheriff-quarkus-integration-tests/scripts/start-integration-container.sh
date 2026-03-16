@@ -96,7 +96,7 @@ done
 if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
     echo "⏳ Waiting for Dex to be ready..."
     for i in {1..30}; do
-        if curl -k -s https://localhost:2556/dex/.well-known/openid-configuration > /dev/null 2>&1; then
+        if curl -k -s https://localhost:2556/dex/.well-known/openid-configuration > /dev/null; then
             echo "✅ Dex is ready!"
             break
         fi
