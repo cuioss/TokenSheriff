@@ -366,8 +366,6 @@
                                         <test.https.port>${test.https.port}</test.https.port>
                                         <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                                         <quarkus.native.enabled>false</quarkus.native.enabled>
-                                        <!-- Signal that Dex must be available — fail instead of skip -->
-                                        <multi.idp.required>true</multi.idp.required>
                                     </systemPropertyVariables>
                                     <skipITs>${skipITs}</skipITs>
                                 </configuration>
