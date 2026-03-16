@@ -126,6 +126,36 @@ class JwtValidationEndpointDexIT extends BaseIntegrationTest {
     }
 
     @Test
+    @Order(5)
+    @DisplayName("Validate Dex refresh token via request body (requires offline_access scope)")
+    void validateDexRefreshToken() {
+        // Dex issues refresh tokens when offline_access scope is requested
+        TestRealm.TokenResponse tokenResponse = dexProvider.obtainValidTokenWithScopes("openid profile email offline_access");
+        assertNotNull(tokenResponse.refreshToken(), "Dex should issue refresh token with offline_access scope");
+
+        given()
+                .contentType(CONTENT_TYPE_JSON)
+                .body(Map.of(TOKEN_FIELD_NAME, tokenResponse.refreshToken()))
+                .when()
+                .post("/jwt/validate/refresh-token")
+                .then()
+                .statusCode(200)
+                .body("valid", equalTo(true))
+                .body("message", equalTo("Refresh token is valid"));
+    }
+
+    @Test
+    @Order(6)
+    @DisplayName("Verify JWKS resolution from Dex well-known endpoint")
+    void verifyDexJwksResolution() {
+        // Verify the full OIDC discovery chain works: well-known -> jwks_uri -> keys
+        assertTrue(dexProvider.isWellKnownEndpointHealthy(),
+                "Dex well-known endpoint should return valid OIDC configuration");
+        assertTrue(dexProvider.isJwksEndpointHealthy(),
+                "Dex JWKS endpoint (discovered via well-known) should return signing keys");
+    }
+
+    @Test
     @Order(10)
     @DisplayName("Reject invalid token claiming Dex issuer")
     void rejectInvalidDexToken() {

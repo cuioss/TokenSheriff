@@ -239,10 +239,13 @@ public class TestRealm {
         String idToken = (String) tokenData.get("id_token");
         String refreshToken = (String) tokenData.get("refresh_token");
 
-        // Validate tokens
+        // Validate tokens (refresh token may be null for providers that don't issue it
+        // without offline_access scope, e.g., Dex)
         validateToken(accessToken, "Access token");
         validateToken(idToken, "ID token");
-        validateToken(refreshToken, "Refresh token");
+        if (refreshToken != null) {
+            validateToken(refreshToken, "Refresh token");
+        }
 
         return new TokenResponse(accessToken, idToken, refreshToken);
     }
