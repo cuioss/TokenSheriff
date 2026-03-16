@@ -32,7 +32,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>
  * Adds Dex-specific tests for JWKS resolution and refresh tokens with offline_access scope.
  * <p>
- * Tests are skipped when Dex is not running (requires {@code COMPOSE_PROFILES=multi-idp}).
+ * Behavior depends on the active Maven profile:
+ * <ul>
+ *   <li>{@code -Pmulti-idp-tests}: Dex is required — tests <b>fail</b> if Dex is unreachable</li>
+ *   <li>{@code -Pintegration-tests}: Dex is optional — tests are <b>skipped</b> if Dex is not running</li>
+ * </ul>
  * <p>
  * Dex does not support Keycloak-specific features like roles, groups, or custom scopes,
  * so bearer token producer/interceptor tests in {@link AbstractJwtValidationEndpointTest}
@@ -40,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @DisplayName("JWT Validation Endpoint Tests - Dex Provider")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@EnabledIf("isDexAvailable")
+@EnabledIf("isDexExpectedOrAvailable")
 class JwtValidationEndpointDexIT extends AbstractCoreJwtValidationTest {
 
     @Override
@@ -48,7 +52,18 @@ class JwtValidationEndpointDexIT extends AbstractCoreJwtValidationTest {
         return TestRealm.createDexProvider();
     }
 
-    static boolean isDexAvailable() {
+    /**
+     * Determines whether Dex tests should run.
+     * <ul>
+     *   <li>When {@code multi.idp.required=true} (set by multi-idp-tests profile):
+     *       always returns {@code true} so tests run and fail loudly if Dex is unreachable</li>
+     *   <li>Otherwise: returns {@code true} only if Dex is actually reachable (graceful skip)</li>
+     * </ul>
+     */
+    static boolean isDexExpectedOrAvailable() {
+        if (Boolean.getBoolean("multi.idp.required")) {
+            return true; // Dex must be running — let tests fail if it's not
+        }
         try {
             return TestRealm.createDexProvider().isProviderAvailable();
         } catch (Exception e) {
