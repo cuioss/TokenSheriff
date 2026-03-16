@@ -449,15 +449,28 @@ _See specification: xref:architecture.adoc[Architecture]_
 [#OAUTH-SHERIFF-12.3]
 ==== OAUTH-SHERIFF-12.3: Integration Testing
 
-Integration tests must verify compatibility with Keycloak as the identity provider:
+Integration tests must verify compatibility with multiple OIDC identity providers:
+
+===== Keycloak (Primary)
 
 * Parse access tokens from Keycloak
 * Parse ID tokens from Keycloak
 * Parse refresh tokens from Keycloak
 * Validate tokens against Keycloak JWKS endpoint
 * Handle token expiration and validation
+* Bearer token validation with scopes, roles, and groups
+* DPoP sender-constrained token validation (RFC 9449)
+* JWE token decryption (RFC 7516)
 
-_See specification: xref:architecture.adoc[Architecture]_
+===== Multi-IDP Compatibility
+
+* Validate access tokens from alternative OIDC providers (Dex, Zitadel, etc.)
+* Validate ID tokens from alternative OIDC providers
+* Verify JWKS resolution via well-known discovery from multiple providers
+* Ensure issuer selection correctly routes tokens to the matching provider configuration
+* Tests for non-primary providers use conditional execution (skip when provider unavailable)
+
+_See specifications: xref:architecture.adoc[Architecture] and xref:specification/multi-idp-testing.adoc[Multi-IDP Testing]_
 
 
 [#OAUTH-SHERIFF-12.4]

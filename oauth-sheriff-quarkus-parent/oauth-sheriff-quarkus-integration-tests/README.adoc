@@ -21,6 +21,7 @@ Integration tests for the OAuth Sheriff Quarkus extension with native container 
 * Native container testing with production-like behavior
 * HTTPS with self-signed certificates
 * Keycloak integration with two test realms
+* Multi-IDP testing with Dex (via Docker Compose profile)
 * Health check and metrics validation
 * Automated build and test scripts
 
@@ -34,8 +35,11 @@ Integration tests for the OAuth Sheriff Quarkus extension with native container 
 
 [source,bash]
 ----
-# Native integration tests (requires Docker)
+# Native integration tests - Keycloak only (requires Docker)
 ./mvnw clean verify -Pintegration-tests -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
+
+# Multi-IDP integration tests - Keycloak + Dex (requires Docker)
+./mvnw clean verify -Pmulti-idp-tests -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
 
 # JVM unit tests only (no Docker required)
 ./mvnw clean test -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests
@@ -102,6 +106,32 @@ ls -la oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/targ
 |Production Ready |✅ |⚠️ (Local Development Only)
 |CI/CD Support |✅ |❌ (Disabled in GitHub Actions)
 |===
+
+== Multi-IDP Testing
+
+The integration tests support multiple OIDC providers to verify broad compatibility. Additional providers are managed via Docker Compose profiles.
+
+=== Dex (Phase 1)
+
+https://dexidp.io/[Dex] is a lightweight, OpenID Certified OIDC provider (~30MB, 2s startup) used for multi-IDP testing.
+
+* **Port**: `2556` (external HTTPS)
+* **Issuer**: `https://dex:5556/dex`
+* **Client**: `dex-client` / `dex-secret`
+* **User**: `dex-user@example.com` / `dex-password`
+
+[source,bash]
+----
+# Start with Dex
+COMPOSE_PROFILES=multi-idp docker compose up -d
+
+# Verify Dex
+curl -k https://localhost:2556/dex/.well-known/openid-configuration
+----
+
+Tests in `JwtValidationEndpointDexIT` are automatically skipped when Dex is not running.
+
+See link:../../doc/specification/multi-idp-testing.adoc[Multi-IDP Testing Specification] for the full architecture and provider roadmap.
 
 == Native Compilation
 
@@ -182,7 +212,8 @@ This ensures reliable cleanup of native executables and build artifacts without 
 * **JwtValidationEndpointBenchmarkIT**: Benchmark realm validation
 * **JwtValidationEndpointIntegrationIT**: Integration realm validation
 * **JwtValidationEndpointTokenRequestIT**: Token request testing
-* **TestRealm**: Test realm configuration helper
+* **JwtValidationEndpointDexIT**: Dex provider validation (multi-IDP, skipped when Dex not running)
+* **TestRealm**: Test realm configuration helper (supports Keycloak and Dex)
 
 === Test Inheritance Structure
 
@@ -267,7 +298,7 @@ Self-signed certificates via `generate-certificates.sh`:
 
 * Truststore: `localhost-truststore.p12` (password: `localhost-trust`)
 * Subject: `CN=localhost`
-* SAN: `dns:localhost,dns:keycloak,ip:127.0.0.1,ip:0.0.0.0`
+* SAN: `dns:localhost,dns:keycloak,dns:dex,ip:127.0.0.1,ip:0.0.0.0`
 
 === Key Properties
 
