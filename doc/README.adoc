@@ -17,6 +17,7 @@ This is the central navigation for OAuthSheriff documentation.
 == Specifications
 
 * xref:specification/token-decryption.adoc[Token Decryption] - Future JWE support
+* xref:specification/multi-idp-testing.adoc[Multi-IDP Testing] - Testing with multiple OIDC providers
 
 == Module Documentation
 

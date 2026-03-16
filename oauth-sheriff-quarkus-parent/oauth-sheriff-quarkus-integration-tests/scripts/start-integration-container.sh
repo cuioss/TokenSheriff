@@ -59,7 +59,14 @@ fi
 export LOG_TARGET_DIR="${PROJECT_DIR}/target"
 
 # Start with Docker Compose (includes Keycloak)
-echo "🐳 Starting Docker containers (Quarkus $MODE + Keycloak)..."
+# Support multi-IDP profiles via COMPOSE_PROFILES environment variable
+PROFILE_INFO=""
+if [[ -n "$COMPOSE_PROFILES" ]]; then
+    export COMPOSE_PROFILES
+    PROFILE_INFO=" [profiles: $COMPOSE_PROFILES]"
+fi
+
+echo "🐳 Starting Docker containers (Quarkus $MODE + Keycloak${PROFILE_INFO})..."
 echo "📁 Quarkus logs will be written to: ${LOG_TARGET_DIR}/quarkus.log"
 if [[ -n "$COMPOSE_OVERRIDE" ]]; then
     mkdir -p "${PROJECT_DIR}/target/jfr-output"
@@ -84,6 +91,24 @@ for i in {1..60}; do
     echo "⏳ Waiting for Keycloak... (attempt $i/60)"
     sleep 1
 done
+
+# Wait for Dex to be ready (only when multi-idp profile is active)
+if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
+    echo "⏳ Waiting for Dex to be ready..."
+    for i in {1..30}; do
+        if curl -k -s https://localhost:2556/dex/.well-known/openid-configuration > /dev/null 2>&1; then
+            echo "✅ Dex is ready!"
+            break
+        fi
+        if [ $i -eq 30 ]; then
+            echo "❌ Dex failed to start within 30 seconds"
+            echo "Check logs with: docker compose logs dex"
+            exit 1
+        fi
+        echo "⏳ Waiting for Dex... (attempt $i/30)"
+        sleep 1
+    done
+fi
 
 # Wait for Quarkus service to be ready and measure startup time
 echo "⏳ Waiting for Quarkus service to be ready..."
@@ -124,6 +149,9 @@ echo "📱 Application URLs:"
 echo "  🔍 Health Check:   https://localhost:10443/q/health"
 echo "  📊 Metrics:        https://localhost:10443/q/metrics"
 echo "  🔑 Keycloak:       https://localhost:1443/auth"
+if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
+echo "  🔑 Dex:            https://localhost:2556/dex/.well-known/openid-configuration"
+fi
 echo ""
 echo "🧪 Quick test commands:"
 echo "  curl -k https://localhost:10443/q/health/live"

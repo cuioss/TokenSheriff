@@ -1,0 +1,194 @@
+= Multi-IDP Integration Testing
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+:toc-title: Table of Contents
+
+== Overview
+
+OAuthSheriff validates JWT tokens from any standards-compliant OIDC provider. To verify this claim beyond a single provider, multi-IDP integration testing exercises the validation pipeline against multiple identity providers running simultaneously.
+
+This specification covers the architecture, provider selection, and usage of the multi-IDP testing infrastructure.
+
+== Architecture
+
+The multi-IDP testing approach extends the existing Docker Compose infrastructure with additional OIDC providers behind a Docker Compose **profile**, keeping the default Keycloak-only workflow unchanged.
+
+[source]
+----
+┌─────────────────────────────────────────────────────────┐
+│ Docker Compose Network: jwt-integration                  │
+│                                                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐   │
+│  │ Keycloak │  │   Dex    │  │ OAuthSheriff          │   │
+│  │ :8443    │  │  :5556   │  │ Integration Tests     │   │
+│  │ (always) │  │ (profile)│  │ :8443                 │   │
+│  └──────────┘  └──────────┘  └──────────────────────┘   │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+----
+
+=== Design Principles
+
+1. **Profile isolation** — Additional providers only start when explicitly requested via `COMPOSE_PROFILES=multi-idp`
+2. **Graceful degradation** — Dex tests use `@EnabledIf` to skip when Dex is not running
+3. **Shared certificates** — All providers use the same TLS certificate (SAN includes all hostnames)
+4. **Consistent patterns** — `TestRealm` is generalized to support any OIDC provider with ROPC grant
+
+== Provider Inventory
+
+|===
+|Provider |Status |Image Size |Startup Time |Dependencies |Notes
+
+|**Keycloak**
+|Active (default)
+|~350MB
+|~30s
+|None
+|Full-featured, Keycloak-specific tests (roles, groups, DPoP, JWE)
+
+|**Dex**
+|Active (Phase 1)
+|~30MB
+|~2s
+|None (memory storage)
+|Lightweight, OpenID Certified, ROPC via `passwordConnector`
+
+|Zitadel
+|Planned (Phase 2)
+|~100MB
+|~10s
+|Embedded CockroachDB
+|Full-featured OIDC/SAML, good for complex flows
+
+|FusionAuth
+|Deferred
+|~400MB
+|~15s
+|PostgreSQL
+|Proprietary license concerns
+
+|Ory Hydra
+|Deferred
+|~20MB
+|~5s
+|External login UI
+|Requires separate login/consent app
+
+|Authentik
+|Deferred
+|~500MB
+|~30s
+|PostgreSQL + Redis
+|Heaviest setup, most realistic for enterprise
+|===
+
+== Usage
+
+=== Keycloak-Only (Default)
+
+No change to existing workflow:
+
+[source,bash]
+----
+./mvnw clean verify -Pintegration-tests \
+    -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
+----
+
+Dex tests are automatically skipped.
+
+=== Multi-IDP (Keycloak + Dex)
+
+[source,bash]
+----
+./mvnw clean verify -Pmulti-idp-tests \
+    -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
+----
+
+This starts Keycloak and Dex, runs all tests including Dex-specific ones.
+
+=== Manual Testing
+
+[source,bash]
+----
+# Start all providers
+COMPOSE_PROFILES=multi-idp docker compose up -d
+
+# Verify Dex
+curl -k https://localhost:2556/dex/.well-known/openid-configuration
+
+# Acquire Dex token via ROPC
+curl -k -X POST https://localhost:2556/dex/token \
+    -d "grant_type=password&client_id=dex-client&client_secret=dex-secret&username=dex-user@example.com&password=dex-password&scope=openid+profile+email"
+----
+
+== Adding a New Provider
+
+Checklist for adding a new OIDC provider:
+
+1. **Docker Compose** — Add service to `docker-compose.yml` under the `multi-idp` profile
+2. **Certificate SAN** — Add `dns:<hostname>` to `generate-certificates.sh` SAN list and regenerate
+3. **Application Properties** — Add issuer configuration under `sheriff.oauth.issuers.<name>.*`
+4. **TestRealm Factory** — Add `createXxxProvider()` factory method with provider-specific URLs
+5. **Integration Test** — Create `JwtValidationEndpoint<Name>IT.java` with `@EnabledIf` condition
+6. **Startup Script** — Add health wait loop for the new provider in `start-integration-container.sh`
+7. **Documentation** — Update this specification and the integration tests README
+
+== Test Scope by Provider
+
+|===
+|Test |Keycloak |Dex |Rationale
+
+|Access token validation
+|Yes
+|Yes
+|Core functionality
+
+|ID token validation
+|Yes
+|Yes
+|Core functionality
+
+|Refresh token validation
+|Yes
+|No
+|Dex refresh token format may differ
+
+|Bearer token producers
+|Yes
+|No
+|Requires Keycloak roles/scopes/groups
+
+|Bearer token interceptors
+|Yes
+|No
+|Requires Keycloak roles/scopes/groups
+
+|DPoP (RFC 9449)
+|Yes
+|No
+|Dex does not support DPoP
+
+|JWE decryption (RFC 7516)
+|Yes
+|No
+|Dex does not support JWE
+
+|Health checks
+|Yes
+|N/A
+|Application-level, provider-independent
+
+|Metrics
+|Yes
+|N/A
+|Application-level, provider-independent
+|===
+
+== References
+
+* xref:../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/README.adoc[Integration Tests README]
+* xref:../Requirements.adoc#OAUTH-SHERIFF-12.3[OAUTH-SHERIFF-12.3: Integration Testing]
+* https://dexidp.io/docs/[Dex Documentation]
+* https://openid.net/certification/[OpenID Certification]

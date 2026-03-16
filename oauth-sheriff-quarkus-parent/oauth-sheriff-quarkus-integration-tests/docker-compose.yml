@@ -126,6 +126,32 @@ services:
     # Production restart policy
     restart: unless-stopped
 
+  # Dex OIDC Provider for Multi-IDP Integration Testing
+  # Lightweight, OpenID Certified provider (~30MB, 2s startup)
+  # Only starts with: COMPOSE_PROFILES=multi-idp docker compose up -d
+  dex:
+    image: dexidp/dex:v2.42.0
+    command:
+      - dex
+      - serve
+      - /etc/dex/config.yaml
+    ports:
+      - "2556:5556"  # External HTTPS port for Dex
+    volumes:
+      - ./src/main/docker/dex:/etc/dex:ro
+      - ./src/main/docker/certificates:/etc/dex/certificates:ro
+    networks:
+      - jwt-integration
+    profiles:
+      - multi-idp
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate --quiet --tries=1 --spider https://localhost:5556/dex/.well-known/openid-configuration || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
   # WRK HTTP benchmarking tool - used by integration benchmarks
   # Usage: docker compose run --rm wrk -t5 -c50 -d30s --latency https://oauth-sheriff-integration-tests:8443/q/health/live
   wrk:

@@ -23,8 +23,9 @@ import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Helper class for managing test realms in Keycloak integration tests.
- * Provides common functionality for token management and endpoint health checks.
+ * Helper class for managing test realms in integration tests.
+ * Supports multiple OIDC providers (Keycloak, Dex) with configurable base URLs
+ * and token endpoint paths.
  */
 public class TestRealm {
 
@@ -34,6 +35,11 @@ public class TestRealm {
     private static final String TOKEN_ENDPOINT_TEMPLATE = "/realms/%s/protocol/openid-connect/token";
     private static final String CERTS_ENDPOINT_TEMPLATE = "/realms/%s/protocol/openid-connect/certs";
     private static final String WELL_KNOWN_ENDPOINT_TEMPLATE = "/realms/%s/.well-known/openid-configuration";
+
+    // Dex provider constants
+    private static final String DEX_BASE_URL = "https://localhost:2556";
+    private static final String DEX_WELL_KNOWN_PATH = "/dex/.well-known/openid-configuration";
+    private static final String DEX_TOKEN_PATH = "/dex/token";
 
     // Integration realm constants
     private static final String INTEGRATION_REALM_ID = "integration";
@@ -62,9 +68,12 @@ public class TestRealm {
     private final String clientSecret;
     private final String username;
     private final String password;
+    private final String baseUrl;
+    private final String tokenEndpoint;
+    private final String providerName;
 
     /**
-     * Creates a new TestRealm instance.
+     * Creates a new TestRealm instance for Keycloak (backward compatible).
      *
      * @param realmIdentifier the realm identifier (e.g., "integration", "benchmark")
      * @param clientId the client ID for authentication
@@ -73,11 +82,41 @@ public class TestRealm {
      * @param password the password for authentication
      */
     public TestRealm(String realmIdentifier, String clientId, String clientSecret, String username, String password) {
+        this(realmIdentifier, clientId, clientSecret, username, password,
+                KEYCLOAK_BASE_URL, TOKEN_ENDPOINT_TEMPLATE.formatted(realmIdentifier), "Keycloak");
+    }
+
+    /**
+     * Creates a new TestRealm instance with custom provider configuration.
+     *
+     * @param realmIdentifier the realm/provider identifier for display purposes
+     * @param clientId the client ID for authentication
+     * @param clientSecret the client secret for authentication
+     * @param username the username for authentication
+     * @param password the password for authentication
+     * @param baseUrl the provider base URL (e.g., "https://localhost:2556")
+     * @param tokenEndpoint the token endpoint path (e.g., "/dex/token")
+     * @param providerName the provider name for display in test output
+     */
+    public TestRealm(String realmIdentifier, String clientId, String clientSecret, String username, String password,
+                     String baseUrl, String tokenEndpoint, String providerName) {
         this.realmIdentifier = realmIdentifier;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.username = username;
         this.password = password;
+        this.baseUrl = baseUrl;
+        this.tokenEndpoint = tokenEndpoint;
+        this.providerName = providerName;
+    }
+
+    /**
+     * Returns the provider name for display in test output.
+     *
+     * @return the provider name (e.g., "Keycloak", "Dex")
+     */
+    public String getProviderName() {
+        return providerName;
     }
 
     /**
@@ -143,6 +182,25 @@ public class TestRealm {
     }
 
     /**
+     * Factory method to create a TestRealm instance for Dex OIDC provider testing.
+     * Dex is a lightweight, OpenID Certified provider used for multi-IDP validation.
+     *
+     * @return TestRealm configured for Dex provider
+     */
+    public static TestRealm createDexProvider() {
+        return new TestRealm(
+                "dex",
+                "dex-client",
+                "dex-secret",
+                "dex-user@example.com",
+                "dex-password",
+                DEX_BASE_URL,
+                DEX_TOKEN_PATH,
+                "Dex"
+        );
+    }
+
+    /**
      * Obtains a valid token from the realm.
      * Similar to JwtValidationIntegrationIT#obtainValidTokenFromIntegrationRealm
      *
@@ -161,7 +219,7 @@ public class TestRealm {
      */
     public TokenResponse obtainValidTokenWithScopes(String scopes) {
         Response tokenResponse = given()
-                .baseUri(KEYCLOAK_BASE_URL)
+                .baseUri(baseUrl)
                 .contentType("application/x-www-form-urlencoded")
                 .formParam("client_id", clientId)
                 .formParam("client_secret", clientSecret)
@@ -170,10 +228,10 @@ public class TestRealm {
                 .formParam("grant_type", "password")
                 .formParam("scope", scopes)
                 .when()
-                .post(TOKEN_ENDPOINT_TEMPLATE.formatted(realmIdentifier));
+                .post(tokenEndpoint);
 
         assertEquals(200, tokenResponse.statusCode(),
-                "Should be able to obtain tokens from " + realmIdentifier + " realm with scopes: " + scopes + ". Response: " + tokenResponse.body().asString());
+                "Should be able to obtain tokens from " + providerName + "/" + realmIdentifier + " with scopes: " + scopes + ". Response: " + tokenResponse.body().asString());
 
         Map<String, Object> tokenData = tokenResponse.jsonPath().getMap("");
 
@@ -207,11 +265,11 @@ public class TestRealm {
      * @return TokenResponse containing DPoP-bound access, ID, and refresh tokens
      */
     public TokenResponse obtainDpopBoundToken(DpopProofHelper dpopHelper) {
-        String tokenUrl = KEYCLOAK_BASE_URL + TOKEN_ENDPOINT_TEMPLATE.formatted(realmIdentifier);
+        String tokenUrl = baseUrl + tokenEndpoint;
         String dpopProof = dpopHelper.createTokenEndpointProof(tokenUrl);
 
         Response tokenResponse = given()
-                .baseUri(KEYCLOAK_BASE_URL)
+                .baseUri(baseUrl)
                 .contentType("application/x-www-form-urlencoded")
                 .header("DPoP", dpopProof)
                 .formParam("client_id", clientId)
@@ -221,11 +279,11 @@ public class TestRealm {
                 .formParam("grant_type", "password")
                 .formParam("scope", "openid profile email")
                 .when()
-                .post(TOKEN_ENDPOINT_TEMPLATE.formatted(realmIdentifier));
+                .post(tokenEndpoint);
 
         assertEquals(200, tokenResponse.statusCode(),
-                "Should be able to obtain DPoP-bound tokens from " + realmIdentifier
-                        + " realm. Response: " + tokenResponse.body().asString());
+                "Should be able to obtain DPoP-bound tokens from " + providerName + "/" + realmIdentifier
+                        + ". Response: " + tokenResponse.body().asString());
 
         Map<String, Object> tokenData = tokenResponse.jsonPath().getMap("");
 
@@ -242,46 +300,97 @@ public class TestRealm {
 
     /**
      * Checks if the well-known endpoint is healthy/available.
+     * For Keycloak, uses the realm-specific well-known URL.
+     * For other providers (e.g., Dex), uses the provider-specific well-known path.
      *
      * @return true if the endpoint is healthy, false otherwise
      */
     public boolean isWellKnownEndpointHealthy() {
-        Response response = given()
-                .baseUri(KEYCLOAK_BASE_URL)
-                .when()
-                .get(WELL_KNOWN_ENDPOINT_TEMPLATE.formatted(realmIdentifier));
+        String wellKnownPath = "Keycloak".equals(providerName)
+                ? WELL_KNOWN_ENDPOINT_TEMPLATE.formatted(realmIdentifier)
+                : DEX_WELL_KNOWN_PATH;
 
-        return response.statusCode() == 200 &&
-                response.body().asString().contains("\"issuer\"") &&
-                response.body().asString().contains("\"jwks_uri\"");
+        try {
+            Response response = given()
+                    .baseUri(baseUrl)
+                    .when()
+                    .get(wellKnownPath);
+
+            return response.statusCode() == 200 &&
+                    response.body().asString().contains("\"issuer\"") &&
+                    response.body().asString().contains("\"jwks_uri\"");
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
      * Checks if the JWKS endpoint is accessible.
+     * For Keycloak, uses the realm-specific certs URL.
+     * For other providers (e.g., Dex), discovers the JWKS URI from the well-known endpoint.
      *
      * @return true if the JWKS endpoint is accessible, false otherwise
      */
     public boolean isJwksEndpointHealthy() {
-        Response response = given()
-                .baseUri(KEYCLOAK_BASE_URL)
-                .when()
-                .get(CERTS_ENDPOINT_TEMPLATE.formatted(realmIdentifier));
+        try {
+            if ("Keycloak".equals(providerName)) {
+                Response response = given()
+                        .baseUri(baseUrl)
+                        .when()
+                        .get(CERTS_ENDPOINT_TEMPLATE.formatted(realmIdentifier));
 
-        return response.statusCode() == 200 && response.body().asString().contains("\"keys\"");
+                return response.statusCode() == 200 && response.body().asString().contains("\"keys\"");
+            }
+            // For non-Keycloak providers, discover JWKS URI from well-known endpoint
+            Response wellKnownResponse = given()
+                    .baseUri(baseUrl)
+                    .when()
+                    .get(DEX_WELL_KNOWN_PATH);
+
+            if (wellKnownResponse.statusCode() != 200) {
+                return false;
+            }
+            String jwksUri = wellKnownResponse.jsonPath().getString("jwks_uri");
+            if (jwksUri == null) {
+                return false;
+            }
+            Response jwksResponse = given().when().get(jwksUri);
+            return jwksResponse.statusCode() == 200 && jwksResponse.body().asString().contains("\"keys\"");
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
-     * Checks if Keycloak management endpoint is healthy.
+     * Checks if the provider is healthy and accessible.
+     * For Keycloak, checks the management endpoint.
+     * For other providers, checks the well-known endpoint.
      *
-     * @return true if Keycloak is healthy, false otherwise
+     * @return true if the provider is healthy, false otherwise
      */
     public boolean isKeycloakHealthy() {
-        Response response = given()
-                .baseUri(KEYCLOAK_MANAGEMENT_URL)
-                .when()
-                .get("/health/ready");
+        if ("Keycloak".equals(providerName)) {
+            try {
+                Response response = given()
+                        .baseUri(KEYCLOAK_MANAGEMENT_URL)
+                        .when()
+                        .get("/health/ready");
+                return response.statusCode() == 200;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        // For non-Keycloak providers, use well-known endpoint as health check
+        return isWellKnownEndpointHealthy();
+    }
 
-        return response.statusCode() == 200;
+    /**
+     * Checks if this provider is reachable. Used for conditional test execution.
+     *
+     * @return true if the provider is reachable, false otherwise
+     */
+    public boolean isProviderAvailable() {
+        return isWellKnownEndpointHealthy();
     }
 
     private void validateToken(String token, String tokenType) {
