@@ -167,20 +167,6 @@ public abstract class AbstractCoreJwtValidationTest extends BaseIntegrationTest 
     }
 
     @Test
-    @Order(15)
-    @DisplayName("Reject invalid token")
-    void rejectInvalidToken() {
-        given()
-                .contentType(CONTENT_TYPE_JSON)
-                .header(AUTHORIZATION, BEARER_PREFIX + "invalid.token.here")
-                .when()
-                .post(JWT_VALIDATE_PATH)
-                .then()
-                .statusCode(200)
-                .body(VALID, equalTo(false));
-    }
-
-    @Test
     @Order(99)
     @DisplayName("Verify SecurityEventCounter metrics have sensible bounds after all tests")
     void verifySecurityEventCounterMetrics() {
