@@ -17,9 +17,9 @@ COPY --chmod=0755 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration
 # Copy certificates and health check script
 COPY --chmod=0755 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/health-check.sh /app/health-check.sh
 COPY --chmod=0644 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/certificates/localhost.crt /app/certificates/localhost.crt
-COPY --chmod=0600 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/certificates/localhost.key /app/certificates/localhost.key
+COPY --chown=1001:1001 --chmod=0600 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/certificates/localhost.key /app/certificates/localhost.key
 COPY --chmod=0644 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/certificates/localhost-truststore.p12 /app/certificates/localhost-truststore.p12
-COPY --chmod=0600 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/certificates/jwe-test-decryption-key.pem /app/certificates/jwe-test-decryption-key.pem
+COPY --chown=1001:1001 --chmod=0600 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/certificates/jwe-test-decryption-key.pem /app/certificates/jwe-test-decryption-key.pem
 
 # Create JFR output directory with proper permissions
 RUN mkdir -p /tmp/jfr-output && chmod 777 /tmp/jfr-output

@@ -17,9 +17,9 @@ COPY --chmod=0755 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration
 
 # Copy certificates
 COPY --chmod=0644 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/certificates/localhost.crt /app/certificates/localhost.crt
-COPY --chmod=0600 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/certificates/localhost.key /app/certificates/localhost.key
+COPY --chown=nonroot:nonroot --chmod=0600 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/certificates/localhost.key /app/certificates/localhost.key
 COPY --chmod=0644 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/certificates/localhost-truststore.p12 /app/certificates/localhost-truststore.p12
-COPY --chmod=0600 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/certificates/jwe-test-decryption-key.pem /app/certificates/jwe-test-decryption-key.pem
+COPY --chown=nonroot:nonroot --chmod=0600 oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/src/main/docker/certificates/jwe-test-decryption-key.pem /app/certificates/jwe-test-decryption-key.pem
 
 EXPOSE 8443
 USER nonroot
