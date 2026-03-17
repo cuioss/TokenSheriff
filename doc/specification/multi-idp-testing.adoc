@@ -53,7 +53,7 @@ The multi-IDP testing approach extends the existing Docker Compose infrastructur
 |~30MB
 |~2s
 |None (memory storage)
-|Lightweight, OpenID Certified, ROPC via `passwordConnector`
+|Lightweight, OpenID Certified, ROPC via `passwordConnector`. Federation broker with fixed claim model — supports groups but not roles or custom scopes (see <<dex-limitations>>).
 
 |Zitadel
 |Planned (Phase 2)
@@ -118,9 +118,9 @@ COMPOSE_PROFILES=multi-idp docker compose up -d
 # Verify Dex
 curl -k https://localhost:2556/dex/.well-known/openid-configuration
 
-# Acquire Dex token via ROPC
+# Acquire Dex token via ROPC (include groups scope for group claims)
 curl -k -X POST https://localhost:2556/dex/token \
-    -d "grant_type=password&client_id=dex-client&client_secret=dex-secret&username=dex-user@example.com&password=dex-password&scope=openid+profile+email"
+    -d "grant_type=password&client_id=dex-client&client_secret=dex-secret&username=dex-user@example.com&password=dex-password&scope=openid+profile+email+groups"
 ----
 
 == Adding a New Provider
@@ -143,8 +143,8 @@ Checklist for adding a new OIDC provider:
 
 |Access token validation
 |Yes
-|No (opaque tokens)
-|Dex access tokens are not JWTs
+|Yes
+|Dex access tokens are valid RS256-signed JWTs. The `scope` claim is absent, which is compliant per RFC 9068 Section 2.2 (scope is OPTIONAL).
 
 |ID token validation
 |Yes
@@ -159,12 +159,12 @@ Checklist for adding a new OIDC provider:
 |Bearer token producers
 |Yes
 |No
-|Requires Keycloak roles/scopes/groups
+|Requires roles and custom scopes — see <<dex-limitations>>
 
 |Bearer token interceptors
 |Yes
 |No
-|Requires Keycloak roles/scopes/groups
+|Requires roles and custom scopes — see <<dex-limitations>>
 
 |DPoP (RFC 9449)
 |Yes
@@ -186,6 +186,35 @@ Checklist for adding a new OIDC provider:
 |N/A
 |Application-level, provider-independent
 |===
+
+[[dex-limitations]]
+== Dex Capability Limitations
+
+Dex is an OIDC **federation broker**, not a full identity provider. Its local connector (`staticPasswords`) is a bootstrapping convenience with a fixed claim model. This creates hard limitations that are **not configurable** — they are coded into Dex's Go source.
+
+=== What Dex supports
+
+* **Groups** — The `Password` struct has a `Groups` field. Groups are included in tokens when the `groups` scope is requested. The static test user is configured with `test-group`.
+* **Standard OIDC scopes** — `openid`, `email`, `groups`, `profile`, `offline_access`
+
+=== What Dex cannot support
+
+* **Custom scopes** (e.g. `read`) — Dex hardcodes accepted scopes in a Go switch statement. Unknown scopes are rejected with HTTP 400 (`Unrecognized scope(s)`). There is no configuration to add custom scopes.
+* **Roles claim** — The `idTokenClaims` struct has no `Roles` field. The local connector's `Password` struct has `Groups` but no mechanism for arbitrary custom claims. Even with an upstream OIDC connector, Dex normalizes claims into its fixed model — upstream `roles` claims are dropped.
+* **Scope claim in tokens** — Dex does not include a `scope` claim in its JWTs. This is valid per RFC 9068 but means scope-based bearer auth tests cannot run against Dex.
+
+=== Implications for bearer auth tests
+
+The `bearerAuthProviders()` method source requires `ROLES + GROUPS + CUSTOM_SCOPES`. Dex has `GROUPS` but cannot provide `ROLES` or `CUSTOM_SCOPES`. A second full-featured IDP (e.g. Zitadel) would be needed to exercise bearer auth across multiple providers.
+
+=== Dex's value in the test suite
+
+Despite these limitations, Dex proves that OAuthSheriff correctly handles:
+
+* A **different OIDC-certified issuer** with different token structure
+* **Missing optional claims** (no `scope` claim — RFC 9068 compliance)
+* **Groups** from a non-Keycloak provider
+* **Multiple simultaneous issuers** in the validation pipeline
 
 == References
 
