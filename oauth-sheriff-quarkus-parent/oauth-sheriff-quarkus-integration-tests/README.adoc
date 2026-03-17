@@ -129,7 +129,7 @@ COMPOSE_PROFILES=multi-idp docker compose up -d
 curl -k https://localhost:2556/dex/.well-known/openid-configuration
 ----
 
-Tests in `JwtValidationEndpointDexIT` are automatically skipped when Dex is not running.
+Tests are parameterized via `TestProviders` — Dex is automatically included in the provider list when `-Ddex.enabled=true` is set by the multi-idp-tests Maven profile. Providers missing required capabilities are skipped with an INFO log.
 
 See link:../../doc/specification/multi-idp-testing.adoc[Multi-IDP Testing Specification] for the full architecture and provider roadmap.
 
@@ -175,10 +175,14 @@ oauth-sheriff-quarkus-integration-tests/
 │           ├── benchmark-realm.json
 │           └── integration-realm.json
 ├── src/test/java/de/cuioss/sheriff/oauth/integration/
-│   ├── HealthCheckIntegrationIT.java
-│   ├── JwtValidationEndpoint*IT.java
-│   ├── AbstractJwtValidationEndpointTest.java
-│   └── BaseIntegrationTest.java
+│   ├── BaseIntegrationTest.java
+│   ├── TestRealm.java
+│   ├── TestProviders.java
+│   ├── token/TokenValidationSpecIT.java
+│   ├── bearer/BearerAuthSpecIT.java
+│   ├── security/{DpopSpecIT,JweDecryptionSpecIT,DpopProofHelper}.java
+│   ├── health/{HealthCheckIntegrationIT,HealthCheckResponsivenessIT}.java
+│   └── api/{ApiValidationSpecIT,TokenRequestSpecIT}.java
 └── scripts/
     ├── start-integration-container.sh
     ├── stop-integration-container.sh
@@ -204,25 +208,23 @@ The module integrates Docker cleanup with Maven's clean phase to prevent file lo
 
 This ensures reliable cleanup of native executables and build artifacts without "file in use" errors.
 
-== Test Classes
+== Test Specs
 
-* **HealthCheckIntegrationIT**: Health endpoint validation
-* **HealthCheckResponsivenessIT**: Health endpoint responsiveness testing
-* **JwtValidationEndpointApiValidationIT**: API validation testing
-* **JwtValidationEndpointBenchmarkIT**: Benchmark realm validation
-* **JwtValidationEndpointIntegrationIT**: Integration realm validation
-* **JwtValidationEndpointTokenRequestIT**: Token request testing
-* **JwtValidationEndpointDexIT**: Dex provider validation (multi-IDP, skipped when Dex not running)
-* **TestRealm**: Test realm configuration helper (supports Keycloak and Dex)
+Tests use `@ParameterizedTest` with `@MethodSource` to run against multiple OIDC providers. Each spec declares required capabilities — providers are filtered by `TestProviders`.
 
-=== Test Inheritance Structure
+* **token/TokenValidationSpecIT**: Access/ID/refresh token validation (parameterized over all providers with matching capabilities)
+* **bearer/BearerAuthSpecIT**: Bearer token producers and interceptors (Keycloak-only — requires ROLES, GROUPS, CUSTOM_SCOPES)
+* **security/DpopSpecIT**: DPoP RFC 9449 validation (parameterized over DPoP-capable providers)
+* **security/JweDecryptionSpecIT**: JWE RFC 7516 decryption (parameterized over JWE-capable providers)
+* **health/HealthCheckIntegrationIT**: Health endpoint validation
+* **health/HealthCheckResponsivenessIT**: Health endpoint responsiveness testing
+* **api/ApiValidationSpecIT**: API input validation (provider-independent)
+* **api/TokenRequestSpecIT**: Token request deserialization (provider-independent)
 
-Test classes inherit from base classes to share common functionality:
+=== Key infrastructure classes
 
-* **BaseIntegrationTest**: Common integration test setup
-* **AbstractJwtValidationEndpointTest**: JWT endpoint testing base
-
-This structure validates both Keycloak realms (benchmark and integration) with different JWT configuration patterns.
+* **TestRealm**: Provider configuration + token acquisition + capability declaration
+* **TestProviders**: Provider registry with capability-based filtering and INFO logging
 
 == Configuration
 
