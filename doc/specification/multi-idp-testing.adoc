@@ -32,7 +32,7 @@ The multi-IDP testing approach extends the existing Docker Compose infrastructur
 === Design Principles
 
 1. **Profile isolation** — Additional providers only start when explicitly requested via `COMPOSE_PROFILES=multi-idp`
-2. **Graceful degradation** — Dex tests use `@EnabledIf` to skip when Dex is not running
+2. **Capability-based filtering** — Each provider declares capabilities (e.g. `JWT_ACCESS_TOKENS`, `ROLES`). Tests declare required capabilities via `@MethodSource` — providers missing capabilities are skipped with an INFO log, not silently hidden
 3. **Shared certificates** — All providers use the same TLS certificate (SAN includes all hostnames)
 4. **Consistent patterns** — `TestRealm` is generalized to support any OIDC provider with ROPC grant
 
@@ -96,7 +96,7 @@ No change to existing workflow:
     -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
 ----
 
-Dex tests are automatically skipped.
+Dex is not in the provider list — only Keycloak tests run.
 
 === Multi-IDP (Keycloak + Dex)
 
@@ -106,7 +106,7 @@ Dex tests are automatically skipped.
     -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
 ----
 
-This starts Keycloak and Dex, runs all tests including Dex-specific ones.
+This starts Keycloak and Dex, sets `QUARKUS_PROFILE=multi-idp` on the app container and `-Ddex.enabled=true` in the test JVM. Dex is included in the provider list and runs through all applicable specs.
 
 === Manual Testing
 
@@ -129,11 +129,12 @@ Checklist for adding a new OIDC provider:
 
 1. **Docker Compose** — Add service to `docker-compose.yml` under the `multi-idp` profile
 2. **Certificate SAN** — Add `dns:<hostname>` to `generate-certificates.sh` SAN list and regenerate
-3. **Application Properties** — Add issuer configuration under `sheriff.oauth.issuers.<name>.*`
-4. **TestRealm Factory** — Add `createXxxProvider()` factory method with provider-specific URLs
-5. **Integration Test** — Create `JwtValidationEndpoint<Name>IT.java` with `@EnabledIf` condition
-6. **Startup Script** — Add health wait loop for the new provider in `start-integration-container.sh`
-7. **Documentation** — Update this specification and the integration tests README
+3. **Application Properties** — Add issuer configuration with `%multi-idp.` Quarkus profile prefix in `application.properties`
+4. **TestRealm Factory** — Add `createXxxProvider()` factory method declaring capabilities
+5. **TestProviders Registry** — Add `ProviderRegistration` entry mapping system property to factory
+6. **Maven POM** — Add `<xxx.enabled>true</xxx.enabled>` to failsafe `systemPropertyVariables` in the multi-idp-tests profile
+7. **Startup Script** — Add health wait loop for the new provider in `start-integration-container.sh`
+8. **Documentation** — Update this specification and the integration tests README
 
 == Test Scope by Provider
 
@@ -142,8 +143,8 @@ Checklist for adding a new OIDC provider:
 
 |Access token validation
 |Yes
-|Yes
-|Core functionality
+|No (opaque tokens)
+|Dex access tokens are not JWTs
 
 |ID token validation
 |Yes
@@ -152,8 +153,8 @@ Checklist for adding a new OIDC provider:
 
 |Refresh token validation
 |Yes
-|No
-|Dex refresh token format may differ
+|Yes (with offline_access)
+|Dex requires offline_access scope for refresh tokens
 
 |Bearer token producers
 |Yes
