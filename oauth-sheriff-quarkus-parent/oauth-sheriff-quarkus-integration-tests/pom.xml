@@ -366,6 +366,7 @@
                                         <test.https.port>${test.https.port}</test.https.port>
                                         <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                                         <quarkus.native.enabled>false</quarkus.native.enabled>
+                                        <dex.enabled>true</dex.enabled>
                                     </systemPropertyVariables>
                                     <skipITs>${skipITs}</skipITs>
                                 </configuration>
@@ -425,6 +426,7 @@
                                     <environmentVariables>
                                         <LOG_TARGET_DIR>${project.build.directory}</LOG_TARGET_DIR>
                                         <COMPOSE_PROFILES>multi-idp</COMPOSE_PROFILES>
+                                        <QUARKUS_PROFILE>multi-idp</QUARKUS_PROFILE>
                                     </environmentVariables>
                                 </configuration>
                             </execution>

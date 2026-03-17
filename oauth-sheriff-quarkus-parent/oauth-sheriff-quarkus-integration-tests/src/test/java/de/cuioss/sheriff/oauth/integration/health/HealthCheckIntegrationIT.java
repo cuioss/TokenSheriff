@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.oauth.integration;
+package de.cuioss.sheriff.oauth.integration.health;
 
+import de.cuioss.sheriff.oauth.integration.BaseIntegrationTest;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
@@ -23,18 +24,16 @@ import static org.hamcrest.Matchers.equalTo;
 /**
  * REST API tests for health check endpoints against external application.
  * <p>
- * These tests verify that health checks work correctly in the
- * external application environment with proper JWT extension integration.
+ * All configured issuers should be reachable:
+ * <ul>
+ *     <li>{@code integration-tests} profile: only Keycloak issuers (Dex disabled)</li>
+ *     <li>{@code multi-idp-tests} profile: Keycloak + Dex (Dex enabled via {@code %multi-idp} Quarkus profile)</li>
+ * </ul>
  */
 class HealthCheckIntegrationIT extends BaseIntegrationTest {
 
     @Test
     void shouldProvideOverallHealthStatus() {
-        // This test verifies the overall health status, which includes:
-        // - JWT validator health check
-        // - JWKS endpoint health check
-        // - Issuer information
-        // - Other application health checks
         given()
                 .when()
                 .get("/q/health")
@@ -73,5 +72,4 @@ class HealthCheckIntegrationIT extends BaseIntegrationTest {
                 .statusCode(200)
                 .body("status", equalTo("UP"));
     }
-
 }

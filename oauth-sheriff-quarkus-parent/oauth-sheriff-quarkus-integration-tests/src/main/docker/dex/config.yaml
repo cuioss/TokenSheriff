@@ -9,8 +9,8 @@ storage:
 
 web:
   https: 0.0.0.0:5556
-  tlsCert: /etc/dex/certificates/localhost.crt
-  tlsKey: /etc/dex/certificates/localhost.key
+  tlsCert: /certs/localhost.crt
+  tlsKey: /certs/localhost.key
 
 oauth2:
   # Enable Resource Owner Password Credentials (ROPC) grant via local connector

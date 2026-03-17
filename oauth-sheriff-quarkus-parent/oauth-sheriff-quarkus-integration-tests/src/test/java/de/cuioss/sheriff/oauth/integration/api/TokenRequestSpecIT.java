@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.oauth.integration;
+package de.cuioss.sheriff.oauth.integration.api;
 
+import de.cuioss.sheriff.oauth.integration.BaseIntegrationTest;
 import org.junit.jupiter.api.*;
 
 import java.util.Map;
@@ -24,13 +25,11 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
- * Integration tests specifically for TokenRequest functionality in complex scenarios.
- * API validation tests (null/empty/blank strings) have been moved to JwtValidationEndpointApiValidationIT.
- * This class focuses on TokenRequest behavior in integration scenarios.
+ * TokenRequest integration spec — tests TokenRequest record deserialization and isEmpty() logic.
  */
-@DisplayName("JWT Validation Endpoint - TokenRequest Integration Tests")
+@DisplayName("TokenRequest Spec")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class JwtValidationEndpointTokenRequestIT extends BaseIntegrationTest {
+class TokenRequestSpecIT extends BaseIntegrationTest {
 
     private static final String CONTENT_TYPE_JSON = "application/json";
     private static final String TOKEN_FIELD_NAME = "token";
@@ -41,14 +40,13 @@ class JwtValidationEndpointTokenRequestIT extends BaseIntegrationTest {
     @Order(1)
     @DisplayName("TokenRequest record should be properly deserialized from JSON")
     void tokenRequestDeserialization() {
-        // Test that TokenRequest record works correctly with JSON deserialization
         given()
                 .contentType(CONTENT_TYPE_JSON)
                 .body(Map.of(TOKEN_FIELD_NAME, "test.token.value"))
                 .when()
                 .post("/jwt/validate-explicit")
                 .then()
-                .statusCode(401) // Should get 401 for invalid token, not 400 for missing token
+                .statusCode(401)
                 .body(VALID, equalTo(false))
                 .body(MESSAGE, containsString("Token validation failed"));
     }
@@ -57,14 +55,13 @@ class JwtValidationEndpointTokenRequestIT extends BaseIntegrationTest {
     @Order(2)
     @DisplayName("TokenRequest.isEmpty() should work correctly with token trimming")
     void tokenRequestIsEmptyWithTokenTrimming() {
-        // Test that tokens with surrounding whitespace are handled correctly
         given()
                 .contentType(CONTENT_TYPE_JSON)
                 .body(Map.of(TOKEN_FIELD_NAME, "  valid.token.value  "))
                 .when()
                 .post("/jwt/validate-explicit")
                 .then()
-                .statusCode(401) // Should get 401 for invalid token, not 400 for empty token
+                .statusCode(401)
                 .body(VALID, equalTo(false))
                 .body(MESSAGE, containsString("Token validation failed"));
     }
