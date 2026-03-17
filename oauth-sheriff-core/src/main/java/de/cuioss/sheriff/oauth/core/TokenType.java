@@ -50,7 +50,7 @@ import static de.cuioss.sheriff.oauth.core.domain.claim.ClaimName.*;
  */
 public enum TokenType {
 
-    ACCESS_TOKEN("Bearer", new TreeSet<>(List.of(ISSUER, EXPIRATION, ISSUED_AT, SUBJECT, SCOPE))),
+    ACCESS_TOKEN("Bearer", new TreeSet<>(List.of(ISSUER, EXPIRATION, ISSUED_AT, SUBJECT))),
     ID_TOKEN("ID", new TreeSet<>(List.of(ISSUER, EXPIRATION, ISSUED_AT, SUBJECT, AUDIENCE))),
     REFRESH_TOKEN("Refresh", Collections.emptySortedSet()),
     UNKNOWN("unknown", Collections.emptySortedSet());

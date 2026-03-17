@@ -100,15 +100,17 @@ public class AccessTokenContent extends BaseTokenContent {
 
     /**
      * Gets the scopes from the token claims.
+     * <p>
+     * The scope claim is optional per RFC 9068 Section 2.2. If the scope claim is not
+     * present in the token, an empty list is returned.
      *
-     * @return a List of scope strings
-     * @throws IllegalStateException if the scope claim is not present in the token
+     * @return a List of scope strings, or an empty list if the scope claim is not present
      */
-   
+
     public List<String> getScopes() {
         return getClaimOption(ClaimName.SCOPE)
                 .map(ClaimValue::getAsList)
-                .orElseThrow(() -> new IllegalStateException("Scope claim not present in token. Available claims: " + getClaims().keySet()));
+                .orElse(Collections.emptyList());
     }
 
     /**

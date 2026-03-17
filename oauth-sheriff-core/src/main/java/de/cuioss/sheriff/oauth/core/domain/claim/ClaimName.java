@@ -121,11 +121,11 @@ public enum ClaimName {
 
     /**
      * The "scope" claim identifies the scope of the access token.
-     * Required by RFC 6749 for ACCESS_TOKEN type.
+     * Optional per RFC 9068 Section 2.2 for JWT access tokens.
      *
-     * @see <a href="https://datatracker.ietf.org/doc/html/rfc6749#section-3.3">RFC 6749 - 3.3. Access Token Scope</a>
+     * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-2.2">RFC 9068 - 2.2. Data Structure</a>
      */
-    SCOPE("scope", ClaimValueType.STRING_LIST, "The \"scope\" claim identifies the scope of the access token. Required by RFC 6749 for ACCESS_TOKEN type.", new ScopeMapper()),
+    SCOPE("scope", ClaimValueType.STRING_LIST, "The \"scope\" claim identifies the scope of the access token. Optional per RFC 9068 Section 2.2 for JWT access tokens.", new ScopeMapper()),
 
     /**
      * The "typ" claim identifies the validation type.
