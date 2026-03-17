@@ -90,6 +90,9 @@ public class TestRealm {
     private static final Set<Capability> KEYCLOAK_CAPABILITIES =
             EnumSet.of(Capability.ROLES, Capability.GROUPS, Capability.CUSTOM_SCOPES, Capability.JWT_ACCESS_TOKENS);
 
+    /** Default scopes for providers that don't specify their own. */
+    private static final String DEFAULT_SCOPES = "openid profile email";
+
     private final String realmIdentifier;
     private final String clientId;
     private final String clientSecret;
@@ -99,11 +102,20 @@ public class TestRealm {
     private final String tokenEndpoint;
     private final String providerName;
     private final Set<Capability> capabilities;
+    private final String defaultScopes;
 
     private TestRealm(String realmIdentifier, String clientId, String clientSecret,
                       String username, String password, String baseUrl,
                       String tokenEndpoint, String providerName,
                       Set<Capability> capabilities) {
+        this(realmIdentifier, clientId, clientSecret, username, password, baseUrl,
+                tokenEndpoint, providerName, capabilities, DEFAULT_SCOPES);
+    }
+
+    private TestRealm(String realmIdentifier, String clientId, String clientSecret,
+                      String username, String password, String baseUrl,
+                      String tokenEndpoint, String providerName,
+                      Set<Capability> capabilities, String defaultScopes) {
         this.realmIdentifier = realmIdentifier;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
@@ -113,6 +125,7 @@ public class TestRealm {
         this.tokenEndpoint = tokenEndpoint;
         this.providerName = providerName;
         this.capabilities = EnumSet.copyOf(capabilities);
+        this.defaultScopes = defaultScopes;
     }
 
     /**
@@ -187,24 +200,35 @@ public class TestRealm {
 
     /**
      * Dex — lightweight, OpenID Certified provider for multi-IDP validation.
+     * <p>
      * Access tokens are valid JWTs (RS256-signed) but do not include a {@code scope}
      * claim, which is optional per RFC 9068 Section 2.2.
+     * <p>
+     * Dex supports {@code groups} natively (via static user config + {@code groups}
+     * scope) but does not support custom scopes (rejects unknown scopes with 400)
+     * or arbitrary custom claims like {@code roles} in the local connector.
      */
     public static TestRealm createDexProvider() {
         return new TestRealm(
                 "dex", "dex-client", "dex-secret",
                 "dex-user@example.com", "dex-password",
                 "https://localhost:2556", "/dex/token",
-                "Dex", EnumSet.of(Capability.OFFLINE_ACCESS, Capability.JWT_ACCESS_TOKENS));
+                "Dex",
+                EnumSet.of(Capability.OFFLINE_ACCESS, Capability.JWT_ACCESS_TOKENS, Capability.GROUPS),
+                "openid profile email groups");
     }
 
     // === Token acquisition ===
 
     /**
-     * Obtains a valid token with default scopes ({@code openid profile email}).
+     * Obtains a valid token with the provider's default scopes.
+     * <p>
+     * Default scopes are provider-specific because IDPs reject unrecognized scopes
+     * (e.g., Dex supports {@code groups} but not {@code read}; Keycloak requires
+     * scopes to be registered as client scopes).
      */
     public TokenResponse obtainValidToken() {
-        return obtainValidTokenWithScopes("openid profile email");
+        return obtainValidTokenWithScopes(defaultScopes);
     }
 
     /**

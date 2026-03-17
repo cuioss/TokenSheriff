@@ -42,6 +42,10 @@ staticPasswords:
     hash: "$2a$10$urcOaB5wArsHhMghs4E8rOjwPv95VTtPj/wUpfVGt3WMyqVvxzAWa"
     username: dex-user
     userID: "08a8684b-db88-4b73-90a9-3cd1661f5466"
+    # Groups included in tokens when 'groups' scope is requested.
+    # "test-group" matches the @BearerToken(requiredGroups) in JwtValidationEndpoint.
+    groups:
+      - "test-group"
 
 logger:
   level: info
