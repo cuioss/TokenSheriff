@@ -19,44 +19,60 @@ import de.cuioss.sheriff.oauth.integration.TestRealm.Capability;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
  * Shared provider sources for parameterized integration tests.
  * <p>
- * Adding a new IDP = one line in {@link #allProviders()} + declare its
- * {@link Capability capabilities} in the factory method.
+ * <b>Adding a new IDP</b> requires exactly one change here: add a
+ * {@link ProviderRegistration} entry to {@link #PROVIDER_REGISTRY}.
+ * Everything else (capability filtering, INFO logging for skipped providers,
+ * test parameterization) follows automatically.
  * <p>
- * Maven profiles control IDP availability via system properties:
- * <ul>
- *     <li>{@code integration-tests} profile: no {@code dex.enabled} → only Keycloak</li>
- *     <li>{@code multi-idp-tests} profile: {@code dex.enabled=true} → Keycloak + Dex</li>
- * </ul>
+ * Maven profiles control IDP availability via system properties passed to
+ * the failsafe-forked JVM (e.g. {@code -Ddex.enabled=true}).
  */
 public final class TestProviders {
 
     private static final CuiLogger LOGGER = new CuiLogger(TestProviders.class);
+
+    /**
+     * Registry of all IDPs. Each entry maps a system-property gate to a
+     * {@link TestRealm} factory. Providers whose system property is absent
+     * or {@code false} are not included in the provider list.
+     * <p>
+     * A {@code null} system property means "always enabled" (e.g. Keycloak).
+     */
+    private static final List<ProviderRegistration> PROVIDER_REGISTRY = List.of(
+            // Keycloak — always available
+            new ProviderRegistration(null, TestRealm::createIntegrationRealm),
+            new ProviderRegistration(null, TestRealm::createBenchmarkRealm),
+            // Dex — only when multi-idp-tests profile is active
+            new ProviderRegistration("dex.enabled", TestRealm::createDexProvider)
+            // To add Zitadel:
+            // new ProviderRegistration("zitadel.enabled", TestRealm::createZitadelProvider)
+    );
 
     private TestProviders() {
         // utility class
     }
 
     /**
-     * All available OIDC providers. Includes Dex when {@code -Ddex.enabled=true}
-     * is set via Maven failsafe system properties.
+     * All available OIDC providers based on active system properties.
+     * Providers whose gate property is absent or false are excluded.
      * <p>
-     * If Dex is enabled but unreachable, {@code obtainValidToken()} will fail loudly
-     * (no silent skip, no {@code @EnabledIf}).
+     * If a provider is enabled but unreachable, {@code obtainValidToken()} will
+     * fail loudly (no silent skip, no {@code @EnabledIf}).
      */
     public static Stream<TestRealm> allProviders() {
         var providers = new ArrayList<TestRealm>();
-        providers.add(TestRealm.createIntegrationRealm());
-        providers.add(TestRealm.createBenchmarkRealm());
-        if (Boolean.getBoolean("dex.enabled")) {
-            providers.add(TestRealm.createDexProvider());
+        for (var reg : PROVIDER_REGISTRY) {
+            if (reg.isEnabled()) {
+                providers.add(reg.factory.get());
+            }
         }
         return providers.stream();
     }
@@ -84,9 +100,10 @@ public final class TestProviders {
         return matching.stream();
     }
 
+    // === Convenience method sources (referenced by @MethodSource in specs) ===
+
     /**
      * Providers that support bearer auth with roles, groups, and custom scopes.
-     * Convenience wrapper for the most common Keycloak-specific capability set.
      */
     public static Stream<TestRealm> bearerAuthProviders() {
         return withCapabilities(Capability.ROLES, Capability.GROUPS, Capability.CUSTOM_SCOPES);
@@ -101,10 +118,21 @@ public final class TestProviders {
 
     /**
      * Providers whose access tokens are JWTs (not opaque).
-     * Required for access token validation tests — opaque tokens (e.g. Dex)
-     * cannot be validated as JWTs.
      */
     public static Stream<TestRealm> jwtAccessTokenProviders() {
         return withCapabilities(Capability.JWT_ACCESS_TOKENS);
+    }
+
+    /**
+     * Associates a system-property gate with a {@link TestRealm} factory.
+     *
+     * @param systemProperty system property that must be {@code true} to enable
+     *                       this provider, or {@code null} for always-enabled
+     * @param factory        creates the {@link TestRealm} instance
+     */
+    private record ProviderRegistration(String systemProperty, Supplier<TestRealm> factory) {
+        boolean isEnabled() {
+            return systemProperty == null || Boolean.getBoolean(systemProperty);
+        }
     }
 }
