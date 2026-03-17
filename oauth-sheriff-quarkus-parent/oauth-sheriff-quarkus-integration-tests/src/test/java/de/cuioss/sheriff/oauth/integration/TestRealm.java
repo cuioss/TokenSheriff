@@ -187,7 +187,9 @@ public class TestRealm {
 
     /**
      * Dex — lightweight, OpenID Certified provider for multi-IDP validation.
-     * Issues opaque access tokens (no {@link Capability#JWT_ACCESS_TOKENS}).
+     * Access tokens are JWTs structurally but lack the {@code scope} claim required
+     * by OAuth Sheriff's access token validator, so {@link Capability#JWT_ACCESS_TOKENS}
+     * is not declared. ID tokens validate correctly.
      */
     public static TestRealm createDexProvider() {
         return new TestRealm(
