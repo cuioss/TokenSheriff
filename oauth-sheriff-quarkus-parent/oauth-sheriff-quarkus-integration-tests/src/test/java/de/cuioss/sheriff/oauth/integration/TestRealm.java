@@ -187,16 +187,15 @@ public class TestRealm {
 
     /**
      * Dex — lightweight, OpenID Certified provider for multi-IDP validation.
-     * Access tokens are JWTs structurally but lack the {@code scope} claim required
-     * by OAuth Sheriff's access token validator, so {@link Capability#JWT_ACCESS_TOKENS}
-     * is not declared. ID tokens validate correctly.
+     * Access tokens are valid JWTs (RS256-signed) but do not include a {@code scope}
+     * claim, which is optional per RFC 9068 Section 2.2.
      */
     public static TestRealm createDexProvider() {
         return new TestRealm(
                 "dex", "dex-client", "dex-secret",
                 "dex-user@example.com", "dex-password",
                 "https://localhost:2556", "/dex/token",
-                "Dex", EnumSet.of(Capability.OFFLINE_ACCESS));
+                "Dex", EnumSet.of(Capability.OFFLINE_ACCESS, Capability.JWT_ACCESS_TOKENS));
     }
 
     // === Token acquisition ===
