@@ -15,9 +15,12 @@
  */
 package de.cuioss.sheriff.oauth.integration;
 
+import de.cuioss.sheriff.oauth.integration.security.DpopProofHelper;
 import io.restassured.response.Response;
 
+import java.util.EnumSet;
 import java.util.Map;
+import java.util.Set;
 
 import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.*;
@@ -28,6 +31,24 @@ import static org.junit.jupiter.api.Assertions.*;
  * and token endpoint paths.
  */
 public class TestRealm {
+
+    /**
+     * Capabilities that an OIDC provider/realm may support. Tests use these to
+     * declare which features they require — providers missing the required
+     * capabilities are skipped with an INFO log, not silently hidden.
+     */
+    public enum Capability {
+        /** Supports {@code offline_access} scope for refresh tokens. */
+        OFFLINE_ACCESS,
+        /** Token contains role claims usable for bearer auth. */
+        ROLES,
+        /** Token contains group claims usable for bearer auth. */
+        GROUPS,
+        /** Supports custom scopes beyond {@code openid profile email} (e.g. "read"). */
+        CUSTOM_SCOPES,
+        /** Access tokens are JWTs (not opaque). Required for access token validation tests. */
+        JWT_ACCESS_TOKENS
+    }
 
     private static final String KEYCLOAK_BASE_URL = "https://localhost:1443";
     private static final String KEYCLOAK_MANAGEMENT_URL = "https://localhost:1090";
@@ -71,35 +92,12 @@ public class TestRealm {
     private final String baseUrl;
     private final String tokenEndpoint;
     private final String providerName;
+    private final Set<Capability> capabilities;
 
-    /**
-     * Creates a new TestRealm instance for Keycloak (backward compatible).
-     *
-     * @param realmIdentifier the realm identifier (e.g., "integration", "benchmark")
-     * @param clientId the client ID for authentication
-     * @param clientSecret the client secret for authentication
-     * @param username the username for authentication
-     * @param password the password for authentication
-     */
-    public TestRealm(String realmIdentifier, String clientId, String clientSecret, String username, String password) {
-        this(realmIdentifier, clientId, clientSecret, username, password,
-                KEYCLOAK_BASE_URL, TOKEN_ENDPOINT_TEMPLATE.formatted(realmIdentifier), "Keycloak");
-    }
-
-    /**
-     * Creates a new TestRealm instance with custom provider configuration.
-     *
-     * @param realmIdentifier the realm/provider identifier for display purposes
-     * @param clientId the client ID for authentication
-     * @param clientSecret the client secret for authentication
-     * @param username the username for authentication
-     * @param password the password for authentication
-     * @param baseUrl the provider base URL (e.g., "https://localhost:2556")
-     * @param tokenEndpoint the token endpoint path (e.g., "/dex/token")
-     * @param providerName the provider name for display in test output
-     */
-    public TestRealm(String realmIdentifier, String clientId, String clientSecret, String username, String password,
-                     String baseUrl, String tokenEndpoint, String providerName) {
+    private TestRealm(String realmIdentifier, String clientId, String clientSecret,
+                      String username, String password, String baseUrl,
+                      String tokenEndpoint, String providerName,
+                      Set<Capability> capabilities) {
         this.realmIdentifier = realmIdentifier;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
@@ -108,6 +106,7 @@ public class TestRealm {
         this.baseUrl = baseUrl;
         this.tokenEndpoint = tokenEndpoint;
         this.providerName = providerName;
+        this.capabilities = EnumSet.copyOf(capabilities);
     }
 
     /**
@@ -120,17 +119,46 @@ public class TestRealm {
     }
 
     /**
+     * Returns whether this realm supports the given capability.
+     */
+    public boolean hasCapability(Capability capability) {
+        return capabilities.contains(capability);
+    }
+
+    /**
+     * Returns whether this realm supports <em>all</em> of the given capabilities.
+     */
+    public boolean hasAllCapabilities(Capability... required) {
+        return capabilities.containsAll(Set.of(required));
+    }
+
+    /**
+     * Returns the immutable set of capabilities this realm supports.
+     */
+    public Set<Capability> getCapabilities() {
+        return Set.copyOf(capabilities);
+    }
+
+    /**
      * Factory method to create a TestRealm instance for integration tests.
      *
      * @return TestRealm configured for integration realm
      */
+    /** Keycloak capabilities shared by integration/benchmark realms. */
+    private static final Set<Capability> KEYCLOAK_CAPABILITIES =
+            EnumSet.of(Capability.ROLES, Capability.GROUPS, Capability.CUSTOM_SCOPES, Capability.JWT_ACCESS_TOKENS);
+
     public static TestRealm createIntegrationRealm() {
         return new TestRealm(
                 INTEGRATION_REALM_ID,
                 INTEGRATION_CLIENT_ID,
                 INTEGRATION_CLIENT_SECRET,
                 INTEGRATION_USERNAME,
-                INTEGRATION_PASSWORD
+                INTEGRATION_PASSWORD,
+                KEYCLOAK_BASE_URL,
+                TOKEN_ENDPOINT_TEMPLATE.formatted(INTEGRATION_REALM_ID),
+                "Keycloak",
+                KEYCLOAK_CAPABILITIES
         );
     }
 
@@ -146,7 +174,11 @@ public class TestRealm {
                 DPOP_CLIENT_ID,
                 DPOP_CLIENT_SECRET,
                 INTEGRATION_USERNAME,
-                INTEGRATION_PASSWORD
+                INTEGRATION_PASSWORD,
+                KEYCLOAK_BASE_URL,
+                TOKEN_ENDPOINT_TEMPLATE.formatted(INTEGRATION_REALM_ID),
+                "Keycloak",
+                KEYCLOAK_CAPABILITIES
         );
     }
 
@@ -162,7 +194,11 @@ public class TestRealm {
                 JWE_CLIENT_ID,
                 JWE_CLIENT_SECRET,
                 INTEGRATION_USERNAME,
-                INTEGRATION_PASSWORD
+                INTEGRATION_PASSWORD,
+                KEYCLOAK_BASE_URL,
+                TOKEN_ENDPOINT_TEMPLATE.formatted(INTEGRATION_REALM_ID),
+                "Keycloak",
+                KEYCLOAK_CAPABILITIES
         );
     }
 
@@ -177,7 +213,11 @@ public class TestRealm {
                 BENCHMARK_CLIENT_ID,
                 BENCHMARK_CLIENT_SECRET,
                 BENCHMARK_USERNAME,
-                BENCHMARK_PASSWORD
+                BENCHMARK_PASSWORD,
+                KEYCLOAK_BASE_URL,
+                TOKEN_ENDPOINT_TEMPLATE.formatted(BENCHMARK_REALM_ID),
+                "Keycloak",
+                KEYCLOAK_CAPABILITIES
         );
     }
 
@@ -196,7 +236,8 @@ public class TestRealm {
                 "dex-password",
                 DEX_BASE_URL,
                 DEX_TOKEN_PATH,
-                "Dex"
+                "Dex",
+                EnumSet.of(Capability.OFFLINE_ACCESS)
         );
     }
 
@@ -394,6 +435,11 @@ public class TestRealm {
      */
     public boolean isProviderAvailable() {
         return isWellKnownEndpointHealthy();
+    }
+
+    @Override
+    public String toString() {
+        return providerName + "/" + realmIdentifier;
     }
 
     private void validateToken(String token, String tokenType) {

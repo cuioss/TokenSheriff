@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.oauth.integration;
+package de.cuioss.sheriff.oauth.integration.api;
 
+import de.cuioss.sheriff.oauth.integration.BaseIntegrationTest;
 import org.junit.jupiter.api.*;
 
 import java.util.Map;
@@ -24,13 +25,12 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
- * Integration tests for JWT Validation Endpoint API validation.
+ * API contract spec — provider-independent input validation tests.
  * Tests null, empty, blank string handling and basic input validation.
- * These tests focus on the API contract and TokenRequest.isEmpty() implementation.
  */
-@DisplayName("JWT Validation Endpoint - API Validation Tests")
+@DisplayName("API Validation Spec")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class JwtValidationEndpointApiValidationIT extends BaseIntegrationTest {
+class ApiValidationSpecIT extends BaseIntegrationTest {
 
     private static final String CONTENT_TYPE_JSON = "application/json";
     private static final String TOKEN_FIELD_NAME = "token";
@@ -39,7 +39,6 @@ class JwtValidationEndpointApiValidationIT extends BaseIntegrationTest {
     private static final String AUTHORIZATION = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
 
-    // API endpoint paths
     private static final String JWT_VALIDATE_PATH = "/jwt/validate";
     private static final String JWT_VALIDATE_EXPLICIT_PATH = "/jwt/validate-explicit";
     private static final String JWT_VALIDATE_ID_TOKEN_PATH = "/jwt/validate/id-token";
@@ -336,7 +335,6 @@ class JwtValidationEndpointApiValidationIT extends BaseIntegrationTest {
         @Order(52)
         @DisplayName("validateRefreshToken should return 200 for refresh token (opaque validation)")
         void validateRefreshTokenOpaqueValidation() {
-            // Note: Refresh tokens are validated opaquely and return 200 for any string
             given()
                     .contentType(CONTENT_TYPE_JSON)
                     .body(Map.of(TOKEN_FIELD_NAME, "invalid.token.here"))
@@ -403,7 +401,6 @@ class JwtValidationEndpointApiValidationIT extends BaseIntegrationTest {
     @Order(100)
     @DisplayName("TokenRequest.isEmpty() consistency test across all endpoints")
     void tokenRequestIsEmptyConsistency() {
-        // Test that all endpoints consistently use TokenRequest.isEmpty() logic
         String[] endpoints = {
                 JWT_VALIDATE_EXPLICIT_PATH,
                 JWT_VALIDATE_ID_TOKEN_PATH,
@@ -420,7 +417,6 @@ class JwtValidationEndpointApiValidationIT extends BaseIntegrationTest {
             String endpoint = endpoints[i];
             String expectedMessage = expectedMessages[i];
 
-            // Test with empty string
             given()
                     .contentType(CONTENT_TYPE_JSON)
                     .body(Map.of(TOKEN_FIELD_NAME, ""))
@@ -431,7 +427,6 @@ class JwtValidationEndpointApiValidationIT extends BaseIntegrationTest {
                     .body(VALID, equalTo(false))
                     .body(MESSAGE, equalTo(expectedMessage));
 
-            // Test with whitespace
             given()
                     .contentType(CONTENT_TYPE_JSON)
                     .body(Map.of(TOKEN_FIELD_NAME, "  \t  "))

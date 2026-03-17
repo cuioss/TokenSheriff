@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.oauth.integration;
+package de.cuioss.sheriff.oauth.integration.health;
 
+import de.cuioss.sheriff.oauth.integration.BaseIntegrationTest;
 import de.cuioss.tools.logging.CuiLogger;
 import org.junit.jupiter.api.Test;
 
@@ -30,17 +31,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration test that validates health checks are responsive and do not exhibit blocking behavior.
- * <p>
- * This test ensures that:
- * - All health check types respond quickly without timing out
- * - Multiple concurrent health checks can be handled without blocking
- * - Health checks maintain acceptable response times under concurrent load
- * </p>
  */
 class HealthCheckResponsivenessIT extends BaseIntegrationTest {
 
     private static final CuiLogger LOGGER = new CuiLogger(HealthCheckResponsivenessIT.class);
-    private static final int MAX_ACCEPTABLE_RESPONSE_TIME_MS = 5000; // 5 seconds max for CI native image
+    private static final int MAX_ACCEPTABLE_RESPONSE_TIME_MS = 5000;
     private static final int CONCURRENT_HEALTH_CHECKS = 10;
 
     @Test
@@ -64,18 +59,16 @@ class HealthCheckResponsivenessIT extends BaseIntegrationTest {
                 try {
                     HealthCheckTimingResult result = futures.get(i).get(5, TimeUnit.SECONDS);
                     results.add(result);
-                    LOGGER.debug("Health check %s completed in %sms", i + 1, result.responseTime.toMillis());
                 } catch (TimeoutException e) {
-                    Duration timeout = Duration.ofSeconds(5);
-                    results.add(new HealthCheckTimingResult(i + 1, "readiness", timeout, false, "TIMEOUT"));
-                    LOGGER.debug("Health check %s timed out", i + 1);
+                    results.add(new HealthCheckTimingResult(i + 1, "readiness",
+                            Duration.ofSeconds(5), false, "TIMEOUT"));
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    results.add(new HealthCheckTimingResult(i + 1, "readiness", Duration.ZERO, false, "INTERRUPTED"));
-                    LOGGER.debug("Health check %s was interrupted", i + 1);
+                    results.add(new HealthCheckTimingResult(i + 1, "readiness",
+                            Duration.ZERO, false, "INTERRUPTED"));
                 } catch (ExecutionException e) {
-                    results.add(new HealthCheckTimingResult(i + 1, "readiness", Duration.ZERO, false, "ERROR"));
-                    LOGGER.debug("Health check %s failed: %s", i + 1, e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+                    results.add(new HealthCheckTimingResult(i + 1, "readiness",
+                            Duration.ZERO, false, "ERROR"));
                 }
             }
         } finally {
@@ -87,8 +80,6 @@ class HealthCheckResponsivenessIT extends BaseIntegrationTest {
 
     @Test
     void shouldRespondQuicklyForAllHealthCheckTypes() {
-        LOGGER.debug("Testing response times for all health check types");
-
         List<HealthCheckType> healthCheckTypes = List.of(
                 new HealthCheckType("liveness", "/q/health/live"),
                 new HealthCheckType("readiness", "/q/health/ready"),
@@ -108,20 +99,17 @@ class HealthCheckResponsivenessIT extends BaseIntegrationTest {
             Duration responseTime = Duration.between(start, Instant.now());
 
             assertTrue("UP".equals(status) || "DOWN".equals(status),
-                    "Health check %s should return a valid status but was %s".formatted(checkType.name, status));
+                    "Health check %s should return a valid status but was %s".formatted(
+                            checkType.name, status));
 
             assertTrue(responseTime.toMillis() < MAX_ACCEPTABLE_RESPONSE_TIME_MS,
                     "Health check %s took %dms, exceeding max of %dms".formatted(
                             checkType.name, responseTime.toMillis(), MAX_ACCEPTABLE_RESPONSE_TIME_MS));
-
-            LOGGER.debug("✅ %s health check: %s in %sms", checkType.name, status, responseTime.toMillis());
         }
     }
 
     private HealthCheckTimingResult performTimedHealthCheck(String type, String url, int checkId) {
         Instant startTime = Instant.now();
-        boolean success = false;
-        String status;
 
         String responseStatus = given()
                 .when()
@@ -129,39 +117,20 @@ class HealthCheckResponsivenessIT extends BaseIntegrationTest {
                 .then()
                 .extract().path("status");
 
-        status = responseStatus;
-        success = "UP".equals(responseStatus);
-
         Duration responseTime = Duration.between(startTime, Instant.now());
-        return new HealthCheckTimingResult(checkId, type, responseTime, success, status);
+        return new HealthCheckTimingResult(checkId, type, responseTime,
+                "UP".equals(responseStatus), responseStatus);
     }
 
     private void validateHealthCheckResponsiveness(List<HealthCheckTimingResult> results) {
-        LOGGER.debug("Validating responsiveness of %s concurrent health checks", results.size());
-
-        long failures = results.stream().filter(r -> !r.success).count();
         long slowResponses = results.stream()
                 .filter(r -> r.responseTime.toMillis() > MAX_ACCEPTABLE_RESPONSE_TIME_MS)
                 .count();
-
-        Duration avgResponseTime = Duration.ofMillis(
-                (long) results.stream()
-                        .mapToLong(r -> r.responseTime.toMillis())
-                        .average()
-                        .orElse(0)
-        );
 
         Duration maxResponseTime = results.stream()
                 .map(r -> r.responseTime)
                 .max(Duration::compareTo)
                 .orElse(Duration.ZERO);
-
-        LOGGER.debug("Concurrent health check results:");
-        LOGGER.debug("- Total checks: %s", results.size());
-        LOGGER.debug("- Failures: %s", failures);
-        LOGGER.debug("- Slow responses (>%sms): %s", MAX_ACCEPTABLE_RESPONSE_TIME_MS, slowResponses);
-        LOGGER.debug("- Average response time: %sms", avgResponseTime.toMillis());
-        LOGGER.debug("- Maximum response time: %sms", maxResponseTime.toMillis());
 
         assertEquals(0, slowResponses, "%d health checks exceeded %dms response time limit".formatted(
                 slowResponses, MAX_ACCEPTABLE_RESPONSE_TIME_MS));

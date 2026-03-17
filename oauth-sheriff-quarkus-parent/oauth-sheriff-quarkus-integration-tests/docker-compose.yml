@@ -83,6 +83,8 @@ services:
     environment:
       # Log file path configuration - write to mounted /logs directory
       - LOG_FILE_PATH=/logs/quarkus.log
+      # Quarkus profile — set to "multi-idp" to enable Dex issuer configuration
+      - QUARKUS_PROFILE=${QUARKUS_PROFILE:-prod}
 
     depends_on:
       keycloak:
@@ -139,7 +141,7 @@ services:
       - "2556:5556"  # External HTTPS port for Dex
     volumes:
       - ./src/main/docker/dex:/etc/dex:ro
-      - ./src/main/docker/certificates:/etc/dex/certificates:ro
+      - ./src/main/docker/certificates:/certs:ro
     networks:
       - jwt-integration
     profiles:

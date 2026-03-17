@@ -13,56 +13,57 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.oauth.integration;
+package de.cuioss.sheriff.oauth.integration.security;
 
-import de.cuioss.tools.logging.CuiLogger;
+import de.cuioss.sheriff.oauth.integration.BaseIntegrationTest;
+import de.cuioss.sheriff.oauth.integration.TestRealm;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.stream.Stream;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
- * Integration tests for RFC 9449 DPoP (Demonstrating Proof of Possession) support.
- * <p>
- * Tests DPoP sender-constrained token validation against a real Keycloak instance
- * via the full Docker Compose stack. Uses the integration realm with
- * {@code dpop.bound.access.tokens=true} on the client.
- * <p>
- * Authorization scheme: Uses {@code Authorization: Bearer <token>} even for DPoP-bound
- * tokens (existing design — the DPoP proof is validated when the {@code DPoP} header
- * and {@code cnf.jkt} claim are present).
+ * DPoP (RFC 9449) spec — parameterized over DPoP-capable providers.
+ * Currently only Keycloak's {@code dpop-client} supports DPoP, but the design
+ * accommodates future DPoP-capable providers (Zitadel, etc.).
  */
-@DisplayName("DPoP Integration Tests (RFC 9449)")
+@DisplayName("DPoP Spec (RFC 9449)")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class DpopIntegrationIT extends BaseIntegrationTest {
+class DpopSpecIT extends BaseIntegrationTest {
 
-    private static final CuiLogger LOGGER = new CuiLogger(DpopIntegrationIT.class);
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String JWT_VALIDATE_PATH = "/jwt/validate";
     private static final String AUTHORIZATION = "Authorization";
 
-    private final TestRealm dpopRealm = TestRealm.createDpopRealm();
-    private final TestRealm integrationRealm = TestRealm.createIntegrationRealm();
+    static Stream<TestRealm> dpopProviders() {
+        // Add future DPoP-capable providers here
+        return Stream.of(TestRealm.createDpopRealm());
+    }
 
     // === Positive Tests ===
 
-    @Test
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("dpopProviders")
     @Order(1)
-    @DisplayName("Should obtain DPoP-bound token from Keycloak")
-    void shouldObtainDpopBoundToken() {
+    @DisplayName("Should obtain DPoP-bound token")
+    void shouldObtainDpopBoundToken(TestRealm realm) {
         var dpopHelper = new DpopProofHelper();
-        var tokenResponse = dpopRealm.obtainDpopBoundToken(dpopHelper);
+        var tokenResponse = realm.obtainDpopBoundToken(dpopHelper);
         assertNotNull(tokenResponse.accessToken(), "DPoP-bound access token should not be null");
-        LOGGER.info("Successfully obtained DPoP-bound token from Keycloak dpop-client");
     }
 
-    @Test
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("dpopProviders")
     @Order(2)
-    @DisplayName("Should validate DPoP-bound token with valid DPoP proof")
-    void shouldValidateDpopBoundToken() {
+    @DisplayName("Should validate DPoP-bound token with valid proof")
+    void shouldValidateDpopBoundToken(TestRealm realm) {
         var dpopHelper = new DpopProofHelper();
-        var tokenResponse = dpopRealm.obtainDpopBoundToken(dpopHelper);
+        var tokenResponse = realm.obtainDpopBoundToken(dpopHelper);
         String accessToken = tokenResponse.accessToken();
         String resourceProof = dpopHelper.createResourceProof(accessToken);
 
@@ -78,12 +79,13 @@ class DpopIntegrationIT extends BaseIntegrationTest {
                 .body("message", equalTo("Access token is valid"));
     }
 
-    @Test
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("dpopProviders")
     @Order(3)
     @DisplayName("Should validate multiple requests with fresh DPoP proofs")
-    void shouldValidateMultipleRequestsWithFreshProofs() {
+    void shouldValidateMultipleRequestsWithFreshProofs(TestRealm realm) {
         var dpopHelper = new DpopProofHelper();
-        var tokenResponse = dpopRealm.obtainDpopBoundToken(dpopHelper);
+        var tokenResponse = realm.obtainDpopBoundToken(dpopHelper);
         String accessToken = tokenResponse.accessToken();
 
         for (int i = 0; i < 3; i++) {
@@ -104,8 +106,7 @@ class DpopIntegrationIT extends BaseIntegrationTest {
     @Order(4)
     @DisplayName("Should still accept bearer token without DPoP (dpop.required=false)")
     void shouldStillAcceptBearerTokenWithoutDpop() {
-        // Regular token from integration-client (no DPoP) — works since dpop.required=false
-        var tokenResponse = integrationRealm.obtainValidToken();
+        var tokenResponse = TestRealm.createIntegrationRealm().obtainValidToken();
 
         given()
                 .contentType("application/json")
@@ -119,14 +120,14 @@ class DpopIntegrationIT extends BaseIntegrationTest {
 
     // === Negative Tests ===
 
-    @Test
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("dpopProviders")
     @Order(10)
     @DisplayName("Should reject DPoP-bound token without DPoP header")
-    void shouldRejectDpopTokenWithoutDpopHeader() {
+    void shouldRejectDpopTokenWithoutDpopHeader(TestRealm realm) {
         var dpopHelper = new DpopProofHelper();
-        var tokenResponse = dpopRealm.obtainDpopBoundToken(dpopHelper);
+        var tokenResponse = realm.obtainDpopBoundToken(dpopHelper);
 
-        // Token has cnf.jkt but no DPoP header — must be rejected
         given()
                 .contentType("application/json")
                 .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
@@ -136,15 +137,15 @@ class DpopIntegrationIT extends BaseIntegrationTest {
                 .statusCode(401);
     }
 
-    @Test
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("dpopProviders")
     @Order(11)
     @DisplayName("Should reject DPoP proof signed with wrong key")
-    void shouldRejectDpopTokenWithWrongKey() {
+    void shouldRejectDpopTokenWithWrongKey(TestRealm realm) {
         var dpopHelper = new DpopProofHelper();
-        var tokenResponse = dpopRealm.obtainDpopBoundToken(dpopHelper);
+        var tokenResponse = realm.obtainDpopBoundToken(dpopHelper);
         String accessToken = tokenResponse.accessToken();
 
-        // Create proof with a DIFFERENT key pair — thumbprint won't match cnf.jkt
         var wrongKeyHelper = DpopProofHelper.createWithDifferentKey();
         String wrongProof = wrongKeyHelper.createResourceProof(accessToken);
 
@@ -158,12 +159,13 @@ class DpopIntegrationIT extends BaseIntegrationTest {
                 .statusCode(401);
     }
 
-    @Test
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("dpopProviders")
     @Order(12)
     @DisplayName("Should reject replayed DPoP proof (same jti)")
-    void shouldRejectReplayedDpopProof() {
+    void shouldRejectReplayedDpopProof(TestRealm realm) {
         var dpopHelper = new DpopProofHelper();
-        var tokenResponse = dpopRealm.obtainDpopBoundToken(dpopHelper);
+        var tokenResponse = realm.obtainDpopBoundToken(dpopHelper);
         String accessToken = tokenResponse.accessToken();
 
         String fixedJti = "replay-test-" + java.util.UUID.randomUUID();
@@ -190,15 +192,15 @@ class DpopIntegrationIT extends BaseIntegrationTest {
                 .statusCode(401);
     }
 
-    @Test
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("dpopProviders")
     @Order(13)
     @DisplayName("Should reject stale DPoP proof (iat too old)")
-    void shouldRejectStaleDpopProof() {
+    void shouldRejectStaleDpopProof(TestRealm realm) {
         var dpopHelper = new DpopProofHelper();
-        var tokenResponse = dpopRealm.obtainDpopBoundToken(dpopHelper);
+        var tokenResponse = realm.obtainDpopBoundToken(dpopHelper);
         String accessToken = tokenResponse.accessToken();
 
-        // Create proof with iat 10 minutes in the past (max age is 300s)
         long staleIat = (System.currentTimeMillis() / 1000) - 600;
         String staleProof = dpopHelper.createResourceProofWithIat(accessToken, staleIat);
 
@@ -212,21 +214,20 @@ class DpopIntegrationIT extends BaseIntegrationTest {
                 .statusCode(401);
     }
 
-    @Test
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("dpopProviders")
     @Order(14)
-    @DisplayName("Should reject DPoP proof with wrong ath (access token hash mismatch)")
-    void shouldRejectDpopProofWithWrongAth() {
+    @DisplayName("Should reject DPoP proof with wrong ath")
+    void shouldRejectDpopProofWithWrongAth(TestRealm realm) {
         var dpopHelper = new DpopProofHelper();
-        var tokenResponse = dpopRealm.obtainDpopBoundToken(dpopHelper);
-        String accessToken = tokenResponse.accessToken();
+        var tokenResponse = realm.obtainDpopBoundToken(dpopHelper);
 
-        // Create proof with ath computed from a different token
         String wrongAth = "dGhpc19pc19hX3dyb25nX2F0aF92YWx1ZQ";
         String wrongAthProof = dpopHelper.createResourceProofWithAth(wrongAth);
 
         given()
                 .contentType("application/json")
-                .header(AUTHORIZATION, BEARER_PREFIX + accessToken)
+                .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
                 .header("DPoP", wrongAthProof)
                 .when()
                 .post(JWT_VALIDATE_PATH)
