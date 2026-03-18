@@ -16,14 +16,13 @@
 package de.cuioss.sheriff.oauth.integration;
 
 import de.cuioss.sheriff.oauth.integration.security.DpopProofHelper;
-import de.cuioss.sheriff.oauth.integration.token.RopcStrategy;
-import de.cuioss.sheriff.oauth.integration.token.ClientCredentialsStrategy;
-import de.cuioss.sheriff.oauth.integration.token.TokenAcquisitionStrategy;
 import io.restassured.response.Response;
+import io.restassured.specification.RequestSpecification;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Properties;
@@ -117,6 +116,8 @@ public class TestRealm {
     /** Default scopes for providers that don't specify their own. */
     private static final String DEFAULT_SCOPES = "openid profile email";
 
+    private enum GrantType { PASSWORD, CLIENT_CREDENTIALS }
+
     private final String realmIdentifier;
     private final String clientId;
     private final String clientSecret;
@@ -125,15 +126,18 @@ public class TestRealm {
     private final String providerName;
     private final Set<Capability> capabilities;
     private final String defaultScopes;
-    private final TokenAcquisitionStrategy tokenStrategy;
+    private final GrantType grantType;
+    private final String username;           // only for PASSWORD
+    private final String password;           // only for PASSWORD
+    private final Map<String, String> extraHeaders; // e.g. Host header for Zitadel
 
-    /** ROPC constructor — creates a {@link RopcStrategy} from username/password. */
+    /** ROPC constructor (Keycloak, Dex). */
     private TestRealm(String realmIdentifier, String clientId, String clientSecret,
                       String username, String password, String baseUrl,
                       String tokenEndpoint, String providerName,
                       Set<Capability> capabilities) {
-        this(realmIdentifier, clientId, clientSecret, baseUrl, tokenEndpoint, providerName,
-                capabilities, DEFAULT_SCOPES, new RopcStrategy(username, password));
+        this(realmIdentifier, clientId, clientSecret, username, password,
+                baseUrl, tokenEndpoint, providerName, capabilities, DEFAULT_SCOPES);
     }
 
     /** ROPC constructor with custom default scopes. */
@@ -141,15 +145,6 @@ public class TestRealm {
                       String username, String password, String baseUrl,
                       String tokenEndpoint, String providerName,
                       Set<Capability> capabilities, String defaultScopes) {
-        this(realmIdentifier, clientId, clientSecret, baseUrl, tokenEndpoint, providerName,
-                capabilities, defaultScopes, new RopcStrategy(username, password));
-    }
-
-    /** General constructor with explicit token acquisition strategy. */
-    private TestRealm(String realmIdentifier, String clientId, String clientSecret,
-                      String baseUrl, String tokenEndpoint, String providerName,
-                      Set<Capability> capabilities, String defaultScopes,
-                      TokenAcquisitionStrategy tokenStrategy) {
         this.realmIdentifier = realmIdentifier;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
@@ -158,7 +153,29 @@ public class TestRealm {
         this.providerName = providerName;
         this.capabilities = EnumSet.copyOf(capabilities);
         this.defaultScopes = defaultScopes;
-        this.tokenStrategy = tokenStrategy;
+        this.grantType = GrantType.PASSWORD;
+        this.username = username;
+        this.password = password;
+        this.extraHeaders = Collections.emptyMap();
+    }
+
+    /** Client credentials constructor (Zitadel). */
+    private TestRealm(String realmIdentifier, String clientId, String clientSecret,
+                      String baseUrl, String tokenEndpoint, String providerName,
+                      Set<Capability> capabilities, String defaultScopes,
+                      Map<String, String> extraHeaders) {
+        this.realmIdentifier = realmIdentifier;
+        this.clientId = clientId;
+        this.clientSecret = clientSecret;
+        this.baseUrl = baseUrl;
+        this.tokenEndpoint = tokenEndpoint;
+        this.providerName = providerName;
+        this.capabilities = EnumSet.copyOf(capabilities);
+        this.defaultScopes = defaultScopes;
+        this.grantType = GrantType.CLIENT_CREDENTIALS;
+        this.username = null;
+        this.password = null;
+        this.extraHeaders = Map.copyOf(extraHeaders);
     }
 
     /**
@@ -268,18 +285,16 @@ public class TestRealm {
         String clientSecret = credentials.getProperty("zitadel.service.client-secret");
         String projectId = credentials.getProperty("zitadel.project.id");
 
-        // Zitadel EXTERNALDOMAIN=zitadel, so Host header must match
-        var strategy = new ClientCredentialsStrategy(clientId, clientSecret, "zitadel:3080");
-
         // No openid scope — avoids id_token with different signing key timing
         String defaultScopes = "profile email urn:zitadel:iam:org:project:id:" + projectId + ":aud";
 
+        // Zitadel EXTERNALDOMAIN=zitadel, so Host header must match
         return new TestRealm(
                 "zitadel", clientId, clientSecret,
                 ZITADEL_BASE_URL, ZITADEL_TOKEN_ENDPOINT,
                 "Zitadel", ZITADEL_CAPABILITIES,
                 defaultScopes,
-                strategy);
+                Map.of("Host", "zitadel:3080"));
     }
 
     private static Properties loadZitadelCredentials() {
@@ -309,11 +324,37 @@ public class TestRealm {
 
     /**
      * Obtains a valid token with specific scopes.
-     * Delegates to the configured {@link TokenAcquisitionStrategy}.
      */
     public TokenResponse obtainValidTokenWithScopes(String scopes) {
-        TokenResponse response = tokenStrategy.acquireToken(
-                baseUrl, tokenEndpoint, clientId, clientSecret, scopes);
+        RequestSpecification request = given()
+                .baseUri(baseUrl)
+                .contentType("application/x-www-form-urlencoded")
+                .formParam("client_id", clientId)
+                .formParam("client_secret", clientSecret)
+                .formParam("scope", scopes);
+
+        extraHeaders.forEach(request::header);
+
+        switch (grantType) {
+            case PASSWORD -> request
+                    .formParam("grant_type", "password")
+                    .formParam("username", username)
+                    .formParam("password", password);
+            case CLIENT_CREDENTIALS -> request
+                    .formParam("grant_type", "client_credentials");
+        }
+
+        Response tokenResponse = request.when().post(tokenEndpoint);
+
+        assertEquals(200, tokenResponse.statusCode(),
+                "Token request failed for " + this + ". Response: "
+                        + tokenResponse.body().asString());
+
+        Map<String, Object> tokenData = tokenResponse.jsonPath().getMap("");
+        var response = new TokenResponse(
+                (String) tokenData.get("access_token"),
+                (String) tokenData.get("id_token"),
+                (String) tokenData.get("refresh_token"));
 
         validateToken(response.accessToken(), "Access token from " + this);
         // ID token is not returned by client_credentials grant (Zitadel)
@@ -341,13 +382,13 @@ public class TestRealm {
      * <p>
      * DPoP requires ROPC — only supported by Keycloak realms.
      *
-     * @throws IllegalStateException if this realm does not use {@link RopcStrategy}
+     * @throws IllegalStateException if this realm does not use PASSWORD grant type
      */
     public TokenResponse obtainDpopBoundToken(DpopProofHelper dpopHelper) {
-        if (!(tokenStrategy instanceof RopcStrategy ropc)) {
+        if (grantType != GrantType.PASSWORD) {
             throw new IllegalStateException(
-                    "DPoP token acquisition requires ROPC strategy, but " + this
-                            + " uses " + tokenStrategy.getClass().getSimpleName());
+                    "DPoP token acquisition requires PASSWORD grant type, but " + this
+                            + " uses " + grantType);
         }
 
         String tokenUrl = baseUrl + tokenEndpoint;
@@ -359,8 +400,8 @@ public class TestRealm {
                 .header("DPoP", dpopProof)
                 .formParam("client_id", clientId)
                 .formParam("client_secret", clientSecret)
-                .formParam("username", ropc.getUsername())
-                .formParam("password", ropc.getPassword())
+                .formParam("username", username)
+                .formParam("password", password)
                 .formParam("grant_type", "password")
                 .formParam("scope", "openid profile email")
                 .when()
