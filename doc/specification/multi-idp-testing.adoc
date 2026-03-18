@@ -17,16 +17,21 @@ The multi-IDP testing approach extends the existing Docker Compose infrastructur
 
 [source]
 ----
-┌─────────────────────────────────────────────────────────┐
-│ Docker Compose Network: jwt-integration                  │
-│                                                          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐   │
-│  │ Keycloak │  │   Dex    │  │ OAuthSheriff          │   │
-│  │ :8443    │  │  :5556   │  │ Integration Tests     │   │
-│  │ (always) │  │ (profile)│  │ :8443                 │   │
-│  └──────────┘  └──────────┘  └──────────────────────┘   │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│ Docker Compose Network: jwt-integration                               │
+│                                                                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐  │
+│  │ Keycloak │  │   Dex    │  │ Zitadel  │  │ OAuthSheriff          │  │
+│  │ :8443    │  │  :5556   │  │  :8443   │  │ Integration Tests     │  │
+│  │ (always) │  │ (profile)│  │ (profile)│  │ :8443                 │  │
+│  └──────────┘  └──────────┘  └────┬─────┘  └──────────────────────┘  │
+│                                    │                                  │
+│                               ┌────┴─────┐                           │
+│                               │ Postgres │                           │
+│                               │  :5432   │                           │
+│                               │ (profile)│                           │
+│                               └──────────┘                           │
+└──────────────────────────────────────────────────────────────────────┘
 ----
 
 === Design Principles
@@ -34,7 +39,7 @@ The multi-IDP testing approach extends the existing Docker Compose infrastructur
 1. **Profile isolation** — Additional providers only start when explicitly requested via `COMPOSE_PROFILES=multi-idp`
 2. **Capability-based filtering** — Each provider declares capabilities (e.g. `JWT_ACCESS_TOKENS`, `ROLES`). Tests declare required capabilities via `@MethodSource` — providers missing capabilities are skipped with an INFO log, not silently hidden
 3. **Shared certificates** — All providers use the same TLS certificate (SAN includes all hostnames)
-4. **Consistent patterns** — `TestRealm` is generalized to support any OIDC provider with ROPC grant
+4. **Pluggable token acquisition** — `TestRealm` delegates to `TokenAcquisitionStrategy` implementations: `RopcStrategy` for ROPC-capable providers (Keycloak, Dex), `TokenExchangeStrategy` for modern providers (Zitadel)
 
 == Provider Inventory
 
@@ -55,12 +60,12 @@ The multi-IDP testing approach extends the existing Docker Compose infrastructur
 |None (memory storage)
 |Lightweight, OpenID Certified, ROPC via `passwordConnector`. Federation broker with fixed claim model — supports groups but not roles or custom scopes (see <<dex-limitations>>).
 
-|Zitadel
-|Planned (Phase 2)
+|**Zitadel**
+|Active (Phase 2)
 |~100MB
-|~10s
-|Embedded CockroachDB
-|Full-featured OIDC/SAML, good for complex flows
+|~40s
+|PostgreSQL 16
+|Full-featured, OpenID Certified (Apache 2.0). Supports roles (via project grants), groups (via Actions + user metadata), JWT access tokens. Does not support ROPC — uses RFC 8693 Token Exchange instead. Does not support custom scopes (only standard OIDC + URN scopes). See <<zitadel-details>>.
 
 |FusionAuth
 |Deferred
@@ -98,7 +103,7 @@ No change to existing workflow:
 
 Dex is not in the provider list — only Keycloak tests run.
 
-=== Multi-IDP (Keycloak + Dex)
+=== Multi-IDP (Keycloak + Dex + Zitadel)
 
 [source,bash]
 ----
@@ -106,7 +111,7 @@ Dex is not in the provider list — only Keycloak tests run.
     -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
 ----
 
-This starts Keycloak and Dex, sets `QUARKUS_PROFILE=multi-idp` on the app container and `-Ddex.enabled=true` in the test JVM. Dex is included in the provider list and runs through all applicable specs.
+This starts Keycloak, Dex, and Zitadel (with PostgreSQL), sets `QUARKUS_PROFILE=multi-idp` on the app container and `-Ddex.enabled=true -Dzitadel.enabled=true` in the test JVM. All providers are included in the provider list and run through applicable specs based on their capabilities.
 
 === Manual Testing
 
@@ -118,9 +123,16 @@ COMPOSE_PROFILES=multi-idp docker compose up -d
 # Verify Dex
 curl -k https://localhost:2556/dex/.well-known/openid-configuration
 
+# Verify Zitadel
+curl -k https://localhost:3443/.well-known/openid-configuration
+
 # Acquire Dex token via ROPC (include groups scope for group claims)
 curl -k -X POST https://localhost:2556/dex/token \
     -d "grant_type=password&client_id=dex-client&client_secret=dex-secret&username=dex-user@example.com&password=dex-password&scope=openid+profile+email+groups"
+
+# Run Zitadel setup (generates credentials)
+PAT_FILE=/tmp/zitadel-admin-pat/zitadel-admin-sa.pat OUTPUT_DIR=. \
+    bash src/main/docker/zitadel/setup.sh
 ----
 
 == Adding a New Provider
@@ -139,14 +151,16 @@ Checklist for adding a new OIDC provider:
 == Test Scope by Provider
 
 |===
-|Test |Keycloak |Dex |Rationale
+|Test |Keycloak |Dex |Zitadel |Rationale
 
 |Access token validation
 |Yes
 |Yes
-|Dex access tokens are valid RS256-signed JWTs. The `scope` claim is absent, which is compliant per RFC 9068 Section 2.2 (scope is OPTIONAL).
+|Yes
+|All three produce RS256-signed JWT access tokens
 
 |ID token validation
+|Yes
 |Yes
 |Yes
 |Core functionality
@@ -154,35 +168,54 @@ Checklist for adding a new OIDC provider:
 |Refresh token validation
 |Yes
 |Yes (with offline_access)
-|Dex requires offline_access scope for refresh tokens
+|Yes
+|All providers support refresh tokens
 
-|Bearer token producers
+|Bearer with-roles
 |Yes
 |No
-|Requires roles and custom scopes — see <<dex-limitations>>
+|Yes
+|Keycloak: realm roles, Zitadel: project roles via Actions. Dex has no roles concept.
 
-|Bearer token interceptors
+|Bearer with-groups
 |Yes
 |No
-|Requires roles and custom scopes — see <<dex-limitations>>
+|Yes
+|Keycloak: group mappers, Zitadel: user metadata via Actions. Dex has groups but lacks other bearer requirements.
+
+|Bearer with-scopes
+|Yes
+|No
+|No
+|Only Keycloak supports custom scopes (e.g. "read"). Zitadel only accepts standard OIDC + URN scopes.
+
+|Bearer with-all
+|Yes
+|No
+|No
+|Requires ROLES + GROUPS + CUSTOM_SCOPES — only Keycloak qualifies
 
 |DPoP (RFC 9449)
 |Yes
 |No
-|Dex does not support DPoP
+|No
+|Keycloak-specific feature
 
 |JWE decryption (RFC 7516)
 |Yes
 |No
-|Dex does not support JWE
+|No
+|Keycloak-specific feature
 
 |Health checks
 |Yes
+|N/A
 |N/A
 |Application-level, provider-independent
 
 |Metrics
 |Yes
+|N/A
 |N/A
 |Application-level, provider-independent
 |===
@@ -205,7 +238,7 @@ Dex is an OIDC **federation broker**, not a full identity provider. Its local co
 
 === Implications for bearer auth tests
 
-The `bearerAuthProviders()` method source requires `ROLES + GROUPS + CUSTOM_SCOPES`. Dex has `GROUPS` but cannot provide `ROLES` or `CUSTOM_SCOPES`. A second full-featured IDP (e.g. Zitadel) would be needed to exercise bearer auth across multiple providers.
+The `bearerAuthProviders()` method source requires `ROLES + GROUPS + CUSTOM_SCOPES`. Dex has `GROUPS` but cannot provide `ROLES` or `CUSTOM_SCOPES`. Zitadel fills this gap — it participates in roles-only and groups-only bearer tests via the split capability gates in `BearerAuthSpecIT`.
 
 === Dex's value in the test suite
 
@@ -216,9 +249,56 @@ Despite these limitations, Dex proves that OAuthSheriff correctly handles:
 * **Groups** from a non-Keycloak provider
 * **Multiple simultaneous issuers** in the validation pipeline
 
+[[zitadel-details]]
+== Zitadel Integration Details
+
+Zitadel (Apache 2.0, OpenID Certified) is a full-featured identity provider that extends bearer auth test coverage beyond what Dex can provide.
+
+=== Token Acquisition: RFC 8693 Token Exchange
+
+Zitadel does not support ROPC (`grant_type=password`), which is deprecated in OAuth 2.1. Instead, token acquisition uses a two-step RFC 8693 Token Exchange flow:
+
+1. **Client credentials** — A service account authenticates via `client_credentials` grant to obtain a machine access token
+2. **Token exchange** — The machine token is exchanged for a human user's JWT access token + ID token via `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`
+
+This flow is encapsulated in `TokenExchangeStrategy`, which implements the `TokenAcquisitionStrategy` interface alongside the existing `RopcStrategy`.
+
+=== Setup: Imperative API Configuration
+
+Unlike Keycloak (declarative realm JSON import), Zitadel requires imperative configuration via its Management API. The `src/main/docker/zitadel/setup.sh` script runs after Zitadel starts and creates:
+
+* A project with `user` and `admin` roles
+* An OIDC application with JWT access tokens and token exchange grant
+* A human user (`zitadel-user@example.com`) with the `user` role
+* A service account with impersonation permission
+* Zitadel Actions (server-side JavaScript) that inject:
+** `roles` — flat array from project role grants
+** `groups` — from user metadata
+
+Credentials are written to `target/zitadel-credentials.properties`, consumed by `TestRealm.createZitadelProvider()`.
+
+=== Capabilities
+
+|===
+|Capability |Supported |Notes
+
+|ROLES |Yes |Via project role grants + Actions flattening into `roles` claim
+|GROUPS |Yes |Via user metadata + Actions injecting `groups` claim
+|JWT_ACCESS_TOKENS |Yes |Configurable per application (default opaque, set to JWT)
+|CUSTOM_SCOPES |No |Zitadel only accepts standard OIDC + its own URN-based scopes
+|OFFLINE_ACCESS |No |Not exercised in current test suite
+|===
+
+=== Dependencies
+
+* **PostgreSQL 16** — Zitadel requires a relational database (no embedded option like CockroachDB in older versions)
+* **Startup time** — ~40s (PostgreSQL + Zitadel init + setup script)
+* **Image size** — ~100MB (Zitadel) + ~80MB (PostgreSQL Alpine)
+
 == References
 
 * xref:../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/README.adoc[Integration Tests README]
 * xref:../Requirements.adoc#OAUTH-SHERIFF-12.3[OAUTH-SHERIFF-12.3: Integration Testing]
 * https://dexidp.io/docs/[Dex Documentation]
+* https://zitadel.com/docs[Zitadel Documentation]
 * https://openid.net/certification/[OpenID Certification]

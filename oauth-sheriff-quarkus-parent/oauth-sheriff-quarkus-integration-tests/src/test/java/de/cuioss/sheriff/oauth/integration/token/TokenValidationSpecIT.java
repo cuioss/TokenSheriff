@@ -80,6 +80,9 @@ class TokenValidationSpecIT extends BaseIntegrationTest {
     @DisplayName("Validate ID token via request body")
     void validateIdToken(TestRealm realm) {
         var tokenResponse = realm.obtainValidToken();
+        // client_credentials grant (Zitadel) doesn't return an ID token
+        Assumptions.assumeTrue(tokenResponse.idToken() != null,
+                "Skipping ID token validation — " + realm + " did not return an ID token");
 
         given()
                 .contentType(CONTENT_TYPE_JSON)

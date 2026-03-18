@@ -25,7 +25,7 @@ keytool -genkeypair \
   -keysize 2048 \
   -validity ${CERT_VALIDITY} \
   -dname "${CERT_DNAME}" \
-  -ext san=dns:localhost,dns:keycloak,dns:dex,ip:127.0.0.1,ip:0.0.0.0 \
+  -ext san=dns:localhost,dns:keycloak,dns:dex,dns:zitadel,ip:127.0.0.1,ip:0.0.0.0 \
   -keystore "${TEMP_KEYSTORE}" \
   -storetype PKCS12 \
   -storepass "${TEMP_PASSWORD}" \
@@ -64,6 +64,6 @@ echo "  - localhost.key: Private key in PEM format (restricted access)"
 echo ""
 echo "Certificate valid for ${CERT_VALIDITY} days (2 years)"
 echo "Subject: ${CERT_DNAME}"
-echo "SAN: dns:localhost,dns:keycloak,dns:dex,ip:127.0.0.1,ip:0.0.0.0"
+echo "SAN: dns:localhost,dns:keycloak,dns:dex,dns:zitadel,ip:127.0.0.1,ip:0.0.0.0"
 echo ""
 echo "Security: No passwords required - file permissions provide security"
