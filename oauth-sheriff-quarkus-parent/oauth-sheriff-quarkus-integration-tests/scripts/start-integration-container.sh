@@ -186,7 +186,7 @@ if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
     SVC_SECRET=$(grep 'service.client-secret' "${PROJECT_DIR}/target/zitadel-credentials.properties" | cut -d= -f2)
     PROJECT_ID=$(grep 'project.id' "${PROJECT_DIR}/target/zitadel-credentials.properties" | cut -d= -f2)
     echo "⏳ Waiting for Zitadel token validation to work..."
-    for i in {1..30}; do
+    for i in {1..90}; do
         TOKEN=$(curl -s -H "Host: zitadel:3080" -u "${SVC_ID}:${SVC_SECRET}" -X POST http://localhost:3080/oauth/v2/token \
             -d "grant_type=client_credentials&scope=openid+profile+email+urn:zitadel:iam:org:project:id:${PROJECT_ID}:aud" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
         if [ -n "$TOKEN" ]; then
@@ -197,8 +197,13 @@ if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
                 break
             fi
         fi
-        if [ $i -eq 30 ]; then
-            echo "⚠️  Zitadel token validation not ready after 30s (JWKS may still be refreshing)"
+        if [ $i -eq 90 ]; then
+            echo "❌ Zitadel token validation not ready after 90s"
+            echo "JWKS refresh has not picked up Zitadel keys. Check Quarkus logs and Zitadel JWKS endpoint."
+            exit 1
+        fi
+        if (( i % 10 == 0 )); then
+            echo "⏳ Zitadel token validation not ready yet (attempt $i/90)..."
         fi
         sleep 1
     done
