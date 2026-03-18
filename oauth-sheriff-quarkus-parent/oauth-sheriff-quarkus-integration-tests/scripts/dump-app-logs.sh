@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # Configuration
-APP_CONTAINER_NAME="oauth-sheriff-quarkus-integration-tests-oauth-sheriff-integration-tests-1"
+APP_SERVICE_NAME="oauth-sheriff-integration-tests"
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 APP_LOG_FILENAME="app-logs-${TIMESTAMP}.txt"
 
@@ -30,17 +30,10 @@ TARGET_ABS_PATH=$(cd "$TARGET_DIR" && pwd)
 APP_LOG_FILE_PATH="${TARGET_ABS_PATH}/${APP_LOG_FILENAME}"
 
 echo "🚀 Dumping application container logs..."
-echo "📦 App container: $APP_CONTAINER_NAME"
 echo "📝 Output file: $APP_LOG_FILE_PATH"
 
-# Check if container exists
-if ! docker ps -a --format "table {{.Names}}" | grep -q "^${APP_CONTAINER_NAME}$"; then
-    echo "⚠️  Container $APP_CONTAINER_NAME not found, skipping log dump"
-    exit 0
-fi
-
-# Dump logs
-if docker logs "$APP_CONTAINER_NAME" > "$APP_LOG_FILE_PATH" 2>&1; then
+# Use docker compose to resolve the service name (works regardless of container naming)
+if docker compose logs "$APP_SERVICE_NAME" > "$APP_LOG_FILE_PATH" 2>&1; then
     LOG_SIZE=$(wc -l < "$APP_LOG_FILE_PATH")
     FILE_SIZE=$(du -h "$APP_LOG_FILE_PATH" | cut -f1)
     echo "✅ Successfully dumped $LOG_SIZE lines ($FILE_SIZE)"
@@ -52,6 +45,6 @@ if docker logs "$APP_CONTAINER_NAME" > "$APP_LOG_FILE_PATH" 2>&1; then
     grep -i "jwe\|decryption" "$APP_LOG_FILE_PATH" || echo "  (no JWE-related log lines found)"
     echo ""
 else
-    echo "⚠️  Failed to dump logs from container: $APP_CONTAINER_NAME"
+    echo "⚠️  Could not dump app logs (container may not be running)"
     exit 0
 fi
