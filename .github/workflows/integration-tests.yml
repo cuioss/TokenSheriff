@@ -29,7 +29,9 @@ jobs:
 
   multi-idp-tests:
     # Multi-IDP tests: Keycloak + Dex + Zitadel — validates provider-agnostic JWT handling
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    # Runs after integration-tests to avoid concurrent push race to cuioss.github.io
+    needs: integration-tests
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)
     uses: cuioss/cuioss-organization/.github/workflows/reusable-maven-integration-tests.yml@2569924aa94ecef006ab4c96db06f43b051e5dbd # v0.6.5
     with:
       report-name: oauth-sheriff-multi-idp-tests
