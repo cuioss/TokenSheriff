@@ -18,15 +18,15 @@ The multi-IDP testing approach extends the existing Docker Compose infrastructur
 [source]
 ----
 ┌──────────────────────────────────────────────────────────────────────┐
-│ Docker Compose Network: jwt-integration                               │
-│                                                                       │
+│ Docker Compose Network: jwt-integration                              │
+│                                                                      │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐  │
-│  │ Keycloak │  │   Dex    │  │ Zitadel  │  │ OAuthSheriff          │  │
-│  │ :8443    │  │  :5556   │  │  :8443   │  │ Integration Tests     │  │
-│  │ (always) │  │ (profile)│  │ (profile)│  │ :8443                 │  │
+│  │ Keycloak │  │   Dex    │  │ Zitadel  │  │ OAuthSheriff         │  │
+│  │ :8443    │  │  :5556   │  │  :8443   │  │ Integration Tests    │  │
+│  │ (always) │  │ (profile)│  │ (profile)│  │ :8443                │  │
 │  └──────────┘  └──────────┘  └────┬─────┘  └──────────────────────┘  │
-│                                    │                                  │
-│                               ┌────┴─────┐                           │
+│                                   │                                  │
+│                               ┌───┴──────┐                           │
 │                               │ Postgres │                           │
 │                               │  :5432   │                           │
 │                               │ (profile)│                           │
