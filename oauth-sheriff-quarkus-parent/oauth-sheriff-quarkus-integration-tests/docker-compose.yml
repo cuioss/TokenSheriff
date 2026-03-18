@@ -177,11 +177,9 @@ services:
     restart: unless-stopped
 
   # Zitadel OIDC Provider for Multi-IDP Integration Testing
-  # Full-featured, OpenID Certified provider with roles, groups, token exchange
+  # OpenID Certified, client_credentials with JWT access tokens
   # Only starts with: COMPOSE_PROFILES=multi-idp docker compose up -d
-  # Requires user: "0" to avoid file-permission bug in start-from-init migration
-  # (03_default_instance fails to write PAT file → partial migration → AlreadyExists on retry)
-  # See: https://github.com/zitadel/zitadel/issues/8910
+  # Requires user: "0" to work around start-from-init PAT file permission bug (#8910)
   zitadel:
     image: ghcr.io/zitadel/zitadel:v2.71.6
     command: start-from-init --masterkeyFromEnv --tlsMode disabled

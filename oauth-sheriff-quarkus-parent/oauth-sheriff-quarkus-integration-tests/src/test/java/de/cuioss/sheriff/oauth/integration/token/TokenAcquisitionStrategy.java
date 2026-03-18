@@ -19,13 +19,12 @@ import de.cuioss.sheriff.oauth.integration.TestRealm.TokenResponse;
 
 /**
  * Strategy for acquiring tokens from an OIDC provider. Different providers
- * support different grant types — ROPC (Keycloak, Dex), token exchange
+ * support different grant types — ROPC (Keycloak, Dex), client_credentials
  * (Zitadel), etc.
  * <p>
- * Implementations capture provider-specific credentials (e.g. username/password
- * for ROPC, service account credentials for token exchange) in their
- * constructors. The {@link #acquireToken} method receives the common parameters
- * shared across all strategies.
+ * Implementations capture provider-specific credentials in their constructors.
+ * The {@link #acquireToken} method receives the common parameters shared
+ * across all strategies.
  */
 @FunctionalInterface
 public interface TokenAcquisitionStrategy {

@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Used by providers that support {@code grant_type=password} (Keycloak, Dex).
  * <p>
  * Note: ROPC is deprecated in OAuth 2.1 and not supported by modern IDPs
- * like Zitadel or Ory Hydra. Use {@link TokenExchangeStrategy} for those.
+ * like Zitadel or Ory Hydra. Use {@link ClientCredentialsStrategy} for those.
  */
 public class RopcStrategy implements TokenAcquisitionStrategy {
 
