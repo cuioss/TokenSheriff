@@ -202,24 +202,16 @@ if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
         TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
         if [ -n "$TOKEN" ]; then
             STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" -X POST https://localhost:10443/jwt/validate \
-                -H "Content-Type: application/json" -d "{\"token\":\"${TOKEN}\",\"tokenType\":\"ACCESS_TOKEN\"}" 2>/dev/null)
+                -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
             if [ "$STATUS" = "200" ]; then
                 echo "✅ Zitadel tokens validate successfully! (attempt $i)"
                 break
             fi
             if (( i % 10 == 0 )); then
                 echo "⏳ Token acquired but validation returned $STATUS (attempt $i/90)"
-                # Decode token to show issuer claim
-                ISS=$(echo "$TOKEN" | cut -d. -f2 | python3 -c "import sys,base64,json; s=sys.stdin.read().strip(); s+='='*(4-len(s)%4); print(json.loads(base64.urlsafe_b64decode(s)).get('iss','?'))" 2>/dev/null)
-                echo "  Token issuer (iss): ${ISS}"
-                # Show validation response body for debugging
                 BODY=$(curl -k -s -X POST https://localhost:10443/jwt/validate \
-                    -H "Content-Type: application/json" -d "{\"token\":\"${TOKEN}\",\"tokenType\":\"ACCESS_TOKEN\"}" 2>/dev/null)
-                echo "  Response: ${BODY:0:200}"
-                # Also try Bearer header approach
-                BEARER_STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" -X POST https://localhost:10443/jwt/validate \
                     -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
-                echo "  Bearer header status: ${BEARER_STATUS}"
+                echo "  Response: ${BODY:0:200}"
             fi
         else
             if (( i % 10 == 0 )); then
