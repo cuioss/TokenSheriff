@@ -110,6 +110,56 @@ if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
     done
 fi
 
+# Wait for Zitadel to be ready and run setup (only when multi-idp profile is active)
+if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
+    echo "⏳ Waiting for Zitadel to be ready..."
+    for i in {1..60}; do
+        if curl -s -H "Host: zitadel:3080" http://localhost:3080/debug/ready > /dev/null 2>&1; then
+            echo "✅ Zitadel is ready!"
+            break
+        fi
+        if [ $i -eq 60 ]; then
+            echo "❌ Zitadel failed to start within 60 seconds"
+            echo "Check logs with: docker compose logs zitadel"
+            exit 1
+        fi
+        echo "⏳ Waiting for Zitadel... (attempt $i/60)"
+        sleep 1
+    done
+
+    # Run Zitadel setup script to configure users, roles, and OIDC app
+    echo "🔧 Running Zitadel setup script..."
+    # Copy PAT from Docker container to host-accessible location
+    # Retry because Zitadel may still be writing the PAT file after health check passes
+    PAT_CONTAINER=$(docker compose ps -q zitadel)
+    mkdir -p /tmp/zitadel-admin-pat
+    for i in {1..10}; do
+        if docker cp "${PAT_CONTAINER}:/machinekey/zitadel-admin-sa.pat" /tmp/zitadel-admin-pat/ 2>/dev/null; then
+            if [ -s /tmp/zitadel-admin-pat/zitadel-admin-sa.pat ]; then
+                echo "✅ Admin PAT copied from container"
+                break
+            fi
+        fi
+        if [ $i -eq 10 ]; then
+            echo "❌ Failed to copy Zitadel admin PAT after 10 attempts"
+            exit 1
+        fi
+        echo "⏳ Waiting for Zitadel PAT file... (attempt $i/10)"
+        sleep 2
+    done
+
+    PAT_FILE=/tmp/zitadel-admin-pat/zitadel-admin-sa.pat \
+    OUTPUT_DIR="${PROJECT_DIR}" \
+    bash "${PROJECT_DIR}/src/main/docker/zitadel/setup.sh"
+    if [ $? -eq 0 ]; then
+        echo "✅ Zitadel setup complete!"
+    else
+        echo "❌ Zitadel setup failed"
+        echo "Check Zitadel logs with: docker compose logs zitadel"
+        exit 1
+    fi
+fi
+
 # Wait for Quarkus service to be ready and measure startup time
 echo "⏳ Waiting for Quarkus service to be ready..."
 START_TIME=$(date +%s)
@@ -129,6 +179,30 @@ for i in {1..30}; do
     echo "⏳ Waiting for Quarkus... (attempt $i/30)"
     sleep 1
 done
+
+# Wait for Zitadel JWKS keys to be picked up by app (keys may rotate after init)
+if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
+    SVC_ID=$(grep 'service.client-id' "${PROJECT_DIR}/target/zitadel-credentials.properties" | cut -d= -f2)
+    SVC_SECRET=$(grep 'service.client-secret' "${PROJECT_DIR}/target/zitadel-credentials.properties" | cut -d= -f2)
+    PROJECT_ID=$(grep 'project.id' "${PROJECT_DIR}/target/zitadel-credentials.properties" | cut -d= -f2)
+    echo "⏳ Waiting for Zitadel token validation to work..."
+    for i in {1..30}; do
+        TOKEN=$(curl -s -H "Host: zitadel:3080" -u "${SVC_ID}:${SVC_SECRET}" -X POST http://localhost:3080/oauth/v2/token \
+            -d "grant_type=client_credentials&scope=openid+profile+email+urn:zitadel:iam:org:project:id:${PROJECT_ID}:aud" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
+        if [ -n "$TOKEN" ]; then
+            STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" -X POST https://localhost:10443/jwt/validate \
+                -H "Content-Type: application/json" -d "{\"token\":\"${TOKEN}\",\"tokenType\":\"ACCESS_TOKEN\"}" 2>/dev/null)
+            if [ "$STATUS" = "200" ]; then
+                echo "✅ Zitadel tokens validate successfully!"
+                break
+            fi
+        fi
+        if [ $i -eq 30 ]; then
+            echo "⚠️  Zitadel token validation not ready after 30s (JWKS may still be refreshing)"
+        fi
+        sleep 1
+    done
+fi
 
 # Extract native startup time from logs
 NATIVE_STARTUP=$(docker compose logs oauth-sheriff-integration-tests 2>/dev/null | grep "started in" | sed -n 's/.*started in \([0-9.]*\)s.*/\1/p' | tail -1)
@@ -151,6 +225,7 @@ echo "  📊 Metrics:        https://localhost:10443/q/metrics"
 echo "  🔑 Keycloak:       https://localhost:1443/auth"
 if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
 echo "  🔑 Dex:            https://localhost:2556/dex/.well-known/openid-configuration"
+echo "  🔑 Zitadel:        http://localhost:3080/.well-known/openid-configuration"
 fi
 echo ""
 echo "🧪 Quick test commands:"

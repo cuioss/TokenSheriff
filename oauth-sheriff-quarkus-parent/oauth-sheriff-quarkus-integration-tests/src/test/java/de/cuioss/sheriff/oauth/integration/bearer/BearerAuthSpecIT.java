@@ -29,9 +29,10 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Bearer auth spec — parameterized over Keycloak providers only.
- * Tests bearer token producer and interceptor endpoints that require
- * Keycloak-specific features (roles, groups, custom scopes).
+ * Bearer auth spec — parameterized over providers with matching capabilities.
+ * Tests are split by capability gate so providers like Zitadel (roles + groups
+ * but no custom scopes) participate in roles-only and groups-only tests while
+ * only Keycloak runs the full with-all suite.
  */
 @DisplayName("Bearer Auth Spec")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -43,7 +44,7 @@ class BearerAuthSpecIT extends BaseIntegrationTest {
     // === Bearer Token Producer Tests ===
 
     @ParameterizedTest(name = "[{0}] {1}")
-    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#bearerAuthProviders")
+    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#customScopesProviders")
     @Order(1)
     @DisplayName("Bearer token producer — with-scopes")
     void bearerTokenWithScopes(TestRealm realm) {
@@ -57,11 +58,11 @@ class BearerAuthSpecIT extends BaseIntegrationTest {
     }
 
     @ParameterizedTest(name = "[{0}]")
-    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#bearerAuthProviders")
+    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#rolesProviders")
     @Order(2)
     @DisplayName("Bearer token producer — with-roles")
     void bearerTokenWithRoles(TestRealm realm) {
-        var tokenResponse = realm.obtainValidTokenWithAllScopes();
+        var tokenResponse = realm.obtainValidToken();
         given()
                 .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
                 .when()
@@ -71,11 +72,11 @@ class BearerAuthSpecIT extends BaseIntegrationTest {
     }
 
     @ParameterizedTest(name = "[{0}]")
-    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#bearerAuthProviders")
+    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#groupsProviders")
     @Order(3)
     @DisplayName("Bearer token producer — with-groups")
     void bearerTokenWithGroups(TestRealm realm) {
-        var tokenResponse = realm.obtainValidTokenWithAllScopes();
+        var tokenResponse = realm.obtainValidToken();
         given()
                 .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
                 .when()
@@ -101,7 +102,7 @@ class BearerAuthSpecIT extends BaseIntegrationTest {
     // === Bearer Token Interceptor Tests ===
 
     @ParameterizedTest(name = "[{0}]")
-    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#bearerAuthProviders")
+    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#customScopesProviders")
     @Order(10)
     @DisplayName("Interceptor — with scopes")
     void interceptorWithScopes(TestRealm realm) {
@@ -117,11 +118,11 @@ class BearerAuthSpecIT extends BaseIntegrationTest {
     }
 
     @ParameterizedTest(name = "[{0}]")
-    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#bearerAuthProviders")
+    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#rolesProviders")
     @Order(11)
     @DisplayName("Interceptor — with roles")
     void interceptorWithRoles(TestRealm realm) {
-        var tokenResponse = realm.obtainValidTokenWithAllScopes();
+        var tokenResponse = realm.obtainValidToken();
         given()
                 .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
                 .when()
@@ -133,11 +134,11 @@ class BearerAuthSpecIT extends BaseIntegrationTest {
     }
 
     @ParameterizedTest(name = "[{0}]")
-    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#bearerAuthProviders")
+    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#groupsProviders")
     @Order(12)
     @DisplayName("Interceptor — with groups")
     void interceptorWithGroups(TestRealm realm) {
-        var tokenResponse = realm.obtainValidTokenWithAllScopes();
+        var tokenResponse = realm.obtainValidToken();
         given()
                 .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
                 .when()
@@ -167,7 +168,7 @@ class BearerAuthSpecIT extends BaseIntegrationTest {
     @ParameterizedTest(name = "[{0}] {1}")
     @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#bearerAuthProviders")
     @Order(14)
-    @DisplayName("Interceptor — default permissions succeed")
+    @DisplayName("Interceptor — default permissions succeed (all capabilities)")
     void interceptorDefaultPermissions(TestRealm realm) {
         var tokenResponse = realm.obtainValidToken();
 
@@ -224,7 +225,7 @@ class BearerAuthSpecIT extends BaseIntegrationTest {
     // === String Return Type Tests ===
 
     @ParameterizedTest(name = "[{0}]")
-    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#bearerAuthProviders")
+    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#customScopesProviders")
     @Order(30)
     @DisplayName("Interceptor — String return type success")
     void stringReturnSuccess(TestRealm realm) {
@@ -244,7 +245,7 @@ class BearerAuthSpecIT extends BaseIntegrationTest {
     }
 
     @ParameterizedTest(name = "[{0}]")
-    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#bearerAuthProviders")
+    @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#customScopesProviders")
     @Order(31)
     @DisplayName("Interceptor — String return type failure throws WebApplicationException")
     void stringReturnFailure(TestRealm realm) {

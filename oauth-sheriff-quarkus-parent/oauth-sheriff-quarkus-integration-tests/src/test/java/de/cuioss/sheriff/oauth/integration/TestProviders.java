@@ -51,9 +51,9 @@ public final class TestProviders {
             new ProviderRegistration(null, TestRealm::createIntegrationRealm),
             new ProviderRegistration(null, TestRealm::createBenchmarkRealm),
             // Dex — only when multi-idp-tests profile is active
-            new ProviderRegistration("dex.enabled", TestRealm::createDexProvider)
-            // To add Zitadel:
-            // new ProviderRegistration("zitadel.enabled", TestRealm::createZitadelProvider)
+            new ProviderRegistration("dex.enabled", TestRealm::createDexProvider),
+            // Zitadel — only when multi-idp-tests profile is active
+            new ProviderRegistration("zitadel.enabled", TestRealm::createZitadelProvider)
     );
 
     private TestProviders() {
@@ -121,6 +121,30 @@ public final class TestProviders {
      */
     public static Stream<TestRealm> jwtAccessTokenProviders() {
         return withCapabilities(Capability.JWT_ACCESS_TOKENS);
+    }
+
+    /**
+     * Providers that support role claims in bearer tokens.
+     * Includes Keycloak and Zitadel but not Dex (no roles support).
+     */
+    public static Stream<TestRealm> rolesProviders() {
+        return withCapabilities(Capability.ROLES, Capability.JWT_ACCESS_TOKENS);
+    }
+
+    /**
+     * Providers that support group claims in bearer tokens.
+     * Includes Keycloak, Dex, and Zitadel.
+     */
+    public static Stream<TestRealm> groupsProviders() {
+        return withCapabilities(Capability.GROUPS, Capability.ROLES, Capability.JWT_ACCESS_TOKENS);
+    }
+
+    /**
+     * Providers that support custom scopes (e.g. "read") in bearer tokens.
+     * Only Keycloak — Dex rejects unknown scopes, Zitadel only accepts URN scopes.
+     */
+    public static Stream<TestRealm> customScopesProviders() {
+        return withCapabilities(Capability.CUSTOM_SCOPES, Capability.JWT_ACCESS_TOKENS);
     }
 
     /**
