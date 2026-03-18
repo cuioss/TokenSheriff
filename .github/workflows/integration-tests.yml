@@ -1,4 +1,5 @@
-# Runs integration/E2E tests via Maven with report deployment to cuioss.github.io.
+# Runs multi-IDP integration tests via Maven with report deployment to cuioss.github.io.
+# The multi-idp-tests profile is a superset that includes standard integration tests.
 name: Integration Tests
 
 on:
@@ -12,26 +13,11 @@ permissions:
   contents: read
 
 jobs:
-  integration-tests:
+  multi-idp-tests:
+    # Multi-IDP tests: Keycloak + Dex + Zitadel — superset of standard integration tests
     # Run on push events, OR on pull_request only if from a fork
     # This prevents duplicate runs: push handles internal branches, PR handles forks
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
-    uses: cuioss/cuioss-organization/.github/workflows/reusable-maven-integration-tests.yml@2569924aa94ecef006ab4c96db06f43b051e5dbd # v0.6.5
-    with:
-      report-name: oauth-sheriff-integration-tests
-      maven-args-input: |
-        verify -Pintegration-tests -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
-      reports-folder: |
-        oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/target/failsafe-reports
-    secrets:
-      RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
-      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-
-  multi-idp-tests:
-    # Multi-IDP tests: Keycloak + Dex + Zitadel — validates provider-agnostic JWT handling
-    # Runs after integration-tests to avoid concurrent push race to cuioss.github.io
-    needs: integration-tests
-    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)
     uses: cuioss/cuioss-organization/.github/workflows/reusable-maven-integration-tests.yml@2569924aa94ecef006ab4c96db06f43b051e5dbd # v0.6.5
     with:
       report-name: oauth-sheriff-multi-idp-tests
