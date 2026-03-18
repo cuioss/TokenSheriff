@@ -186,24 +186,41 @@ if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
     SVC_SECRET=$(grep 'service.client-secret' "${PROJECT_DIR}/target/zitadel-credentials.properties" | cut -d= -f2)
     PROJECT_ID=$(grep 'project.id' "${PROJECT_DIR}/target/zitadel-credentials.properties" | cut -d= -f2)
     echo "⏳ Waiting for Zitadel token validation to work..."
+    echo "  Zitadel JWKS URL (from inside Docker): http://zitadel:8080/oauth/v2/keys"
+    echo "  Zitadel JWKS URL (from host): http://localhost:3080/oauth/v2/keys"
+    # Verify JWKS endpoint is reachable from host
+    JWKS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: zitadel:3080" http://localhost:3080/oauth/v2/keys 2>/dev/null)
+    echo "  JWKS endpoint status: ${JWKS_STATUS}"
     for i in {1..90}; do
-        TOKEN=$(curl -s -H "Host: zitadel:3080" -u "${SVC_ID}:${SVC_SECRET}" -X POST http://localhost:3080/oauth/v2/token \
-            -d "grant_type=client_credentials&scope=openid+profile+email+urn:zitadel:iam:org:project:id:${PROJECT_ID}:aud" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
+        TOKEN_RESPONSE=$(curl -s -H "Host: zitadel:3080" -u "${SVC_ID}:${SVC_SECRET}" -X POST http://localhost:3080/oauth/v2/token \
+            -d "grant_type=client_credentials&scope=profile+email+urn:zitadel:iam:org:project:id:${PROJECT_ID}:aud" 2>/dev/null)
+        TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
         if [ -n "$TOKEN" ]; then
             STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" -X POST https://localhost:10443/jwt/validate \
                 -H "Content-Type: application/json" -d "{\"token\":\"${TOKEN}\",\"tokenType\":\"ACCESS_TOKEN\"}" 2>/dev/null)
             if [ "$STATUS" = "200" ]; then
-                echo "✅ Zitadel tokens validate successfully!"
+                echo "✅ Zitadel tokens validate successfully! (attempt $i)"
                 break
+            fi
+            if (( i % 10 == 0 )); then
+                echo "⏳ Token acquired but validation returned $STATUS (attempt $i/90)"
+                # Show validation response body for debugging
+                BODY=$(curl -k -s -X POST https://localhost:10443/jwt/validate \
+                    -H "Content-Type: application/json" -d "{\"token\":\"${TOKEN}\",\"tokenType\":\"ACCESS_TOKEN\"}" 2>/dev/null)
+                echo "  Response: ${BODY:0:200}"
+            fi
+        else
+            if (( i % 10 == 0 )); then
+                echo "⏳ Token acquisition failed (attempt $i/90)"
+                echo "  Response: ${TOKEN_RESPONSE:0:200}"
             fi
         fi
         if [ $i -eq 90 ]; then
             echo "❌ Zitadel token validation not ready after 90s"
             echo "JWKS refresh has not picked up Zitadel keys. Check Quarkus logs and Zitadel JWKS endpoint."
+            # Dump Quarkus logs for JWKS-related entries
+            docker compose logs oauth-sheriff-integration-tests 2>/dev/null | grep -i "jwks\|zitadel\|issuer" | tail -20
             exit 1
-        fi
-        if (( i % 10 == 0 )); then
-            echo "⏳ Zitadel token validation not ready yet (attempt $i/90)..."
         fi
         sleep 1
     done
