@@ -272,7 +272,7 @@ class TokenValidatorTest {
         @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 2)
         @DisplayName("Log warning when token is missing claims")
         void shouldLogWarningWhenTokenIsMissingClaims(TestTokenHolder tokenHolder) {
-            tokenHolder.withoutClaim(ClaimName.SCOPE.getName());
+            tokenHolder.withoutClaim(ClaimName.SUBJECT.getName());
             String validToken = tokenHolder.getRawToken();
 
             var exception = assertThrows(TokenValidationException.class,

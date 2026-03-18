@@ -145,12 +145,13 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
     }
 
     @Test
-    @DisplayName("Throw exception when scopes not present")
-    void shouldThrowExceptionWhenScopesNotPresent() {
+    @DisplayName("Return empty list when scopes not present")
+    void shouldReturnEmptyListWhenScopesNotPresent() {
         var accessTokenContent = createTokenWithClaims(new HashMap<>());
 
-        assertThrows(IllegalStateException.class, accessTokenContent::getScopes,
-                "Should throw exception when scopes missing");
+        List<String> scopes = accessTokenContent.getScopes();
+        assertNotNull(scopes, "Scopes should not be null");
+        assertTrue(scopes.isEmpty(), "Scopes should be empty when scope claim is absent");
     }
 
     @ParameterizedTest

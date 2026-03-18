@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.oauth.integration;
+package de.cuioss.sheriff.oauth.integration.security;
 
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -27,13 +27,13 @@ import java.util.*;
  * <p>
  * Pattern borrowed from {@code DpopPipelineIntegrationTest} in oauth-sheriff-core.
  */
-class DpopProofHelper {
+public class DpopProofHelper {
 
     private final KeyPair keyPair;
     private final Map<String, Object> jwkMap;
     private final String jwkJson;
 
-    DpopProofHelper() {
+    public DpopProofHelper() {
         this.keyPair = generateRsaKeyPair();
         this.jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
         this.jwkJson = mapToJson(jwkMap);
@@ -44,7 +44,7 @@ class DpopProofHelper {
      * Includes {@code htm} and {@code htu} claims (Keycloak requires these).
      * No {@code ath} claim since we don't have an access token yet.
      */
-    String createTokenEndpointProof(String tokenEndpointUrl) {
+    public String createTokenEndpointProof(String tokenEndpointUrl) {
         String bodyJson = """
                 {"jti":"%s","iat":%d,"htm":"POST","htu":"%s"}""".formatted(
                 UUID.randomUUID().toString(),
@@ -57,7 +57,7 @@ class DpopProofHelper {
      * Creates a DPoP proof for the resource server with {@code ath} claim.
      * OAuth Sheriff validates ath but not htm/htu, so those are omitted.
      */
-    String createResourceProof(String rawAccessToken) {
+    public String createResourceProof(String rawAccessToken) {
         String bodyJson = """
                 {"jti":"%s","iat":%d,"ath":"%s"}""".formatted(
                 UUID.randomUUID().toString(),
@@ -69,7 +69,7 @@ class DpopProofHelper {
     /**
      * Creates a DPoP proof with a custom {@code iat} timestamp (for stale proof testing).
      */
-    String createResourceProofWithIat(String rawAccessToken, long iatSeconds) {
+    public String createResourceProofWithIat(String rawAccessToken, long iatSeconds) {
         String bodyJson = """
                 {"jti":"%s","iat":%d,"ath":"%s"}""".formatted(
                 UUID.randomUUID().toString(),
@@ -81,7 +81,7 @@ class DpopProofHelper {
     /**
      * Creates a DPoP proof with a wrong {@code ath} value (for ath mismatch testing).
      */
-    String createResourceProofWithAth(String wrongAth) {
+    public String createResourceProofWithAth(String wrongAth) {
         String bodyJson = """
                 {"jti":"%s","iat":%d,"ath":"%s"}""".formatted(
                 UUID.randomUUID().toString(),
@@ -93,7 +93,7 @@ class DpopProofHelper {
     /**
      * Creates a DPoP proof with a specific {@code jti} (for replay testing).
      */
-    String createResourceProofWithJti(String rawAccessToken, String jti) {
+    public String createResourceProofWithJti(String rawAccessToken, String jti) {
         String bodyJson = """
                 {"jti":"%s","iat":%d,"ath":"%s"}""".formatted(
                 jti,
@@ -105,7 +105,7 @@ class DpopProofHelper {
     /**
      * Creates a new DpopProofHelper with a different key pair (for wrong-key testing).
      */
-    static DpopProofHelper createWithDifferentKey() {
+    public static DpopProofHelper createWithDifferentKey() {
         return new DpopProofHelper();
     }
 

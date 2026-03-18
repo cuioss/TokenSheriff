@@ -21,6 +21,7 @@ Integration tests for the OAuth Sheriff Quarkus extension with native container 
 * Native container testing with production-like behavior
 * HTTPS with self-signed certificates
 * Keycloak integration with two test realms
+* Multi-IDP testing with Dex (via Docker Compose profile)
 * Health check and metrics validation
 * Automated build and test scripts
 
@@ -34,8 +35,11 @@ Integration tests for the OAuth Sheriff Quarkus extension with native container 
 
 [source,bash]
 ----
-# Native integration tests (requires Docker)
+# Native integration tests - Keycloak only (requires Docker)
 ./mvnw clean verify -Pintegration-tests -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
+
+# Multi-IDP integration tests - Keycloak + Dex (requires Docker)
+./mvnw clean verify -Pmulti-idp-tests -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
 
 # JVM unit tests only (no Docker required)
 ./mvnw clean test -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests
@@ -103,6 +107,32 @@ ls -la oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/targ
 |CI/CD Support |✅ |❌ (Disabled in GitHub Actions)
 |===
 
+== Multi-IDP Testing
+
+The integration tests support multiple OIDC providers to verify broad compatibility. Additional providers are managed via Docker Compose profiles.
+
+=== Dex (Phase 1)
+
+https://dexidp.io/[Dex] is a lightweight, OpenID Certified OIDC provider (~30MB, 2s startup) used for multi-IDP testing.
+
+* **Port**: `2556` (external HTTPS)
+* **Issuer**: `https://dex:5556/dex`
+* **Client**: `dex-client` / `dex-secret`
+* **User**: `dex-user@example.com` / `dex-password`
+
+[source,bash]
+----
+# Start with Dex
+COMPOSE_PROFILES=multi-idp docker compose up -d
+
+# Verify Dex
+curl -k https://localhost:2556/dex/.well-known/openid-configuration
+----
+
+Tests are parameterized via `TestProviders` — Dex is automatically included in the provider list when `-Ddex.enabled=true` is set by the multi-idp-tests Maven profile. Providers missing required capabilities are skipped with an INFO log.
+
+See link:../../doc/specification/multi-idp-testing.adoc[Multi-IDP Testing Specification] for the full architecture and provider roadmap.
+
 == Native Compilation
 
 === Java 25 Builder Image
@@ -145,10 +175,14 @@ oauth-sheriff-quarkus-integration-tests/
 │           ├── benchmark-realm.json
 │           └── integration-realm.json
 ├── src/test/java/de/cuioss/sheriff/oauth/integration/
-│   ├── HealthCheckIntegrationIT.java
-│   ├── JwtValidationEndpoint*IT.java
-│   ├── AbstractJwtValidationEndpointTest.java
-│   └── BaseIntegrationTest.java
+│   ├── BaseIntegrationTest.java
+│   ├── TestRealm.java
+│   ├── TestProviders.java
+│   ├── token/TokenValidationSpecIT.java
+│   ├── bearer/BearerAuthSpecIT.java
+│   ├── security/{DpopSpecIT,JweDecryptionSpecIT,DpopProofHelper}.java
+│   ├── health/{HealthCheckIntegrationIT,HealthCheckResponsivenessIT}.java
+│   └── api/{ApiValidationSpecIT,TokenRequestSpecIT}.java
 └── scripts/
     ├── start-integration-container.sh
     ├── stop-integration-container.sh
@@ -174,24 +208,23 @@ The module integrates Docker cleanup with Maven's clean phase to prevent file lo
 
 This ensures reliable cleanup of native executables and build artifacts without "file in use" errors.
 
-== Test Classes
+== Test Specs
 
-* **HealthCheckIntegrationIT**: Health endpoint validation
-* **HealthCheckResponsivenessIT**: Health endpoint responsiveness testing
-* **JwtValidationEndpointApiValidationIT**: API validation testing
-* **JwtValidationEndpointBenchmarkIT**: Benchmark realm validation
-* **JwtValidationEndpointIntegrationIT**: Integration realm validation
-* **JwtValidationEndpointTokenRequestIT**: Token request testing
-* **TestRealm**: Test realm configuration helper
+Tests use `@ParameterizedTest` with `@MethodSource` to run against multiple OIDC providers. Each spec declares required capabilities — providers are filtered by `TestProviders`.
 
-=== Test Inheritance Structure
+* **token/TokenValidationSpecIT**: Access/ID/refresh token validation (parameterized over all providers with matching capabilities)
+* **bearer/BearerAuthSpecIT**: Bearer token producers and interceptors (Keycloak-only — requires ROLES, GROUPS, CUSTOM_SCOPES)
+* **security/DpopSpecIT**: DPoP RFC 9449 validation (parameterized over DPoP-capable providers)
+* **security/JweDecryptionSpecIT**: JWE RFC 7516 decryption (parameterized over JWE-capable providers)
+* **health/HealthCheckIntegrationIT**: Health endpoint validation
+* **health/HealthCheckResponsivenessIT**: Health endpoint responsiveness testing
+* **api/ApiValidationSpecIT**: API input validation (provider-independent)
+* **api/TokenRequestSpecIT**: Token request deserialization (provider-independent)
 
-Test classes inherit from base classes to share common functionality:
+=== Key infrastructure classes
 
-* **BaseIntegrationTest**: Common integration test setup
-* **AbstractJwtValidationEndpointTest**: JWT endpoint testing base
-
-This structure validates both Keycloak realms (benchmark and integration) with different JWT configuration patterns.
+* **TestRealm**: Provider configuration + token acquisition + capability declaration
+* **TestProviders**: Provider registry with capability-based filtering and INFO logging
 
 == Configuration
 
@@ -267,7 +300,7 @@ Self-signed certificates via `generate-certificates.sh`:
 
 * Truststore: `localhost-truststore.p12` (password: `localhost-trust`)
 * Subject: `CN=localhost`
-* SAN: `dns:localhost,dns:keycloak,ip:127.0.0.1,ip:0.0.0.0`
+* SAN: `dns:localhost,dns:keycloak,dns:dex,ip:127.0.0.1,ip:0.0.0.0`
 
 === Key Properties
 

@@ -1,0 +1,52 @@
+# Dex OIDC Provider Configuration for Multi-IDP Integration Testing
+# Dex is a lightweight, OpenID Certified OIDC provider (~30MB, 2s startup)
+# Documentation: https://dexidp.io/docs/
+
+issuer: https://dex:5556/dex
+
+storage:
+  type: memory
+
+web:
+  https: 0.0.0.0:5556
+  tlsCert: /certs/localhost.crt
+  tlsKey: /certs/localhost.key
+
+oauth2:
+  # Enable Resource Owner Password Credentials (ROPC) grant via local connector
+  # This allows the TestRealm pattern to acquire tokens programmatically
+  passwordConnector: local
+  # Skip approval screen for automated testing
+  skipApprovalScreen: true
+
+expiry:
+  # Match Keycloak's 900s (15 min) token expiry for consistency
+  idTokens: 15m
+  signingKeys: 6h
+
+staticClients:
+  - id: dex-client
+    secret: dex-secret
+    name: Dex Integration Test Client
+    redirectURIs:
+      - https://localhost:2556/callback
+    # Public to allow ROPC grant
+    public: false
+
+# Static local connector with test user
+enablePasswordDB: true
+staticPasswords:
+  - email: dex-user@example.com
+    # bcrypt hash of "dex-password"
+    # Generated with: htpasswd -nbBC 10 "" dex-password | tr -d ':\n' | sed 's/$2y/$2a/'
+    hash: "$2a$10$urcOaB5wArsHhMghs4E8rOjwPv95VTtPj/wUpfVGt3WMyqVvxzAWa"
+    username: dex-user
+    userID: "08a8684b-db88-4b73-90a9-3cd1661f5466"
+    # Groups included in tokens when 'groups' scope is requested.
+    # "test-group" matches the @BearerToken(requiredGroups) in JwtValidationEndpoint.
+    groups:
+      - "test-group"
+
+logger:
+  level: info
+  format: text

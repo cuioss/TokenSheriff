@@ -10,7 +10,7 @@
 set -euo pipefail
 
 # Configuration
-KEYCLOAK_CONTAINER_NAME="oauth-sheriff-quarkus-integration-tests-keycloak-1"
+KEYCLOAK_SERVICE_NAME="keycloak"
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 KEYCLOAK_LOG_FILENAME="keycloak-logs-${TIMESTAMP}.txt"
 
@@ -35,34 +35,15 @@ TARGET_ABS_PATH=$(cd "$TARGET_DIR" && pwd)
 KEYCLOAK_LOG_FILE_PATH="${TARGET_ABS_PATH}/${KEYCLOAK_LOG_FILENAME}"
 
 echo "🚀 Dumping Keycloak container logs..."
-echo "📦 Keycloak container: $KEYCLOAK_CONTAINER_NAME"
 echo "📝 Output file: $KEYCLOAK_LOG_FILE_PATH"
 
-# Check if container exists and is running
-if ! docker ps --format "table {{.Names}}" | grep -q "^${KEYCLOAK_CONTAINER_NAME}$"; then
-    if docker ps -a --format "table {{.Names}}" | grep -q "^${KEYCLOAK_CONTAINER_NAME}$"; then
-        echo "⚠️  Warning: Container $KEYCLOAK_CONTAINER_NAME exists but is not running"
-        echo "📋 Attempting to dump logs from stopped container..."
-    else
-        echo "❌ Error: Container $KEYCLOAK_CONTAINER_NAME not found"
-        echo "🔍 Available containers:"
-        docker ps -a --format "table {{.Names}}\t{{.Status}}"
-        exit 1
-    fi
-else
-    echo "✅ Container is running"
-fi
-
-# Dump logs
-echo "📥 Dumping Keycloak logs..."
-if docker logs "$KEYCLOAK_CONTAINER_NAME" > "$KEYCLOAK_LOG_FILE_PATH" 2>&1; then
+# Use docker compose to resolve the service name (works regardless of container naming)
+if docker compose logs "$KEYCLOAK_SERVICE_NAME" > "$KEYCLOAK_LOG_FILE_PATH" 2>&1; then
     LOG_SIZE=$(wc -l < "$KEYCLOAK_LOG_FILE_PATH")
     FILE_SIZE=$(du -h "$KEYCLOAK_LOG_FILE_PATH" | cut -f1)
     echo "✅ Successfully dumped $LOG_SIZE lines ($FILE_SIZE)"
     echo "📍 Full path: $KEYCLOAK_LOG_FILE_PATH"
-    echo "🎉 Keycloak logs successfully dumped!"
-    exit 0
 else
-    echo "❌ Failed to dump logs from container: $KEYCLOAK_CONTAINER_NAME"
-    exit 1
+    echo "⚠️  Could not dump Keycloak logs (container may not be running)"
+    exit 0
 fi
