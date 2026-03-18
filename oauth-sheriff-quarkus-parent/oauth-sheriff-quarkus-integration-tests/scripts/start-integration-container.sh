@@ -64,6 +64,11 @@ PROFILE_INFO=""
 if [[ -n "$COMPOSE_PROFILES" ]]; then
     export COMPOSE_PROFILES
     PROFILE_INFO=" [profiles: $COMPOSE_PROFILES]"
+    # Ensure Quarkus profile matches — enables %multi-idp. properties for Dex/Zitadel issuers
+    if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]] && [[ -z "$QUARKUS_PROFILE" || "$QUARKUS_PROFILE" == "prod" ]]; then
+        export QUARKUS_PROFILE="multi-idp"
+        echo "📋 Set QUARKUS_PROFILE=multi-idp (required for Dex/Zitadel issuer configuration)"
+    fi
 fi
 
 echo "🐳 Starting Docker containers (Quarkus $MODE + Keycloak${PROFILE_INFO})..."
@@ -204,10 +209,17 @@ if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
             fi
             if (( i % 10 == 0 )); then
                 echo "⏳ Token acquired but validation returned $STATUS (attempt $i/90)"
+                # Decode token to show issuer claim
+                ISS=$(echo "$TOKEN" | cut -d. -f2 | python3 -c "import sys,base64,json; s=sys.stdin.read().strip(); s+='='*(4-len(s)%4); print(json.loads(base64.urlsafe_b64decode(s)).get('iss','?'))" 2>/dev/null)
+                echo "  Token issuer (iss): ${ISS}"
                 # Show validation response body for debugging
                 BODY=$(curl -k -s -X POST https://localhost:10443/jwt/validate \
                     -H "Content-Type: application/json" -d "{\"token\":\"${TOKEN}\",\"tokenType\":\"ACCESS_TOKEN\"}" 2>/dev/null)
                 echo "  Response: ${BODY:0:200}"
+                # Also try Bearer header approach
+                BEARER_STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" -X POST https://localhost:10443/jwt/validate \
+                    -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
+                echo "  Bearer header status: ${BEARER_STATUS}"
             fi
         else
             if (( i % 10 == 0 )); then
