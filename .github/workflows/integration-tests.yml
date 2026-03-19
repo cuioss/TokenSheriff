@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  multi-idp-tests:
-    # Multi-IDP tests: Keycloak + Dex + Zitadel — superset of standard integration tests
+  integration-tests:
+    # Multi-IDP tests (Keycloak + Dex + Zitadel) — superset that includes standard integration tests
     # Run on push events, OR on pull_request only if from a fork
     # This prevents duplicate runs: push handles internal branches, PR handles forks
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
