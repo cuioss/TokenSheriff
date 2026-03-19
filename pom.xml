@@ -9,7 +9,7 @@
     </parent>
     <groupId>de.cuioss.sheriff.oauth</groupId>
     <artifactId>oauth-sheriff-parent</artifactId>
-    <version>0.6.0</version>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>OAuth Sheriff Parent</name>
     <description>A comprehensive framework for validating OAuth/JWT tokens in multi-issuer environments.
@@ -32,7 +32,7 @@
         <developerConnection>
             scm:git:https://github.com/cuioss/OAuthSheriff/
         </developerConnection>
-        <tag>0.6.0</tag>
+        <tag>HEAD</tag>
     </scm>
     <issueManagement>
         <url>https://github.com/cuioss/OAuthSheriff/issues</url>
