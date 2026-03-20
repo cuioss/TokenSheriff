@@ -51,7 +51,7 @@
     "lit": "^3.3.2",
     "postcss-lit": "^1.4.1",
     "prettier": "^3.8.1",
-    "stylelint": "^17.4.0",
+    "stylelint": "^17.5.0",
     "stylelint-config-standard": "^40.0.0",
     "stylelint-order": "^8.1.1"
   },
