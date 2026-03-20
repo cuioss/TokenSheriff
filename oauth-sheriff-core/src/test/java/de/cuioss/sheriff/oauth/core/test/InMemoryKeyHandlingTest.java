@@ -76,7 +76,7 @@ class InMemoryKeyHandlingTest {
         String jwks = InMemoryKeyMaterialHandler.createDefaultJwks(algorithm);
 
         assertNotNull(jwks, "JWKS should not be null");
-        assertTrue(jwks.contains("\"alg\":\"" + algorithm.name() + "\""), "JWKS should contain algorithm " + algorithm);
+        assertTrue(jwks.contains("\"alg\":\"" + algorithm.getJwkAlgorithmName() + "\""), "JWKS should contain algorithm " + algorithm);
 
         // Parse the JWKS to verify it's valid JSON
         try (JsonReader reader = Json.createReader(new StringReader(jwks))) {
@@ -85,18 +85,18 @@ class InMemoryKeyHandlingTest {
             assertEquals(1, jwksObject.getJsonArray("keys").size(), "JWKS should contain 1 key");
 
             JsonObject key = jwksObject.getJsonArray("keys").getJsonObject(0);
-            String algName = algorithm.name();
+            String algName = algorithm.getJwkAlgorithmName();
 
             if (algName.startsWith("RS") || algName.startsWith("PS")) {
                 assertEquals("RSA", key.getString("kty"), "Key type should be RSA for " + algorithm);
                 assertEquals(InMemoryKeyMaterialHandler.DEFAULT_KEY_ID, key.getString("kid"), "Key ID should match default");
-                assertEquals(algorithm.name(), key.getString("alg"), "Algorithm should match");
+                assertEquals(algorithm.getJwkAlgorithmName(), key.getString("alg"), "Algorithm should match");
                 assertTrue(key.containsKey("n"), "RSA key should contain modulus");
                 assertTrue(key.containsKey("e"), "RSA key should contain exponent");
             } else if (algName.startsWith("ES")) {
                 assertEquals("EC", key.getString("kty"), "Key type should be EC for " + algorithm);
                 assertEquals(InMemoryKeyMaterialHandler.DEFAULT_KEY_ID, key.getString("kid"), "Key ID should match default");
-                assertEquals(algorithm.name(), key.getString("alg"), "Algorithm should match");
+                assertEquals(algorithm.getJwkAlgorithmName(), key.getString("alg"), "Algorithm should match");
                 assertTrue(key.containsKey("crv"), "EC key should contain curve");
                 assertTrue(key.containsKey("x"), "EC key should contain x coordinate");
                 assertTrue(key.containsKey("y"), "EC key should contain y coordinate");

@@ -92,8 +92,9 @@ class JwtTokenTamperingUtilTest {
         // Verify that the validation was actually tampered
         assertNotEquals(originalToken, tamperedToken,
                 "Token should be tampered using strategy: " + strategy.getDescription());
+        var accessTokenRequest = AccessTokenRequest.of(tamperedToken);
         TokenValidationException exception = assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)),
+                () -> tokenValidator.createAccessToken(accessTokenRequest),
                 "Tampered token should be rejected. Strategy: " + strategy.getDescription());
 
         // Verify the exception has a valid event type
@@ -112,8 +113,9 @@ class JwtTokenTamperingUtilTest {
         // Verify that the validation was actually tampered
         assertNotEquals(originalToken, tamperedToken,
                 "Token should be tampered using strategy: " + strategy.getDescription());
+        var idTokenRequest = IdTokenRequest.of(tamperedToken);
         TokenValidationException exception = assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createIdToken(IdTokenRequest.of(tamperedToken)),
+                () -> tokenValidator.createIdToken(idTokenRequest),
                 "Tampered token should be rejected. Strategy: " + strategy.getDescription());
 
         // Verify the exception has a valid event type

@@ -81,9 +81,10 @@ class IdTokenValidationPipelineTest {
         String tokenString = tokenHolder.getRawToken();
 
         // When/Then
+        var idTokenRequest = IdTokenRequest.of(tokenString);
         TokenValidationException exception = assertThrows(
                 TokenValidationException.class,
-                () -> tokenValidator.createIdToken(IdTokenRequest.of(tokenString)),
+                () -> tokenValidator.createIdToken(idTokenRequest),
                 "Should throw TokenValidationException for missing issuer"
         );
 
@@ -107,9 +108,10 @@ class IdTokenValidationPipelineTest {
         String tokenString = tokenHolder.getRawToken();
 
         // When/Then
+        var idTokenRequest = IdTokenRequest.of(tokenString);
         assertThrows(
                 TokenValidationException.class,
-                () -> tokenValidator.createIdToken(IdTokenRequest.of(tokenString)),
+                () -> tokenValidator.createIdToken(idTokenRequest),
                 "Should consistently throw TokenValidationException for missing issuer"
         );
     }

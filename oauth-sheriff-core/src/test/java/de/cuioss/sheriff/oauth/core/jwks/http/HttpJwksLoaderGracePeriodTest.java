@@ -620,8 +620,9 @@ class HttpJwksLoaderGracePeriodTest {
                     .until(() -> loader.getKeyInfo(ORIGINAL_KEY_ID).isEmpty());
 
             // CRITICAL: With zero grace period, the original token should immediately fail validation
+            var accessTokenRequest = AccessTokenRequest.of(tokenSignedWithOriginalKey);
             TokenValidationException exception = assertThrows(TokenValidationException.class,
-                    () -> validator.createAccessToken(AccessTokenRequest.of(tokenSignedWithOriginalKey)),
+                    () -> validator.createAccessToken(accessTokenRequest),
                     """
                             Token signed with original key should IMMEDIATELY FAIL with zero grace period. \
                             This verifies that zero grace period immediately invalidates old tokens!""");

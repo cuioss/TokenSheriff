@@ -128,8 +128,9 @@ class TokenValidatorJweTest {
                     .jweDecryptionConfig(wrongConfig)
                     .build();
 
+            var accessTokenRequest = AccessTokenRequest.of(jweToken);
             assertThrows(TokenValidationException.class,
-                    () -> validator.createAccessToken(AccessTokenRequest.of(jweToken)));
+                    () -> validator.createAccessToken(accessTokenRequest));
         }
     }
 
@@ -250,8 +251,9 @@ class TokenValidatorJweTest {
                     .issuerConfig(issuerConfig)
                     .build();
 
+            var accessTokenRequest = AccessTokenRequest.of(jweToken);
             assertThrows(TokenValidationException.class,
-                    () -> validator.createAccessToken(AccessTokenRequest.of(jweToken)));
+                    () -> validator.createAccessToken(accessTokenRequest));
         }
 
         @Test
@@ -274,8 +276,9 @@ class TokenValidatorJweTest {
                     .jweDecryptionConfig(wrongConfig)
                     .build();
 
+            var accessTokenRequest = AccessTokenRequest.of(jweToken);
             assertThrows(TokenValidationException.class,
-                    () -> validator.createAccessToken(AccessTokenRequest.of(jweToken)));
+                    () -> validator.createAccessToken(accessTokenRequest));
 
             // Security events should be tracked
             assertFalse(validator.getSecurityEventCounter().getCounters().isEmpty(),

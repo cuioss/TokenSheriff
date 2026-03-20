@@ -73,7 +73,7 @@ public class InMemoryKeyMaterialHandler {
         PS256(Jwts.SIG.PS256),
         PS384(Jwts.SIG.PS384),
         PS512(Jwts.SIG.PS512),
-        EdDSA(Jwts.SIG.EdDSA);
+        ED_DSA(Jwts.SIG.EdDSA);
 
         @Getter
         private final SignatureAlgorithm algorithm;
@@ -88,6 +88,9 @@ public class InMemoryKeyMaterialHandler {
          * @return the algorithm name as used in JWK
          */
         public String getJwkAlgorithmName() {
+            if (this == ED_DSA) {
+                return "EdDSA";
+            }
             return name();
         }
     }

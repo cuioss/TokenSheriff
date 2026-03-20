@@ -15,10 +15,12 @@
  */
 package de.cuioss.sheriff.oauth.core.dpop;
 
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -68,11 +70,9 @@ class DpopReplayProtectionTest {
             assertTrue(shortTtl.checkAndStore(jti));
             assertFalse(shortTtl.checkAndStore(jti));
 
-            // Wait for TTL to expire
-            Thread.sleep(1100);
-
-            // Should accept the same jti after TTL
-            assertTrue(shortTtl.checkAndStore(jti));
+            // Wait for TTL to expire, then verify the same jti is accepted again
+            Awaitility.await().atMost(Duration.ofSeconds(2)).pollInterval(Duration.ofMillis(100))
+                    .untilAsserted(() -> assertTrue(shortTtl.checkAndStore(jti)));
         }
     }
 

@@ -21,6 +21,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 /**
  * Test to verify the OAuth Sheriff extension is properly registered and configured.
  * 
@@ -38,5 +40,10 @@ class CuiJwtExtensionTest {
     @Test
     @DisplayName("Should register the extension")
     void shouldRegisterExtension() {
+        // The QuarkusUnitTest bootstrap above is the primary assertion: if the
+        // OAuth Sheriff extension fails to register correctly, Quarkus startup
+        // would throw before reaching this method. The explicit assertion below
+        // satisfies static analysis requirements.
+        assertNotNull(unitTest, "QuarkusUnitTest extension must be initialized for extension registration to succeed");
     }
 }

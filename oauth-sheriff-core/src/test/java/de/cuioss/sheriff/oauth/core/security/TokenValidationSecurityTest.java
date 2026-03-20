@@ -90,8 +90,9 @@ class TokenValidationSecurityTest {
         String tamperedPayload = Base64.getUrlEncoder().withoutPadding().encodeToString(tamperedPayloadJson.getBytes());
         String tamperedToken = parts[0] + "." + tamperedPayload + ".";
 
+        var request1 = AccessTokenRequest.of(tamperedToken);
         assertThrows(TokenValidationException.class, () ->
-                        tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)),
+                        tokenValidator.createAccessToken(request1),
                 "Should reject token with tampered payload");
     }
 
@@ -105,8 +106,9 @@ class TokenValidationSecurityTest {
         // Ensure the token was actually tampered
         assertNotEquals(validToken, tamperedToken, "Tampered token should be different from valid token");
 
+        var request2 = AccessTokenRequest.of(tamperedToken);
         assertThrows(TokenValidationException.class, () ->
-                        tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)),
+                        tokenValidator.createAccessToken(request2),
                 "Should reject token with tampered signature: " + tamperedToken);
     }
 
@@ -117,8 +119,9 @@ class TokenValidationSecurityTest {
         String validToken = tokenHolder.getRawToken();
         String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(validToken, TamperingStrategy.ALGORITHM_NONE);
 
+        var request3 = AccessTokenRequest.of(tamperedToken);
         assertThrows(TokenValidationException.class, () ->
-                        tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)),
+                        tokenValidator.createAccessToken(request3),
                 "Should reject token with 'none' algorithm");
     }
 
@@ -146,8 +149,9 @@ class TokenValidationSecurityTest {
         String tamperedToken = parts[0] + "." + tamperedPayload + ".";
 
         // Verify that the tampered token is rejected
+        var request4 = AccessTokenRequest.of(tamperedToken);
         assertThrows(TokenValidationException.class, () ->
-                tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)));
+                tokenValidator.createAccessToken(request4));
     }
 
     @ParameterizedTest
@@ -168,8 +172,9 @@ class TokenValidationSecurityTest {
         String validToken = tokenHolder.getRawToken();
         String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(validToken, TamperingStrategy.ALGORITHM_DOWNGRADE);
 
+        var request5 = AccessTokenRequest.of(tamperedToken);
         assertThrows(TokenValidationException.class, () ->
-                        tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)),
+                        tokenValidator.createAccessToken(request5),
                 "Should reject token with downgraded algorithm");
     }
 
@@ -180,8 +185,9 @@ class TokenValidationSecurityTest {
         String validToken = tokenHolder.getRawToken();
         String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(validToken, TamperingStrategy.INVALID_KID);
 
+        var request6 = AccessTokenRequest.of(tamperedToken);
         assertThrows(TokenValidationException.class, () ->
-                        tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)),
+                        tokenValidator.createAccessToken(request6),
                 "Should reject token with invalid key ID");
     }
 }

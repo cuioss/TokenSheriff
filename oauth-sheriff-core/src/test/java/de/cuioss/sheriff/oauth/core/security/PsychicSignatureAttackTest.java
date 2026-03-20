@@ -81,8 +81,9 @@ class PsychicSignatureAttackTest {
         String tamperedToken = parts[0] + "." + parts[1] + "." + zeroSignatureBase64;
 
         // Verify that the token is rejected
+        var request256 = AccessTokenRequest.of(tamperedToken);
         assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)));
+                () -> tokenValidator.createAccessToken(request256));
 
         // Verify that the security event counter was incremented
         // The logs show that ES256 is an unsupported algorithm, so we should check for that event
@@ -111,8 +112,9 @@ class PsychicSignatureAttackTest {
         String tamperedToken = parts[0] + "." + parts[1] + "." + zeroSignatureBase64;
 
         // Verify that the token is rejected
+        var request384 = AccessTokenRequest.of(tamperedToken);
         assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)));
+                () -> tokenValidator.createAccessToken(request384));
 
         // Verify that the security event counter was incremented
         // The logs show that ES384 is an unsupported algorithm, so we should check for that event
@@ -141,8 +143,9 @@ class PsychicSignatureAttackTest {
         String tamperedToken = parts[0] + "." + parts[1] + "." + zeroSignatureBase64;
 
         // Verify that the token is rejected
+        var request512 = AccessTokenRequest.of(tamperedToken);
         assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)));
+                () -> tokenValidator.createAccessToken(request512));
 
         // Verify that the security event counter was incremented
         // The logs show that ES512 is an unsupported algorithm, so we should check for that event

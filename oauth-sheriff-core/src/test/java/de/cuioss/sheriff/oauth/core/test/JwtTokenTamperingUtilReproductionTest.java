@@ -50,9 +50,9 @@ class JwtTokenTamperingUtilReproductionTest {
      * Creates a minimal valid JWT string with a controlled signature.
      */
     private static String createTokenWithSignature(String signature) {
-        // {"alg":"RS256","typ":"JWT"}
+        // Base64url-encoded header: alg=RS256, typ=JWT
         String header = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9";
-        // {"sub":"test","iss":"test-issuer","exp":9999999999}
+        // Base64url-encoded payload: sub=test, iss=test-issuer, exp=9999999999
         String payload = "eyJzdWIiOiJ0ZXN0IiwiaXNzIjoidGVzdC1pc3N1ZXIiLCJleHAiOjk5OTk5OTk5OTl9";
         return header + "." + payload + "." + signature;
     }

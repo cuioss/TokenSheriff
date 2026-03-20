@@ -63,7 +63,8 @@ class MetricsIntegrationTest {
 
         String invalidToken = "invalid.jwt.token";
 
-        assertThrows(TokenValidationException.class, () -> tokenValidator.createAccessToken(AccessTokenRequest.of(invalidToken)),
+        var request = AccessTokenRequest.of(invalidToken);
+        assertThrows(TokenValidationException.class, () -> tokenValidator.createAccessToken(request),
                 "Should have thrown TokenValidationException for invalid token");
 
         assertNotNull(meterRegistry.find(JwtPropertyKeys.METRICS.VALIDATION_ERRORS).counters(),
@@ -136,7 +137,8 @@ class MetricsIntegrationTest {
         // Force initialization of metrics collector
         metricsCollector.updateCounters();
 
-        Exception thrownException = assertThrows(expectedException, () -> tokenValidator.createAccessToken(AccessTokenRequest.of(invalidToken)), "Should throw an exception for invalid token: " + description);
+        var tokenRequest = AccessTokenRequest.of(invalidToken);
+        Exception thrownException = assertThrows(expectedException, () -> tokenValidator.createAccessToken(tokenRequest), "Should throw an exception for invalid token: " + description);
 
         assertTrue(expectedException.isAssignableFrom(thrownException.getClass()),
                 "Expected exception of type " + expectedException.getSimpleName() +

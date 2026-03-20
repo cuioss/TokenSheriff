@@ -360,8 +360,8 @@ class JwkKeyHandlerTest {
 
     @Test
     void shouldDetermineOkpAlgorithm() {
-        assertEquals("EdDSA", JwkKeyHandler.determineOkpAlgorithm("Ed25519"));
-        assertEquals("EdDSA", JwkKeyHandler.determineOkpAlgorithm("Ed448"));
+        assertEquals("EdDSA", JwkKeyHandler.determineOkpAlgorithm());
+        assertEquals("EdDSA", JwkKeyHandler.determineOkpAlgorithm());
     }
 
     /**
@@ -369,7 +369,7 @@ class JwkKeyHandlerTest {
      */
     private JwkKey createOkpJwkFromKeyMaterial(String curve) {
         var publicKey = (EdECPublicKey) InMemoryKeyMaterialHandler.getDefaultPublicKey(
-                InMemoryKeyMaterialHandler.Algorithm.EdDSA);
+                InMemoryKeyMaterialHandler.Algorithm.ED_DSA);
         String xEncoded = InMemoryKeyMaterialHandler.encodeEdECPublicKey(publicKey);
         return new JwkKey("OKP", "test-ed-key", "EdDSA", null, null, curve, xEncoded, null);
     }

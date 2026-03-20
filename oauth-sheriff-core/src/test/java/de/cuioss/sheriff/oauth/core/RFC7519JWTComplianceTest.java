@@ -232,8 +232,9 @@ class RFC7519JWTComplianceTest {
                     JwtTokenTamperingUtil.TamperingStrategy.MODIFY_SIGNATURE_LAST_CHAR
             );
             TokenValidator validator = TokenValidator.builder().issuerConfig(tokenHolder.getIssuerConfig()).build();
+            var invalidSignatureRequest = AccessTokenRequest.of(invalidToken);
             TokenValidationException exception = assertThrows(TokenValidationException.class,
-                    () -> validator.createAccessToken(AccessTokenRequest.of(invalidToken)));
+                    () -> validator.createAccessToken(invalidSignatureRequest));
 
             assertEquals(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED, exception.getEventType());
         }
@@ -254,8 +255,9 @@ class RFC7519JWTComplianceTest {
 
             String token = tokenHolder.getRawToken();
             TokenValidator validator = TokenValidator.builder().issuerConfig(tokenHolder.getIssuerConfig()).build();
+            var expiredRequest = AccessTokenRequest.of(token);
             TokenValidationException exception = assertThrows(TokenValidationException.class,
-                    () -> validator.createAccessToken(AccessTokenRequest.of(token)));
+                    () -> validator.createAccessToken(expiredRequest));
 
             assertEquals(SecurityEventCounter.EventType.TOKEN_EXPIRED, exception.getEventType());
         }
@@ -276,8 +278,9 @@ class RFC7519JWTComplianceTest {
 
             String token = tokenHolder.getRawToken();
             TokenValidator validator = TokenValidator.builder().issuerConfig(tokenHolder.getIssuerConfig()).build();
+            var futureNbfRequest = AccessTokenRequest.of(token);
             TokenValidationException exception = assertThrows(TokenValidationException.class,
-                    () -> validator.createAccessToken(AccessTokenRequest.of(token)));
+                    () -> validator.createAccessToken(futureNbfRequest));
 
             assertEquals(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE, exception.getEventType());
         }

@@ -78,7 +78,8 @@ class QuarkusTokenValidatorProducerTest {
     void shouldRejectInvalidTokensInIntegratedEnvironment() {
         String invalidToken = "invalid.token.format";
 
-        assertThrows(TokenValidationException.class, () -> tokenValidator.createAccessToken(AccessTokenRequest.of(invalidToken)),
+        var request = AccessTokenRequest.of(invalidToken);
+        assertThrows(TokenValidationException.class, () -> tokenValidator.createAccessToken(request),
                 "Integrated TokenValidator should reject invalid tokens");
     }
 
