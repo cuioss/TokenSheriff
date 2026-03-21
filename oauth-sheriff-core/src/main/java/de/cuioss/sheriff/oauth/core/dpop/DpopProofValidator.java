@@ -143,40 +143,7 @@ public class DpopProofValidator {
         String expectedThumbprint = cnfJkt.get();
 
         DecodedDpopProof decoded = decodeDpopProofJwt(dpopProofString);
-        MapRepresentation headerMap = decoded.headerMap();
-
-        // Validate alg header: must be asymmetric
-        String alg = headerMap.getString("alg").orElse(null);
-        if (alg == null || !algorithmPreferences.isSupported(alg)) {
-            rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
-                    "DPoP proof algorithm '%s' is not supported".formatted(alg));
-        }
-
-        // Extract embedded jwk from DPoP proof header
-        Optional<Map<String, Object>> jwkOpt = headerMap.getMap("jwk");
-        if (jwkOpt.isEmpty()) {
-            rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
-                    "DPoP proof header is missing required 'jwk' field");
-        }
-        Map<String, Object> jwkMap = jwkOpt.get();
-        PublicKey proofPublicKey = parsePublicKey(jwkMap);
-
-        // Validate DPoP proof signature
-        verifyDpopSignature(decoded.parts(), proofPublicKey, alg);
-
-        validateDpopClaims(decoded.bodyMap(), rawAccessToken);
-
-        // Validate JWK Thumbprint
-        String computedThumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
-        if (!computedThumbprint.equals(expectedThumbprint)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_THUMBPRINT_MISMATCH, computedThumbprint, expectedThumbprint);
-            securityEventCounter.increment(EventType.DPOP_THUMBPRINT_MISMATCH);
-            throw new TokenValidationException(EventType.DPOP_THUMBPRINT_MISMATCH,
-                    "DPoP proof JWK thumbprint '%s' does not match token cnf.jkt '%s'"
-                            .formatted(computedThumbprint, expectedThumbprint));
-        }
-
-        LOGGER.debug("DPoP proof validation successful");
+        validateDpopProofHeaderAndSignature(decoded, expectedThumbprint, rawAccessToken);
     }
 
     /**
@@ -258,6 +225,48 @@ public class DpopProofValidator {
         }
 
         return new DecodedDpopProof(parts, headerMap, bodyMap);
+    }
+
+    /**
+     * Validates the DPoP proof header fields (alg, jwk), verifies the signature,
+     * validates claims, and checks the JWK thumbprint against the expected value.
+     */
+    private void validateDpopProofHeaderAndSignature(DecodedDpopProof decoded, String expectedThumbprint,
+            String rawAccessToken) {
+        MapRepresentation headerMap = decoded.headerMap();
+
+        // Validate alg header: must be asymmetric
+        String alg = headerMap.getString("alg").orElse(null);
+        if (alg == null || !algorithmPreferences.isSupported(alg)) {
+            rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
+                    "DPoP proof algorithm '%s' is not supported".formatted(alg));
+        }
+
+        // Extract embedded jwk from DPoP proof header
+        Optional<Map<String, Object>> jwkOpt = headerMap.getMap("jwk");
+        if (jwkOpt.isEmpty()) {
+            rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
+                    "DPoP proof header is missing required 'jwk' field");
+        }
+        Map<String, Object> jwkMap = jwkOpt.get();
+        PublicKey proofPublicKey = parsePublicKey(jwkMap);
+
+        // Validate DPoP proof signature
+        verifyDpopSignature(decoded.parts(), proofPublicKey, alg);
+
+        validateDpopClaims(decoded.bodyMap(), rawAccessToken);
+
+        // Validate JWK Thumbprint
+        String computedThumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+        if (!computedThumbprint.equals(expectedThumbprint)) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_THUMBPRINT_MISMATCH, computedThumbprint, expectedThumbprint);
+            securityEventCounter.increment(EventType.DPOP_THUMBPRINT_MISMATCH);
+            throw new TokenValidationException(EventType.DPOP_THUMBPRINT_MISMATCH,
+                    "DPoP proof JWK thumbprint '%s' does not match token cnf.jkt '%s'"
+                            .formatted(computedThumbprint, expectedThumbprint));
+        }
+
+        LOGGER.debug("DPoP proof validation successful");
     }
 
     /**
