@@ -63,7 +63,7 @@ class DpopReplayProtectionTest {
     }
 
     @Test
-    void shouldAcceptJtiAfterTtlExpires() throws Exception {
+    void shouldAcceptJtiAfterTtlExpires() {
         // Use a very short TTL for testing
         try (var shortTtl = new DpopReplayProtection(1, 10_000)) {
             String jti = "short-lived-jti";

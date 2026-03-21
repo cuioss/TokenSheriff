@@ -84,7 +84,7 @@ public class DpopProofValidator {
      * @param headerMap the decoded JWT header as a map
      * @param bodyMap   the decoded JWT payload as a map
      */
-    private record DecodedDpopProof(String[] parts, MapRepresentation headerMap, MapRepresentation bodyMap) {
+    private record DecodedDpopProof(List<String> parts, MapRepresentation headerMap, MapRepresentation bodyMap) {
     }
 
     /**
@@ -224,7 +224,7 @@ public class DpopProofValidator {
                     "DPoP proof typ must be '%s' but was '%s'".formatted(DPOP_TYP, typ));
         }
 
-        return new DecodedDpopProof(parts, headerMap, bodyMap);
+        return new DecodedDpopProof(List.of(parts), headerMap, bodyMap);
     }
 
     /**
@@ -252,7 +252,7 @@ public class DpopProofValidator {
         PublicKey proofPublicKey = parsePublicKey(jwkMap);
 
         // Validate DPoP proof signature
-        verifyDpopSignature(decoded.parts(), proofPublicKey, alg);
+        verifyDpopSignature(decoded.parts().toArray(String[]::new), proofPublicKey, alg);
 
         validateDpopClaims(decoded.bodyMap(), rawAccessToken);
 
