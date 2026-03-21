@@ -66,8 +66,9 @@ class TokenValidatorPerformanceIntegrationTest {
         assertEquals(0, performanceMonitor.getSampleCount(MeasurementType.COMPLETE_VALIDATION));
 
         // Try to validate an invalid token (empty string) - this should record metrics even for failures
+        var emptyRequest = AccessTokenRequest.of("");
         try {
-            tokenValidator.createAccessToken(AccessTokenRequest.of(""));
+            tokenValidator.createAccessToken(emptyRequest);
             fail("Should have thrown TokenValidationException for empty token");
         } catch (IllegalArgumentException | IllegalStateException | TokenValidationException e) {
             // Expected - token validation should fail for empty string
@@ -81,8 +82,9 @@ class TokenValidatorPerformanceIntegrationTest {
                 "Complete validation average should be positive");
 
         // Try with a malformed token - this should get further in the pipeline
+        var malformedRequest = AccessTokenRequest.of("not.a.valid.jwt.token");
         try {
-            tokenValidator.createAccessToken(AccessTokenRequest.of("not.a.valid.jwt.token"));
+            tokenValidator.createAccessToken(malformedRequest);
             fail("Should have thrown TokenValidationException for malformed token");
         } catch (IllegalArgumentException | IllegalStateException | TokenValidationException e) {
             // Expected - token validation should fail for malformed token

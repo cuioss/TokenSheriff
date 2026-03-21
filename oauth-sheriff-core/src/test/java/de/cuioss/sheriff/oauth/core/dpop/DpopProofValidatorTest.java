@@ -33,6 +33,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -42,6 +45,7 @@ import java.security.interfaces.EdECPublicKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.ECPoint;
 import java.util.*;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -466,8 +470,8 @@ class DpopProofValidatorTest {
         @Test
         @DisplayName("Should pass with valid DPoP proof using EdDSA (Ed25519)")
         void shouldPassWithValidDpopProofUsingEdDSA() {
-            PrivateKey edPrivateKey = InMemoryKeyMaterialHandler.getDefaultPrivateKey(Algorithm.EdDSA);
-            EdECPublicKey edPublicKey = (EdECPublicKey) InMemoryKeyMaterialHandler.getDefaultPublicKey(Algorithm.EdDSA);
+            PrivateKey edPrivateKey = InMemoryKeyMaterialHandler.getDefaultPrivateKey(Algorithm.ED_DSA);
+            EdECPublicKey edPublicKey = (EdECPublicKey) InMemoryKeyMaterialHandler.getDefaultPublicKey(Algorithm.ED_DSA);
             Map<String, Object> jwkMap = edDsaPublicKeyToJwkMap(edPublicKey);
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -514,31 +518,19 @@ class DpopProofValidatorTest {
     @DisplayName("Missing Required Claim Tests")
     class MissingClaimTests {
 
-        @Test
-        @DisplayName("Should reject DPoP proof with missing jti claim")
-        void shouldRejectMissingJtiClaim() {
-            KeyPair keyPair = generateRsaKeyPair();
-            Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
-            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
-
-            String rawAccessToken = "some.access.token";
-            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
-
-            String dpopProof = buildDpopProofWithSelectiveClaims(keyPair, jwkMap, "RS256",
-                    rawAccessToken, false, true, true);
-
-            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
-                    Map.of("dpop", List.of(dpopProof)));
-
-            var ex = assertThrows(TokenValidationException.class,
-                    () -> validator.validate(request, accessToken, rawAccessToken));
-            assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
-            assertTrue(ex.getMessage().contains("jti"));
+        static Stream<Arguments> missingClaimProvider() {
+            // Each entry: (includeJti, includeIat, includeAth, expectedClaimInMessage)
+            return Stream.of(
+                    Arguments.of(false, true, true, "jti"),
+                    Arguments.of(true, false, true, "iat"),
+                    Arguments.of(true, true, false, "ath")
+            );
         }
 
-        @Test
-        @DisplayName("Should reject DPoP proof with missing iat claim")
-        void shouldRejectMissingIatClaim() {
+        @ParameterizedTest(name = "Should reject DPoP proof with missing {3} claim")
+        @MethodSource("missingClaimProvider")
+        void shouldRejectProofWithMissingRequiredClaim(boolean includeJti, boolean includeIat,
+                boolean includeAth, String expectedClaim) {
             KeyPair keyPair = generateRsaKeyPair();
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
@@ -547,7 +539,7 @@ class DpopProofValidatorTest {
             DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
 
             String dpopProof = buildDpopProofWithSelectiveClaims(keyPair, jwkMap, "RS256",
-                    rawAccessToken, true, false, true);
+                    rawAccessToken, includeJti, includeIat, includeAth);
 
             AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
                     Map.of("dpop", List.of(dpopProof)));
@@ -555,29 +547,7 @@ class DpopProofValidatorTest {
             var ex = assertThrows(TokenValidationException.class,
                     () -> validator.validate(request, accessToken, rawAccessToken));
             assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
-            assertTrue(ex.getMessage().contains("iat"));
-        }
-
-        @Test
-        @DisplayName("Should reject DPoP proof with missing ath claim")
-        void shouldRejectMissingAthClaim() {
-            KeyPair keyPair = generateRsaKeyPair();
-            Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
-            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
-
-            String rawAccessToken = "some.access.token";
-            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
-
-            String dpopProof = buildDpopProofWithSelectiveClaims(keyPair, jwkMap, "RS256",
-                    rawAccessToken, true, true, false);
-
-            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
-                    Map.of("dpop", List.of(dpopProof)));
-
-            var ex = assertThrows(TokenValidationException.class,
-                    () -> validator.validate(request, accessToken, rawAccessToken));
-            assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
-            assertTrue(ex.getMessage().contains("ath"));
+            assertTrue(ex.getMessage().contains(expectedClaim));
         }
     }
 

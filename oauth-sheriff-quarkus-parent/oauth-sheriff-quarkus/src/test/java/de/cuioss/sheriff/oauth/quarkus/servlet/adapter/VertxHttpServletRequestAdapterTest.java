@@ -78,6 +78,28 @@ class VertxHttpServletRequestAdapterTest {
     @Test
     @DisplayName("Should support HTTP header name normalization for RFC compliance")
     void shouldSupportHttpHeaderNameNormalizationForRfcCompliance() {
+        // RFC 7230 §3.2 (HTTP/1.1) and RFC 9113 §8.1.2 (HTTP/2) both require
+        // header field names to be treated as case-insensitive. The adapter
+        // delegates to Vertx's MultiMap.caseInsensitiveMultiMap(), so a header
+        // stored as "Content-Type" must also be retrievable by "content-type" or
+        // "CONTENT-TYPE".
+        MultiMap headers = MultiMap.caseInsensitiveMultiMap();
+        headers.add("Content-Type", "application/json");
+        headers.add("Authorization", "Bearer token");
+
+        EasyMock.expect(mockRequest.headers()).andReturn(headers).anyTimes();
+        EasyMock.replay(mockRequest);
+
+        // Canonical casing
+        assertEquals("application/json", adapter.getHeader("Content-Type"));
+        // Lowercase – RFC-mandated case-insensitivity
+        assertEquals("application/json", adapter.getHeader("content-type"));
+        // Uppercase
+        assertEquals("application/json", adapter.getHeader("CONTENT-TYPE"));
+        // Mixed case on a second header
+        assertEquals("Bearer token", adapter.getHeader("AUTHORIZATION"));
+
+        EasyMock.verify(mockRequest);
     }
 
     @Nested

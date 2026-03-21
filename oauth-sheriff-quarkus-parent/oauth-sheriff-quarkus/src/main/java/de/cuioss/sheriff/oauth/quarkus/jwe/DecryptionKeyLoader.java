@@ -130,18 +130,27 @@ public class DecryptionKeyLoader {
 
         byte[] keyBytes = Base64.getDecoder().decode(base64);
         try {
-            PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(keyBytes);
-
-            // Try RSA first, then EC
-            try {
-                return KeyFactory.getInstance("RSA").generatePrivate(keySpec);
-            } catch (GeneralSecurityException ignored) {
-                return KeyFactory.getInstance("EC").generatePrivate(keySpec);
-            }
+            return parsePrivateKey(new PKCS8EncodedKeySpec(keyBytes));
         } catch (GeneralSecurityException e) {
             throw new IllegalArgumentException("Failed to parse private key — not RSA or EC", e);
         } finally {
             Arrays.fill(keyBytes, (byte) 0);
+        }
+    }
+
+    /**
+     * Attempts to parse a private key from a PKCS#8 key spec, trying RSA first then EC.
+     *
+     * @param keySpec the PKCS#8 encoded key spec
+     * @return the parsed private key
+     * @throws GeneralSecurityException if the key cannot be parsed as RSA or EC
+     */
+    private static PrivateKey parsePrivateKey(PKCS8EncodedKeySpec keySpec)
+            throws GeneralSecurityException {
+        try {
+            return KeyFactory.getInstance("RSA").generatePrivate(keySpec);
+        } catch (GeneralSecurityException ignored) {
+            return KeyFactory.getInstance("EC").generatePrivate(keySpec);
         }
     }
 }

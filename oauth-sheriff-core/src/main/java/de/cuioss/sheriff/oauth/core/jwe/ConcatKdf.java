@@ -60,14 +60,14 @@ public class ConcatKdf {
             byte[] algIdBytes = algorithmId.getBytes(StandardCharsets.US_ASCII);
 
             // Build otherInfo per RFC 7518 Section 4.6.2:
-            // AlgorithmID || PartyUInfo || PartyVInfo || SuppPubInfo
+            // AlgorithmID, PartyUInfo, PartyVInfo, SuppPubInfo (concatenated)
             // Each length-prefixed with 4-byte big-endian length
             byte[] otherInfo = buildOtherInfo(algIdBytes, apu, apv, keyLengthBits);
 
             byte[] derivedKeyMaterial = new byte[reps * (hashLen / 8)];
             for (int counter = 1; counter <= reps; counter++) {
                 digest.reset();
-                // roundHash = Hash(counter || Z || OtherInfo)
+                // roundHash = Hash of: counter, Z, OtherInfo (concatenated)
                 digest.update(intToFourBytes(counter));
                 digest.update(sharedSecret);
                 digest.update(otherInfo);
@@ -86,7 +86,7 @@ public class ConcatKdf {
     }
 
     private static byte[] buildOtherInfo(byte[] algId, byte[] apu, byte[] apv, int keyLengthBits) {
-        // Format: len(algId) || algId || len(apu) || apu || len(apv) || apv || keyLengthBits
+        // Format: len(algId), algId, len(apu), apu, len(apv), apv, keyLengthBits (each concatenated)
         int totalLen = 4 + algId.length + 4 + apu.length + 4 + apv.length + 4;
         ByteBuffer buffer = ByteBuffer.allocate(totalLen);
         buffer.put(intToFourBytes(algId.length));

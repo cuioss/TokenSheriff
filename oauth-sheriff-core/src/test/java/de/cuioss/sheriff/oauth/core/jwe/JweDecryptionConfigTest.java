@@ -76,8 +76,8 @@ class JweDecryptionConfigTest {
     @Test
     @DisplayName("Should throw if no keys configured")
     void shouldThrowIfNoKeys() {
-        assertThrows(IllegalArgumentException.class, () ->
-                JweDecryptionConfig.builder().build());
+        var builder = JweDecryptionConfig.builder();
+        assertThrows(IllegalArgumentException.class, builder::build);
     }
 
     @Test

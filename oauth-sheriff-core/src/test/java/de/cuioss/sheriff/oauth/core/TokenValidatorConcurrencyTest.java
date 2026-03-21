@@ -78,9 +78,10 @@ class TokenValidatorConcurrencyTest {
                     startLatch.await();
 
                     // Perform multiple iterations to increase chance of race condition
+                    var request = AccessTokenRequest.of(validJwt);
                     for (int j = 0; j < ITERATIONS_PER_THREAD; j++) {
                         // This should trigger the resolveIssuerConfig method
-                        tokenValidator.createAccessToken(AccessTokenRequest.of(validJwt));
+                        tokenValidator.createAccessToken(request);
                         successCount.incrementAndGet();
                     }
                 } catch (InterruptedException e) {
@@ -121,10 +122,11 @@ class TokenValidatorConcurrencyTest {
 
         // Launch multiple threads to create access tokens simultaneously
         for (int i = 0; i < 50; i++) {
+            var request = AccessTokenRequest.of(validJwt);
             executor.submit(() -> {
                 try {
                     for (int j = 0; j < 20; j++) {
-                        tokenValidator.createAccessToken(AccessTokenRequest.of(validJwt));
+                        tokenValidator.createAccessToken(request);
                     }
                 } finally {
                     latch.countDown();

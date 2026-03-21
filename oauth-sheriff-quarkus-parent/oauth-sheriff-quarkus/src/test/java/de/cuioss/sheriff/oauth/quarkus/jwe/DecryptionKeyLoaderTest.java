@@ -136,12 +136,14 @@ class DecryptionKeyLoaderTest {
         Process process = pb.start();
         assertEquals(0, process.waitFor());
 
+        var storePassChars = storePass.toCharArray();
+        var wrongAlias = "wrong-alias";
         assertThrows(IllegalArgumentException.class, () ->
                 DecryptionKeyLoader.loadFromKeyStore(
                         keystorePath,
-                        storePass.toCharArray(),
-                        "wrong-alias",
-                        storePass.toCharArray()));
+                        storePassChars,
+                        wrongAlias,
+                        storePassChars));
     }
 
     @Test

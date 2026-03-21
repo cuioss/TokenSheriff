@@ -329,18 +329,7 @@ public class NonValidatingJwtParser {
      */
     private DecodedJwt handleJweToken(String[] parts, String originalToken,
             boolean logWarnings, boolean trackSecurityEvents) {
-        // Check if JWE decryption is configured
-        if (jweDecryptionConfig == null || jweDecryptor == null) {
-            if (logWarnings) {
-                LOGGER.warn(JWTValidationLogMessages.WARN.JWE_DECRYPTION_NOT_CONFIGURED);
-            }
-            if (trackSecurityEvents) {
-                securityEventCounter.increment(SecurityEventCounter.EventType.JWE_DECRYPTION_NOT_CONFIGURED);
-            }
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.JWE_DECRYPTION_NOT_CONFIGURED,
-                    "Received JWE token but no decryption configuration is available");
-        }
+        validateJweConfigured(logWarnings, trackSecurityEvents);
 
         try {
             // Decode JWE header only (first part)
@@ -363,24 +352,8 @@ public class NonValidatingJwtParser {
                         "Inner JWS from JWE exceeds maximum token size");
             }
 
-            // Check for nested JWE (not allowed)
-            String[] innerParts = innerJws.split("\\.");
-            if (innerParts.length == 5) {
-                if (logWarnings) {
-                    LOGGER.warn(JWTValidationLogMessages.WARN.JWE_NESTED_NOT_ALLOWED);
-                }
-                throw new TokenValidationException(
-                        SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                        "Nested JWE tokens are not allowed");
-            }
-
-            if (innerParts.length != 3) {
-                throw new TokenValidationException(
-                        SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
-                        "Inner JWS from JWE has invalid format: expected 3 parts but got %d".formatted(innerParts.length));
-            }
-
             // Parse the inner JWS and return DecodedJwt with original JWE as rawToken
+            String[] innerParts = validateInnerJwsParts(innerJws, logWarnings);
             DecodedJwt innerDecoded = decodeTokenParts(innerParts, innerJws, logWarnings, trackSecurityEvents);
             // Return with original JWE token as rawToken (for caching/logging)
             return new DecodedJwt(innerDecoded.header(), innerDecoded.body(),
@@ -399,6 +372,45 @@ public class NonValidatingJwtParser {
                     SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT,
                     "Failed to decode JWE header: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Validates that JWE decryption is configured, throwing if it is not.
+     */
+    private void validateJweConfigured(boolean logWarnings, boolean trackSecurityEvents) {
+        if (jweDecryptionConfig == null || jweDecryptor == null) {
+            if (logWarnings) {
+                LOGGER.warn(JWTValidationLogMessages.WARN.JWE_DECRYPTION_NOT_CONFIGURED);
+            }
+            if (trackSecurityEvents) {
+                securityEventCounter.increment(SecurityEventCounter.EventType.JWE_DECRYPTION_NOT_CONFIGURED);
+            }
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.JWE_DECRYPTION_NOT_CONFIGURED,
+                    "Received JWE token but no decryption configuration is available");
+        }
+    }
+
+    /**
+     * Splits the inner JWS string and validates the part count.
+     * Returns the 3 parts on success, throws {@link TokenValidationException} otherwise.
+     */
+    private String[] validateInnerJwsParts(String innerJws, boolean logWarnings) {
+        String[] innerParts = innerJws.split("\\.");
+        if (innerParts.length == 5) {
+            if (logWarnings) {
+                LOGGER.warn(JWTValidationLogMessages.WARN.JWE_NESTED_NOT_ALLOWED);
+            }
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                    "Nested JWE tokens are not allowed");
+        }
+        if (innerParts.length != 3) {
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
+                    "Inner JWS from JWE has invalid format: expected 3 parts but got %d".formatted(innerParts.length));
+        }
+        return innerParts;
     }
 
 

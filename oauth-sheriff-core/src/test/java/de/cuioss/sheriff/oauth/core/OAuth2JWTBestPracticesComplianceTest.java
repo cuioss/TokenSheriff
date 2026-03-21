@@ -110,8 +110,9 @@ class OAuth2JWTBestPracticesComplianceTest {
             TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
             tokenHolder.withAudience(List.of("wrong-audience"));
             String token = tokenHolder.getRawToken();
+            var wrongAudienceRequest = AccessTokenRequest.of(token);
             TokenValidationException exception = assertThrows(TokenValidationException.class,
-                    () -> tokenValidator.createAccessToken(AccessTokenRequest.of(token)),
+                    () -> tokenValidator.createAccessToken(wrongAudienceRequest),
                     "Token with incorrect audience should be rejected");
 
             // Verify the exception has the correct event type
@@ -146,8 +147,9 @@ class OAuth2JWTBestPracticesComplianceTest {
                     .withClaim(ClaimName.ISSUER.getName(), ClaimValue.forPlainString(wrongIssuer));
 
             String token = tokenHolder.getRawToken();
+            var wrongIssuerRequest = AccessTokenRequest.of(token);
             TokenValidationException exception = assertThrows(TokenValidationException.class,
-                    () -> tokenValidator.createAccessToken(AccessTokenRequest.of(token)),
+                    () -> tokenValidator.createAccessToken(wrongIssuerRequest),
                     "Token with incorrect issuer should be rejected");
 
             // Verify the exception has the correct event type
@@ -185,8 +187,9 @@ class OAuth2JWTBestPracticesComplianceTest {
 
             TokenValidator validator = TokenValidator.builder().issuerConfig(tokenHolder.getIssuerConfig()).build();
 
+            var tamperedAccessRequest = AccessTokenRequest.of(tamperedToken);
             TokenValidationException exception = assertThrows(TokenValidationException.class,
-                    () -> validator.createAccessToken(AccessTokenRequest.of(tamperedToken)),
+                    () -> validator.createAccessToken(tamperedAccessRequest),
                     "Token with invalid signature should be rejected, offending validation: " + tamperedToken);
 
             // Verify the exception has the correct event type
@@ -208,8 +211,9 @@ class OAuth2JWTBestPracticesComplianceTest {
 
             assertNotEquals(tamperedToken, token, "Token should be tampered");
             TokenValidator validator = TokenValidator.builder().issuerConfig(tokenHolder.getIssuerConfig()).build();
+            var tamperedIdRequest = IdTokenRequest.of(tamperedToken);
             TokenValidationException exception = assertThrows(TokenValidationException.class,
-                    () -> validator.createIdToken(IdTokenRequest.of(tamperedToken)),
+                    () -> validator.createIdToken(tamperedIdRequest),
                     "Token with invalid signature should be rejected, offending validation: " + tamperedToken);
 
             // Verify the exception has the correct event type
@@ -250,8 +254,9 @@ class OAuth2JWTBestPracticesComplianceTest {
                     ClaimValue.forDateTime(String.valueOf(expiredDateTime.toEpochSecond()), expiredDateTime));
 
             String token = tokenHolder.getRawToken();
+            var expiredTokenRequest = AccessTokenRequest.of(token);
             TokenValidationException exception = assertThrows(TokenValidationException.class,
-                    () -> tokenValidator.createAccessToken(AccessTokenRequest.of(token)),
+                    () -> tokenValidator.createAccessToken(expiredTokenRequest),
                     "Expired token should be rejected");
 
             // Verify the exception has the correct event type
@@ -285,8 +290,9 @@ class OAuth2JWTBestPracticesComplianceTest {
                             .algorithmPreferences(new SignatureAlgorithmPreferences())
                             .build())
                     .build();
+            var largeTokenRequest = AccessTokenRequest.of(largeToken);
             TokenValidationException exception = assertThrows(TokenValidationException.class,
-                    () -> factory.createAccessToken(AccessTokenRequest.of(largeToken)),
+                    () -> factory.createAccessToken(largeTokenRequest),
                     "Token exceeding max size should be rejected");
 
             // Verify the exception has the correct event type

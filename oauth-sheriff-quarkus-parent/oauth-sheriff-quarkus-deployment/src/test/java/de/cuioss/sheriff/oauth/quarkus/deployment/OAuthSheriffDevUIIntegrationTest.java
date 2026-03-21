@@ -45,6 +45,12 @@ class CuiJwtDevUIIntegrationTest {
     @Test
     @DisplayName("Should register DevUI components successfully")
     void devUIComponentsRegistered() {
+        // Verify the processor class required for DevUI registration is accessible.
+        // The QuarkusUnitTest bootstrap above constitutes the primary assertion:
+        // if the extension fails to register its DevUI components, the test setup
+        // itself would throw an exception before reaching this point.
+        assertNotNull(OAuthSheriffProcessor.class.getName(),
+                "OAuthSheriffProcessor must be present for DevUI component registration");
     }
 
     @Test

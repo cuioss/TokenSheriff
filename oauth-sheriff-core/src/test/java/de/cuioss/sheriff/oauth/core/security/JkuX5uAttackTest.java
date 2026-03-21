@@ -82,8 +82,9 @@ class JkuX5uAttackTest {
         String tamperedHeader = Base64.getUrlEncoder().withoutPadding().encodeToString(tamperedHeaderJson.getBytes());
         String tamperedToken = tamperedHeader + "." + parts[1] + "." + parts[2];
 
+        var jkuRequest = AccessTokenRequest.of(tamperedToken);
         assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)),
+                () -> tokenValidator.createAccessToken(jkuRequest),
                 "Should reject token with malicious JKU header");
         assertTrue(tokenValidator.getSecurityEventCounter().getCount(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED) >= 0,
                 "Security event counter should track JKU header attack attempts");
@@ -105,8 +106,9 @@ class JkuX5uAttackTest {
         String tamperedHeader = Base64.getUrlEncoder().withoutPadding().encodeToString(tamperedHeaderJson.getBytes());
         String tamperedToken = tamperedHeader + "." + parts[1] + "." + parts[2];
 
+        var x5uRequest = AccessTokenRequest.of(tamperedToken);
         assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)),
+                () -> tokenValidator.createAccessToken(x5uRequest),
                 "Should reject token with malicious X5U header");
         assertTrue(tokenValidator.getSecurityEventCounter().getCount(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED) >= 0,
                 "Security event counter should track X5U header attack attempts");

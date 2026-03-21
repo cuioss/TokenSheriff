@@ -162,14 +162,13 @@ public final class JwkKeyHandler {
     }
 
     /**
-     * Determines the EdDSA algorithm name for an OKP curve.
+     * Determines the EdDSA algorithm name for OKP keys.
      * Both Ed25519 and Ed448 use the single JWS algorithm identifier "EdDSA"
      * as defined in RFC 8037. The actual curve is determined by the key.
      *
-     * @param curve the OKP curve name (Ed25519 or Ed448)
      * @return always "EdDSA" for supported OKP curves
      */
-    public static String determineOkpAlgorithm(String curve) {
+    public static String determineOkpAlgorithm() {
         return EDDSA_ALGORITHM;
     }
 

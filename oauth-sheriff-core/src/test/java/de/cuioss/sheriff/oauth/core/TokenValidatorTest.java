@@ -129,7 +129,8 @@ class TokenValidatorTest {
             tokenHolder.withClaim(ClaimName.ISSUER.getName(), ClaimValue.forPlainString("invalid-issuer"));
             var token = tokenHolder.getRawToken();
 
-            assertThrows(TokenValidationException.class, () -> tokenValidator.createAccessToken(AccessTokenRequest.of(token)),
+            var request = AccessTokenRequest.of(token);
+            assertThrows(TokenValidationException.class, () -> tokenValidator.createAccessToken(request),
                     "Should throw exception for invalid issuer");
         }
 
@@ -140,7 +141,8 @@ class TokenValidatorTest {
             tokenHolder.withClaim(ClaimName.ISSUER.getName(), ClaimValue.forPlainString("invalid-issuer"));
             var token = tokenHolder.getRawToken();
 
-            assertThrows(TokenValidationException.class, () -> tokenValidator.createIdToken(IdTokenRequest.of(token)),
+            var request = IdTokenRequest.of(token);
+            assertThrows(TokenValidationException.class, () -> tokenValidator.createIdToken(request),
                     "Should throw exception for invalid issuer");
         }
     }
@@ -159,8 +161,9 @@ class TokenValidatorTest {
                     .build();
             var factory = TokenValidator.builder().parserConfig(customConfig).issuerConfig(issuerConfig).build();
 
+            var request = AccessTokenRequest.of(largeToken);
             var exception = assertThrows(TokenValidationException.class,
-                    () -> factory.createAccessToken(AccessTokenRequest.of(largeToken)));
+                    () -> factory.createAccessToken(request));
 
             assertEquals(SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED, exception.getEventType(),
                     "Should indicate token size exceeded");
@@ -178,8 +181,9 @@ class TokenValidatorTest {
             tokenHolder.withClaim("large-claim", ClaimValue.forPlainString("a".repeat(200)));
             String token = tokenHolder.getRawToken();
 
+            var request = AccessTokenRequest.of(token);
             var exception = assertThrows(TokenValidationException.class,
-                    () -> factory.createAccessToken(AccessTokenRequest.of(token)));
+                    () -> factory.createAccessToken(request));
 
             assertEquals(SecurityEventCounter.EventType.DECODED_PART_SIZE_EXCEEDED, exception.getEventType(),
                     "Should indicate payload size exceeded");
@@ -192,13 +196,15 @@ class TokenValidatorTest {
         @Test
         @DisplayName("Handle empty or blank token strings")
         void shouldHandleEmptyOrBlankTokenStrings() {
+            var emptyRequest = AccessTokenRequest.of("");
             var emptyException = assertThrows(TokenValidationException.class,
-                    () -> tokenValidator.createAccessToken(AccessTokenRequest.of("")));
+                    () -> tokenValidator.createAccessToken(emptyRequest));
             assertEquals(SecurityEventCounter.EventType.TOKEN_EMPTY, emptyException.getEventType(),
                     "Should indicate empty token");
 
+            var blankRequest = AccessTokenRequest.of("   ");
             var blankException = assertThrows(TokenValidationException.class,
-                    () -> tokenValidator.createAccessToken(AccessTokenRequest.of("   ")));
+                    () -> tokenValidator.createAccessToken(blankRequest));
             assertEquals(SecurityEventCounter.EventType.TOKEN_EMPTY, blankException.getEventType(),
                     "Should indicate empty token");
         }
@@ -208,8 +214,9 @@ class TokenValidatorTest {
         void shouldHandleInvalidTokenFormat() {
             var invalidToken = Generators.letterStrings(10, 20).next();
 
+            var request = AccessTokenRequest.of(invalidToken);
             var exception = assertThrows(TokenValidationException.class,
-                    () -> tokenValidator.createAccessToken(AccessTokenRequest.of(invalidToken)));
+                    () -> tokenValidator.createAccessToken(request));
 
             assertEquals(SecurityEventCounter.EventType.INVALID_JWT_FORMAT, exception.getEventType(),
                     "Should indicate invalid JWT format");
@@ -222,8 +229,9 @@ class TokenValidatorTest {
             tokenHolder.withClaim(ClaimName.ISSUER.getName(), ClaimValue.forPlainString("https://unknown-issuer.com"));
             String token = tokenHolder.getRawToken();
 
+            var request = AccessTokenRequest.of(token);
             var exception = assertThrows(TokenValidationException.class,
-                    () -> tokenValidator.createAccessToken(AccessTokenRequest.of(token)));
+                    () -> tokenValidator.createAccessToken(request));
 
             assertEquals(SecurityEventCounter.EventType.NO_ISSUER_CONFIG, exception.getEventType(),
                     "Should indicate no issuer config");
@@ -240,8 +248,9 @@ class TokenValidatorTest {
         @Test
         @DisplayName("Log warning when token is empty")
         void shouldLogWarningWhenTokenIsEmpty() {
+            var emptyRequest = AccessTokenRequest.of(EMPTY_TOKEN);
             assertThrows(TokenValidationException.class,
-                    () -> tokenValidator.createAccessToken(AccessTokenRequest.of(EMPTY_TOKEN)));
+                    () -> tokenValidator.createAccessToken(emptyRequest));
 
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, JWTValidationLogMessages.WARN.TOKEN_IS_EMPTY.resolveIdentifierString());
         }
@@ -249,8 +258,9 @@ class TokenValidatorTest {
         @Test
         @DisplayName("Log warning when token format is invalid")
         void shouldLogWarningWhenTokenFormatIsInvalid() {
+            var invalidRequest = AccessTokenRequest.of(INVALID_TOKEN);
             assertThrows(TokenValidationException.class,
-                    () -> tokenValidator.createAccessToken(AccessTokenRequest.of(INVALID_TOKEN)));
+                    () -> tokenValidator.createAccessToken(invalidRequest));
 
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT.resolveIdentifierString());
         }
@@ -262,8 +272,9 @@ class TokenValidatorTest {
             tokenHolder.withClaim(ClaimName.ISSUER.getName(), ClaimValue.forPlainString("unknown-issuer"));
             String token = tokenHolder.getRawToken();
 
+            var request = AccessTokenRequest.of(token);
             assertThrows(TokenValidationException.class,
-                    () -> tokenValidator.createAccessToken(AccessTokenRequest.of(token)));
+                    () -> tokenValidator.createAccessToken(request));
 
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "No configuration found for issuer");
         }
@@ -275,8 +286,9 @@ class TokenValidatorTest {
             tokenHolder.withoutClaim(ClaimName.SUBJECT.getName());
             String validToken = tokenHolder.getRawToken();
 
+            var request = AccessTokenRequest.of(validToken);
             var exception = assertThrows(TokenValidationException.class,
-                    () -> tokenValidator.createAccessToken(AccessTokenRequest.of(validToken)));
+                    () -> tokenValidator.createAccessToken(request));
 
             assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType(),
                     "Should indicate missing claim");
@@ -290,8 +302,9 @@ class TokenValidatorTest {
             tokenHolder.withoutClaim(ClaimName.AUDIENCE.getName());
             String validToken = tokenHolder.getRawToken();
 
+            var idRequest = IdTokenRequest.of(validToken);
             var exception = assertThrows(TokenValidationException.class,
-                    () -> tokenValidator.createIdToken(IdTokenRequest.of(validToken)));
+                    () -> tokenValidator.createIdToken(idRequest));
 
             assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType(),
                     "Should indicate missing claim");
@@ -320,8 +333,9 @@ class TokenValidatorTest {
 
             TokenValidator newTokenValidator = TokenValidator.builder().issuerConfig(newIssuerConfig).build();
 
+            var request = AccessTokenRequest.of(token);
             var exception = assertThrows(TokenValidationException.class,
-                    () -> newTokenValidator.createAccessToken(AccessTokenRequest.of(token)));
+                    () -> newTokenValidator.createAccessToken(request));
 
             assertEquals(SecurityEventCounter.EventType.KEY_NOT_FOUND, exception.getEventType(),
                     "Should indicate key not found");

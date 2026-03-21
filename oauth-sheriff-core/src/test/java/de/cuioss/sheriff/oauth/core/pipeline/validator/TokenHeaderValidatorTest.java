@@ -146,8 +146,9 @@ class TokenHeaderValidatorTest {
             assertEquals("RS256", decodedJwt.getAlg().orElse(null));
 
             // When validating the validation, it should throw an exception
+            var request = AccessTokenRequest.of("test");
             var exception = assertThrows(TokenValidationException.class,
-                    () -> validator.validate(decodedJwt, AccessTokenRequest.of("test")));
+                    () -> validator.validate(decodedJwt, request));
 
             // Verify the exception has the correct event type
             assertEquals(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM, exception.getEventType());
@@ -177,8 +178,9 @@ class TokenHeaderValidatorTest {
             DecodedJwt decodedJwt = new DecodedJwt(null, null, null, new String[]{"", "", ""}, "");
 
             // When validating the validation, it should throw an exception
+            var request = AccessTokenRequest.of("test");
             var exception = assertThrows(TokenValidationException.class,
-                    () -> validator.validate(decodedJwt, AccessTokenRequest.of("test")));
+                    () -> validator.validate(decodedJwt, request));
 
             // Verify the exception has the correct event type
             assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
@@ -234,8 +236,9 @@ class TokenHeaderValidatorTest {
             );
 
             // When validating the token, it should throw an exception
+            var request = AccessTokenRequest.of("test");
             var exception = assertThrows(TokenValidationException.class,
-                    () -> validator.validate(decodedJwt, AccessTokenRequest.of("test")));
+                    () -> validator.validate(decodedJwt, request));
 
             // Verify the exception has the correct event type
             assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
@@ -286,8 +289,9 @@ class TokenHeaderValidatorTest {
             );
 
             // When validating the token, it should throw an exception
+            var request = AccessTokenRequest.of("test");
             var exception = assertThrows(TokenValidationException.class,
-                    () -> validator.validate(decodedJwt, AccessTokenRequest.of("test")));
+                    () -> validator.validate(decodedJwt, request));
 
             // Verify the exception message includes available header info (only alg)
             assertTrue(exception.getMessage().contains("alg=RS256"));
@@ -330,8 +334,9 @@ class TokenHeaderValidatorTest {
 
             // When validating the token, it should throw an exception for missing alg first
             // (alg validation comes before kid validation)
+            var request = AccessTokenRequest.of("test");
             var exception = assertThrows(TokenValidationException.class,
-                    () -> validator.validate(decodedJwt, AccessTokenRequest.of("test")));
+                    () -> validator.validate(decodedJwt, request));
 
             // Verify the exception is for missing alg (not kid, since alg is checked first)
             assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
@@ -393,8 +398,9 @@ class TokenHeaderValidatorTest {
             );
 
             // When validating the token, it should throw an exception
+            var request = AccessTokenRequest.of("test");
             var exception = assertThrows(TokenValidationException.class,
-                    () -> validator.validate(decodedJwt, AccessTokenRequest.of("test")));
+                    () -> validator.validate(decodedJwt, request));
 
             // Verify the exception has the correct event type
             assertEquals(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM, exception.getEventType());
@@ -557,8 +563,9 @@ class TokenHeaderValidatorTest {
             );
 
             // When validating, it should throw TokenValidationException
+            var request = AccessTokenRequest.of("test");
             var exception = assertThrows(TokenValidationException.class,
-                    () -> validator.validate(decodedJwt, AccessTokenRequest.of("test")));
+                    () -> validator.validate(decodedJwt, request));
 
             // Verify exception details
             assertEquals(SecurityEventCounter.EventType.TOKEN_TYPE_MISMATCH, exception.getEventType());
@@ -599,8 +606,9 @@ class TokenHeaderValidatorTest {
             );
 
             // When validating, it should throw TokenValidationException
+            var request = AccessTokenRequest.of("test");
             var exception = assertThrows(TokenValidationException.class,
-                    () -> validator.validate(decodedJwt, AccessTokenRequest.of("test")));
+                    () -> validator.validate(decodedJwt, request));
 
             // Verify exception details
             assertEquals(SecurityEventCounter.EventType.TOKEN_TYPE_MISMATCH, exception.getEventType());

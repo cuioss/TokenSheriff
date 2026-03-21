@@ -93,7 +93,7 @@ class TokenSignatureValidatorAlgorithmTest {
     // Note: EC algorithms (ES256, ES384, ES512) are excluded because JJWT generates IEEE P1363 format signatures
     // but the JDK expects ASN.1/DER format, causing validation failures. This will be fixed with signature format conversion.
     // EdDSA uses raw signature format natively (no conversion needed) and is included here.
-    @EnumSource(value = InMemoryKeyMaterialHandler.Algorithm.class, names = {"RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "EdDSA"})
+    @EnumSource(value = InMemoryKeyMaterialHandler.Algorithm.class, names = {"RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ED_DSA"})
     @DisplayName("Should validate token with valid signature for RSA and EdDSA algorithms")
     void shouldValidateTokenWithValidSignature(InMemoryKeyMaterialHandler.Algorithm algorithm) {
         // Create a valid token with the specified algorithm
@@ -169,7 +169,7 @@ class TokenSignatureValidatorAlgorithmTest {
         // (e.g. "s is too large") instead of returning false like RSA/PSS algorithms.
         long initialCount = securityEventCounter.getCount(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED);
 
-        String validToken = createToken(InMemoryKeyMaterialHandler.Algorithm.EdDSA);
+        String validToken = createToken(InMemoryKeyMaterialHandler.Algorithm.ED_DSA);
         String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(
                 validToken, JwtTokenTamperingUtil.TamperingStrategy.MODIFY_SIGNATURE_LAST_CHAR);
 

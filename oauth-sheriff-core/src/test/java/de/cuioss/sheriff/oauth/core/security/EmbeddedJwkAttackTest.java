@@ -82,8 +82,9 @@ class EmbeddedJwkAttackTest {
         String tamperedHeader = Base64.getUrlEncoder().withoutPadding().encodeToString(tamperedHeaderJson.getBytes());
         String tamperedToken = tamperedHeader + "." + parts[1] + "." + parts[2];
 
+        var jwkRequest = AccessTokenRequest.of(tamperedToken);
         assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(AccessTokenRequest.of(tamperedToken)),
+                () -> tokenValidator.createAccessToken(jwkRequest),
                 "Should reject token with embedded JWK header");
 
         assertTrue(tokenValidator.getSecurityEventCounter().getCount(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED) >= 0,

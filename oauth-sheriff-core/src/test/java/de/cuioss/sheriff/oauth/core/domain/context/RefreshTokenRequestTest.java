@@ -75,8 +75,9 @@ class RefreshTokenRequestTest {
     @DisplayName("should return immutable headers")
     void shouldReturnImmutableHeaders() {
         var request = new RefreshTokenRequest(TOKEN, Map.of("key", List.of("value")));
+        var headers = request.httpHeaders();
         assertThrows(UnsupportedOperationException.class,
-                () -> request.httpHeaders().put("new", List.of("val")));
+                () -> headers.put("new", List.of("val")));
     }
 
     @Test

@@ -184,8 +184,9 @@ class KeyInjectionAttackTest {
         tokenValidator.getSecurityEventCounter().reset(expectedEventType);
 
         // Verify that the token is rejected
+        var kidRequest = AccessTokenRequest.of(token);
         var exception = assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(AccessTokenRequest.of(token)));
+                () -> tokenValidator.createAccessToken(kidRequest));
 
         // Verify the error message if needed
         LOGGER.debug("Exception message: %s", exception.getMessage());

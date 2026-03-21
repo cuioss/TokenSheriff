@@ -75,7 +75,8 @@ class ClientConfusionAttackTest {
         tokenValidator = TokenValidator.builder().issuerConfig(issuerConfig).build();
 
         // Verify the token is rejected
-        var exception = assertThrows(TokenValidationException.class, () -> tokenValidator.createIdToken(IdTokenRequest.of(token)),
+        var request = IdTokenRequest.of(token);
+        var exception = assertThrows(TokenValidationException.class, () -> tokenValidator.createIdToken(request),
                 "Token with invalid azp claim should be rejected");
         assertEquals(SecurityEventCounter.EventType.AZP_MISMATCH, exception.getEventType(),
                 "Exception should have AZP_MISMATCH event type");
@@ -148,7 +149,8 @@ class ClientConfusionAttackTest {
         tokenValidator = TokenValidator.builder().issuerConfig(tokenHolder.getIssuerConfig()).build();
 
         // Verify the token is rejected
-        var exception = assertThrows(TokenValidationException.class, () -> tokenValidator.createIdToken(IdTokenRequest.of(token)),
+        var idTokenRequest = IdTokenRequest.of(token);
+        var exception = assertThrows(TokenValidationException.class, () -> tokenValidator.createIdToken(idTokenRequest),
                 "Token with missing azp claim should be rejected");
         assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType(),
                 "Exception should have MISSING_CLAIM event type");
