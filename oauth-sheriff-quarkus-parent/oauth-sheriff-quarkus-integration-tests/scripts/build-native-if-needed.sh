@@ -10,7 +10,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 RUNNER_FILE=$(find "${PROJECT_DIR}/target" -name "*-runner" -type f 2>/dev/null | head -n 1)
 
 if [[ -z "$RUNNER_FILE" ]]; then
-    echo "🔨 Native executable not found, building it now..."
+    echo "Native executable not found, building it now..."
     echo "This will take approximately 2 minutes..."
     
     # Build native executable using Quarkus Maven plugin
@@ -22,10 +22,10 @@ if [[ -z "$RUNNER_FILE" ]]; then
     # Verify it was created
     RUNNER_FILE=$(find "${PROJECT_DIR}/target" -name "*-runner" -type f 2>/dev/null | head -n 1)
     if [[ -z "$RUNNER_FILE" ]]; then
-        echo "❌ Failed to build native executable"
+        echo "Error: Failed to build native executable"
         exit 1
     fi
-    echo "✅ Native executable built: $(basename "$RUNNER_FILE")"
+    echo "Native executable built: $(basename "$RUNNER_FILE")"
 else
-    echo "✅ Native executable already exists: $(basename "$RUNNER_FILE")"
+    echo "Native executable already exists: $(basename "$RUNNER_FILE")"
 fi

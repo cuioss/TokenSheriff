@@ -14,17 +14,17 @@ DEFAULT_MODULE="library"
 
 # Function to stop the server
 stop_server() {
-    echo "🔍 Looking for running benchmark report servers..."
+    echo "Looking for running benchmark report servers..."
     
     # Find Python HTTP server processes
     PIDS=$(ps aux | grep -E "python.*http.server|python.*SimpleHTTPServer" | grep -v grep | awk '{print $2}')
     
     if [ -z "$PIDS" ]; then
-        echo "ℹ️  No HTTP server found running."
+        echo "No HTTP server found running."
         exit 0
     fi
     
-    echo "🛑 Stopping HTTP server(s)..."
+    echo "Stopping HTTP server(s)..."
     for PID in $PIDS; do
         # Get process info for confirmation
         PROCESS_INFO=$(ps -p $PID -o command= 2>/dev/null)
@@ -32,14 +32,14 @@ stop_server() {
             echo "   Stopping PID $PID: $PROCESS_INFO"
             kill $PID 2>/dev/null
             if [ $? -eq 0 ]; then
-                echo "   ✅ Stopped PID $PID"
+                echo "   Stopped PID $PID"
             else
-                echo "   ⚠️  Could not stop PID $PID (may require sudo)"
+                echo "   Could not stop PID $PID (may require sudo)"
             fi
         fi
     done
     
-    echo "✨ Done!"
+    echo "Done!"
     exit 0
 }
 
@@ -62,7 +62,7 @@ elif [[ "$1" =~ ^[0-9]+$ ]]; then
 else
     # Show usage if invalid parameter
     if [ -n "$1" ]; then
-        echo "❌ Invalid parameter: $1"
+        echo "Error: Invalid parameter: $1"
         echo ""
         echo "Usage:"
         echo "  ./serve-reports.sh [module] [port]"
@@ -88,7 +88,7 @@ esac
 
 # Check if reports directory exists
 if [ ! -d "$REPORTS_DIR" ]; then
-    echo "❌ Reports directory not found: $REPORTS_DIR"
+    echo "Error: Reports directory not found: $REPORTS_DIR"
     echo ""
     case "$MODULE" in
         library)
@@ -112,7 +112,7 @@ fi
 # Check if server is already running on the specified port
 EXISTING_PID=$(lsof -ti:$PORT 2>/dev/null)
 if [ -n "$EXISTING_PID" ]; then
-    echo "⚠️  Port $PORT is already in use by process $EXISTING_PID"
+    echo "Port $PORT is already in use by process $EXISTING_PID"
     echo ""
     echo "You can:"
     echo "  1. Stop the existing server: ./serve-reports.sh stop"
@@ -121,10 +121,10 @@ if [ -n "$EXISTING_PID" ]; then
     exit 1
 fi
 
-echo "🚀 Starting local HTTP server for $MODULE_DESC"
-echo "📁 Module: $MODULE"
-echo "📂 Serving from: $REPORTS_DIR"
-echo "🌐 URL: http://localhost:$PORT"
+echo "Starting local HTTP server for $MODULE_DESC"
+echo "Module: $MODULE"
+echo "Serving from: $REPORTS_DIR"
+echo "URL: http://localhost:$PORT"
 echo ""
 
 # Show available content based on module
@@ -161,7 +161,7 @@ case "$MODULE" in
 esac
 
 echo ""
-echo "📌 To stop the server:"
+echo "To stop the server:"
 echo "   Press Ctrl+C or run: ./serve-reports.sh stop"
 echo ""
 
@@ -174,7 +174,7 @@ if command -v python3 &> /dev/null; then
 elif command -v python &> /dev/null; then
     python -m SimpleHTTPServer "$PORT"
 else
-    echo "❌ Error: Python is not installed. Please install Python to use this script."
+    echo "Error: Python is not installed. Please install Python to use this script."
     echo "Alternative: Use any other HTTP server like 'npx http-server' or 'php -S localhost:$PORT'"
     exit 1
 fi
