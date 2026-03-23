@@ -54,6 +54,7 @@ import java.security.*;
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#token-validation-pipeline">Token Validation Pipeline</a>
  * and <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
  *
+ * @apiNote This class is internal to OAuth Sheriff and not part of the public API.
  * @since 1.0
  * @author Oliver Wolff
  */

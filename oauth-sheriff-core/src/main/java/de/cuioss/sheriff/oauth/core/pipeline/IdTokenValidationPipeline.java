@@ -59,6 +59,7 @@ import java.util.Map;
  * This class is thread-safe after construction. All validators are pre-created
  * and cached in immutable maps for optimal performance.
  *
+ * @apiNote This class is internal to OAuth Sheriff and not part of the public API.
  * @since 1.0
  * @author Oliver Wolff
  */

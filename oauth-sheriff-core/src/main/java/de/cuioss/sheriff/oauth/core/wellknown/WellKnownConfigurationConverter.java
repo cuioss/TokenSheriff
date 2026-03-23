@@ -42,7 +42,7 @@ import java.util.Optional;
  * @since 1.0
  * @author Oliver Wolff
  */
-public class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnownResult> {
+class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnownResult> {
 
     private static final CuiLogger LOGGER = new CuiLogger(WellKnownConfigurationConverter.class);
 

@@ -62,7 +62,7 @@ import java.util.Optional;
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
 @SuperBuilder
-public class IdTokenContent extends BaseTokenContent {
+public final class IdTokenContent extends BaseTokenContent {
 
     @Serial
     private static final long serialVersionUID = 1L;

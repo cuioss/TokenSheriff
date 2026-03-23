@@ -34,6 +34,7 @@ import java.util.Set;
  * The azp claim identifies the client that the token was issued for and must match
  * one of the expected client IDs if client ID validation is configured.
  *
+ * @apiNote This class is internal to OAuth Sheriff and not part of the public API.
  * @since 1.0
  * @author Oliver Wolff
  */
