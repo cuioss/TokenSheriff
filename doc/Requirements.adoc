@@ -519,8 +519,12 @@ _See analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchm
 
 **Measured Performance (JMH on Apple M4, 100 threads):**
 
-* **Core validation**: 159,100 ops/s* **Average latency**: 0.657ms* **P50 latency**: 77µs (P95: 80µs, P99: 163µs)* **Signature validation**: P50=68µs (88% of total time)
-* **Cache operations**: P50=0.1µs* **Token parsing**: P50=4.3µs
+* **Core validation**: 159,100 ops/s
+* **Average latency**: 0.657ms
+* **P50 latency**: 77µs (P95: 80µs, P99: 163µs)
+* **Signature validation**: P50=68µs (88% of total time)
+* **Cache operations**: P50=0.1µs
+* **Token parsing**: P50=4.3µs
 
 _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis (March 2026)]_
 
@@ -534,7 +538,9 @@ _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Mic
 
 **Measured Performance (JMH on Apple M4, 100 threads):**
 
-* **All valid tokens**: 152,200 ops/s* **50% invalid tokens**: 222,300 ops/s (+39% throughput improvement)* **Fast-fail optimization**: Invalid tokens rejected early without full processing
+* **All valid tokens**: 152,200 ops/s
+* **50% invalid tokens**: 222,300 ops/s (+39% throughput improvement)
+* **Fast-fail optimization**: Invalid tokens rejected early without full processing
 
 _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc#_throughput_results[Throughput Results]_
 
@@ -551,7 +557,11 @@ _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc#_th
 
 **Measured Performance (WRK on Apple M4, Docker, 150 connections):**
 
-* **JWT validation (cache enabled)**: 25,178 ops/s* **P50 latency**: 5.49ms (P90: 15.73ms, P99: 32.59ms)* **Health check**: 88,700 ops/s* **Error rate**: 0% timeouts* **CPU usage**: 85.0% peak, 79.7% average (JWT with cache)
+* **JWT validation (cache enabled)**: 25,178 ops/s
+* **P50 latency**: 5.49ms (P90: 15.73ms, P99: 32.59ms)
+* **Health check**: 88,700 ops/s
+* **Error rate**: 0% timeouts
+* **CPU usage**: 85.0% peak, 79.7% average (JWT with cache)
 
 _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis (March 2026)]_
 
@@ -566,7 +576,11 @@ _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.ad
 
 **Measured Performance:**
 
-* **Cache lookup**: P50=0.1µs (P95: 0.4µs)* **Cache store**: P50=0.1µs (P95: 0.5µs)* **Cache hit rate**: 100% (cache size 20, integration tests)* **Cache effectiveness**: 100% hit rate with cache size 20 across all connection levels* **Cached validation time**: 0.26ms average per token
+* **Cache lookup**: P50=0.1µs (P95: 0.4µs)
+* **Cache store**: P50=0.1µs (P95: 0.5µs)
+* **Cache hit rate**: 100% (cache size 20, integration tests)
+* **Cache effectiveness**: 100% hit rate with cache size 20 across all connection levels
+* **Cached validation time**: 0.26ms average per token
 
 _See analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Performance Analysis]_
 
@@ -581,7 +595,10 @@ _See analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integr
 
 **Measured Performance:**
 
-* **JWT stability**: 22.7-24.3K ops/s across 50-300 connections* **Optimal configuration**: 100 connections (95.4K health, 24.3K JWT)* **Thread scaling**: 100 concurrent threads with 159K ops/s (library)* **Latency scaling**: P50 increases linearly with connections (5.49ms @ 150 conns)
+* **JWT stability**: 22.7-24.3K ops/s across 50-300 connections
+* **Optimal configuration**: 100 connections (95.4K health, 24.3K JWT)
+* **Thread scaling**: 100 concurrent threads with 159K ops/s (library)
+* **Latency scaling**: P50 increases linearly with connections (5.49ms @ 150 conns)
 
 _See analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc#_connection_sweep_50_300_connections[Connection Scaling Analysis]_
 
