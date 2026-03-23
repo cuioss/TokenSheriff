@@ -1,4 +1,4 @@
-= JWT Validation Test Utilities
+= OAuth Sheriff Test Utilities
 :doctype: book
 :toc: left
 :toclevels: 3

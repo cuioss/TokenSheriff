@@ -211,7 +211,7 @@ For detailed architectural information, see:
 * xref:doc/security/threat-model.adoc[Threat Model] - Security analysis
 * xref:doc/specification/multi-idp-testing.adoc[Multi-IDP Testing] - Testing with multiple OIDC providers
 
-For configuration details including runtime dependencies and test support, see the xref:oauth-sheriff-core/README.adoc[JWT Validation Module documentation].
+For configuration details including runtime dependencies and test support, see the xref:oauth-sheriff-core/README.adoc[OAuth Sheriff Core documentation].
 
 == Performance
 
