@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class IssuerConfigCacheSynchronizationTest {
 
-    private IssuerConfigCache issuerConfigResolver;
+    private IssuerConfigCache issuerConfigCache;
     private String issuerIdentifier;
 
     @BeforeEach
@@ -53,7 +53,7 @@ class IssuerConfigCacheSynchronizationTest {
         issuerIdentifier = issuerConfig.getIssuerIdentifier();
 
         SecurityEventCounter securityEventCounter = new SecurityEventCounter();
-        issuerConfigResolver = new IssuerConfigCache(List.of(issuerConfig), securityEventCounter);
+        issuerConfigCache = new IssuerConfigCache(List.of(issuerConfig), securityEventCounter);
     }
 
     @Test
@@ -123,7 +123,7 @@ class IssuerConfigCacheSynchronizationTest {
     @DisplayName("Measure post-warmup throughput for optimized cache")
     void measuresPostWarmupThroughput() throws Exception {
         // Pre-warm the resolver by doing a single resolution
-        IssuerConfig warmupResult = issuerConfigResolver.resolveConfig(issuerIdentifier);
+        IssuerConfig warmupResult = issuerConfigCache.resolveConfig(issuerIdentifier);
         assertNotNull(warmupResult);
 
         // Now test performance after warmup
@@ -140,7 +140,7 @@ class IssuerConfigCacheSynchronizationTest {
                     long threadStartTime = System.nanoTime();
 
                     for (int j = 0; j < operationsPerThread; j++) {
-                        IssuerConfig result = issuerConfigResolver.resolveConfig(issuerIdentifier);
+                        IssuerConfig result = issuerConfigCache.resolveConfig(issuerIdentifier);
                         assertNotNull(result);
                         totalOperations.incrementAndGet();
                     }

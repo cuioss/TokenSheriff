@@ -67,7 +67,7 @@ public class IdTokenValidationPipeline {
     private static final CuiLogger LOGGER = new CuiLogger(IdTokenValidationPipeline.class);
 
     private final NonValidatingJwtParser jwtParser;
-    private final IssuerConfigCache issuerConfigResolver;
+    private final IssuerConfigCache issuerConfigCache;
     private final Map<String, TokenSignatureValidator> signatureValidators;
     private final Map<String, TokenBuilder> tokenBuilders;
     private final Map<String, TokenClaimValidator> claimValidators;
@@ -78,7 +78,7 @@ public class IdTokenValidationPipeline {
      * Creates a new IdTokenValidationPipeline.
      *
      * @param jwtParser the JWT parser for decoding tokens
-     * @param issuerConfigResolver the resolver for issuer configurations
+     * @param issuerConfigCache the resolver for issuer configurations
      * @param signatureValidators pre-created signature validators keyed by issuer
      * @param tokenBuilders pre-created token builders keyed by issuer
      * @param claimValidators pre-created claim validators keyed by issuer
@@ -86,14 +86,14 @@ public class IdTokenValidationPipeline {
      * @param securityEventCounter the security event counter for tracking operations
      */
     public IdTokenValidationPipeline(NonValidatingJwtParser jwtParser,
-            IssuerConfigCache issuerConfigResolver,
+            IssuerConfigCache issuerConfigCache,
             Map<String, TokenSignatureValidator> signatureValidators,
             Map<String, TokenBuilder> tokenBuilders,
             Map<String, TokenClaimValidator> claimValidators,
             Map<String, TokenHeaderValidator> headerValidators,
             SecurityEventCounter securityEventCounter) {
         this.jwtParser = jwtParser;
-        this.issuerConfigResolver = issuerConfigResolver;
+        this.issuerConfigCache = issuerConfigCache;
         this.signatureValidators = signatureValidators;
         this.tokenBuilders = tokenBuilders;
         this.claimValidators = claimValidators;
@@ -132,7 +132,7 @@ public class IdTokenValidationPipeline {
         });
 
         // 3. Resolve issuer config
-        IssuerConfig issuerConfig = issuerConfigResolver.resolveConfig(issuerString);
+        IssuerConfig issuerConfig = issuerConfigCache.resolveConfig(issuerString);
 
         // 4. Validate header
         TokenHeaderValidator headerValidator = headerValidators.get(issuerConfig.getIssuerIdentifier());

@@ -226,7 +226,7 @@ public class TokenValidator implements Closeable {
                 .build();
 
         // Let the IssuerConfigCache handle all issuer config processing
-        IssuerConfigCache issuerConfigResolver = new IssuerConfigCache(issuerConfigs, this.securityEventCounter);
+        IssuerConfigCache issuerConfigCache = new IssuerConfigCache(issuerConfigs, this.securityEventCounter);
 
         // Initialize immutable map of TokenSignatureValidator instances for each issuer
         // This eliminates the performance bottleneck of creating new instances on every validation
@@ -312,7 +312,7 @@ public class TokenValidator implements Closeable {
         // Construct IdTokenValidationPipeline (full validation, no cache, no metrics)
         this.idTokenPipeline = new IdTokenValidationPipeline(
                 jwtParser,
-                issuerConfigResolver,
+                issuerConfigCache,
                 signatureValidators,
                 tokenBuilders,
                 claimValidators,
@@ -324,7 +324,7 @@ public class TokenValidator implements Closeable {
         // Pipeline creates its own AccessTokenCache from config
         this.accessTokenPipeline = new AccessTokenValidationPipeline(
                 jwtParser,
-                issuerConfigResolver,
+                issuerConfigCache,
                 signatureValidators,
                 tokenBuilders,
                 claimValidators,
@@ -336,7 +336,7 @@ public class TokenValidator implements Closeable {
         LOGGER.debug("AccessTokenValidationPipeline initialized with cache maxSize=%s, evictionInterval=%ss",
                 cacheConfig.getMaxSize(), cacheConfig.getEvictionIntervalSeconds());
 
-        LOGGER.info(JWTValidationLogMessages.INFO.TOKEN_FACTORY_INITIALIZED, issuerConfigResolver.toString());
+        LOGGER.info(JWTValidationLogMessages.INFO.TOKEN_FACTORY_INITIALIZED, issuerConfigCache.toString());
 
         if (jweDecryptionConfig != null) {
             LOGGER.info(JWTValidationLogMessages.INFO.JWE_DECRYPTION_ENABLED, jweDecryptionConfig.getKeyCount());

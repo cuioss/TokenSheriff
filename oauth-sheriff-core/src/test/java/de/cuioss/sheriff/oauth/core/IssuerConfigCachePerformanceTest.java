@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class IssuerConfigCachePerformanceTest {
 
-    private IssuerConfigCache issuerConfigResolver;
+    private IssuerConfigCache issuerConfigCache;
     private String issuerIdentifier;
 
     @BeforeEach
@@ -50,7 +50,7 @@ class IssuerConfigCachePerformanceTest {
         issuerIdentifier = issuerConfig.getIssuerIdentifier();
 
         SecurityEventCounter securityEventCounter = new SecurityEventCounter();
-        issuerConfigResolver = new IssuerConfigCache(List.of(issuerConfig), securityEventCounter);
+        issuerConfigCache = new IssuerConfigCache(List.of(issuerConfig), securityEventCounter);
     }
 
     @Test
@@ -79,7 +79,7 @@ class IssuerConfigCachePerformanceTest {
                     for (int j = 0; j < operationsPerThread; j++) {
                         long startTime = System.nanoTime();
 
-                        IssuerConfig result = issuerConfigResolver.resolveConfig(issuerIdentifier);
+                        IssuerConfig result = issuerConfigCache.resolveConfig(issuerIdentifier);
 
                         long duration = System.nanoTime() - startTime;
                         totalNanoTime.addAndGet(duration);
@@ -199,7 +199,7 @@ class IssuerConfigCachePerformanceTest {
                     barrier.await();
 
                     long startTime = System.nanoTime();
-                    IssuerConfig result = issuerConfigResolver.resolveConfig(issuerIdentifier);
+                    IssuerConfig result = issuerConfigCache.resolveConfig(issuerIdentifier);
                     long duration = System.nanoTime() - startTime;
 
                     executionTimes.add(duration);
