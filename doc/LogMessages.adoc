@@ -150,145 +150,145 @@ This section documents log messages specific to the Quarkus integration module (
 
 ==== Configuration Messages (001-010)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-001 |RESOLVING_ISSUER_CONFIGURATIONS |"Resolving issuer configurations from properties" |Indicates the start of issuer configuration resolution from application properties
-|OAuthSheriff_Q-002 |RESOLVED_ISSUER_CONFIGURATION |"Resolved issuer configuration: %s" |Shows a single resolved issuer configuration with its details
-|OAuthSheriff_Q-003 |RESOLVED_ENABLED_ISSUER_CONFIGURATIONS |"Resolved %s enabled issuer configurations" |Summary count of all enabled issuer configurations found
-|OAuthSheriff_Q-004 |RESOLVED_PARSER_CONFIG |"Resolved ParserConfig: maxTokenSize=%s bytes, maxPayloadSize=%s bytes, maxStringLength=%s, maxBufferSize=%s" |Shows the resolved JWT parser configuration limits
+|OAuthSheriff_Q-001 |"Resolving issuer configurations from properties" |Indicates the start of issuer configuration resolution from application properties
+|OAuthSheriff_Q-002 |"Resolved issuer configuration: %s" |Shows a single resolved issuer configuration with its details
+|OAuthSheriff_Q-003 |"Resolved %s enabled issuer configurations" |Summary count of all enabled issuer configurations found
+|OAuthSheriff_Q-004 |"Resolved ParserConfig: maxTokenSize=%s bytes, maxPayloadSize=%s bytes, maxStringLength=%s, maxBufferSize=%s" |Shows the resolved JWT parser configuration limits
 |===
 
 ==== Validation Messages (011-020)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-011 |INITIALIZING_JWT_VALIDATION_COMPONENTS |"Initializing JWT validation components from configuration" |Indicates the start of JWT validation component initialization
-|OAuthSheriff_Q-012 |JWT_VALIDATION_COMPONENTS_INITIALIZED |"JWT validation components initialized successfully with %s issuers" |Confirms successful initialization with issuer count
-|OAuthSheriff_Q-013 |RESOLVING_ACCESS_LOG_FILTER_CONFIG |"Resolving access log filter configuration from properties" |Indicates the start of access log filter configuration resolution
-|OAuthSheriff_Q-014 |CLAIM_MAPPER_REGISTRY_INITIALIZED |"Claim mapper registry initialized with %s custom mapper(s): %s" |Shows the number of custom claim mappers discovered and their names
-|OAuthSheriff_Q-015 |NO_CUSTOM_CLAIM_MAPPERS_DISCOVERED |"No custom claim mappers discovered" |Indicates that no custom claim mappers were found during CDI discovery
+|OAuthSheriff_Q-011 |"Initializing JWT validation components from configuration" |Indicates the start of JWT validation component initialization
+|OAuthSheriff_Q-012 |"JWT validation components initialized successfully with %s issuers" |Confirms successful initialization with issuer count
+|OAuthSheriff_Q-013 |"Resolving access log filter configuration from properties" |Indicates the start of access log filter configuration resolution
+|OAuthSheriff_Q-014 |"Claim mapper registry initialized with %s custom mapper(s): %s" |Shows the number of custom claim mappers discovered and their names
+|OAuthSheriff_Q-015 |"No custom claim mappers discovered" |Indicates that no custom claim mappers were found during CDI discovery
 |===
 
 ==== Metrics Messages (021-022)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-021 |INITIALIZING_JWT_METRICS_COLLECTOR |"Initializing JwtMetricsCollector" |Indicates the start of JWT metrics collector initialization
-|OAuthSheriff_Q-022 |JWT_METRICS_COLLECTOR_INITIALIZED |"JwtMetricsCollector initialized with %s event types" |Confirms successful initialization with event type count
+|OAuthSheriff_Q-021 |"Initializing JwtMetricsCollector" |Indicates the start of JWT metrics collector initialization
+|OAuthSheriff_Q-022 |"JwtMetricsCollector initialized with %s event types" |Confirms successful initialization with event type count
 |===
 
 ==== JWE Configuration Messages (031-034)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-031 |JWE_DECRYPTION_CONFIG_RESOLVING |"Resolving JWE decryption configuration from properties" |Indicates the start of JWE decryption configuration resolution
-|OAuthSheriff_Q-032 |JWE_DECRYPTION_CONFIG_RESOLVED |"JWE decryption configuration resolved with %s key(s)" |Shows the number of JWE decryption keys resolved
-|OAuthSheriff_Q-033 |JWE_CONFIG_CHECK |"JWE config check: singleKeyPath=%s, keystorePath=%s, multiKeys=%s" |Logs the JWE configuration sources being checked
-|OAuthSheriff_Q-034 |JWE_DECRYPTION_NOT_CONFIGURED |"No JWE decryption configuration found - JWE support disabled" |Indicates that no JWE decryption configuration was found
+|OAuthSheriff_Q-031 |"Resolving JWE decryption configuration from properties" |Indicates the start of JWE decryption configuration resolution
+|OAuthSheriff_Q-032 |"JWE decryption configuration resolved with %s key(s)" |Shows the number of JWE decryption keys resolved
+|OAuthSheriff_Q-033 |"JWE config check: singleKeyPath=%s, keystorePath=%s, multiKeys=%s" |Logs the JWE configuration sources being checked
+|OAuthSheriff_Q-034 |"No JWE decryption configuration found - JWE support disabled" |Indicates that no JWE decryption configuration was found
 |===
 
 ==== Cache Messages (041-043)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-041 |RESOLVING_ACCESS_TOKEN_CACHE_CONFIG |"Resolving access token cache configuration from properties" |Indicates the start of access token cache configuration resolution
-|OAuthSheriff_Q-042 |ACCESS_TOKEN_CACHE_DISABLED |"Access token cache disabled (maxSize=0)" |Indicates that the access token cache is disabled
-|OAuthSheriff_Q-043 |ACCESS_TOKEN_CACHE_CONFIGURED |"Access token cache configured: maxSize=%s, evictionIntervalSeconds=%s" |Shows the configured access token cache settings
+|OAuthSheriff_Q-041 |"Resolving access token cache configuration from properties" |Indicates the start of access token cache configuration resolution
+|OAuthSheriff_Q-042 |"Access token cache disabled (maxSize=0)" |Indicates that the access token cache is disabled
+|OAuthSheriff_Q-043 |"Access token cache configured: maxSize=%s, evictionIntervalSeconds=%s" |Shows the configured access token cache settings
 |===
 
 ==== Metrics Management Messages (051-052)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-051 |CLEARING_JWT_METRICS |"Clearing all JWT metrics" |Indicates that all JWT metrics are being cleared
-|OAuthSheriff_Q-052 |JWT_METRICS_CLEARED |"JWT metrics cleared successfully" |Confirms successful clearing of JWT metrics
+|OAuthSheriff_Q-051 |"Clearing all JWT metrics" |Indicates that all JWT metrics are being cleared
+|OAuthSheriff_Q-052 |"JWT metrics cleared successfully" |Confirms successful clearing of JWT metrics
 |===
 
 ==== JWKS Startup Messages (060-064)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-060 |JWKS_STARTUP_SERVICE_INITIALIZED |"JWKS startup service activated for background key loading" |Indicates that the JWKS startup service has been activated
-|OAuthSheriff_Q-061 |STARTING_ASYNCHRONOUS_JWKS_INITIALIZATION |"Starting asynchronous JWKS initialization for %s issuer(s)" |Indicates the start of background JWKS loading with issuer count
-|OAuthSheriff_Q-062 |NO_ISSUER_CONFIGURATIONS_FOUND |"No issuer configurations found - skipping JWKS initialization" |Indicates that JWKS initialization is skipped due to no configured issuers
-|OAuthSheriff_Q-063 |BACKGROUND_JWKS_INITIALIZATION_COMPLETED |"Background JWKS initialization completed successfully" |Confirms successful completion of background JWKS initialization
-|OAuthSheriff_Q-064 |BACKGROUND_JWKS_LOADING_COMPLETED_FOR_ISSUER |"Background JWKS loading completed for issuer: %s with status: %s" |Shows the completion status for a specific issuer's JWKS loading
+|OAuthSheriff_Q-060 |"JWKS startup service activated for background key loading" |Indicates that the JWKS startup service has been activated
+|OAuthSheriff_Q-061 |"Starting asynchronous JWKS initialization for %s issuer(s)" |Indicates the start of background JWKS loading with issuer count
+|OAuthSheriff_Q-062 |"No issuer configurations found - skipping JWKS initialization" |Indicates that JWKS initialization is skipped due to no configured issuers
+|OAuthSheriff_Q-063 |"Background JWKS initialization completed successfully" |Confirms successful completion of background JWKS initialization
+|OAuthSheriff_Q-064 |"Background JWKS loading completed for issuer: %s with status: %s" |Shows the completion status for a specific issuer's JWKS loading
 |===
 
 ==== Access Log Filter Messages (065-066)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-065 |CUSTOM_ACCESS_LOG_FILTER_INITIALIZED |"CustomAccessLogFilter initialized: %s" |Shows the initialized access log filter configuration
-|OAuthSheriff_Q-066 |ACCESS_LOG_ENTRY |"%s" |Individual access log entry in the configured format
+|OAuthSheriff_Q-065 |"CustomAccessLogFilter initialized: %s" |Shows the initialized access log filter configuration
+|OAuthSheriff_Q-066 |"%s" |Individual access log entry in the configured format
 |===
 
 === Quarkus WARN Level (100-199)
 
 ==== Health Check Warnings (100-110)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-100 |ERROR_CHECKING_JWKS_LOADER |"Error checking JWKS loader for issuer %s: %s" |Indicates an error occurred while checking JWKS loader status in health check
+|OAuthSheriff_Q-100 |"Error checking JWKS loader for issuer %s: %s" |Indicates an error occurred while checking JWKS loader status in health check
 |===
 
 ==== Bearer Token Warnings (121-130)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-128 |BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED |"Bearer token does not meet requirements. Missing scopes: %s, Missing roles: %s, Missing groups: %s" |Details about which requirements are missing from a bearer token
+|OAuthSheriff_Q-128 |"Bearer token does not meet requirements. Missing scopes: %s, Missing roles: %s, Missing groups: %s" |Details about which requirements are missing from a bearer token
 |===
 
 ==== JWKS Startup Warnings (131-136)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-131 |BACKGROUND_JWKS_LOADING_FAILED_FOR_ISSUER |"Background JWKS loading failed for issuer %s: %s" |Indicates that background JWKS loading failed for a specific issuer
-|OAuthSheriff_Q-133 |NO_MICROMETER_COUNTER_FOUND |"No Micrometer counter found for event type %s, delta %s lost" |Indicates that a metrics counter was not found and a delta value was lost
-|OAuthSheriff_Q-134 |JWKS_LOADING_RETRY_WARNING |"JWKS loading failed for issuer %s: %s - will retry via background refresh" |Indicates that JWKS loading failed but will be retried
-|OAuthSheriff_Q-135 |BACKGROUND_JWKS_ISSUES_WARNING |"Background JWKS initialization encountered issues: %s - on-demand loading will handle this" |Indicates issues during background JWKS initialization with fallback to on-demand loading
-|OAuthSheriff_Q-136 |BEARER_TOKEN_ANNOTATION_NOT_FOUND |"@BearerAuth annotation not found on method or class: %s" |Indicates that the @BearerAuth annotation was not found on the intercepted method or its declaring class
+|OAuthSheriff_Q-131 |"Background JWKS loading failed for issuer %s: %s" |Indicates that background JWKS loading failed for a specific issuer
+|OAuthSheriff_Q-133 |"No Micrometer counter found for event type %s, delta %s lost" |Indicates that a metrics counter was not found and a delta value was lost
+|OAuthSheriff_Q-134 |"JWKS loading failed for issuer %s: %s - will retry via background refresh" |Indicates that JWKS loading failed but will be retried
+|OAuthSheriff_Q-135 |"Background JWKS initialization encountered issues: %s - on-demand loading will handle this" |Indicates issues during background JWKS initialization with fallback to on-demand loading
+|OAuthSheriff_Q-136 |"@BearerAuth annotation not found on method or class: %s" |Indicates that the @BearerAuth annotation was not found on the intercepted method or its declaring class
 |===
 
 ==== JWE Warnings (141-142)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-141 |JWE_KEYSTORE_MISSING_ALIAS |"JWE keystore configured at %s but no key-alias specified — skipping keystore key loading" |Indicates that a JWE keystore was configured but no key alias was specified
-|OAuthSheriff_Q-142 |JWE_KEY_LOADING_FAILED |"Failed to load JWE decryption keys, JWE support disabled: %s" |Indicates that JWE decryption key loading failed and JWE support is disabled
+|OAuthSheriff_Q-141 |"JWE keystore configured at %s but no key-alias specified — skipping keystore key loading" |Indicates that a JWE keystore was configured but no key alias was specified
+|OAuthSheriff_Q-142 |"Failed to load JWE decryption keys, JWE support disabled: %s" |Indicates that JWE decryption key loading failed and JWE support is disabled
 |===
 
 === Quarkus ERROR Level (200-299)
 
 ==== Infrastructure Errors (200-210)
 
-[cols="1,2,3,4", options="header"]
+[cols="1,2,3", options="header"]
 |===
-|ID |LogRecord |Template |Description
+|ID |Message |Description
 
-|OAuthSheriff_Q-201 |VERTX_REQUEST_CONTEXT_UNAVAILABLE |"Vertx HttpServerRequest context is unavailable - no active request context found" |Indicates that the Vertx HTTP server request context could not be resolved
+|OAuthSheriff_Q-201 |"Vertx HttpServerRequest context is unavailable - no active request context found" |Indicates that the Vertx HTTP server request context could not be resolved
 |===
