@@ -41,7 +41,7 @@ Supported algorithms (preference order: ECDSA > EdDSA > RSA-PSS > RSA PKCS#1 v1.
 [[secure-communication]]
 === Secure Communication
 
-TLS 1.2+ enforced for all JWKS and well-known endpoint communication via `SecureSSLContextProvider`. Configurable minimum TLS version.
+TLS 1.2+ enforced for all JWKS and well-known endpoint communication via `SecureSSLContextProvider` (from cui-http-client). Configurable minimum TLS version.
 
 [[safe-parsing]]
 === Safe Parsing

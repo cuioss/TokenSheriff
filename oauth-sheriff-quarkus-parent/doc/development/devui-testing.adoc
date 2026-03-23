@@ -70,6 +70,7 @@ e-2-e-playwright/
 
 [source,bash]
 ----
+# Run from oauth-sheriff-quarkus-parent/ directory
 docker compose up -d
 ./mvnw -f oauth-sheriff-quarkus-integration-tests/pom.xml quarkus:dev
 cd e-2-e-playwright && npx playwright test

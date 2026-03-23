@@ -56,7 +56,7 @@ image::plantuml/token-types.png[Token Types]
 * **TokenContent** / **BaseTokenContent** - Core interface and abstract base for JWT tokens
 * **AccessTokenContent** - OAuth2 access token with scope and role support
 * **IdTokenContent** - OpenID Connect ID token for user identity
-* **RefreshTokenContent** - Opaque refresh token (implements `MinimalTokenContent`; if JWT, claims are extracted but signature is _not_ verified)
+* **RefreshTokenContent** - Refresh token with minimal validation (implements `MinimalTokenContent`; if JWT-formatted, claims are extracted but no cryptographic signature verification or claim validation is performed)
 
 [[multi-issuer]]
 === IssuerConfig and Multi-Issuer Support

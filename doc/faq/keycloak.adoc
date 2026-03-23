@@ -139,7 +139,7 @@ Expected token structure after configuration:
 
 *Solution:* Always set `"full.path": "false"` in your group membership mapper:
 
-[source,jsonc]
+[source,json]
 ----
 {
   "name": "groups",
@@ -154,7 +154,7 @@ Expected token structure after configuration:
 ----
 
 **Token comparison:**
-[source,jsonc]
+[source,json]
 ----
 // With "full.path": "true" (default) - WRONG
 {

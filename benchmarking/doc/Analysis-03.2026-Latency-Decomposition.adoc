@@ -39,7 +39,7 @@ An ablation study decomposes the full JWT avg latency (2.30ms at 50 connections)
 |Authorization parsing (Mock minus C)
 
 |**D: Direct Validation**
-|`POST /mock-jwt/direct-validate`
+|`POST /mock-jwt/direct-validation`
 |Calls `createAccessToken()` directly, no CDI proxy
 |JWT validation under concurrency (D minus Mock)
 

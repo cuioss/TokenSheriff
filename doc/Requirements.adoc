@@ -12,7 +12,7 @@ This document outlines the functional and non-functional requirements for the JW
 === Document Navigation
 
 * xref:../README.adoc[README] - Project overview and introduction
-* xref:../oauth-sheriff-core/README.adoc[Usage Guide] - How to use the library with code examples
+* xref:../oauth-sheriff-core/doc/usage-guide.adoc[Usage Guide] - How to use the library with code examples
 * xref:architecture.adoc[Architecture] - Architecture reference
 * xref:LogMessages.adoc[Log Messages] - Reference for all log messages
 * xref:security/threat-model.adoc[Threat Model] - Security analysis and mitigations
@@ -542,7 +542,7 @@ _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Mic
 * **50% invalid tokens**: 222,300 ops/s (+39% throughput improvement) ✅
 * **Fast-fail optimization**: Invalid tokens rejected early without full processing
 
-_See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc#_error_handling_performance[Error Handling Performance]_
+_See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc#_throughput_results[Throughput Results]_
 
 [#OAUTH-SHERIFF-9.3]
 ==== OAUTH-SHERIFF-9.3: Integration Performance (HTTP/REST)
@@ -557,7 +557,7 @@ _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc#_er
 
 **Measured Performance (WRK on Apple M4, Docker, 150 connections):**
 
-* **JWT validation (cache enabled)**: 23,800 ops/s ✅
+* **JWT validation (cache enabled)**: 25,178 ops/s ✅
 * **P50 latency**: 5.49ms (P90: 15.73ms, P99: 32.59ms) ✅
 * **Health check**: 88,700 ops/s ✅
 * **Error rate**: 0% timeouts ✅
@@ -600,7 +600,7 @@ _See analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integr
 * **Thread scaling**: 100 concurrent threads with 159K ops/s (library) ✅
 * **Latency scaling**: P50 increases linearly with connections (5.49ms @ 150 conns)
 
-_See analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc#_connection_count_investigation_results[Connection Scaling Analysis]_
+_See analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc#_connection_sweep_50_300_connections[Connection Scaling Analysis]_
 
 [#OAUTH-SHERIFF-10]
 === OAUTH-SHERIFF-10: Reliability

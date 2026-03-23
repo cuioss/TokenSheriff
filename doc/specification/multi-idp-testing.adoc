@@ -22,7 +22,7 @@ The multi-IDP testing approach extends the existing Docker Compose infrastructur
 │                                                                       │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐  │
 │  │ Keycloak │  │   Dex    │  │ Zitadel  │  │ OAuthSheriff          │  │
-│  │ :8443    │  │  :5556   │  │  :8443   │  │ Integration Tests     │  │
+│  │ :8443    │  │  :5556   │  │  :8080   │  │ Integration Tests     │  │
 │  │ (always) │  │ (profile)│  │ (profile)│  │ :8443                 │  │
 │  └──────────┘  └──────────┘  └────┬─────┘  └──────────────────────┘  │
 │                                    │                                  │
@@ -39,7 +39,7 @@ The multi-IDP testing approach extends the existing Docker Compose infrastructur
 1. **Profile isolation** — Additional providers only start when explicitly requested via `COMPOSE_PROFILES=multi-idp`
 2. **Capability-based filtering** — Each provider declares capabilities (e.g. `JWT_ACCESS_TOKENS`, `ROLES`). Tests declare required capabilities via `@MethodSource` — providers missing capabilities are skipped with an INFO log, not silently hidden
 3. **Shared certificates** — All providers use the same TLS certificate (SAN includes all hostnames)
-4. **Pluggable token acquisition** — `TestRealm` delegates to `TokenAcquisitionStrategy` implementations: `RopcStrategy` for ROPC-capable providers (Keycloak, Dex), `TokenExchangeStrategy` for modern providers (Zitadel)
+4. **Pluggable token acquisition** — `TestRealm` delegates to provider-specific token acquisition: ROPC (`grant_type=password`) for Keycloak and Dex, `client_credentials` grant for Zitadel
 
 == Provider Inventory
 
@@ -64,8 +64,8 @@ The multi-IDP testing approach extends the existing Docker Compose infrastructur
 |Active (Phase 2)
 |~100MB
 |~40s
-|PostgreSQL 16
-|Full-featured, OpenID Certified (Apache 2.0). Supports roles (via project grants), groups (via Actions + user metadata), JWT access tokens. Does not support ROPC — uses RFC 8693 Token Exchange instead. Does not support custom scopes (only standard OIDC + URN scopes). See <<zitadel-details>>.
+|PostgreSQL 17
+|Full-featured, OpenID Certified (Apache 2.0). Supports roles (via project grants), groups (via Actions + user metadata), JWT access tokens. Does not support ROPC — uses `client_credentials` grant instead. Does not support custom scopes (only standard OIDC + URN scopes). See <<zitadel-details>>.
 
 |FusionAuth
 |Deferred
@@ -124,7 +124,7 @@ COMPOSE_PROFILES=multi-idp docker compose up -d
 curl -k https://localhost:2556/dex/.well-known/openid-configuration
 
 # Verify Zitadel
-curl -k https://localhost:3443/.well-known/openid-configuration
+curl -s -H "Host: zitadel:3080" http://localhost:3080/.well-known/openid-configuration
 
 # Acquire Dex token via ROPC (include groups scope for group claims)
 curl -k -X POST https://localhost:2556/dex/token \
@@ -174,14 +174,14 @@ Checklist for adding a new OIDC provider:
 |Bearer with-roles
 |Yes
 |No
-|Yes
-|Keycloak: realm roles, Zitadel: project roles via Actions. Dex has no roles concept.
+|No
+|Keycloak: realm roles. Dex has no roles concept. Zitadel Actions are configured but not yet exercised in tests (see <<zitadel-details>>).
 
 |Bearer with-groups
 |Yes
 |No
-|Yes
-|Keycloak: group mappers, Zitadel: user metadata via Actions. Dex has groups but lacks other bearer requirements.
+|No
+|Keycloak: group mappers. Dex has groups but the test also requires roles. Zitadel Actions are configured but not yet exercised in tests.
 
 |Bearer with-scopes
 |Yes
@@ -254,14 +254,11 @@ Despite these limitations, Dex proves that OAuthSheriff correctly handles:
 
 Zitadel (Apache 2.0, OpenID Certified) is a full-featured identity provider that extends bearer auth test coverage beyond what Dex can provide.
 
-=== Token Acquisition: RFC 8693 Token Exchange
+=== Token Acquisition: Client Credentials
 
-Zitadel does not support ROPC (`grant_type=password`), which is deprecated in OAuth 2.1. Instead, token acquisition uses a two-step RFC 8693 Token Exchange flow:
+Zitadel does not support ROPC (`grant_type=password`), which is deprecated in OAuth 2.1. Instead, token acquisition uses the `client_credentials` grant — a service account authenticates directly to obtain a JWT access token.
 
-1. **Client credentials** — A service account authenticates via `client_credentials` grant to obtain a machine access token
-2. **Token exchange** — The machine token is exchanged for a human user's JWT access token + ID token via `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`
-
-This flow is encapsulated in `TokenExchangeStrategy`, which implements the `TokenAcquisitionStrategy` interface alongside the existing `RopcStrategy`.
+Note: The `client_credentials` grant does not return an ID token. ID token validation tests are skipped for Zitadel accordingly.
 
 === Setup: Imperative API Configuration
 
@@ -282,8 +279,8 @@ Credentials are written to `target/zitadel-credentials.properties`, consumed by 
 |===
 |Capability |Supported |Notes
 
-|ROLES |Yes |Via project role grants + Actions flattening into `roles` claim
-|GROUPS |Yes |Via user metadata + Actions injecting `groups` claim
+|ROLES |Configured, not yet tested |Actions flatten project role grants into `roles` claim, but `ROLES` capability is not yet declared in `TestRealm` — Zitadel Actions v1 don't populate grants in `client_credentials` flow
+|GROUPS |Configured, not yet tested |Actions inject user metadata as `groups` claim, but `GROUPS` capability is not yet declared in `TestRealm`
 |JWT_ACCESS_TOKENS |Yes |Configurable per application (default opaque, set to JWT)
 |CUSTOM_SCOPES |No |Zitadel only accepts standard OIDC + its own URN-based scopes
 |OFFLINE_ACCESS |No |Not exercised in current test suite
@@ -291,7 +288,7 @@ Credentials are written to `target/zitadel-credentials.properties`, consumed by 
 
 === Dependencies
 
-* **PostgreSQL 16** — Zitadel requires a relational database (no embedded option like CockroachDB in older versions)
+* **PostgreSQL 17** — Zitadel requires a relational database (no embedded option like CockroachDB in older versions)
 * **Startup time** — ~40s (PostgreSQL + Zitadel init + setup script)
 * **Image size** — ~100MB (Zitadel) + ~80MB (PostgreSQL Alpine)
 

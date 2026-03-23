@@ -277,13 +277,16 @@ Does the code generate reports/badges/artifacts?
 [source,java]
 ----
 public final void runBenchmark() throws IOException, RunnerException {
-    config = createConfiguration();
+    BenchmarkConfiguration config = createConfiguration();
     validateConfiguration(config);
+    prometheusMetricsManager.clear();
+    Path outputPath = Path.of(config.resultsDirectory());
+    Files.createDirectories(outputPath);
     try {
         prepareBenchmark(config);
         beforeBenchmark(config);           // pre-benchmark hook
-        options = buildCommonOptions(config).build();
-        results = executeBenchmark(options);
+        Options options = buildCommonOptions(config).build();
+        Collection<RunResult> results = executeBenchmark(options);
         processTimestampData(results, outputPath);
         processResults(results, config);
         afterBenchmark(results, config);   // post-benchmark hook

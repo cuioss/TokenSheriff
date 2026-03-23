@@ -14,18 +14,38 @@ package "JWT Token Handling" {
   }
 
   package "Pipeline Components" {
+    [TokenStringValidator]
+    [NonValidatingJwtParser]
+    [TokenHeaderValidator]
+    [TokenSignatureValidator]
+    [TokenBuilder]
+    [TokenClaimValidator]
+    [DpopProofValidator]
   }
 
   package "Configuration" {
+    [IssuerConfig]
+    [ParserConfig]
+    [AccessTokenCacheConfig]
+    [JweDecryptionConfig]
   }
 
   package "Key Management" {
+    [JwksLoader]
+    [HttpJwksLoader]
+    [JWKSKeyLoader]
+    [HttpWellKnownResolver]
   }
 
   package "Monitoring & Security" {
+    [SecurityEventCounter]
+    [TokenValidatorMonitor]
   }
 
   package "Token Content" {
+    [AccessTokenContent]
+    [IdTokenContent]
+    [RefreshTokenContent]
   }
 
   ' Main entry point to pipelines

@@ -32,8 +32,8 @@ All benchmark commands run from `benchmarking/benchmark-integration-wrk/` relati
    grep "Requests/sec" target/benchmark-results/wrk/*.txt
    ```
 4. Analyze server logs — load `references/log-analysis-checklist.md` and follow the checklist against:
-   - `target/benchmark-results/logs/quarkus.log`
-   - `target/benchmark-results/logs/keycloak-logs-*.txt`
+   - `target/quarkus.log`
+   - `target/benchmark-results/keycloak-logs-*.txt`
    - `target/benchmark-results/wrk/*.txt` (for non-2xx errors)
 5. Report results summary to the user.
 
@@ -64,12 +64,9 @@ All benchmark commands run from `benchmarking/benchmark-integration-wrk/` relati
    ```bash
    ../../mvnw clean verify -Pbenchmark-jfr
    ```
-3. Run JFR for direct-validation (reuse containers):
+3. Run JFR for other benchmarks (reuse containers). Supported values for `-Djfr.benchmark=`: `jwt` (default), `health`, `direct-validation`, `mock-jwt`, `ablation-baseline`, `ablation-header-only`:
    ```bash
    ../../mvnw verify -Pbenchmark-jfr -Djfr.benchmark=direct-validation -Dskip.container.lifecycle=true
-   ```
-4. Run JFR for mock-jwt (reuse containers):
-   ```bash
    ../../mvnw verify -Pbenchmark-jfr -Djfr.benchmark=mock-jwt -Dskip.container.lifecycle=true
    ```
 5. JFR output is at `target/jfr-output/`. Analyze with:
@@ -95,7 +92,7 @@ Execute workflows 1 through 4 sequentially. Stop and report if any workflow fail
 
 | File | Purpose |
 |------|---------|
-| `benchmarking/benchmark-integration-wrk/pom.xml` | Maven profiles: benchmark, benchmark-jfr, quick, stress, max |
+| `benchmarking/benchmark-integration-wrk/pom.xml` | Maven profiles: benchmark, benchmark-jfr, quick, stress, max, autoscale |
 | `benchmarking/doc/Analysis-03.2026-Integration.adoc` | Connection sweep data tables |
 | `benchmarking/doc/Analysis-03.2026-Latency-Decomposition.adoc` | Ablation decomposition |
 | `benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc` | JFR analysis |

@@ -7,7 +7,7 @@
 
 * **Platform**: Apple M4, 10 CPU cores
 * **Runtime**: Mandrel jdk-25 native image
-* **Framework**: Quarkus 3.27.2 (LTS)
+* **Framework**: Quarkus 3.27.2 (LTS) — version at recording time; project has since upgraded
 * **JFR Settings**: `profile` preset, 240 seconds
 * **Load**: WRK, 50 concurrent connections
 * **Samples**: 48,027 execution samples, 3,181 unique hot methods
@@ -95,7 +95,7 @@ TLS encryption (18.7%) is the single largest CPU consumer — shared infrastruct
 | `TokenContent.getClaimOption()` | 9
 | `CustomAccessLogFilter.filter()` (proxy) | 8
 | `VertxHttpServletRequestAdapter.getHeaders()` | 7
-| `LogRecordModel.format()` | 7
+| `LogRecordModel.format()` (cui-java-tools) | 7
 | `CustomAccessLogFilter.filter()` | 6
 | `ClientIpExtractor.extractFromHeader()` | 5
 | `CustomAccessLogFilter.formatLogEntry()` | 5
@@ -154,6 +154,7 @@ Top allocation types from 45,048 `ObjectAllocationSample` events:
 | `CreationalContextImpl` | 250 | CDI bean creation contexts
 |===
 
+[[_why_cpu_doesnt_match_latency]]
 == Why CPU% Doesn't Match Latency%
 
 JFR shows CUI library at 0.3% of CPU samples, yet the ablation study measures JWT validation at 46% of request time. This is explained by **CPU saturation**: with 114 avg threads competing for 10 cores (~11:1 oversubscription at 85% peak CPU), most threads are **off-CPU** (waiting to be scheduled) at any given JFR sample point. JFR `ExecutionSample` only captures on-CPU time, but wall-clock latency includes both on-CPU execution and CPU scheduling wait time. A JMH concurrency sweep confirms: RSA latency scales proportionally to thread oversubscription (48µs at 1 thread → 556µs at 50 threads on HotSpot JVM). See link:Analysis-03.2026-Integration.adoc#_root_cause_cpu_saturation_from_rsa_under_concurrency[root cause analysis].

@@ -7,7 +7,7 @@ OAuth Sheriff is a high-performance OAuth 2.0 and OpenID Connect token validatio
 ### Build System
 - **Build tool**: Maven 3.9.6 (via wrapper: `./mvnw`)
 - **Java version**: Java 21 (LTS)
-- **Primary framework**: Quarkus 3.25.4
+- **Primary framework**: Quarkus 3.34.0
 
 ### Project Structure
 Multi-module Maven project:
@@ -56,21 +56,17 @@ This project uses CUI logging standards with Java Util Logging:
 - **Coverage check**: `./mvnw clean verify -Pcoverage`
 
 ### CUI Test Generator
-This project uses CUI Test Generator for all test data generation:
+This project has CUI Test Generator dependencies available for test data generation:
 - Provides type-safe, consistent test data generation
-- Use `@GeneratorsSource` for complex objects (most preferred)
-- Use `@CompositeTypeGeneratorSource` for multiple related types
 - Use `@CsvSource` for simple data
 - Use `@ValueSource` for single parameter variations
-- Use `@MethodSource` as last resort only
+- Use `@MethodSource` for complex parameterization
 
 ### Parameterized Tests
-Mandatory for 3+ similar test variants. Annotation hierarchy (preferred order):
-1. `@GeneratorsSource` (most preferred)
-2. `@CompositeTypeGeneratorSource`
-3. `@CsvSource`
-4. `@ValueSource`
-5. `@MethodSource` (last resort)
+Mandatory for 3+ similar test variants. Common annotations:
+1. `@CsvSource`
+2. `@ValueSource`
+3. `@MethodSource`
 
 ### Test Execution Commands
 ```bash
@@ -184,26 +180,20 @@ Execute comprehensive quality verification and commit workflow for a specific mo
 4. Artifact cleanup verification
 5. Git commit
 
-## Slash Commands
+## Skills
 
-The project includes custom slash commands in `.claude/commands/`:
+The project includes custom skills in `.claude/skills/`:
 
-- `/verify-project [push]` - Comprehensive project verification
-- `/verify-integration-tests` - Integration tests with Quarkus/Keycloak log analysis
-- `/verify-micro-benchmark` - JMH micro-benchmark verification
-- `/verify-integration-benchmark` - WRK-based integration benchmark verification
-- `/verify-all [push]` - End-to-end verification of all commands in sequence
-
-All commands read execution duration from `doc/commands.md` and update it if changed >10%.
+- `run-benchmark-suite` - Run full benchmark suite with ablation sweep, connection sweep, JFR profiling, and doc updates
 
 ## Documentation Standards
 
 - **Format**: AsciiDoc with `.adoc` extension
 - **Key documents**:
   - `README.adoc` - Project overview
-  - `doc/Build.adoc` - Build instructions
+  - `doc/README.adoc` - Documentation hub
   - `doc/Requirements.adoc` - Functional requirements
-  - `doc/Specification.adoc` - Technical specifications
+  - `doc/architecture.adoc` - Architecture reference
   - `doc/LogMessages.adoc` - Logging reference
 - **Cross-references**: Use `xref:` syntax (not `<<>>`)
 - **Blank lines**: Required before all lists
@@ -243,8 +233,8 @@ All commands read execution duration from `doc/commands.md` and update it if cha
 
 Key reference files for development:
 - `doc/LogMessages.adoc` - Complete logging reference
-- `doc/Build.adoc` - Build and deployment instructions
+- `doc/README.adoc` - Documentation hub
 - `doc/Requirements.adoc` - Functional requirements
-- `doc/Specification.adoc` - Technical specifications
+- `doc/architecture.adoc` - Architecture reference
 - `.editorconfig` - Code formatting configuration
 - `lombok.config` - Lombok configuration

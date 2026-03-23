@@ -44,7 +44,7 @@ de.cuioss.benchmarking.common/
 
 === Configuration Management (`config/`)
 
-* **BenchmarkConfiguration** - Centralized benchmark configuration using builder pattern
+* **BenchmarkConfiguration** - Centralized benchmark configuration record with nested builder
   - JMH parameters (forks, iterations, warmup, threads, etc.)
   - Integration-specific properties (service URLs, metrics endpoints)
   - Time value parsing for various units (ms, s, m)
@@ -55,12 +55,12 @@ de.cuioss.benchmarking.common/
   - INTEGRATION - End-to-end benchmarks
   - Affects thresholds and quality gates
 
-* **ReportConfiguration** - Configuration for report generation
+* **ReportConfiguration** - Configuration record for report generation
   - Result file paths and formats
   - Benchmark names for throughput and latency tests
   - Project name for dashboard display
 
-* **IntegrationConfiguration** - Configuration for integration benchmarks
+* **IntegrationConfiguration** - Configuration record for integration benchmarks
   - Service URLs and metrics endpoints
 
 === Constants (`constants/`)

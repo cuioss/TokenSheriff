@@ -54,6 +54,7 @@ Pipeline steps (in execution order):
 Cross-cutting concerns:
 
 * `JWKS_OPERATIONS` - Key loading and caching operations (within signature validation)
+* `JWE_DECRYPTION` - JWE token decryption (within token parsing for 5-part JWE tokens)
 * `RETRY_ATTEMPT` - Individual HTTP retry attempt timing
 * `RETRY_COMPLETE` - Complete retry cycle with all attempts and delays
 * `RETRY_DELAY` - Exponential backoff delay timing between retries

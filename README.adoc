@@ -53,7 +53,7 @@ toc::[]
 
 === Why another JWT-Library?
 
-This project started as an instrumentation of https://github.com/smallrye/smallrye-jwt[SmallRye JWT], then shifted to https://github.com/jwtk/jjwt[JJWT] with the goal to implement robust multi-issuer handling. With a strong focus on security (see xref:doc/Requirements.adoc[Requirements]), the project evolved through several iterations until it became an entirely new library with its own implementation. The main differentiator is the comprehensive approach to security in multi-issuer environments.
+This project started as an instrumentation of https://github.com/smallrye/smallrye-jwt[SmallRye JWT], then shifted to https://github.com/jwtk/jjwt[JJWT] with the goal to implement robust multi-issuer handling. With a strong focus on security (see xref:doc/Requirements.adoc[Requirements]), the project evolved through several iterations until it became an entirely new library with its own validation and parsing implementation (JJWT remains only as a test dependency for token generation). The main differentiator is the comprehensive approach to security in multi-issuer environments.
 
 === The Challenge
 

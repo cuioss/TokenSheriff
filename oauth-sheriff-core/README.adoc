@@ -39,7 +39,7 @@ try {
     List<String> roles = token.getRoles();
 } catch (TokenValidationException e) {
     // Handle validation failure
-    LOGGER.error("Token validation failed: %s", e.getMessage(), e);
+    LOGGER.error(e, "Token validation failed: %s", e.getMessage());
 }
 ----
 
