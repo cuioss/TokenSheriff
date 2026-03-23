@@ -49,6 +49,7 @@ import java.util.*;
  * }
  * </pre>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class CollectionClaimHandler {

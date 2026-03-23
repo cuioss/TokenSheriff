@@ -41,6 +41,7 @@ import java.security.SignatureException;
  *   <li><strong>ES384 (P-384):</strong> 48-byte R and S components (96 bytes total in P1363)</li>
  *   <li><strong>ES512 (P-521):</strong> 66-byte R and S components (132 bytes total in P1363)</li>
  * </ul>
+ * @since 1.0
  */
 public class EcdsaSignatureFormatConverter {
 

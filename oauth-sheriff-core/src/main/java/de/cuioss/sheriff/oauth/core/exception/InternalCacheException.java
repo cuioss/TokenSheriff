@@ -23,6 +23,7 @@ import java.io.Serial;
  * This exception indicates an internal error in the caching layer,
  * not a validation failure of the token itself.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class InternalCacheException extends RuntimeException {

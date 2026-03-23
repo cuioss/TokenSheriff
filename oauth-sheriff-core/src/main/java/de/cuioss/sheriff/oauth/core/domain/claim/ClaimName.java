@@ -32,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * This is a replacement for the org.eclipse.microprofile.jwt.ClaimNames interface
  * to provide a standardized set of JWT claim names and types.
  *
+ * @since 1.0
  */
 @Getter
 public enum ClaimName {
@@ -72,11 +73,11 @@ public enum ClaimName {
     /**
      * The "nbf" (not before) claim identifies the time before which the JWT
      * MUST NOT be accepted for processing.
-     * Optional by RFC 7519 for all validation types.
+     * Optional by RFC 7519 for all token types.
      *
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.5">RFC 7519 - 4.1.5. "nbf" (Not Before) Claim</a>
      */
-    NOT_BEFORE("nbf", ClaimValueType.DATETIME, "The \"nbf\" (not before) claim identifies the time before which the JWT MUST NOT be accepted for processing. Optional by RFC 7519 for all validation types.", new OffsetDateTimeMapper()),
+    NOT_BEFORE("nbf", ClaimValueType.DATETIME, "The \"nbf\" (not before) claim identifies the time before which the JWT MUST NOT be accepted for processing. Optional by RFC 7519 for all token types.", new OffsetDateTimeMapper()),
 
     /**
      * The "iat" (issued at) claim identifies the time at which the JWT was issued.
@@ -88,36 +89,36 @@ public enum ClaimName {
 
     /**
      * The "jti" (JWT ID) claim provides a unique identifier for the JWT.
-     * Optional by RFC 7519 for all validation types.
+     * Optional by RFC 7519 for all token types.
      *
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.7">RFC 7519 - 4.1.7. "jti" (JWT ID) Claim</a>
      */
-    TOKEN_ID("jti", ClaimValueType.STRING, "The \"jti\" (JWT ID) claim provides a unique identifier for the JWT. Optional by RFC 7519 for all validation types.", new IdentityMapper()),
+    TOKEN_ID("jti", ClaimValueType.STRING, "The \"jti\" (JWT ID) claim provides a unique identifier for the JWT. Optional by RFC 7519 for all token types.", new IdentityMapper()),
 
     /**
      * The "name" claim contains the full name of the end-user.
-     * Optional for all validation types.
+     * Optional for all token types.
      *
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims">OpenID Connect Core 1.0 - Standard Claims</a>
      */
-    NAME("name", ClaimValueType.STRING, "The \"name\" claim contains the full name of the end-user. Optional for all validation types.", new IdentityMapper()),
+    NAME("name", ClaimValueType.STRING, "The \"name\" claim contains the full name of the end-user. Optional for all token types.", new IdentityMapper()),
 
     /**
      * The "email" claim contains the preferred email address of the end-user.
-     * Optional for all validation types.
+     * Optional for all token types.
      *
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims">OpenID Connect Core 1.0 - Standard Claims</a>
      */
-    EMAIL("email", ClaimValueType.STRING, "The \"email\" claim contains the preferred email address of the end-user. Optional for all validation types.", new IdentityMapper()),
+    EMAIL("email", ClaimValueType.STRING, "The \"email\" claim contains the preferred email address of the end-user. Optional for all token types.", new IdentityMapper()),
 
     /**
      * The "preferred_username" claim contains the shorthand name by which the end-user
      * wishes to be referred to.
-     * Optional for all validation types.
+     * Optional for all token types.
      *
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims">OpenID Connect Core 1.0 - Standard Claims</a>
      */
-    PREFERRED_USERNAME("preferred_username", ClaimValueType.STRING, "The \"preferred_username\" claim contains the shorthand name by which the end-user wishes to be referred to. Optional for all validation types.", new IdentityMapper()),
+    PREFERRED_USERNAME("preferred_username", ClaimValueType.STRING, "The \"preferred_username\" claim contains the shorthand name by which the end-user wishes to be referred to. Optional for all token types.", new IdentityMapper()),
 
     /**
      * The "scope" claim identifies the scope of the access token.
@@ -128,10 +129,10 @@ public enum ClaimName {
     SCOPE("scope", ClaimValueType.STRING_LIST, "The \"scope\" claim identifies the scope of the access token. Optional per RFC 9068 Section 2.2 for JWT access tokens.", new ScopeMapper()),
 
     /**
-     * The "typ" claim identifies the validation type.
+     * The "typ" claim identifies the token type.
      * Implementation-specific claim, not defined in standard specifications.
      */
-    TYPE("typ", ClaimValueType.STRING, "The \"typ\" claim identifies the validation type. Implementation-specific claim, not defined in standard specifications.", new IdentityMapper()),
+    TYPE("typ", ClaimValueType.STRING, "The \"typ\" claim identifies the token type. Implementation-specific claim, not defined in standard specifications.", new IdentityMapper()),
 
     /**
      * The "roles" claim identifies the roles assigned to the user.

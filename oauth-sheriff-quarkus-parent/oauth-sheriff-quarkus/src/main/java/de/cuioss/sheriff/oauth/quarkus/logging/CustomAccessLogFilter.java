@@ -49,6 +49,8 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.INF
  * - Include/exclude URL path patterns
  * - Configurable log format
  * - Performance optimized with cached disabled state
+ *
+ * @since 1.0
  */
 @Provider
 @ApplicationScoped

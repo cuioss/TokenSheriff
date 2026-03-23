@@ -31,6 +31,7 @@ import java.util.List;
  * For more details on the security aspects, see the
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class JwkAlgorithmPreferences {

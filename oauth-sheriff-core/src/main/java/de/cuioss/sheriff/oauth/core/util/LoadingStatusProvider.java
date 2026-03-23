@@ -41,6 +41,7 @@ package de.cuioss.sheriff.oauth.core.util;
  * }
  * </pre>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public interface LoadingStatusProvider {

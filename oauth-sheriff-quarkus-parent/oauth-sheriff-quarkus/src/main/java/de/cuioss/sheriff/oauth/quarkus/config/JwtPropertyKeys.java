@@ -29,6 +29,7 @@ import lombok.experimental.UtilityClass;
  * All properties are prefixed with "sheriff.oauth".
  * </p>
  *
+ * @since 1.0
  */
 @UtilityClass
 public final class JwtPropertyKeys {

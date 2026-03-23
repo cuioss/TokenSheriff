@@ -36,6 +36,7 @@ import java.util.Optional;
  *   <li>Determining appropriate algorithms</li>
  *   <li>Error handling and logging</li>
  * </ul>
+ * @since 1.0
  */
 public class KeyProcessor {
 

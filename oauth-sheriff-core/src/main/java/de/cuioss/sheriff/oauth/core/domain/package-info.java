@@ -20,7 +20,7 @@
  * <ul>
  *   <li>{@link de.cuioss.sheriff.oauth.core.domain.claim} - Classes for handling JWT claims, including claim names,
  *       values, types, and mappers</li>
- *   <li>{@link de.cuioss.sheriff.oauth.core.domain.token} - Classes representing different validation types and their content</li>
+ *   <li>{@link de.cuioss.sheriff.oauth.core.domain.token} - Classes representing different token types and their content</li>
  * </ul>
  * <p>
  * 

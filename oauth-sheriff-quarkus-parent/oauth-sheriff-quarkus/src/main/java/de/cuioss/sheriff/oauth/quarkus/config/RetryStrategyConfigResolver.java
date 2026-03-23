@@ -35,6 +35,7 @@ import java.time.Duration;
  *   <li>Global enable/disable flag</li>
  * </ul>
  *
+ * @since 1.0
  */
 public class RetryStrategyConfigResolver {
 

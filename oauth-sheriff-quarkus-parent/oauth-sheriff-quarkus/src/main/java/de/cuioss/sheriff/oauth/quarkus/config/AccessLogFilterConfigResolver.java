@@ -40,6 +40,8 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.INF
  * - true: Enable access logging
  * - false: Disable access logging (default)
  * </p>
+ *
+ * @since 1.0
  */
 @RequiredArgsConstructor
 public class AccessLogFilterConfigResolver {

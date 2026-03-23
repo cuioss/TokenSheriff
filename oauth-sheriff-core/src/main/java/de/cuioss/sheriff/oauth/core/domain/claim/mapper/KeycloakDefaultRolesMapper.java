@@ -50,6 +50,7 @@ import java.util.Optional;
  *   <li>Non-array roles value - returns empty list</li>
  * </ul>
  *
+ * @since 1.0
  * @see <a href="https://www.keycloak.org/docs/latest/server_admin/index.html#_protocol-mappers">Keycloak Protocol Mappers</a>
  */
 public class KeycloakDefaultRolesMapper implements ClaimMapper {

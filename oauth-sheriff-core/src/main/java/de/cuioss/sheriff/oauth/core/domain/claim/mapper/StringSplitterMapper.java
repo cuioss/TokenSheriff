@@ -43,6 +43,7 @@ import java.util.Optional;
  * ClaimValue roles = commaMapper.map(jsonObject, "roles");
  * </pre>
  *
+ * @since 1.0
  */
 public class StringSplitterMapper implements ClaimMapper {
 

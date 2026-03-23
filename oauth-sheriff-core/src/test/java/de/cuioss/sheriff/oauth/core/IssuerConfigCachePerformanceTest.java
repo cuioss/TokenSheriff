@@ -31,15 +31,15 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Performance test for IssuerConfigResolver.resolveConfig() to verify
+ * Performance test for IssuerConfigCache.resolveConfig() to verify
  * lock-free operation and high-throughput under concurrent load.
  *
  * This test measures the actual performance characteristics of issuer config
  * resolution to ensure the 1000+ ops/s target is achieved without synchronization overhead.
  */
-class IssuerConfigResolverPerformanceTest {
+class IssuerConfigCachePerformanceTest {
 
-    private IssuerConfigResolver issuerConfigResolver;
+    private IssuerConfigCache issuerConfigCache;
     private String issuerIdentifier;
 
     @BeforeEach
@@ -50,7 +50,7 @@ class IssuerConfigResolverPerformanceTest {
         issuerIdentifier = issuerConfig.getIssuerIdentifier();
 
         SecurityEventCounter securityEventCounter = new SecurityEventCounter();
-        issuerConfigResolver = new IssuerConfigResolver(List.of(issuerConfig), securityEventCounter);
+        issuerConfigCache = new IssuerConfigCache(List.of(issuerConfig), securityEventCounter);
     }
 
     @Test
@@ -79,7 +79,7 @@ class IssuerConfigResolverPerformanceTest {
                     for (int j = 0; j < operationsPerThread; j++) {
                         long startTime = System.nanoTime();
 
-                        IssuerConfig result = issuerConfigResolver.resolveConfig(issuerIdentifier);
+                        IssuerConfig result = issuerConfigCache.resolveConfig(issuerIdentifier);
 
                         long duration = System.nanoTime() - startTime;
                         totalNanoTime.addAndGet(duration);
@@ -142,7 +142,7 @@ class IssuerConfigResolverPerformanceTest {
         for (int i = 0; i < resolverCount; i++) {
             // Create a new resolver for each group
             TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
-            IssuerConfigResolver resolver = new IssuerConfigResolver(List.of(tokenHolder.getIssuerConfig()), securityEventCounter);
+            IssuerConfigCache resolver = new IssuerConfigCache(List.of(tokenHolder.getIssuerConfig()), securityEventCounter);
             String issuerId = tokenHolder.getIssuerConfig().getIssuerIdentifier();
 
             // Launch multiple threads per resolver
@@ -199,7 +199,7 @@ class IssuerConfigResolverPerformanceTest {
                     barrier.await();
 
                     long startTime = System.nanoTime();
-                    IssuerConfig result = issuerConfigResolver.resolveConfig(issuerIdentifier);
+                    IssuerConfig result = issuerConfigCache.resolveConfig(issuerIdentifier);
                     long duration = System.nanoTime() - startTime;
 
                     executionTimes.add(duration);

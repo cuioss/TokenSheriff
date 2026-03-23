@@ -35,6 +35,7 @@ import java.util.stream.Collectors;
  * </ul>
  * This is particularly useful for {@link ClaimValueType#STRING_LIST} claims.
  *
+ * @since 1.0
  */
 public class JsonCollectionMapper implements ClaimMapper {
     @Override

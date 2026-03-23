@@ -56,6 +56,7 @@ import java.util.Optional;
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#token-types">Token Types</a>
  * specification.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @ToString(callSuper = true)
@@ -89,7 +90,7 @@ public class IdTokenContent extends BaseTokenContent {
     public List<String> getAudience() {
         return getClaimOption(ClaimName.AUDIENCE)
                 .map(ClaimValue::getAsList)
-                .orElseThrow(() -> new IllegalStateException("Audience claim not presentin token"));
+                .orElseThrow(() -> new IllegalStateException("Audience claim not present in token"));
     }
 
     /**

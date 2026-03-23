@@ -98,7 +98,7 @@ Key features:
 
 _See Requirement xref:Requirements.adoc#OAUTH-SHERIFF-4.1[OAUTH-SHERIFF-4.1: JWKS Endpoint Support]_
 
-`HttpWellKnownResolver` fetches `/.well-known/openid-configuration` documents and caches the result using lock-free `AtomicReference`. The discovered `issuer` field is used by `IssuerConfigResolver` for issuer matching, and the discovered `jwks_uri` is used by `HttpJwksLoader` to fetch public keys.
+`HttpWellKnownResolver` fetches `/.well-known/openid-configuration` documents and caches the result using lock-free `AtomicReference`. The discovered `issuer` field is used by `IssuerConfigCache` for issuer matching, and the discovered `jwks_uri` is used by `HttpJwksLoader` to fetch public keys.
 
 [[securityeventcounter]]
 === SecurityEventCounter

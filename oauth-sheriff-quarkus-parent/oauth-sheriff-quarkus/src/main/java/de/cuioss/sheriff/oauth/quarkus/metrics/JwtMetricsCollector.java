@@ -57,6 +57,8 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.WAR
  *   <li>result - The validation result (success or failure)</li>
  *   <li>category - The category of event (structure, signature, semantic) - only for failures</li>
  * </ul>
+ *
+ * @since 1.0
  */
 @ApplicationScoped
 @Unremovable

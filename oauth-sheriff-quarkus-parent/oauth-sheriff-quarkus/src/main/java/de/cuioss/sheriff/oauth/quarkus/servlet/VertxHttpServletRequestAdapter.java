@@ -71,6 +71,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>Async servlet context - use Vertx async patterns</li>
  * </ul>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @RequiredArgsConstructor

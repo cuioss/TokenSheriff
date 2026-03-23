@@ -31,6 +31,8 @@ import java.util.List;
  * liveness status for the JWT validation component. It only needs access
  * to the issuer configurations to verify they are properly loaded.
  * </p>
+ *
+ * @since 1.0
  */
 @ApplicationScoped
 @Liveness

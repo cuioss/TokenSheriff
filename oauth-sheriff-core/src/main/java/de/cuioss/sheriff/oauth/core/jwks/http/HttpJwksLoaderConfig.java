@@ -22,7 +22,7 @@ import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages;
 import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages.WARN;
 import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.jwks.JwksType;
-import de.cuioss.sheriff.oauth.core.well_known.WellKnownConfig;
+import de.cuioss.sheriff.oauth.core.wellknown.WellKnownConfig;
 import de.cuioss.tools.base.Preconditions;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.EqualsAndHashCode;
@@ -49,6 +49,7 @@ import java.util.concurrent.ScheduledExecutorService;
  * For more detailed information about the HTTP-based JWKS loading, see the
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#_jwksloader">Technical Components Specification</a>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @ToString

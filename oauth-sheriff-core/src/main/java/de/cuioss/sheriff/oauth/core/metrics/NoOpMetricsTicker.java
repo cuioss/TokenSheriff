@@ -21,6 +21,7 @@ package de.cuioss.sheriff.oauth.core.metrics;
  * This implementation has zero overhead as all methods are empty and can be optimized away
  * by the JVM's JIT compiler. The singleton pattern ensures minimal memory footprint.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @SuppressWarnings("java:S6548") // owolff: fits for its purpose as a no-op implementation

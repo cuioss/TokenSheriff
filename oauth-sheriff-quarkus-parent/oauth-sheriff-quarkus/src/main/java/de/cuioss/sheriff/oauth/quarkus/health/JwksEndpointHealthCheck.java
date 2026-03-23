@@ -42,6 +42,8 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.WAR
  * readiness status for JWT validation JWKS endpoints. It only needs access
  * to the issuer configurations to check the health of their JWKS loaders.
  * </p>
+ *
+ * @since 1.0
  */
 @ApplicationScoped
 @Readiness

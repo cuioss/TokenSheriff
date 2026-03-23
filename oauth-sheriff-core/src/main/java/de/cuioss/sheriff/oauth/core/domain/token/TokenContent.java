@@ -47,6 +47,7 @@ import java.util.Optional;
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#token-structure">Token Structure</a>
  * specification.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public interface TokenContent extends MinimalTokenContent {
@@ -82,7 +83,7 @@ public interface TokenContent extends MinimalTokenContent {
     default String getIssuer() {
         return getClaimOption(ClaimName.ISSUER)
                 .map(ClaimValue::getOriginalString)
-                .orElseThrow(() -> new IllegalStateException("Issuer claim not presentin token"));
+                .orElseThrow(() -> new IllegalStateException("Issuer claim not present in token"));
     }
 
     /**

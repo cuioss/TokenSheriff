@@ -39,6 +39,7 @@ import java.util.concurrent.CompletableFuture;
  * Optional&lt;KeyInfo&gt; keyInfo = loader.getKeyInfo("key-id");
  * </pre>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @SuppressWarnings("JavadocLinkAsPlainText")

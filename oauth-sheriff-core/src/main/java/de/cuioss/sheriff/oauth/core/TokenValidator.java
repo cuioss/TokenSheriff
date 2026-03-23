@@ -132,6 +132,7 @@ import java.util.Map;
  * For more detailed specifications, see the
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#_tokenvalidator">Technical Components Specification</a>
  *
+ * @since 1.0
  */
 @SuppressWarnings({"JavadocLinkAsPlainText", "java:S6539"}) // java:S6539: Intentional facade pattern - high coupling is by design
 public class TokenValidator implements Closeable {
@@ -224,8 +225,8 @@ public class TokenValidator implements Closeable {
                 .jweDecryptionConfig(jweDecryptionConfig)
                 .build();
 
-        // Let the IssuerConfigResolver handle all issuer config processing
-        IssuerConfigResolver issuerConfigResolver = new IssuerConfigResolver(issuerConfigs, this.securityEventCounter);
+        // Let the IssuerConfigCache handle all issuer config processing
+        IssuerConfigCache issuerConfigCache = new IssuerConfigCache(issuerConfigs, this.securityEventCounter);
 
         // Initialize immutable map of TokenSignatureValidator instances for each issuer
         // This eliminates the performance bottleneck of creating new instances on every validation
@@ -311,7 +312,7 @@ public class TokenValidator implements Closeable {
         // Construct IdTokenValidationPipeline (full validation, no cache, no metrics)
         this.idTokenPipeline = new IdTokenValidationPipeline(
                 jwtParser,
-                issuerConfigResolver,
+                issuerConfigCache,
                 signatureValidators,
                 tokenBuilders,
                 claimValidators,
@@ -323,7 +324,7 @@ public class TokenValidator implements Closeable {
         // Pipeline creates its own AccessTokenCache from config
         this.accessTokenPipeline = new AccessTokenValidationPipeline(
                 jwtParser,
-                issuerConfigResolver,
+                issuerConfigCache,
                 signatureValidators,
                 tokenBuilders,
                 claimValidators,
@@ -335,7 +336,7 @@ public class TokenValidator implements Closeable {
         LOGGER.debug("AccessTokenValidationPipeline initialized with cache maxSize=%s, evictionInterval=%ss",
                 cacheConfig.getMaxSize(), cacheConfig.getEvictionIntervalSeconds());
 
-        LOGGER.info(JWTValidationLogMessages.INFO.TOKEN_FACTORY_INITIALIZED, issuerConfigResolver.toString());
+        LOGGER.info(JWTValidationLogMessages.INFO.TOKEN_FACTORY_INITIALIZED, issuerConfigCache.toString());
 
         if (jweDecryptionConfig != null) {
             LOGGER.info(JWTValidationLogMessages.INFO.JWE_DECRYPTION_ENABLED, jweDecryptionConfig.getKeyCount());

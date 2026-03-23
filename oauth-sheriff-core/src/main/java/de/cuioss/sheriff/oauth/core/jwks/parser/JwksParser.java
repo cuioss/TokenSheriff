@@ -40,6 +40,7 @@ import java.util.List;
  *   <li>Handling both standard JWKS format and single key format</li>
  *   <li>Security event tracking for parsing failures</li>
  * </ul>
+ * @since 1.0
  */
 @RequiredArgsConstructor
 public class JwksParser {

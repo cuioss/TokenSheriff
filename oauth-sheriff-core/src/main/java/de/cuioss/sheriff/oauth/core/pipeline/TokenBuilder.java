@@ -45,6 +45,7 @@ import java.util.Optional;
  * For more details on the token building process, see the
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#token-validation-pipeline">Token Validation Pipeline</a>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class TokenBuilder {

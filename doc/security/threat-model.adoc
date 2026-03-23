@@ -51,8 +51,8 @@ _See Requirements xref:../Requirements.adoc#OAUTH-SHERIFF-8.1[OAUTH-SHERIFF-8.1]
 
 |S4
 |Tokens from untrusted issuers
-|Strict issuer allowlist in link:../../oauth-sheriff-core/src/main/java/de/cuioss/sheriff/oauth/core/IssuerConfig.java[IssuerConfig]; issuer resolved by link:../../oauth-sheriff-core/src/main/java/de/cuioss/sheriff/oauth/core/IssuerConfigResolver.java[IssuerConfigResolver]
-|link:../../oauth-sheriff-core/src/test/java/de/cuioss/sheriff/oauth/core/IssuerConfigResolverTest.java[IssuerConfigResolverTest]
+|Strict issuer allowlist in link:../../oauth-sheriff-core/src/main/java/de/cuioss/sheriff/oauth/core/IssuerConfig.java[IssuerConfig]; issuer resolved by link:../../oauth-sheriff-core/src/main/java/de/cuioss/sheriff/oauth/core/IssuerConfigCache.java[IssuerConfigCache]
+|link:../../oauth-sheriff-core/src/test/java/de/cuioss/sheriff/oauth/core/IssuerConfigCacheTest.java[IssuerConfigCacheTest]
 
 |S5
 |Token substitution (client confusion)

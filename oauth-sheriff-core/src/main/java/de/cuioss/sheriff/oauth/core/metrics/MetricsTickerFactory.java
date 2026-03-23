@@ -24,6 +24,7 @@ import lombok.experimental.UtilityClass;
  * based on the monitor's configuration, breaking the cyclic dependency between
  * MeasurementType, TokenValidatorMonitor, and ActiveMetricsTicker.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @UtilityClass

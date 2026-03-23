@@ -43,6 +43,7 @@ import java.util.Set;
  *   <li>At least one token audience must match an expected audience</li>
  * </ul>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @RequiredArgsConstructor

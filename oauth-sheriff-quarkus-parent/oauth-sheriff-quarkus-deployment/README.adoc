@@ -89,7 +89,7 @@ Automatically registers classes for reflection across 5 build steps (36 classes 
 **Classes with Methods and Constructors:**
 
 * `de.cuioss.sheriff.oauth.core.TokenValidator` - Main validation component
-* `de.cuioss.sheriff.oauth.core.IssuerConfigResolver` - Configuration resolver
+* `de.cuioss.sheriff.oauth.core.IssuerConfigCache` - Issuer configuration cache
 * `de.cuioss.sheriff.oauth.core.security.SecurityEventCounter` - Security metrics
 * `io.micrometer.core.instrument.MeterRegistry` - Metrics registry
 

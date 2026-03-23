@@ -51,6 +51,7 @@ import java.util.Map;
  * <p>
  * This class is thread-safe and stateless after construction.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class RefreshTokenValidationPipeline {

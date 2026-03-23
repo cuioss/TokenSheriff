@@ -36,6 +36,7 @@ import java.time.OffsetDateTime;
  *   <li>Consistent timing behavior under high concurrency (200+ threads)</li>
  * </ul>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class ValidationContext {

@@ -39,14 +39,14 @@ class TokenTypeTest {
     void shouldHandleValidTokenTypes(TokenType tokenType) {
         assertNotNull(tokenType.getTypeClaimName(), "Type claim name should not be null");
         assertNotNull(tokenType.getMandatoryClaims(), "Mandatory claims should not be null");
-        assertEquals(tokenType, TokenType.fromTypClaim(tokenType.getTypeClaimName()), "Should parse back to same token type");
+        assertEquals(tokenType, TokenType.fromTypeClaim(tokenType.getTypeClaimName()), "Should parse back to same token type");
     }
 
     @ParameterizedTest
     @NullAndEmptySource
     @DisplayName("Should return UNKNOWN for null or empty type claims without logging")
     void shouldDefaultToUnknownForNullOrEmpty(String invalidType) {
-        assertEquals(TokenType.UNKNOWN, TokenType.fromTypClaim(invalidType), "Invalid type should return UNKNOWN");
+        assertEquals(TokenType.UNKNOWN, TokenType.fromTypeClaim(invalidType), "Invalid type should return UNKNOWN");
         // No warning expected for null or empty
     }
 
@@ -54,7 +54,7 @@ class TokenTypeTest {
     @ValueSource(strings = {"invalid", "not_a_token_type", "custom_token"})
     @DisplayName("Should return UNKNOWN for invalid type claims and log warning")
     void shouldDefaultToUnknownAndLogWarning(String invalidType) {
-        assertEquals(TokenType.UNKNOWN, TokenType.fromTypClaim(invalidType), "Invalid type should return UNKNOWN");
+        assertEquals(TokenType.UNKNOWN, TokenType.fromTypeClaim(invalidType), "Invalid type should return UNKNOWN");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                 JWTValidationLogMessages.WARN.UNKNOWN_TOKEN_TYPE.resolveIdentifierString());
     }

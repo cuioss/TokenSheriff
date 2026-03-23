@@ -6,7 +6,7 @@ title Multi-Issuer Token Validation Flow
 actor "Application" as App
 participant "TokenValidator" as Validator
 participant "NonValidatingJwtParser" as Parser
-participant "IssuerConfigResolver" as Resolver
+participant "IssuerConfigCache" as Resolver
 participant "IssuerConfig" as Config
 participant "JwksLoader" as Loader
 

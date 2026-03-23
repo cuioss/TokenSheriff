@@ -98,6 +98,7 @@ import java.lang.annotation.Target;
  * <p>
  * <strong>Declarative Alternative:</strong> For automatic validation without manual checks, use {@link BearerAuth} annotation.
  *
+ * @since 1.0
  * @author Oliver Wolff
  * @see BearerAuth
  */

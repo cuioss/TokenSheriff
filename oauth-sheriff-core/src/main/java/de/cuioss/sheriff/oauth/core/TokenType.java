@@ -46,6 +46,7 @@ import static de.cuioss.sheriff.oauth.core.domain.claim.ClaimName.*;
  * For more detailed specifications, see the
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#_token_architecture_and_types">Technical Components Specification - Token Architecture and Types</a>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public enum TokenType {
@@ -84,7 +85,7 @@ public enum TokenType {
      * @param typeClaimName the string value of the type claim, must not be null
      * @return the matching TokenType, or {@link #UNKNOWN} if no match is found
      */
-    public static TokenType fromTypClaim(String typeClaimName) {
+    public static TokenType fromTypeClaim(String typeClaimName) {
         for (TokenType tokenType : TokenType.values()) {
             if (tokenType.typeClaimName.equalsIgnoreCase(typeClaimName)) {
                 return tokenType;

@@ -35,15 +35,15 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Test to verify that IssuerConfigResolver.resolveConfig() operates without
+ * Test to verify that IssuerConfigCache.resolveConfig() operates without
  * synchronization bottlenecks under high concurrency.
  *
  * This test directly measures the synchronization characteristics of
- * IssuerConfigResolver to ensure lock-free operation and detect convoy effects.
+ * IssuerConfigCache to ensure lock-free operation and detect convoy effects.
  */
-class IssuerConfigResolverSynchronizationTest {
+class IssuerConfigCacheSynchronizationTest {
 
-    private IssuerConfigResolver issuerConfigResolver;
+    private IssuerConfigCache issuerConfigCache;
     private String issuerIdentifier;
 
     @BeforeEach
@@ -53,22 +53,22 @@ class IssuerConfigResolverSynchronizationTest {
         issuerIdentifier = issuerConfig.getIssuerIdentifier();
 
         SecurityEventCounter securityEventCounter = new SecurityEventCounter();
-        issuerConfigResolver = new IssuerConfigResolver(List.of(issuerConfig), securityEventCounter);
+        issuerConfigCache = new IssuerConfigCache(List.of(issuerConfig), securityEventCounter);
     }
 
     @Test
     @Timeout(value = 15, unit = TimeUnit.SECONDS)
     @DisplayName("Measure performance during warmup phase")
     void measuresWarmupPhasePerformance() throws Exception {
-        // Create multiple IssuerConfigResolver instances to test warmup phase
-        List<IssuerConfigResolver> resolvers = new ArrayList<>();
+        // Create multiple IssuerConfigCache instances to test warmup phase
+        List<IssuerConfigCache> resolvers = new ArrayList<>();
         List<String> issuerIds = new ArrayList<>();
         SecurityEventCounter securityEventCounter = new SecurityEventCounter();
 
         for (int i = 0; i < 5; i++) {
             TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
             IssuerConfig config = tokenHolder.getIssuerConfig();
-            resolvers.add(new IssuerConfigResolver(List.of(config), securityEventCounter));
+            resolvers.add(new IssuerConfigCache(List.of(config), securityEventCounter));
             issuerIds.add(config.getIssuerIdentifier());
         }
 
@@ -80,7 +80,7 @@ class IssuerConfigResolverSynchronizationTest {
 
         // Test each resolver with multiple threads simultaneously (warmup phase)
         for (int i = 0; i < resolvers.size(); i++) {
-            IssuerConfigResolver resolver = resolvers.get(i);
+            IssuerConfigCache resolver = resolvers.get(i);
             String issuerId = issuerIds.get(i);
             for (int j = 0; j < threadsPerResolver; j++) {
                 executor.submit(() -> {
@@ -112,7 +112,7 @@ class IssuerConfigResolverSynchronizationTest {
         double avgTimeMs = totalTime.get() / (double) operations.get() / 1_000_000;
 
 
-        // During warmup phase, IssuerConfigResolver should be fast
+        // During warmup phase, IssuerConfigCache should be fast
         // Threshold increased to 2.0ms to account for CI environment variability (JVM warmup, shared resources)
         assertTrue(avgTimeMs < 2.0, "Operations should be fast during warmup (was: %.2f ms)".formatted(avgTimeMs));
         assertEquals(operations.get(), threadsPerResolver * resolvers.size(), "All operations should complete");
@@ -123,7 +123,7 @@ class IssuerConfigResolverSynchronizationTest {
     @DisplayName("Measure post-warmup throughput for optimized cache")
     void measuresPostWarmupThroughput() throws Exception {
         // Pre-warm the resolver by doing a single resolution
-        IssuerConfig warmupResult = issuerConfigResolver.resolveConfig(issuerIdentifier);
+        IssuerConfig warmupResult = issuerConfigCache.resolveConfig(issuerIdentifier);
         assertNotNull(warmupResult);
 
         // Now test performance after warmup
@@ -140,7 +140,7 @@ class IssuerConfigResolverSynchronizationTest {
                     long threadStartTime = System.nanoTime();
 
                     for (int j = 0; j < operationsPerThread; j++) {
-                        IssuerConfig result = issuerConfigResolver.resolveConfig(issuerIdentifier);
+                        IssuerConfig result = issuerConfigCache.resolveConfig(issuerIdentifier);
                         assertNotNull(result);
                         totalOperations.incrementAndGet();
                     }
@@ -163,7 +163,7 @@ class IssuerConfigResolverSynchronizationTest {
         double avgTimeMs = totalTime.get() / (double) totalOperations.get() / 1_000_000;
         double throughputOpsPerSec = totalOperations.get() / (totalTime.get() / 1_000_000_000.0);
 
-        // After warmup, IssuerConfigResolver should be very fast
+        // After warmup, IssuerConfigCache should be very fast
         assertTrue(avgTimeMs < 0.1, "Post-warmup operations should be very fast (was: %.2f ms)".formatted(avgTimeMs));
         assertTrue(throughputOpsPerSec > 10000, "Post-warmup throughput should be high (was: %.0f ops/s)".formatted(throughputOpsPerSec));
         assertEquals(threadCount * operationsPerThread, totalOperations.get(), "All operations should complete");

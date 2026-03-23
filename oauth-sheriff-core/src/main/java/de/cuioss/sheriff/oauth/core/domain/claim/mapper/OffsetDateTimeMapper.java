@@ -29,6 +29,7 @@ import java.util.Optional;
  * According to JWT specification (RFC 7519), date-time values are represented as NumericDate,
  * which is the number of seconds from 1970-01-01T00:00:00Z UTC until the specified UTC date/time.
  *
+ * @since 1.0
  */
 public class OffsetDateTimeMapper implements ClaimMapper {
     @Override

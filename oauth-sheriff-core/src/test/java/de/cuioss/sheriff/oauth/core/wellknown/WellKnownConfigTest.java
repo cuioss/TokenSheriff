@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.oauth.core.well_known;
+package de.cuioss.sheriff.oauth.core.wellknown;
 
 import de.cuioss.http.client.handler.SecureSSLContextProvider;
 import org.junit.jupiter.api.DisplayName;

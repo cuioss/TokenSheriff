@@ -51,6 +51,7 @@ import java.util.zip.Inflater;
  * <p>
  * This class is thread-safe and stateless.
  *
+ * @since 1.0
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc7516">RFC 7516 - JSON Web Encryption</a>
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc7518">RFC 7518 - JSON Web Algorithms</a>
  */

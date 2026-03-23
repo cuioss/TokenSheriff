@@ -67,6 +67,7 @@ import java.util.concurrent.TimeUnit;
  * This implementation is structured to simplify later integration with micrometer-based
  * metrics systems but does not create any dependency on external monitoring frameworks.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class TokenValidatorMonitor {

@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * Call {@link #close()} to shut down the eviction scheduler.
  * </p>
  *
+ * @since 1.0
  */
 public class DpopReplayProtection implements Closeable {
 

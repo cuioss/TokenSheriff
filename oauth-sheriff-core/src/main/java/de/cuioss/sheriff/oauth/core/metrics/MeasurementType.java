@@ -57,6 +57,7 @@ import lombok.RequiredArgsConstructor;
  *   <li><strong>RefreshTokenValidationPipeline</strong>: No metrics (uses NoOpMetricsTicker)</li>
  * </ul>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @RequiredArgsConstructor

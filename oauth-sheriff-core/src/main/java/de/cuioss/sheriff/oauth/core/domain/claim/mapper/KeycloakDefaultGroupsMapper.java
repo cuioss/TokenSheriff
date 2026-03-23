@@ -52,6 +52,7 @@ import java.util.Optional;
  * and the OAuth Sheriff library's expected format, ensuring seamless integration
  * without requiring custom protocol mappers in Keycloak.
  *
+ * @since 1.0
  * @see <a href="https://www.keycloak.org/docs/latest/server_admin/index.html#_group-mappers">Keycloak Group Mappers</a>
  */
 public class KeycloakDefaultGroupsMapper implements ClaimMapper {

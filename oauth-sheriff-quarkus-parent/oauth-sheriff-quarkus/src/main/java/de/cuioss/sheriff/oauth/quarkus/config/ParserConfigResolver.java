@@ -36,6 +36,7 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.INF
  * duplication and ensuring consistency with the core validation rules.
  * </p>
  *
+ * @since 1.0
  */
 public class ParserConfigResolver {
 

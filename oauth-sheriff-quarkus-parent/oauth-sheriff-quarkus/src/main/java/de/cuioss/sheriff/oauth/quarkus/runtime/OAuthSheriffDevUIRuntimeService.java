@@ -34,6 +34,8 @@ import java.util.*;
  * components. All methods return {@link Map} structures serialized as JSON-RPC
  * responses over WebSocket.
  * </p>
+ *
+ * @since 1.0
  */
 @ApplicationScoped
 public class OAuthSheriffDevUIRuntimeService {

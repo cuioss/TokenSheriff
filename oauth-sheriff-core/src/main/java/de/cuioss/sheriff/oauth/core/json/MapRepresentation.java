@@ -46,6 +46,7 @@ import java.util.stream.Collectors;
  *   <li>Direct compatibility with ClaimMapper implementations</li>
  * </ul>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public record MapRepresentation(Map<String, Object> data) implements Serializable {

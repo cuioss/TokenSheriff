@@ -50,6 +50,7 @@ import java.util.concurrent.ScheduledExecutorService;
  * AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter);
  * </pre>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @Builder
