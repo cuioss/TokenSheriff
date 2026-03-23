@@ -117,6 +117,7 @@ import java.util.Base64;
  * For more details on the security aspects, see the
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
  *
+ * @apiNote This class is internal to OAuth Sheriff and not part of the public API.
  * @since 1.0
  * @author Oliver Wolff
  */

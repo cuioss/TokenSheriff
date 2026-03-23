@@ -16,9 +16,12 @@
 package de.cuioss.sheriff.oauth.quarkus.producer;
 
 import de.cuioss.sheriff.oauth.core.TokenValidator;
+import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
+import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
+import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolver;
 import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolverMock;
@@ -28,8 +31,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.Optional;
-import java.util.Set;
+import java.time.OffsetDateTime;
+import java.util.*;
 
 import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.WARN;
 import static de.cuioss.test.juli.LogAsserts.assertSingleLogMessagePresentContaining;
@@ -89,12 +92,9 @@ class BearerTokenProducerTest {
         String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
         servletResolverMock.setBearerToken(token);
 
-        AccessTokenContent mockContent = createMock(AccessTokenContent.class);
-        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(mockContent);
-        expect(mockContent.determineMissingScopes(anyObject())).andReturn(Set.of());
-        expect(mockContent.determineMissingRoles(anyObject())).andReturn(Set.of());
-        expect(mockContent.determineMissingGroups(anyObject())).andReturn(Set.of());
-        replay(tokenValidator, mockContent);
+        AccessTokenContent tokenContent = createAccessToken(Map.of());
+        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
+        replay(tokenValidator);
 
         BearerTokenResult result = producer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
 
@@ -103,7 +103,7 @@ class BearerTokenProducerTest {
         assertSingleLogMessagePresentContaining(TestLogLevel.DEBUG,
                 "Bearer token validation successful");
 
-        verify(tokenValidator, mockContent);
+        verify(tokenValidator);
     }
 
     @Test
@@ -112,25 +112,23 @@ class BearerTokenProducerTest {
         String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
         servletResolverMock.setBearerToken(token);
 
-        AccessTokenContent mockContent = createMock(AccessTokenContent.class);
+        // Token has "write" scope but not "admin"
+        AccessTokenContent tokenContent = createAccessToken(Map.of(
+                ClaimName.SCOPE.getName(), ClaimValue.forList("write", List.of("write"))));
         Set<String> requiredScopes = Set.of("admin", "write");
-        Set<String> missingScopes = Set.of("admin");
 
-        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(mockContent);
-        expect(mockContent.determineMissingScopes(requiredScopes)).andReturn(missingScopes);
-        expect(mockContent.determineMissingRoles(anyObject())).andReturn(Set.of());
-        expect(mockContent.determineMissingGroups(anyObject())).andReturn(Set.of());
-        replay(tokenValidator, mockContent);
+        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
+        replay(tokenValidator);
 
         BearerTokenResult result = producer.getBearerTokenResult(requiredScopes, Set.of(), Set.of());
 
         assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
         assertFalse(result.getAccessTokenContent().isPresent());
-        assertEquals(missingScopes, result.getMissingScopes());
+        assertEquals(Set.of("admin"), result.getMissingScopes());
         assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
                 WARN.BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED.resolveIdentifierString());
 
-        verify(tokenValidator, mockContent);
+        verify(tokenValidator);
     }
 
     @Test
@@ -139,25 +137,23 @@ class BearerTokenProducerTest {
         String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
         servletResolverMock.setBearerToken(token);
 
-        AccessTokenContent mockContent = createMock(AccessTokenContent.class);
+        // Token has "user" role but not "admin"
+        AccessTokenContent tokenContent = createAccessToken(Map.of(
+                ClaimName.ROLES.getName(), ClaimValue.forList("user", List.of("user"))));
         Set<String> requiredRoles = Set.of("user", "admin");
-        Set<String> missingRoles = Set.of("admin");
 
-        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(mockContent);
-        expect(mockContent.determineMissingScopes(anyObject())).andReturn(Set.of());
-        expect(mockContent.determineMissingRoles(requiredRoles)).andReturn(missingRoles);
-        expect(mockContent.determineMissingGroups(anyObject())).andReturn(Set.of());
-        replay(tokenValidator, mockContent);
+        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
+        replay(tokenValidator);
 
         BearerTokenResult result = producer.getBearerTokenResult(Set.of(), requiredRoles, Set.of());
 
         assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
         assertFalse(result.getAccessTokenContent().isPresent());
-        assertEquals(missingRoles, result.getMissingRoles());
+        assertEquals(Set.of("admin"), result.getMissingRoles());
         assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
                 WARN.BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED.resolveIdentifierString());
 
-        verify(tokenValidator, mockContent);
+        verify(tokenValidator);
     }
 
     @Test
@@ -166,25 +162,23 @@ class BearerTokenProducerTest {
         String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
         servletResolverMock.setBearerToken(token);
 
-        AccessTokenContent mockContent = createMock(AccessTokenContent.class);
+        // Token has "developers" group but not "managers"
+        AccessTokenContent tokenContent = createAccessToken(Map.of(
+                ClaimName.GROUPS.getName(), ClaimValue.forList("developers", List.of("developers"))));
         Set<String> requiredGroups = Set.of("developers", "managers");
-        Set<String> missingGroups = Set.of("managers");
 
-        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(mockContent);
-        expect(mockContent.determineMissingScopes(anyObject())).andReturn(Set.of());
-        expect(mockContent.determineMissingRoles(anyObject())).andReturn(Set.of());
-        expect(mockContent.determineMissingGroups(requiredGroups)).andReturn(missingGroups);
-        replay(tokenValidator, mockContent);
+        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
+        replay(tokenValidator);
 
         BearerTokenResult result = producer.getBearerTokenResult(Set.of(), Set.of(), requiredGroups);
 
         assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
         assertFalse(result.getAccessTokenContent().isPresent());
-        assertEquals(missingGroups, result.getMissingGroups());
+        assertEquals(Set.of("managers"), result.getMissingGroups());
         assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
                 WARN.BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED.resolveIdentifierString());
 
-        verify(tokenValidator, mockContent);
+        verify(tokenValidator);
     }
 
     @Test
@@ -214,19 +208,16 @@ class BearerTokenProducerTest {
         String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
         servletResolverMock.setBearerToken(token);
 
-        AccessTokenContent mockContent = createMock(AccessTokenContent.class);
-        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(mockContent);
-        expect(mockContent.determineMissingScopes(anyObject())).andReturn(Set.of());
-        expect(mockContent.determineMissingRoles(anyObject())).andReturn(Set.of());
-        expect(mockContent.determineMissingGroups(anyObject())).andReturn(Set.of());
-        replay(tokenValidator, mockContent);
+        AccessTokenContent tokenContent = createAccessToken(Map.of());
+        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
+        replay(tokenValidator);
 
         Optional<AccessTokenContent> result = producer.getAccessTokenContent();
 
         assertTrue(result.isPresent());
-        assertEquals(mockContent, result.get());
+        assertEquals(tokenContent, result.get());
 
-        verify(tokenValidator, mockContent);
+        verify(tokenValidator);
     }
 
     @Test
@@ -271,5 +262,22 @@ class BearerTokenProducerTest {
         assertEquals("Bearer token is empty", result.getErrorMessage().orElse(null));
         assertSingleLogMessagePresentContaining(TestLogLevel.DEBUG,
                 "Bearer token is empty - invalid request per RFC 6750");
+    }
+
+    /**
+     * Creates an {@link AccessTokenContent} with mandatory claims and optional additional claims.
+     */
+    private static AccessTokenContent createAccessToken(Map<String, ClaimValue> additionalClaims) {
+        Map<String, ClaimValue> claims = new HashMap<>();
+        claims.put(ClaimName.ISSUER.getName(), ClaimValue.forPlainString("test-issuer"));
+        claims.put(ClaimName.SUBJECT.getName(), ClaimValue.forPlainString("test-subject"));
+        claims.put(ClaimName.EXPIRATION.getName(), ClaimValue.forDateTime(
+                String.valueOf(OffsetDateTime.now().plusHours(1).toEpochSecond()),
+                OffsetDateTime.now().plusHours(1)));
+        claims.put(ClaimName.ISSUED_AT.getName(), ClaimValue.forDateTime(
+                String.valueOf(OffsetDateTime.now().toEpochSecond()),
+                OffsetDateTime.now()));
+        claims.putAll(additionalClaims);
+        return new AccessTokenContent(claims, "raw-token", null, MapRepresentation.empty());
     }
 }

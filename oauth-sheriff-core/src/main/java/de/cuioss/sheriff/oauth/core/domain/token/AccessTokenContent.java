@@ -63,7 +63,7 @@ import java.util.*;
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
 @SuperBuilder
-public class AccessTokenContent extends BaseTokenContent {
+public final class AccessTokenContent extends BaseTokenContent {
 
     private static final CuiLogger LOGGER = new CuiLogger(AccessTokenContent.class);
 

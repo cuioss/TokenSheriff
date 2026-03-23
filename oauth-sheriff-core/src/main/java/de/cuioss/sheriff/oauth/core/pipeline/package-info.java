@@ -16,6 +16,9 @@
 /**
  * Provides classes for processing JWT tokens through a pipeline of operations.
  * <p>
+ * <strong>This package is internal to OAuth Sheriff and not part of the public API.</strong>
+ * Use {@link de.cuioss.sheriff.oauth.core.TokenValidator} as the public entry point.
+ * <p>
  * This package implements the token processing pipeline, including parsing, validation, and building tokens.
  * The classes in this package work together to form a complete token processing pipeline.
  * <p>

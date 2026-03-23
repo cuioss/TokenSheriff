@@ -54,6 +54,7 @@ import java.util.Optional;
  * @param parts the original token parts (header.payload.signature)
  * @param rawToken the original raw token string
  *
+ * @apiNote This record is internal to OAuth Sheriff and not part of the public API.
  * @since 1.0
  * @author Oliver Wolff
  */

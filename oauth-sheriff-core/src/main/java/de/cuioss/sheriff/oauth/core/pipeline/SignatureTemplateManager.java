@@ -46,6 +46,7 @@ import java.util.Map;
  *   <li>Thread-safe caching with ConcurrentHashMap</li>
  * </ul>
  *
+ * @apiNote This class is internal to OAuth Sheriff and not part of the public API.
  * @since 1.0
  * @author Oliver Wolff
  */

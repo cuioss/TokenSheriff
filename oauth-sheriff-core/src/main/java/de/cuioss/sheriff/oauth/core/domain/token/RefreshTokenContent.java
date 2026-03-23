@@ -55,7 +55,7 @@ import java.util.Map;
  */
 @ToString
 @EqualsAndHashCode
-public class RefreshTokenContent implements MinimalTokenContent {
+public final class RefreshTokenContent implements MinimalTokenContent {
 
     @Serial
     private static final long serialVersionUID = 1L;

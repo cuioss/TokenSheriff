@@ -51,7 +51,8 @@ import java.util.Map;
 @ToString
 @EqualsAndHashCode
 @SuperBuilder
-public abstract class BaseTokenContent implements TokenContent {
+public abstract sealed class BaseTokenContent implements TokenContent
+        permits AccessTokenContent, IdTokenContent {
 
     @Serial
     private static final long serialVersionUID = 1L;
