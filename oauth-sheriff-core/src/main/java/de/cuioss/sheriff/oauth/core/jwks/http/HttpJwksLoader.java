@@ -29,7 +29,7 @@ import de.cuioss.sheriff.oauth.core.jwks.key.KeyInfo;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.util.LoaderStatus;
 import de.cuioss.sheriff.oauth.core.util.LoadingStatusProvider;
-import de.cuioss.sheriff.oauth.core.well_known.HttpWellKnownResolver;
+import de.cuioss.sheriff.oauth.core.wellknown.HttpWellKnownResolver;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.time.Instant;
@@ -63,6 +63,7 @@ import static de.cuioss.sheriff.oauth.core.JWTValidationLogMessages.WARN;
  * <p>
  * Implements Requirement <a href="../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-4.5">OAUTH-SHERIFF-4.5: Key Rotation Grace Period</a>
  *
+ * @since 1.0
  * @author Oliver Wolff
  * @see HttpJwksLoaderConfig
  * @see <a href="https://github.com/cuioss/OAuthSheriff/issues/110">Issue #110: Key rotation grace period</a>

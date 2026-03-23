@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.oauth.core.well_known;
+package de.cuioss.sheriff.oauth.core.wellknown;
 
 import de.cuioss.http.client.adapter.ETagAwareHttpAdapter;
 import de.cuioss.http.client.adapter.HttpAdapter;
@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * <strong>Thread Safety:</strong> This class uses AtomicReference for lock-free thread-safe caching.
  * The compareAndSet pattern prevents duplicate loads while allowing concurrent access.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class HttpWellKnownResolver implements LoadingStatusProvider {

@@ -30,6 +30,7 @@ import lombok.RequiredArgsConstructor;
  * <p>
  * Note: This implementation is not thread-safe. Each thread should use its own instance.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @RequiredArgsConstructor

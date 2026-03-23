@@ -54,6 +54,7 @@ import java.security.*;
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#token-validation-pipeline">Token Validation Pipeline</a>
  * and <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class TokenSignatureValidator {

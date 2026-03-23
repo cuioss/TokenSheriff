@@ -16,7 +16,7 @@
 package de.cuioss.sheriff.oauth.quarkus.deployment;
 
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
-import de.cuioss.sheriff.oauth.core.IssuerConfigResolver;
+import de.cuioss.sheriff.oauth.core.IssuerConfigCache;
 import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.TokenValidator;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
@@ -126,7 +126,7 @@ public class OAuthSheriffProcessor {
         return ReflectiveClassBuildItem.builder(
                 // Classes that need methods + constructors for instantiation
                 TokenValidator.class,        // Public constructors, API methods
-                IssuerConfigResolver.class,  // Package constructor, internal methods
+                IssuerConfigCache.class,  // Package constructor, internal methods
                 SecurityEventCounter.class,  // Default constructor, counter methods
                 MeterRegistry.class)         // Micrometer registry for metrics
                 .methods(true)    // Methods needed for API calls and getters

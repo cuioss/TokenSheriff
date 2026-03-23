@@ -128,6 +128,7 @@ import java.lang.annotation.Target;
  *   <li>Stores validated token in request context for method access</li>
  * </ul>
  *
+ * @since 1.0
  * @author Oliver Wolff
  * @see BearerToken
  * @see de.cuioss.sheriff.oauth.quarkus.interceptor.BearerTokenInterceptor

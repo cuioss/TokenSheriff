@@ -24,6 +24,7 @@ package de.cuioss.sheriff.oauth.core.metrics;
  * <p>
  * Implementations must be thread-safe if they will be used in concurrent contexts.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public interface MetricsTicker {

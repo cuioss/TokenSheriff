@@ -61,6 +61,7 @@ import java.util.Optional;
  * because the DPoP proof header contains {@code jwk} as a nested JSON object,
  * while DSL-JSON's {@code JwtHeader} expects it as a String.
  *
+ * @since 1.0
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc9449">RFC 9449</a>
  */
 public class DpopProofValidator {

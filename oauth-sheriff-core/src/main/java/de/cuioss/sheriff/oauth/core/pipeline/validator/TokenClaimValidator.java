@@ -58,6 +58,7 @@ import java.util.Set;
  *   <li>{@link AuthorizedPartyValidator} - for authorized party validation</li>
  * </ul>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class TokenClaimValidator {

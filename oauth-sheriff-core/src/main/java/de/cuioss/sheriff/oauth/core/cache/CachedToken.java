@@ -32,6 +32,7 @@ import java.time.OffsetDateTime;
  * The expiration time is cached to enable efficient background eviction of expired tokens
  * without needing to parse the token content.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @RequiredArgsConstructor

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.oauth.core.well_known;
+package de.cuioss.sheriff.oauth.core.wellknown;
 
 import com.dslplatform.json.DslJson;
 import de.cuioss.http.client.ContentType;
@@ -39,6 +39,7 @@ import java.util.Optional;
  * <p>
  * Path: HttpResponse.BodyHandler → DSL-JSON → WellKnownResult
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnownResult> {

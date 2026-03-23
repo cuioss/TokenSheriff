@@ -32,6 +32,8 @@ import java.util.Map;
  * 
  * <p>The extraction follows a priority order from most trusted to least trusted
  * headers, with special handling for comma-separated values and RFC 7239 format.</p>
+ *
+ * @since 1.0
  */
 @UtilityClass
 public class ClientIpExtractor {

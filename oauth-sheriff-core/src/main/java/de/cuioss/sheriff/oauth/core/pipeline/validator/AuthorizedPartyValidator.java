@@ -34,6 +34,7 @@ import java.util.Set;
  * The azp claim identifies the client that the token was issued for and must match
  * one of the expected client IDs if client ID validation is configured.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @RequiredArgsConstructor

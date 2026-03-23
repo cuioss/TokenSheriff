@@ -45,6 +45,7 @@ import java.util.Map;
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#token-structure">Token Structure</a>
  * specification.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @ToString

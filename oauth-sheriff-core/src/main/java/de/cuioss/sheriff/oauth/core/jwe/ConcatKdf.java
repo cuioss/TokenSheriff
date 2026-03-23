@@ -35,6 +35,7 @@ import java.util.Arrays;
  *   <li>Key data length in bits</li>
  * </ul>
  *
+ * @since 1.0
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc7518#section-4.6">RFC 7518 Section 4.6</a>
  */
 @UtilityClass

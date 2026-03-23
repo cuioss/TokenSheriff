@@ -35,6 +35,7 @@ import java.lang.annotation.Target;
  * HttpServletRequestResolver resolver;
  * }</pre>
  * 
+ * @since 1.0
  * @author Oliver Wolff
  */
 @Qualifier

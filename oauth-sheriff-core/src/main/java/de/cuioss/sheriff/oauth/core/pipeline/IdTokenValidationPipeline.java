@@ -16,7 +16,7 @@
 package de.cuioss.sheriff.oauth.core.pipeline;
 
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
-import de.cuioss.sheriff.oauth.core.IssuerConfigResolver;
+import de.cuioss.sheriff.oauth.core.IssuerConfigCache;
 import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages;
 import de.cuioss.sheriff.oauth.core.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.oauth.core.domain.context.ValidationContext;
@@ -59,6 +59,7 @@ import java.util.Map;
  * This class is thread-safe after construction. All validators are pre-created
  * and cached in immutable maps for optimal performance.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class IdTokenValidationPipeline {
@@ -66,7 +67,7 @@ public class IdTokenValidationPipeline {
     private static final CuiLogger LOGGER = new CuiLogger(IdTokenValidationPipeline.class);
 
     private final NonValidatingJwtParser jwtParser;
-    private final IssuerConfigResolver issuerConfigResolver;
+    private final IssuerConfigCache issuerConfigResolver;
     private final Map<String, TokenSignatureValidator> signatureValidators;
     private final Map<String, TokenBuilder> tokenBuilders;
     private final Map<String, TokenClaimValidator> claimValidators;
@@ -85,7 +86,7 @@ public class IdTokenValidationPipeline {
      * @param securityEventCounter the security event counter for tracking operations
      */
     public IdTokenValidationPipeline(NonValidatingJwtParser jwtParser,
-            IssuerConfigResolver issuerConfigResolver,
+            IssuerConfigCache issuerConfigResolver,
             Map<String, TokenSignatureValidator> signatureValidators,
             Map<String, TokenBuilder> tokenBuilders,
             Map<String, TokenClaimValidator> claimValidators,

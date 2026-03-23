@@ -28,6 +28,7 @@ package de.cuioss.sheriff.oauth.core.security;
  *   <li>SemanticIssues: For semantic validation failures (typically thrown by TokenClaimValidator, e.g., time or audience issues). Usually maps to HTTP 401.</li>
  * </ul>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public enum EventCategory {

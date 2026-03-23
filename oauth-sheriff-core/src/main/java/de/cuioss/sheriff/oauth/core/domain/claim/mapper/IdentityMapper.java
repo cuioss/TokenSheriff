@@ -26,6 +26,7 @@ import java.util.Optional;
  * {@link ClaimValue} without any transformation.
  * This is useful for claims that are already in the desired format.
  *
+ * @since 1.0
  */
 public class IdentityMapper implements ClaimMapper {
     @Override

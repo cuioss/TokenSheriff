@@ -46,6 +46,7 @@ import java.util.Map;
  *   <li>Thread-safe caching with ConcurrentHashMap</li>
  * </ul>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public final class SignatureTemplateManager {

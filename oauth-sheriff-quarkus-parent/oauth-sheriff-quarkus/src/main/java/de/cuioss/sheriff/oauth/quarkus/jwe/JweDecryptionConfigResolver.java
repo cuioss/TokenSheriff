@@ -42,6 +42,7 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.WAR
  * <p>
  * Returns {@code null} if no JWE properties are configured.
  *
+ * @since 1.0
  * @see JwtPropertyKeys.JWE
  */
 public class JweDecryptionConfigResolver {

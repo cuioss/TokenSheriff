@@ -41,6 +41,7 @@ import java.util.stream.Collectors;
  * the validation can be configured per-issuer to accommodate identity providers that don't include the
  * subject claim in access tokens by default.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @RequiredArgsConstructor

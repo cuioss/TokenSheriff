@@ -25,6 +25,7 @@ package de.cuioss.sheriff.oauth.core.util;
  *   <li>LOADING: if a loading operation is currently in progress</li>
  *   <li>UNDEFINED: if the status hasn't been determined yet</li>
  * </ul>
+ * @since 1.0
  */
 public enum LoaderStatus {
     /** The loader is functioning properly and contains at least one key or valid content */

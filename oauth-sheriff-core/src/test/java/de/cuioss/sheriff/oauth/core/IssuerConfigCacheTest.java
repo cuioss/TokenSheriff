@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Comprehensive unit test for IssuerConfigResolver to verify:
+ * Comprehensive unit test for IssuerConfigCache to verify:
  * - Lazy initialization and caching behavior
  * - Thread safety and concurrency handling
  * - Cache optimization from ConcurrentHashMap to immutable map
@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * - Error handling for missing/unhealthy issuers
  */
 @EnableTestLogger
-class IssuerConfigResolverTest {
+class IssuerConfigCacheTest {
 
     private SecurityEventCounter securityEventCounter;
     private TestTokenHolder tokenHolder1;
@@ -68,7 +68,7 @@ class IssuerConfigResolverTest {
             IssuerConfig config = tokenHolder1.getIssuerConfig();
             String issuerIdentifier = config.getIssuerIdentifier();
 
-            IssuerConfigResolver resolver = new IssuerConfigResolver(
+            IssuerConfigCache resolver = new IssuerConfigCache(
                     List.of(config),
                     securityEventCounter
             );
@@ -84,7 +84,7 @@ class IssuerConfigResolverTest {
             IssuerConfig config = tokenHolder1.getIssuerConfig();
             String issuerIdentifier = config.getIssuerIdentifier();
 
-            IssuerConfigResolver resolver = new IssuerConfigResolver(
+            IssuerConfigCache resolver = new IssuerConfigCache(
                     List.of(config),
                     securityEventCounter
             );
@@ -107,7 +107,7 @@ class IssuerConfigResolverTest {
             String issuer1 = config1.getIssuerIdentifier();
             String issuer2 = config2.getIssuerIdentifier();
 
-            IssuerConfigResolver resolver = new IssuerConfigResolver(
+            IssuerConfigCache resolver = new IssuerConfigCache(
                     List.of(config1, config2),
                     securityEventCounter
             );
@@ -139,7 +139,7 @@ class IssuerConfigResolverTest {
                     .issuerIdentifier("https://disabled-issuer.com")
                     .build();
 
-            IssuerConfigResolver resolver = new IssuerConfigResolver(
+            IssuerConfigCache resolver = new IssuerConfigCache(
                     List.of(disabledConfig),
                     securityEventCounter
             );
@@ -164,7 +164,7 @@ class IssuerConfigResolverTest {
         void throwsExceptionForUnknownIssuer() {
             IssuerConfig config = tokenHolder1.getIssuerConfig();
 
-            IssuerConfigResolver resolver = new IssuerConfigResolver(
+            IssuerConfigCache resolver = new IssuerConfigCache(
                     List.of(config),
                     securityEventCounter
             );
@@ -187,7 +187,7 @@ class IssuerConfigResolverTest {
         void incrementsSecurityEventCounterForMissingIssuer() {
             IssuerConfig config = tokenHolder1.getIssuerConfig();
 
-            IssuerConfigResolver resolver = new IssuerConfigResolver(
+            IssuerConfigCache resolver = new IssuerConfigCache(
                     List.of(config),
                     securityEventCounter
             );
@@ -209,7 +209,7 @@ class IssuerConfigResolverTest {
                     .enabled(false)
                     .build();
 
-            new IssuerConfigResolver(
+            new IssuerConfigCache(
                     List.of(enabledConfig, disabledConfig),
                     securityEventCounter
             );
@@ -233,7 +233,7 @@ class IssuerConfigResolverTest {
             // Initialize the config to make it unhealthy
             config.initSecurityEventCounter(securityEventCounter);
 
-            IssuerConfigResolver resolver = new IssuerConfigResolver(
+            IssuerConfigCache resolver = new IssuerConfigCache(
                     List.of(config),
                     securityEventCounter
             );
@@ -261,7 +261,7 @@ class IssuerConfigResolverTest {
             IssuerConfig config = tokenHolder1.getIssuerConfig();
             String issuerIdentifier = config.getIssuerIdentifier();
 
-            IssuerConfigResolver resolver = new IssuerConfigResolver(
+            IssuerConfigCache resolver = new IssuerConfigCache(
                     List.of(config),
                     securityEventCounter
             );
@@ -307,7 +307,7 @@ class IssuerConfigResolverTest {
                 issuerIds.add(config.getIssuerIdentifier());
             }
 
-            IssuerConfigResolver resolver = new IssuerConfigResolver(
+            IssuerConfigCache resolver = new IssuerConfigCache(
                     configs,
                     securityEventCounter
             );
@@ -352,7 +352,7 @@ class IssuerConfigResolverTest {
             IssuerConfig config = tokenHolder1.getIssuerConfig();
             String issuerIdentifier = config.getIssuerIdentifier();
 
-            IssuerConfigResolver resolver = new IssuerConfigResolver(
+            IssuerConfigCache resolver = new IssuerConfigCache(
                     List.of(config),
                     securityEventCounter
             );
@@ -373,7 +373,7 @@ class IssuerConfigResolverTest {
             IssuerConfig config = tokenHolder1.getIssuerConfig();
             String issuerIdentifier = config.getIssuerIdentifier();
 
-            IssuerConfigResolver resolver = new IssuerConfigResolver(
+            IssuerConfigCache resolver = new IssuerConfigCache(
                     List.of(config),
                     securityEventCounter
             );

@@ -27,6 +27,7 @@ import lombok.experimental.UtilityClass;
  * All metrics are prefixed with "sheriff.oauth".
  * </p>
  *
+ * @since 1.0
  */
 @UtilityClass
 public final class MetricIdentifier {

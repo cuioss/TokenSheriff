@@ -16,7 +16,7 @@
 package de.cuioss.sheriff.oauth.core.pipeline;
 
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
-import de.cuioss.sheriff.oauth.core.IssuerConfigResolver;
+import de.cuioss.sheriff.oauth.core.IssuerConfigCache;
 import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages;
 import de.cuioss.sheriff.oauth.core.cache.AccessTokenCache;
 import de.cuioss.sheriff.oauth.core.cache.AccessTokenCacheConfig;
@@ -74,6 +74,7 @@ import java.util.Optional;
  * This class is thread-safe after construction. All validators are pre-created
  * and cached in immutable maps for optimal performance.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class AccessTokenValidationPipeline {
@@ -81,7 +82,7 @@ public class AccessTokenValidationPipeline {
     private static final CuiLogger LOGGER = new CuiLogger(AccessTokenValidationPipeline.class);
 
     private final NonValidatingJwtParser jwtParser;
-    private final IssuerConfigResolver issuerConfigResolver;
+    private final IssuerConfigCache issuerConfigResolver;
     private final Map<String, TokenSignatureValidator> signatureValidators;
     private final Map<String, TokenBuilder> tokenBuilders;
     private final Map<String, TokenClaimValidator> claimValidators;
@@ -107,7 +108,7 @@ public class AccessTokenValidationPipeline {
      */
     @SuppressWarnings("java:S107") // Many dependencies are required
     public AccessTokenValidationPipeline(NonValidatingJwtParser jwtParser,
-            IssuerConfigResolver issuerConfigResolver,
+            IssuerConfigCache issuerConfigResolver,
             Map<String, TokenSignatureValidator> signatureValidators,
             Map<String, TokenBuilder> tokenBuilders,
             Map<String, TokenClaimValidator> claimValidators,

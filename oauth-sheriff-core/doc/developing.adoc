@@ -102,7 +102,7 @@ The access token validation pipeline consists of:
 . `NonValidatingJwtParser` - Base64URL decoding and JSON parsing
 . Issuer extraction - Extract issuer (iss) claim from decoded JWT
 . Cache lookup - Check access token cache (before expensive operations)
-. `IssuerConfigResolver` - Resolve issuer configuration
+. `IssuerConfigCache` - Resolve issuer configuration
 . `TokenHeaderValidator` - Header and algorithm validation
 . `TokenSignatureValidator` - Cryptographic signature verification (most expensive)
 . `TokenBuilder` - Build typed `AccessTokenContent` object

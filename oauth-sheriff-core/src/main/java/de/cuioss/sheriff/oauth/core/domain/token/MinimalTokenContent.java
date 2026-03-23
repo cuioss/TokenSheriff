@@ -36,6 +36,7 @@ import java.io.Serializable;
  * All token content classes in the library implement this interface, providing
  * a common base for token handling regardless of the specific token format.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public interface MinimalTokenContent extends Serializable {
@@ -48,9 +49,9 @@ public interface MinimalTokenContent extends Serializable {
     String getRawToken();
 
     /**
-     * Gets the validation type.
+     * Gets the token type.
      *
-     * @return the validation type (ACCESS_TOKEN, ID_TOKEN, or REFRESH_TOKEN)
+     * @return the token type (ACCESS_TOKEN, ID_TOKEN, or REFRESH_TOKEN)
      */
     TokenType getTokenType();
 }

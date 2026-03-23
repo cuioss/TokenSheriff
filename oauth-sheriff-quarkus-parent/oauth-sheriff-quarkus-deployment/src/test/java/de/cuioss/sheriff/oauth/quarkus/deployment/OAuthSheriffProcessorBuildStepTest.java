@@ -16,7 +16,7 @@
 package de.cuioss.sheriff.oauth.quarkus.deployment;
 
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
-import de.cuioss.sheriff.oauth.core.IssuerConfigResolver;
+import de.cuioss.sheriff.oauth.core.IssuerConfigCache;
 import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.TokenValidator;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
@@ -68,7 +68,7 @@ class OAuthSheriffProcessorBuildStepTest {
         // Assert
         assertNotNull(reflectiveItem);
         assertTrue(reflectiveItem.getClassNames().contains(TokenValidator.class.getName()));
-        assertTrue(reflectiveItem.getClassNames().contains(IssuerConfigResolver.class.getName()));
+        assertTrue(reflectiveItem.getClassNames().contains(IssuerConfigCache.class.getName()));
         assertTrue(reflectiveItem.getClassNames().contains(SecurityEventCounter.class.getName()));
         assertFalse(reflectiveItem.getClassNames().contains(IssuerConfig.class.getName()));
         assertFalse(reflectiveItem.getClassNames().contains(ParserConfig.class.getName()));

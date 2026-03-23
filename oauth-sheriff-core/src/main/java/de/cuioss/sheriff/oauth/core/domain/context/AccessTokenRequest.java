@@ -36,6 +36,7 @@ import java.util.Objects;
  *
  * @param tokenString the raw token string, must not be null
  * @param httpHeaders the HTTP headers from the original request, defensively copied
+ * @since 1.0
  */
 public record AccessTokenRequest(String tokenString, Map<String, List<String>> httpHeaders)
         implements TokenValidationRequest {

@@ -39,6 +39,7 @@ import static de.cuioss.sheriff.oauth.core.JWTValidationLogMessages.WARN;
  * It follows the CUI converter pattern by extending StringContentConverter
  * and provides proper empty value semantics for error cases.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class JwksHttpContentConverter extends StringContentConverter<Jwks> {

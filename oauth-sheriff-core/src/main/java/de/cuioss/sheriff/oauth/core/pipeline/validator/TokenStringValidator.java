@@ -44,6 +44,7 @@ import java.nio.charset.StandardCharsets;
  * <p>
  * This class is thread-safe and stateless after construction.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class TokenStringValidator {

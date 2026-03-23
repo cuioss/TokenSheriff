@@ -33,6 +33,7 @@ import lombok.experimental.UtilityClass;
  * For more detailed information about log messages, see the
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/LogMessages.adoc">Log Messages Documentation</a>
  *
+ * @since 1.0
  */
 @UtilityClass
 public final class JWTValidationLogMessages {
@@ -256,7 +257,7 @@ public final class JWTValidationLogMessages {
         public static final LogRecord UNKNOWN_TOKEN_TYPE = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(108)
-                .template("Unknown validation type: %s")
+                .template("Unknown token type: %s")
                 .build();
 
         public static final LogRecord MISSING_CLAIM = LogRecordModel.builder()

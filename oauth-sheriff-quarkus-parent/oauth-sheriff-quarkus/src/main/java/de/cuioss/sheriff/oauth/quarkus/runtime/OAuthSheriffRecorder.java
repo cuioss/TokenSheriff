@@ -26,6 +26,8 @@ import io.quarkus.runtime.annotations.Recorder;
  * <p>
  * If future runtime initialization is needed, methods can be added here and called
  * from the deployment processor.
+ *
+ * @since 1.0
  */
 @Recorder
 public class OAuthSheriffRecorder {

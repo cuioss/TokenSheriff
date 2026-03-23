@@ -39,6 +39,7 @@ import java.util.stream.Collectors;
  *   <li>CONSTRAINT_VIOLATION: 401 (Unauthorized) for missing scopes, 403 (Forbidden) for missing roles/groups</li>
  * </ul>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @UtilityClass

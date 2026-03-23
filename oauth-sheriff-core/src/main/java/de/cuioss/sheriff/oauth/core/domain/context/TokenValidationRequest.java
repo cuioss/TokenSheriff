@@ -35,6 +35,7 @@ import java.util.Map;
  * <p>
  * Implementations are immutable and thread-safe.
  *
+ * @since 1.0
  */
 public sealed interface TokenValidationRequest
         permits AccessTokenRequest, IdTokenRequest, RefreshTokenRequest {

@@ -17,6 +17,7 @@ package de.cuioss.sheriff.oauth.core.jwks;
 
 /**
  * Enum representing the different types of JWKS sources.
+ * @since 1.0
  */
 public enum JwksType {
     /** HTTP JWKS endpoint */

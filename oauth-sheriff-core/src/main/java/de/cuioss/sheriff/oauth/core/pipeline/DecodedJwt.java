@@ -54,6 +54,7 @@ import java.util.Optional;
  * @param parts the original token parts (header.payload.signature)
  * @param rawToken the original raw token string
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public record DecodedJwt(

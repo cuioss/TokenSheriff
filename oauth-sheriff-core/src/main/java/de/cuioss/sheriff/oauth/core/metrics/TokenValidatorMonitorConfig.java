@@ -57,6 +57,7 @@ import java.util.Set;
  *     .build(); // No measurement types = disabled
  * </pre>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @Builder

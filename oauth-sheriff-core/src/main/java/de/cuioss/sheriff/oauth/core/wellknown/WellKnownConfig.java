@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.oauth.core.well_known;
+package de.cuioss.sheriff.oauth.core.wellknown;
 
 import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.http.client.handler.HttpHandler;
@@ -37,6 +37,7 @@ import java.net.URI;
  * The configuration supports both String URLs and URI objects for the well-known endpoint,
  * and provides comprehensive SSL/TLS configuration options through the HttpHandler builder pattern.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @ToString

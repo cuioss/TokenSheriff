@@ -52,6 +52,7 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.INF
  * with the core validation logic without duplication.
  * </p>
  *
+ * @since 1.0
  */
 public class IssuerConfigResolver {
 

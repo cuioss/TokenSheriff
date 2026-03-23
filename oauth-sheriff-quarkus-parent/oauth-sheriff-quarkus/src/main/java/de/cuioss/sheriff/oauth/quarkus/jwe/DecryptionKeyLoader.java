@@ -44,6 +44,8 @@ import java.util.Base64;
  * </ul>
  * <p>
  * Security: Passwords are cleared from {@code char[]} arrays after use.
+ *
+ * @since 1.0
  */
 @UtilityClass
 public class DecryptionKeyLoader {

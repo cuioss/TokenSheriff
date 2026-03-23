@@ -26,6 +26,8 @@ import java.util.List;
  * Configuration data for custom HTTP access logging filter.
  * This filter provides more granular control than Quarkus built-in access logging,
  * allowing filtering by HTTP status codes and specific paths.
+ *
+ * @since 1.0
  */
 @Value
 @Builder

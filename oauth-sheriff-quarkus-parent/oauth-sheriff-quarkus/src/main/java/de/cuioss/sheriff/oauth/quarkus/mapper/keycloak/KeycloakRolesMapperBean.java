@@ -35,6 +35,7 @@ import org.eclipse.microprofile.config.Config;
  * format. The mapper is applied globally to all configured issuers.
  * </p>
  *
+ * @since 1.0
  * @see KeycloakDefaultRolesMapper
  * @see DiscoverableClaimMapper
  */

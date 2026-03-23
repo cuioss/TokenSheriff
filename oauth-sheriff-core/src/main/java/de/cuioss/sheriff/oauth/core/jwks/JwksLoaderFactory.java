@@ -48,6 +48,7 @@ import lombok.experimental.UtilityClass;
  * <p>
  * See specification: <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#_jwksloader">Technical Components Specification - JwksLoader</a>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @UtilityClass

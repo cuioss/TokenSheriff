@@ -26,6 +26,8 @@ import org.eclipse.microprofile.config.Config;
  * This producer creates the configuration resolver instance and injects
  * it into dependent beans like {@link de.cuioss.sheriff.oauth.quarkus.logging.CustomAccessLogFilter}.
  * </p>
+ *
+ * @since 1.0
  */
 @ApplicationScoped
 public class AccessLogFilterConfigProducer {

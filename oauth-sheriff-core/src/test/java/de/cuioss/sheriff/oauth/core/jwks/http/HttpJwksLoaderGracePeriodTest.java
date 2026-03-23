@@ -453,7 +453,7 @@ class HttpJwksLoaderGracePeriodTest {
             moduleDispatcher.returnDefault();
 
             HttpJwksLoader loader = new HttpJwksLoader(config);
-            // Don't initialize the loader here - TokenValidator will do it via IssuerConfigResolver
+            // Don't initialize the loader here - TokenValidator will do it via IssuerConfigCache
 
             // Create IssuerConfig with our loader
             IssuerConfig issuerConfig = IssuerConfig.builder()
@@ -469,7 +469,7 @@ class HttpJwksLoaderGracePeriodTest {
                             .build())
                     .build();
 
-            // Wait for the loader to be initialized (IssuerConfigResolver triggers async loading)
+            // Wait for the loader to be initialized (IssuerConfigCache triggers async loading)
             await("Loader initialization")
                     .atMost(3, SECONDS)
                     .until(() -> loader.getLoaderStatus() == LoaderStatus.OK);

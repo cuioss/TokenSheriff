@@ -36,6 +36,7 @@ import java.util.*;
  * <p>
  * This class is immutable after construction and thread-safe.
  *
+ * @since 1.0
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc7516">RFC 7516 - JSON Web Encryption</a>
  */
 @Getter

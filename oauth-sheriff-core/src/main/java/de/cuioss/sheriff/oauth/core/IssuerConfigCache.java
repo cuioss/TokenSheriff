@@ -44,12 +44,13 @@ import static de.cuioss.sheriff.oauth.core.JWTValidationLogMessages.WARN;
  *   <li>A ConcurrentHashMap for mutable cache during initialization</li>
  *   <li>An immutable Map for optimal lock-free reads after all configs are loaded</li>
  * </ul>
+ * @since 1.0
  */
 @EqualsAndHashCode
 @ToString(of = {"mutableCache", "immutableCache", "loadingFutures"})
-public class IssuerConfigResolver {
+public class IssuerConfigCache {
 
-    private static final CuiLogger LOGGER = new CuiLogger(IssuerConfigResolver.class);
+    private static final CuiLogger LOGGER = new CuiLogger(IssuerConfigCache.class);
 
     /**
      * Mutable cache used during initialization phase.
@@ -84,7 +85,7 @@ public class IssuerConfigResolver {
      * @param issuerConfigs        collection of issuer configurations to manage, must not be null
      * @param securityEventCounter counter for security events, must not be null
      */
-    IssuerConfigResolver(Collection<IssuerConfig> issuerConfigs,
+    IssuerConfigCache(Collection<IssuerConfig> issuerConfigs,
             SecurityEventCounter securityEventCounter) {
         this.securityEventCounter = securityEventCounter;
         this.mutableCache = new ConcurrentHashMap<>();
@@ -124,7 +125,7 @@ public class IssuerConfigResolver {
             }
         }
 
-        LOGGER.debug("IssuerConfigResolver initialized with %s enabled configurations (%s total)", enabledCount, totalCount);
+        LOGGER.debug("IssuerConfigCache initialized with %s enabled configurations (%s total)", enabledCount, totalCount);
 
         // After all futures are registered, create a combined future to optimize cache when all complete
         if (!loadingFutures.isEmpty()) {

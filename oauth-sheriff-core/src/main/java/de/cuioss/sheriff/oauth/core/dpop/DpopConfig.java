@@ -36,6 +36,7 @@ import lombok.ToString;
  *   <li>{@code nonceCacheTtlSeconds} - TTL for jti replay entries (default: 300s).</li>
  * </ul>
  *
+ * @since 1.0
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc9449">RFC 9449 - OAuth 2.0 Demonstrating Proof of Possession (DPoP)</a>
  */
 @Getter

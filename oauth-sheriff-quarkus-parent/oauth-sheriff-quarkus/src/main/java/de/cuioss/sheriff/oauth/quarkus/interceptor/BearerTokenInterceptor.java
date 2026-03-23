@@ -76,6 +76,7 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.WAR
  *   <li>Successful validation allows method to proceed and access token via CDI event</li>
  * </ul>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @BearerAuth

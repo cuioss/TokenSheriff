@@ -34,6 +34,7 @@ import java.util.*;
  * {@code @RequestScoped} HttpServerRequest producer cannot provide a valid instance. This is wrapped behavior -
  * implementations may throw {@link IllegalStateException} which gets wrapped by CDI.</p>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public interface HttpServletRequestResolver {

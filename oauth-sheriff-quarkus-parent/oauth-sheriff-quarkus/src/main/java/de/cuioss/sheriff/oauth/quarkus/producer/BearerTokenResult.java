@@ -62,6 +62,7 @@ import java.util.Set;
  * }
  * }</pre>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @Value

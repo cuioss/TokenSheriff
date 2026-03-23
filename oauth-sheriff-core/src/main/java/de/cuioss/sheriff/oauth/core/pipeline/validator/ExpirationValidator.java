@@ -35,6 +35,7 @@ import lombok.RequiredArgsConstructor;
  * The validator includes a 60-second clock skew tolerance for the not-before validation
  * to account for time differences between token issuer and validator.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @RequiredArgsConstructor

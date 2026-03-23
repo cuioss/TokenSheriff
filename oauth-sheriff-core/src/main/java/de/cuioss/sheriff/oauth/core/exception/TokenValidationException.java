@@ -36,6 +36,7 @@ import java.io.Serial;
  * This exception is thrown by the validation pipeline when a token fails
  * validation.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class TokenValidationException extends RuntimeException {

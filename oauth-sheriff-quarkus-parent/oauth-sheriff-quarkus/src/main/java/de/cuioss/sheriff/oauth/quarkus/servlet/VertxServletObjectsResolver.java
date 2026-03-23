@@ -47,6 +47,7 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.ERR
  * <p><strong>Quarkus Context:</strong> This implementation works with Quarkus's Vertx-based HTTP layer
  * and provides access to HTTP request data through the native Vertx APIs.</p>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @ApplicationScoped

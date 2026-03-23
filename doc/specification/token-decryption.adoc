@@ -306,7 +306,7 @@ JWE decryption is transparent — it happens inside `NonValidatingJwtParser` and
                                    |
              +---------------------v---------------------+
              |   Existing pipeline (UNCHANGED)            |
-             |   IssuerConfigResolver --> HeaderValidator |
+             |   IssuerConfigCache --> HeaderValidator |
              |   --> SignatureValidator --> TokenBuilder  |
              |   --> ClaimValidator --> Cache             |
              +--------------------------------------------+

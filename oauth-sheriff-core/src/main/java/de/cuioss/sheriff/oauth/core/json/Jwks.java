@@ -30,6 +30,7 @@ import java.util.Optional;
  * The keys field is nullable to support permissive JSON parsing - business rule
  * validation should happen later in the validation chain.
  * 
+ * @since 1.0
  * @author Generated
  */
 @CompiledJson

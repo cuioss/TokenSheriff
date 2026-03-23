@@ -32,16 +32,16 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Concurrency tests for IssuerConfigResolver focusing on race conditions
+ * Concurrency tests for IssuerConfigCache focusing on race conditions
  * during the transition from ConcurrentHashMap to immutable map.
  *
  * This test reproduces the UnsupportedOperationException that occurs when:
  * 1. Thread A optimizes the cache to read-only (Map.copyOf)
  * 2. Thread B tries to put() into the now-immutable map
  */
-class IssuerConfigResolverConcurrencyTest {
+class IssuerConfigCacheConcurrencyTest {
 
-    private static final CuiLogger LOGGER = new CuiLogger(IssuerConfigResolverConcurrencyTest.class);
+    private static final CuiLogger LOGGER = new CuiLogger(IssuerConfigCacheConcurrencyTest.class);
 
     /**
      * Test specifically for the case where optimization happens while other threads
@@ -63,7 +63,7 @@ class IssuerConfigResolverConcurrencyTest {
             issuerIds.add(issuerId);
         }
 
-        IssuerConfigResolver resolver = new IssuerConfigResolver(
+        IssuerConfigCache resolver = new IssuerConfigCache(
                 issuerConfigs,
                 new SecurityEventCounter()
         );
@@ -125,7 +125,7 @@ class IssuerConfigResolverConcurrencyTest {
         IssuerConfig config = tokenHolder.getIssuerConfig();
         String issuerId = config.getIssuerIdentifier();
 
-        IssuerConfigResolver resolver = new IssuerConfigResolver(
+        IssuerConfigCache resolver = new IssuerConfigCache(
                 List.of(config),
                 new SecurityEventCounter()
         );
@@ -183,7 +183,7 @@ class IssuerConfigResolverConcurrencyTest {
             healthyIssuerIds.add(healthyId);
         }
 
-        IssuerConfigResolver resolver = new IssuerConfigResolver(
+        IssuerConfigCache resolver = new IssuerConfigCache(
                 issuerConfigs,
                 new SecurityEventCounter()
         );

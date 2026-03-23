@@ -98,6 +98,7 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.WAR
  * }
  * }</pre>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @ApplicationScoped

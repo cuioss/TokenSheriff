@@ -38,6 +38,7 @@ import java.util.Optional;
  * This implementation prioritizes the core fields needed for JWT validation while
  * maintaining extensibility for additional OpenID Connect discovery fields.
  *
+ * @since 1.0
  * @author Oliver Wolff
  * @see <a href="https://openid.net/specs/openid-connect-discovery-1_0.html">OpenID Connect Discovery</a>
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc8414">RFC 8414 - OAuth 2.0 Authorization Server Metadata</a>

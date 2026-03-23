@@ -69,6 +69,7 @@ import java.util.Optional;
  * @param apv The "apv" (Agreement PartyVInfo) Header Parameter (JWE only, RFC 7518 Section 4.6.1.3).
  *            Base64URL-encoded value for key derivation.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @CompiledJson

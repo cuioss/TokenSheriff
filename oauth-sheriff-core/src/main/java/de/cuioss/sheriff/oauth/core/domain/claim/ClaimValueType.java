@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
  * Defines the types of claim values supported by the system.
  * Based on the OAuth 2.0/OpenID Connect specifications and actual usage patterns.
  *
+ * @since 1.0
  */
 @Getter
 @RequiredArgsConstructor

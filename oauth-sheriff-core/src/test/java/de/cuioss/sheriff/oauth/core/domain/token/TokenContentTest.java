@@ -85,7 +85,7 @@ class TokenContentTest {
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
                 token::getIssuer);
-        assertTrue(exception.getMessage().contains("Issuer claim not presentin token"));
+        assertTrue(exception.getMessage().contains("Issuer claim not present in token"));
     }
 
     @Test

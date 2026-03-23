@@ -57,6 +57,7 @@ import java.util.concurrent.TimeUnit;
  * The cache verifies token content on each hit to handle potential hash collisions.
  * JWTs self-expire via their exp claim, reducing need for complex eviction strategies.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public class AccessTokenCache {

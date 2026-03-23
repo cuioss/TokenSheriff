@@ -63,7 +63,7 @@ enum "TokenType" as TokenType {
   ID_TOKEN
   REFRESH_TOKEN
   UNKNOWN
-  +fromTypClaim(typeClaimName: String): TokenType
+  +fromTypeClaim(typeClaimName: String): TokenType
 }
 
 Serializable <|-- MinimalTokenContent

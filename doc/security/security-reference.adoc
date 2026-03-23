@@ -30,7 +30,7 @@ Supported algorithms (preference order: ECDSA > EdDSA > RSA-PSS > RSA PKCS#1 v1.
 [[claims-validation]]
 === Claims Validation
 
-* **iss** (issuer) - validated by `IssuerConfigResolver` during issuer resolution
+* **iss** (issuer) - validated by `IssuerConfigCache` during issuer resolution
 * **sub** (subject) - mandatory, validated by `TokenClaimValidator`
 * **exp** (expiration) - mandatory, with configurable clock skew
 * **iat** (issued at) - extracted into token content but not actively validated

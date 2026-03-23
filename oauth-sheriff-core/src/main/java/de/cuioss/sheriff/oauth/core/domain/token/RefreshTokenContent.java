@@ -50,6 +50,7 @@ import java.util.Map;
  *   <li><a href="https://datatracker.ietf.org/doc/html/rfc7519">RFC 7519 - JWT</a></li>
  * </ul>
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 @ToString
@@ -63,10 +64,12 @@ public class RefreshTokenContent implements MinimalTokenContent {
     private final String rawToken;
 
     /**
-     * For cases the idp returns a JWT as Refresh-Token, this method returns a non-validated-claims-representation
-     * of the validation.
-     * <em>Note:</em> This is validation is not validated in any way
-     * It is never null but be empty
+     * Returns the claims extracted from the refresh token JWT, if applicable.
+     * <p>
+     * When the identity provider returns a JWT-formatted refresh token, this provides
+     * access to the raw claims. These claims are <em>not</em> validated in any way.
+     * <p>
+     * Never {@code null}, but may be empty.
      */
     @Getter
     private final Map<String, ClaimValue> claims;
@@ -77,7 +80,7 @@ public class RefreshTokenContent implements MinimalTokenContent {
     }
 
     /**
-     * Gets the validation type.
+     * Gets the token type.
      *
      * @return always TokenType.REFRESH_TOKEN
      */

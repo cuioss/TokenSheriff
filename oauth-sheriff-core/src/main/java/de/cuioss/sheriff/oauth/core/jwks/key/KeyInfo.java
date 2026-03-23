@@ -42,6 +42,7 @@ import java.security.PublicKey;
  *              particularly important in environments with key rotation, where multiple
  *              valid keys may exist simultaneously.
  *
+ * @since 1.0
  * @author Oliver Wolff
  */
 public record KeyInfo(

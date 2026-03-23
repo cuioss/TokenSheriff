@@ -41,6 +41,7 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.INF
  *   <li>Logs the number of registered mappers</li>
  * </ul>
  *
+ * @since 1.0
  * @see DiscoverableClaimMapper
  */
 @ApplicationScoped

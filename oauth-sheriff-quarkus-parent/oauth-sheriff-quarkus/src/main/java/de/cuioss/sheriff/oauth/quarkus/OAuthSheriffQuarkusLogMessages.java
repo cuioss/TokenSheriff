@@ -33,6 +33,7 @@ import lombok.experimental.UtilityClass;
  *   <li>200-299: ERROR level messages</li>
  * </ul>
  *
+ * @since 1.0
  * @see de.cuioss.tools.logging.LogRecord
  */
 @UtilityClass
