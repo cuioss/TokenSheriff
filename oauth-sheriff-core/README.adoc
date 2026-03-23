@@ -1,4 +1,4 @@
-= JWT Validation Module
+= OAuth Sheriff Core
 :toc: left
 :toclevels: 2
 :source-highlighter: highlight.js

@@ -1,4 +1,4 @@
-= JWT Validation API Reference
+= OAuth Sheriff Core API Reference
 :toc: left
 :toclevels: 3
 :source-highlighter: highlight.js
