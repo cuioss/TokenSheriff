@@ -19,7 +19,7 @@ This document provides a reference for all log messages used in the JWT Token Va
 
 === Log Message Format
 
-All messages follow the format: JWTValidation-[identifier]: [message]
+All messages follow the format: OAuthSheriff-[identifier]: [message]
 
 The log message levels follow these identifier ranges:
 
@@ -40,17 +40,17 @@ For more details about security events related to these log messages, see the Se
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
-|JWTValidation-001 |TOKEN |TokenValidator initialized with %s |Logged when TokenValidator is initialized with issuer configurations
-|JWTValidation-002 |JWKS |Keys updated due to data change - load state: %s |Logged when JWKS keys are updated due to data changes from the endpoint
-|JWTValidation-003 |JWKS |Successfully loaded JWKS from HTTP endpoint |Logged when JWKS is successfully loaded from HTTP endpoint
-|JWTValidation-004 |JWKS |Background JWKS refresh started with interval: %s seconds |Logged when background JWKS refresh is started with specified interval
-|JWTValidation-005 |JWKS |Background JWKS refresh updated keys, load state: %s |Logged when background JWKS refresh successfully updates keys
-|JWTValidation-006 |TOKEN |Skipping disabled issuer configuration %s |Logged when an issuer configuration is skipped because it's disabled
-|JWTValidation-007 |JWKS |Successfully resolved JWKS URI from well-known endpoint: %s |Logged when JWKS URI is successfully resolved via well-known discovery
-|JWTValidation-008 |RETRY |Retry operation '%s' completed successfully after %s attempts in %sms |Logged when a retry operation completes successfully with timing information
-|JWTValidation-009 |JWKS |JWKS loaded successfully for issuer: %s |Logged when JWKS is successfully loaded for a specific issuer
-|JWTValidation-010 |ISSUER |Issuer configuration loaded successfully: %s |Logged when an issuer configuration is successfully loaded
-|JWTValidation-011 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
+|OAuthSheriff-001 |TOKEN |TokenValidator initialized with %s |Logged when TokenValidator is initialized with issuer configurations
+|OAuthSheriff-002 |JWKS |Keys updated due to data change - load state: %s |Logged when JWKS keys are updated due to data changes from the endpoint
+|OAuthSheriff-003 |JWKS |Successfully loaded JWKS from HTTP endpoint |Logged when JWKS is successfully loaded from HTTP endpoint
+|OAuthSheriff-004 |JWKS |Background JWKS refresh started with interval: %s seconds |Logged when background JWKS refresh is started with specified interval
+|OAuthSheriff-005 |JWKS |Background JWKS refresh updated keys, load state: %s |Logged when background JWKS refresh successfully updates keys
+|OAuthSheriff-006 |TOKEN |Skipping disabled issuer configuration %s |Logged when an issuer configuration is skipped because it's disabled
+|OAuthSheriff-007 |JWKS |Successfully resolved JWKS URI from well-known endpoint: %s |Logged when JWKS URI is successfully resolved via well-known discovery
+|OAuthSheriff-008 |RETRY |Retry operation '%s' completed successfully after %s attempts in %sms |Logged when a retry operation completes successfully with timing information
+|OAuthSheriff-009 |JWKS |JWKS loaded successfully for issuer: %s |Logged when JWKS is successfully loaded for a specific issuer
+|OAuthSheriff-010 |ISSUER |Issuer configuration loaded successfully: %s |Logged when an issuer configuration is successfully loaded
+|OAuthSheriff-011 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
 |===
 
 == WARN Level (100-162)
@@ -58,69 +58,69 @@ For more details about security events related to these log messages, see the Se
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
-|JWTValidation-100 |TOKEN |Token exceeds maximum size limit of %s bytes, validation will be rejected |Logged when a token is rejected due to size constraints
-|JWTValidation-101 |TOKEN |The given validation was empty, request will be rejected |Logged when an empty or null token is provided
-|JWTValidation-102 |TOKEN |No key found with ID: %s |Logged when a key with the specified ID cannot be found in the JWKS
-|JWTValidation-103 |TOKEN |Failed to decode JWT Token |Logged when the JWT token cannot be decoded
-|JWTValidation-104 |TOKEN |Invalid JWT Token format: expected 3 parts (JWS) or 5 parts (JWE) but got %s |Logged when the JWT token format is invalid
-|JWTValidation-105 |TOKEN |Decoded part exceeds maximum size limit of %s bytes |Logged when a decoded part of the token exceeds the maximum size limit
-|JWTValidation-106 |TOKEN |Unsupported algorithm: %s |Logged when an unsupported algorithm is encountered
-|JWTValidation-107 |TOKEN |Token has a 'not before' claim that is more than 60 seconds in the future |Logged when a token has a 'not before' claim that is too far in the future
-|JWTValidation-108 |TOKEN |Unknown validation type: %s |Logged when an unknown token type is encountered
-|JWTValidation-109 |TOKEN |Token is missing required claim: %s |Logged when a token is missing a required claim
-|JWTValidation-110 |TOKEN |Token has expired |Logged when a token has expired
-|JWTValidation-111 |TOKEN |Token authorized party '%s' does not match expected client ID '%s' |Logged when the azp claim in the token does not match the expected client ID
-|JWTValidation-112 |TOKEN |Missing recommended element: %s |Logged when a recommended element is missing from the token
-|JWTValidation-113 |TOKEN |Token audience %s does not match any of the expected audiences %s |Logged when the audience in the token does not match any of the expected audiences
-|JWTValidation-114 |TOKEN |No configuration found for issuer: %s |Logged when no configuration is found for the issuer
-|JWTValidation-115 |TOKEN |Algorithm %s is explicitly rejected for security reasons |Logged when an algorithm is explicitly rejected for security reasons
-|JWTValidation-116 |JWKS |Creating HttpJwksLoaderConfig with invalid JWKS URI. The loader will return empty results. |Logged when an invalid JWKS URI is provided to HttpJwksLoaderConfig
-|JWTValidation-117 |JWKS |Load operation failed but using cached content |Logged when JWKS load operation fails but cached content is available and used
-|JWTValidation-118 |JWKS |Load operation failed with no cached content available |Logged when JWKS load operation fails and no cached content is available
-|JWTValidation-119 |JWKS |JWK is missing required field 'kty' |Logged when a JWK key is missing the required 'kty' parameter
-|JWTValidation-120 |JWKS |Unsupported key type: %s |Logged when an unsupported JWK key type is encountered
-|JWTValidation-121 |JWKS |Key ID exceeds maximum length: %s |Logged when a JWK key ID exceeds the maximum allowed length
-|JWTValidation-122 |JWKS |Invalid or unsupported algorithm: %s |Logged when an invalid or unsupported algorithm is encountered in a JWK
-|JWTValidation-123 |TOKEN |Found unhealthy issuer config: %s |Logged when an issuer configuration is found to be unhealthy during health checks
-|JWTValidation-124 |JWKS |Background refresh skipped - no HTTP cache available |Logged when background JWKS refresh is skipped due to missing HTTP cache
-|JWTValidation-125 |JWKS |Background JWKS refresh failed: %s |Logged when background JWKS refresh operation fails
-|JWTValidation-126 |JWKS |Failed to resolve JWKS URI from well-known resolver |Logged when JWKS URI resolution fails from well-known discovery
-|JWTValidation-127 |JWKS |JWKS object is null |Logged when JWKS object validation fails due to null object
-|JWTValidation-128 |JWKS |JWKS keys array exceeds maximum size: %s |Logged when JWKS keys array exceeds the maximum allowed size
-|JWTValidation-129 |JWKS |JWKS keys array is empty |Logged when JWKS keys array is empty
-|JWTValidation-130 |JWKS |Failed to parse RSA key with ID %s: %s |Logged when RSA key parsing fails for a specific key ID
-|JWTValidation-131 |JWKS |Failed to parse EC key with ID %s: %s |Logged when EC key parsing fails for a specific key ID
-|JWTValidation-132 |RETRY |Retry operation '%s' failed after %s attempts in %sms |Logged when a retry operation fails after exhausting all attempts
-|JWTValidation-133 |JSON |Failed to parse JWKS JSON: %s |Logged when JSON parsing fails for JWKS content and an empty result is returned as fallback
-|JWTValidation-134 |ISSUER |IssuerConfig for issuer '%s' has claimSubOptional=true. This is not conform to RFC 7519 which requires the 'sub' claim for ACCESS_TOKEN and ID_TOKEN types. Use this setting only when necessary and ensure appropriate alternative validation mechanisms. |Logged when an issuer configuration has the subject claim marked as optional, which violates RFC 7519 requirements
-|JWTValidation-135 |JWKS |Invalid Base64 URL encoding detected for JWK field: %s |Logged when Base64 URL encoding validation fails for a JWK field
-|JWTValidation-136 |JWKS |Background refresh skipped - no HTTP handler available |Logged when background JWKS refresh is skipped because no HTTP handler is available
-|JWTValidation-137 |JWKS |Background refresh IO error: %s for issuer: %s |Logged when an IO error occurs during background JWKS refresh for a specific issuer
-|JWTValidation-138 |JWKS |Background refresh parse error: %s for issuer: %s |Logged when a JSON parsing error occurs during background JWKS refresh for a specific issuer
-|JWTValidation-139 |JWKS |Background refresh key processing error: %s for issuer: %s |Logged when a key processing error occurs during background JWKS refresh for a specific issuer
-|JWTValidation-140 |ISSUER |Failed to load issuer configuration for %s, status: %s |Logged when issuer configuration loading fails with a specific status
-|JWTValidation-141 |JWKS |Timeout waiting for JWKS to load for issuer: %s |Logged when JWKS loading times out for a specific issuer
-|JWTValidation-142 |JWKS |Interrupted while waiting for JWKS to load for issuer: %s |Logged when the thread is interrupted while waiting for JWKS to load
-|JWTValidation-143 |JWKS |Configured issuer '%s' does not match discovered issuer '%s' from well-known document |Logged when there is a mismatch between configured and discovered issuer from well-known endpoint
-|JWTValidation-144 |JWKS |Using insecure HTTP protocol for JWKS endpoint: %s - HTTPS should be used in production |Logged when an insecure HTTP protocol is used for JWKS endpoint instead of HTTPS
-|JWTValidation-145 |JWKS |DSL-JSON returned null for JWKS parsing |Logged when DSL-JSON parser returns null while parsing JWKS content
-|JWTValidation-146 |JWKS |Failed to parse JWKS content: %s |Logged when JWKS content parsing fails due to IO error or invalid JSON structure
-|JWTValidation-147 |JWKS |Failed to parse OKP key with ID %s: %s |Logged when OKP (EdDSA) key parsing fails for a specific key ID
-|JWTValidation-148 |TOKEN |Token type '%s' does not match expected type '%s' |Logged when the JWT typ header does not match the expected token type configured for the issuer (RFC 9068 validation)
-|JWTValidation-149 |DPOP |DPoP proof is required but the DPoP HTTP header is missing |Logged when a DPoP proof is expected (cnf.jkt present or dpop.required=true) but the DPoP HTTP header is absent
-|JWTValidation-150 |DPOP |DPoP proof has invalid format: %s |Logged when the DPoP proof JWT cannot be decoded or has structural issues (wrong typ, unsupported algorithm, missing jwk, invalid signature)
-|JWTValidation-151 |DPOP |DPoP proof iat claim is outside acceptable freshness window |Logged when the DPoP proof iat claim is too old or too far in the future
-|JWTValidation-152 |DPOP |DPoP proof JWK thumbprint '%s' does not match token cnf.jkt '%s' |Logged when the computed JWK Thumbprint (RFC 7638) of the DPoP proof's public key does not match the cnf.jkt claim in the access token
-|JWTValidation-153 |DPOP |DPoP proof replay detected for jti: %s |Logged when a DPoP proof with a previously seen jti value is detected (replay attack)
-|JWTValidation-154 |DPOP |DPoP proof is missing required claim: %s |Logged when the DPoP proof JWT body is missing a required claim (jti, iat, or ath)
-|JWTValidation-155 |DPOP |DPoP proof ath claim does not match access token hash |Logged when the DPoP proof ath claim (SHA-256 hash of the access token) does not match the actual access token
-|JWTValidation-156 |DPOP |DPoP is required but access token does not contain cnf.jkt claim |Logged when DPoP validation is required or a DPoP proof is provided but the access token lacks the cnf.jkt claim
-|JWTValidation-157 |JWE |Failed to decrypt JWE token: %s |Logged when JWE decryption fails due to cryptographic errors (wrong key, tampered content, etc.)
-|JWTValidation-158 |JWE |Unsupported JWE algorithm: alg=%s, enc=%s |Logged when a JWE token uses an unsupported or rejected algorithm combination
-|JWTValidation-159 |JWE |Received JWE token but no decryption configuration is available |Logged when a 5-part JWE token is received but no JweDecryptionConfig was configured on TokenValidator
-|JWTValidation-160 |JWE |No decryption key found for key ID: %s |Logged when the JWE header references a kid that has no matching decryption key and no default key is configured
-|JWTValidation-161 |JWE |Unsupported JWE compression algorithm: %s |Logged when a JWE token uses an unsupported compression algorithm (only DEF/DEFLATE is supported)
-|JWTValidation-162 |JWE |Nested JWE tokens are not allowed |Logged when decrypting a JWE token reveals another JWE (5-part) token instead of the expected inner JWS
+|OAuthSheriff-100 |TOKEN |Token exceeds maximum size limit of %s bytes, validation will be rejected |Logged when a token is rejected due to size constraints
+|OAuthSheriff-101 |TOKEN |The given validation was empty, request will be rejected |Logged when an empty or null token is provided
+|OAuthSheriff-102 |TOKEN |No key found with ID: %s |Logged when a key with the specified ID cannot be found in the JWKS
+|OAuthSheriff-103 |TOKEN |Failed to decode JWT Token |Logged when the JWT token cannot be decoded
+|OAuthSheriff-104 |TOKEN |Invalid JWT Token format: expected 3 parts (JWS) or 5 parts (JWE) but got %s |Logged when the JWT token format is invalid
+|OAuthSheriff-105 |TOKEN |Decoded part exceeds maximum size limit of %s bytes |Logged when a decoded part of the token exceeds the maximum size limit
+|OAuthSheriff-106 |TOKEN |Unsupported algorithm: %s |Logged when an unsupported algorithm is encountered
+|OAuthSheriff-107 |TOKEN |Token has a 'not before' claim that is more than 60 seconds in the future |Logged when a token has a 'not before' claim that is too far in the future
+|OAuthSheriff-108 |TOKEN |Unknown validation type: %s |Logged when an unknown token type is encountered
+|OAuthSheriff-109 |TOKEN |Token is missing required claim: %s |Logged when a token is missing a required claim
+|OAuthSheriff-110 |TOKEN |Token has expired |Logged when a token has expired
+|OAuthSheriff-111 |TOKEN |Token authorized party '%s' does not match expected client ID '%s' |Logged when the azp claim in the token does not match the expected client ID
+|OAuthSheriff-112 |TOKEN |Missing recommended element: %s |Logged when a recommended element is missing from the token
+|OAuthSheriff-113 |TOKEN |Token audience %s does not match any of the expected audiences %s |Logged when the audience in the token does not match any of the expected audiences
+|OAuthSheriff-114 |TOKEN |No configuration found for issuer: %s |Logged when no configuration is found for the issuer
+|OAuthSheriff-115 |TOKEN |Algorithm %s is explicitly rejected for security reasons |Logged when an algorithm is explicitly rejected for security reasons
+|OAuthSheriff-116 |JWKS |Creating HttpJwksLoaderConfig with invalid JWKS URI. The loader will return empty results. |Logged when an invalid JWKS URI is provided to HttpJwksLoaderConfig
+|OAuthSheriff-117 |JWKS |Load operation failed but using cached content |Logged when JWKS load operation fails but cached content is available and used
+|OAuthSheriff-118 |JWKS |Load operation failed with no cached content available |Logged when JWKS load operation fails and no cached content is available
+|OAuthSheriff-119 |JWKS |JWK is missing required field 'kty' |Logged when a JWK key is missing the required 'kty' parameter
+|OAuthSheriff-120 |JWKS |Unsupported key type: %s |Logged when an unsupported JWK key type is encountered
+|OAuthSheriff-121 |JWKS |Key ID exceeds maximum length: %s |Logged when a JWK key ID exceeds the maximum allowed length
+|OAuthSheriff-122 |JWKS |Invalid or unsupported algorithm: %s |Logged when an invalid or unsupported algorithm is encountered in a JWK
+|OAuthSheriff-123 |TOKEN |Found unhealthy issuer config: %s |Logged when an issuer configuration is found to be unhealthy during health checks
+|OAuthSheriff-124 |JWKS |Background refresh skipped - no HTTP cache available |Logged when background JWKS refresh is skipped due to missing HTTP cache
+|OAuthSheriff-125 |JWKS |Background JWKS refresh failed: %s |Logged when background JWKS refresh operation fails
+|OAuthSheriff-126 |JWKS |Failed to resolve JWKS URI from well-known resolver |Logged when JWKS URI resolution fails from well-known discovery
+|OAuthSheriff-127 |JWKS |JWKS object is null |Logged when JWKS object validation fails due to null object
+|OAuthSheriff-128 |JWKS |JWKS keys array exceeds maximum size: %s |Logged when JWKS keys array exceeds the maximum allowed size
+|OAuthSheriff-129 |JWKS |JWKS keys array is empty |Logged when JWKS keys array is empty
+|OAuthSheriff-130 |JWKS |Failed to parse RSA key with ID %s: %s |Logged when RSA key parsing fails for a specific key ID
+|OAuthSheriff-131 |JWKS |Failed to parse EC key with ID %s: %s |Logged when EC key parsing fails for a specific key ID
+|OAuthSheriff-132 |RETRY |Retry operation '%s' failed after %s attempts in %sms |Logged when a retry operation fails after exhausting all attempts
+|OAuthSheriff-133 |JSON |Failed to parse JWKS JSON: %s |Logged when JSON parsing fails for JWKS content and an empty result is returned as fallback
+|OAuthSheriff-134 |ISSUER |IssuerConfig for issuer '%s' has claimSubOptional=true. This is not conform to RFC 7519 which requires the 'sub' claim for ACCESS_TOKEN and ID_TOKEN types. Use this setting only when necessary and ensure appropriate alternative validation mechanisms. |Logged when an issuer configuration has the subject claim marked as optional, which violates RFC 7519 requirements
+|OAuthSheriff-135 |JWKS |Invalid Base64 URL encoding detected for JWK field: %s |Logged when Base64 URL encoding validation fails for a JWK field
+|OAuthSheriff-136 |JWKS |Background refresh skipped - no HTTP handler available |Logged when background JWKS refresh is skipped because no HTTP handler is available
+|OAuthSheriff-137 |JWKS |Background refresh IO error: %s for issuer: %s |Logged when an IO error occurs during background JWKS refresh for a specific issuer
+|OAuthSheriff-138 |JWKS |Background refresh parse error: %s for issuer: %s |Logged when a JSON parsing error occurs during background JWKS refresh for a specific issuer
+|OAuthSheriff-139 |JWKS |Background refresh key processing error: %s for issuer: %s |Logged when a key processing error occurs during background JWKS refresh for a specific issuer
+|OAuthSheriff-140 |ISSUER |Failed to load issuer configuration for %s, status: %s |Logged when issuer configuration loading fails with a specific status
+|OAuthSheriff-141 |JWKS |Timeout waiting for JWKS to load for issuer: %s |Logged when JWKS loading times out for a specific issuer
+|OAuthSheriff-142 |JWKS |Interrupted while waiting for JWKS to load for issuer: %s |Logged when the thread is interrupted while waiting for JWKS to load
+|OAuthSheriff-143 |JWKS |Configured issuer '%s' does not match discovered issuer '%s' from well-known document |Logged when there is a mismatch between configured and discovered issuer from well-known endpoint
+|OAuthSheriff-144 |JWKS |Using insecure HTTP protocol for JWKS endpoint: %s - HTTPS should be used in production |Logged when an insecure HTTP protocol is used for JWKS endpoint instead of HTTPS
+|OAuthSheriff-145 |JWKS |DSL-JSON returned null for JWKS parsing |Logged when DSL-JSON parser returns null while parsing JWKS content
+|OAuthSheriff-146 |JWKS |Failed to parse JWKS content: %s |Logged when JWKS content parsing fails due to IO error or invalid JSON structure
+|OAuthSheriff-147 |JWKS |Failed to parse OKP key with ID %s: %s |Logged when OKP (EdDSA) key parsing fails for a specific key ID
+|OAuthSheriff-148 |TOKEN |Token type '%s' does not match expected type '%s' |Logged when the JWT typ header does not match the expected token type configured for the issuer (RFC 9068 validation)
+|OAuthSheriff-149 |DPOP |DPoP proof is required but the DPoP HTTP header is missing |Logged when a DPoP proof is expected (cnf.jkt present or dpop.required=true) but the DPoP HTTP header is absent
+|OAuthSheriff-150 |DPOP |DPoP proof has invalid format: %s |Logged when the DPoP proof JWT cannot be decoded or has structural issues (wrong typ, unsupported algorithm, missing jwk, invalid signature)
+|OAuthSheriff-151 |DPOP |DPoP proof iat claim is outside acceptable freshness window |Logged when the DPoP proof iat claim is too old or too far in the future
+|OAuthSheriff-152 |DPOP |DPoP proof JWK thumbprint '%s' does not match token cnf.jkt '%s' |Logged when the computed JWK Thumbprint (RFC 7638) of the DPoP proof's public key does not match the cnf.jkt claim in the access token
+|OAuthSheriff-153 |DPOP |DPoP proof replay detected for jti: %s |Logged when a DPoP proof with a previously seen jti value is detected (replay attack)
+|OAuthSheriff-154 |DPOP |DPoP proof is missing required claim: %s |Logged when the DPoP proof JWT body is missing a required claim (jti, iat, or ath)
+|OAuthSheriff-155 |DPOP |DPoP proof ath claim does not match access token hash |Logged when the DPoP proof ath claim (SHA-256 hash of the access token) does not match the actual access token
+|OAuthSheriff-156 |DPOP |DPoP is required but access token does not contain cnf.jkt claim |Logged when DPoP validation is required or a DPoP proof is provided but the access token lacks the cnf.jkt claim
+|OAuthSheriff-157 |JWE |Failed to decrypt JWE token: %s |Logged when JWE decryption fails due to cryptographic errors (wrong key, tampered content, etc.)
+|OAuthSheriff-158 |JWE |Unsupported JWE algorithm: alg=%s, enc=%s |Logged when a JWE token uses an unsupported or rejected algorithm combination
+|OAuthSheriff-159 |JWE |Received JWE token but no decryption configuration is available |Logged when a 5-part JWE token is received but no JweDecryptionConfig was configured on TokenValidator
+|OAuthSheriff-160 |JWE |No decryption key found for key ID: %s |Logged when the JWE header references a kid that has no matching decryption key and no default key is configured
+|OAuthSheriff-161 |JWE |Unsupported JWE compression algorithm: %s |Logged when a JWE token uses an unsupported compression algorithm (only DEF/DEFLATE is supported)
+|OAuthSheriff-162 |JWE |Nested JWE tokens are not allowed |Logged when decrypting a JWE token reveals another JWE (5-part) token instead of the expected inner JWS
 |===
 
 == ERROR Level (200-211)
@@ -128,18 +128,18 @@ For more details about security events related to these log messages, see the Se
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
-|JWTValidation-200 |TOKEN |Failed to validate validation signature: %s |Logged when a token signature validation fails
-|JWTValidation-201 |JWKS |JWKS content size exceeds maximum allowed size (upperLimit=%s, actual=%s) |Logged when the JWKS content size exceeds the maximum allowed size, showing both the configured upper limit and the actual content size
-|JWTValidation-202 |JWKS |Failed to parse JWKS JSON: %s |Logged when there is an error parsing the JWKS JSON
-|JWTValidation-203 |JWKS |Failed to load JWKS |Logged when a JWKS load operation fails
-|JWTValidation-204 |JWKS |Unsupported JwksType for HttpJwksLoader: %s |Logged when an unsupported JWKS type is encountered in HttpJwksLoader
-|JWTValidation-205 |WELLKNOWN |Failed to parse JSON from %s: %s |Logged when JSON parsing fails for a well-known discovery document
-|JWTValidation-206 |CACHE |Token passed validation but has no expiration time - this indicates a validation bug |Logged when a validated token unexpectedly has no expiration time, indicating a validation pipeline bug
-|JWTValidation-207 |CACHE |Unexpected error while caching token |Logged when an unexpected error occurs while storing a validated token in the cache
-|JWTValidation-208 |CACHE |Validation function returned null instead of throwing exception |Logged when a validation function unexpectedly returns null instead of throwing an exception on failure
-|JWTValidation-209 |CACHE |Error during cache eviction |Logged when an error occurs during background cache eviction operations
-|JWTValidation-210 |JWKS |JWKS initialization failed: %s for issuer: %s |Logged when JWKS initialization fails for a specific issuer with error details
-|JWTValidation-211 |JWKS |JWKS load execution failed: %s for issuer: %s |Logged when JWKS load execution fails for a specific issuer with error details
+|OAuthSheriff-200 |TOKEN |Failed to validate validation signature: %s |Logged when a token signature validation fails
+|OAuthSheriff-201 |JWKS |JWKS content size exceeds maximum allowed size (upperLimit=%s, actual=%s) |Logged when the JWKS content size exceeds the maximum allowed size, showing both the configured upper limit and the actual content size
+|OAuthSheriff-202 |JWKS |Failed to parse JWKS JSON: %s |Logged when there is an error parsing the JWKS JSON
+|OAuthSheriff-203 |JWKS |Failed to load JWKS |Logged when a JWKS load operation fails
+|OAuthSheriff-204 |JWKS |Unsupported JwksType for HttpJwksLoader: %s |Logged when an unsupported JWKS type is encountered in HttpJwksLoader
+|OAuthSheriff-205 |WELLKNOWN |Failed to parse JSON from %s: %s |Logged when JSON parsing fails for a well-known discovery document
+|OAuthSheriff-206 |CACHE |Token passed validation but has no expiration time - this indicates a validation bug |Logged when a validated token unexpectedly has no expiration time, indicating a validation pipeline bug
+|OAuthSheriff-207 |CACHE |Unexpected error while caching token |Logged when an unexpected error occurs while storing a validated token in the cache
+|OAuthSheriff-208 |CACHE |Validation function returned null instead of throwing exception |Logged when a validation function unexpectedly returns null instead of throwing an exception on failure
+|OAuthSheriff-209 |CACHE |Error during cache eviction |Logged when an error occurs during background cache eviction operations
+|OAuthSheriff-210 |JWKS |JWKS initialization failed: %s for issuer: %s |Logged when JWKS initialization fails for a specific issuer with error details
+|OAuthSheriff-211 |JWKS |JWKS load execution failed: %s for issuer: %s |Logged when JWKS load execution fails for a specific issuer with error details
 |===
 
 == Quarkus Integration Messages
@@ -154,10 +154,10 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-001 |RESOLVING_ISSUER_CONFIGURATIONS |"Resolving issuer configurations from properties" |Indicates the start of issuer configuration resolution from application properties
-|OAUTH_SHERIFF_QUARKUS-002 |RESOLVED_ISSUER_CONFIGURATION |"Resolved issuer configuration: %s" |Shows a single resolved issuer configuration with its details
-|OAUTH_SHERIFF_QUARKUS-003 |RESOLVED_ENABLED_ISSUER_CONFIGURATIONS |"Resolved %s enabled issuer configurations" |Summary count of all enabled issuer configurations found
-|OAUTH_SHERIFF_QUARKUS-004 |RESOLVED_PARSER_CONFIG |"Resolved ParserConfig: maxTokenSize=%s bytes, maxPayloadSize=%s bytes, maxStringLength=%s, maxBufferSize=%s" |Shows the resolved JWT parser configuration limits
+|OAuthSheriff_Q-001 |RESOLVING_ISSUER_CONFIGURATIONS |"Resolving issuer configurations from properties" |Indicates the start of issuer configuration resolution from application properties
+|OAuthSheriff_Q-002 |RESOLVED_ISSUER_CONFIGURATION |"Resolved issuer configuration: %s" |Shows a single resolved issuer configuration with its details
+|OAuthSheriff_Q-003 |RESOLVED_ENABLED_ISSUER_CONFIGURATIONS |"Resolved %s enabled issuer configurations" |Summary count of all enabled issuer configurations found
+|OAuthSheriff_Q-004 |RESOLVED_PARSER_CONFIG |"Resolved ParserConfig: maxTokenSize=%s bytes, maxPayloadSize=%s bytes, maxStringLength=%s, maxBufferSize=%s" |Shows the resolved JWT parser configuration limits
 |===
 
 ==== Validation Messages (011-020)
@@ -166,11 +166,11 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-011 |INITIALIZING_JWT_VALIDATION_COMPONENTS |"Initializing JWT validation components from configuration" |Indicates the start of JWT validation component initialization
-|OAUTH_SHERIFF_QUARKUS-012 |JWT_VALIDATION_COMPONENTS_INITIALIZED |"JWT validation components initialized successfully with %s issuers" |Confirms successful initialization with issuer count
-|OAUTH_SHERIFF_QUARKUS-013 |RESOLVING_ACCESS_LOG_FILTER_CONFIG |"Resolving access log filter configuration from properties" |Indicates the start of access log filter configuration resolution
-|OAUTH_SHERIFF_QUARKUS-014 |CLAIM_MAPPER_REGISTRY_INITIALIZED |"Claim mapper registry initialized with %s custom mapper(s): %s" |Shows the number of custom claim mappers discovered and their names
-|OAUTH_SHERIFF_QUARKUS-015 |NO_CUSTOM_CLAIM_MAPPERS_DISCOVERED |"No custom claim mappers discovered" |Indicates that no custom claim mappers were found during CDI discovery
+|OAuthSheriff_Q-011 |INITIALIZING_JWT_VALIDATION_COMPONENTS |"Initializing JWT validation components from configuration" |Indicates the start of JWT validation component initialization
+|OAuthSheriff_Q-012 |JWT_VALIDATION_COMPONENTS_INITIALIZED |"JWT validation components initialized successfully with %s issuers" |Confirms successful initialization with issuer count
+|OAuthSheriff_Q-013 |RESOLVING_ACCESS_LOG_FILTER_CONFIG |"Resolving access log filter configuration from properties" |Indicates the start of access log filter configuration resolution
+|OAuthSheriff_Q-014 |CLAIM_MAPPER_REGISTRY_INITIALIZED |"Claim mapper registry initialized with %s custom mapper(s): %s" |Shows the number of custom claim mappers discovered and their names
+|OAuthSheriff_Q-015 |NO_CUSTOM_CLAIM_MAPPERS_DISCOVERED |"No custom claim mappers discovered" |Indicates that no custom claim mappers were found during CDI discovery
 |===
 
 ==== Metrics Messages (021-022)
@@ -179,8 +179,8 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-021 |INITIALIZING_JWT_METRICS_COLLECTOR |"Initializing JwtMetricsCollector" |Indicates the start of JWT metrics collector initialization
-|OAUTH_SHERIFF_QUARKUS-022 |JWT_METRICS_COLLECTOR_INITIALIZED |"JwtMetricsCollector initialized with %s event types" |Confirms successful initialization with event type count
+|OAuthSheriff_Q-021 |INITIALIZING_JWT_METRICS_COLLECTOR |"Initializing JwtMetricsCollector" |Indicates the start of JWT metrics collector initialization
+|OAuthSheriff_Q-022 |JWT_METRICS_COLLECTOR_INITIALIZED |"JwtMetricsCollector initialized with %s event types" |Confirms successful initialization with event type count
 |===
 
 ==== JWE Configuration Messages (031-034)
@@ -189,10 +189,10 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-031 |JWE_DECRYPTION_CONFIG_RESOLVING |"Resolving JWE decryption configuration from properties" |Indicates the start of JWE decryption configuration resolution
-|OAUTH_SHERIFF_QUARKUS-032 |JWE_DECRYPTION_CONFIG_RESOLVED |"JWE decryption configuration resolved with %s key(s)" |Shows the number of JWE decryption keys resolved
-|OAUTH_SHERIFF_QUARKUS-033 |JWE_CONFIG_CHECK |"JWE config check: singleKeyPath=%s, keystorePath=%s, multiKeys=%s" |Logs the JWE configuration sources being checked
-|OAUTH_SHERIFF_QUARKUS-034 |JWE_DECRYPTION_NOT_CONFIGURED |"No JWE decryption configuration found - JWE support disabled" |Indicates that no JWE decryption configuration was found
+|OAuthSheriff_Q-031 |JWE_DECRYPTION_CONFIG_RESOLVING |"Resolving JWE decryption configuration from properties" |Indicates the start of JWE decryption configuration resolution
+|OAuthSheriff_Q-032 |JWE_DECRYPTION_CONFIG_RESOLVED |"JWE decryption configuration resolved with %s key(s)" |Shows the number of JWE decryption keys resolved
+|OAuthSheriff_Q-033 |JWE_CONFIG_CHECK |"JWE config check: singleKeyPath=%s, keystorePath=%s, multiKeys=%s" |Logs the JWE configuration sources being checked
+|OAuthSheriff_Q-034 |JWE_DECRYPTION_NOT_CONFIGURED |"No JWE decryption configuration found - JWE support disabled" |Indicates that no JWE decryption configuration was found
 |===
 
 ==== Cache Messages (041-043)
@@ -201,9 +201,9 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-041 |RESOLVING_ACCESS_TOKEN_CACHE_CONFIG |"Resolving access token cache configuration from properties" |Indicates the start of access token cache configuration resolution
-|OAUTH_SHERIFF_QUARKUS-042 |ACCESS_TOKEN_CACHE_DISABLED |"Access token cache disabled (maxSize=0)" |Indicates that the access token cache is disabled
-|OAUTH_SHERIFF_QUARKUS-043 |ACCESS_TOKEN_CACHE_CONFIGURED |"Access token cache configured: maxSize=%s, evictionIntervalSeconds=%s" |Shows the configured access token cache settings
+|OAuthSheriff_Q-041 |RESOLVING_ACCESS_TOKEN_CACHE_CONFIG |"Resolving access token cache configuration from properties" |Indicates the start of access token cache configuration resolution
+|OAuthSheriff_Q-042 |ACCESS_TOKEN_CACHE_DISABLED |"Access token cache disabled (maxSize=0)" |Indicates that the access token cache is disabled
+|OAuthSheriff_Q-043 |ACCESS_TOKEN_CACHE_CONFIGURED |"Access token cache configured: maxSize=%s, evictionIntervalSeconds=%s" |Shows the configured access token cache settings
 |===
 
 ==== Metrics Management Messages (051-052)
@@ -212,8 +212,8 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-051 |CLEARING_JWT_METRICS |"Clearing all JWT metrics" |Indicates that all JWT metrics are being cleared
-|OAUTH_SHERIFF_QUARKUS-052 |JWT_METRICS_CLEARED |"JWT metrics cleared successfully" |Confirms successful clearing of JWT metrics
+|OAuthSheriff_Q-051 |CLEARING_JWT_METRICS |"Clearing all JWT metrics" |Indicates that all JWT metrics are being cleared
+|OAuthSheriff_Q-052 |JWT_METRICS_CLEARED |"JWT metrics cleared successfully" |Confirms successful clearing of JWT metrics
 |===
 
 ==== JWKS Startup Messages (060-064)
@@ -222,11 +222,11 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-060 |JWKS_STARTUP_SERVICE_INITIALIZED |"JWKS startup service activated for background key loading" |Indicates that the JWKS startup service has been activated
-|OAUTH_SHERIFF_QUARKUS-061 |STARTING_ASYNCHRONOUS_JWKS_INITIALIZATION |"Starting asynchronous JWKS initialization for %s issuer(s)" |Indicates the start of background JWKS loading with issuer count
-|OAUTH_SHERIFF_QUARKUS-062 |NO_ISSUER_CONFIGURATIONS_FOUND |"No issuer configurations found - skipping JWKS initialization" |Indicates that JWKS initialization is skipped due to no configured issuers
-|OAUTH_SHERIFF_QUARKUS-063 |BACKGROUND_JWKS_INITIALIZATION_COMPLETED |"Background JWKS initialization completed successfully" |Confirms successful completion of background JWKS initialization
-|OAUTH_SHERIFF_QUARKUS-064 |BACKGROUND_JWKS_LOADING_COMPLETED_FOR_ISSUER |"Background JWKS loading completed for issuer: %s with status: %s" |Shows the completion status for a specific issuer's JWKS loading
+|OAuthSheriff_Q-060 |JWKS_STARTUP_SERVICE_INITIALIZED |"JWKS startup service activated for background key loading" |Indicates that the JWKS startup service has been activated
+|OAuthSheriff_Q-061 |STARTING_ASYNCHRONOUS_JWKS_INITIALIZATION |"Starting asynchronous JWKS initialization for %s issuer(s)" |Indicates the start of background JWKS loading with issuer count
+|OAuthSheriff_Q-062 |NO_ISSUER_CONFIGURATIONS_FOUND |"No issuer configurations found - skipping JWKS initialization" |Indicates that JWKS initialization is skipped due to no configured issuers
+|OAuthSheriff_Q-063 |BACKGROUND_JWKS_INITIALIZATION_COMPLETED |"Background JWKS initialization completed successfully" |Confirms successful completion of background JWKS initialization
+|OAuthSheriff_Q-064 |BACKGROUND_JWKS_LOADING_COMPLETED_FOR_ISSUER |"Background JWKS loading completed for issuer: %s with status: %s" |Shows the completion status for a specific issuer's JWKS loading
 |===
 
 ==== Access Log Filter Messages (065-066)
@@ -235,8 +235,8 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-065 |CUSTOM_ACCESS_LOG_FILTER_INITIALIZED |"CustomAccessLogFilter initialized: %s" |Shows the initialized access log filter configuration
-|OAUTH_SHERIFF_QUARKUS-066 |ACCESS_LOG_ENTRY |"%s" |Individual access log entry in the configured format
+|OAuthSheriff_Q-065 |CUSTOM_ACCESS_LOG_FILTER_INITIALIZED |"CustomAccessLogFilter initialized: %s" |Shows the initialized access log filter configuration
+|OAuthSheriff_Q-066 |ACCESS_LOG_ENTRY |"%s" |Individual access log entry in the configured format
 |===
 
 === Quarkus WARN Level (100-199)
@@ -247,7 +247,7 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-100 |ERROR_CHECKING_JWKS_LOADER |"Error checking JWKS loader for issuer %s: %s" |Indicates an error occurred while checking JWKS loader status in health check
+|OAuthSheriff_Q-100 |ERROR_CHECKING_JWKS_LOADER |"Error checking JWKS loader for issuer %s: %s" |Indicates an error occurred while checking JWKS loader status in health check
 |===
 
 ==== Bearer Token Warnings (121-130)
@@ -256,7 +256,7 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-128 |BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED |"Bearer token does not meet requirements. Missing scopes: %s, Missing roles: %s, Missing groups: %s" |Details about which requirements are missing from a bearer token
+|OAuthSheriff_Q-128 |BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED |"Bearer token does not meet requirements. Missing scopes: %s, Missing roles: %s, Missing groups: %s" |Details about which requirements are missing from a bearer token
 |===
 
 ==== JWKS Startup Warnings (131-136)
@@ -265,11 +265,11 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-131 |BACKGROUND_JWKS_LOADING_FAILED_FOR_ISSUER |"Background JWKS loading failed for issuer %s: %s" |Indicates that background JWKS loading failed for a specific issuer
-|OAUTH_SHERIFF_QUARKUS-133 |NO_MICROMETER_COUNTER_FOUND |"No Micrometer counter found for event type %s, delta %s lost" |Indicates that a metrics counter was not found and a delta value was lost
-|OAUTH_SHERIFF_QUARKUS-134 |JWKS_LOADING_RETRY_WARNING |"JWKS loading failed for issuer %s: %s - will retry via background refresh" |Indicates that JWKS loading failed but will be retried
-|OAUTH_SHERIFF_QUARKUS-135 |BACKGROUND_JWKS_ISSUES_WARNING |"Background JWKS initialization encountered issues: %s - on-demand loading will handle this" |Indicates issues during background JWKS initialization with fallback to on-demand loading
-|OAUTH_SHERIFF_QUARKUS-136 |BEARER_TOKEN_ANNOTATION_NOT_FOUND |"@BearerAuth annotation not found on method or class: %s" |Indicates that the @BearerAuth annotation was not found on the intercepted method or its declaring class
+|OAuthSheriff_Q-131 |BACKGROUND_JWKS_LOADING_FAILED_FOR_ISSUER |"Background JWKS loading failed for issuer %s: %s" |Indicates that background JWKS loading failed for a specific issuer
+|OAuthSheriff_Q-133 |NO_MICROMETER_COUNTER_FOUND |"No Micrometer counter found for event type %s, delta %s lost" |Indicates that a metrics counter was not found and a delta value was lost
+|OAuthSheriff_Q-134 |JWKS_LOADING_RETRY_WARNING |"JWKS loading failed for issuer %s: %s - will retry via background refresh" |Indicates that JWKS loading failed but will be retried
+|OAuthSheriff_Q-135 |BACKGROUND_JWKS_ISSUES_WARNING |"Background JWKS initialization encountered issues: %s - on-demand loading will handle this" |Indicates issues during background JWKS initialization with fallback to on-demand loading
+|OAuthSheriff_Q-136 |BEARER_TOKEN_ANNOTATION_NOT_FOUND |"@BearerAuth annotation not found on method or class: %s" |Indicates that the @BearerAuth annotation was not found on the intercepted method or its declaring class
 |===
 
 ==== JWE Warnings (141-142)
@@ -278,8 +278,8 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-141 |JWE_KEYSTORE_MISSING_ALIAS |"JWE keystore configured at %s but no key-alias specified — skipping keystore key loading" |Indicates that a JWE keystore was configured but no key alias was specified
-|OAUTH_SHERIFF_QUARKUS-142 |JWE_KEY_LOADING_FAILED |"Failed to load JWE decryption keys, JWE support disabled: %s" |Indicates that JWE decryption key loading failed and JWE support is disabled
+|OAuthSheriff_Q-141 |JWE_KEYSTORE_MISSING_ALIAS |"JWE keystore configured at %s but no key-alias specified — skipping keystore key loading" |Indicates that a JWE keystore was configured but no key alias was specified
+|OAuthSheriff_Q-142 |JWE_KEY_LOADING_FAILED |"Failed to load JWE decryption keys, JWE support disabled: %s" |Indicates that JWE decryption key loading failed and JWE support is disabled
 |===
 
 === Quarkus ERROR Level (200-299)
@@ -290,5 +290,5 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |LogRecord |Template |Description
 
-|OAUTH_SHERIFF_QUARKUS-201 |VERTX_REQUEST_CONTEXT_UNAVAILABLE |"Vertx HttpServerRequest context is unavailable - no active request context found" |Indicates that the Vertx HTTP server request context could not be resolved
+|OAuthSheriff_Q-201 |VERTX_REQUEST_CONTEXT_UNAVAILABLE |"Vertx HttpServerRequest context is unavailable - no active request context found" |Indicates that the Vertx HTTP server request context could not be resolved
 |===
