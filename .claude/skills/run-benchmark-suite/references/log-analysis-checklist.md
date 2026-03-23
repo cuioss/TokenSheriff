@@ -5,7 +5,7 @@ Run this checklist after each benchmark run to validate results.
 ## 1. Application Errors
 
 ```bash
-grep -i "ERROR\|SEVERE\|FATAL" target/benchmark-results/logs/quarkus.log
+grep -i "ERROR\|SEVERE\|FATAL" target/quarkus.log
 ```
 
 - Any errors during the benchmark window invalidate that run.
@@ -14,7 +14,7 @@ grep -i "ERROR\|SEVERE\|FATAL" target/benchmark-results/logs/quarkus.log
 ## 2. Token Validation Issues
 
 ```bash
-grep -i "expired\|invalid.*token\|unauthorized\|401" target/benchmark-results/logs/quarkus.log
+grep -i "expired\|invalid.*token\|unauthorized\|401" target/quarkus.log
 ```
 
 - Expired tokens indicate the benchmark ran too long or token TTL is too short.
@@ -23,7 +23,7 @@ grep -i "expired\|invalid.*token\|unauthorized\|401" target/benchmark-results/lo
 ## 3. GC Pauses
 
 ```bash
-grep -i "GC\|pause\|safepoint" target/benchmark-results/logs/quarkus.log
+grep -i "GC\|pause\|safepoint" target/quarkus.log
 ```
 
 - Long GC pauses (>50ms) can skew latency percentiles.
@@ -32,7 +32,7 @@ grep -i "GC\|pause\|safepoint" target/benchmark-results/logs/quarkus.log
 ## 4. Keycloak Errors
 
 ```bash
-grep -i "ERROR\|WARN" target/benchmark-results/logs/keycloak-logs-*.txt
+grep -i "ERROR\|WARN" target/benchmark-results/keycloak-logs-*.txt
 ```
 
 - Keycloak errors during token issuance can cause inconsistent benchmark results.
@@ -51,7 +51,7 @@ grep "Non-2xx" target/benchmark-results/wrk/*.txt
 ## 6. Container Health
 
 ```bash
-grep -i "unhealthy\|restart\|OOM\|killed" target/benchmark-results/logs/*.txt
+grep -i "unhealthy\|restart\|OOM\|killed" target/benchmark-results/keycloak-logs-*.txt
 ```
 
 - Container restarts during benchmark invalidate results completely.

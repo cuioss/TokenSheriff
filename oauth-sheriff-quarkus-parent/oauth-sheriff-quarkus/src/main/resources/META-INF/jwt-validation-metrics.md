@@ -7,12 +7,14 @@ The oauth-sheriff-quarkus extension provides automatic metrics collection for JW
 | Metric Name | Type | Description | Tags |
 |-------------|------|-------------|------|
 | `sheriff.oauth.validation.errors` | Counter | Number of JWT validation errors by type | event_type, result, category |
+| `sheriff.oauth.validation.success` | Counter | Number of successful JWT operations by type | event_type, result |
+| `sheriff.oauth.bearer.token.validation` | Timer | Bearer token validation duration (via `@Timed`) | — |
 
 ## Metric Tags
 
 - **event_type**: The specific type of validation error (e.g., TOKEN_EXPIRED, SIGNATURE_VALIDATION_FAILED)
 - **result**: Always "failure" for error metrics
-- **category**: Error category (STRUCTURE, SIGNATURE, SEMANTIC) when available
+- **category**: Error category (`INVALID_STRUCTURE`, `INVALID_SIGNATURE`, `SEMANTIC_ISSUES`) when available — only present on error metrics
 
 ## Setup
 
@@ -131,7 +133,7 @@ Example Grafana dashboard JSON:
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(sheriff_oauth_validation_attempts_total[5m])) by (result)",
+          "expr": "sum(rate(sheriff_oauth_validation_errors_total[5m])) by (category)",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -215,6 +217,6 @@ These metrics are automatically collected when the oauth-sheriff-quarkus module 
 
 1. Ensure the `quarkus-micrometer` extension is enabled in your application
 2. Optionally, add a registry implementation like `quarkus-micrometer-registry-prometheus` for Prometheus integration
-3. Use the TokenValidator with the @TokenValidationMetrics annotation (automatically applied by the producer)
+3. Metrics are automatically collected by `JwtMetricsCollector` when using the TokenValidator provided by the extension
 
 The metrics will be available at the standard Micrometer/Prometheus endpoint: `/q/metrics`
