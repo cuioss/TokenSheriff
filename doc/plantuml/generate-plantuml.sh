@@ -11,6 +11,7 @@
 # and cleaned by `mvn clean`.
 
 set -euo pipefail
+shopt -s lastpipe
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLANTUML_DIR="$SCRIPT_DIR"
@@ -66,8 +67,9 @@ find "$PLANTUML_DIR" -name "*.puml" | sort | while read -r puml_file; do
 done
 
 echo ""
-if [ "$FAILED" -eq 0 ] 2>/dev/null; then
+if [ "$FAILED" -eq 0 ]; then
     echo "PlantUML generation complete"
 else
     echo "PlantUML generation complete (some files may have failed)"
+    exit 1
 fi

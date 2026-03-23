@@ -22,7 +22,7 @@ try {
     Optional<String> subject = token.getSubject();
     List<String> roles = token.getRoles();
 } catch (TokenValidationException e) {
-    LOGGER.error("Token validation failed: %s", e, e.getMessage());
+    LOGGER.error(e, "Token validation failed: %s", e.getMessage());
 }
 ----
 
