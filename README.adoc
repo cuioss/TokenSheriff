@@ -109,22 +109,6 @@ sheriff.oauth.issuers.keycloak.jwks.http.well-known-url=https://keycloak.example
 
 [source,java]
 ----
-@Inject
-@BearerToken(requiredScopes = {"read"})
-private BearerTokenResult tokenResult;
-
-// Token is automatically validated and injected
-if (tokenResult.isSuccessfullyAuthorized()) {
-    // The call is authorized and verified to contain the scope "read"
-}
-----
-
-==== Declarative Security with Interceptors
-
-For a more declarative approach, use the `@BearerAuth` interceptor annotation:
-
-[source,java]
-----
 @GET
 @Path("/data")
 @BearerAuth(requiredScopes = {"read"}, requiredRoles = {"user"})
@@ -135,7 +119,7 @@ public Response getData() {
 }
 ----
 
-Access the validated token using parameter injection:
+When you need access to the validated token, use parameter injection:
 
 [source,java]
 ----
@@ -150,11 +134,6 @@ public Response getData(@BearerToken BearerTokenResult tokenResult) {
     return Response.ok(data).build();
 }
 ----
-
-**When to use which approach:**
-
-* **Producer pattern (`@BearerToken`)**: Explicit validation control, custom error handling, complex authorization logic
-* **Interceptor pattern (`@BearerAuth`)**: Declarative security, automatic error responses, clean separation of concerns
 
 For a complete working example, see the xref:oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/README.adoc[integration tests module].
 

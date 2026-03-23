@@ -25,7 +25,8 @@ For Maven dependency information, see xref:../README.adoc#_maven_coordinates[Mav
 === CDI Integration
 
 * CDI producers for TokenValidator and BearerTokenResult
-* Field-based producers for JWT validation components
+* `@BearerAuth` interceptor for declarative endpoint security
+* Parameter injection of `BearerTokenResult` via `@BearerToken`
 * Integration with Quarkus dependency injection container
 * Request-scoped bearer token validation
 
