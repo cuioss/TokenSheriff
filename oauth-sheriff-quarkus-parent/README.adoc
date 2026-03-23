@@ -62,68 +62,70 @@ xref:oauth-sheriff-quarkus/src/main/resources/META-INF/quarkus-config-doc.adoc[Q
 
 The extension provides the following CDI beans:
 
-==== BearerTokenResult Injection (Recommended)
+==== Declarative Security with @BearerAuth (Recommended)
 
-The extension provides a convenient way to inject validated token results directly into your components:
+The `@BearerAuth` interceptor provides declarative security for JAX-RS endpoints with automatic error responses:
 
 [source,java]
 ----
-// Basic usage
-@Inject
-@BearerToken
-private BearerTokenResult tokenResult;
+// Basic usage - just require a valid token
+@GET
+@BearerAuth
+public Response getData() {
+    return Response.ok(data).build();
+}
 
 // With required scopes
-@Inject
-@BearerToken(requiredScopes = {"read"})
-private BearerTokenResult tokenWithScopes;
+@GET
+@BearerAuth(requiredScopes = {"read"})
+public Response getReadData() {
+    return Response.ok(data).build();
+}
 
 // With required roles
-@Inject
-@BearerToken(requiredRoles = {"user"})
-private BearerTokenResult tokenWithRoles;
+@GET
+@BearerAuth(requiredRoles = {"user"})
+public Response getUserData() {
+    return Response.ok(data).build();
+}
 
 // With required groups
-@Inject
-@BearerToken(requiredGroups = {"test-group"})
-private BearerTokenResult tokenWithGroups;
+@GET
+@BearerAuth(requiredGroups = {"test-group"})
+public Response getGroupData() {
+    return Response.ok(data).build();
+}
 
 // With multiple requirements
-@Inject
-@BearerToken(
+@GET
+@BearerAuth(
     requiredScopes = {"read"},
     requiredRoles = {"user"},
     requiredGroups = {"test-group"}
 )
-private BearerTokenResult tokenWithAllRequirements;
+public Response getRestrictedData() {
+    return Response.ok(data).build();
+}
 ----
 
-Example usage in JAX-RS endpoints:
+When you need access to the validated token, use parameter injection:
 
 [source,java]
 ----
-// Example with BearerTokenResult injection
 @Path("/api/instance")
 @RequestScoped
 public class InstanceEndpoint {
 
-    @Inject
-    @BearerToken(requiredScopes = {"read"})
-    private BearerTokenResult tokenResult;
-
     @GET
     @Path("/data")
-    public Response getData() {
-        if (tokenResult.isNotSuccessfullyAuthorized()) {
-            return tokenResult.createErrorResponse();
-        }
+    @BearerAuth(requiredScopes = {"read"})
+    public Response getData(@BearerToken BearerTokenResult tokenResult) {
         AccessTokenContent token = tokenResult.getAccessTokenContent()
                 .orElseThrow(() -> new IllegalStateException("Token content missing after successful authorization"));
         // Token is valid and has required scopes
         return Response.ok("Data for user: " + token.getSubject().orElse("none")).build();
     }
 }
-
 ----
 
 For more examples and detailed usage, see the xref:doc/README.adoc[Quarkus Extension Documentation].

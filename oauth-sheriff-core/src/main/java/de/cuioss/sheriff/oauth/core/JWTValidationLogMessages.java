@@ -21,7 +21,7 @@ import lombok.experimental.UtilityClass;
 
 /**
  * Provides logging messages for the OAuth Sheriff library module.
- * All messages follow the format: JWTValidation-[identifier]: [message]
+ * All messages follow the format: OAuthSheriff-[identifier]: [message]
  * <p>
  * Implements requirements:
  * <ul>
@@ -38,7 +38,7 @@ import lombok.experimental.UtilityClass;
 @UtilityClass
 public final class JWTValidationLogMessages {
 
-    private static final String PREFIX = "JWTValidation";
+    private static final String PREFIX = "OAuthSheriff";
 
     /**
      * Contains error-level log messages for significant problems that require attention.

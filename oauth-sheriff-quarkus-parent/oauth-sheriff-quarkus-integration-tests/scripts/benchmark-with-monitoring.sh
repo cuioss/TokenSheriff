@@ -9,25 +9,25 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 RESULTS_DIR="$PROJECT_ROOT/benchmarking/benchmark-integration-wrk/target/monitoring-results"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 
-echo "🔍 JWT Validation Benchmark with Comprehensive Monitoring"
+echo "JWT Validation Benchmark with Comprehensive Monitoring"
 echo "========================================================="
-echo "📁 Project root: $PROJECT_ROOT"
-echo "📊 Results: $RESULTS_DIR"
-echo "⏰ Timestamp: $TIMESTAMP"
+echo "Project root: $PROJECT_ROOT"
+echo "Results: $RESULTS_DIR"
+echo "Timestamp: $TIMESTAMP"
 echo ""
 
 # Create results directory
 mkdir -p "$RESULTS_DIR"
 
 # Check prerequisites
-echo "🔧 Checking prerequisites..."
+echo "Checking prerequisites..."
 if ! command -v maven >/dev/null 2>&1 && ! command -v mvn >/dev/null 2>&1; then
-    echo "❌ Maven not found"
+    echo "Error: Maven not found"
     exit 1
 fi
 
 if ! docker info >/dev/null 2>&1; then
-    echo "❌ Docker not running"
+    echo "Error: Docker not running"
     exit 1
 fi
 
@@ -36,8 +36,8 @@ if command -v ./mvnw >/dev/null 2>&1; then
     MAVEN_CMD="./mvnw"
 fi
 
-echo "✅ Using Maven: $MAVEN_CMD"
-echo "✅ Docker available"
+echo "Using Maven: $MAVEN_CMD"
+echo "Docker available"
 echo ""
 
 # Output files
@@ -115,7 +115,7 @@ monitor_containers() {
 show_dashboard() {
     while kill -0 $BENCHMARK_PID 2>/dev/null; do
         clear
-        echo "🔄 JWT Validation Benchmark - Live Monitoring Dashboard"
+        echo "JWT Validation Benchmark - Live Monitoring Dashboard"
         echo "======================================================="
         echo "Duration: $(( $(date +%s) - START_TIME ))s | Target: 120s minimum"
         echo ""
@@ -127,7 +127,7 @@ show_dashboard() {
             local MEM_USE=$(echo "$LATEST_SYSTEM" | cut -d',' -f3)
             local LOAD=$(echo "$LATEST_SYSTEM" | cut -d',' -f4)
             
-            echo "📊 System Resources:"
+            echo "System Resources:"
             echo "   CPU Usage: ${CPU_USE}% (Target: 90%)"
             echo "   Memory Usage: ${MEM_USE}% (Target: 90%)"
             echo "   Load Average: $LOAD"
@@ -136,7 +136,7 @@ show_dashboard() {
         
         # Container stats
         if [[ -f "$CONTAINER_LOG" ]] && [[ $(wc -l < "$CONTAINER_LOG") -gt 1 ]]; then
-            echo "🐳 Container Resources:"
+            echo "Container Resources:"
             # Show latest stats for each container
             local CONTAINERS=$(tail -10 "$CONTAINER_LOG" | cut -d',' -f2 | sort -u)
             for CONTAINER in $CONTAINERS; do
@@ -155,7 +155,7 @@ show_dashboard() {
         if [[ -f "$BENCHMARK_LOG" ]]; then
             local OPS_COUNT=$(grep -c "ops/s" "$BENCHMARK_LOG" 2>/dev/null || echo "0")
             local LATEST_OPS=$(grep "ops/s" "$BENCHMARK_LOG" 2>/dev/null | tail -1 || echo "Waiting for benchmark...")
-            echo "📈 Benchmark Progress:"
+            echo "Benchmark Progress:"
             echo "   Measurements: $OPS_COUNT"
             echo "   Latest: $LATEST_OPS"
             echo ""
@@ -164,9 +164,9 @@ show_dashboard() {
         # JFR status
         if [[ -f "$JFR_FILE" ]]; then
             local JFR_SIZE=$(du -h "$JFR_FILE" 2>/dev/null | cut -f1 || echo "0")
-            echo "📊 JFR Profiling: Active (${JFR_SIZE})"
+            echo "JFR Profiling: Active (${JFR_SIZE})"
         else
-            echo "📊 JFR Profiling: Waiting for containers..."
+            echo "JFR Profiling: Waiting for containers..."
         fi
         
         echo ""
@@ -179,7 +179,7 @@ show_dashboard() {
 # Cleanup function
 cleanup() {
     echo ""
-    echo "🛑 Stopping monitoring and generating report..."
+    echo "Stopping monitoring and generating report..."
     
     # Stop background processes
     [[ -n "$SYSTEM_MONITOR_PID" ]] && kill $SYSTEM_MONITOR_PID 2>/dev/null || true
@@ -189,13 +189,13 @@ cleanup() {
     # Generate comprehensive report
     generate_report
     
-    echo "✅ Monitoring completed!"
+    echo "Monitoring completed!"
     exit 0
 }
 
 # Report generation function
 generate_report() {
-    echo "📄 Generating comprehensive report..."
+    echo "Generating comprehensive report..."
     
     cat > "$FINAL_REPORT" << EOF
 = JWT Validation Benchmark Report - $TIMESTAMP
@@ -242,13 +242,13 @@ EOF
 |${AVG_CPU}%
 |${MAX_CPU}%
 |90%
-|$(if (( $(echo "$AVG_CPU < 90" | bc -l 2>/dev/null || echo "1") )); then echo "❌ Under 90%"; else echo "✅ Target met"; fi)
+|$(if (( $(echo "$AVG_CPU < 90" | bc -l 2>/dev/null || echo "1") )); then echo "MISS"; else echo "OK"; fi)
 
 |Memory Usage
 |${AVG_MEM}%
 |${MAX_MEM}%
 |90%
-|$(if (( $(echo "$AVG_MEM < 90" | bc -l 2>/dev/null || echo "1") )); then echo "❌ Under 90%"; else echo "✅ Target met"; fi)
+|$(if (( $(echo "$AVG_MEM < 90" | bc -l 2>/dev/null || echo "1") )); then echo "MISS"; else echo "OK"; fi)
 |===
 
 EOF
@@ -270,7 +270,7 @@ EOF
 
 * CPU: Average ${AVG_CPU}%, Maximum ${MAX_CPU}%
 * Memory: Average ${AVG_MEM}%
-* Status: $(if (( $(echo "$AVG_CPU < 90" | bc -l 2>/dev/null || echo "1") )); then echo "❌ CPU under 90%"; else echo "✅ CPU target met"; fi)
+* Status: $(if (( $(echo "$AVG_CPU < 90" | bc -l 2>/dev/null || echo "1") )); then echo "MISS: CPU under 90%"; else echo "OK: CPU target met"; fi)
 
 EOF
         done
@@ -317,20 +317,20 @@ $(if [[ -f "$CONTAINER_LOG" ]] && grep -q "jwt" "$CONTAINER_LOG"; then
     JWT_AVG_CPU=$(grep "jwt" "$CONTAINER_LOG" | awk -F',' '{sum+=$3; count++} END {if(count>0) printf "%.0f", sum/count; else print "0"}')
     JWT_AVG_MEM=$(grep "jwt" "$CONTAINER_LOG" | awk -F',' '{sum+=$6; count++} END {if(count>0) printf "%.0f", sum/count; else print "0"}')
     if (( JWT_AVG_CPU < 90 )); then
-        echo "* ⚠️  JWT Container CPU: ${JWT_AVG_CPU}% - Increase JMH threads to reach 90%+"
+        echo "* Warning: JWT Container CPU: ${JWT_AVG_CPU}% - Increase JMH threads to reach 90%+"
     else
-        echo "* ✅ JWT Container CPU: ${JWT_AVG_CPU}% - Target achieved"
+        echo "* JWT Container CPU: ${JWT_AVG_CPU}% - Target achieved"
     fi
     if (( JWT_AVG_MEM < 90 )); then
-        echo "* ⚠️  JWT Container Memory: ${JWT_AVG_MEM}% - Reduce memory limit to reach 90%+"
+        echo "* Warning: JWT Container Memory: ${JWT_AVG_MEM}% - Reduce memory limit to reach 90%+"
     else
-        echo "* ✅ JWT Container Memory: ${JWT_AVG_MEM}% - Target achieved"
+        echo "* JWT Container Memory: ${JWT_AVG_MEM}% - Target achieved"
     fi
 else
-    echo "* ❌ No JWT container metrics - ensure containers are running"
+    echo "* Error: No JWT container metrics - ensure containers are running"
 fi)
-$(if [[ -f "$JFR_FILE" ]]; then echo "* 📊 JFR profiling captured - analyze for optimization opportunities"; else echo "* ⚠️  JFR profiling not captured - check native image JFR support"; fi)
-* 🎯 **Baseline Status**: $(if [[ -f "$CONTAINER_LOG" ]] && grep -q "jwt" "$CONTAINER_LOG"; then
+$(if [[ -f "$JFR_FILE" ]]; then echo "* JFR profiling captured - analyze for optimization opportunities"; else echo "* Warning: JFR profiling not captured - check native image JFR support"; fi)
+* **Baseline Status**: $(if [[ -f "$CONTAINER_LOG" ]] && grep -q "jwt" "$CONTAINER_LOG"; then
     JWT_CPU=$(grep "jwt" "$CONTAINER_LOG" | awk -F',' '{sum+=$3; count++} END {if(count>0) printf "%.0f", sum/count; else print "0"}')
     JWT_MEM=$(grep "jwt" "$CONTAINER_LOG" | awk -F',' '{sum+=$6; count++} END {if(count>0) printf "%.0f", sum/count; else print "0"}')
     if (( JWT_CPU >= 90 && JWT_MEM >= 90 )); then
@@ -352,25 +352,25 @@ $(if [[ -f "$JFR_FILE" ]]; then echo "* JFR profile: link:$(basename "$JFR_FILE"
 Generated: $(date)
 EOF
 
-    echo "📊 Report saved: $FINAL_REPORT"
+    echo "Report saved: $FINAL_REPORT"
 }
 
 # Main execution
 trap cleanup INT TERM
 
-echo "🔨 Step 1: Building integration tests (~6 seconds)..."
+echo "Step 1: Building integration tests (~6 seconds)..."
 cd "$PROJECT_ROOT"
 $MAVEN_CMD clean install -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -q
 
-echo "🔨 Step 2: Force clean rebuild of native executable and container (~90 seconds)..."
+echo "Step 2: Force clean rebuild of native executable and container (~90 seconds)..."
 # Ensure clean rebuild includes updated application.properties
 $MAVEN_CMD clean package -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -Pintegration-tests -q
 # Force Docker to rebuild container with updated configuration
 docker system prune -f --volumes >/dev/null 2>&1 || true
 
-echo "🚀 Step 3: Starting benchmark with comprehensive monitoring..."
-echo "📊 Monitoring will capture system, container, and JFR data"
-echo "⏰ Run for 2+ minutes, then press Ctrl+C"
+echo "Step 3: Starting benchmark with comprehensive monitoring..."
+echo "Monitoring will capture system, container, and JFR data"
+echo "Run for 2+ minutes, then press Ctrl+C"
 echo ""
 
 # Start benchmark with JFR recording
@@ -379,25 +379,25 @@ $MAVEN_CMD verify -pl benchmarking/benchmark-integration-wrk -Pbenchmark > "$BEN
 BENCHMARK_PID=$!
 
 # Wait for containers to start
-echo "⏳ Waiting for containers to initialize..."
+echo "Waiting for containers to initialize..."
 sleep 15
 
 # Check if containers are running
 CONTAINERS=$(docker ps --format "{{.Names}}" | grep -E "(jwt|keycloak)" || echo "")
 if [[ -n "$CONTAINERS" ]]; then
-    echo "✅ Found containers: $CONTAINERS"
+    echo "Found containers: $CONTAINERS"
     
     # Start JFR recording if possible
     JWT_CONTAINER=$(echo "$CONTAINERS" | grep jwt | head -1)
     if [[ -n "$JWT_CONTAINER" ]]; then
-        echo "📊 Starting JFR recording for $JWT_CONTAINER..."
-        docker exec "$JWT_CONTAINER" sh -c "jcmd 1 JFR.start duration=120s filename=/tmp/jwt-profile.jfr" 2>/dev/null || echo "⚠️  JFR recording not available (container may not support jcmd)"
+        echo "Starting JFR recording for $JWT_CONTAINER..."
+        docker exec "$JWT_CONTAINER" sh -c "jcmd 1 JFR.start duration=120s filename=/tmp/jwt-profile.jfr" 2>/dev/null || echo "Warning: JFR recording not available (container may not support jcmd)"
         
         # Copy JFR file after recording
-        (sleep 125; docker cp "$JWT_CONTAINER:/tmp/jwt-profile.jfr" "$JFR_FILE" 2>/dev/null || echo "⚠️  JFR file not available") &
+        (sleep 125; docker cp "$JWT_CONTAINER:/tmp/jwt-profile.jfr" "$JFR_FILE" 2>/dev/null || echo "Warning: JFR file not available") &
     fi
 else
-    echo "⚠️  No JWT/Keycloak containers found - container monitoring will be limited"
+    echo "Warning: No JWT/Keycloak containers found - container monitoring will be limited"
 fi
 
 # Start monitoring in background

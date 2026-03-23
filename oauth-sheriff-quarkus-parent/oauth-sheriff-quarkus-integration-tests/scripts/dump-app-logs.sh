@@ -13,7 +13,7 @@ APP_LOG_FILENAME="app-logs-${TIMESTAMP}.txt"
 
 # Parameter validation
 if [ $# -ne 1 ]; then
-    echo "❌ Error: Target directory parameter required"
+    echo "Error: Target directory parameter required"
     echo "Usage: $0 <target-directory>"
     exit 1
 fi
@@ -29,22 +29,22 @@ fi
 TARGET_ABS_PATH=$(cd "$TARGET_DIR" && pwd)
 APP_LOG_FILE_PATH="${TARGET_ABS_PATH}/${APP_LOG_FILENAME}"
 
-echo "🚀 Dumping application container logs..."
-echo "📝 Output file: $APP_LOG_FILE_PATH"
+echo "Dumping application container logs..."
+echo "Output file: $APP_LOG_FILE_PATH"
 
 # Use docker compose to resolve the service name (works regardless of container naming)
 if docker compose logs "$APP_SERVICE_NAME" > "$APP_LOG_FILE_PATH" 2>&1; then
     LOG_SIZE=$(wc -l < "$APP_LOG_FILE_PATH")
     FILE_SIZE=$(du -h "$APP_LOG_FILE_PATH" | cut -f1)
-    echo "✅ Successfully dumped $LOG_SIZE lines ($FILE_SIZE)"
-    echo "📍 Full path: $APP_LOG_FILE_PATH"
+    echo "Successfully dumped $LOG_SIZE lines ($FILE_SIZE)"
+    echo "Full path: $APP_LOG_FILE_PATH"
 
     # Echo JWE-related diagnostic lines to stdout for CI visibility
     echo ""
-    echo "📋 JWE diagnostic lines from app container:"
+    echo "JWE diagnostic lines from app container:"
     grep -i "jwe\|decryption" "$APP_LOG_FILE_PATH" || echo "  (no JWE-related log lines found)"
     echo ""
 else
-    echo "⚠️  Could not dump app logs (container may not be running)"
+    echo "Warning: Could not dump app logs (container may not be running)"
     exit 0
 fi

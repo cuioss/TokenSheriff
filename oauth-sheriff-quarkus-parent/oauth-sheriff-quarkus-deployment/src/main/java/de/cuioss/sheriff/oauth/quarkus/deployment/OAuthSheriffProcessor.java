@@ -99,7 +99,7 @@ public class OAuthSheriffProcessor {
      */
     private static final LogRecord OAUTH_SHERIFF_FEATURE_REGISTERED = LogRecordModel.builder()
             .template("OAuth Sheriff feature registered")
-            .prefix("OAUTH_SHERIFF_QUARKUS_DEPLOYMENT")
+            .prefix("OAuthSheriff_Q_D")
             .identifier(1)
             .build();
 

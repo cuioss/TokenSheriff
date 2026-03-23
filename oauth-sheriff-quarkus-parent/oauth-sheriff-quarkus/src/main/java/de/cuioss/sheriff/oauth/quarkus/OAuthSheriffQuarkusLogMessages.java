@@ -42,7 +42,7 @@ public final class OAuthSheriffQuarkusLogMessages {
     /**
      * The prefix for all log messages in this module.
      */
-    public static final String PREFIX = "OAUTH_SHERIFF_QUARKUS";
+    public static final String PREFIX = "OAuthSheriff_Q";
 
     /**
      * INFO level log messages (001-099).
