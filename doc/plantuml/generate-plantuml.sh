@@ -51,15 +51,16 @@ find "$PLANTUML_DIR" -name "*.puml" | sort | while read -r puml_file; do
     basename="${puml_file##*/}"
     png_file="${puml_file%.puml}.png"
     echo -n "  ${basename} ... "
-    if $PLANTUML_CMD "$puml_file" 2>&1; then
-        if [ -f "$png_file" ]; then
-            echo "ok"
-        else
-            echo "FAILED (no output)"
-            FAILED=1
-        fi
+    output_and_error=$($PLANTUML_CMD "$puml_file" 2>&1)
+    if [ $? -eq 0 ] && [ -f "$png_file" ]; then
+        echo "ok"
     else
         echo "FAILED"
+        if [ -n "$output_and_error" ]; then
+            echo "--- PlantUML Output ---"
+            echo "$output_and_error"
+            echo "-----------------------"
+        fi
         FAILED=1
     fi
 done
