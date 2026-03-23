@@ -271,12 +271,12 @@ class BearerTokenProducerTest {
         Map<String, ClaimValue> claims = new HashMap<>();
         claims.put(ClaimName.ISSUER.getName(), ClaimValue.forPlainString("test-issuer"));
         claims.put(ClaimName.SUBJECT.getName(), ClaimValue.forPlainString("test-subject"));
+        var now = OffsetDateTime.now();
+        var expires = now.plusHours(1);
         claims.put(ClaimName.EXPIRATION.getName(), ClaimValue.forDateTime(
-                String.valueOf(OffsetDateTime.now().plusHours(1).toEpochSecond()),
-                OffsetDateTime.now().plusHours(1)));
+                String.valueOf(expires.toEpochSecond()), expires));
         claims.put(ClaimName.ISSUED_AT.getName(), ClaimValue.forDateTime(
-                String.valueOf(OffsetDateTime.now().toEpochSecond()),
-                OffsetDateTime.now()));
+                String.valueOf(now.toEpochSecond()), now));
         claims.putAll(additionalClaims);
         return new AccessTokenContent(claims, "raw-token", null, MapRepresentation.empty());
     }
