@@ -41,7 +41,7 @@ _See Requirements xref:../Requirements.adoc#OAUTH-SHERIFF-8.1[OAUTH-SHERIFF-8.1]
 
 |S2
 |JWKS endpoint impersonation
-|TLS 1.2+ enforced for all JWKS communication via `SecureSSLContextProvider` (cui-http-client); HTTPS-only endpoints
+|TLS 1.2+ enforced for all JWKS communication via `SecureSSLContextProvider` (from cui-http-client dependency); HTTPS-only endpoints
 |Integration tests verify HTTPS
 
 |S3

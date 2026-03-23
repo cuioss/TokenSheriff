@@ -91,29 +91,7 @@ cd benchmarking/scripts
 
 === Structure
 
-Each benchmark module generates a consistent artifact structure:
-
-[source]
-----
-target/benchmark-results/
-├── gh-pages-ready/             # GitHub Pages deployment structure
-│   ├── index.html              # Main landing page
-│   ├── trends.html             # Historical trends
-│   ├── badges/                 # Shields.io compatible badges
-│   │   ├── performance-badge.json   # Overall performance score
-│   │   ├── trend-badge.json         # Trend indicator
-│   │   └── last-run-badge.json      # Timestamp badge
-│   ├── data/                   # Metrics and summary data
-│   │   ├── benchmark-summary.json   # Overall summary with quality gates
-│   │   └── *-metrics.json          # Individual benchmark metrics
-│   └── api/                    # JSON API endpoints
-│       ├── latest.json         # Latest benchmark results
-│       ├── benchmarks.json     # List of all benchmarks
-│       └── status.json         # Current quality gate status
-├── history/                    # Historical archive data (NOT deployed)
-├── prometheus/                 # Raw Prometheus metrics (NOT deployed)
-└── wrk/                        # WRK raw results (NOT deployed)
-----
+Each benchmark module generates a consistent artifact structure. See link:../README.adoc#_generated_structure[Generated Structure] in the benchmarking README for the full directory tree.
 
 === Badge Types
 

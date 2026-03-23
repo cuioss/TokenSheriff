@@ -24,11 +24,13 @@ Integration tests use a hybrid certificate approach optimized for GraalVM native
 [source]
 ----
 src/main/docker/certificates/
-├── localhost.crt              # Server certificate (PEM)
-├── localhost.key              # Server private key (PEM)
-├── localhost-truststore.p12   # Client truststore (PKCS12)
-├── generate-certificates.sh   # Certificate generation script
-└── generate-truststore.sh     # Truststore generation script
+├── localhost.crt                    # Server certificate (PEM)
+├── localhost.key                    # Server private key (PEM)
+├── localhost-truststore.p12         # Client truststore (PKCS12)
+├── jwe-test-decryption-key.pem      # JWE test decryption private key
+├── jwe-test-encryption-key-pub.pem  # JWE test encryption public key
+├── generate-certificates.sh         # Certificate generation script
+└── generate-truststore.sh           # Truststore generation script
 ----
 
 == Configuration

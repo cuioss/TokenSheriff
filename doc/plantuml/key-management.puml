@@ -9,7 +9,7 @@ database "Retired Keys\n<<grace period>>" as RetiredKeys
 
 == Initialization ==
 
-IssuerConfig -> HttpLoader : "init()"
+IssuerConfig -> HttpLoader : "initJWKSLoader(securityEventCounter)"
 activate HttpLoader
 HttpLoader -> Endpoint : "fetch JWKS"
 Endpoint --> HttpLoader : "public keys"

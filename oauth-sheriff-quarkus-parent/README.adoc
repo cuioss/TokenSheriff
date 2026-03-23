@@ -126,7 +126,7 @@ public class InstanceEndpoint {
 
 ----
 
-For more examples and detailed usage, see the xref:doc/README.adoc[Token Injection Documentation].
+For more examples and detailed usage, see the xref:doc/README.adoc[Quarkus Extension Documentation].
 
 ==== TokenValidator
 

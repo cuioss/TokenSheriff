@@ -98,7 +98,7 @@ jfr print --events ExecutionSample jwt-profile.jfr | grep -i BigInteger | wc -l
 
 For detailed CPU hotspot data and profiling results, see link:../../../benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc[JFR Profiling Analysis].
 
-NOTE: JFR CPU sampling shows the OAuth library at 0.3% of samples, while the ablation study measures JWT validation at 46.1% of wall-clock time. This is explained by CPU saturation: with ~11:1 thread-to-core oversubscription, most threads are off-CPU (waiting to be scheduled) at any JFR sample point. See link:../../../benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc#_why_cpu_doesn_t_match_latency[CPU/latency mismatch analysis].
+NOTE: JFR CPU sampling shows the OAuth library at 0.3% of samples, while the ablation study measures JWT validation at 46.1% of wall-clock time. This is explained by CPU saturation: with ~11:1 thread-to-core oversubscription, most threads are off-CPU (waiting to be scheduled) at any JFR sample point. See link:../../../benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc#_why_cpu_doesnt_match_latency[CPU/latency mismatch analysis].
 
 == JFR Events Reference
 

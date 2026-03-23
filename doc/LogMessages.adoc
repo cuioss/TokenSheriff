@@ -12,7 +12,7 @@ This document provides a reference for all log messages used in the JWT Token Va
 === Document Navigation
 
 * xref:../README.adoc[README] - Project overview and introduction
-* xref:../oauth-sheriff-core/README.adoc[Usage Guide] - How to use the library with code examples
+* xref:../oauth-sheriff-core/doc/usage-guide.adoc[Usage Guide] - How to use the library with code examples
 * xref:Requirements.adoc[Requirements] - Functional and non-functional requirements
 * xref:architecture.adoc[Architecture] - Architecture reference
 * xref:security/threat-model.adoc[Threat Model] - Security analysis and mitigations
@@ -206,7 +206,7 @@ This section documents log messages specific to the Quarkus integration module (
 |OAUTH_SHERIFF_QUARKUS-043 |ACCESS_TOKEN_CACHE_CONFIGURED |"Access token cache configured: maxSize=%s, evictionIntervalSeconds=%s" |Shows the configured access token cache settings
 |===
 
-==== Metrics Management Messages (051-060)
+==== Metrics Management Messages (051-052)
 
 [cols="1,2,3,4", options="header"]
 |===

@@ -20,10 +20,9 @@ activate Parser
 Parser --> Validator: DecodedJwt
 deactivate Parser
 
-Validator -> Parser: getIssuer()
-activate Parser
-Parser --> Validator: "auth.partner.com"
-deactivate Parser
+Validator -> Validator: DecodedJwt.getIssuer()
+note right: Extract issuer from decoded token
+Validator --> Validator: "auth.partner.com"
 
 Validator -> Resolver: resolveConfig("auth.partner.com")
 activate Resolver

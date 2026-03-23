@@ -18,7 +18,7 @@ package "Payload" #FFF9C4 {
 node "  **.**  " as dot2 #FFFFFF
 
 package "Signature" #FFEBEE {
-  node "HMAC-SHA256(\n  base64UrlEncode(header) + \".\" +\n  base64UrlEncode(payload),\n  secret\n)" as s1
+  node "RSA-SHA256(\n  base64UrlEncode(header) + \".\" +\n  base64UrlEncode(payload),\n  privateKey\n)" as s1
 }
 
 Header -[hidden]-> dot1

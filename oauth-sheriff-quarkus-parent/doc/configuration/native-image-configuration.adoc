@@ -18,7 +18,7 @@ Native image configuration for the OAuth Sheriff Quarkus extension, including re
 # application.properties
 quarkus.native.container-build=true
 quarkus.native.additional-build-args=--enable-url-protocols=https,--enable-http,--enable-https,-O2
-quarkus.native.resources.includes=**/*.p12,**/*.crt,**/*.key
+quarkus.native.resources.includes=**/*.p12,**/*.crt,**/*.key,**/*.pem
 ----
 
 === Reflection Configuration
@@ -30,16 +30,16 @@ The OAuth Sheriff Quarkus deployment automatically registers the following class
 * **Token Content**: `AccessTokenContent`, `IdTokenContent`, `RefreshTokenContent`, `ClaimValue`
 * **Security/Algorithm**: `SignatureAlgorithmPreferences`, `JwkAlgorithmPreferences`, `SecurityEventCounter`
 
-**Total Reflection Classes**: 36 classes registered automatically across 5 build steps.
+**Total Reflection Classes**: 39 classes registered automatically across 5 build steps.
 
 === Resource Configuration
 
 [source,properties]
 ----
-quarkus.native.resources.includes=**/*.p12,**/*.crt,**/*.key,**/*.pem
-quarkus.native.resources.includes=**/*.json,**/*.yaml,**/*.yml
-quarkus.native.resources.includes=**/jwks.json,**/openid-configuration
+quarkus.native.resources.includes=**/*.p12,**/*.crt,**/*.key,**/*.pem,**/*.json,**/*.yaml,**/*.yml,**/jwks.json,**/openid-configuration
 ----
+
+NOTE: In Quarkus properties files, only the last value for a given key takes effect. Combine all patterns in a single `resources.includes` line.
 
 == Build Configuration
 
@@ -47,10 +47,11 @@ quarkus.native.resources.includes=**/jwks.json,**/openid-configuration
 
 [source,properties]
 ----
-quarkus.native.additional-build-args=-O2
-quarkus.native.additional-build-args=--gc=serial
+quarkus.native.additional-build-args=-O2,--gc=serial
 quarkus.native.native-image-xmx=8g
 ----
+
+NOTE: Multiple `additional-build-args` lines override each other — combine all arguments in a single comma-separated line.
 
 === Container Build Configuration
 
@@ -166,9 +167,9 @@ quarkus.native.container-runtime-options=-m=64m
 
 **Validation Checklist**:
 
-* Native image size: ~65MB (expected for JWT validation)
+* Native image size: 96-104MB (distroless: 104MB, JFR/UBI: 96MB)
 * Startup time: <1 second
-* Reflection classes: 36 registered
+* Reflection classes: 39 registered
 * Security services: All enabled for JWT support
 
 [source,bash]

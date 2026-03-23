@@ -41,71 +41,7 @@ The OAuth Sheriff Quarkus extension provides JWT validation through a modular ar
 
 == BearerToken CDI Injection
 
-The extension provides CDI injection for validated bearer tokens:
-
-==== BearerTokenResult Injection (Recommended)
-
-[source,java]
-----
-// Basic usage
-@Inject
-@BearerToken
-private BearerTokenResult tokenResult;
-
-// With required scopes
-@Inject
-@BearerToken(requiredScopes = {"read"})
-private BearerTokenResult tokenWithScopes;
-
-// With required roles
-@Inject
-@BearerToken(requiredRoles = {"user"})
-private BearerTokenResult tokenWithRoles;
-
-// With multiple requirements
-@Inject
-@BearerToken(
-    requiredScopes = {"read"},
-    requiredRoles = {"user"},
-    requiredGroups = {"test-group"}
-)
-private BearerTokenResult tokenWithAllRequirements;
-----
-
-==== Usage in JAX-RS Endpoints
-
-[source,java]
-----
-@Path("/api")
-@RequestScoped
-public class MyEndpoint {
-
-    @Inject
-    @BearerToken(requiredScopes = {"read"})
-    private BearerTokenResult tokenResult;
-
-    @GET
-    @Path("/data")
-    public Response getData() {
-        if (tokenResult.isSuccessfullyAuthorized()) {
-            var tokenOpt = tokenResult.getAccessTokenContent();
-            if (tokenOpt.isPresent()) {
-                AccessTokenContent token = tokenOpt.get();
-                return Response.ok("Data for user: " + token.getSubject().orElse("none")).build();
-            }
-        }
-        return Response.status(401).entity("Unauthorized").build();
-    }
-}
-----
-
-The `@BearerToken` annotation automatically:
-
-* Extracts tokens from the `Authorization` header
-* Validates JWT signatures and claims
-* Checks scope, role, and group requirements
-* Provides detailed validation information via `BearerTokenResult`
-* Provides request-scoped token instances
+The extension provides CDI injection for validated bearer tokens via the `@BearerToken` annotation. See xref:../README.adoc#_bearertokenresult_injection_recommended[BearerTokenResult Injection] in the parent README for complete examples including scopes, roles, groups, and JAX-RS endpoint usage.
 
 == Additional Resources
 
