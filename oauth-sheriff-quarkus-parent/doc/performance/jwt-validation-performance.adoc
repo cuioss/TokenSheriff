@@ -15,7 +15,7 @@ JWT validation performance characteristics, baselines, and analysis for the CUI 
 
 * **Platform**: Apple M4, 10 CPU cores, 32 GB RAM
 * **Runtime**: Mandrel jdk-25 native image
-* **Framework**: Quarkus 3.27.2 (LTS)
+* **Framework**: Quarkus 3.34.0
 * **Container**: Docker with Keycloak for token issuance
 
 === Current Performance Summary

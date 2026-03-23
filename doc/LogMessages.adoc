@@ -173,7 +173,7 @@ This section documents log messages specific to the Quarkus integration module (
 |OAUTH_SHERIFF_QUARKUS-015 |NO_CUSTOM_CLAIM_MAPPERS_DISCOVERED |"No custom claim mappers discovered" |Indicates that no custom claim mappers were found during CDI discovery
 |===
 
-==== Metrics Messages (021-030)
+==== Metrics Messages (021-022)
 
 [cols="1,2,3,4", options="header"]
 |===
@@ -183,7 +183,19 @@ This section documents log messages specific to the Quarkus integration module (
 |OAUTH_SHERIFF_QUARKUS-022 |JWT_METRICS_COLLECTOR_INITIALIZED |"JwtMetricsCollector initialized with %s event types" |Confirms successful initialization with event type count
 |===
 
-==== Cache Messages (041-050)
+==== JWE Configuration Messages (031-034)
+
+[cols="1,2,3,4", options="header"]
+|===
+|ID |LogRecord |Template |Description
+
+|OAUTH_SHERIFF_QUARKUS-031 |JWE_DECRYPTION_CONFIG_RESOLVING |"Resolving JWE decryption configuration from properties" |Indicates the start of JWE decryption configuration resolution
+|OAUTH_SHERIFF_QUARKUS-032 |JWE_DECRYPTION_CONFIG_RESOLVED |"JWE decryption configuration resolved with %s key(s)" |Shows the number of JWE decryption keys resolved
+|OAUTH_SHERIFF_QUARKUS-033 |JWE_CONFIG_CHECK |"JWE config check: singleKeyPath=%s, keystorePath=%s, multiKeys=%s" |Logs the JWE configuration sources being checked
+|OAUTH_SHERIFF_QUARKUS-034 |JWE_DECRYPTION_NOT_CONFIGURED |"No JWE decryption configuration found - JWE support disabled" |Indicates that no JWE decryption configuration was found
+|===
+
+==== Cache Messages (041-043)
 
 [cols="1,2,3,4", options="header"]
 |===
@@ -217,7 +229,7 @@ This section documents log messages specific to the Quarkus integration module (
 |OAUTH_SHERIFF_QUARKUS-064 |BACKGROUND_JWKS_LOADING_COMPLETED_FOR_ISSUER |"Background JWKS loading completed for issuer: %s with status: %s" |Shows the completion status for a specific issuer's JWKS loading
 |===
 
-==== Access Log Filter Messages (065-070)
+==== Access Log Filter Messages (065-066)
 
 [cols="1,2,3,4", options="header"]
 |===
@@ -247,7 +259,7 @@ This section documents log messages specific to the Quarkus integration module (
 |OAUTH_SHERIFF_QUARKUS-128 |BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED |"Bearer token does not meet requirements. Missing scopes: %s, Missing roles: %s, Missing groups: %s" |Details about which requirements are missing from a bearer token
 |===
 
-==== JWKS Startup Warnings (131-140)
+==== JWKS Startup Warnings (131-136)
 
 [cols="1,2,3,4", options="header"]
 |===
@@ -258,6 +270,16 @@ This section documents log messages specific to the Quarkus integration module (
 |OAUTH_SHERIFF_QUARKUS-134 |JWKS_LOADING_RETRY_WARNING |"JWKS loading failed for issuer %s: %s - will retry via background refresh" |Indicates that JWKS loading failed but will be retried
 |OAUTH_SHERIFF_QUARKUS-135 |BACKGROUND_JWKS_ISSUES_WARNING |"Background JWKS initialization encountered issues: %s - on-demand loading will handle this" |Indicates issues during background JWKS initialization with fallback to on-demand loading
 |OAUTH_SHERIFF_QUARKUS-136 |BEARER_TOKEN_ANNOTATION_NOT_FOUND |"@BearerAuth annotation not found on method or class: %s" |Indicates that the @BearerAuth annotation was not found on the intercepted method or its declaring class
+|===
+
+==== JWE Warnings (141-142)
+
+[cols="1,2,3,4", options="header"]
+|===
+|ID |LogRecord |Template |Description
+
+|OAUTH_SHERIFF_QUARKUS-141 |JWE_KEYSTORE_MISSING_ALIAS |"JWE keystore configured at %s but no key-alias specified — skipping keystore key loading" |Indicates that a JWE keystore was configured but no key alias was specified
+|OAUTH_SHERIFF_QUARKUS-142 |JWE_KEY_LOADING_FAILED |"Failed to load JWE decryption keys, JWE support disabled: %s" |Indicates that JWE decryption key loading failed and JWE support is disabled
 |===
 
 === Quarkus ERROR Level (200-299)

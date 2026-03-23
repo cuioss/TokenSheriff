@@ -124,7 +124,7 @@ COMPOSE_PROFILES=multi-idp docker compose up -d
 curl -k https://localhost:2556/dex/.well-known/openid-configuration
 
 # Verify Zitadel
-curl -k https://localhost:3443/.well-known/openid-configuration
+curl -s -H "Host: zitadel:3080" http://localhost:3080/.well-known/openid-configuration
 
 # Acquire Dex token via ROPC (include groups scope for group claims)
 curl -k -X POST https://localhost:2556/dex/token \
@@ -174,14 +174,14 @@ Checklist for adding a new OIDC provider:
 |Bearer with-roles
 |Yes
 |No
-|Yes
-|Keycloak: realm roles, Zitadel: project roles via Actions. Dex has no roles concept.
+|No
+|Keycloak: realm roles. Dex has no roles concept. Zitadel Actions are configured but not yet exercised in tests (see <<zitadel-details>>).
 
 |Bearer with-groups
 |Yes
 |No
-|Yes
-|Keycloak: group mappers, Zitadel: user metadata via Actions. Dex has groups but lacks other bearer requirements.
+|No
+|Keycloak: group mappers. Dex has groups but the test also requires roles. Zitadel Actions are configured but not yet exercised in tests.
 
 |Bearer with-scopes
 |Yes
@@ -282,8 +282,8 @@ Credentials are written to `target/zitadel-credentials.properties`, consumed by 
 |===
 |Capability |Supported |Notes
 
-|ROLES |Yes |Via project role grants + Actions flattening into `roles` claim
-|GROUPS |Yes |Via user metadata + Actions injecting `groups` claim
+|ROLES |Configured, not yet tested |Actions flatten project role grants into `roles` claim, but `ROLES` capability is not yet declared in `TestRealm` — Zitadel Actions v1 don't populate grants in `client_credentials` flow
+|GROUPS |Configured, not yet tested |Actions inject user metadata as `groups` claim, but `GROUPS` capability is not yet declared in `TestRealm`
 |JWT_ACCESS_TOKENS |Yes |Configurable per application (default opaque, set to JWT)
 |CUSTOM_SCOPES |No |Zitadel only accepts standard OIDC + its own URN-based scopes
 |OFFLINE_ACCESS |No |Not exercised in current test suite
