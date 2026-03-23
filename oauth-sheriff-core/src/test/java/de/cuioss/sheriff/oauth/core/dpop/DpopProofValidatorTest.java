@@ -349,39 +349,19 @@ class DpopProofValidatorTest {
         assertEquals(EventType.DPOP_PROOF_EXPIRED, ex.getEventType());
     }
 
-    @Test
-    void shouldRejectProofWithMissingJwk() {
-        String thumbprint = "some-thumbprint";
-        DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
-
-        // Build a proof JWT manually without jwk in header
-        String headerJson = """
-                {"typ":"dpop+jwt","alg":"RS256"}""";
-        String bodyJson = """
-                {"jti":"test-jti","iat":%d,"ath":"test-ath"}""".formatted(System.currentTimeMillis() / 1000);
-        String header = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
-        String body = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(bodyJson.getBytes(StandardCharsets.UTF_8));
-        String proof = header + "." + body + ".dummy-sig";
-
-        AccessTokenRequest request = new AccessTokenRequest("dummy-token",
-                Map.of("dpop", List.of(proof)));
-
-        var ex = assertThrows(TokenValidationException.class,
-                () -> validator.validate(request, accessToken, "dummy-token"));
-        assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
-        assertTrue(ex.getMessage().contains("jwk"));
+    static Stream<Arguments> invalidJwkHeaderProvider() {
+        return Stream.of(
+                Arguments.of("{\"typ\":\"dpop+jwt\",\"alg\":\"RS256\"}", "jwk", "missing jwk"),
+                Arguments.of("{\"typ\":\"dpop+jwt\",\"alg\":\"RS256\",\"jwk\":{\"kty\":\"oct\",\"k\":\"secret\"}}", "Unsupported", "unsupported kty"),
+                Arguments.of("{\"typ\":\"dpop+jwt\",\"alg\":\"RS256\",\"jwk\":{\"n\":\"abc\",\"e\":\"AQAB\"}}", "kty", "missing kty"));
     }
 
-    @Test
-    void shouldRejectProofWithUnsupportedKeyType() {
+    @ParameterizedTest(name = "should reject proof with {2}")
+    @MethodSource("invalidJwkHeaderProvider")
+    void shouldRejectProofWithInvalidJwkHeader(String headerJson, String expectedMessageFragment, String description) {
         String thumbprint = "some-thumbprint";
         DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
 
-        // Build a proof JWT with unsupported kty in jwk
-        String headerJson = """
-                {"typ":"dpop+jwt","alg":"RS256","jwk":{"kty":"oct","k":"secret"}}""";
         String bodyJson = """
                 {"jti":"test-jti","iat":%d,"ath":"test-ath"}""".formatted(System.currentTimeMillis() / 1000);
         String header = Base64.getUrlEncoder().withoutPadding()
@@ -396,32 +376,7 @@ class DpopProofValidatorTest {
         var ex = assertThrows(TokenValidationException.class,
                 () -> validator.validate(request, accessToken, "dummy-token"));
         assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
-        assertTrue(ex.getMessage().contains("Unsupported"));
-    }
-
-    @Test
-    void shouldRejectProofWithMissingKty() {
-        String thumbprint = "some-thumbprint";
-        DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
-
-        // Build a proof JWT with jwk that has no kty
-        String headerJson = """
-                {"typ":"dpop+jwt","alg":"RS256","jwk":{"n":"abc","e":"AQAB"}}""";
-        String bodyJson = """
-                {"jti":"test-jti","iat":%d,"ath":"test-ath"}""".formatted(System.currentTimeMillis() / 1000);
-        String header = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
-        String body = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(bodyJson.getBytes(StandardCharsets.UTF_8));
-        String proof = header + "." + body + ".dummy-sig";
-
-        AccessTokenRequest request = new AccessTokenRequest("dummy-token",
-                Map.of("dpop", List.of(proof)));
-
-        var ex = assertThrows(TokenValidationException.class,
-                () -> validator.validate(request, accessToken, "dummy-token"));
-        assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
-        assertTrue(ex.getMessage().contains("kty"));
+        assertTrue(ex.getMessage().contains(expectedMessageFragment));
     }
 
     @Test
