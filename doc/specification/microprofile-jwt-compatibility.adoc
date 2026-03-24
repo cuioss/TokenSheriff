@@ -20,7 +20,7 @@ This document describes OAuthSheriff's relationship to the https://download.ecli
 * xref:token-decryption.adoc[Token Decryption] - JWE decryption specification
 * xref:multi-idp-testing.adoc[Multi-IDP Testing] - Multi-IDP integration testing
 
-==== Status: PLANNED
+==== Status: IMPLEMENTED
 
 == Design Rationale
 
@@ -91,21 +91,33 @@ The `upn` claim is MP-JWT's standardized human-readable principal identifier. OA
 2. `preferred_username` claim (fallback)
 3. `sub` claim (final fallback)
 
-== Planned Features
-
-The following MP-JWT 2.1 features are planned for adoption in future PRs.
-
 === Clock Skew Tolerance (`mp.jwt.verify.clock.skew`)
 
-Configurable clock skew tolerance per issuer for `exp` and `nbf` validation, accommodating clock drift in distributed systems.
+Clock skew tolerance is applied to both `exp` and `nbf` validation, accommodating clock drift in distributed systems. A token is considered expired only when `exp + clockSkew < now`.
 
-Planned configuration: `sheriff.oauth.issuers.<name>.clock-skew-seconds` (default: `0`)
+Currently configured via `ValidationContext` constructor (default: 60 seconds).
 
 === Token Age Verification (`mp.jwt.verify.token.age`)
 
-Maximum token age validation based on `iat` claim. Rejects tokens where `now - iat > maxAge + clockSkew`, even if not yet expired.
+Maximum token age validation based on `iat` claim. When enabled, rejects tokens where `now - iat > maxTokenAgeSeconds + clockSkewSeconds`, even if not yet expired.
 
-Planned configuration: `sheriff.oauth.issuers.<name>.max-token-age-seconds` (default: disabled)
+Configured via `ValidationContext` constructor with `maxTokenAgeSeconds` parameter (default: disabled).
+
+=== CDI Producers (`@Produces JsonWebToken`, `@Produces Principal`)
+
+Standard MP-JWT CDI injection is supported:
+
+[source,java]
+----
+@Inject JsonWebToken callerPrincipal;  // MP-JWT standard
+@Inject Principal principal;            // Jakarta Security standard
+----
+
+When no valid token is present, an empty `JsonWebToken` is injected (per MP-JWT spec).
+
+== Planned Features
+
+The following MP-JWT 2.1 features are planned for adoption in future PRs.
 
 === Cookie-Based Token Extraction (`mp.jwt.token.header` / `mp.jwt.token.cookie`)
 
@@ -124,9 +136,6 @@ Standard JSR-250 `@RolesAllowed` annotations alongside OAuthSheriff's `@BearerAu
 * `@BearerAuth(requiredScopes={"read"}, requiredRoles={"admin"})` — checks scopes AND roles AND groups (OAuthSheriff extension)
 * `@PermitAll` / `@DenyAll` — standard behavior
 
-=== CDI Producers
-
-`@Produces JsonWebToken` and `@Produces Principal` for standard MP-JWT injection patterns.
 
 == Not Adopted (By Design)
 

@@ -21,13 +21,13 @@ import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.context.ValidationContext;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import lombok.NonNull;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.security.Principal;
 import java.time.OffsetDateTime;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -242,7 +242,7 @@ class TokenContentTest {
     @DisplayName("getAudience() should return Set of audience values")
     void getAudienceShouldReturnSet() {
         var token = createTestToken();
-        token.claims.put("aud", ClaimValue.forList("aud-value", java.util.List.of("client-a", "client-b")));
+        token.claims.put("aud", ClaimValue.forList("aud-value", List.of("client-a", "client-b")));
         var audience = token.getAudience();
         assertEquals(2, audience.size());
         assertTrue(audience.contains("client-a"));
@@ -260,7 +260,7 @@ class TokenContentTest {
     @DisplayName("getGroups() should return Set of group values")
     void getGroupsShouldReturnSet() {
         var token = createTestToken();
-        token.claims.put("groups", ClaimValue.forList("groups-value", java.util.List.of("admin", "users")));
+        token.claims.put("groups", ClaimValue.forList("groups-value", List.of("admin", "users")));
         var groups = token.getGroups();
         assertEquals(2, groups.size());
         assertTrue(groups.contains("admin"));
@@ -318,7 +318,7 @@ class TokenContentTest {
     @DisplayName("getClaim() should return typed values for known claims")
     void getClaimShouldReturnTypedValues() {
         var token = createTestToken();
-        token.claims.put("groups", ClaimValue.forList("groups-value", java.util.List.of("admin")));
+        token.claims.put("groups", ClaimValue.forList("groups-value", List.of("admin")));
         token.claims.put("jti", ClaimValue.forPlainString("id-123"));
 
         // String claim
@@ -335,7 +335,7 @@ class TokenContentTest {
         assertTrue(exp > 0);
 
         // List claim returns Set
-        java.util.Set<String> groups = token.getClaim("groups");
+        Set<String> groups = token.getClaim("groups");
         assertTrue(groups.contains("admin"));
     }
 
@@ -359,8 +359,8 @@ class TokenContentTest {
     @DisplayName("Token should be instance of JsonWebToken and Principal")
     void tokenShouldBeInstanceOfJsonWebTokenAndPrincipal() {
         var token = createTestToken();
-        assertInstanceOf(org.eclipse.microprofile.jwt.JsonWebToken.class, token);
-        assertInstanceOf(java.security.Principal.class, token);
+        assertInstanceOf(JsonWebToken.class, token);
+        assertInstanceOf(Principal.class, token);
     }
 
     // Test implementation

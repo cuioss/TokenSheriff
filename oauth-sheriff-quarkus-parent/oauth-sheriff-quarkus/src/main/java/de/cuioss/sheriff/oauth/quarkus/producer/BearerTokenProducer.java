@@ -26,10 +26,13 @@ import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolver;
 import de.cuioss.tools.logging.CuiLogger;
 import io.micrometer.core.annotation.Timed;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 
+import java.security.Principal;
 import java.util.*;
 
 import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.WARN.*;
@@ -277,5 +280,44 @@ public class BearerTokenProducer {
         Set<String> requiredGroups = annotation != null ? Set.copyOf(List.of(annotation.requiredGroups())) : Collections.emptySet();
 
         return getBearerTokenResult(requiredScopes, requiredRoles, requiredGroups);
+    }
+
+    /**
+     * Produces the current request's {@link JsonWebToken} for standard MP-JWT injection.
+     * <p>
+     * This enables the standard MicroProfile JWT Auth injection pattern:
+     * <pre>{@code
+     * @Inject JsonWebToken callerPrincipal;
+     * }</pre>
+     * <p>
+     * The produced token is the validated {@link AccessTokenContent} (which implements
+     * {@link JsonWebToken}) from the current HTTP request. If no valid token is present,
+     * returns an empty {@link JsonWebToken} where all method calls return null/empty
+     * (per MP-JWT spec: "an empty JsonWebToken is injected").
+     *
+     * @return the validated JsonWebToken, or an empty token if not authenticated
+     */
+    @Produces
+    @RequestScoped
+    public JsonWebToken produceJsonWebToken() {
+        return getAccessTokenContent()
+                .map(token -> (JsonWebToken) token)
+                .orElse(EmptyJsonWebToken.INSTANCE);
+    }
+
+    /**
+     * Produces the current request's {@link Principal} for standard Jakarta Security injection.
+     * <p>
+     * This enables the standard Jakarta Security injection pattern:
+     * <pre>{@code
+     * @Inject Principal principal;
+     * }</pre>
+     *
+     * @return the validated Principal (which is the JsonWebToken), or an empty principal
+     */
+    @Produces
+    @RequestScoped
+    public Principal producePrincipal() {
+        return produceJsonWebToken();
     }
 }

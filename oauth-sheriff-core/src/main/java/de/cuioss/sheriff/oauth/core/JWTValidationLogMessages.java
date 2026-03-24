@@ -587,6 +587,12 @@ public final class JWTValidationLogMessages {
                 .identifier(162)
                 .template("Nested JWE tokens are not allowed")
                 .build();
+
+        public static final LogRecord TOKEN_AGE_EXCEEDED = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(163)
+                .template("Token age exceeds maximum allowed age")
+                .build();
     }
 
 }
