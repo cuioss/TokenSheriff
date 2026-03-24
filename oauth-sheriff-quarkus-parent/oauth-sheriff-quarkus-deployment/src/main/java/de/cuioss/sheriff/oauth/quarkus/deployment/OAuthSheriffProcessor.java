@@ -325,7 +325,6 @@ public class OAuthSheriffProcessor {
                 .addBeanClass(CustomAccessLogFilter.class)
                 // Register interceptor infrastructure
                 .addBeanClass(BearerTokenInterceptor.class)
-                .addBeanClass(RolesAllowedFilter.class)
                 .setUnremovable()
                 .build();
     }

@@ -61,6 +61,7 @@ import java.util.Set;
  */
 @Provider
 @Priority(Priorities.AUTHORIZATION)
+@io.quarkus.runtime.annotations.RegisterForReflection
 public class RolesAllowedFilter implements ContainerRequestFilter {
 
     private static final CuiLogger LOGGER = new CuiLogger(RolesAllowedFilter.class);
