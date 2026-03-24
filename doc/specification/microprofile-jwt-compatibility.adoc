@@ -115,33 +115,25 @@ Standard MP-JWT CDI injection is supported:
 
 When no valid token is present, an empty `JsonWebToken` is injected (per MP-JWT spec).
 
-== Planned Features
-
-The following MP-JWT 2.1 features are planned for adoption in future PRs.
-
 === Cookie-Based Token Extraction (`mp.jwt.token.header` / `mp.jwt.token.cookie`)
 
 Alternative token extraction from HTTP cookies instead of the `Authorization` header. Useful for browser-based SPAs using SameSite cookie protection.
 
-Planned configuration:
+Configuration:
 
 * `sheriff.oauth.token.header` — `Authorization` (default) or `Cookie`
-* `sheriff.oauth.token.cookie` — cookie name (default: `Bearer`)
+* `sheriff.oauth.token.cookie-name` — cookie name (default: `Bearer`)
 
-=== `@RolesAllowed` Support
-
-Standard JSR-250 `@RolesAllowed` annotations alongside OAuthSheriff's `@BearerAuth`:
-
-* `@RolesAllowed("admin")` — checks `groups` claim (MP-JWT spec behavior)
-* `@BearerAuth(requiredScopes={"read"}, requiredRoles={"admin"})` — checks scopes AND roles AND groups (OAuthSheriff extension)
-* `@PermitAll` / `@DenyAll` — standard behavior
-
+When `sheriff.oauth.token.header=Cookie`, the token is extracted from the named cookie in the `Cookie` HTTP header. If a valid `Authorization: Bearer <token>` header is also present, it takes precedence.
 
 == Not Adopted (By Design)
 
 [cols="2,3"]
 |===
 |MP-JWT Feature |Rationale
+
+|`@RolesAllowed` annotation
+|OAuthSheriff uses `@BearerAuth` which provides superior multi-dimensional authorization (scopes AND roles AND groups). The standard `@RolesAllowed` only checks one dimension.
 
 |`@Claim` CDI qualifier injection
 |OAuthSheriff's programmatic `getClaimOption(ClaimName)` with custom `ClaimMapper` pipeline provides type-safe, extensible claim access. `@Claim` injection is less flexible for custom claim types and multi-issuer scenarios.
@@ -208,7 +200,7 @@ The following capabilities have no equivalent in MP-JWT 2.1:
 |Global setting
 
 |`mp.jwt.token.cookie`
-|`sheriff.oauth.token.cookie`
+|`sheriff.oauth.token.cookie-name`
 |Global setting
 
 |`mp.jwt.decrypt.key.location`

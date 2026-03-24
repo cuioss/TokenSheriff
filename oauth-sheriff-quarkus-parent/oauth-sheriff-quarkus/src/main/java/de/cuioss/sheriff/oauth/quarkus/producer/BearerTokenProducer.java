@@ -30,6 +30,7 @@ import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
 import java.security.Principal;
@@ -109,9 +110,16 @@ public class BearerTokenProducer {
 
     private static final CuiLogger LOGGER = new CuiLogger(BearerTokenProducer.class);
     static final String BEARER_PREFIX = "Bearer ";
+    static final String COOKIE_HEADER_VALUE = "Cookie";
 
     private final TokenValidator tokenValidator;
     private final HttpServletRequestResolver servletObjectsResolver;
+
+    @ConfigProperty(name = "sheriff.oauth.token.header", defaultValue = "Authorization")
+    String tokenHeader;
+
+    @ConfigProperty(name = "sheriff.oauth.token.cookie-name", defaultValue = "Bearer")
+    String tokenCookieName;
 
     @Inject
     public BearerTokenProducer(TokenValidator tokenValidator,
@@ -150,6 +158,12 @@ public class BearerTokenProducer {
         Map<String, List<String>> headerMap = servletObjectsResolver.resolveHeaderMap();
 
         Optional<String> tokenResult = extractBearerTokenFromHeaderMap(headerMap);
+
+        // When token.header=Cookie, fall back to cookie extraction if no Authorization token
+        if (tokenResult.isEmpty() && COOKIE_HEADER_VALUE.equalsIgnoreCase(tokenHeader)) {
+            tokenResult = extractTokenFromCookieHeader(headerMap);
+        }
+
         if (tokenResult.isEmpty()) {
             LOGGER.debug("Bearer token missing or invalid in Authorization header");
             return BearerTokenResult.noTokenGiven(requiredScopes, requiredRoles, requiredGroups);
@@ -229,6 +243,55 @@ public class BearerTokenProducer {
         return Optional.of(token);
     }
 
+    /**
+     * Extracts a JWT token from the HTTP Cookie header.
+     * <p>
+     * Parses the Cookie header value according to RFC 6265 and looks for a cookie
+     * matching the configured {@link #tokenCookieName}. Cookie values may optionally
+     * be enclosed in double quotes per RFC 6265 Section 4.1.1.
+     * </p>
+     *
+     * @param headerMap the resolved HTTP header map (keys are lowercase)
+     * @return Optional containing the token value, or empty if cookie not found
+     */
+    Optional<String> extractTokenFromCookieHeader(Map<String, List<String>> headerMap) {
+        List<String> cookieHeaders = headerMap.get("cookie");
+        if (cookieHeaders == null || cookieHeaders.isEmpty()) {
+            LOGGER.debug("Cookie header not found in headerMap");
+            return Optional.empty();
+        }
+
+        // Cookie header format: "name1=value1; name2=value2"
+        for (String cookieHeader : cookieHeaders) {
+            if (cookieHeader == null) {
+                continue;
+            }
+            String[] cookies = cookieHeader.split(";");
+            for (String cookie : cookies) {
+                String trimmed = cookie.trim();
+                int eqIndex = trimmed.indexOf('=');
+                if (eqIndex > 0) {
+                    String name = trimmed.substring(0, eqIndex).trim();
+                    if (tokenCookieName.equals(name)) {
+                        String value = trimmed.substring(eqIndex + 1).trim();
+                        // Remove optional surrounding double quotes per RFC 6265
+                        if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+                            value = value.substring(1, value.length() - 1);
+                        }
+                        if (value.isEmpty()) {
+                            LOGGER.debug("Cookie '%s' found but value is empty", tokenCookieName);
+                            return Optional.empty();
+                        }
+                        LOGGER.debug("Token extracted from cookie '%s'", tokenCookieName);
+                        return Optional.of(value);
+                    }
+                }
+            }
+        }
+
+        LOGGER.debug("Cookie '%s' not found in Cookie header", tokenCookieName);
+        return Optional.empty();
+    }
 
     /**
      * Produces the current request's BearerTokenResult as a CDI bean.

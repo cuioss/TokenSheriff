@@ -439,6 +439,46 @@ public final class JwtPropertyKeys {
     }
 
     /**
+     * Properties related to token extraction configuration.
+     * <p>
+     * These properties control how tokens are extracted from HTTP requests.
+     * By default, tokens are extracted from the Authorization header.
+     * When configured for cookie-based extraction, tokens are read from
+     * a named HTTP cookie instead.
+     * </p>
+     * <p>
+     * All properties are prefixed with "sheriff.oauth.token".
+     * </p>
+     *
+     * @since 1.0
+     */
+    @UtilityClass
+    public static final class TOKEN {
+        private static final String BASE = PREFIX + ".token";
+
+        /**
+         * The HTTP header to extract the token from.
+         * Property: "sheriff.oauth.token.header"
+         * <p>
+         * Supported values:
+         * <ul>
+         *   <li>{@code Authorization} (default) - standard Bearer token from Authorization header</li>
+         *   <li>{@code Cookie} - extract token from a named HTTP cookie</li>
+         * </ul>
+         */
+        public static final String HEADER = BASE + ".header";
+
+        /**
+         * The cookie name to extract the token from when header is set to Cookie.
+         * Property: "sheriff.oauth.token.cookie-name"
+         * <p>
+         * Default value is {@code Bearer}.
+         * </p>
+         */
+        public static final String COOKIE_NAME = BASE + ".cookie-name";
+    }
+
+    /**
      * Global Keycloak mapper configuration properties.
      * <p>
      * These properties control the activation of built-in Keycloak claim mappers
