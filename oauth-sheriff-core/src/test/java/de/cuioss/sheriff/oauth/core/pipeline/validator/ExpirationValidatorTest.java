@@ -176,6 +176,55 @@ class ExpirationValidatorTest {
     }
 
     @Test
+    @DisplayName("Should skip token age validation when disabled")
+    void shouldSkipTokenAgeValidationWhenDisabled() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        OffsetDateTime fixedTime = OffsetDateTime.now();
+        OffsetDateTime issuedAt = fixedTime.minusHours(24); // very old token
+        tokenHolder.withClaim(ClaimName.ISSUED_AT.getName(),
+                ClaimValue.forDateTime(String.valueOf(issuedAt.toEpochSecond()), issuedAt));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+
+        // Context without maxTokenAgeSeconds -> validation disabled
+        ValidationContext noAgeContext = new ValidationContext(fixedTime, 60);
+        assertDoesNotThrow(() -> validator.validateTokenAge(token, noAgeContext));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED));
+    }
+
+    @Test
+    @DisplayName("Should pass token age validation for young token")
+    void shouldPassTokenAgeValidationForYoungToken() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        OffsetDateTime fixedTime = OffsetDateTime.now();
+        OffsetDateTime issuedAt = fixedTime.minusSeconds(100); // 100s old, max age 300 + 60 skew
+        tokenHolder.withClaim(ClaimName.ISSUED_AT.getName(),
+                ClaimValue.forDateTime(String.valueOf(issuedAt.toEpochSecond()), issuedAt));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+
+        ValidationContext ageContext = new ValidationContext(fixedTime, 60, 300);
+        assertDoesNotThrow(() -> validator.validateTokenAge(token, ageContext));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED));
+    }
+
+    @Test
+    @DisplayName("Should fail token age validation for too old token")
+    void shouldFailTokenAgeValidationForTooOldToken() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        OffsetDateTime fixedTime = OffsetDateTime.now();
+        OffsetDateTime issuedAt = fixedTime.minusSeconds(400); // 400s old, max age 300 + 60 skew = 360
+        tokenHolder.withClaim(ClaimName.ISSUED_AT.getName(),
+                ClaimValue.forDateTime(String.valueOf(issuedAt.toEpochSecond()), issuedAt));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+
+        ValidationContext ageContext = new ValidationContext(fixedTime, 60, 300);
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> validator.validateTokenAge(token, ageContext));
+        assertEquals(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED, exception.getEventType());
+        assertTrue(exception.getMessage().contains("Token is too old"));
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED));
+    }
+
+    @Test
     @DisplayName("Should handle edge case of current time as not-before")
     void shouldHandleEdgeCaseOfCurrentTimeAsNotBefore() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
