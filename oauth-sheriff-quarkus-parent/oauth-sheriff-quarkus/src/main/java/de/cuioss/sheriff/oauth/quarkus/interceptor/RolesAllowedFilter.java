@@ -123,18 +123,9 @@ public class RolesAllowedFilter implements ContainerRequestFilter {
 
         AccessTokenContent token = tokenOpt.get();
         Set<String> tokenGroups = token.getGroups();
-        if (tokenGroups == null) {
-            tokenGroups = Collections.emptySet();
-        }
 
         // Check if token groups contain any of the allowed roles (per MP-JWT spec)
-        boolean hasRole = false;
-        for (String role : allowedRoles) {
-            if (tokenGroups.contains(role)) {
-                hasRole = true;
-                break;
-            }
-        }
+        boolean hasRole = allowedRoles.stream().anyMatch(tokenGroups::contains);
 
         if (!hasRole) {
             LOGGER.debug("Token groups %s do not contain any of required roles %s — returning 403",

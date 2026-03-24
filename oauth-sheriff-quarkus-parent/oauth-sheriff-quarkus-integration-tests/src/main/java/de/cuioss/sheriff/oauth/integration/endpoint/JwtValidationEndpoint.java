@@ -55,7 +55,7 @@ public class JwtValidationEndpoint {
     public static final String NOT_PRESENT = "not-present";
 
     @Inject
-    JsonWebToken jsonWebToken;
+    jakarta.inject.Provider<JsonWebToken> jsonWebTokenProvider;
 
     private final TokenValidator tokenValidator;
     private final Instance<BearerTokenResult> basicToken;
@@ -401,12 +401,13 @@ public class JwtValidationEndpoint {
     @BearerAuth
     public Response testMpJwtPrincipal() {
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("principalName", jsonWebToken.getName());
-        data.put("subject", jsonWebToken.getSubject());
-        data.put("groups", jsonWebToken.getGroups());
-        data.put("claimNames", jsonWebToken.getClaimNames());
+        JsonWebToken jwt = jsonWebTokenProvider.get();
+        data.put("principalName", jwt.getName());
+        data.put("subject", jwt.getSubject());
+        data.put("groups", jwt.getGroups());
+        data.put("claimNames", jwt.getClaimNames());
         // JsonWebToken extends Principal, so we report its class name
-        data.put("principalClass", jsonWebToken.getClass().getSimpleName());
+        data.put("principalClass", jwt.getClass().getSimpleName());
         return Response.ok(data).build();
     }
 
