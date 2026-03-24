@@ -62,6 +62,48 @@ xref:oauth-sheriff-quarkus/src/main/resources/META-INF/quarkus-config-doc.adoc[Q
 
 The extension provides the following CDI beans:
 
+==== MicroProfile JWT / Jakarta Security Injection
+
+The extension implements https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html[MicroProfile JWT Auth 2.1] compatibility. Every validated token is a `JsonWebToken` (which extends `java.security.Principal`), enabling standard injection patterns:
+
+[source,java]
+----
+import org.eclipse.microprofile.jwt.JsonWebToken;
+import java.security.Principal;
+
+@Path("/api")
+@RequestScoped
+public class MyResource {
+
+    @Inject
+    JsonWebToken callerPrincipal;  // MP-JWT standard injection
+
+    @Inject
+    Principal principal;            // Jakarta Security standard injection
+
+    @GET
+    @BearerAuth(requiredScopes = {"read"})
+    public Response getData() {
+        // getName() uses MP-JWT UPN fallback chain: upn → preferred_username → sub
+        String userName = callerPrincipal.getName();
+
+        // Standard JsonWebToken methods
+        String subject = callerPrincipal.getSubject();
+        Set<String> groups = callerPrincipal.getGroups();
+        long expirationTime = callerPrincipal.getExpirationTime();
+
+        // Generic claim access
+        String email = callerPrincipal.getClaim("email");
+
+        return Response.ok("Hello " + userName).build();
+    }
+}
+----
+
+When no valid token is present, an empty `JsonWebToken` is injected where all methods return null (per MP-JWT spec).
+
+For details on the MicroProfile JWT compatibility layer, see xref:../doc/specification/microprofile-jwt-compatibility.adoc[MicroProfile JWT Compatibility Specification].
+
 ==== Declarative Security with @BearerAuth (Recommended)
 
 The `@BearerAuth` interceptor provides declarative security for JAX-RS endpoints with automatic error responses:
@@ -96,7 +138,7 @@ public Response getGroupData() {
     return Response.ok(data).build();
 }
 
-// With multiple requirements
+// With multiple requirements (scopes AND roles AND groups)
 @GET
 @BearerAuth(
     requiredScopes = {"read"},
@@ -108,7 +150,7 @@ public Response getRestrictedData() {
 }
 ----
 
-When you need access to the validated token, use parameter injection:
+When you need access to the validated token content, use parameter injection:
 
 [source,java]
 ----
@@ -122,8 +164,11 @@ public class InstanceEndpoint {
     public Response getData(@BearerToken BearerTokenResult tokenResult) {
         AccessTokenContent token = tokenResult.getAccessTokenContent()
                 .orElseThrow(() -> new IllegalStateException("Token content missing after successful authorization"));
-        // Token is valid and has required scopes
-        return Response.ok("Data for user: " + token.getSubject().orElse("none")).build();
+        // OAuthSheriff-specific API with richer types
+        String userId = Objects.toString(token.getSubject(), "unknown");
+        OffsetDateTime expiry = token.getExpirationDateTime();
+        List<String> scopes = token.getScopes();
+        return Response.ok("Data for user: " + userId).build();
     }
 }
 ----

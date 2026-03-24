@@ -119,21 +119,23 @@ public Response getData() {
 }
 ----
 
-When you need access to the validated token, use parameter injection:
+The extension also supports standard https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html[MicroProfile JWT Auth 2.1] injection — every validated token is a `JsonWebToken` and `Principal`:
 
 [source,java]
 ----
+@Inject
+JsonWebToken callerPrincipal;  // MP-JWT standard
+
 @GET
 @BearerAuth(requiredScopes = {"read"})
-public Response getData(@BearerToken BearerTokenResult tokenResult) {
-    AccessTokenContent token = tokenResult.getAccessTokenContent()
-        .orElseThrow(() -> new IllegalStateException("Token not available"));
-
-    String userId = token.getSubject().orElse("unknown");
-
-    return Response.ok(data).build();
+public Response getData() {
+    String userName = callerPrincipal.getName();  // UPN fallback: upn → preferred_username → sub
+    Set<String> groups = callerPrincipal.getGroups();
+    return Response.ok("Hello " + userName).build();
 }
 ----
+
+For details, see the xref:doc/specification/microprofile-jwt-compatibility.adoc[MicroProfile JWT Compatibility] specification and the xref:oauth-sheriff-quarkus-parent/README.adoc[Quarkus Extension documentation].
 
 For a complete working example, see the xref:oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/README.adoc[integration tests module].
 
@@ -188,6 +190,7 @@ For detailed architectural information, see:
 * xref:oauth-sheriff-core/README.adoc[Usage Guide] - Detailed usage examples
 * xref:doc/Requirements.adoc[Requirements] - Functional and non-functional requirements
 * xref:doc/security/threat-model.adoc[Threat Model] - Security analysis
+* xref:doc/specification/microprofile-jwt-compatibility.adoc[MicroProfile JWT Compatibility] - MP-JWT 2.1 integration and rationale
 * xref:doc/specification/multi-idp-testing.adoc[Multi-IDP Testing] - Testing with multiple OIDC providers
 
 For configuration details including runtime dependencies and test support, see the xref:oauth-sheriff-core/README.adoc[OAuth Sheriff Core documentation].
