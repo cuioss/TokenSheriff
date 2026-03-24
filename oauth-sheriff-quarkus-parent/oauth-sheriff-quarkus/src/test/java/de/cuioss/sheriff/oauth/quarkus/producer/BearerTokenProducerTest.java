@@ -58,7 +58,7 @@ class BearerTokenProducerTest {
         tokenValidator = createMock(TokenValidator.class);
         servletResolverMock = new HttpServletRequestResolverMock();
         HttpServletRequestResolver servletResolver = servletResolverMock;
-        producer = new BearerTokenProducer(tokenValidator, servletResolver);
+        producer = new BearerTokenProducer(tokenValidator, servletResolver, "Authorization", "Bearer");
     }
 
     @Test
@@ -262,6 +262,85 @@ class BearerTokenProducerTest {
         assertEquals("Bearer token is empty", result.getErrorMessage().orElse(null));
         assertSingleLogMessagePresentContaining(TestLogLevel.DEBUG,
                 "Bearer token is empty - invalid request per RFC 6750");
+    }
+
+    // === Cookie-based token extraction tests ===
+
+    @Test
+    @DisplayName("Should extract token from cookie when token.header is Cookie")
+    void cookieExtraction() {
+        // Create a producer configured for cookie extraction
+        var cookieProducer = new BearerTokenProducer(tokenValidator, servletResolverMock, "Cookie", "Bearer");
+        String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
+        servletResolverMock.setHeader("Cookie", "Bearer=" + token + "; other=value");
+
+        AccessTokenContent tokenContent = createAccessToken(Map.of());
+        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
+        replay(tokenValidator);
+
+        BearerTokenResult result = cookieProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+        assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus());
+        assertTrue(result.getAccessTokenContent().isPresent());
+        verify(tokenValidator);
+    }
+
+    @Test
+    @DisplayName("Should extract token from custom cookie name")
+    void customCookieNameExtraction() {
+        var cookieProducer = new BearerTokenProducer(tokenValidator, servletResolverMock, "Cookie", "jwt_token");
+        String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
+        servletResolverMock.setHeader("Cookie", "other=foo; jwt_token=" + token);
+
+        AccessTokenContent tokenContent = createAccessToken(Map.of());
+        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
+        replay(tokenValidator);
+
+        BearerTokenResult result = cookieProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+        assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus());
+        assertTrue(result.getAccessTokenContent().isPresent());
+        verify(tokenValidator);
+    }
+
+    @Test
+    @DisplayName("Should return no token when cookie is not present")
+    void missingCookie() {
+        var cookieProducer = new BearerTokenProducer(tokenValidator, servletResolverMock, "Cookie", "Bearer");
+        // No cookie header set
+
+        BearerTokenResult result = cookieProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+        assertEquals(BearerTokenStatus.NO_TOKEN_GIVEN, result.getStatus());
+    }
+
+    @Test
+    @DisplayName("Should return no token when cookie header exists but target cookie is missing")
+    void cookieHeaderWithoutTargetCookie() {
+        var cookieProducer = new BearerTokenProducer(tokenValidator, servletResolverMock, "Cookie", "Bearer");
+        servletResolverMock.setHeader("Cookie", "other=somevalue; session=abc");
+
+        BearerTokenResult result = cookieProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+        assertEquals(BearerTokenStatus.NO_TOKEN_GIVEN, result.getStatus());
+    }
+
+    @Test
+    @DisplayName("Should prefer Authorization header even when cookie is also present and header is Authorization")
+    void authorizationHeaderPreferredOverCookie() {
+        // Default producer uses Authorization header
+        String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
+        servletResolverMock.setBearerToken(token);
+        servletResolverMock.setHeader("Cookie", "Bearer=other-token");
+
+        AccessTokenContent tokenContent = createAccessToken(Map.of());
+        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
+        replay(tokenValidator);
+
+        BearerTokenResult result = producer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+        assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus());
+        verify(tokenValidator);
     }
 
     /**

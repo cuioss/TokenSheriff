@@ -27,16 +27,18 @@ import de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenResult;
 import de.cuioss.tools.logging.CuiLogger;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import io.smallrye.common.annotation.RunOnVirtualThread;
+import jakarta.annotation.security.DenyAll;
+import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 /**
  * REST endpoint for JWT validation operations.
@@ -51,6 +53,9 @@ public class JwtValidationEndpoint {
 
     private static final CuiLogger LOGGER = new CuiLogger(JwtValidationEndpoint.class);
     public static final String NOT_PRESENT = "not-present";
+
+    @Inject
+    JsonWebToken jsonWebToken;
 
     private final TokenValidator tokenValidator;
     private final Instance<BearerTokenResult> basicToken;
@@ -384,6 +389,78 @@ public class JwtValidationEndpoint {
         return Response.ok(new ValidationResponse(true, "Echo successful", responseData)).build();
     }
 
+
+    // === MP-JWT JsonWebToken injection test ===
+
+    /**
+     * Tests MP-JWT {@link JsonWebToken} injection.
+     * Returns principal name, subject, groups, and claim names from the injected token.
+     */
+    @GET
+    @Path("/mp-jwt/principal")
+    @BearerAuth
+    public Response testMpJwtPrincipal() {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("principalName", jsonWebToken.getName());
+        data.put("subject", jsonWebToken.getSubject());
+        data.put("groups", jsonWebToken.getGroups());
+        data.put("claimNames", jsonWebToken.getClaimNames());
+        // JsonWebToken extends Principal, so we report its class name
+        data.put("principalClass", jsonWebToken.getClass().getSimpleName());
+        return Response.ok(data).build();
+    }
+
+    // === @RolesAllowed test endpoints ===
+
+    /**
+     * Tests {@code @RolesAllowed("admin")} — requires admin group in token.
+     */
+    @GET
+    @Path("/roles/admin")
+    @RolesAllowed("admin")
+    public Response testRolesAdmin() {
+        return Response.ok(Map.of("access", "granted", "role", "admin")).build();
+    }
+
+    /**
+     * Tests {@code @RolesAllowed("user")} — requires user group in token.
+     */
+    @GET
+    @Path("/roles/user")
+    @RolesAllowed("user")
+    public Response testRolesUser() {
+        return Response.ok(Map.of("access", "granted", "role", "user")).build();
+    }
+
+    /**
+     * Tests {@code @RolesAllowed("test-group")} — requires test-group in token.
+     */
+    @GET
+    @Path("/roles/test-group")
+    @RolesAllowed("test-group")
+    public Response testRolesTestGroup() {
+        return Response.ok(Map.of("access", "granted", "role", "test-group")).build();
+    }
+
+    /**
+     * Tests {@code @DenyAll} — always returns 403 Forbidden.
+     */
+    @GET
+    @Path("/roles/deny-all")
+    @DenyAll
+    public Response testDenyAll() {
+        return Response.ok(Map.of("access", "should-not-reach")).build();
+    }
+
+    /**
+     * Tests {@code @PermitAll} — allows access without token.
+     */
+    @GET
+    @Path("/roles/permit-all")
+    @PermitAll
+    public Response testPermitAll() {
+        return Response.ok(Map.of("access", "granted")).build();
+    }
 
     // Helper methods
 

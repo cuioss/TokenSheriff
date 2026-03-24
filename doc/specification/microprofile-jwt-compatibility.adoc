@@ -115,26 +115,26 @@ Standard MP-JWT CDI injection is supported:
 
 When no valid token is present, an empty `JsonWebToken` is injected (per MP-JWT spec).
 
-== Planned Features
-
-The following MP-JWT 2.1 features are planned for adoption in future PRs.
-
 === Cookie-Based Token Extraction (`mp.jwt.token.header` / `mp.jwt.token.cookie`)
 
 Alternative token extraction from HTTP cookies instead of the `Authorization` header. Useful for browser-based SPAs using SameSite cookie protection.
 
-Planned configuration:
+OAuthSheriff configuration:
 
 * `sheriff.oauth.token.header` — `Authorization` (default) or `Cookie`
-* `sheriff.oauth.token.cookie` — cookie name (default: `Bearer`)
+* `sheriff.oauth.token.cookie-name` — cookie name (default: `Bearer`)
+
+When `token.header=Cookie`, the `BearerTokenProducer` parses the HTTP `Cookie` header and extracts the JWT from the named cookie. The `Authorization` header is checked first as a fallback.
 
 === `@RolesAllowed` Support
 
-Standard JSR-250 `@RolesAllowed` annotations alongside OAuthSheriff's `@BearerAuth`:
+Standard JSR-250 `@RolesAllowed` annotations are supported alongside OAuthSheriff's `@BearerAuth`:
 
 * `@RolesAllowed("admin")` — checks `groups` claim (MP-JWT spec behavior)
 * `@BearerAuth(requiredScopes={"read"}, requiredRoles={"admin"})` — checks scopes AND roles AND groups (OAuthSheriff extension)
 * `@PermitAll` / `@DenyAll` — standard behavior
+
+Implemented via `RolesAllowedFilter`, a JAX-RS `ContainerRequestFilter` at `Priorities.AUTHORIZATION` priority. Method-level annotations take precedence over class-level.
 
 
 == Not Adopted (By Design)

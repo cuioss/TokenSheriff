@@ -784,6 +784,52 @@ public final class JwtPropertyKeys {
     }
 
     /**
+     * Properties related to token extraction configuration.
+     * <p>
+     * These properties control how the bearer token is extracted from incoming
+     * HTTP requests. By default, the token is extracted from the {@code Authorization}
+     * header using the {@code Bearer} scheme. Alternatively, the token can be
+     * extracted from a named cookie.
+     * </p>
+     * <p>
+     * All properties are prefixed with "sheriff.oauth.token".
+     * </p>
+     *
+     * @since 1.0
+     */
+    @UtilityClass
+    public static final class TOKEN {
+        /**
+         * Base path for token extraction configurations.
+         */
+        public static final String BASE = PREFIX + ".token";
+
+        /**
+         * The header source for token extraction.
+         * Property: "sheriff.oauth.token.header"
+         * <p>
+         * Supported values:
+         * <ul>
+         *   <li>{@code Authorization} (default) — extract from the Authorization header with Bearer scheme</li>
+         *   <li>{@code Cookie} — extract from a named cookie (see {@link #COOKIE_NAME})</li>
+         * </ul>
+         */
+        public static final String HEADER = BASE + ".header";
+
+        /**
+         * The cookie name to use when extracting the token from cookies.
+         * Property: "sheriff.oauth.token.cookie-name"
+         * <p>
+         * Only used when {@link #HEADER} is set to {@code Cookie}.
+         * </p>
+         * <p>
+         * Default value is {@code Bearer}.
+         * </p>
+         */
+        public static final String COOKIE_NAME = BASE + ".cookie-name";
+    }
+
+    /**
      * Properties related to HTTP retry configuration.
      */
     @UtilityClass

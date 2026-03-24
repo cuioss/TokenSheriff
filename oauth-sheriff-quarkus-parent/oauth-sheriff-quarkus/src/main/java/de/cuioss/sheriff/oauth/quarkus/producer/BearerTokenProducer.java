@@ -21,6 +21,7 @@ import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.oauth.quarkus.annotation.ServletObjectsResolver;
+import de.cuioss.sheriff.oauth.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.oauth.quarkus.metrics.MetricIdentifier;
 import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolver;
 import de.cuioss.tools.logging.CuiLogger;
@@ -30,6 +31,7 @@ import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
 import java.security.Principal;
@@ -109,15 +111,24 @@ public class BearerTokenProducer {
 
     private static final CuiLogger LOGGER = new CuiLogger(BearerTokenProducer.class);
     static final String BEARER_PREFIX = "Bearer ";
+    static final String HEADER_AUTHORIZATION = "Authorization";
+    static final String HEADER_COOKIE = "Cookie";
+    static final String DEFAULT_COOKIE_NAME = "Bearer";
 
     private final TokenValidator tokenValidator;
     private final HttpServletRequestResolver servletObjectsResolver;
+    private final String tokenHeader;
+    private final String tokenCookieName;
 
     @Inject
     public BearerTokenProducer(TokenValidator tokenValidator,
-            @ServletObjectsResolver(ServletObjectsResolver.Variant.VERTX) HttpServletRequestResolver servletObjectsResolver) {
+            @ServletObjectsResolver(ServletObjectsResolver.Variant.VERTX) HttpServletRequestResolver servletObjectsResolver,
+            @ConfigProperty(name = JwtPropertyKeys.TOKEN.HEADER, defaultValue = HEADER_AUTHORIZATION) String tokenHeader,
+            @ConfigProperty(name = JwtPropertyKeys.TOKEN.COOKIE_NAME, defaultValue = DEFAULT_COOKIE_NAME) String tokenCookieName) {
         this.tokenValidator = tokenValidator;
         this.servletObjectsResolver = servletObjectsResolver;
+        this.tokenHeader = tokenHeader;
+        this.tokenCookieName = tokenCookieName;
     }
 
     /**
@@ -150,6 +161,10 @@ public class BearerTokenProducer {
         Map<String, List<String>> headerMap = servletObjectsResolver.resolveHeaderMap();
 
         Optional<String> tokenResult = extractBearerTokenFromHeaderMap(headerMap);
+        // Fallback to cookie extraction if Authorization header has no token
+        if (tokenResult.isEmpty() && HEADER_COOKIE.equalsIgnoreCase(tokenHeader)) {
+            tokenResult = extractTokenFromCookieHeader(headerMap);
+        }
         if (tokenResult.isEmpty()) {
             LOGGER.debug("Bearer token missing or invalid in Authorization header");
             return BearerTokenResult.noTokenGiven(requiredScopes, requiredRoles, requiredGroups);
@@ -229,6 +244,46 @@ public class BearerTokenProducer {
         return Optional.of(token);
     }
 
+
+    /**
+     * Extracts the bearer token from the cookie header in the provided HTTP header map.
+     * <p>
+     * Parses the {@code cookie} header value to find a cookie matching the configured
+     * {@link #tokenCookieName}. Cookies are expected in the standard format:
+     * {@code name1=value1; name2=value2}.
+     *
+     * @param headerMap the resolved HTTP header map
+     * @return Optional containing the cookie value, or empty Optional if the cookie is not found
+     */
+    private Optional<String> extractTokenFromCookieHeader(Map<String, List<String>> headerMap) {
+        List<String> cookieHeaders = headerMap.get("cookie");
+        if (cookieHeaders == null || cookieHeaders.isEmpty()) {
+            LOGGER.debug("Cookie header not found in headerMap");
+            return Optional.empty();
+        }
+
+        // Parse cookie header(s) — may be a single header with semicolons or multiple headers
+        for (String cookieHeader : cookieHeaders) {
+            String[] cookies = cookieHeader.split(";");
+            for (String cookie : cookies) {
+                String trimmed = cookie.trim();
+                int eqIndex = trimmed.indexOf('=');
+                if (eqIndex > 0) {
+                    String name = trimmed.substring(0, eqIndex).trim();
+                    if (tokenCookieName.equals(name)) {
+                        String value = trimmed.substring(eqIndex + 1).trim();
+                        if (!value.isEmpty()) {
+                            LOGGER.debug("Bearer token extracted from cookie '%s'", tokenCookieName);
+                            return Optional.of(value);
+                        }
+                    }
+                }
+            }
+        }
+
+        LOGGER.debug("Cookie '%s' not found in cookie header", tokenCookieName);
+        return Optional.empty();
+    }
 
     /**
      * Produces the current request's BearerTokenResult as a CDI bean.
