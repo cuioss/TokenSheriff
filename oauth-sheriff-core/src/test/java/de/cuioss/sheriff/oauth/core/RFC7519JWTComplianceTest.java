@@ -36,7 +36,6 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -86,7 +85,7 @@ class RFC7519JWTComplianceTest {
             assertNotNull(result, "Token should be parsed successfully");
 
             // Subject claim is mandatory per RFC 7519
-            Optional<String> subject = result.getSubject();
+            Optional<String> subject = result.getSubjectOption();
             assertTrue(subject.isPresent(), "Subject must be present according to RFC 7519");
         }
 
@@ -98,8 +97,8 @@ class RFC7519JWTComplianceTest {
             String token = tokenHolder.getRawToken();
             AccessTokenContent result = TokenValidator.builder().issuerConfig(tokenHolder.getIssuerConfig()).build().createAccessToken(AccessTokenRequest.of(token));
             assertNotNull(result, "Token should be parsed successfully");
-            assertTrue(result.getAudience().isPresent());
-            assertEquals(List.of(TestTokenHolder.TEST_AUDIENCE), result.getAudience().get());
+            assertFalse(result.getAudience().isEmpty());
+            assertTrue(result.getAudience().contains(TestTokenHolder.TEST_AUDIENCE));
         }
 
         @ParameterizedTest
@@ -110,7 +109,7 @@ class RFC7519JWTComplianceTest {
             String token = tokenHolder.getRawToken();
             AccessTokenContent result = TokenValidator.builder().issuerConfig(tokenHolder.getIssuerConfig()).build().createAccessToken(AccessTokenRequest.of(token));
             assertNotNull(result, "Token should be parsed successfully");
-            assertNotNull(result.getExpirationTime());
+            assertNotNull(result.getExpirationDateTime());
             assertFalse(result.isExpired(validationContext));
         }
 
@@ -131,7 +130,7 @@ class RFC7519JWTComplianceTest {
             String token = tokenHolder.getRawToken();
             AccessTokenContent result = TokenValidator.builder().issuerConfig(tokenHolder.getIssuerConfig()).build().createAccessToken(AccessTokenRequest.of(token));
             assertNotNull(result, "Token should be parsed successfully");
-            assertTrue(result.getNotBefore().isPresent());
+            assertTrue(result.getNotBeforeDateTime().isPresent());
         }
 
         @Test
@@ -142,7 +141,7 @@ class RFC7519JWTComplianceTest {
             String token = tokenHolder.getRawToken();
             AccessTokenContent result = TokenValidator.builder().issuerConfig(tokenHolder.getIssuerConfig()).build().createAccessToken(AccessTokenRequest.of(token));
             assertNotNull(result, "Token should be parsed successfully");
-            assertNotNull(result.getIssuedAtTime());
+            assertNotNull(result.getIssuedAtDateTime());
         }
 
         @Test
@@ -303,11 +302,11 @@ class RFC7519JWTComplianceTest {
             assertNotNull(result.getIssuer());
 
             // Subject claim is mandatory per RFC 7519
-            Optional<String> subject = result.getSubject();
+            Optional<String> subject = result.getSubjectOption();
             assertTrue(subject.isPresent(), "Subject must be present according to RFC 7519");
 
-            assertNotNull(result.getExpirationTime());
-            assertNotNull(result.getIssuedAtTime());
+            assertNotNull(result.getExpirationDateTime());
+            assertNotNull(result.getIssuedAtDateTime());
         }
 
         @Test

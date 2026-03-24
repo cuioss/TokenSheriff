@@ -494,7 +494,7 @@ class HttpJwksLoaderGracePeriodTest {
             // Validate token with original key - should succeed
             AccessTokenContent validationResult1 = validator.createAccessToken(AccessTokenRequest.of(tokenSignedWithOriginalKey));
             assertNotNull(validationResult1, "Token signed with original key should validate");
-            assertEquals("test-subject", validationResult1.getSubject().orElse(null),
+            assertEquals("test-subject", validationResult1.getSubject(),
                     "Subject claim should match");
 
             // Rotate keys - switch to different key
@@ -523,7 +523,7 @@ class HttpJwksLoaderGracePeriodTest {
             // Validate new token with rotated key - should succeed
             AccessTokenContent validationResult2 = validator.createAccessToken(AccessTokenRequest.of(tokenSignedWithRotatedKey));
             assertNotNull(validationResult2, "Token signed with rotated key should validate");
-            assertEquals("test-subject-rotated", validationResult2.getSubject().orElse(null),
+            assertEquals("test-subject-rotated", validationResult2.getSubject(),
                     "Subject claim should match for rotated key token");
 
             // CRITICAL: Validate the original token AFTER key rotation
@@ -533,7 +533,7 @@ class HttpJwksLoaderGracePeriodTest {
                     """
                             Token signed with ORIGINAL key should STILL validate within grace period. \
                             This is the key test for Issue #110 - old tokens remain valid during grace period!""");
-            assertEquals("test-subject", validationResult3.getSubject().orElse(null),
+            assertEquals("test-subject", validationResult3.getSubject(),
                     "Original token subject should still be accessible");
 
             // Both tokens should be valid simultaneously during grace period

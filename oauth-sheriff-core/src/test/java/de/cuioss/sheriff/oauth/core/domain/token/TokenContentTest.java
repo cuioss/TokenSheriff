@@ -93,7 +93,7 @@ class TokenContentTest {
     void shouldGetSubjectWhenClaimIsPresent() {
         TestTokenContent token = createTestToken();
 
-        Optional<String> subject = token.getSubject();
+        Optional<String> subject = token.getSubjectOption();
         assertTrue(subject.isPresent());
         assertEquals("test-subject", subject.get());
     }
@@ -103,7 +103,7 @@ class TokenContentTest {
     void shouldReturnEmptyOptionalWhenSubjectClaimIsMissing() {
         TestTokenContent token = createTokenWithoutSubject();
 
-        Optional<String> subject = token.getSubject();
+        Optional<String> subject = token.getSubjectOption();
         assertFalse(subject.isPresent());
     }
 
@@ -112,7 +112,7 @@ class TokenContentTest {
     void shouldGetExpirationTimeFromMandatoryClaim() {
         TestTokenContent token = createTestToken();
 
-        OffsetDateTime expirationTime = token.getExpirationTime();
+        OffsetDateTime expirationTime = token.getExpirationDateTime();
         assertNotNull(expirationTime);
         assertTrue(expirationTime.isAfter(OffsetDateTime.now()));
     }
@@ -123,7 +123,7 @@ class TokenContentTest {
         TestTokenContent token = createTokenWithoutExpiration();
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
-                token::getExpirationTime);
+                token::getExpirationDateTime);
         assertTrue(exception.getMessage().contains("ExpirationTime claim not present in token"));
     }
 
@@ -132,7 +132,7 @@ class TokenContentTest {
     void shouldGetIssuedAtTimeFromMandatoryClaim() {
         TestTokenContent token = createTestToken();
 
-        OffsetDateTime issuedAtTime = token.getIssuedAtTime();
+        OffsetDateTime issuedAtTime = token.getIssuedAtDateTime();
         assertNotNull(issuedAtTime);
         assertTrue(issuedAtTime.isBefore(OffsetDateTime.now()));
     }
@@ -143,7 +143,7 @@ class TokenContentTest {
         TestTokenContent token = createTokenWithoutIssuedAt();
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
-                token::getIssuedAtTime);
+                token::getIssuedAtDateTime);
         assertTrue(exception.getMessage().contains("issued at time claim not present in token"));
     }
 
@@ -151,11 +151,11 @@ class TokenContentTest {
     @DisplayName("Should handle optional not before claim")
     void shouldHandleOptionalNotBeforeClaim() {
         TestTokenContent tokenWithNotBefore = createTestTokenWithNotBefore();
-        Optional<OffsetDateTime> notBefore = tokenWithNotBefore.getNotBefore();
+        Optional<OffsetDateTime> notBefore = tokenWithNotBefore.getNotBeforeDateTime();
         assertTrue(notBefore.isPresent());
 
         TestTokenContent tokenWithoutNotBefore = createTestToken();
-        Optional<OffsetDateTime> notBeforeEmpty = tokenWithoutNotBefore.getNotBefore();
+        Optional<OffsetDateTime> notBeforeEmpty = tokenWithoutNotBefore.getNotBeforeDateTime();
         assertFalse(notBeforeEmpty.isPresent());
     }
 

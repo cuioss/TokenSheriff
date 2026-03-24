@@ -36,6 +36,7 @@ import jakarta.ws.rs.core.Response;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * REST endpoint for JWT validation operations.
@@ -91,7 +92,7 @@ public class JwtValidationEndpoint {
             if (tokenOpt.isPresent()) {
                 AccessTokenContent token = tokenOpt.get();
                 LOGGER.debug("Access token validated successfully - Subject: %s, Roles: %s, Groups: %s, Scopes: %s",
-                        token.getSubject().orElse("none"), token.getRoles(), token.getGroups(), token.getScopes());
+                        Objects.toString(token.getSubject(), "none"), token.getRoles(), token.getGroups(), token.getScopes());
                 return Response.ok(createTokenResponse(token, "Access token is valid")).build();
             } else {
                 LOGGER.debug("BasicToken authorized but no AccessTokenContent present");
@@ -125,7 +126,7 @@ public class JwtValidationEndpoint {
         try {
             AccessTokenContent token = tokenValidator.createAccessToken(AccessTokenRequest.of(tokenRequest.token().trim()));
             LOGGER.debug("Explicit token validated successfully - Subject: %s, Roles: %s, Groups: %s, Scopes: %s",
-                    token.getSubject().orElse("none"), token.getRoles(), token.getGroups(), token.getScopes());
+                    Objects.toString(token.getSubject(), "none"), token.getRoles(), token.getGroups(), token.getScopes());
             return Response.ok(createTokenResponse(token, "Access token is valid")).build();
         } catch (TokenValidationException e) {
             LOGGER.debug("Explicit token validation failed: %s", e.getMessage());
@@ -310,7 +311,7 @@ public class JwtValidationEndpoint {
                 .orElseThrow(() -> new IllegalStateException("Token content missing after successful authorization"));
 
         // Extract token data
-        String userId = token.getSubject().orElse(NOT_PRESENT);
+        String userId = Objects.toString(token.getSubject(), NOT_PRESENT);
         LOGGER.debug("Token subject: %s, scopes: %s", userId, token.getScopes());
 
         // Build response with token details
@@ -401,7 +402,7 @@ public class JwtValidationEndpoint {
         if (tokenOpt.isPresent()) {
             AccessTokenContent token = tokenOpt.get();
             LOGGER.debug("Bearer token authorized successfully - Subject: %s, Roles: %s, Groups: %s, Scopes: %s",
-                    token.getSubject().orElse("none"), token.getRoles(), token.getGroups(), token.getScopes());
+                    Objects.toString(token.getSubject(), "none"), token.getRoles(), token.getGroups(), token.getScopes());
             return Response.ok(createTokenResponse(token, description + " is valid")).build();
         } else {
             // This shouldn't happen in normal cases with successful authorization
@@ -416,9 +417,9 @@ public class JwtValidationEndpoint {
      * Creates a standardized token response.
      */
     private ValidationResponse createTokenResponse(AccessTokenContent token, String message) {
-        // Use HashMap to handle Optional values from getSubject() and getEmail()
+        // Use HashMap to handle nullable values from getSubject() and Optional from getEmail()
         var data = new HashMap<String, Object>();
-        data.put("subject", token.getSubject().orElse(NOT_PRESENT));
+        data.put("subject", Objects.toString(token.getSubject(), NOT_PRESENT));
         data.put("scopes", token.getScopes());
         data.put("roles", token.getRoles());
         data.put("groups", token.getGroups());

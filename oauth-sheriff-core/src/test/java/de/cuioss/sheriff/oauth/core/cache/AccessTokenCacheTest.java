@@ -182,7 +182,7 @@ class AccessTokenCacheTest {
                 .pollInterval(100, TimeUnit.MILLISECONDS)
                 .until(() -> {
                     // Check if token has expired by comparing with current time
-                    return expiredContent.getExpirationTime().isBefore(OffsetDateTime.now());
+                    return expiredContent.getExpirationDateTime().isBefore(OffsetDateTime.now());
                 });
 
         // When - second access should detect expiration and throw exception

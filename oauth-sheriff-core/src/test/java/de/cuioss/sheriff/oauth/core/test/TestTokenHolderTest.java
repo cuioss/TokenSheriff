@@ -25,10 +25,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -489,7 +486,7 @@ class TestTokenHolderTest {
 
             // Verify the audience claim using the new getter method
             var audience = tokenHolder.getAudience();
-            assertEquals(customAudience, audience, "Audience should match custom value");
+            assertEquals(new LinkedHashSet<>(customAudience), audience, "Audience should match custom value");
 
             // Parse the token and verify the audience claim in the JWT
             var jwt = Jwts.parser()
@@ -557,7 +554,7 @@ class TestTokenHolderTest {
             assertNotNull(accessTokenContent.getScopes(), "Scopes should be accessible");
             assertNotNull(accessTokenContent.getRoles(), "Roles should be accessible");
             assertNotNull(accessTokenContent.getGroups(), "Groups should be accessible");
-            assertTrue(accessTokenContent.getAudience().isPresent(), "Audience should be present");
+            assertFalse(accessTokenContent.getAudience().isEmpty(), "Audience should be present");
         }
 
         @Test
