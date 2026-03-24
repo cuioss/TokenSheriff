@@ -55,7 +55,7 @@ public class JwtValidationEndpoint {
     public static final String NOT_PRESENT = "not-present";
 
     @Inject
-    jakarta.inject.Provider<JsonWebToken> jsonWebTokenProvider;
+    Instance<JsonWebToken> jsonWebTokenProvider;
 
     private final TokenValidator tokenValidator;
     private final Instance<BearerTokenResult> basicToken;

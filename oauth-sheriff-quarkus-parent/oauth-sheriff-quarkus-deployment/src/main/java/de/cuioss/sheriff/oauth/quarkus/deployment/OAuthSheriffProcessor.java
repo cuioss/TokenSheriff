@@ -44,6 +44,7 @@ import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.quarkus.config.AccessLogFilterConfigProducer;
 import de.cuioss.sheriff.oauth.quarkus.config.ParserConfigResolver;
 import de.cuioss.sheriff.oauth.quarkus.interceptor.BearerTokenInterceptor;
+import de.cuioss.sheriff.oauth.quarkus.interceptor.RolesAllowedFilter;
 import de.cuioss.sheriff.oauth.quarkus.logging.CustomAccessLogFilter;
 import de.cuioss.sheriff.oauth.quarkus.mapper.ClaimMapperRegistry;
 import de.cuioss.sheriff.oauth.quarkus.mapper.DiscoverableClaimMapper;
@@ -204,8 +205,9 @@ public class OAuthSheriffProcessor {
                 TokenContent.class,
                 BaseTokenContent.class,
                 MinimalTokenContent.class,
-                // MicroProfile JWT interface - needed for default method resolution in native image
+                // MicroProfile JWT interface and empty implementation - needed for native image
                 org.eclipse.microprofile.jwt.JsonWebToken.class,
+                // Note: EmptyJsonWebToken is registered by name below (package-private class)
                 // Claim handling classes - need full reflection for enum handling
                 ClaimValue.class,
                 ClaimName.class,
@@ -238,6 +240,22 @@ public class OAuthSheriffProcessor {
                 .methods(false)  // Methods not needed - mappers are called via interface
                 .fields(false)   // Fields not needed - no field access
                 .constructors(true) // Only constructors needed for instantiation
+                .build();
+    }
+
+    /**
+     * Register EmptyJsonWebToken for reflection in native image.
+     * This package-private class is the fallback when no valid JWT is present.
+     *
+     * @return A {@link ReflectiveClassBuildItem} for EmptyJsonWebToken
+     */
+    @BuildStep
+    public ReflectiveClassBuildItem registerEmptyJsonWebTokenForReflection() {
+        return ReflectiveClassBuildItem.builder(
+                "de.cuioss.sheriff.oauth.quarkus.producer.EmptyJsonWebToken")
+                .methods(true)
+                .fields(false)
+                .constructors(true)
                 .build();
     }
 
@@ -307,6 +325,7 @@ public class OAuthSheriffProcessor {
                 .addBeanClass(CustomAccessLogFilter.class)
                 // Register interceptor infrastructure
                 .addBeanClass(BearerTokenInterceptor.class)
+                .addBeanClass(RolesAllowedFilter.class)
                 .setUnremovable()
                 .build();
     }
@@ -320,6 +339,18 @@ public class OAuthSheriffProcessor {
     @BuildStep
     public ResteasyJaxrsProviderBuildItem registerCustomAccessLogFilter() {
         return new ResteasyJaxrsProviderBuildItem(CustomAccessLogFilter.class.getName());
+    }
+
+    /**
+     * Register the RolesAllowedFilter as a JAX-RS provider.
+     * This filter enforces {@code @RolesAllowed}, {@code @DenyAll}, and {@code @PermitAll}
+     * annotations by checking the JWT token's groups claim.
+     *
+     * @return A {@link ResteasyJaxrsProviderBuildItem} for the RolesAllowedFilter
+     */
+    @BuildStep
+    public ResteasyJaxrsProviderBuildItem registerRolesAllowedFilter() {
+        return new ResteasyJaxrsProviderBuildItem(RolesAllowedFilter.class.getName());
     }
 
     /**
