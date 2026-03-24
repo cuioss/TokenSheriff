@@ -132,7 +132,8 @@ public class ExpirationValidator {
             securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED,
-                    "Token is too old. Issued at: " + issuedAt + ", Max age: " + context.getMaxTokenAgeSeconds() + "s (with " + context.getClockSkewSeconds() + "s clock skew tolerance)"
+                    "Token is too old. Issued at: %s, Max age: %ds (with %ds clock skew tolerance)".formatted(
+                            issuedAt, context.getMaxTokenAgeSeconds(), context.getClockSkewSeconds())
             );
         }
         LOGGER.debug("Token age is within acceptable range");
