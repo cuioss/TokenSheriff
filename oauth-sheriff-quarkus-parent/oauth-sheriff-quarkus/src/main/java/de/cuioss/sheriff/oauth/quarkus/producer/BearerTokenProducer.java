@@ -21,7 +21,6 @@ import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.oauth.quarkus.annotation.ServletObjectsResolver;
-import de.cuioss.sheriff.oauth.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.oauth.quarkus.metrics.MetricIdentifier;
 import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolver;
 import de.cuioss.tools.logging.CuiLogger;
@@ -117,14 +116,31 @@ public class BearerTokenProducer {
 
     private final TokenValidator tokenValidator;
     private final HttpServletRequestResolver servletObjectsResolver;
-    private final String tokenHeader;
-    private final String tokenCookieName;
+
+    @ConfigProperty(name = "sheriff.oauth.token.header", defaultValue = "Authorization")
+    String tokenHeader;
+
+    @ConfigProperty(name = "sheriff.oauth.token.cookie-name", defaultValue = "Bearer")
+    String tokenCookieName;
 
     @Inject
     public BearerTokenProducer(TokenValidator tokenValidator,
-            @ServletObjectsResolver(ServletObjectsResolver.Variant.VERTX) HttpServletRequestResolver servletObjectsResolver,
-            @ConfigProperty(name = JwtPropertyKeys.TOKEN.HEADER, defaultValue = HEADER_AUTHORIZATION) String tokenHeader,
-            @ConfigProperty(name = JwtPropertyKeys.TOKEN.COOKIE_NAME, defaultValue = DEFAULT_COOKIE_NAME) String tokenCookieName) {
+            @ServletObjectsResolver(ServletObjectsResolver.Variant.VERTX) HttpServletRequestResolver servletObjectsResolver) {
+        this.tokenValidator = tokenValidator;
+        this.servletObjectsResolver = servletObjectsResolver;
+    }
+
+    /**
+     * Constructor for unit testing that allows specifying token extraction configuration directly.
+     *
+     * @param tokenValidator          the token validator
+     * @param servletObjectsResolver  the servlet objects resolver
+     * @param tokenHeader             the header name to extract the token from
+     * @param tokenCookieName         the cookie name to extract the token from
+     */
+    BearerTokenProducer(TokenValidator tokenValidator,
+            HttpServletRequestResolver servletObjectsResolver,
+            String tokenHeader, String tokenCookieName) {
         this.tokenValidator = tokenValidator;
         this.servletObjectsResolver = servletObjectsResolver;
         this.tokenHeader = tokenHeader;
