@@ -51,11 +51,21 @@ public class ValidationContext {
 
     /**
      * Clock skew tolerance in seconds for time-based validations.
-     * Used for not-before (nbf) claim validation to account for time differences
-     * between token issuer and validator.
+     * Applied to both expiration (exp) and not-before (nbf) claim validation
+     * to account for time differences between token issuer and validator.
      */
     @Getter
     private final int clockSkewSeconds;
+
+    /**
+     * Maximum token age in seconds, or {@code null} if token age validation is disabled.
+     * When set, tokens where {@code now - iat > maxTokenAgeSeconds + clockSkewSeconds}
+     * are rejected, even if not yet expired.
+     *
+     * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.token.age</a>
+     */
+    @Getter
+    private final Integer maxTokenAgeSeconds;
 
     /**
      * Creates a new ValidationContext with the current time captured at creation.
@@ -65,6 +75,7 @@ public class ValidationContext {
     public ValidationContext(int clockSkewSeconds) {
         this.currentTime = OffsetDateTime.now();
         this.clockSkewSeconds = clockSkewSeconds;
+        this.maxTokenAgeSeconds = null;
     }
 
     /**
@@ -76,6 +87,32 @@ public class ValidationContext {
     public ValidationContext(OffsetDateTime currentTime, int clockSkewSeconds) {
         this.currentTime = currentTime;
         this.clockSkewSeconds = clockSkewSeconds;
+        this.maxTokenAgeSeconds = null;
+    }
+
+    /**
+     * Creates a new ValidationContext with token age validation.
+     *
+     * @param clockSkewSeconds the clock skew tolerance in seconds
+     * @param maxTokenAgeSeconds the maximum token age in seconds, or null to disable
+     */
+    public ValidationContext(int clockSkewSeconds, Integer maxTokenAgeSeconds) {
+        this.currentTime = OffsetDateTime.now();
+        this.clockSkewSeconds = clockSkewSeconds;
+        this.maxTokenAgeSeconds = maxTokenAgeSeconds;
+    }
+
+    /**
+     * Creates a new ValidationContext with all parameters for testing purposes.
+     *
+     * @param currentTime the current time to use for validation
+     * @param clockSkewSeconds the clock skew tolerance in seconds
+     * @param maxTokenAgeSeconds the maximum token age in seconds, or null to disable
+     */
+    public ValidationContext(OffsetDateTime currentTime, int clockSkewSeconds, Integer maxTokenAgeSeconds) {
+        this.currentTime = currentTime;
+        this.clockSkewSeconds = clockSkewSeconds;
+        this.maxTokenAgeSeconds = maxTokenAgeSeconds;
     }
 
     /**
@@ -90,12 +127,16 @@ public class ValidationContext {
 
     /**
      * Checks if a given expiration time represents an expired token.
+     * <p>
+     * Applies clock skew tolerance: a token is considered expired only if its expiration time
+     * plus the clock skew tolerance is before the current time. This accommodates clock drift
+     * between the token issuer and the validator in distributed systems.
      *
      * @param expirationTime the token's expiration time
-     * @return true if the token is expired, false otherwise
+     * @return true if the token is expired (even accounting for clock skew), false otherwise
      */
     public boolean isExpired(OffsetDateTime expirationTime) {
-        return expirationTime.isBefore(currentTime);
+        return expirationTime.plusSeconds(clockSkewSeconds).isBefore(currentTime);
     }
 
     /**
@@ -106,5 +147,31 @@ public class ValidationContext {
      */
     public boolean isNotBeforeInvalid(OffsetDateTime notBeforeTime) {
         return notBeforeTime.isAfter(getCurrentTimeWithClockSkew());
+    }
+
+    /**
+     * Checks if token age validation is enabled.
+     *
+     * @return true if maxTokenAgeSeconds is configured
+     */
+    public boolean isTokenAgeValidationEnabled() {
+        return maxTokenAgeSeconds != null;
+    }
+
+    /**
+     * Checks if a token is too old based on its issued-at time.
+     * <p>
+     * A token is considered too old when {@code now - issuedAt > maxTokenAgeSeconds + clockSkewSeconds}.
+     *
+     * @param issuedAt the token's issued-at time
+     * @return true if the token is too old, false otherwise
+     * @throws IllegalStateException if token age validation is not enabled
+     */
+    public boolean isTokenTooOld(OffsetDateTime issuedAt) {
+        if (maxTokenAgeSeconds == null) {
+            throw new IllegalStateException("Token age validation is not enabled");
+        }
+        long ageSeconds = java.time.Duration.between(issuedAt, currentTime).getSeconds();
+        return ageSeconds > (long) maxTokenAgeSeconds + clockSkewSeconds;
     }
 }

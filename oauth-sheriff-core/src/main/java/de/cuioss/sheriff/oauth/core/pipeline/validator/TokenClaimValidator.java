@@ -123,6 +123,7 @@ public class TokenClaimValidator {
         authorizedPartyValidator.validateAuthorizedParty(token);
         expirationValidator.validateNotBefore(token, context);
         expirationValidator.validateNotExpired(token, context);
+        expirationValidator.validateTokenAge(token, context);
         LOGGER.debug("Token is valid");
         return token;
     }

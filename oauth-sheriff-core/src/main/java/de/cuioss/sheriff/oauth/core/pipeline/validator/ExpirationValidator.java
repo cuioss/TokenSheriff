@@ -107,4 +107,34 @@ public class ExpirationValidator {
         }
         LOGGER.debug("Not before claim is present, and not more than " + context.getClockSkewSeconds() + " seconds in the future");
     }
+
+    /**
+     * Validates that the token is not too old based on its issued-at time.
+     * <p>
+     * This implements the MP-JWT 2.1 {@code mp.jwt.verify.token.age} concept.
+     * A token is rejected when {@code now - iat > maxTokenAgeSeconds + clockSkewSeconds}.
+     * <p>
+     * This validation is only performed when {@link de.cuioss.sheriff.oauth.core.domain.context.ValidationContext#isTokenAgeValidationEnabled()}
+     * returns true.
+     *
+     * @param token the token to validate
+     * @param context the validation context containing max token age configuration
+     * @throws TokenValidationException if the token is too old
+     */
+    public void validateTokenAge(TokenContent token, ValidationContext context) {
+        if (!context.isTokenAgeValidationEnabled()) {
+            return;
+        }
+
+        var issuedAt = token.getIssuedAtDateTime();
+        if (context.isTokenTooOld(issuedAt)) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_EXPIRED);
+            securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_EXPIRED);
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.TOKEN_EXPIRED,
+                    "Token is too old. Issued at: " + issuedAt + ", Max age: " + context.getMaxTokenAgeSeconds() + "s (with " + context.getClockSkewSeconds() + "s clock skew tolerance)"
+            );
+        }
+        LOGGER.debug("Token age is within acceptable range");
+    }
 }

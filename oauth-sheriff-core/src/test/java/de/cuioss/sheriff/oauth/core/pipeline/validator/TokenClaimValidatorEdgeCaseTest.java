@@ -103,8 +103,8 @@ class TokenClaimValidatorEdgeCaseTest {
                     .build();
             var validator = createValidator(issuerConfig);
 
-            // When validating a token that has just expired (5 seconds ago)
-            TokenContent tokenJustExpired = createTokenWithExpirationTime(OffsetDateTime.now().minusSeconds(5));
+            // When validating a token that has expired beyond the clock skew tolerance (65 seconds ago > 60s skew)
+            TokenContent tokenJustExpired = createTokenWithExpirationTime(OffsetDateTime.now().minusSeconds(65));
 
             // Then the validation should fail with a TokenValidationException
             assertThrows(TokenValidationException.class, () -> validator.validate(tokenJustExpired, validationContext),
