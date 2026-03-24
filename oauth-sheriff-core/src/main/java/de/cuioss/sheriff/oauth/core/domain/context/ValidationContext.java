@@ -17,6 +17,7 @@ package de.cuioss.sheriff.oauth.core.domain.context;
 
 import lombok.Getter;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 
 /**
@@ -171,7 +172,7 @@ public class ValidationContext {
         if (maxTokenAgeSeconds == null) {
             throw new IllegalStateException("Token age validation is not enabled");
         }
-        long ageSeconds = java.time.Duration.between(issuedAt, currentTime).getSeconds();
+        long ageSeconds = Duration.between(issuedAt, currentTime).getSeconds();
         return ageSeconds > (long) maxTokenAgeSeconds + clockSkewSeconds;
     }
 }

@@ -128,10 +128,10 @@ public class ExpirationValidator {
 
         var issuedAt = token.getIssuedAtDateTime();
         if (context.isTokenTooOld(issuedAt)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_EXPIRED);
-            securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_EXPIRED);
+            LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_AGE_EXCEEDED);
+            securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED);
             throw new TokenValidationException(
-                    SecurityEventCounter.EventType.TOKEN_EXPIRED,
+                    SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED,
                     "Token is too old. Issued at: " + issuedAt + ", Max age: " + context.getMaxTokenAgeSeconds() + "s (with " + context.getClockSkewSeconds() + "s clock skew tolerance)"
             );
         }

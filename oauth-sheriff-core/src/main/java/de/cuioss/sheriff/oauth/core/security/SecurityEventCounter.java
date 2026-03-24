@@ -74,6 +74,7 @@ public class SecurityEventCounter {
 
         // Validation failures
         TOKEN_EXPIRED(JWTValidationLogMessages.WARN.TOKEN_EXPIRED, EventCategory.SEMANTIC_ISSUES),
+        TOKEN_AGE_EXCEEDED(JWTValidationLogMessages.WARN.TOKEN_AGE_EXCEEDED, EventCategory.SEMANTIC_ISSUES),
         TOKEN_NBF_FUTURE(JWTValidationLogMessages.WARN.TOKEN_NBF_FUTURE, EventCategory.SEMANTIC_ISSUES),
         AUDIENCE_MISMATCH(JWTValidationLogMessages.WARN.AUDIENCE_MISMATCH, EventCategory.SEMANTIC_ISSUES),
         AZP_MISMATCH(JWTValidationLogMessages.WARN.AZP_MISMATCH, EventCategory.SEMANTIC_ISSUES),
