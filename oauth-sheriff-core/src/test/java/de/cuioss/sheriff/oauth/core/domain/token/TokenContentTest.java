@@ -179,6 +179,190 @@ class TokenContentTest {
         assertEquals(TokenType.ACCESS_TOKEN, token.getTokenType());
     }
 
+    // ============================================================
+    // JsonWebToken interface method tests
+    // ============================================================
+
+    @Test
+    @DisplayName("getName() should return UPN when present")
+    void getNameShouldReturnUpnWhenPresent() {
+        var token = createTokenWithUpn();
+        assertEquals("user@example.com", token.getName());
+    }
+
+    @Test
+    @DisplayName("getName() should fallback to preferred_username when UPN is absent")
+    void getNameShouldFallbackToPreferredUsername() {
+        var token = createTestToken(); // has sub but no upn
+        // Add preferred_username
+        token.claims.put("preferred_username", ClaimValue.forPlainString("jdoe"));
+        assertEquals("jdoe", token.getName());
+    }
+
+    @Test
+    @DisplayName("getName() should fallback to sub when UPN and preferred_username are absent")
+    void getNameShouldFallbackToSub() {
+        var token = createTestToken(); // has sub="test-subject"
+        assertEquals("test-subject", token.getName());
+    }
+
+    @Test
+    @DisplayName("getName() should return null when no principal claims are present")
+    void getNameShouldReturnNullWhenNoPrincipalClaims() {
+        var token = createTokenWithoutSubject();
+        assertNull(token.getName());
+    }
+
+    @Test
+    @DisplayName("getSubject() should return nullable String per JsonWebToken contract")
+    void getSubjectShouldReturnNullableString() {
+        var token = createTestToken();
+        assertEquals("test-subject", token.getSubject());
+
+        var tokenNoSub = createTokenWithoutSubject();
+        assertNull(tokenNoSub.getSubject());
+    }
+
+    @Test
+    @DisplayName("getTokenID() should return jti claim")
+    void getTokenIDShouldReturnJtiClaim() {
+        var token = createTestToken();
+        token.claims.put("jti", ClaimValue.forPlainString("token-123"));
+        assertEquals("token-123", token.getTokenID());
+    }
+
+    @Test
+    @DisplayName("getTokenID() should return null when jti is absent")
+    void getTokenIDShouldReturnNullWhenAbsent() {
+        var token = createTestToken();
+        assertNull(token.getTokenID());
+    }
+
+    @Test
+    @DisplayName("getAudience() should return Set of audience values")
+    void getAudienceShouldReturnSet() {
+        var token = createTestToken();
+        token.claims.put("aud", ClaimValue.forList("aud-value", java.util.List.of("client-a", "client-b")));
+        var audience = token.getAudience();
+        assertEquals(2, audience.size());
+        assertTrue(audience.contains("client-a"));
+        assertTrue(audience.contains("client-b"));
+    }
+
+    @Test
+    @DisplayName("getAudience() should return empty set when absent")
+    void getAudienceShouldReturnEmptySetWhenAbsent() {
+        var token = createTestToken();
+        assertTrue(token.getAudience().isEmpty());
+    }
+
+    @Test
+    @DisplayName("getGroups() should return Set of group values")
+    void getGroupsShouldReturnSet() {
+        var token = createTestToken();
+        token.claims.put("groups", ClaimValue.forList("groups-value", java.util.List.of("admin", "users")));
+        var groups = token.getGroups();
+        assertEquals(2, groups.size());
+        assertTrue(groups.contains("admin"));
+        assertTrue(groups.contains("users"));
+    }
+
+    @Test
+    @DisplayName("getGroups() should return empty set when absent")
+    void getGroupsShouldReturnEmptySetWhenAbsent() {
+        var token = createTestToken();
+        assertTrue(token.getGroups().isEmpty());
+    }
+
+    @Test
+    @DisplayName("getExpirationTime() should return epoch seconds")
+    void getExpirationTimeShouldReturnEpochSeconds() {
+        var token = createTestToken();
+        long epochSeconds = token.getExpirationTime();
+        assertTrue(epochSeconds > 0);
+        // Should be consistent with getExpirationDateTime()
+        assertEquals(token.getExpirationDateTime().toEpochSecond(), epochSeconds);
+    }
+
+    @Test
+    @DisplayName("getIssuedAtTime() should return epoch seconds")
+    void getIssuedAtTimeShouldReturnEpochSeconds() {
+        var token = createTestToken();
+        long epochSeconds = token.getIssuedAtTime();
+        assertTrue(epochSeconds > 0);
+        // Should be consistent with getIssuedAtDateTime()
+        assertEquals(token.getIssuedAtDateTime().toEpochSecond(), epochSeconds);
+    }
+
+    @Test
+    @DisplayName("getClaimNames() should return all claim keys")
+    void getClaimNamesShouldReturnAllClaimKeys() {
+        var token = createTestToken();
+        var names = token.getClaimNames();
+        assertTrue(names.contains("iss"));
+        assertTrue(names.contains("sub"));
+        assertTrue(names.contains("exp"));
+        assertTrue(names.contains("iat"));
+    }
+
+    @Test
+    @DisplayName("containsClaim() should check claim presence")
+    void containsClaimShouldCheckPresence() {
+        var token = createTestToken();
+        assertTrue(token.containsClaim("iss"));
+        assertTrue(token.containsClaim("sub"));
+        assertFalse(token.containsClaim("nonexistent"));
+    }
+
+    @Test
+    @DisplayName("getClaim() should return typed values for known claims")
+    void getClaimShouldReturnTypedValues() {
+        var token = createTestToken();
+        token.claims.put("groups", ClaimValue.forList("groups-value", java.util.List.of("admin")));
+        token.claims.put("jti", ClaimValue.forPlainString("id-123"));
+
+        // String claim
+        String issuer = token.getClaim("iss");
+        assertEquals("test-issuer", issuer);
+
+        // String claim via jti
+        String jti = token.getClaim("jti");
+        assertEquals("id-123", jti);
+
+        // DateTime claim returns epoch seconds (Long)
+        Long exp = token.getClaim("exp");
+        assertNotNull(exp);
+        assertTrue(exp > 0);
+
+        // List claim returns Set
+        java.util.Set<String> groups = token.getClaim("groups");
+        assertTrue(groups.contains("admin"));
+    }
+
+    @Test
+    @DisplayName("getClaim() should return null for absent claims")
+    void getClaimShouldReturnNullForAbsentClaims() {
+        var token = createTestToken();
+        assertNull(token.getClaim("nonexistent"));
+    }
+
+    @Test
+    @DisplayName("getClaim() should return original string for unknown claim names")
+    void getClaimShouldReturnStringForUnknownClaims() {
+        var token = createTestToken();
+        token.claims.put("custom_claim", ClaimValue.forPlainString("custom-value"));
+        String value = token.getClaim("custom_claim");
+        assertEquals("custom-value", value);
+    }
+
+    @Test
+    @DisplayName("Token should be instance of JsonWebToken and Principal")
+    void tokenShouldBeInstanceOfJsonWebTokenAndPrincipal() {
+        var token = createTestToken();
+        assertInstanceOf(org.eclipse.microprofile.jwt.JsonWebToken.class, token);
+        assertInstanceOf(java.security.Principal.class, token);
+    }
+
     // Test implementation
 
     private static class TestTokenContent implements TokenContent {
@@ -263,6 +447,18 @@ class TokenContentTest {
         claims.put("exp", ClaimValue.forDateTime("exp-value", OffsetDateTime.now().plusHours(1)));
         claims.put("iat", ClaimValue.forDateTime("iat-value", OffsetDateTime.now().minusMinutes(5)));
         claims.put("nbf", ClaimValue.forDateTime("nbf-value", OffsetDateTime.now().minusMinutes(2)));
+
+        return new TestTokenContent(claims, "raw-token-string", TokenType.ACCESS_TOKEN);
+    }
+
+    private TestTokenContent createTokenWithUpn() {
+        Map<String, ClaimValue> claims = new HashMap<>();
+        claims.put("iss", ClaimValue.forPlainString("test-issuer"));
+        claims.put("sub", ClaimValue.forPlainString("test-subject"));
+        claims.put("upn", ClaimValue.forPlainString("user@example.com"));
+        claims.put("preferred_username", ClaimValue.forPlainString("jdoe"));
+        claims.put("exp", ClaimValue.forDateTime("exp-value", OffsetDateTime.now().plusHours(1)));
+        claims.put("iat", ClaimValue.forDateTime("iat-value", OffsetDateTime.now().minusMinutes(5)));
 
         return new TestTokenContent(claims, "raw-token-string", TokenType.ACCESS_TOKEN);
     }
