@@ -90,12 +90,17 @@ public final class AccessTokenContent extends BaseTokenContent {
      * Gets the audience claim value.
      * <p>
      * 'aud' is optional for {@link TokenType#ACCESS_TOKEN}.
+     * Returns a {@link Set} per the {@link org.eclipse.microprofile.jwt.JsonWebToken#getAudience()} contract.
+     * Returns an empty set if not present (audience is optional for access tokens).
      *
-     * @return an Optional containing the audience as a list of strings, or empty if not present
+     * @return the audience as a set of strings, or an empty set if not present
      */
-    public Optional<List<String>> getAudience() {
+    @Override
+    public Set<String> getAudience() {
         return getClaimOption(ClaimName.AUDIENCE)
-                .map(ClaimValue::getAsList);
+                .map(ClaimValue::getAsList)
+                .<Set<String>>map(list -> new LinkedHashSet<>(list))
+                .orElse(Collections.emptySet());
     }
 
     /**
@@ -131,14 +136,16 @@ public final class AccessTokenContent extends BaseTokenContent {
      * Gets the groups from the token claims.
      * <p>
      * The "groups" claim is a common but not standardized claim used for group-based access control.
+     * Returns a {@link Set} per the {@link org.eclipse.microprofile.jwt.JsonWebToken#getGroups()} contract.
      *
-     * @return a List of group strings, or an empty list if the groups claim is not present
+     * @return a Set of group strings, or an empty set if the groups claim is not present
      */
-   
-    public List<String> getGroups() {
+    @Override
+    public Set<String> getGroups() {
         return getClaimOption(ClaimName.GROUPS)
                 .map(ClaimValue::getAsList)
-                .orElse(Collections.emptyList());
+                .<Set<String>>map(list -> new LinkedHashSet<>(list))
+                .orElse(Collections.emptySet());
     }
 
     /**

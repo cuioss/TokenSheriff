@@ -91,7 +91,7 @@ public class ExpirationValidator {
      * @throws TokenValidationException if the "not before" time is invalid
      */
     public void validateNotBefore(TokenContent token, ValidationContext context) {
-        var notBefore = token.getNotBefore();
+        var notBefore = token.getNotBeforeDateTime();
         if (notBefore.isEmpty()) {
             LOGGER.debug("Not before claim is optional, so if it's not present, validation passes");
             return;

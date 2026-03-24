@@ -215,7 +215,7 @@ public class AccessTokenCache {
             // Wrap validated token in CachedToken for storage
             // Note: expirationTime is guaranteed to be present because tokens are validated
             // before caching, and validation requires a valid exp claim
-            OffsetDateTime expirationTime = content.getExpirationTime();
+            OffsetDateTime expirationTime = content.getExpirationDateTime();
 
             CachedToken newCachedToken = CachedToken.builder()
                     .rawToken(tokenString)

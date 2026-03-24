@@ -34,7 +34,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -104,7 +103,7 @@ class OpenIDConnectComplianceTest {
 
             // Since we explicitly set the subject claim, it should always be present
             // regardless of claimSubOptional configuration
-            Optional<String> resultSubject = result.getSubject();
+            Optional<String> resultSubject = result.getSubjectOption();
             assertTrue(resultSubject.isPresent(), "Subject should be present when explicitly set");
             assertEquals(subject, resultSubject.get());
         }
@@ -115,7 +114,7 @@ class OpenIDConnectComplianceTest {
 
             String token = TestTokenGenerators.idTokens().next().getRawToken();
             IdTokenContent result = tokenValidator.createIdToken(IdTokenRequest.of(token));
-            assertEquals(List.of(TestTokenHolder.TEST_AUDIENCE), result.getAudience());
+            assertTrue(result.getAudience().contains(TestTokenHolder.TEST_AUDIENCE));
         }
 
         @Test
@@ -124,7 +123,7 @@ class OpenIDConnectComplianceTest {
 
             String token = TestTokenGenerators.idTokens().next().getRawToken();
             IdTokenContent result = tokenValidator.createIdToken(IdTokenRequest.of(token));
-            assertNotNull(result.getExpirationTime());
+            assertNotNull(result.getExpirationDateTime());
             assertFalse(result.isExpired(validationContext));
         }
 
@@ -134,7 +133,7 @@ class OpenIDConnectComplianceTest {
 
             String token = TestTokenGenerators.idTokens().next().getRawToken();
             IdTokenContent result = tokenValidator.createIdToken(IdTokenRequest.of(token));
-            assertNotNull(result.getIssuedAtTime());
+            assertNotNull(result.getIssuedAtDateTime());
         }
 
         @ParameterizedTest
@@ -195,7 +194,7 @@ class OpenIDConnectComplianceTest {
 
             String token = tokenHolder.getRawToken();
             IdTokenContent result = TokenValidator.builder().issuerConfig(tokenHolder.getIssuerConfig()).build().createIdToken(IdTokenRequest.of(token));
-            assertEquals(name, result.getName().orElse(null));
+            assertEquals(name, result.getDisplayName().orElse(null));
         }
 
         @ParameterizedTest

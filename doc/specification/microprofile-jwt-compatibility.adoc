@@ -1,0 +1,221 @@
+= MicroProfile JWT Auth 2.1 Compatibility
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+xref:../architecture.adoc[Back to Architecture Reference]
+
+== Overview
+
+This document describes OAuthSheriff's relationship to the https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html[Eclipse MicroProfile JWT Auth 2.1] specification. OAuthSheriff implements select MP-JWT 2.1 primitives as a compatibility layer while retaining its advanced multi-issuer, multi-token-type architecture.
+
+=== Document Navigation
+
+* xref:../../README.adoc[README] - Project overview and introduction
+* xref:../../oauth-sheriff-core/README.adoc[Usage Guide] - How to use the library with code examples
+* xref:../Requirements.adoc[Requirements] - Functional and non-functional requirements
+* xref:../architecture.adoc[Architecture] - Architecture reference and implementation details
+* xref:token-decryption.adoc[Token Decryption] - JWE decryption specification
+* xref:multi-idp-testing.adoc[Multi-IDP Testing] - Multi-IDP integration testing
+
+==== Status: PLANNED
+
+== Design Rationale
+
+OAuthSheriff is **not** an MP-JWT implementation. It is a purpose-built, production-grade JWT/OAuth 2.0/OpenID Connect token validation library that provides capabilities beyond what MP-JWT defines. Rather than conforming to the MP-JWT specification's single-issuer, single-token-type model, OAuthSheriff adopts **select primitives** from the spec where they provide value.
+
+The approach is:
+
+* **Core types**: `TokenContent extends JsonWebToken` — every validated token IS a `Principal` and `JsonWebToken`
+* **Spec method signatures**: MP-JWT method names and return types are the primary API for standard claims
+* **OAuthSheriff extensions**: Multi-issuer support, DPoP, custom claim mappers, sealed token hierarchy, security event tracking — all preserved as additional API surface
+
+== Adopted Features
+
+=== `JsonWebToken` Interface (`org.eclipse.microprofile.jwt.JsonWebToken`)
+
+`TokenContent` extends `JsonWebToken`, making every validated token a `java.security.Principal`. This enables standard Jakarta Security integration:
+
+[source,java]
+----
+@Inject JsonWebToken callerPrincipal;  // MP-JWT standard injection
+@Inject Principal principal;            // Jakarta Security standard injection
+----
+
+The spec method signatures are adopted as the **primary API**:
+
+[cols="3,2,2"]
+|===
+|Method |Return Type |Source
+
+|`getName()`
+|`String`
+|UPN fallback: `upn` -> `preferred_username` -> `sub`
+
+|`getSubject()`
+|`String` (nullable)
+|Replaces `Optional<String>` (convenience: `getSubjectOption()`)
+
+|`getExpirationTime()`
+|`long` (epoch seconds)
+|Replaces `OffsetDateTime` (convenience: `getExpirationDateTime()`)
+
+|`getIssuedAtTime()`
+|`long` (epoch seconds)
+|Replaces `OffsetDateTime` (convenience: `getIssuedAtDateTime()`)
+
+|`getGroups()`
+|`Set<String>`
+|From `groups` claim
+
+|`getAudience()`
+|`Set<String>`
+|From `aud` claim
+
+|`getClaimNames()`
+|`Set<String>`
+|All claim keys in token
+
+|`getClaim(String)`
+|`<T> T`
+|Generic claim access with type conversion
+|===
+
+=== `upn` Claim (User Principal Name)
+
+The `upn` claim is MP-JWT's standardized human-readable principal identifier. OAuthSheriff's `ClaimName` enum includes `UPN` with the spec-defined fallback chain for `Principal.getName()`:
+
+1. `upn` claim (if present)
+2. `preferred_username` claim (fallback)
+3. `sub` claim (final fallback)
+
+== Planned Features
+
+The following MP-JWT 2.1 features are planned for adoption in future PRs.
+
+=== Clock Skew Tolerance (`mp.jwt.verify.clock.skew`)
+
+Configurable clock skew tolerance per issuer for `exp` and `nbf` validation, accommodating clock drift in distributed systems.
+
+Planned configuration: `sheriff.oauth.issuers.<name>.clock-skew-seconds` (default: `0`)
+
+=== Token Age Verification (`mp.jwt.verify.token.age`)
+
+Maximum token age validation based on `iat` claim. Rejects tokens where `now - iat > maxAge + clockSkew`, even if not yet expired.
+
+Planned configuration: `sheriff.oauth.issuers.<name>.max-token-age-seconds` (default: disabled)
+
+=== Cookie-Based Token Extraction (`mp.jwt.token.header` / `mp.jwt.token.cookie`)
+
+Alternative token extraction from HTTP cookies instead of the `Authorization` header. Useful for browser-based SPAs using SameSite cookie protection.
+
+Planned configuration:
+
+* `sheriff.oauth.token.header` — `Authorization` (default) or `Cookie`
+* `sheriff.oauth.token.cookie` — cookie name (default: `Bearer`)
+
+=== `@RolesAllowed` Support
+
+Standard JSR-250 `@RolesAllowed` annotations alongside OAuthSheriff's `@BearerAuth`:
+
+* `@RolesAllowed("admin")` — checks `groups` claim (MP-JWT spec behavior)
+* `@BearerAuth(requiredScopes={"read"}, requiredRoles={"admin"})` — checks scopes AND roles AND groups (OAuthSheriff extension)
+* `@PermitAll` / `@DenyAll` — standard behavior
+
+=== CDI Producers
+
+`@Produces JsonWebToken` and `@Produces Principal` for standard MP-JWT injection patterns.
+
+== Not Adopted (By Design)
+
+[cols="2,3"]
+|===
+|MP-JWT Feature |Rationale
+
+|`@Claim` CDI qualifier injection
+|OAuthSheriff's programmatic `getClaimOption(ClaimName)` with custom `ClaimMapper` pipeline provides type-safe, extensible claim access. `@Claim` injection is less flexible for custom claim types and multi-issuer scenarios.
+
+|`@LoginConfig` annotation
+|Not applicable to Quarkus extension model. OAuthSheriff activates via `@BearerAuth` interceptor binding and configuration properties.
+
+|`mp.jwt.*` config namespace
+|`sheriff.oauth.*` is the established convention. OAuthSheriff's per-issuer configuration model (`sheriff.oauth.issuers.<name>.*`) has no equivalent in the single-issuer `mp.jwt.*` namespace.
+
+|`ClaimValue<T>` (MP-JWT version)
+|OAuthSheriff's `ClaimValue` with `ClaimMapper` pipeline (e.g., `ScopeMapper`, `KeycloakDefaultRolesMapper`) is more powerful. MP-JWT's `ClaimValue` is a simple typed wrapper.
+
+|Single-issuer model
+|OAuthSheriff's multi-issuer `IssuerConfigCache` with per-issuer JWKS loading, algorithm constraints, and claim validation is a core differentiator. MP-JWT assumes one issuer per application.
+|===
+
+== OAuthSheriff Advantages Beyond MP-JWT
+
+The following capabilities have no equivalent in MP-JWT 2.1:
+
+* **Multi-issuer support** — `IssuerConfigCache` with async JWKS loading per issuer
+* **DPoP (RFC 9449)** — Optional Demonstrating Proof-of-Possession validation
+* **Custom claim mappers** — Pluggable `ClaimMapper` interface with Keycloak-specific implementations
+* **Sealed token hierarchy** — `AccessTokenContent`, `IdTokenContent`, `RefreshTokenContent` with type-safe access patterns
+* **Security event tracking** — `SecurityEventCounter` with categorized validation failure tracking
+* **Performance monitoring** — `TokenValidatorMonitor` with microsecond-precision pipeline measurements
+* **Token caching** — `AccessTokenCache` with TTL-based eviction
+* **JWE transparency** — Encrypted tokens decrypted transparently before validation
+* **Algorithm security** — RFC 8725 and NIST SP 800-131A compliant algorithm whitelisting
+
+== Configuration Mapping
+
+[cols="2,2,1"]
+|===
+|MP-JWT Property |OAuthSheriff Equivalent |Notes
+
+|`mp.jwt.verify.issuer`
+|`sheriff.oauth.issuers.<name>.expected-issuer`
+|Per-issuer in OAuthSheriff
+
+|`mp.jwt.verify.audiences`
+|`sheriff.oauth.issuers.<name>.expected-audience`
+|Per-issuer in OAuthSheriff
+
+|`mp.jwt.verify.publickey.location`
+|`sheriff.oauth.issuers.<name>.jwks.http.well-known-url`
+|OAuthSheriff uses OIDC discovery or direct JWKS URL
+
+|`mp.jwt.verify.publickey.algorithm`
+|`sheriff.oauth.issuers.<name>.allowed-signature-algorithms`
+|Per-issuer, multiple algorithms supported
+
+|`mp.jwt.verify.clock.skew`
+|`sheriff.oauth.issuers.<name>.clock-skew-seconds`
+|Per-issuer in OAuthSheriff
+
+|`mp.jwt.verify.token.age`
+|`sheriff.oauth.issuers.<name>.max-token-age-seconds`
+|Per-issuer in OAuthSheriff
+
+|`mp.jwt.token.header`
+|`sheriff.oauth.token.header`
+|Global setting
+
+|`mp.jwt.token.cookie`
+|`sheriff.oauth.token.cookie`
+|Global setting
+
+|`mp.jwt.decrypt.key.location`
+|`sheriff.oauth.jwe.decrypt-key-location`
+|JWE decryption key
+
+|`mp.jwt.decrypt.key.algorithm`
+|`sheriff.oauth.jwe.key-management-algorithm`
+|JWE key management algorithm
+|===
+
+== References
+
+* https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html[MicroProfile JWT Auth 2.1 Specification]
+* https://datatracker.ietf.org/doc/html/rfc7519[RFC 7519 - JSON Web Token (JWT)]
+* https://datatracker.ietf.org/doc/html/rfc9068[RFC 9068 - JWT Profile for OAuth 2.0 Access Tokens]
+* https://datatracker.ietf.org/doc/html/rfc8725[RFC 8725 - JSON Web Token Best Current Practices]
+* https://datatracker.ietf.org/doc/html/rfc9449[RFC 9449 - OAuth 2.0 Demonstrating Proof of Possession (DPoP)]
+* xref:../architecture.adoc[OAuthSheriff Architecture Reference]

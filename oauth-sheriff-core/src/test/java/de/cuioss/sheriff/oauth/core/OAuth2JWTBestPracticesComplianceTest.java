@@ -97,8 +97,8 @@ class OAuth2JWTBestPracticesComplianceTest {
             String token = TestTokenGenerators.accessTokens().next().getRawToken();
             AccessTokenContent result = tokenValidator.createAccessToken(AccessTokenRequest.of(token));
             assertNotNull(result, "Token should be parsed successfully");
-            assertTrue(result.getAudience().isPresent(), "Audience claim should be present");
-            assertTrue(result.getAudience().get().contains(TestTokenHolder.TEST_AUDIENCE),
+            assertFalse(result.getAudience().isEmpty(), "Audience claim should be present");
+            assertTrue(result.getAudience().contains(TestTokenHolder.TEST_AUDIENCE),
                     "Audience claim should contain the expected value");
         }
 
@@ -233,7 +233,7 @@ class OAuth2JWTBestPracticesComplianceTest {
             String token = TestTokenGenerators.accessTokens().next().getRawToken();
             AccessTokenContent result = tokenValidator.createAccessToken(AccessTokenRequest.of(token));
             assertNotNull(result, "Token should be parsed successfully");
-            assertNotNull(result.getExpirationTime(),
+            assertNotNull(result.getExpirationDateTime(),
                     "Expiration time claim should be present");
             assertFalse(result.isExpired(validationContext),
                     "Token should not be expired");

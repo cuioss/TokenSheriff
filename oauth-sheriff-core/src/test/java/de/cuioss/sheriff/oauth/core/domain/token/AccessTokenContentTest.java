@@ -95,7 +95,7 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
         );
     }
 
-    private List<String> getClaimValues(AccessTokenContent token, ClaimName claimName) {
+    private Collection<String> getClaimValues(AccessTokenContent token, ClaimName claimName) {
         return switch (claimName) {
             case ROLES -> token.getRoles();
             case GROUPS -> token.getGroups();
@@ -126,10 +126,10 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
         var accessTokenContent = createTokenWithClaim(
                 ClaimName.AUDIENCE, ClaimValue.forList(testAudience.toString(), testAudience));
 
-        Optional<List<String>> audience = accessTokenContent.getAudience();
+        Set<String> audience = accessTokenContent.getAudience();
 
-        assertTrue(audience.isPresent(), "Audience should be present");
-        assertEquals(testAudience, audience.get(), "Audience should match expected");
+        assertFalse(audience.isEmpty(), "Audience should be present");
+        assertEquals(new LinkedHashSet<>(testAudience), audience, "Audience should match expected");
     }
 
     @Test
@@ -188,9 +188,9 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
         var accessTokenContent = createTokenWithClaim(
                 claimName, ClaimValue.forList(testValues.toString(), testValues));
 
-        List<String> values = getClaimValues(accessTokenContent, claimName);
+        Collection<String> values = getClaimValues(accessTokenContent, claimName);
 
-        assertEquals(testValues, values, description + " should match expected");
+        assertTrue(values.containsAll(testValues) && testValues.containsAll(values), description + " should match expected");
     }
 
     @ParameterizedTest

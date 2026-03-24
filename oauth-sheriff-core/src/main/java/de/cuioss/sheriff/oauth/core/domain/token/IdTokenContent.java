@@ -24,9 +24,10 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.io.Serial;
-import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Represents the content of an OpenID Connect ID Token.
@@ -83,22 +84,29 @@ public final class IdTokenContent extends BaseTokenContent {
      * Gets the audience claim value.
      * <p>
      * 'aud' is mandatory for {@link TokenType#ID_TOKEN}.
+     * Returns a {@link Set} per the {@link org.eclipse.microprofile.jwt.JsonWebToken#getAudience()} contract.
      *
-     * @return the audience as a list of strings, or throws exception if it's not present
+     * @return the audience as a set of strings, or throws exception if it's not present
      * @throws IllegalStateException if the audience claim is not present
      */
-    public List<String> getAudience() {
+    @Override
+    public Set<String> getAudience() {
         return getClaimOption(ClaimName.AUDIENCE)
                 .map(ClaimValue::getAsList)
+                .<Set<String>>map(list -> new LinkedHashSet<>(list))
                 .orElseThrow(() -> new IllegalStateException("Audience claim not present in token"));
     }
 
     /**
-     * Gets the name from the token claims.
+     * Gets the display name from the OIDC "name" claim.
+     * <p>
+     * Note: This is the OIDC "name" claim (full display name), not the
+     * {@link org.eclipse.microprofile.jwt.JsonWebToken#getName()} principal name
+     * (which returns the UPN fallback chain). Use {@link #getDisplayName()} for clarity.
      *
-     * @return an Optional containing the name if present, or empty otherwise
+     * @return an Optional containing the display name if present, or empty otherwise
      */
-    public Optional<String> getName() {
+    public Optional<String> getDisplayName() {
         return getClaimOption(ClaimName.NAME)
                 .map(ClaimValue::getOriginalString);
     }

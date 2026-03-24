@@ -37,6 +37,7 @@ import jakarta.ws.rs.core.Response;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -158,7 +159,7 @@ public class MockJwtValidationEndpoint {
                     new AccessTokenRequest(extraction.token(), headerMap));
 
             var data = new HashMap<String, Object>();
-            data.put("subject", token.getSubject().orElse("not-present"));
+            data.put("subject", Objects.toString(token.getSubject(), "not-present"));
             data.put("scopes", token.getScopes());
             data.put("roles", token.getRoles());
             data.put("groups", token.getGroups());

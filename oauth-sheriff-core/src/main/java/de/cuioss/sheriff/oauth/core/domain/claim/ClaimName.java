@@ -160,7 +160,18 @@ public enum ClaimName {
      *
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#IDToken">OpenID Connect Core 1.0 - ID Token</a>
      */
-    AUTHORIZED_PARTY("azp", ClaimValueType.STRING, "The \"azp\" (authorized party) claim identifies the party to which the ID Token was issued. Optional by OpenID Connect Core 1.0 for ID_TOKEN type.", new IdentityMapper());
+    AUTHORIZED_PARTY("azp", ClaimValueType.STRING, "The \"azp\" (authorized party) claim identifies the party to which the ID Token was issued. Optional by OpenID Connect Core 1.0 for ID_TOKEN type.", new IdentityMapper()),
+
+    /**
+     * The "upn" (user principal name) claim is a MicroProfile JWT specific claim that uniquely
+     * identifies the subject or user principal of the token. It serves as the primary source
+     * for {@code java.security.Principal.getName()} with a defined fallback chain:
+     * {@code upn} -> {@code preferred_username} -> {@code sub}.
+     * Optional for all token types.
+     *
+     * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MicroProfile JWT Auth 2.1</a>
+     */
+    UPN("upn", ClaimValueType.STRING, "The \"upn\" (user principal name) claim uniquely identifies the subject or user principal of the token. MicroProfile JWT specific claim with fallback chain: upn -> preferred_username -> sub.", new IdentityMapper());
 
     private final String name;
     private final ClaimValueType valueType;

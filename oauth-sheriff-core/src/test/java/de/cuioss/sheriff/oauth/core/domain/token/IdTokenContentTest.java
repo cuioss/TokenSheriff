@@ -29,10 +29,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -68,9 +65,9 @@ class IdTokenContentTest implements ShouldHandleObjectContracts<IdTokenContent> 
         tokenHolder.withClaim(ClaimName.AUDIENCE.getName(), ClaimValue.forList(TEST_AUDIENCE.toString(), TEST_AUDIENCE));
         var idTokenContent = new IdTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), MapRepresentation.empty());
 
-        List<String> audience = idTokenContent.getAudience();
+        Set<String> audience = idTokenContent.getAudience();
 
-        assertEquals(TEST_AUDIENCE, audience, "Audience should match");
+        assertEquals(new LinkedHashSet<>(TEST_AUDIENCE), audience, "Audience should match");
     }
 
     @Test
@@ -90,7 +87,7 @@ class IdTokenContentTest implements ShouldHandleObjectContracts<IdTokenContent> 
         tokenHolder.withClaim(ClaimName.NAME.getName(), ClaimValue.forPlainString(TEST_NAME));
         var idTokenContent = new IdTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), MapRepresentation.empty());
 
-        Optional<String> name = idTokenContent.getName();
+        Optional<String> name = idTokenContent.getDisplayName();
 
         assertTrue(name.isPresent(), "Name should be present");
         assertEquals(TEST_NAME, name.get(), "Name should match");
@@ -102,7 +99,7 @@ class IdTokenContentTest implements ShouldHandleObjectContracts<IdTokenContent> 
         Map<String, ClaimValue> claims = new HashMap<>();
         var idTokenContent = new IdTokenContent(claims, SAMPLE_TOKEN, MapRepresentation.empty());
 
-        Optional<String> name = idTokenContent.getName();
+        Optional<String> name = idTokenContent.getDisplayName();
 
         assertTrue(name.isEmpty(), "Name should be empty");
     }
