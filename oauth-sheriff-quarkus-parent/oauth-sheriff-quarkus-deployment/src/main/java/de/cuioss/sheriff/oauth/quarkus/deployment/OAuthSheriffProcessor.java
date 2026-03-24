@@ -204,6 +204,8 @@ public class OAuthSheriffProcessor {
                 TokenContent.class,
                 BaseTokenContent.class,
                 MinimalTokenContent.class,
+                // MicroProfile JWT interface - needed for default method resolution in native image
+                org.eclipse.microprofile.jwt.JsonWebToken.class,
                 // Claim handling classes - need full reflection for enum handling
                 ClaimValue.class,
                 ClaimName.class,

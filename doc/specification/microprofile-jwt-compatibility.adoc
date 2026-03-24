@@ -91,34 +91,42 @@ The `upn` claim is MP-JWT's standardized human-readable principal identifier. OA
 2. `preferred_username` claim (fallback)
 3. `sub` claim (final fallback)
 
+== Planned Features
+
+The following MP-JWT 2.1 features are planned for adoption in future PRs.
+
 === Clock Skew Tolerance (`mp.jwt.verify.clock.skew`)
 
 Configurable clock skew tolerance per issuer for `exp` and `nbf` validation, accommodating clock drift in distributed systems.
 
-OAuthSheriff configuration: `sheriff.oauth.issuers.<name>.clock-skew-seconds` (default: `0`)
+Planned configuration: `sheriff.oauth.issuers.<name>.clock-skew-seconds` (default: `0`)
 
 === Token Age Verification (`mp.jwt.verify.token.age`)
 
 Maximum token age validation based on `iat` claim. Rejects tokens where `now - iat > maxAge + clockSkew`, even if not yet expired.
 
-OAuthSheriff configuration: `sheriff.oauth.issuers.<name>.max-token-age-seconds` (default: disabled)
+Planned configuration: `sheriff.oauth.issuers.<name>.max-token-age-seconds` (default: disabled)
 
 === Cookie-Based Token Extraction (`mp.jwt.token.header` / `mp.jwt.token.cookie`)
 
 Alternative token extraction from HTTP cookies instead of the `Authorization` header. Useful for browser-based SPAs using SameSite cookie protection.
 
-OAuthSheriff configuration:
+Planned configuration:
 
 * `sheriff.oauth.token.header` — `Authorization` (default) or `Cookie`
 * `sheriff.oauth.token.cookie` — cookie name (default: `Bearer`)
 
 === `@RolesAllowed` Support
 
-Standard JSR-250 `@RolesAllowed` annotations are supported alongside OAuthSheriff's `@BearerAuth`:
+Standard JSR-250 `@RolesAllowed` annotations alongside OAuthSheriff's `@BearerAuth`:
 
 * `@RolesAllowed("admin")` — checks `groups` claim (MP-JWT spec behavior)
 * `@BearerAuth(requiredScopes={"read"}, requiredRoles={"admin"})` — checks scopes AND roles AND groups (OAuthSheriff extension)
 * `@PermitAll` / `@DenyAll` — standard behavior
+
+=== CDI Producers
+
+`@Produces JsonWebToken` and `@Produces Principal` for standard MP-JWT injection patterns.
 
 == Not Adopted (By Design)
 
