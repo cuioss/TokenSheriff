@@ -165,7 +165,11 @@ public class BearerTokenProducer {
         }
 
         if (tokenResult.isEmpty()) {
-            LOGGER.debug("Bearer token missing or invalid in Authorization header");
+            if (COOKIE_HEADER_VALUE.equalsIgnoreCase(tokenHeader)) {
+                LOGGER.debug("Bearer token not found in Authorization header or '%s' cookie", tokenCookieName);
+            } else {
+                LOGGER.debug("Bearer token missing or invalid in Authorization header");
+            }
             return BearerTokenResult.noTokenGiven(requiredScopes, requiredRoles, requiredGroups);
         }
 
