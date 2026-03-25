@@ -46,7 +46,7 @@ class TokenValidatorProducerUnitTest {
                 JwtPropertyKeys.ISSUERS.JWKS_CONTENT.formatted("test"), "{\"keys\":[{\"kty\":\"RSA\",\"use\":\"sig\",\"kid\":\"test-key\",\"alg\":\"RS256\",\"n\":\"nzyis1ZjfNB0bBgKFMSvvkTtwlvBsaJq7S5wA-kzeVOVpVWwkWdVha4s38XM_pa_yr47av7-z3VTmvDRyAHcaT92whREFpLv9cj5lTeJSibyr_Mrm_YtjCZVWgaOYIhwrXwKLqPr_11inWsAkfIytvHWTxZYEcXLgAXFuUuaS3uF9gEiNQwzGTU1v0FqkqTBr4B8nW3HCN47XUu0t8Y0e3zvAIhySnxIZi9aDaPvSlAeZ7VVl5ivy_43QvTRpM3eBFs9A1Y9a9aCtHSP8KXRTYhH2TvPxLOOFg0Lu-pwrps6CqvbeZjQlqCh9cGowQ\",\"e\":\"AQAB\"}]}"
         );
         Config testConfig = new TestConfig(props);
-        TokenValidatorProducer producer = new TokenValidatorProducer(testConfig, null);
+        TokenValidatorProducer producer = new TokenValidatorProducer(testConfig, null, null);
 
         producer.init();
 
@@ -66,7 +66,7 @@ class TokenValidatorProducerUnitTest {
                 JwtPropertyKeys.ISSUERS.JWKS_CONTENT.formatted("test"), "{\"keys\":[{\"kty\":\"RSA\",\"use\":\"sig\",\"kid\":\"test-key\",\"alg\":\"RS256\",\"n\":\"nzyis1ZjfNB0bBgKFMSvvkTtwlvBsaJq7S5wA-kzeVOVpVWwkWdVha4s38XM_pa_yr47av7-z3VTmvDRyAHcaT92whREFpLv9cj5lTeJSibyr_Mrm_YtjCZVWgaOYIhwrXwKLqPr_11inWsAkfIytvHWTxZYEcXLgAXFuUuaS3uF9gEiNQwzGTU1v0FqkqTBr4B8nW3HCN47XUu0t8Y0e3zvAIhySnxIZi9aDaPvSlAeZ7VVl5ivy_43QvTRpM3eBFs9A1Y9a9aCtHSP8KXRTYhH2TvPxLOOFg0Lu-pwrps6CqvbeZjQlqCh9cGowQ\",\"e\":\"AQAB\"}]}"
         );
         Config testConfig = new TestConfig(props);
-        TokenValidatorProducer producer = new TokenValidatorProducer(testConfig, null);
+        TokenValidatorProducer producer = new TokenValidatorProducer(testConfig, null, null);
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
                 producer::init);

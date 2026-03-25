@@ -158,6 +158,7 @@ The following capabilities have no equivalent in MP-JWT 2.1:
 * **Multi-issuer support** — `IssuerConfigCache` with async JWKS loading per issuer
 * **DPoP (RFC 9449)** — Optional Demonstrating Proof-of-Possession validation
 * **Custom claim mappers** — Pluggable `ClaimMapper` interface with Keycloak-specific implementations
+* **Custom validation rules** — Pluggable `TokenValidationRule` interface for domain-specific post-validation checks (e.g., tenant-id enforcement, subject blocklists)
 * **Sealed token hierarchy** — `AccessTokenContent`, `IdTokenContent`, `RefreshTokenContent` with type-safe access patterns
 * **Security event tracking** — `SecurityEventCounter` with categorized validation failure tracking
 * **Performance monitoring** — `TokenValidatorMonitor` with microsecond-precision pipeline measurements

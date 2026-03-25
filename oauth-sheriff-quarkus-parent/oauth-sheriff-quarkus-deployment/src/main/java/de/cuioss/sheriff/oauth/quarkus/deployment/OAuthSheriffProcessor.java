@@ -24,6 +24,9 @@ import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValueType;
 import de.cuioss.sheriff.oauth.core.domain.claim.mapper.*;
 import de.cuioss.sheriff.oauth.core.domain.token.*;
+import de.cuioss.sheriff.oauth.core.jwe.JweAlgorithmPreferences;
+import de.cuioss.sheriff.oauth.core.jwe.JweDecryptionConfig;
+import de.cuioss.sheriff.oauth.core.jwe.JweDecryptor;
 import de.cuioss.sheriff.oauth.core.jwks.http.HttpJwksLoader;
 import de.cuioss.sheriff.oauth.core.jwks.http.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.oauth.core.jwks.key.JWKSKeyLoader;
@@ -35,13 +38,11 @@ import de.cuioss.sheriff.oauth.core.pipeline.TokenBuilder;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenClaimValidator;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenHeaderValidator;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenSignatureValidator;
-import de.cuioss.sheriff.oauth.core.jwe.JweAlgorithmPreferences;
-import de.cuioss.sheriff.oauth.core.jwe.JweDecryptionConfig;
-import de.cuioss.sheriff.oauth.core.jwe.JweDecryptor;
 import de.cuioss.sheriff.oauth.core.security.JwkAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.quarkus.config.AccessLogFilterConfigProducer;
+import de.cuioss.sheriff.oauth.quarkus.config.IssuerConfigResolver;
 import de.cuioss.sheriff.oauth.quarkus.config.ParserConfigResolver;
 import de.cuioss.sheriff.oauth.quarkus.interceptor.BearerTokenInterceptor;
 import de.cuioss.sheriff.oauth.quarkus.logging.CustomAccessLogFilter;
@@ -54,6 +55,8 @@ import de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenProducer;
 import de.cuioss.sheriff.oauth.quarkus.producer.TokenValidatorProducer;
 import de.cuioss.sheriff.oauth.quarkus.runtime.OAuthSheriffDevUIRuntimeService;
 import de.cuioss.sheriff.oauth.quarkus.servlet.VertxServletObjectsResolver;
+import de.cuioss.sheriff.oauth.quarkus.validation.DiscoverableTokenValidationRule;
+import de.cuioss.sheriff.oauth.quarkus.validation.TokenValidationRuleRegistry;
 import de.cuioss.tools.logging.CuiLogger;
 import de.cuioss.tools.logging.LogRecord;
 import de.cuioss.tools.logging.LogRecordModel;
@@ -72,6 +75,7 @@ import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
 import io.quarkus.devui.spi.page.CardPageBuildItem;
 import io.quarkus.devui.spi.page.Page;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.jandex.DotName;
 
 /**
@@ -205,7 +209,7 @@ public class OAuthSheriffProcessor {
                 BaseTokenContent.class,
                 MinimalTokenContent.class,
                 // MicroProfile JWT interface - needed for default method resolution in native image
-                org.eclipse.microprofile.jwt.JsonWebToken.class,
+                JsonWebToken.class,
                 // Claim handling classes - need full reflection for enum handling
                 ClaimValue.class,
                 ClaimName.class,
@@ -293,14 +297,16 @@ public class OAuthSheriffProcessor {
                 .addBeanClasses(
                         TokenValidatorProducer.class,
                         BearerTokenProducer.class,
-                        de.cuioss.sheriff.oauth.quarkus.config.IssuerConfigResolver.class,
+                        IssuerConfigResolver.class,
                         ParserConfigResolver.class,
                         VertxServletObjectsResolver.class,
                         JwtMetricsCollector.class,
                         // CDI-based claim mapper infrastructure
                         ClaimMapperRegistry.class,
                         KeycloakRolesMapperBean.class,
-                        KeycloakGroupsMapperBean.class
+                        KeycloakGroupsMapperBean.class,
+                        // CDI-based token validation rule infrastructure
+                        TokenValidationRuleRegistry.class
                 )
                 // Register additional configuration producers using class references
                 .addBeanClass(AccessLogFilterConfigProducer.class)
@@ -336,7 +342,9 @@ public class OAuthSheriffProcessor {
                 DotName.createSimple(JwtMetricsCollector.class.getName()),
                 DotName.createSimple(MeterRegistry.class.getName()),
                 // Ensure user-provided DiscoverableClaimMapper implementations are discovered
-                DotName.createSimple(DiscoverableClaimMapper.class.getName())
+                DotName.createSimple(DiscoverableClaimMapper.class.getName()),
+                // Ensure user-provided DiscoverableTokenValidationRule implementations are discovered
+                DotName.createSimple(DiscoverableTokenValidationRule.class.getName())
         ));
     }
 

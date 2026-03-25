@@ -121,6 +121,10 @@ For more details about security events related to these log messages, see the Se
 |OAuthSheriff-160 |JWE |No decryption key found for key ID: %s |Logged when the JWE header references a kid that has no matching decryption key and no default key is configured
 |OAuthSheriff-161 |JWE |Unsupported JWE compression algorithm: %s |Logged when a JWE token uses an unsupported compression algorithm (only DEF/DEFLATE is supported)
 |OAuthSheriff-162 |JWE |Nested JWE tokens are not allowed |Logged when decrypting a JWE token reveals another JWE (5-part) token instead of the expected inner JWS
+
+|OAuthSheriff-163 |Token Age |Token age exceeds maximum allowed age |Logged when a token's `iat` claim indicates it was issued longer ago than the configured `maxTokenAgeSeconds`
+
+|OAuthSheriff-164 |Custom Rule |Custom validation rule rejected token: %s |Logged when a custom `TokenValidationRule` rejects a token by throwing `TokenValidationException`
 |===
 
 == ERROR Level (200-211)
@@ -160,6 +164,8 @@ This section documents log messages specific to the Quarkus integration module (
 |OAuthSheriff_Q-013 |VALIDATION |Resolving access log filter configuration from properties |Indicates the start of access log filter configuration resolution
 |OAuthSheriff_Q-014 |VALIDATION |Claim mapper registry initialized with %s custom mapper(s): %s |Shows the number of custom claim mappers discovered and their names
 |OAuthSheriff_Q-015 |VALIDATION |No custom claim mappers discovered |Indicates that no custom claim mappers were found during CDI discovery
+|OAuthSheriff_Q-016 |VALIDATION |Token validation rule registry initialized with %s custom rule(s) |Shows the number of custom token validation rules discovered during CDI discovery
+|OAuthSheriff_Q-017 |VALIDATION |No custom token validation rules discovered |Indicates that no custom token validation rules were found during CDI discovery
 |OAuthSheriff_Q-021 |METRICS |Initializing JwtMetricsCollector |Indicates the start of JWT metrics collector initialization
 |OAuthSheriff_Q-022 |METRICS |JwtMetricsCollector initialized with %s event types |Confirms successful initialization with event type count
 |OAuthSheriff_Q-031 |JWE |Resolving JWE decryption configuration from properties |Indicates the start of JWE decryption configuration resolution

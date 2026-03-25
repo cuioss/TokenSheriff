@@ -108,9 +108,36 @@ The access token validation pipeline consists of:
 . `TokenBuilder` - Build typed `AccessTokenContent` object
 . `TokenClaimValidator` - Claims validation (exp, nbf, aud, iss)
 . `DpopProofValidator` - DPoP proof validation (if configured, RFC 9449)
+. Custom `TokenValidationRule` instances - User-provided post-validation checks
 . Cache store - Store validated token for future lookups
 
 Each validator throws `TokenValidationException` with specific `EventType` on failure.
+
+=== Custom Validation Rules
+
+Custom rules run after all built-in validation and before cache storage. They receive the fully validated `AccessTokenContent` and `ValidationContext`:
+
+[source,java]
+----
+TokenValidationRule tenantRule = (token, context) -> {
+    var tenantId = token.getClaimOption(ClaimName.of("tenant_id"));
+    if (tenantId.isEmpty()) {
+        throw new TokenValidationException(
+            SecurityEventCounter.EventType.CUSTOM_RULE_REJECTED,
+            "Missing required tenant_id claim"
+        );
+    }
+};
+
+TokenValidator validator = TokenValidator.builder()
+    .issuerConfig(issuerConfig)
+    .tokenValidationRule(tenantRule)
+    .build();
+----
+
+Rules are immutable after startup. Multiple rules execute in insertion order; the first failure rejects the token.
+
+In Quarkus, implement `DiscoverableTokenValidationRule` as an `@ApplicationScoped` CDI bean for automatic discovery with priority-based ordering.
 
 == Testing Support
 

@@ -91,6 +91,9 @@ public class SecurityEventCounter {
         DPOP_ATH_MISMATCH(JWTValidationLogMessages.WARN.DPOP_ATH_MISMATCH, EventCategory.SEMANTIC_ISSUES),
         DPOP_CNF_MISSING(JWTValidationLogMessages.WARN.DPOP_CNF_MISSING, EventCategory.SEMANTIC_ISSUES),
 
+        // Custom validation rule issues
+        CUSTOM_RULE_REJECTED(JWTValidationLogMessages.WARN.CUSTOM_RULE_REJECTED, EventCategory.SEMANTIC_ISSUES),
+
         // JWE decryption issues (RFC 7516)
         JWE_DECRYPTION_FAILED(JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, EventCategory.INVALID_STRUCTURE),
         JWE_UNSUPPORTED_ALGORITHM(JWTValidationLogMessages.WARN.JWE_UNSUPPORTED_ALGORITHM, EventCategory.INVALID_STRUCTURE),

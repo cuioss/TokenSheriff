@@ -32,6 +32,7 @@ import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenClaimValidator;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenHeaderValidator;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenSignatureValidator;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenStringValidator;
+import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenValidationRule;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.Builder;
@@ -192,6 +193,7 @@ public class TokenValidator implements Closeable {
     private TokenValidator(
             @Nullable ParserConfig parserConfig,
             @Singular List<IssuerConfig> issuerConfigs,
+            @Singular List<TokenValidationRule> tokenValidationRules,
             @Nullable TokenValidatorMonitorConfig monitorConfig,
             @Nullable AccessTokenCacheConfig cacheConfig,
             @Nullable JweDecryptionConfig jweDecryptionConfig) {
@@ -330,6 +332,7 @@ public class TokenValidator implements Closeable {
                 claimValidators,
                 headerValidators,
                 dpopValidators,
+                tokenValidationRules,
                 cacheConfig,
                 this.securityEventCounter,
                 this.performanceMonitor);

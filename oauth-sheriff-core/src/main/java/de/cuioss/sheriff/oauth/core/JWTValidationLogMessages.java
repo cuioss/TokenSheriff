@@ -593,6 +593,12 @@ public final class JWTValidationLogMessages {
                 .identifier(163)
                 .template("Token age exceeds maximum allowed age")
                 .build();
+
+        public static final LogRecord CUSTOM_RULE_REJECTED = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(164)
+                .template("Custom validation rule rejected token: %s")
+                .build();
     }
 
 }
