@@ -39,7 +39,7 @@ import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenValidationRule;
  *             var tenantId = token.getClaimOption(ClaimName.of("tenant_id"));
  *             if (tenantId.isEmpty()) {
  *                 throw new TokenValidationException(
- *                     EventType.CUSTOM_RULE_REJECTED,
+ *                     SecurityEventCounter.EventType.CUSTOM_RULE_REJECTED,
  *                     "Missing required tenant_id claim"
  *                 );
  *             }

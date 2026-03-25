@@ -81,7 +81,7 @@ public class TenantIdRule implements DiscoverableTokenValidationRule {
         return (token, context) -> {
             if (token.getClaimOption(ClaimName.of("tenant_id")).isEmpty()) {
                 throw new TokenValidationException(
-                    EventType.CUSTOM_RULE_REJECTED,
+                    SecurityEventCounter.EventType.CUSTOM_RULE_REJECTED,
                     "Missing required tenant_id claim");
             }
         };
