@@ -59,6 +59,43 @@ In development mode (`@BuildStep(onlyIf = IsDevelopment.class)`):
 * `OAuthSheriffProcessor.createJwtDevUIJsonRPCService()`: Registers JSON-RPC service
 * `OAuthSheriffDevUIRuntimeService`: Provides runtime data access
 
+== CDI Extension Points
+
+The extension provides two CDI-discoverable interfaces for customization:
+
+=== Custom Claim Mappers
+
+Implement `DiscoverableClaimMapper` as an `@ApplicationScoped` bean to add custom claim type mapping. Mappers are collected by `ClaimMapperRegistry` and applied globally to all issuers.
+
+=== Custom Validation Rules
+
+Implement `DiscoverableTokenValidationRule` as an `@ApplicationScoped` bean to add domain-specific post-validation logic. Rules execute after all built-in validation (signature, claims, DPoP) and before cache storage.
+
+[source,java]
+----
+@ApplicationScoped
+public class TenantIdRule implements DiscoverableTokenValidationRule {
+
+    @Override
+    public TokenValidationRule getRule() {
+        return (token, context) -> {
+            if (token.getClaimOption(ClaimName.of("tenant_id")).isEmpty()) {
+                throw new TokenValidationException(
+                    EventType.CUSTOM_RULE_REJECTED,
+                    "Missing required tenant_id claim");
+            }
+        };
+    }
+
+    @Override
+    public int getPriority() {
+        return 500; // lower = earlier execution, default is 1000
+    }
+}
+----
+
+Rules are collected by `TokenValidationRuleRegistry`, sorted by priority, and wired into the pipeline automatically. Disable a rule conditionally by overriding `isEnabled()`.
+
 == Native Image Support
 
 * Reflection configuration for JWT validation classes
