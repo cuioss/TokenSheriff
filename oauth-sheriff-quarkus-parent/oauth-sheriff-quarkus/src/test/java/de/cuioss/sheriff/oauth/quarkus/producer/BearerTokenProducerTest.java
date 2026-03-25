@@ -27,10 +27,13 @@ import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolver;
 import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolverMock;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import org.easymock.Capture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.time.OffsetDateTime;
 import java.util.*;
 
@@ -54,11 +57,14 @@ class BearerTokenProducerTest {
     private HttpServletRequestResolverMock servletResolverMock;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         tokenValidator = createMock(TokenValidator.class);
         servletResolverMock = new HttpServletRequestResolverMock();
         HttpServletRequestResolver servletResolver = servletResolverMock;
         producer = new BearerTokenProducer(tokenValidator, servletResolver);
+        // Set default values that would normally be injected by CDI @ConfigProperty
+        setField(producer, "tokenHeader", "Authorization");
+        setField(producer, "tokenCookieName", "Bearer");
     }
 
     @Test
@@ -262,6 +268,148 @@ class BearerTokenProducerTest {
         assertEquals("Bearer token is empty", result.getErrorMessage().orElse(null));
         assertSingleLogMessagePresentContaining(TestLogLevel.DEBUG,
                 "Bearer token is empty - invalid request per RFC 6750");
+    }
+
+    @Nested
+    @DisplayName("Cookie-based token extraction")
+    @EnableTestLogger(rootLevel = TestLogLevel.DEBUG)
+    class CookieExtractionTests {
+
+        @BeforeEach
+        void configureCookieMode() throws Exception {
+            setField(producer, "tokenHeader", "Cookie");
+            setField(producer, "tokenCookieName", "Bearer");
+        }
+
+        @Test
+        @DisplayName("Should extract token from cookie with default cookie name")
+        void extractTokenFromCookieDefaultName() {
+            String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
+            servletResolverMock.setHeader("Cookie", "Bearer=" + token);
+
+            AccessTokenContent tokenContent = createAccessToken(Map.of());
+            expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
+            replay(tokenValidator);
+
+            BearerTokenResult result = producer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+            assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus());
+            assertTrue(result.getAccessTokenContent().isPresent());
+            verify(tokenValidator);
+        }
+
+        @Test
+        @DisplayName("Should extract token from cookie with custom cookie name")
+        void extractTokenFromCookieCustomName() throws Exception {
+            setField(producer, "tokenCookieName", "jwt_token");
+
+            String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
+            servletResolverMock.setHeader("Cookie", "other=abc; jwt_token=" + token + "; session=xyz");
+
+            AccessTokenContent tokenContent = createAccessToken(Map.of());
+            expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
+            replay(tokenValidator);
+
+            BearerTokenResult result = producer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+            assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus());
+            assertTrue(result.getAccessTokenContent().isPresent());
+            verify(tokenValidator);
+        }
+
+        @Test
+        @DisplayName("Should return no token when cookie header is missing")
+        void missingCookieHeader() {
+            // No cookie header set
+            BearerTokenResult result = producer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+            assertEquals(BearerTokenStatus.NO_TOKEN_GIVEN, result.getStatus());
+            assertTrue(result.getAccessTokenContent().isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should return no token when target cookie is not present")
+        void cookieHeaderWithoutTargetCookie() {
+            servletResolverMock.setHeader("Cookie", "session=abc; other=xyz");
+
+            BearerTokenResult result = producer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+            assertEquals(BearerTokenStatus.NO_TOKEN_GIVEN, result.getStatus());
+            assertTrue(result.getAccessTokenContent().isEmpty());
+        }
+
+        @Test
+        @DisplayName("Authorization header takes precedence over cookie")
+        void authorizationHeaderTakesPrecedence() {
+            String authToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.auth.signature";
+            String cookieToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.cookie.signature";
+            servletResolverMock.setBearerToken(authToken);
+            servletResolverMock.setHeader("Cookie", "Bearer=" + cookieToken);
+
+            AccessTokenContent tokenContent = createAccessToken(Map.of());
+            // Capture the request to verify which token was used
+            Capture<AccessTokenRequest> capture = Capture.newInstance();
+            expect(tokenValidator.createAccessToken(capture(capture))).andReturn(tokenContent);
+            replay(tokenValidator);
+
+            BearerTokenResult result = producer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+            assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus());
+            assertEquals(authToken, capture.getValue().tokenString());
+            verify(tokenValidator);
+        }
+
+        @Test
+        @DisplayName("Should handle quoted cookie values per RFC 6265")
+        void quotedCookieValue() {
+            String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
+            servletResolverMock.setHeader("Cookie", "Bearer=\"" + token + "\"");
+
+            AccessTokenContent tokenContent = createAccessToken(Map.of());
+            expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
+            replay(tokenValidator);
+
+            BearerTokenResult result = producer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+            assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus());
+            assertTrue(result.getAccessTokenContent().isPresent());
+            verify(tokenValidator);
+        }
+
+        @Test
+        @DisplayName("Should return no token when cookie value is empty")
+        void emptyCookieValue() {
+            servletResolverMock.setHeader("Cookie", "Bearer=");
+
+            BearerTokenResult result = producer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+            assertEquals(BearerTokenStatus.NO_TOKEN_GIVEN, result.getStatus());
+            assertTrue(result.getAccessTokenContent().isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should not use cookie extraction when tokenHeader is Authorization (default)")
+        void defaultHeaderDoesNotUseCookies() throws Exception {
+            setField(producer, "tokenHeader", "Authorization");
+
+            String cookieToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.cookie.signature";
+            servletResolverMock.setHeader("Cookie", "Bearer=" + cookieToken);
+            // No Authorization header
+
+            BearerTokenResult result = producer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+            assertEquals(BearerTokenStatus.NO_TOKEN_GIVEN, result.getStatus());
+            assertTrue(result.getAccessTokenContent().isEmpty());
+        }
+    }
+
+    /**
+     * Sets a field value on the target object using reflection.
+     */
+    private static void setField(Object target, String fieldName, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 
     /**
