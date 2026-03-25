@@ -21,10 +21,10 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.INFO;
 
@@ -61,23 +61,19 @@ public class TokenValidationRuleRegistry {
      */
     @PostConstruct
     void init() {
-        List<DiscoverableTokenValidationRule> enabledRules = new ArrayList<>();
-        for (DiscoverableTokenValidationRule rule : discoveredRules) {
-            if (!rule.isEnabled()) {
-                LOGGER.debug("Skipping disabled token validation rule: %s", rule.getClass().getSimpleName());
-                continue;
-            }
-            enabledRules.add(rule);
-        }
-
-        // Sort by priority (lower value = earlier execution)
-        enabledRules.sort(Comparator.comparingInt(DiscoverableTokenValidationRule::getPriority));
-
-        List<TokenValidationRule> rules = new ArrayList<>(enabledRules.size());
-        for (DiscoverableTokenValidationRule rule : enabledRules) {
-            rules.add(rule.getRule());
-        }
-        registeredRules = Collections.unmodifiableList(rules);
+        registeredRules = Collections.unmodifiableList(
+                discoveredRules.stream()
+                        .filter(rule -> {
+                            if (rule.isEnabled()) {
+                                return true;
+                            }
+                            LOGGER.debug("Skipping disabled token validation rule: %s",
+                                    rule.getClass().getSimpleName());
+                            return false;
+                        })
+                        .sorted(Comparator.comparingInt(DiscoverableTokenValidationRule::getPriority))
+                        .map(DiscoverableTokenValidationRule::getRule)
+                        .collect(Collectors.toList()));
 
         if (registeredRules.isEmpty()) {
             LOGGER.info(INFO.NO_CUSTOM_VALIDATION_RULES_DISCOVERED);
