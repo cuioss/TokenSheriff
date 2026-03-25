@@ -577,6 +577,7 @@ public class IssuerConfig implements LoadingStatusProvider {
          * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.clock.skew</a>
          */
         public IssuerConfigBuilder clockSkewSeconds(int clockSkewSeconds) {
+            Preconditions.checkArgument(clockSkewSeconds >= 0, "clockSkewSeconds must not be negative, but was %s", clockSkewSeconds);
             this.clockSkewSeconds = clockSkewSeconds;
             return this;
         }
@@ -596,6 +597,9 @@ public class IssuerConfig implements LoadingStatusProvider {
          * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.token.age</a>
          */
         public IssuerConfigBuilder maxTokenAgeSeconds(Integer maxTokenAgeSeconds) {
+            if (null != maxTokenAgeSeconds) {
+                Preconditions.checkArgument(maxTokenAgeSeconds >= 0, "maxTokenAgeSeconds must not be negative, but was %s", maxTokenAgeSeconds);
+            }
             this.maxTokenAgeSeconds = maxTokenAgeSeconds;
             return this;
         }
