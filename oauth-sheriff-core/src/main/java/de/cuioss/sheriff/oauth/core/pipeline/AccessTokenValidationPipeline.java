@@ -32,9 +32,11 @@ import de.cuioss.sheriff.oauth.core.metrics.TokenValidatorMonitor;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenClaimValidator;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenHeaderValidator;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenSignatureValidator;
+import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenValidationRule;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -89,6 +91,7 @@ public class AccessTokenValidationPipeline {
     private final Map<String, TokenClaimValidator> claimValidators;
     private final Map<String, TokenHeaderValidator> headerValidators;
     private final Map<String, DpopProofValidator> dpopValidators;
+    private final List<TokenValidationRule> customValidationRules;
     private final AccessTokenCache cache;
     private final SecurityEventCounter securityEventCounter;
     private final TokenValidatorMonitor performanceMonitor;
@@ -103,6 +106,7 @@ public class AccessTokenValidationPipeline {
      * @param claimValidators pre-created claim validators keyed by issuer
      * @param headerValidators pre-created header validators keyed by issuer
      * @param dpopValidators pre-created DPoP validators keyed by issuer (may be empty)
+     * @param customValidationRules custom validation rules executed after built-in validation
      * @param cacheConfig the cache configuration for access token caching
      * @param securityEventCounter the security event counter for tracking operations
      * @param performanceMonitor the monitor for recording performance metrics
@@ -115,6 +119,7 @@ public class AccessTokenValidationPipeline {
             Map<String, TokenClaimValidator> claimValidators,
             Map<String, TokenHeaderValidator> headerValidators,
             Map<String, DpopProofValidator> dpopValidators,
+            List<TokenValidationRule> customValidationRules,
             AccessTokenCacheConfig cacheConfig,
             SecurityEventCounter securityEventCounter,
             TokenValidatorMonitor performanceMonitor) {
@@ -125,6 +130,7 @@ public class AccessTokenValidationPipeline {
         this.claimValidators = claimValidators;
         this.headerValidators = headerValidators;
         this.dpopValidators = dpopValidators;
+        this.customValidationRules = List.copyOf(customValidationRules);
         this.cache = new AccessTokenCache(cacheConfig, securityEventCounter);
         this.securityEventCounter = securityEventCounter;
         this.performanceMonitor = performanceMonitor;
@@ -232,14 +238,14 @@ public class AccessTokenValidationPipeline {
         }
 
         // 8. Validate claims (with CLAIMS_VALIDATION metrics)
+        // Create ValidationContext with cached current time to eliminate synchronous OffsetDateTime.now() calls
+        // Use per-issuer clock skew and max token age from IssuerConfig
+        ValidationContext context = new ValidationContext(
+                issuerConfig.getClockSkewSeconds(),
+                issuerConfig.getMaxTokenAgeSeconds());
         MetricsTicker claimsTicker = MetricsTickerFactory.createStartedTicker(MeasurementType.CLAIMS_VALIDATION, performanceMonitor);
         AccessTokenContent validatedToken;
         try {
-            // Create ValidationContext with cached current time to eliminate synchronous OffsetDateTime.now() calls
-            // Use per-issuer clock skew and max token age from IssuerConfig
-            ValidationContext context = new ValidationContext(
-                    issuerConfig.getClockSkewSeconds(),
-                    issuerConfig.getMaxTokenAgeSeconds());
             TokenClaimValidator claimValidator = claimValidators.get(issuerConfig.getIssuerIdentifier());
             validatedToken = (AccessTokenContent) claimValidator.validate(accessToken, context);
         } finally {
@@ -248,6 +254,11 @@ public class AccessTokenValidationPipeline {
 
         // 8.5 Validate DPoP proof (after claims validation, before cache store)
         runDpopValidation(request, decodedJwt, issuerConfig.getIssuerIdentifier(), tokenString);
+
+        // 8.6 Run custom validation rules (after all built-in validation, before cache store)
+        for (TokenValidationRule rule : customValidationRules) {
+            rule.validate(validatedToken, context);
+        }
 
         LOGGER.debug("Token successfully validated");
 

@@ -110,6 +110,20 @@ public final class OAuthSheriffQuarkusLogMessages {
                 .identifier(15)
                 .build();
 
+        // Token Validation Rule Registry Messages (016-017)
+
+        public static final LogRecord VALIDATION_RULE_REGISTRY_INITIALIZED = LogRecordModel.builder()
+                .template("Token validation rule registry initialized with %s custom rule(s)")
+                .prefix(PREFIX)
+                .identifier(16)
+                .build();
+
+        public static final LogRecord NO_CUSTOM_VALIDATION_RULES_DISCOVERED = LogRecordModel.builder()
+                .template("No custom token validation rules discovered")
+                .prefix(PREFIX)
+                .identifier(17)
+                .build();
+
         // Metrics Messages (021-030)
 
         public static final LogRecord INITIALIZING_JWT_METRICS_COLLECTOR = LogRecordModel.builder()

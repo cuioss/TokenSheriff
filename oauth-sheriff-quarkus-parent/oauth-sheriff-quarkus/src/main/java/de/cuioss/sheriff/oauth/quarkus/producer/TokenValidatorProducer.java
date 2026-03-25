@@ -28,6 +28,7 @@ import de.cuioss.sheriff.oauth.quarkus.config.ParserConfigResolver;
 import de.cuioss.sheriff.oauth.quarkus.config.RetryStrategyConfigResolver;
 import de.cuioss.sheriff.oauth.quarkus.jwe.JweDecryptionConfigResolver;
 import de.cuioss.sheriff.oauth.quarkus.mapper.ClaimMapperRegistry;
+import de.cuioss.sheriff.oauth.quarkus.validation.TokenValidationRuleRegistry;
 import de.cuioss.tools.logging.CuiLogger;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -67,6 +68,7 @@ public class TokenValidatorProducer {
 
     private final Config config;
     private final ClaimMapperRegistry claimMapperRegistry;
+    private final TokenValidationRuleRegistry validationRuleRegistry;
 
     @Produces
     @ApplicationScoped
@@ -85,9 +87,11 @@ public class TokenValidatorProducer {
     SecurityEventCounter securityEventCounter;
 
     @SuppressWarnings("java:S2637") // False positive: fields are initialized in @PostConstruct
-    public TokenValidatorProducer(Config config, ClaimMapperRegistry claimMapperRegistry) {
+    public TokenValidatorProducer(Config config, ClaimMapperRegistry claimMapperRegistry,
+            TokenValidationRuleRegistry validationRuleRegistry) {
         this.config = config;
         this.claimMapperRegistry = claimMapperRegistry;
+        this.validationRuleRegistry = validationRuleRegistry;
     }
 
     /**
@@ -144,6 +148,11 @@ public class TokenValidatorProducer {
         // Add each issuer config to the builder
         for (IssuerConfig issuerConfig : issuerConfigs) {
             builder.issuerConfig(issuerConfig);
+        }
+
+        // Add custom validation rules from CDI-discovered DiscoverableTokenValidationRule beans
+        if (validationRuleRegistry != null) {
+            builder.tokenValidationRules(validationRuleRegistry.getValidationRules());
         }
 
         tokenValidator = builder.build();
