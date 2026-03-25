@@ -175,6 +175,38 @@ public class IssuerConfig implements LoadingStatusProvider {
     @Nullable
     DpopConfig dpopConfig;
 
+    /**
+     * Clock skew tolerance in seconds for time-based claim validation (exp, nbf).
+     * <p>
+     * Accommodates clock drift between the token issuer and the validator in distributed systems.
+     * A token is considered expired only when {@code exp + clockSkewSeconds < now}.
+     * </p>
+     * <p>
+     * Default value is {@code 60} seconds.
+     * </p>
+     *
+     * @see de.cuioss.sheriff.oauth.core.domain.context.ValidationContext
+     * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.clock.skew</a>
+     */
+    int clockSkewSeconds;
+
+    /**
+     * Maximum token age in seconds based on the {@code iat} claim, or {@code null} if disabled.
+     * <p>
+     * When set, tokens where {@code now - iat > maxTokenAgeSeconds + clockSkewSeconds}
+     * are rejected, even if not yet expired. This provides an additional security control
+     * beyond standard expiration checking.
+     * </p>
+     * <p>
+     * Default value is {@code null} (disabled).
+     * </p>
+     *
+     * @see de.cuioss.sheriff.oauth.core.domain.context.ValidationContext
+     * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.token.age</a>
+     */
+    @Nullable
+    Integer maxTokenAgeSeconds;
+
     SignatureAlgorithmPreferences algorithmPreferences;
 
     /**
@@ -327,6 +359,8 @@ public class IssuerConfig implements LoadingStatusProvider {
         private boolean claimSubOptional = false;
         private String expectedTokenType;
         private DpopConfig dpopConfig;
+        private int clockSkewSeconds = 60;
+        private Integer maxTokenAgeSeconds;
         private SignatureAlgorithmPreferences algorithmPreferences = new SignatureAlgorithmPreferences();
         private Map<String, ClaimMapper> claimMappers;
         private JwksLoader jwksLoader;
@@ -525,6 +559,44 @@ public class IssuerConfig implements LoadingStatusProvider {
          */
         public IssuerConfigBuilder dpopConfig(DpopConfig dpopConfig) {
             this.dpopConfig = dpopConfig;
+            return this;
+        }
+
+        /**
+         * Sets the clock skew tolerance in seconds for time-based claim validation.
+         * <p>
+         * Accommodates clock drift between the token issuer and the validator in distributed systems.
+         * A token is considered expired only when {@code exp + clockSkewSeconds < now}.
+         * </p>
+         * <p>
+         * Default value is {@code 60} seconds.
+         * </p>
+         *
+         * @param clockSkewSeconds the clock skew tolerance in seconds (must be non-negative)
+         * @return this builder instance for method chaining
+         * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.clock.skew</a>
+         */
+        public IssuerConfigBuilder clockSkewSeconds(int clockSkewSeconds) {
+            this.clockSkewSeconds = clockSkewSeconds;
+            return this;
+        }
+
+        /**
+         * Sets the maximum token age in seconds based on the {@code iat} claim.
+         * <p>
+         * When set, tokens where {@code now - iat > maxTokenAgeSeconds + clockSkewSeconds}
+         * are rejected, even if not yet expired.
+         * </p>
+         * <p>
+         * Default value is {@code null} (disabled).
+         * </p>
+         *
+         * @param maxTokenAgeSeconds the maximum token age in seconds, or {@code null} to disable
+         * @return this builder instance for method chaining
+         * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.token.age</a>
+         */
+        public IssuerConfigBuilder maxTokenAgeSeconds(Integer maxTokenAgeSeconds) {
+            this.maxTokenAgeSeconds = maxTokenAgeSeconds;
             return this;
         }
 
@@ -811,7 +883,8 @@ public class IssuerConfig implements LoadingStatusProvider {
             }
 
             return new IssuerConfig(enabled, issuerIdentifier, expectedAudience, expectedClientId,
-                    claimSubOptional, expectedTokenType, dpopConfig, algorithmPreferences, claimMappers, jwksLoader);
+                    claimSubOptional, expectedTokenType, dpopConfig, clockSkewSeconds, maxTokenAgeSeconds,
+                    algorithmPreferences, claimMappers, jwksLoader);
         }
 
         private void validateConfiguration() {
@@ -860,7 +933,7 @@ public class IssuerConfig implements LoadingStatusProvider {
     @SuppressWarnings("java:S107") // ok for private constructor
     private IssuerConfig(boolean enabled, @Nullable String issuerIdentifier, @Nullable Set<String> expectedAudience,
             @Nullable Set<String> expectedClientId, boolean claimSubOptional, @Nullable String expectedTokenType,
-            @Nullable DpopConfig dpopConfig,
+            @Nullable DpopConfig dpopConfig, int clockSkewSeconds, @Nullable Integer maxTokenAgeSeconds,
             @Nullable SignatureAlgorithmPreferences algorithmPreferences,
             @Nullable Map<String, ClaimMapper> claimMappers, @Nullable JwksLoader jwksLoader) {
         this.enabled = enabled;
@@ -870,6 +943,8 @@ public class IssuerConfig implements LoadingStatusProvider {
         this.claimSubOptional = claimSubOptional;
         this.expectedTokenType = expectedTokenType;
         this.dpopConfig = dpopConfig;
+        this.clockSkewSeconds = clockSkewSeconds;
+        this.maxTokenAgeSeconds = maxTokenAgeSeconds;
         this.algorithmPreferences = algorithmPreferences != null ? algorithmPreferences : new SignatureAlgorithmPreferences();
         this.claimMappers = claimMappers != null ? claimMappers : Map.of();
         this.jwksLoader = jwksLoader;
