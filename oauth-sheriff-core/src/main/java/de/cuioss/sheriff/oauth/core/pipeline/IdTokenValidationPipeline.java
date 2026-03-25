@@ -160,10 +160,12 @@ public class IdTokenValidationPipeline {
 
         // 7. Validate claims
         // Create ValidationContext with cached current time to eliminate synchronous OffsetDateTime.now() calls
-        // Use clock skew of 60 seconds as per ExpirationValidator.CLOCK_SKEW_SECONDS
+        // Use per-issuer clock skew and max token age from IssuerConfig
         // Note: claimValidator is guaranteed to exist because TokenValidator
         // creates validators for all configured issuers during construction
-        ValidationContext context = new ValidationContext(60);
+        ValidationContext context = new ValidationContext(
+                issuerConfig.getClockSkewSeconds(),
+                issuerConfig.getMaxTokenAgeSeconds());
         TokenClaimValidator claimValidator = claimValidators.get(issuerConfig.getIssuerIdentifier());
         IdTokenContent validatedToken = (IdTokenContent) claimValidator.validate(token, context);
 

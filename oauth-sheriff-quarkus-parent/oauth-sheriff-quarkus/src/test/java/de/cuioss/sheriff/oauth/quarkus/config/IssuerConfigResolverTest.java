@@ -390,6 +390,72 @@ class IssuerConfigResolverTest {
             IssuerConfig issuer = result.getFirst();
             assertFalse(issuer.isClaimSubOptional(), "Should default claimSubOptional to false");
         }
+
+        @Test
+        @DisplayName("should configure clock skew seconds from property")
+        void shouldConfigureClockSkewSeconds() {
+            TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.CLOCK_SKEW_SECONDS.formatted(TEST_ISSUER), "120"
+            ));
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config);
+
+            List<IssuerConfig> result = resolver.resolveIssuerConfigs();
+
+            assertEquals(1, result.size());
+            IssuerConfig issuer = result.getFirst();
+            assertEquals(120, issuer.getClockSkewSeconds(),
+                    "Should configure clockSkewSeconds to 120");
+        }
+
+        @Test
+        @DisplayName("should default clock skew seconds to 60 when not specified")
+        void shouldDefaultClockSkewSecondsTo60() {
+            TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+            ));
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config);
+
+            List<IssuerConfig> result = resolver.resolveIssuerConfigs();
+
+            assertEquals(1, result.size());
+            IssuerConfig issuer = result.getFirst();
+            assertEquals(60, issuer.getClockSkewSeconds(),
+                    "Should default clockSkewSeconds to 60");
+        }
+
+        @Test
+        @DisplayName("should configure max token age seconds from property")
+        void shouldConfigureMaxTokenAgeSeconds() {
+            TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.MAX_TOKEN_AGE_SECONDS.formatted(TEST_ISSUER), "300"
+            ));
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config);
+
+            List<IssuerConfig> result = resolver.resolveIssuerConfigs();
+
+            assertEquals(1, result.size());
+            IssuerConfig issuer = result.getFirst();
+            assertEquals(300, issuer.getMaxTokenAgeSeconds(),
+                    "Should configure maxTokenAgeSeconds to 300");
+        }
+
+        @Test
+        @DisplayName("should default max token age seconds to null when not specified")
+        void shouldDefaultMaxTokenAgeSecondsToNull() {
+            TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+            ));
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config);
+
+            List<IssuerConfig> result = resolver.resolveIssuerConfigs();
+
+            assertEquals(1, result.size());
+            IssuerConfig issuer = result.getFirst();
+            assertNull(issuer.getMaxTokenAgeSeconds(),
+                    "Should default maxTokenAgeSeconds to null");
+        }
     }
 
     @Nested

@@ -107,6 +107,64 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
             assertEquals(claimMapper, config.getClaimMappers().get("test-claim"));
             assertNotNull(config.getJwksLoader());
         }
+
+        @Test
+        @DisplayName("Should have default clockSkewSeconds of 60")
+        void shouldHaveDefaultClockSkewSeconds() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .build();
+            assertEquals(60, config.getClockSkewSeconds(),
+                    "Default clockSkewSeconds should be 60");
+        }
+
+        @Test
+        @DisplayName("Should have default maxTokenAgeSeconds of null")
+        void shouldHaveDefaultMaxTokenAgeSeconds() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .build();
+            assertNull(config.getMaxTokenAgeSeconds(),
+                    "Default maxTokenAgeSeconds should be null");
+        }
+
+        @Test
+        @DisplayName("Should build with custom clockSkewSeconds")
+        void shouldBuildWithCustomClockSkewSeconds() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .clockSkewSeconds(120)
+                    .build();
+            assertEquals(120, config.getClockSkewSeconds(),
+                    "clockSkewSeconds should be 120");
+        }
+
+        @Test
+        @DisplayName("Should build with custom maxTokenAgeSeconds")
+        void shouldBuildWithCustomMaxTokenAgeSeconds() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .maxTokenAgeSeconds(300)
+                    .build();
+            assertEquals(300, config.getMaxTokenAgeSeconds(),
+                    "maxTokenAgeSeconds should be 300");
+        }
+
+        @Test
+        @DisplayName("Should build with zero clockSkewSeconds")
+        void shouldBuildWithZeroClockSkewSeconds() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .clockSkewSeconds(0)
+                    .build();
+            assertEquals(0, config.getClockSkewSeconds(),
+                    "clockSkewSeconds should be 0");
+        }
     }
 
     @Nested

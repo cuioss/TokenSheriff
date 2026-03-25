@@ -236,8 +236,10 @@ public class AccessTokenValidationPipeline {
         AccessTokenContent validatedToken;
         try {
             // Create ValidationContext with cached current time to eliminate synchronous OffsetDateTime.now() calls
-            // Use clock skew of 60 seconds as per ExpirationValidator.CLOCK_SKEW_SECONDS
-            ValidationContext context = new ValidationContext(60);
+            // Use per-issuer clock skew and max token age from IssuerConfig
+            ValidationContext context = new ValidationContext(
+                    issuerConfig.getClockSkewSeconds(),
+                    issuerConfig.getMaxTokenAgeSeconds());
             TokenClaimValidator claimValidator = claimValidators.get(issuerConfig.getIssuerIdentifier());
             validatedToken = (AccessTokenContent) claimValidator.validate(accessToken, context);
         } finally {

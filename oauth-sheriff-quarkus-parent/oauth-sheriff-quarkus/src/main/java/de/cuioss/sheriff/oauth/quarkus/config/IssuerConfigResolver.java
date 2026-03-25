@@ -232,6 +232,8 @@ public class IssuerConfigResolver {
         configureAlgorithmPreferences(builder, issuerName);
         configureClaimSubOptional(builder, issuerName);
         configureExpectedTokenType(builder, issuerName);
+        configureClockSkew(builder, issuerName);
+        configureMaxTokenAge(builder, issuerName);
         configureDpop(builder, issuerName);
 
         // Configure JWKS source (mutually exclusive)
@@ -346,6 +348,36 @@ public class IssuerConfigResolver {
         if (expectedTokenType.isPresent()) {
             builder.expectedTokenType(expectedTokenType.get());
             LOGGER.debug("Set expected token type for %s: %s", issuerName, expectedTokenType.get());
+        }
+    }
+
+    /**
+     * Configures clock skew tolerance from properties.
+     */
+    private void configureClockSkew(IssuerConfig.IssuerConfigBuilder builder, String issuerName) {
+        Optional<Integer> clockSkewSeconds = config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.CLOCK_SKEW_SECONDS.formatted(issuerName),
+                Integer.class
+        );
+
+        if (clockSkewSeconds.isPresent()) {
+            builder.clockSkewSeconds(clockSkewSeconds.get());
+            LOGGER.debug("Set clock skew seconds for %s: %s", issuerName, clockSkewSeconds.get());
+        }
+    }
+
+    /**
+     * Configures maximum token age from properties.
+     */
+    private void configureMaxTokenAge(IssuerConfig.IssuerConfigBuilder builder, String issuerName) {
+        Optional<Integer> maxTokenAgeSeconds = config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.MAX_TOKEN_AGE_SECONDS.formatted(issuerName),
+                Integer.class
+        );
+
+        if (maxTokenAgeSeconds.isPresent()) {
+            builder.maxTokenAgeSeconds(maxTokenAgeSeconds.get());
+            LOGGER.debug("Set max token age seconds for %s: %s", issuerName, maxTokenAgeSeconds.get());
         }
     }
 

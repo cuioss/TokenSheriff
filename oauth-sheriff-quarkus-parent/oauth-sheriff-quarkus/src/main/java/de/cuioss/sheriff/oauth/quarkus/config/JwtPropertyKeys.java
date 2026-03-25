@@ -215,6 +215,38 @@ public final class JwtPropertyKeys {
          */
         public static final String EXPECTED_TOKEN_TYPE = BASE + "expected-token-type";
 
+        /**
+         * Clock skew tolerance in seconds for time-based claim validation (exp, nbf).
+         * Template: "sheriff.oauth.issuers.%s.clock-skew-seconds"
+         * <p>
+         * Accommodates clock drift between the token issuer and the validator in distributed systems.
+         * A token is considered expired only when {@code exp + clockSkewSeconds < now}.
+         * </p>
+         * <p>
+         * Default value is {@code 60} seconds.
+         * </p>
+         *
+         * @see de.cuioss.sheriff.oauth.core.IssuerConfig#getClockSkewSeconds()
+         * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.clock.skew</a>
+         */
+        public static final String CLOCK_SKEW_SECONDS = BASE + "clock-skew-seconds";
+
+        /**
+         * Maximum token age in seconds based on the {@code iat} claim.
+         * Template: "sheriff.oauth.issuers.%s.max-token-age-seconds"
+         * <p>
+         * When set, tokens where {@code now - iat > maxTokenAgeSeconds + clockSkewSeconds}
+         * are rejected, even if not yet expired.
+         * </p>
+         * <p>
+         * Default value is disabled (no maximum token age enforcement).
+         * </p>
+         *
+         * @see de.cuioss.sheriff.oauth.core.IssuerConfig#getMaxTokenAgeSeconds()
+         * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.token.age</a>
+         */
+        public static final String MAX_TOKEN_AGE_SECONDS = BASE + "max-token-age-seconds";
+
         // === DPoP Configuration (RFC 9449) ===
 
         /**

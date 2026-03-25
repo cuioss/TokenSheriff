@@ -95,13 +95,13 @@ The `upn` claim is MP-JWT's standardized human-readable principal identifier. OA
 
 Clock skew tolerance is applied to both `exp` and `nbf` validation, accommodating clock drift in distributed systems. A token is considered expired only when `exp + clockSkew < now`.
 
-Currently configured via `ValidationContext` constructor (default: 60 seconds).
+Configured per issuer via `sheriff.oauth.issuers.<name>.clock-skew-seconds` (default: 60 seconds).
 
 === Token Age Verification (`mp.jwt.verify.token.age`)
 
 Maximum token age validation based on `iat` claim. When enabled, rejects tokens where `now - iat > maxTokenAgeSeconds + clockSkewSeconds`, even if not yet expired.
 
-Configured via `ValidationContext` constructor with `maxTokenAgeSeconds` parameter (default: disabled).
+Configured per issuer via `sheriff.oauth.issuers.<name>.max-token-age-seconds` (default: disabled).
 
 === CDI Producers (`@Produces JsonWebToken`, `@Produces Principal`)
 
