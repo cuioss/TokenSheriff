@@ -41,8 +41,9 @@ import java.util.*;
  * configuration for JwksLoader and {@link SignatureAlgorithmPreferences}.
  * </p>
  * <p>
- * The JwksLoader is initialized through the {@link #initSecurityEventCounter(SecurityEventCounter)} method
- * and can be accessed through the {@link #jwksLoader} field.
+ * The JwksLoader is initialized through {@link IssuerConfigCache}, which calls
+ * {@link JwksLoader#initJWKSLoader(SecurityEventCounter)} asynchronously.
+ * The loaded keys can be accessed through the {@link #jwksLoader} field.
  * </p>
  * <p>
  * This class is immutable after construction and thread-safe once the JwksLoader is initialized.
@@ -115,8 +116,21 @@ public class IssuerConfig implements LoadingStatusProvider {
      * Set of expected audience values.
      * These values are matched against the "aud" claim in the token.
      * If the token's audience claim matches any of these values, it is considered valid.
+     * <p>
+     * Either this must be non-empty or {@link #audienceValidationDisabled} must be set to
+     * {@code true}. An empty audience set with validation enabled will fail at build time.
      */
     Set<String> expectedAudience;
+
+    /**
+     * Whether audience validation is explicitly disabled for this issuer.
+     * <p>
+     * When {@code true}, audience validation is skipped regardless of {@link #expectedAudience}.
+     * When {@code false} (default), {@link #expectedAudience} must be non-empty.
+     * <p>
+     * Default value is {@code false} (audience validation is required).
+     */
+    boolean audienceValidationDisabled;
 
     /**
      * Set of expected client ID values.
@@ -128,9 +142,12 @@ public class IssuerConfig implements LoadingStatusProvider {
     /**
      * Whether the "sub" (subject) claim is optional for this issuer.
      * <p>
+     * Design Decision: pragmatic accommodation for identity providers (e.g., Keycloak) that omit
+     * the subject claim in access tokens. Default is secure ({@code false}). This is intentional
+     * and not a compatibility workaround.
+     * <p>
      * When set to {@code true}, the mandatory claims validator will not require the "sub" claim
-     * to be present in tokens from this issuer. This provides a workaround for identity providers
-     * that don't include the subject claim in access tokens by default.
+     * to be present in tokens from this issuer.
      * </p>
      * <p>
      * <strong>Warning:</strong> Setting this to {@code true} relaxes RFC 7519 compliance.
@@ -151,7 +168,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * When configured, the {@link de.cuioss.sheriff.oauth.core.pipeline.validator.TokenHeaderValidator}
      * will validate that the token's "typ" header matches this value
      * (e.g., "at+jwt" per RFC 9068).
-     * When {@code null}, no token type validation is performed (default, backward compatible).
+     * When {@code null}, no token type validation is performed (default).
      *
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068">RFC 9068</a>
      */
@@ -224,37 +241,21 @@ public class IssuerConfig implements LoadingStatusProvider {
     JwksLoader jwksLoader;
 
     /**
-     * Initializes the JwksLoader if it's not already initialized and the issuer is enabled.
+     * Validates that the security event counter is not null.
      * <p>
-     * This method should be called by TokenValidator before using the JwksLoader.
-     * It will initialize the JwksLoader based on the first available configuration in the following order:
-     * <ol>
-     *   <li>HTTP JwksLoader (httpJwksLoaderConfig)</li>
-     *   <li>File JwksLoader (jwksFilePath)</li>
-     *   <li>In-memory JwksLoader (jwksContent)</li>
-     * </ol>
+     * This method performs parameter validation only. The actual JWKS loading is triggered
+     * by {@link IssuerConfigCache}, which calls {@link JwksLoader#initJWKSLoader(SecurityEventCounter)}
+     * asynchronously. This avoids double initialization and redundant HTTP requests.
      * <p>
-     * If the issuer is disabled ({@link #enabled} is {@code false}), this method will not
-     * initialize the JwksLoader and will leave it as {@code null}.
-     * <p>
-     * <strong>Important:</strong> This method assumes the configuration has already been validated
-     * during construction via the {@link IssuerConfigBuilder#build()} method. It focuses solely on
-     * initializing the JwksLoader instances with the provided SecurityEventCounter.
-     * <p>
-     * This method is not thread-safe and should be called before the object is shared between threads.
+     * This method is retained for API compatibility with callers that need to validate
+     * the counter parameter early (e.g., Quarkus CDI producers).
      *
      * @param securityEventCounter the counter for security events, must not be null
      * @throws NullPointerException if securityEventCounter is null
      */
     public void initSecurityEventCounter(SecurityEventCounter securityEventCounter) {
-        // Skip initialization if the issuer is disabled or jwksLoader is not configured
-        if (!enabled || jwksLoader == null) {
-            return;
-        }
-
-        // Initialize the JwksLoader with the SecurityEventCounter
-        // For now, we block on completion - proper async handling will be in C6
-        jwksLoader.initJWKSLoader(securityEventCounter).join();
+        Objects.requireNonNull(securityEventCounter, "securityEventCounter must not be null");
+        // No-op: JWKS loading is handled by IssuerConfigCache.initJWKSLoader()
     }
 
 
@@ -355,6 +356,7 @@ public class IssuerConfig implements LoadingStatusProvider {
         private boolean enabled = true;
         private String issuerIdentifier;
         private Set<String> expectedAudience;
+        private boolean audienceValidationDisabled = false;
         private Set<String> expectedClientId;
         private boolean claimSubOptional = false;
         private String expectedTokenType;
@@ -456,6 +458,21 @@ public class IssuerConfig implements LoadingStatusProvider {
         }
 
         /**
+         * Explicitly disables audience validation for this issuer.
+         * <p>
+         * When set to {@code true}, no audience validation is performed regardless of
+         * {@link #expectedAudience}. Use this only when the issuer does not include the
+         * "aud" claim in tokens and audience validation is not required.
+         *
+         * @param audienceValidationDisabled {@code true} to disable audience validation
+         * @return this builder instance for method chaining
+         */
+        public IssuerConfigBuilder audienceValidationDisabled(boolean audienceValidationDisabled) {
+            this.audienceValidationDisabled = audienceValidationDisabled;
+            return this;
+        }
+
+        /**
          * Adds a single expected client ID value for token validation.
          * <p>
          * This value will be matched against the "azp" (authorized party) or "client_id" claims in tokens.
@@ -534,7 +551,7 @@ public class IssuerConfig implements LoadingStatusProvider {
          * The comparison is case-insensitive per RFC convention.
          * </p>
          * <p>
-         * When not set (default), no token type validation is performed for backward compatibility.
+         * When not set (default), no token type validation is performed.
          * </p>
          *
          * @param expectedTokenType the expected token type value (e.g., "at+jwt")
@@ -879,6 +896,15 @@ public class IssuerConfig implements LoadingStatusProvider {
             if (enabled) {
                 validateConfiguration();
                 createJwksLoaderIfNeeded();
+
+                // Validate audience configuration: either set expectedAudience or explicitly disable
+                if (!audienceValidationDisabled
+                        && (expectedAudience == null || expectedAudience.isEmpty())) {
+                    throw new IllegalArgumentException(
+                            "expectedAudience must be non-empty for issuer '%s'. "
+                                    .formatted(issuerIdentifier != null ? issuerIdentifier : "unknown")
+                                    + "Either configure expected audience values or set audienceValidationDisabled(true).");
+                }
             }
 
             // Warn about RFC compliance when subject claim is made optional
@@ -886,9 +912,9 @@ public class IssuerConfig implements LoadingStatusProvider {
                 LOGGER.warn(JWTValidationLogMessages.WARN.CLAIM_SUB_OPTIONAL_WARNING, issuerIdentifier != null ? issuerIdentifier : "unknown");
             }
 
-            return new IssuerConfig(enabled, issuerIdentifier, expectedAudience, expectedClientId,
-                    claimSubOptional, expectedTokenType, dpopConfig, clockSkewSeconds, maxTokenAgeSeconds,
-                    algorithmPreferences, claimMappers, jwksLoader);
+            return new IssuerConfig(enabled, issuerIdentifier, expectedAudience, audienceValidationDisabled,
+                    expectedClientId, claimSubOptional, expectedTokenType, dpopConfig, clockSkewSeconds,
+                    maxTokenAgeSeconds, algorithmPreferences, claimMappers, jwksLoader);
         }
 
         private void validateConfiguration() {
@@ -936,13 +962,15 @@ public class IssuerConfig implements LoadingStatusProvider {
      */
     @SuppressWarnings("java:S107") // ok for private constructor
     private IssuerConfig(boolean enabled, @Nullable String issuerIdentifier, @Nullable Set<String> expectedAudience,
-            @Nullable Set<String> expectedClientId, boolean claimSubOptional, @Nullable String expectedTokenType,
+            boolean audienceValidationDisabled, @Nullable Set<String> expectedClientId,
+            boolean claimSubOptional, @Nullable String expectedTokenType,
             @Nullable DpopConfig dpopConfig, int clockSkewSeconds, @Nullable Integer maxTokenAgeSeconds,
             @Nullable SignatureAlgorithmPreferences algorithmPreferences,
             @Nullable Map<String, ClaimMapper> claimMappers, @Nullable JwksLoader jwksLoader) {
         this.enabled = enabled;
         this.issuerIdentifier = issuerIdentifier;
         this.expectedAudience = expectedAudience != null ? expectedAudience : Set.of();
+        this.audienceValidationDisabled = audienceValidationDisabled;
         this.expectedClientId = expectedClientId != null ? expectedClientId : Set.of();
         this.claimSubOptional = claimSubOptional;
         this.expectedTokenType = expectedTokenType;

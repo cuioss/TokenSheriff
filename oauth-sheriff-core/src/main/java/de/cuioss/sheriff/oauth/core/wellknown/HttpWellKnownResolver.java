@@ -119,33 +119,6 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
     }
 
     /**
-     * Gets the authorization endpoint from the well-known configuration.
-     *
-     * @return Optional containing the authorization endpoint if available, empty otherwise
-     */
-    public Optional<String> getAuthorizationEndpoint() {
-        return ensureLoaded().flatMap(WellKnownResult::getAuthorizationEndpoint);
-    }
-
-    /**
-     * Gets the token endpoint from the well-known configuration.
-     *
-     * @return Optional containing the token endpoint if available, empty otherwise
-     */
-    public Optional<String> getTokenEndpoint() {
-        return ensureLoaded().flatMap(WellKnownResult::getTokenEndpoint);
-    }
-
-    /**
-     * Gets the userinfo endpoint from the well-known configuration.
-     *
-     * @return Optional containing the userinfo endpoint if available, empty otherwise
-     */
-    public Optional<String> getUserinfoEndpoint() {
-        return ensureLoaded().flatMap(WellKnownResult::getUserinfoEndpoint);
-    }
-
-    /**
      * Gets the complete well-known configuration result.
      *
      * @return Optional containing the WellKnownResult if available, empty otherwise

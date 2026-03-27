@@ -45,7 +45,6 @@ class ParserConfigTest implements ShouldImplementEqualsAndHashCode<ParserConfig>
         assertEquals(ParserConfig.DEFAULT_MAX_TOKEN_SIZE, config.getMaxTokenSize());
         assertEquals(ParserConfig.DEFAULT_MAX_PAYLOAD_SIZE, config.getMaxPayloadSize());
         assertEquals(ParserConfig.DEFAULT_MAX_STRING_LENGTH, config.getMaxStringLength());
-        assertEquals(ParserConfig.DEFAULT_MAX_BUFFER_SIZE, config.getMaxBufferSize());
     }
 
     @Test
@@ -55,13 +54,11 @@ class ParserConfigTest implements ShouldImplementEqualsAndHashCode<ParserConfig>
                 .maxTokenSize(16384)
                 .maxPayloadSize(32768)
                 .maxStringLength(8192)
-                .maxBufferSize(256000)
                 .build();
 
         assertEquals(16384, config.getMaxTokenSize());
         assertEquals(32768, config.getMaxPayloadSize());
         assertEquals(8192, config.getMaxStringLength());
-        assertEquals(256000, config.getMaxBufferSize());
     }
 
     @Test
@@ -70,7 +67,6 @@ class ParserConfigTest implements ShouldImplementEqualsAndHashCode<ParserConfig>
         assertEquals(ParserConfig.DEFAULT_MAX_TOKEN_SIZE, 8 * 1024);
         assertEquals(ParserConfig.DEFAULT_MAX_PAYLOAD_SIZE, 8 * 1024);
         assertEquals(ParserConfig.DEFAULT_MAX_STRING_LENGTH, 4 * 1024);
-        assertEquals(ParserConfig.DEFAULT_MAX_BUFFER_SIZE, 128 * 1024);
     }
 
     @Test
@@ -78,7 +74,6 @@ class ParserConfigTest implements ShouldImplementEqualsAndHashCode<ParserConfig>
     void shouldCreateDslJsonWithSecuritySettings() {
         var config = ParserConfig.builder()
                 .maxStringLength(2048)
-                .maxBufferSize(64000)
                 .build();
 
         var dslJson = config.getDslJson();
@@ -95,29 +90,59 @@ class ParserConfigTest implements ShouldImplementEqualsAndHashCode<ParserConfig>
                 .maxTokenSize(1)
                 .maxPayloadSize(1)
                 .maxStringLength(1)
-                .maxBufferSize(1)
                 .build();
 
         assertEquals(1, config.getMaxTokenSize());
         assertEquals(1, config.getMaxPayloadSize());
         assertEquals(1, config.getMaxStringLength());
-        assertEquals(1, config.getMaxBufferSize());
     }
 
     @Test
-    @DisplayName("Should handle zero values")
-    void shouldHandleZeroValues() {
-        var config = ParserConfig.builder()
-                .maxTokenSize(0)
-                .maxPayloadSize(0)
-                .maxStringLength(0)
-                .maxBufferSize(0)
-                .build();
+    @DisplayName("Should reject zero maxTokenSize")
+    void shouldRejectZeroMaxTokenSize() {
+        var builder = ParserConfig.builder().maxTokenSize(0);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxTokenSize"));
+    }
 
-        assertEquals(0, config.getMaxTokenSize());
-        assertEquals(0, config.getMaxPayloadSize());
-        assertEquals(0, config.getMaxStringLength());
-        assertEquals(0, config.getMaxBufferSize());
+    @Test
+    @DisplayName("Should reject zero maxPayloadSize")
+    void shouldRejectZeroMaxPayloadSize() {
+        var builder = ParserConfig.builder().maxPayloadSize(0);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxPayloadSize"));
+    }
+
+    @Test
+    @DisplayName("Should reject zero maxStringLength")
+    void shouldRejectZeroMaxStringLength() {
+        var builder = ParserConfig.builder().maxStringLength(0);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxStringLength"));
+    }
+
+    @Test
+    @DisplayName("Should reject negative maxTokenSize")
+    void shouldRejectNegativeMaxTokenSize() {
+        var builder = ParserConfig.builder().maxTokenSize(-1);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxTokenSize"));
+    }
+
+    @Test
+    @DisplayName("Should reject negative maxPayloadSize")
+    void shouldRejectNegativeMaxPayloadSize() {
+        var builder = ParserConfig.builder().maxPayloadSize(-100);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxPayloadSize"));
+    }
+
+    @Test
+    @DisplayName("Should reject negative maxStringLength")
+    void shouldRejectNegativeMaxStringLength() {
+        var builder = ParserConfig.builder().maxStringLength(-42);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxStringLength"));
     }
 
     @Test
@@ -127,13 +152,11 @@ class ParserConfigTest implements ShouldImplementEqualsAndHashCode<ParserConfig>
                 .maxTokenSize(Integer.MAX_VALUE)
                 .maxPayloadSize(Integer.MAX_VALUE)
                 .maxStringLength(Integer.MAX_VALUE)
-                .maxBufferSize(Integer.MAX_VALUE)
                 .build();
 
         assertEquals(Integer.MAX_VALUE, config.getMaxTokenSize());
         assertEquals(Integer.MAX_VALUE, config.getMaxPayloadSize());
         assertEquals(Integer.MAX_VALUE, config.getMaxStringLength());
-        assertEquals(Integer.MAX_VALUE, config.getMaxBufferSize());
     }
 
     @Test
@@ -158,7 +181,6 @@ class ParserConfigTest implements ShouldImplementEqualsAndHashCode<ParserConfig>
     void shouldVerifyDslJsonConfigurationIsProperlyApplied() {
         var config = ParserConfig.builder()
                 .maxStringLength(1024)
-                .maxBufferSize(2048)
                 .build();
 
         var dslJson = config.getDslJson();
@@ -174,7 +196,6 @@ class ParserConfigTest implements ShouldImplementEqualsAndHashCode<ParserConfig>
     void shouldCreateDslJsonWithConsistentConfiguration() {
         var config = ParserConfig.builder()
                 .maxStringLength(100)
-                .maxBufferSize(2048)
                 .build();
 
         var dslJson = config.getDslJson();
@@ -190,12 +211,10 @@ class ParserConfigTest implements ShouldImplementEqualsAndHashCode<ParserConfig>
     void shouldVerifyDslJsonSettingsAreAppliedCorrectly() {
         var config1 = ParserConfig.builder()
                 .maxStringLength(1024)
-                .maxBufferSize(2048)
                 .build();
 
         var config2 = ParserConfig.builder()
                 .maxStringLength(2048)
-                .maxBufferSize(4096)
                 .build();
 
         var dslJson1 = config1.getDslJson();

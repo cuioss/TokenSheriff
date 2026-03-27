@@ -92,7 +92,7 @@ public class TokenClaimValidator {
         this.mandatoryClaimsValidator = new MandatoryClaimsValidator(issuerConfig, securityEventCounter);
         this.authorizedPartyValidator = new AuthorizedPartyValidator(expectedClientId, securityEventCounter);
 
-        if (MoreCollections.isEmpty(expectedAudience)) {
+        if (MoreCollections.isEmpty(expectedAudience) && !issuerConfig.isAudienceValidationDisabled()) {
             LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_RECOMMENDED_ELEMENT, "expectedAudience");
             securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT);
         }

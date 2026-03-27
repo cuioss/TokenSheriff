@@ -130,23 +130,22 @@ class HttpWellKnownResolverTest {
         // Test multiple endpoint resolutions
         Optional<String> issuer = resolver.getIssuer();
         Optional<String> jwksUri = resolver.getJwksUri();
-        Optional<String> authEndpoint = resolver.getAuthorizationEndpoint();
-        Optional<String> tokenEndpoint = resolver.getTokenEndpoint();
-        Optional<String> userinfoEndpoint = resolver.getUserinfoEndpoint();
+        Optional<WellKnownResult> wellKnownResult = resolver.getWellKnownResult();
 
-        // All endpoints should be available
+        // Core endpoints should be available
         assertTrue(issuer.isPresent(), "Issuer should be available");
         assertTrue(jwksUri.isPresent(), "JWKS URI should be available");
-        assertTrue(authEndpoint.isPresent(), "Authorization endpoint should be available");
-        assertTrue(tokenEndpoint.isPresent(), "Token endpoint should be available");
-        assertTrue(userinfoEndpoint.isPresent(), "Userinfo endpoint should be available");
+        assertTrue(wellKnownResult.isPresent(), "WellKnownResult should be available");
 
         // Verify endpoint URLs
         assertEquals(baseUrl, issuer.get());
         assertEquals(baseUrl + "/oidc/jwks.json", jwksUri.get());
-        assertEquals(baseUrl + "/protocol/openid-connect/auth", authEndpoint.get());
-        assertEquals(baseUrl + "/protocol/openid-connect/token", tokenEndpoint.get());
-        assertEquals(baseUrl + "/protocol/openid-connect/userinfo", userinfoEndpoint.get());
+
+        // Verify additional endpoints via WellKnownResult
+        var result = wellKnownResult.get();
+        assertEquals(baseUrl + "/protocol/openid-connect/auth", result.authorizationEndpoint());
+        assertEquals(baseUrl + "/protocol/openid-connect/token", result.tokenEndpoint());
+        assertEquals(baseUrl + "/protocol/openid-connect/userinfo", result.userinfoEndpoint());
 
         // Should only call the well-known endpoint once due to caching
         assertEquals(1, moduleDispatcher.getCallCounter(), "Well-known endpoint should be called once (cached)");
@@ -171,7 +170,7 @@ class HttpWellKnownResolverTest {
         // All endpoint resolutions should return empty
         assertFalse(resolver.getJwksUri().isPresent(), "JWKS URI should not be available on error");
         assertFalse(resolver.getIssuer().isPresent(), "Issuer should not be available on error");
-        assertFalse(resolver.getAuthorizationEndpoint().isPresent(), "Authorization endpoint should not be available on error");
+        assertFalse(resolver.getWellKnownResult().isPresent(), "WellKnownResult should not be available on error");
 
         // Health status should reflect error
         assertEquals(LoaderStatus.ERROR, resolver.getLoaderStatus());
@@ -229,6 +228,6 @@ class HttpWellKnownResolverTest {
         var wellKnown = result.get();
         assertNotNull(wellKnown.getIssuer(), "Issuer should be present in result");
         assertNotNull(wellKnown.getJwksUri(), "JWKS URI should be present in result");
-        assertNotNull(wellKnown.getAuthorizationEndpoint(), "Authorization endpoint should be present in result");
+        assertNotNull(wellKnown.authorizationEndpoint(), "Authorization endpoint should be present in result");
     }
 }

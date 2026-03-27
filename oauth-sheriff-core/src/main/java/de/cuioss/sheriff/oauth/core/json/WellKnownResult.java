@@ -74,24 +74,6 @@ public class WellKnownResult {
         this.userinfoEndpoint = userinfoEndpoint;
     }
 
-    public static final String ABOUT_EMPTY = "about:empty";
-    /**
-     * Sentinel value representing an empty/invalid well-known configuration.
-     * <p>
-     * This special value is used when HttpContentConverter needs to provide a non-null
-     * empty value but no valid configuration can be created. It uses a recognizable
-     * placeholder that clearly indicates this is not a real configuration.
-     * <p>
-     * <strong>This should never be used for actual OpenID Connect operations.</strong>
-     */
-    public static final WellKnownResult EMPTY = new WellKnownResult(
-            ABOUT_EMPTY, // RFC 6694 - special URI for empty content
-            ABOUT_EMPTY,
-            null,
-            null,
-            null
-    );
-
     public String issuer() {
         return issuer;
     }
@@ -157,38 +139,4 @@ public class WellKnownResult {
         return Optional.ofNullable(userinfoEndpoint);
     }
 
-    /**
-     * Checks if this configuration is the special empty sentinel value.
-     *
-     * @return true if this is the EMPTY sentinel value
-     */
-    public boolean isEmpty() {
-        return this == EMPTY ||
-                ABOUT_EMPTY.equals(issuer) ||
-                (issuer == null && jwksUri == null);
-    }
-
-    /**
-     * Checks if this configuration has all fields required for full OAuth 2.0 flows.
-     * <p>
-     * Returns true if both authorization_endpoint and token_endpoint are present,
-     * indicating this server supports full authorization code flow.
-     *
-     * @return true if configuration supports full OAuth 2.0 flows
-     */
-    public boolean supportsFullOAuthFlows() {
-        return authorizationEndpoint != null && tokenEndpoint != null;
-    }
-
-    /**
-     * Checks if this configuration is minimal (contains only required JWT validation fields).
-     * <p>
-     * Returns true if only issuer and jwks_uri are present, which is sufficient
-     * for JWT token validation scenarios.
-     *
-     * @return true if configuration contains only minimal JWT validation fields
-     */
-    public boolean isMinimal() {
-        return authorizationEndpoint == null && tokenEndpoint == null;
-    }
 }

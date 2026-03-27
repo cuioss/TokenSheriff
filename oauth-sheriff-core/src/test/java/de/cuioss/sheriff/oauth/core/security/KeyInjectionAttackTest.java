@@ -181,7 +181,7 @@ class KeyInjectionAttackTest {
         LOGGER.debug("Created token with %s KID: %s", attackType, token);
 
         // Reset the security event counter for this test
-        tokenValidator.getSecurityEventCounter().reset(expectedEventType);
+        tokenValidator.getSecurityEventCounter().reset();
 
         // Verify that the token is rejected
         var kidRequest = AccessTokenRequest.of(token);

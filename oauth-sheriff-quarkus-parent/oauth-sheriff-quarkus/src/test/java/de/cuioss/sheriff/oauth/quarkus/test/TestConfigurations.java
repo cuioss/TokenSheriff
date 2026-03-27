@@ -41,7 +41,8 @@ public final class TestConfigurations {
         return new TestConfig(Map.of(
                 JwtPropertyKeys.ISSUERS.ENABLED.formatted("test"), "true",
                 JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("test"), "https://test.example.com",
-                JwtPropertyKeys.ISSUERS.JWKS_FILE_PATH.formatted("test"), "classpath:keys/test_public_key.jwks"
+                JwtPropertyKeys.ISSUERS.JWKS_FILE_PATH.formatted("test"), "classpath:keys/test_public_key.jwks",
+                JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted("test"), "true"
         ));
     }
 
@@ -55,7 +56,8 @@ public final class TestConfigurations {
         return new TestConfig(Map.of(
                 JwtPropertyKeys.PARSER.MAX_TOKEN_SIZE, "-1",
                 JwtPropertyKeys.ISSUERS.ENABLED.formatted("test"), "true",
-                JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("test"), "https://test.example.com"
+                JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("test"), "https://test.example.com",
+                JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted("test"), "true"
         ));
     }
 
@@ -82,7 +84,8 @@ public final class TestConfigurations {
         return new TestConfig(Map.of(
                 JwtPropertyKeys.ISSUERS.ENABLED.formatted("test"), "true",
                 JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("test"), "https://test.example.com",
-                JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted("test"), "https://test.example.com/.well-known/openid_configuration"
+                JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted("test"), "https://test.example.com/.well-known/openid_configuration",
+                JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted("test"), "true"
         ));
     }
 
@@ -98,7 +101,8 @@ public final class TestConfigurations {
                 JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("test"), "https://test.example.com",
                 JwtPropertyKeys.ISSUERS.JWKS_URL.formatted("test"), "https://test.example.com/jwks",
                 JwtPropertyKeys.ISSUERS.REFRESH_INTERVAL_SECONDS.formatted("test"), "300",
-                JwtPropertyKeys.ISSUERS.CONNECT_TIMEOUT_SECONDS.formatted("test"), "5"
+                JwtPropertyKeys.ISSUERS.CONNECT_TIMEOUT_SECONDS.formatted("test"), "5",
+                JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted("test"), "true"
         ));
     }
 
@@ -113,7 +117,8 @@ public final class TestConfigurations {
                 JwtPropertyKeys.ISSUERS.ENABLED.formatted("test"), "true",
                 JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted("test"), "https://test.example.com/.well-known/openid_configuration",
                 JwtPropertyKeys.ISSUERS.CONNECT_TIMEOUT_SECONDS.formatted("test"), "5",
-                JwtPropertyKeys.ISSUERS.READ_TIMEOUT_SECONDS.formatted("test"), "5"
+                JwtPropertyKeys.ISSUERS.READ_TIMEOUT_SECONDS.formatted("test"), "5",
+                JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted("test"), "true"
         ));
     }
 
@@ -128,9 +133,11 @@ public final class TestConfigurations {
                 JwtPropertyKeys.ISSUERS.ENABLED.formatted("primary"), "true",
                 JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("primary"), "https://primary.example.com",
                 JwtPropertyKeys.ISSUERS.JWKS_URL.formatted("primary"), "https://primary.example.com/jwks",
+                JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted("primary"), "true",
                 JwtPropertyKeys.ISSUERS.ENABLED.formatted("secondary"), "true",
                 JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("secondary"), "https://secondary.example.com",
                 JwtPropertyKeys.ISSUERS.JWKS_URL.formatted("secondary"), "https://secondary.example.com/jwks",
+                JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted("secondary"), "true",
                 JwtPropertyKeys.ISSUERS.ENABLED.formatted("disabled"), "false",
                 JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("disabled"), "https://disabled.example.com"
         ));
@@ -147,10 +154,10 @@ public final class TestConfigurations {
                 JwtPropertyKeys.PARSER.MAX_TOKEN_SIZE, "16384",
                 JwtPropertyKeys.PARSER.MAX_PAYLOAD_SIZE, "16384",
                 JwtPropertyKeys.PARSER.MAX_STRING_LENGTH, "8192",
-                JwtPropertyKeys.PARSER.MAX_BUFFER_SIZE, "128",
                 JwtPropertyKeys.ISSUERS.ENABLED.formatted("test"), "true",
                 JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("test"), "https://test.example.com",
-                JwtPropertyKeys.ISSUERS.JWKS_FILE_PATH.formatted("test"), "classpath:keys/test_public_key.jwks"
+                JwtPropertyKeys.ISSUERS.JWKS_FILE_PATH.formatted("test"), "classpath:keys/test_public_key.jwks",
+                JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted("test"), "true"
         ));
     }
 
@@ -280,6 +287,17 @@ public final class TestConfigurations {
         }
 
         /**
+         * Disables audience validation for this issuer.
+         *
+         * @param disabled true to disable audience validation
+         * @return this builder
+         */
+        public IssuerConfigBuilder audienceValidationDisabled(boolean disabled) {
+            parent.addProperty(JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(issuerName), String.valueOf(disabled));
+            return this;
+        }
+
+        /**
          * Sets the well-known discovery URL.
          *
          * @param url the well-known endpoint URL
@@ -360,17 +378,6 @@ public final class TestConfigurations {
          */
         public ParserConfigBuilder maxStringLength(int length) {
             parent.addProperty(JwtPropertyKeys.PARSER.MAX_STRING_LENGTH, String.valueOf(length));
-            return this;
-        }
-
-        /**
-         * Sets the maximum buffer size for JSON parsing in bytes.
-         *
-         * @param size maximum buffer size
-         * @return this builder
-         */
-        public ParserConfigBuilder maxBufferSize(int size) {
-            parent.addProperty(JwtPropertyKeys.PARSER.MAX_BUFFER_SIZE, String.valueOf(size));
             return this;
         }
 

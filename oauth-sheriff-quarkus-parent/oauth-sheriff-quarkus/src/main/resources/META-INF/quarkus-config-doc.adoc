@@ -72,7 +72,6 @@ Properties under `sheriff.oauth.issuers.<name>.*` — one block per issuer.
 |`sheriff.oauth.parser.max-token-size` |int |`8192` |Max JWT token size (bytes)
 |`sheriff.oauth.parser.max-payload-size` |int |`8192` |Max decoded JSON payload (bytes)
 |`sheriff.oauth.parser.max-string-length` |int |`4096` |Max JSON string value (bytes)
-|`sheriff.oauth.parser.max-buffer-size` |int |`131072` |Max JSON buffer size (bytes)
 |===
 
 == Cache

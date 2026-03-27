@@ -21,7 +21,7 @@ import de.cuioss.sheriff.oauth.core.test.generator.ClaimControlParameter;
 import de.cuioss.sheriff.oauth.quarkus.annotation.BearerAuth;
 import de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenProducer;
 import de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenResult;
-import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenStatus;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import jakarta.interceptor.InvocationContext;
 import jakarta.ws.rs.WebApplicationException;
@@ -31,10 +31,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 
-import static de.cuioss.test.juli.LogAsserts.assertSingleLogMessagePresentContaining;
 import static org.easymock.EasyMock.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link BearerTokenInterceptor}.
@@ -60,7 +58,10 @@ class BearerTokenInterceptorTest {
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithScopes"));
         expect(bearerTokenProducer.getBearerTokenResult(Set.of("read"), Set.of(), Set.of()))
-                .andReturn(BearerTokenResult.success(tokenHolder.asAccessTokenContent(), Set.of(), Set.of(), Set.of()));
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -92,7 +93,10 @@ class BearerTokenInterceptorTest {
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithMultipleScopes"));
         expect(bearerTokenProducer.getBearerTokenResult(Set.of("read", "write", "admin"), Set.of(), Set.of()))
-                .andReturn(BearerTokenResult.success(tokenHolder.asAccessTokenContent(), Set.of(), Set.of(), Set.of()));
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -108,7 +112,10 @@ class BearerTokenInterceptorTest {
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithRoles"));
         expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of("user", "admin"), Set.of()))
-                .andReturn(BearerTokenResult.success(tokenHolder.asAccessTokenContent(), Set.of(), Set.of(), Set.of()));
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -124,7 +131,10 @@ class BearerTokenInterceptorTest {
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithGroups"));
         expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of("developers", "managers")))
-                .andReturn(BearerTokenResult.success(tokenHolder.asAccessTokenContent(), Set.of(), Set.of(), Set.of()));
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -143,7 +153,10 @@ class BearerTokenInterceptorTest {
                 Set.of("read", "write"),
                 Set.of("user"),
                 Set.of("team-a")))
-                .andReturn(BearerTokenResult.success(tokenHolder.asAccessTokenContent(), Set.of(), Set.of(), Set.of()));
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -159,7 +172,10 @@ class BearerTokenInterceptorTest {
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithEmptyAnnotation"));
         expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of()))
-                .andReturn(BearerTokenResult.success(tokenHolder.asAccessTokenContent(), Set.of(), Set.of(), Set.of()));
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -169,20 +185,19 @@ class BearerTokenInterceptorTest {
     }
 
     @Test
-    @DisplayName("Should proceed when annotation not found (with warning)")
-    void shouldProceedWhenAnnotationNotFound() throws Exception {
+    @DisplayName("Should throw IllegalStateException when annotation not found (fail closed)")
+    void shouldThrowWhenAnnotationNotFound() throws Exception {
         TestResource resource = new TestResource();
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithoutAnnotation")).times(2);
         expect(invocationContext.getTarget()).andReturn(resource);
-        expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
-        Object result = interceptor.validateBearerToken(invocationContext);
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> interceptor.validateBearerToken(invocationContext));
 
-        assertEquals("success", result);
-        assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
-                "@BearerAuth annotation not found");
+        assertTrue(exception.getMessage().contains("@BearerAuth annotation not found"),
+                "Exception message should mention missing annotation");
         verify(invocationContext);
     }
 
@@ -195,7 +210,10 @@ class BearerTokenInterceptorTest {
         expect(invocationContext.getMethod()).andReturn(TestResourceClassLevel.class.getMethod("methodWithoutAnnotation"));
         expect(invocationContext.getTarget()).andReturn(resource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of("class-scope"), Set.of(), Set.of()))
-                .andReturn(BearerTokenResult.success(tokenHolder.asAccessTokenContent(), Set.of(), Set.of(), Set.of()));
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 

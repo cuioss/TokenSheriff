@@ -35,7 +35,6 @@ class DSLJsonSecurityTest {
     void shouldParseValidJwksSuccessfully() {
         ParserConfig config = ParserConfig.builder()
                 .maxStringLength(1000)
-                .maxBufferSize(2048)
                 .build();
 
         DslJson<Object> dslJson = config.getDslJson();
@@ -79,7 +78,7 @@ class DSLJsonSecurityTest {
         WellKnownResult result = assertDoesNotThrow(() ->
                 dslJson.deserialize(WellKnownResult.class, validConfig.getBytes(), validConfig.getBytes().length)
         );
-        assertFalse(result.isEmpty());
+        assertNotNull(result.issuer());
         assertEquals("https://example.com", result.issuer());
         assertEquals("https://example.com/.well-known/jwks.json", result.jwksUri());
     }

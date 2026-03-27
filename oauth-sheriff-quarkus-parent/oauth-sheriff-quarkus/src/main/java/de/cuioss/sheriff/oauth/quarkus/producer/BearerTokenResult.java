@@ -104,33 +104,6 @@ public class BearerTokenResult implements Serializable {
 
 
     /**
-     * Creates a BearerTokenResult for successful token validation.
-     *
-     * @param accessTokenContent the validated access token content
-     * @param requiredScopes     the scopes that were required for validation
-     * @param requiredRoles      the roles that were required for validation
-     * @param requiredGroups     the groups that were required for validation
-     * @return a BearerTokenResult indicating successful validation
-     */
-   
-    public static BearerTokenResult success(AccessTokenContent accessTokenContent,
-            Set<String> requiredScopes, Set<String> requiredRoles, Set<String> requiredGroups) {
-        // For success case, calculate missing values (should all be empty)
-        Set<String> missingScopes = accessTokenContent.determineMissingScopes(requiredScopes);
-        Set<String> missingRoles = accessTokenContent.determineMissingRoles(requiredRoles);
-        Set<String> missingGroups = accessTokenContent.determineMissingGroups(requiredGroups);
-
-        return builder()
-                .status(BearerTokenStatus.FULLY_VERIFIED)
-                .accessTokenContent(accessTokenContent)
-                .missingScopes(missingScopes)
-                .missingRoles(missingRoles)
-                .missingGroups(missingGroups)
-                .build();
-    }
-
-
-    /**
      * Creates a BearerTokenResult for failed token validation due to parsing error.
      *
      * @param exception      the TokenValidationException that occurred during parsing

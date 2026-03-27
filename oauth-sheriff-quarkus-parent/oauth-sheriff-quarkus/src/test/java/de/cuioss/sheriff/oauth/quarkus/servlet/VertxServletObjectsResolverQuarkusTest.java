@@ -216,7 +216,7 @@ class VertxServletObjectsResolverQuarkusTest {
     public static class TestEndpoint {
 
         @Inject
-        @ServletObjectsResolver(ServletObjectsResolver.Variant.VERTX)
+        @ServletObjectsResolver
         HttpServletRequestResolver resolver;
 
         @GET

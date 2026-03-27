@@ -18,7 +18,6 @@ package de.cuioss.sheriff.oauth.core.domain.token;
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
-import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValueType;
 import de.cuioss.sheriff.oauth.core.domain.context.ValidationContext;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
@@ -54,6 +53,8 @@ import java.util.*;
  * @since 1.0
  * @author Oliver Wolff
  */
+// Design Decision: MP-JWT coupling (extends JsonWebToken) is intentional. Provides
+// java.security.Principal integration and MicroProfile JWT Auth injection compatibility.
 public interface TokenContent extends MinimalTokenContent, JsonWebToken {
 
     /**

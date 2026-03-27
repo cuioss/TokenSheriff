@@ -355,6 +355,7 @@ class TokenValidatorTest {
                     .issuerIdentifier("https://dpop-issuer.example.com")
                     .dpopConfig(DpopConfig.builder().build())
                     .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
+                    .audienceValidationDisabled(true)
                     .build();
 
             try (var dpopValidator = TokenValidator.builder()
@@ -383,11 +384,13 @@ class TokenValidatorTest {
                     .issuerIdentifier("https://issuer1.example.com")
                     .dpopConfig(DpopConfig.builder().nonceCacheSize(5000).nonceCacheTtlSeconds(120).build())
                     .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
+                    .audienceValidationDisabled(true)
                     .build();
             IssuerConfig issuer2 = IssuerConfig.builder()
                     .issuerIdentifier("https://issuer2.example.com")
                     .dpopConfig(DpopConfig.builder().nonceCacheSize(8000).nonceCacheTtlSeconds(200).build())
                     .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
+                    .audienceValidationDisabled(true)
                     .build();
 
             try (var multiValidator = TokenValidator.builder()

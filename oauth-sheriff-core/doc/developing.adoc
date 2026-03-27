@@ -73,7 +73,7 @@ Cross-cutting concerns:
 SecurityEventCounter counter = tokenValidator.getSecurityEventCounter();
 long invalidTokens = counter.getCount(EventType.INVALID_JWT_FORMAT);
 Map<EventType, Long> allCounts = counter.getCounters();
-counter.reset(EventType.INVALID_JWT_FORMAT);
+counter.reset();
 ----
 
 Event categories: `INVALID_STRUCTURE` (malformed tokens, size violations), `INVALID_SIGNATURE` (verification failures), `SEMANTIC_ISSUES` (expired tokens, audience mismatches).
@@ -166,7 +166,6 @@ Configure limits in `ParserConfig` to prevent attacks:
 * `maxTokenSize` - Limits entire JWT token (default 8KB)
 * `maxPayloadSize` - Limits decoded JWT parts (default 8KB)
 * `maxStringLength` - Limits JSON string buffer size (default 4KB)
-* `maxBufferSize` - Reserved buffer size limit (not currently enforced; default 128KB)
 
 == Related Documentation
 

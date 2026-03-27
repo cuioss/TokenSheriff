@@ -44,11 +44,13 @@ class BearerTokenResultTest {
     class StaticFactoryMethods {
 
         @Test
-        @DisplayName("success() should create FULLY_VERIFIED result with no missing attributes")
-        void successShouldCreateFullyVerifiedResult() {
+        @DisplayName("builder should create FULLY_VERIFIED result with no missing attributes")
+        void builderShouldCreateFullyVerifiedResult() {
             var tokenContent = createTestToken();
-            // Use empty requirements to ensure no missing attributes
-            var result = BearerTokenResult.success(tokenContent, Set.of(), Set.of(), Set.of());
+            var result = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.FULLY_VERIFIED)
+                    .accessTokenContent(tokenContent)
+                    .build();
 
             assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus());
             assertTrue(result.getAccessTokenContent().isPresent());
@@ -163,7 +165,10 @@ class BearerTokenResultTest {
         @Test
         @DisplayName("isSuccessfullyAuthorized() should return true only for FULLY_VERIFIED")
         void isSuccessfullyAuthorizedShouldReturnTrueOnlyForFullyVerified() {
-            var successResult = BearerTokenResult.success(createTestToken(), Set.of(), Set.of(), Set.of());
+            var successResult = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.FULLY_VERIFIED)
+                    .accessTokenContent(createTestToken())
+                    .build();
             assertTrue(successResult.isSuccessfullyAuthorized());
 
             var failureResult = BearerTokenResult.constraintViolation(Set.of("scope"), Set.of(), Set.of());
@@ -173,7 +178,10 @@ class BearerTokenResultTest {
         @Test
         @DisplayName("isNotSuccessfullyAuthorized() should return true for all non-FULLY_VERIFIED status")
         void isNotSuccessfullyAuthorizedShouldReturnTrueForNonFullyVerified() {
-            var successResult = BearerTokenResult.success(createTestToken(), Set.of(), Set.of(), Set.of());
+            var successResult = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.FULLY_VERIFIED)
+                    .accessTokenContent(createTestToken())
+                    .build();
             assertFalse(successResult.isNotSuccessfullyAuthorized());
 
             var failureResult = BearerTokenResult.constraintViolation(Set.of("scope"), Set.of(), Set.of());
@@ -310,7 +318,10 @@ class BearerTokenResultTest {
         @Test
         @DisplayName("should throw IllegalStateException when called on successfully authorized token")
         void shouldThrowExceptionForSuccessfullyAuthorizedToken() {
-            var result = BearerTokenResult.success(createTestToken(), Set.of(), Set.of(), Set.of());
+            var result = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.FULLY_VERIFIED)
+                    .accessTokenContent(createTestToken())
+                    .build();
 
             var exception = assertThrows(IllegalStateException.class, result::createErrorResponse);
 
@@ -338,7 +349,10 @@ class BearerTokenResultTest {
 
     private BearerTokenResult createResultWithStatus(BearerTokenStatus status) {
         return switch (status) {
-            case FULLY_VERIFIED -> BearerTokenResult.success(createTestToken(), Set.of(), Set.of(), Set.of());
+            case FULLY_VERIFIED -> BearerTokenResult.builder()
+                    .status(BearerTokenStatus.FULLY_VERIFIED)
+                    .accessTokenContent(createTestToken())
+                    .build();
             case NO_TOKEN_GIVEN -> BearerTokenResult.noTokenGiven(Set.of(), Set.of(), Set.of());
             case PARSING_ERROR -> BearerTokenResult.parsingError(
                     new TokenValidationException(EventType.INVALID_JWT_FORMAT, "test"), Set.of(), Set.of(), Set.of());

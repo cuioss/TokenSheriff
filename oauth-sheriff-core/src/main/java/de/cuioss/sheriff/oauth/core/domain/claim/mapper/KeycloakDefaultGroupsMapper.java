@@ -25,10 +25,14 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * A {@link ClaimMapper} implementation for mapping Keycloak's default groups structure.
+ * A fixed-source {@link ClaimMapper} that always reads from the {@code "groups"} claim
+ * in the token payload, regardless of the {@code claimName} parameter passed to
+ * {@link #map(MapRepresentation, String)}.
  * <p>
- * This mapper extracts groups from Keycloak's standard {@code groups} claim and ensures
- * they are properly formatted for the OAuth Sheriff library's authorization mechanisms.
+ * This is intentional: Keycloak's group membership mapper always writes to the
+ * {@code "groups"} claim, so the source claim is fixed by the identity provider's
+ * convention. The {@code claimName} parameter identifies the <em>target</em> claim
+ * in OAuth Sheriff's model (e.g., {@code GROUPS}), not the source claim in the token.
  * <p>
  * Keycloak typically includes groups in the token as:
  * <pre>
@@ -47,10 +51,6 @@ import java.util.Optional;
  *   <li>Non-array groups value - returns empty list</li>
  *   <li>Group names with or without path prefixes</li>
  * </ul>
- * <p>
- * This mapper provides a bridge between Keycloak's default group claim structure
- * and the OAuth Sheriff library's expected format, ensuring seamless integration
- * without requiring custom protocol mappers in Keycloak.
  *
  * @since 1.0
  * @see <a href="https://www.keycloak.org/docs/latest/server_admin/index.html#_group-mappers">Keycloak Group Mappers</a>

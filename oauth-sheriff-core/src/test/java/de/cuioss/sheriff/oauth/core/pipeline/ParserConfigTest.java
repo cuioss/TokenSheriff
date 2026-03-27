@@ -37,7 +37,6 @@ class ParserConfigTest {
         assertEquals(ParserConfig.DEFAULT_MAX_TOKEN_SIZE, config.getMaxTokenSize());
         assertEquals(ParserConfig.DEFAULT_MAX_PAYLOAD_SIZE, config.getMaxPayloadSize());
         assertEquals(ParserConfig.DEFAULT_MAX_STRING_LENGTH, config.getMaxStringLength());
-        assertEquals(ParserConfig.DEFAULT_MAX_BUFFER_SIZE, config.getMaxBufferSize());
     }
 
     @Test
@@ -47,14 +46,12 @@ class ParserConfigTest {
                 .maxTokenSize(16384)
                 .maxPayloadSize(8192)
                 .maxStringLength(4096)
-                .maxBufferSize(65536)
                 .build();
 
         assertNotNull(config);
         assertEquals(16384, config.getMaxTokenSize());
         assertEquals(8192, config.getMaxPayloadSize());
         assertEquals(4096, config.getMaxStringLength());
-        assertEquals(65536, config.getMaxBufferSize());
 
         // Verify DslJson is created properly
         assertNotNull(config.getDslJson());

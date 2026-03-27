@@ -31,8 +31,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.WARN.BEARER_TOKEN_ANNOTATION_NOT_FOUND;
-
 /**
  * Interceptor for declarative Bearer token validation at method level.
  * <p>
@@ -115,8 +113,11 @@ public class BearerTokenInterceptor {
         // Extract annotation from method or class level
         BearerAuth annotation = extractAnnotation(ctx);
         if (annotation == null) {
-            LOGGER.warn(BEARER_TOKEN_ANNOTATION_NOT_FOUND, ctx.getMethod().getName());
-            return ctx.proceed();
+            // Fail closed: missing annotation means security configuration error
+            throw new IllegalStateException(
+                    "@BearerAuth annotation not found on method '%s' or its declaring class. "
+                            .formatted(ctx.getMethod().getName())
+                            + "Security interceptor cannot proceed without authentication configuration.");
         }
 
         // Extract requirements from annotation

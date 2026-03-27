@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.oauth.core.wellknown;
 
 import de.cuioss.http.client.adapter.RetryConfig;
+import de.cuioss.sheriff.oauth.core.json.WellKnownResult;
 import de.cuioss.sheriff.oauth.core.test.dispatcher.WellKnownDispatcher;
 import de.cuioss.sheriff.oauth.core.util.LoaderStatus;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -214,8 +215,9 @@ class HttpWellKnownResolverIssuerTest {
         Optional<String> jwksUri = resolver.getJwksUri();
         assertTrue(jwksUri.isPresent(), "JWKS URI should be available from minimal config");
 
-        // Other endpoints might not be available in minimal config
-        Optional<String> authEndpoint = resolver.getAuthorizationEndpoint();
-        assertFalse(authEndpoint.isPresent(), "Authorization endpoint should not be in minimal config");
+        // Other endpoints should not be available in minimal config
+        Optional<WellKnownResult> result = resolver.getWellKnownResult();
+        assertTrue(result.isPresent(), "WellKnownResult should be available");
+        assertNull(result.get().authorizationEndpoint(), "Authorization endpoint should not be in minimal config");
     }
 }

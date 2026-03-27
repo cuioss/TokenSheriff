@@ -43,6 +43,7 @@ class IssuerConfigClaimSubOptionalTest {
         IssuerConfig issuerConfig = IssuerConfig.builder()
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
+                .audienceValidationDisabled(true)
                 .build();
 
         assertFalse(issuerConfig.isClaimSubOptional(), "claimSubOptional should default to false");
@@ -55,6 +56,7 @@ class IssuerConfigClaimSubOptionalTest {
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
                 .claimSubOptional(true)
+                .audienceValidationDisabled(true)
                 .build();
 
         assertTrue(issuerConfig.isClaimSubOptional(), "claimSubOptional should be true when explicitly set");
@@ -67,6 +69,7 @@ class IssuerConfigClaimSubOptionalTest {
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
                 .claimSubOptional(false)
+                .audienceValidationDisabled(true)
                 .build();
 
         assertFalse(issuerConfig.isClaimSubOptional(), "claimSubOptional should be false when explicitly set to false");
@@ -79,6 +82,7 @@ class IssuerConfigClaimSubOptionalTest {
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
                 .claimSubOptional(true)
+                .audienceValidationDisabled(true)
                 .build();
 
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "claimSubOptional=true");
@@ -94,6 +98,7 @@ class IssuerConfigClaimSubOptionalTest {
                 .issuerIdentifier(issuerIdentifier)
                 .jwksContent("{\"keys\":[]}")
                 .claimSubOptional(true)
+                .audienceValidationDisabled(true)
                 .build();
 
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, issuerIdentifier);
@@ -107,6 +112,7 @@ class IssuerConfigClaimSubOptionalTest {
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
                 .claimSubOptional(false)
+                .audienceValidationDisabled(true)
                 .build();
 
         LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, IssuerConfig.class);
@@ -118,6 +124,7 @@ class IssuerConfigClaimSubOptionalTest {
         IssuerConfig.builder()
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
+                .audienceValidationDisabled(true)
                 .build();
 
         LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, IssuerConfig.class);
@@ -130,6 +137,7 @@ class IssuerConfigClaimSubOptionalTest {
                 .issuerIdentifier("https://example.com") // Provide a minimal issuer identifier
                 .jwksContent("{\"keys\":[]}") // Provide JWKS content to avoid loader config error
                 .claimSubOptional(true)
+                .audienceValidationDisabled(true)
                 .build();
 
         // Test verifies that when issuerIdentifier is null internally, "unknown" is used in warning message
@@ -144,6 +152,7 @@ class IssuerConfigClaimSubOptionalTest {
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}") // Provide JWKS content
                 .claimSubOptional(true)
+                .audienceValidationDisabled(true)
                 .build();
         assertTrue(wellKnownConfig.isClaimSubOptional());
 
@@ -152,6 +161,7 @@ class IssuerConfigClaimSubOptionalTest {
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
                 .claimSubOptional(true)
+                .audienceValidationDisabled(true)
                 .build();
         assertTrue(fileConfig.isClaimSubOptional());
 
@@ -160,6 +170,7 @@ class IssuerConfigClaimSubOptionalTest {
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
                 .claimSubOptional(true)
+                .audienceValidationDisabled(true)
                 .build();
         assertTrue(contentConfig.isClaimSubOptional());
     }

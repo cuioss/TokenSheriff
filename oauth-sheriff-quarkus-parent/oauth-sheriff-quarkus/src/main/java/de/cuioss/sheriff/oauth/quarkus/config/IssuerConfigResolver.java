@@ -23,6 +23,7 @@ import de.cuioss.sheriff.oauth.core.jwks.http.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.quarkus.mapper.ClaimMapperRegistry;
 import de.cuioss.tools.logging.CuiLogger;
+import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.Config;
 import org.jspecify.annotations.Nullable;
 
@@ -64,52 +65,18 @@ public class IssuerConfigResolver {
     private final @Nullable ParserConfig parserConfig;
 
     /**
-     * Creates a new IssuerConfigResolver with the specified configuration.
-     * <p>
-     * This constructor creates a resolver without a claim mapper registry.
-     * No custom claim mappers will be applied to resolved issuer configurations.
-     * </p>
+     * CDI constructor. Uses default retry configuration.
      *
      * @param config the configuration instance to use for property resolution
      */
+    @Inject
     public IssuerConfigResolver(Config config) {
         this(config, RetryConfig.defaults(), null, null);
     }
 
     /**
-     * Creates a new IssuerConfigResolver with the specified configuration and retry config.
-     * <p>
-     * This constructor creates a resolver without a claim mapper registry.
-     * No custom claim mappers will be applied to resolved issuer configurations.
-     * </p>
-     *
-     * @param config the configuration instance to use for property resolution
-     * @param retryConfig the retry configuration to use for HTTP operations
-     */
-    public IssuerConfigResolver(Config config, RetryConfig retryConfig) {
-        this(config, retryConfig, null, null);
-    }
-
-    /**
-     * Creates a new IssuerConfigResolver with the specified configuration, retry config,
-     * and claim mapper registry.
-     *
-     * @param config the configuration instance to use for property resolution
-     * @param retryConfig the retry configuration to use for HTTP operations
-     * @param claimMapperRegistry the registry of CDI-discovered claim mappers, may be {@code null}
-     */
-    public IssuerConfigResolver(Config config, RetryConfig retryConfig, @Nullable ClaimMapperRegistry claimMapperRegistry) {
-        this(config, retryConfig, claimMapperRegistry, null);
-    }
-
-    /**
      * Creates a new IssuerConfigResolver with the specified configuration, retry config,
      * claim mapper registry, and pre-initialized parser configuration.
-     * <p>
-     * The parserConfig is pre-initialized on the caller's thread to ensure the correct
-     * classloader is used for ServiceLoader discovery, avoiding issues when JWKS loading
-     * runs on ForkJoinPool threads with a different classloader context.
-     * </p>
      *
      * @param config the configuration instance to use for property resolution
      * @param retryConfig the retry configuration to use for HTTP operations
@@ -206,7 +173,7 @@ public class IssuerConfigResolver {
         return config.getOptionalValue(
                 JwtPropertyKeys.ISSUERS.ENABLED.formatted(issuerName),
                 Boolean.class
-        ).orElse(true); // Default to enabled if not explicitly disabled
+        ).orElse(false); // Default to disabled — require explicit enabled=true
     }
 
     /**
@@ -281,6 +248,12 @@ public class IssuerConfigResolver {
             audiences.forEach(builder::expectedAudience);
             LOGGER.debug("Set expected audiences for %s: %s", issuerName, audiences);
         }
+
+        // Allow explicit opt-out of audience validation
+        config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(issuerName),
+                Boolean.class
+        ).ifPresent(disabled -> builder.audienceValidationDisabled(disabled));
     }
 
     /**
@@ -494,8 +467,11 @@ public class IssuerConfigResolver {
         if (issuerIdentifier.isPresent()) {
             builder.issuerIdentifier(issuerIdentifier.get());
         } else {
-            // Use the issuer name as fallback if no explicit identifier is configured
-            builder.issuerIdentifier(issuerName);
+            throw new IllegalStateException(
+                    "Issuer '%s' requires explicit 'issuer-identifier' when using direct JWKS URL. "
+                            .formatted(issuerName)
+                            + "Configure '%s' in application properties."
+                            .formatted(JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(issuerName)));
         }
 
         // Configure URLs - let the builder handle mutual exclusivity validation

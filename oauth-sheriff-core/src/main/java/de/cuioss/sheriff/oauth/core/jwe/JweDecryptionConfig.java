@@ -119,7 +119,7 @@ public class JweDecryptionConfig {
         private PrivateKey defaultDecryptionKey;
         private JweAlgorithmPreferences algorithmPreferences = new JweAlgorithmPreferences();
         private int maxEncryptedTokenSize = DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE;
-        private boolean compressionEnabled = true;
+        private boolean compressionEnabled = false;
 
         /**
          * Adds a decryption key with the given key ID.

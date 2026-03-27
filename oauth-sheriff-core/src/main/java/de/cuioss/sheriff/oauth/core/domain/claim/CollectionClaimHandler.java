@@ -77,12 +77,17 @@ public class CollectionClaimHandler {
 
     /**
      * Checks if the claim provides all expected values.
+     * <p>
+     * An empty collection is considered satisfied (returns true), since there are
+     * no values to check against.
      *
-     * @param expectedValues the values to check for
+     * @param expectedValues the values to check for, must not be null
      * @return true if the claim contains all expected values, false otherwise
+     * @throws NullPointerException if expectedValues is null
      */
     public boolean providesValues(Collection<String> expectedValues) {
-        if (null == expectedValues || expectedValues.isEmpty()) {
+        Objects.requireNonNull(expectedValues, "expectedValues must not be null");
+        if (expectedValues.isEmpty()) {
             LOGGER.debug("No values to check against");
             return true;
         }

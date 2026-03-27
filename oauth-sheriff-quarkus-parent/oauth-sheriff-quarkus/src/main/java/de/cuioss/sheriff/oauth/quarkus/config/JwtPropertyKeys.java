@@ -66,10 +66,6 @@ public final class JwtPropertyKeys {
          */
         public static final String MAX_STRING_LENGTH = BASE + ".max-string-length";
 
-        /**
-         * Maximum buffer size for JSON parsing in bytes (DSL-JSON internal buffer).
-         */
-        public static final String MAX_BUFFER_SIZE = BASE + ".max-buffer-size";
     }
 
     /**
@@ -154,6 +150,12 @@ public final class JwtPropertyKeys {
          * @see de.cuioss.sheriff.oauth.core.IssuerConfig
          */
         public static final String EXPECTED_AUDIENCE = BASE + "expected-audience";
+
+        /**
+         * Explicitly disable audience validation for this issuer.
+         * Template: "sheriff.oauth.issuers.%s.audience-validation-disabled"
+         */
+        public static final String AUDIENCE_VALIDATION_DISABLED = BASE + "audience-validation-disabled";
 
         /**
          * Set of expected client ID values (comma-separated).

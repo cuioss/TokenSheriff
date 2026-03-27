@@ -209,8 +209,8 @@ class BearerTokenProducerTest {
     }
 
     @Test
-    @DisplayName("Should handle getAccessTokenContent convenience method")
-    void getAccessTokenContentMethod() {
+    @DisplayName("Should handle getBearerTokenResult with no requirements")
+    void getBearerTokenResultWithNoRequirements() {
         String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
         servletResolverMock.setBearerToken(token);
 
@@ -218,10 +218,11 @@ class BearerTokenProducerTest {
         expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
         replay(tokenValidator);
 
-        Optional<AccessTokenContent> result = producer.getAccessTokenContent();
+        BearerTokenResult result = producer.getBearerTokenResult(
+                Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
 
-        assertTrue(result.isPresent());
-        assertEquals(tokenContent, result.get());
+        assertTrue(result.getAccessTokenContent().isPresent());
+        assertEquals(tokenContent, result.getAccessTokenContent().get());
 
         verify(tokenValidator);
     }
@@ -426,6 +427,6 @@ class BearerTokenProducerTest {
         claims.put(ClaimName.ISSUED_AT.getName(), ClaimValue.forDateTime(
                 String.valueOf(now.toEpochSecond()), now));
         claims.putAll(additionalClaims);
-        return new AccessTokenContent(claims, "raw-token", null, MapRepresentation.empty());
+        return new AccessTokenContent(claims, "raw-token", MapRepresentation.empty());
     }
 }

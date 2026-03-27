@@ -465,13 +465,7 @@ public class TestTokenHolder implements TokenContent {
             throw new IllegalStateException("Cannot convert token of type " + tokenType + " to AccessTokenContent. Only ACCESS_TOKEN is supported.");
         }
 
-        // Extract email from claims if present
-        String email = null;
-        if (claims.containsKey(ClaimName.EMAIL.getName())) {
-            email = claims.get(ClaimName.EMAIL.getName()).getOriginalString();
-        }
-
-        return new AccessTokenContent(claims, getRawToken(), email, createMapRepresentationFromClaims());
+        return new AccessTokenContent(claims, getRawToken(), createMapRepresentationFromClaims());
     }
 
     /**

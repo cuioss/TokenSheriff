@@ -99,10 +99,10 @@ public class IssuerConfigCache {
             if (config.isEnabled()) {
                 String issuer = config.getIssuerIdentifier();
 
-                // Initialize security event counter
+                // Validate security event counter parameter
                 config.initSecurityEventCounter(securityEventCounter);
 
-                // Initialize and start loading
+                // Single initialization point: trigger async JWKS loading
                 CompletableFuture<LoaderStatus> future =
                         config.getJwksLoader().initJWKSLoader(securityEventCounter);
 

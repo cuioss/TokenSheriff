@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.oauth.core.jwks.http;
 
 import de.cuioss.http.client.ContentType;
+import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.json.Jwks;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
@@ -38,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnableTestLogger
 class JwksHttpContentConverterTest {
 
-    private final JwksHttpContentConverter converter = new JwksHttpContentConverter();
+    private final JwksHttpContentConverter converter = new JwksHttpContentConverter(ParserConfig.builder().build());
 
     @Test
     void shouldReturnCorrectBodyHandler() {

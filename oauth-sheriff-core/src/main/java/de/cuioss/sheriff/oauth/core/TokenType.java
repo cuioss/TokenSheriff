@@ -16,6 +16,8 @@
 package de.cuioss.sheriff.oauth.core;
 
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
+import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
+import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.Getter;
 
@@ -79,11 +81,12 @@ public enum TokenType {
      * Resolves a TokenType from a type claim string value.
      * <p>
      * This method performs a case-insensitive comparison of the provided type claim name
-     * against the known token types. If no match is found, it logs a warning and returns
-     * the {@link #UNKNOWN} token type.
+     * against the known token types. If no match is found, it throws a
+     * {@link TokenValidationException}.
      *
      * @param typeClaimName the string value of the type claim, must not be null
-     * @return the matching TokenType, or {@link #UNKNOWN} if no match is found
+     * @return the matching TokenType
+     * @throws TokenValidationException if the type claim does not match any known token type
      */
     public static TokenType fromTypeClaim(String typeClaimName) {
         for (TokenType tokenType : TokenType.values()) {
@@ -91,7 +94,8 @@ public enum TokenType {
                 return tokenType;
             }
         }
-        LOGGER.warn(JWTValidationLogMessages.WARN.UNKNOWN_TOKEN_TYPE, typeClaimName);
-        return UNKNOWN;
+        throw new TokenValidationException(
+                SecurityEventCounter.EventType.TOKEN_TYPE_MISMATCH,
+                "Unrecognized token type: " + typeClaimName);
     }
 }

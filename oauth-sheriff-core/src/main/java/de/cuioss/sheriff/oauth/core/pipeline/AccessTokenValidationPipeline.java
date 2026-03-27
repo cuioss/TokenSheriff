@@ -202,6 +202,9 @@ public class AccessTokenValidationPipeline {
         MetricsTicker headerTicker = MetricsTickerFactory.createStartedTicker(MeasurementType.HEADER_VALIDATION, performanceMonitor);
         try {
             TokenHeaderValidator headerValidator = headerValidators.get(issuerConfig.getIssuerIdentifier());
+            if (headerValidator == null) {
+                throw new IllegalStateException("No header validator found for issuer: " + issuerConfig.getIssuerIdentifier());
+            }
             headerValidator.validate(decodedJwt, request);
         } finally {
             headerTicker.stopAndRecord();
@@ -224,6 +227,9 @@ public class AccessTokenValidationPipeline {
         AccessTokenContent accessToken;
         try {
             TokenBuilder tokenBuilder = tokenBuilders.get(issuerConfig.getIssuerIdentifier());
+            if (tokenBuilder == null) {
+                throw new IllegalStateException("No token builder found for issuer: " + issuerConfig.getIssuerIdentifier());
+            }
             Optional<AccessTokenContent> tokenOpt = tokenBuilder.createAccessToken(decodedJwt);
             if (tokenOpt.isEmpty()) {
                 LOGGER.debug("Access token building failed");
@@ -247,6 +253,9 @@ public class AccessTokenValidationPipeline {
         AccessTokenContent validatedToken;
         try {
             TokenClaimValidator claimValidator = claimValidators.get(issuerConfig.getIssuerIdentifier());
+            if (claimValidator == null) {
+                throw new IllegalStateException("No claim validator found for issuer: " + issuerConfig.getIssuerIdentifier());
+            }
             validatedToken = (AccessTokenContent) claimValidator.validate(accessToken, context);
         } finally {
             claimsTicker.stopAndRecord();

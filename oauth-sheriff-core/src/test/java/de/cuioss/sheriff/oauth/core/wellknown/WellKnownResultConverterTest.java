@@ -78,9 +78,8 @@ class WellKnownResultConverterTest {
         assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri());
         assertEquals("https://example.com/auth", config.authorizationEndpoint());
         assertEquals("https://example.com/token", config.tokenEndpoint());
-        assertTrue(config.supportsFullOAuthFlows());
-        assertFalse(config.isMinimal());
-        assertFalse(config.isEmpty());
+        assertNotNull(config.authorizationEndpoint());
+        assertNotNull(config.tokenEndpoint());
     }
 
     @Test
@@ -94,9 +93,8 @@ class WellKnownResultConverterTest {
         assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri());
         assertNull(config.authorizationEndpoint());
         assertNull(config.tokenEndpoint());
-        assertFalse(config.supportsFullOAuthFlows());
-        assertTrue(config.isMinimal());
-        assertFalse(config.isEmpty());
+        assertNull(config.authorizationEndpoint());
+        assertNull(config.tokenEndpoint());
     }
 
     @Test

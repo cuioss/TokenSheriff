@@ -43,7 +43,9 @@ public class IdentityMapper implements ClaimMapper {
         if (value instanceof String str) {
             stringValue = str;
         } else {
-            // Convert other types (numbers, booleans, arrays, objects) to string
+            // Design Decision: toString() on non-String claims is intentional identity-mapping
+            // behavior. Complex objects produce non-pretty output but this is the documented
+            // contract of an identity mapper.
             stringValue = value.toString();
         }
 
