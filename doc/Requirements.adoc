@@ -395,7 +395,7 @@ _See specification: xref:security/security-reference.adoc#cryptographic-agility[
 The library must support optional per-issuer validation of the JWT `typ` header parameter as defined in https://datatracker.ietf.org/doc/html/rfc9068[RFC 9068 - JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens] (October 2021).
 
 * When `expected-token-type` is configured for an issuer, tokens with a missing or mismatched `typ` header are rejected
-* When not configured (default), no token type validation is performed for backward compatibility
+* When not configured (default), no token type validation is performed
 * Comparison is case-insensitive per RFC convention
 * Validation occurs in the `TokenHeaderValidator` as part of the header validation pipeline step
 

@@ -201,8 +201,7 @@ public class TokenHeaderValidator {
      * Validates the token's "typ" header against the expected token type configured in the issuer.
      * <p>
      * This validation is optional and only performed when {@code expectedTokenType} is configured
-     * in the {@link IssuerConfig}. When not configured, this method is a no-op for backward
-     * compatibility.
+     * in the {@link IssuerConfig}. When not configured, this method is a no-op.
      * </p>
      * <p>
      * The comparison is case-insensitive per RFC convention.
@@ -215,7 +214,7 @@ public class TokenHeaderValidator {
     private void validateTokenType(DecodedJwt decodedJwt) {
         var expectedType = issuerConfig.getExpectedTokenType();
         if (expectedType == null || expectedType.isBlank()) {
-            return; // No token type validation configured - backward compatible
+            return; // No token type validation configured
         }
 
         var actualType = decodedJwt.getHeader().getTyp();
