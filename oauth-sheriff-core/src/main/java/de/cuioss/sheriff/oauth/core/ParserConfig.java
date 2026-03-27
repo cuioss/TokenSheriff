@@ -37,7 +37,6 @@ import lombok.ToString;
  *   <li><strong>maxPayloadSize</strong>: Limits each decoded JWT part (header, payload) after Base64 decoding.
  *       Since Base64 encoding increases size by ~33%, decoded parts are smaller than the original token.</li>
  *   <li><strong>maxStringLength</strong>: DSL-JSON enforced limit on maximum string buffer size.</li>
- *   <li><strong>maxBufferSize</strong>: DSL-JSON enforced limit on maximum buffer size for parsing.</li>
  * </ul>
  * <p>
  * <strong>DSL-JSON Advantages:</strong>
@@ -93,11 +92,6 @@ public final class ParserConfig {
     public static final int DEFAULT_MAX_STRING_LENGTH = 4 * 1024;
 
     /**
-     * Default maximum buffer size for DSL-JSON parsing (128KB).
-     */
-    public static final int DEFAULT_MAX_BUFFER_SIZE = 128 * 1024;
-
-    /**
      * Maximum size of a JWT token in bytes to prevent overflow attacks.
      * This limit is applied to the entire token string before any processing begins.
      * Protects against denial-of-service attacks via extremely large token strings.
@@ -128,20 +122,6 @@ public final class ParserConfig {
     int maxStringLength = DEFAULT_MAX_STRING_LENGTH;
 
     /**
-     * The maximum buffer size for DSL-JSON parsing operations.
-     * <p>
-     * This limit is enforced by DSL-JSON and prevents attacks where
-     * extremely large JSON documents could consume excessive memory.
-     * <p>
-     * Default: 128KB (131,072 bytes) - allows for large JWT payloads while
-     * preventing memory exhaustion attacks.
-     *
-     * @return the maximum buffer size in bytes
-     */
-    @Builder.Default
-    int maxBufferSize = DEFAULT_MAX_BUFFER_SIZE;
-
-    /**
      * Lazy-initialized DSL-JSON instance with security settings.
      * <p>
      * This DSL-JSON instance is created only when first accessed and then cached.
@@ -163,13 +143,11 @@ public final class ParserConfig {
      * @param maxTokenSize the maximum token size
      * @param maxPayloadSize the maximum payload size
      * @param maxStringLength the maximum string length
-     * @param maxBufferSize the maximum buffer size
      */
-    private ParserConfig(int maxTokenSize, int maxPayloadSize, int maxStringLength, int maxBufferSize) {
+    private ParserConfig(int maxTokenSize, int maxPayloadSize, int maxStringLength) {
         this.maxTokenSize = maxTokenSize;
         this.maxPayloadSize = maxPayloadSize;
         this.maxStringLength = maxStringLength;
-        this.maxBufferSize = maxBufferSize;
     }
 
     /**
@@ -211,7 +189,6 @@ public final class ParserConfig {
         private int maxTokenSize = DEFAULT_MAX_TOKEN_SIZE;
         private int maxPayloadSize = DEFAULT_MAX_PAYLOAD_SIZE;
         private int maxStringLength = DEFAULT_MAX_STRING_LENGTH;
-        private int maxBufferSize = DEFAULT_MAX_BUFFER_SIZE;
 
         public ParserConfigBuilder maxTokenSize(int maxTokenSize) {
             this.maxTokenSize = maxTokenSize;
@@ -228,13 +205,8 @@ public final class ParserConfig {
             return this;
         }
 
-        public ParserConfigBuilder maxBufferSize(int maxBufferSize) {
-            this.maxBufferSize = maxBufferSize;
-            return this;
-        }
-
         public ParserConfig build() {
-            return new ParserConfig(maxTokenSize, maxPayloadSize, maxStringLength, maxBufferSize);
+            return new ParserConfig(maxTokenSize, maxPayloadSize, maxStringLength);
         }
     }
 

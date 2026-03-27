@@ -120,7 +120,6 @@ High-performance, lock-free monitoring of validation pipeline metrics with micro
 |`maxEncryptedTokenSize` |32 KB |Entire JWE string before processing (when `JweDecryptionConfig` is configured)
 |`maxPayloadSize` |8 KB |Each Base64-decoded part
 |`maxStringLength` |4 KB |Individual JSON string values (DSL-JSON enforced)
-|`maxBufferSize` |128 KB |Maximum buffer size for DSL-JSON parsing
 |===
 
 == References

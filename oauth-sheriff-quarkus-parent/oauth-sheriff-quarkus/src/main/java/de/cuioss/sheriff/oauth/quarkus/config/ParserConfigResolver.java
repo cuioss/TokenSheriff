@@ -94,17 +94,10 @@ public class ParserConfigResolver {
                     LOGGER.debug("Set maxStringLength from configuration: %s", value);
                 });
 
-        config.getOptionalValue(JwtPropertyKeys.PARSER.MAX_BUFFER_SIZE, Integer.class)
-                .ifPresent(value -> {
-                    builder.maxBufferSize(value);
-                    LOGGER.debug("Set maxBufferSize from configuration: %s", value);
-                });
-
         // Let the builder validate and create the instance
         ParserConfig result = builder.build();
 
-        LOGGER.info(INFO.RESOLVED_PARSER_CONFIG, result.getMaxTokenSize(), result.getMaxPayloadSize(), result.getMaxStringLength(),
-                result.getMaxBufferSize());
+        LOGGER.info(INFO.RESOLVED_PARSER_CONFIG, result.getMaxTokenSize(), result.getMaxPayloadSize(), result.getMaxStringLength());
 
         return result;
     }

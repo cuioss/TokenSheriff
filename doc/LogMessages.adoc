@@ -158,7 +158,7 @@ This section documents log messages specific to the Quarkus integration module (
 |OAuthSheriff_Q-001 |CONFIG |Resolving issuer configurations from properties |Indicates the start of issuer configuration resolution from application properties
 |OAuthSheriff_Q-002 |CONFIG |Resolved issuer configuration: %s |Shows a single resolved issuer configuration with its details
 |OAuthSheriff_Q-003 |CONFIG |Resolved %s enabled issuer configurations |Summary count of all enabled issuer configurations found
-|OAuthSheriff_Q-004 |CONFIG |Resolved ParserConfig: maxTokenSize=%s bytes, maxPayloadSize=%s bytes, maxStringLength=%s, maxBufferSize=%s |Shows the resolved JWT parser configuration limits
+|OAuthSheriff_Q-004 |CONFIG |Resolved ParserConfig: maxTokenSize=%s bytes, maxPayloadSize=%s bytes, maxStringLength=%s |Shows the resolved JWT parser configuration limits
 |OAuthSheriff_Q-011 |VALIDATION |Initializing JWT validation components from configuration |Indicates the start of JWT validation component initialization
 |OAuthSheriff_Q-012 |VALIDATION |JWT validation components initialized successfully with %s issuers |Confirms successful initialization with issuer count
 |OAuthSheriff_Q-013 |VALIDATION |Resolving access log filter configuration from properties |Indicates the start of access log filter configuration resolution

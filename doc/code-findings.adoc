@@ -79,10 +79,9 @@ Design issues that affect the 1.0 API contract, create false security assumption
 |ID |Location |Issue |Recommendation |Security Review
 
 |H-1
-|`ParserConfig:95-142`
-|`maxBufferSize` field is configured, stored, documented, included in `equals`/`hashCode` -- but never enforced. DSL-JSON `Settings` has no buffer-size API. Creates a false sense of security.
-|Remove the field entirely, or wire it into actual enforcement.
-|*Confirmed* (Medium). `createDslJson()` never passes `maxBufferSize` to DSL-JSON Settings. Field is dead configuration creating false sense of security. `maxTokenSize`, `maxPayloadSize`, and `maxStringLength` are enforced.
+|`ParserConfig` (formerly lines 95-142)
+|`maxBufferSize` field was configured, stored, documented, included in `equals`/`hashCode` -- but never enforced. DSL-JSON `Settings` has no buffer-size API. Created a false sense of security.
+|*Resolved*. Field, constant, builder method, configuration property, log message parameter, and all documentation references removed.
 
 |H-2
 |`IssuerConfig:116-119`
@@ -334,7 +333,7 @@ Independent security review conducted 2026-03-27. Each finding was verified agai
 1. *C-6* (High): `BearerTokenInterceptor` fail-open -- change to fail closed
 2. *C-1* (Medium): EC curve defaults to ES256 -- throw for unknown curves
 3. *C-7* (Medium): Config key as issuer fallback -- require explicit `issuer-identifier`
-4. *H-1* (Medium): `maxBufferSize` dead config -- remove or enforce
+4. [line-through]#*H-1* (Medium): `maxBufferSize` dead config -- *Resolved*#
 5. *H-2* (Medium): Empty audience skips validation -- require or explicitly opt out
 6. *M-1* (Medium): `ParserConfig` accepts zero/negative limits -- add validation
 7. *L-11* (Medium): Inconsistent null guards in pipeline -- add consistent checks

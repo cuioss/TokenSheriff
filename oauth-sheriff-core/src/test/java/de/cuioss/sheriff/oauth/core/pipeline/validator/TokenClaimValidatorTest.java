@@ -93,22 +93,23 @@ class TokenClaimValidatorTest {
         }
 
         @Test
-        @DisplayName("Log warning when missing expected audience")
-        void shouldLogWarningWhenMissingExpectedAudience() {
+        @DisplayName("No warning when audience validation is explicitly disabled")
+        void shouldNotLogWarningWhenAudienceValidationDisabled() {
             long initialCount = SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT);
 
             var issuerConfig = IssuerConfig.builder()
                     .issuerIdentifier(TestTokenHolder.TEST_ISSUER)
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                     .expectedClientId(TestTokenHolder.TEST_CLIENT_ID)
+                    .audienceValidationDisabled(true)
                     .build();
 
             TokenClaimValidator validator = createValidator(issuerConfig);
 
             assertNotNull(validator, "Validator should not be null");
             assertTrue(validator.getExpectedAudience().isEmpty(), "Expected audience should be empty");
-            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, JWTValidationLogMessages.WARN.MISSING_RECOMMENDED_ELEMENT.resolveIdentifierString());
-            assertEquals(initialCount + 1, SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT));
+            // No warning for missing audience when audienceValidationDisabled=true
+            assertEquals(initialCount, SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT));
         }
 
         @Test
@@ -131,13 +132,14 @@ class TokenClaimValidatorTest {
         }
 
         @Test
-        @DisplayName("Log warnings when missing all recommended elements")
-        void shouldLogWarningsWhenMissingAllRecommendedElements() {
+        @DisplayName("Log warning only for missing client ID when audience validation is disabled")
+        void shouldLogWarningOnlyForMissingClientIdWhenAudienceValidationDisabled() {
             long initialCount = SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT);
 
             var issuerConfig = IssuerConfig.builder()
                     .issuerIdentifier(TestTokenHolder.TEST_ISSUER)
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
+                    .audienceValidationDisabled(true)
                     .build();
 
             TokenClaimValidator validator = createValidator(issuerConfig);
@@ -145,8 +147,9 @@ class TokenClaimValidatorTest {
             assertNotNull(validator, "Validator should not be null");
             assertTrue(validator.getExpectedAudience().isEmpty(), "Expected audience should be empty");
             assertTrue(validator.getExpectedClientId().isEmpty(), "Expected client ID should be empty");
+            // Only clientId warning fires; audience warning is suppressed when audienceValidationDisabled=true
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, JWTValidationLogMessages.WARN.MISSING_RECOMMENDED_ELEMENT.resolveIdentifierString());
-            assertEquals(initialCount + 2, SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT));
+            assertEquals(initialCount + 1, SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT));
         }
     }
 

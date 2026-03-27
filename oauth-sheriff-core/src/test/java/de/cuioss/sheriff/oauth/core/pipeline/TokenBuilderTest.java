@@ -80,6 +80,7 @@ class TokenBuilderTest {
         IssuerConfig issuerConfig = IssuerConfig.builder()
                 .issuerIdentifier("test-issuer")
                 .jwksContent("{\"keys\":[]}")
+                .audienceValidationDisabled(true)
                 .build();
 
         tokenBuilder = new TokenBuilder(issuerConfig);

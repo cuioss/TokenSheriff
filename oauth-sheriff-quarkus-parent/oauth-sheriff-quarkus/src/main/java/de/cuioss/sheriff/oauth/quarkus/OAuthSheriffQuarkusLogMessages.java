@@ -71,7 +71,7 @@ public final class OAuthSheriffQuarkusLogMessages {
                 .build();
 
         public static final LogRecord RESOLVED_PARSER_CONFIG = LogRecordModel.builder()
-                .template("Resolved ParserConfig: maxTokenSize=%s bytes, maxPayloadSize=%s bytes, maxStringLength=%s, maxBufferSize=%s")
+                .template("Resolved ParserConfig: maxTokenSize=%s bytes, maxPayloadSize=%s bytes, maxStringLength=%s")
                 .prefix(PREFIX)
                 .identifier(4)
                 .build();

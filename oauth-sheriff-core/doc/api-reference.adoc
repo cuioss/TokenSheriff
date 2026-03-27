@@ -92,7 +92,6 @@ public class ParserConfig {
         public ParserConfigBuilder maxTokenSize(int bytes);      // Default: 8192 (8KB)
         public ParserConfigBuilder maxPayloadSize(int bytes);    // Default: 8192 (8KB)
         public ParserConfigBuilder maxStringLength(int bytes);   // Default: 4096 (4KB)
-        public ParserConfigBuilder maxBufferSize(int bytes);     // Default: 131072 (128KB)
     }
 }
 ----
@@ -184,10 +183,6 @@ public class TokenValidationException extends RuntimeException {
 |4KB
 |During JSON parsing
 
-|`maxBufferSize`
-|Reserved buffer size limit (not currently passed to DSL-JSON; stored for DevUI display)
-|128KB
-|Not enforced during parsing
 |===
 
 Base64 encoding increases size by ~33%, so an 8KB token yields ~6KB decoded content. These limits provide defense-in-depth against denial-of-service attacks, memory exhaustion, and JSON parsing vulnerabilities.

@@ -58,7 +58,6 @@ class JwtPropertyKeysTest {
             assertTrue(JwtPropertyKeys.PARSER.MAX_TOKEN_SIZE.startsWith(JwtPropertyKeys.PARSER.BASE));
             assertTrue(JwtPropertyKeys.PARSER.MAX_PAYLOAD_SIZE.startsWith(JwtPropertyKeys.PARSER.BASE));
             assertTrue(JwtPropertyKeys.PARSER.MAX_STRING_LENGTH.startsWith(JwtPropertyKeys.PARSER.BASE));
-            assertTrue(JwtPropertyKeys.PARSER.MAX_BUFFER_SIZE.startsWith(JwtPropertyKeys.PARSER.BASE));
         }
     }
 

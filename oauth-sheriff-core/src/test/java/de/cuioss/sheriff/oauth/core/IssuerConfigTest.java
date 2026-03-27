@@ -61,6 +61,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
         return IssuerConfig.builder()
                 .issuerIdentifier(TEST_ISSUER)
                 .jwksContent(TEST_JWKS_CONTENT)
+                .audienceValidationDisabled(true)
                 .build();
     }
 
@@ -74,6 +75,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
             var config = IssuerConfig.builder()
                     .issuerIdentifier(TEST_ISSUER)
                     .jwksContent(TEST_JWKS_CONTENT)
+                    .audienceValidationDisabled(true)
                     .build();
             assertNotNull(config.getJwksLoader());
             assertEquals(TEST_ISSUER, config.getIssuerIdentifier());
@@ -114,6 +116,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
             var config = IssuerConfig.builder()
                     .issuerIdentifier(TEST_ISSUER)
                     .jwksContent(TEST_JWKS_CONTENT)
+                    .audienceValidationDisabled(true)
                     .build();
             assertEquals(60, config.getClockSkewSeconds(),
                     "Default clockSkewSeconds should be 60");
@@ -125,6 +128,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
             var config = IssuerConfig.builder()
                     .issuerIdentifier(TEST_ISSUER)
                     .jwksContent(TEST_JWKS_CONTENT)
+                    .audienceValidationDisabled(true)
                     .build();
             assertNull(config.getMaxTokenAgeSeconds(),
                     "Default maxTokenAgeSeconds should be null");
@@ -137,6 +141,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                     .issuerIdentifier(TEST_ISSUER)
                     .jwksContent(TEST_JWKS_CONTENT)
                     .clockSkewSeconds(120)
+                    .audienceValidationDisabled(true)
                     .build();
             assertEquals(120, config.getClockSkewSeconds(),
                     "clockSkewSeconds should be 120");
@@ -149,6 +154,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                     .issuerIdentifier(TEST_ISSUER)
                     .jwksContent(TEST_JWKS_CONTENT)
                     .maxTokenAgeSeconds(300)
+                    .audienceValidationDisabled(true)
                     .build();
             assertEquals(300, config.getMaxTokenAgeSeconds(),
                     "maxTokenAgeSeconds should be 300");
@@ -161,6 +167,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                     .issuerIdentifier(TEST_ISSUER)
                     .jwksContent(TEST_JWKS_CONTENT)
                     .clockSkewSeconds(0)
+                    .audienceValidationDisabled(true)
                     .build();
             assertEquals(0, config.getClockSkewSeconds(),
                     "clockSkewSeconds should be 0");
@@ -179,6 +186,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                             .jwksUrl(TEST_JWKS_URL)
                             .issuerIdentifier("test-issuer")
                             .build())
+                    .audienceValidationDisabled(true)
                     .build();
             var securityEventCounter = new SecurityEventCounter();
 
@@ -195,6 +203,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
             var config = IssuerConfig.builder()
                     .issuerIdentifier("test-issuer")
                     .jwksFilePath(jwksFilePath.toString())
+                    .audienceValidationDisabled(true)
                     .build();
             var securityEventCounter = new SecurityEventCounter();
 
@@ -208,6 +217,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
             var config = IssuerConfig.builder()
                     .issuerIdentifier("test-issuer")
                     .jwksContent(TEST_JWKS_CONTENT)
+                    .audienceValidationDisabled(true)
                     .build();
             var securityEventCounter = new SecurityEventCounter();
 
@@ -233,6 +243,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
             var config = IssuerConfig.builder()
                     .issuerIdentifier("test-issuer")
                     .jwksContent(TEST_JWKS_CONTENT)
+                    .audienceValidationDisabled(true)
                     .build();
             assertThrows(NullPointerException.class,
                     () -> config.initSecurityEventCounter(null));
@@ -250,6 +261,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                 IssuerConfig.builder()
                         .issuerIdentifier("test-issuer")
                         .jwksContent(TEST_JWKS_CONTENT)
+                        .audienceValidationDisabled(true)
                         .build();
             });
         }
@@ -264,6 +276,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
             assertDoesNotThrow(() -> {
                 IssuerConfig.builder()
                         .httpJwksLoaderConfig(httpConfig)
+                        .audienceValidationDisabled(true)
                         .build();
             });
         }
@@ -313,6 +326,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                     .issuerIdentifier(TEST_ISSUER)
                     .jwksContent(TEST_JWKS_CONTENT)
                     .claimSubOptional(true)
+                    .audienceValidationDisabled(true)
                     .build();
 
             // Verify the warning was logged

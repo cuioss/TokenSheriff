@@ -43,6 +43,7 @@ class TokenValidatorProducerUnitTest {
                 JwtPropertyKeys.PARSER.MAX_TOKEN_SIZE, "4096",
                 JwtPropertyKeys.ISSUERS.ENABLED.formatted("test"), "true",
                 JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("test"), "https://test.example.com",
+                JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted("test"), "true",
                 JwtPropertyKeys.ISSUERS.JWKS_CONTENT.formatted("test"), "{\"keys\":[{\"kty\":\"RSA\",\"use\":\"sig\",\"kid\":\"test-key\",\"alg\":\"RS256\",\"n\":\"nzyis1ZjfNB0bBgKFMSvvkTtwlvBsaJq7S5wA-kzeVOVpVWwkWdVha4s38XM_pa_yr47av7-z3VTmvDRyAHcaT92whREFpLv9cj5lTeJSibyr_Mrm_YtjCZVWgaOYIhwrXwKLqPr_11inWsAkfIytvHWTxZYEcXLgAXFuUuaS3uF9gEiNQwzGTU1v0FqkqTBr4B8nW3HCN47XUu0t8Y0e3zvAIhySnxIZi9aDaPvSlAeZ7VVl5ivy_43QvTRpM3eBFs9A1Y9a9aCtHSP8KXRTYhH2TvPxLOOFg0Lu-pwrps6CqvbeZjQlqCh9cGowQ\",\"e\":\"AQAB\"}]}"
         );
         Config testConfig = new TestConfig(props);
