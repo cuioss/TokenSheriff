@@ -35,7 +35,6 @@ class DSLJsonSecurityTest {
     void shouldParseValidJwksSuccessfully() {
         ParserConfig config = ParserConfig.builder()
                 .maxStringLength(1000)
-                .maxBufferSize(2048)
                 .build();
 
         DslJson<Object> dslJson = config.getDslJson();

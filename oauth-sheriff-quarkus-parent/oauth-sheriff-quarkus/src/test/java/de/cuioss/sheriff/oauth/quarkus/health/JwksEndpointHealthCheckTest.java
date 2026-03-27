@@ -208,6 +208,7 @@ class JwksEndpointHealthCheckTest {
         IssuerConfig errorIssuerConfig = IssuerConfig.builder()
                 .issuerIdentifier("error-issuer")
                 .jwksLoader(new ErrorJwksLoader())
+                .audienceValidationDisabled(true)
                 .build();
 
         // Create a health check with the error issuer config
@@ -253,12 +254,14 @@ class JwksEndpointHealthCheckTest {
         IssuerConfig healthyIssuerConfig = IssuerConfig.builder()
                 .issuerIdentifier("healthy-issuer")
                 .jwksLoader(new HealthyJwksLoader())
+                .audienceValidationDisabled(true)
                 .build();
 
         // Create an unhealthy issuer config
         IssuerConfig unhealthyIssuerConfig = IssuerConfig.builder()
                 .issuerIdentifier("unhealthy-issuer")
                 .jwksLoader(new UnhealthyJwksLoader())
+                .audienceValidationDisabled(true)
                 .build();
 
         // Create a health check with both issuer configs
@@ -319,6 +322,7 @@ class JwksEndpointHealthCheckTest {
                 List.of(IssuerConfig.builder()
                         .issuerIdentifier("cache-test-issuer")
                         .jwksLoader(new HealthyJwksLoader())
+                        .audienceValidationDisabled(true)
                         .build()),
                 1);
 
@@ -377,6 +381,7 @@ class JwksEndpointHealthCheckTest {
         IssuerConfig failFastIssuerConfig = IssuerConfig.builder()
                 .issuerIdentifier("fail-fast-issuer")
                 .jwksLoader(failFastLoader)
+                .audienceValidationDisabled(true)
                 .build();
 
         // Create health check with fail-fast loader

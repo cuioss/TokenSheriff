@@ -82,7 +82,8 @@ class IssuerConfigResolverTest {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             ParserConfig parserConfig = ParserConfig.builder().build();
 
@@ -133,7 +134,8 @@ class IssuerConfigResolverTest {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -150,9 +152,11 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(ANOTHER_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(ANOTHER_ISSUER), "https://other.com",
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(ANOTHER_ISSUER), "https://other.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(ANOTHER_ISSUER), "https://other.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(ANOTHER_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -175,6 +179,7 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(ANOTHER_ISSUER), "false",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(ANOTHER_ISSUER), "https://other.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(ANOTHER_ISSUER), "https://other.com/jwks"
@@ -197,7 +202,8 @@ class IssuerConfigResolverTest {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), enabledValue,
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -237,7 +243,8 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
                     JwtPropertyKeys.ISSUERS.CONNECT_TIMEOUT_SECONDS.formatted(TEST_ISSUER), "30",
-                    JwtPropertyKeys.ISSUERS.READ_TIMEOUT_SECONDS.formatted(TEST_ISSUER), "60"
+                    JwtPropertyKeys.ISSUERS.READ_TIMEOUT_SECONDS.formatted(TEST_ISSUER), "60",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -255,7 +262,8 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted(TEST_ISSUER), "https://example.com/.well-known/openid_configuration",
-                    JwtPropertyKeys.ISSUERS.REFRESH_INTERVAL_SECONDS.formatted(TEST_ISSUER), "3600"
+                    JwtPropertyKeys.ISSUERS.REFRESH_INTERVAL_SECONDS.formatted(TEST_ISSUER), "3600",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -273,7 +281,8 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
-                    JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted(TEST_ISSUER), "https://example.com/.well-known/openid_configuration"
+                    JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted(TEST_ISSUER), "https://example.com/.well-known/openid_configuration",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -298,7 +307,8 @@ class IssuerConfigResolverTest {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), issuerIdentifier,
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -338,7 +348,8 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.EXPECTED_CLIENT_ID.formatted(TEST_ISSUER), clientIds,
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -360,7 +371,8 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.ALGORITHM_PREFERENCES.formatted(TEST_ISSUER), algorithms,
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -388,7 +400,8 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.CLAIM_SUB_OPTIONAL.formatted(TEST_ISSUER), claimSubOptionalValue,
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -406,7 +419,8 @@ class IssuerConfigResolverTest {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -424,7 +438,8 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
-                    JwtPropertyKeys.ISSUERS.CLOCK_SKEW_SECONDS.formatted(TEST_ISSUER), "120"
+                    JwtPropertyKeys.ISSUERS.CLOCK_SKEW_SECONDS.formatted(TEST_ISSUER), "120",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -442,7 +457,8 @@ class IssuerConfigResolverTest {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -461,7 +477,8 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
-                    JwtPropertyKeys.ISSUERS.MAX_TOKEN_AGE_SECONDS.formatted(TEST_ISSUER), "300"
+                    JwtPropertyKeys.ISSUERS.MAX_TOKEN_AGE_SECONDS.formatted(TEST_ISSUER), "300",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -479,7 +496,8 @@ class IssuerConfigResolverTest {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -503,7 +521,8 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
-                    JwtPropertyKeys.ISSUERS.DPOP_ENABLED.formatted(TEST_ISSUER), "true"
+                    JwtPropertyKeys.ISSUERS.DPOP_ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -525,7 +544,8 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
-                    JwtPropertyKeys.ISSUERS.DPOP_ENABLED.formatted(TEST_ISSUER), "false"
+                    JwtPropertyKeys.ISSUERS.DPOP_ENABLED.formatted(TEST_ISSUER), "false",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -541,7 +561,8 @@ class IssuerConfigResolverTest {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -562,7 +583,8 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.DPOP_REQUIRED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS.formatted(TEST_ISSUER), "120",
                     JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE.formatted(TEST_ISSUER), "5000",
-                    JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS.formatted(TEST_ISSUER), "600"
+                    JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS.formatted(TEST_ISSUER), "600",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -589,7 +611,8 @@ class IssuerConfigResolverTest {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -607,7 +630,8 @@ class IssuerConfigResolverTest {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
@@ -623,6 +647,7 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(ANOTHER_ISSUER), "false",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(ANOTHER_ISSUER), "https://other.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(ANOTHER_ISSUER), "https://other.com/jwks"
@@ -642,7 +667,8 @@ class IssuerConfigResolverTest {
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.CLAIM_SUB_OPTIONAL.formatted(TEST_ISSUER), "true",
-                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 

@@ -281,6 +281,12 @@ public class IssuerConfigResolver {
             audiences.forEach(builder::expectedAudience);
             LOGGER.debug("Set expected audiences for %s: %s", issuerName, audiences);
         }
+
+        // Allow explicit opt-out of audience validation
+        config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(issuerName),
+                Boolean.class
+        ).ifPresent(disabled -> builder.audienceValidationDisabled(disabled));
     }
 
     /**

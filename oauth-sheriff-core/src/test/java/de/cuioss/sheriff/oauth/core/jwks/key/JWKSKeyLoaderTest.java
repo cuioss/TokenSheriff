@@ -169,7 +169,6 @@ class JWKSKeyLoaderTest {
             ParserConfig customConfig = ParserConfig.builder()
                     .maxPayloadSize(1024)
                     .maxStringLength(512)
-                    .maxBufferSize(2048)
                     .build();
             JWKSKeyLoader loaderWithCustomConfig = JWKSKeyLoader.builder()
                     .jwksContent(jwksContent)

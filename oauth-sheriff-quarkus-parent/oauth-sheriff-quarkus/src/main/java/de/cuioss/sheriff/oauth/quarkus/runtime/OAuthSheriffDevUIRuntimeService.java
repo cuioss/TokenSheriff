@@ -157,7 +157,7 @@ public class OAuthSheriffDevUIRuntimeService {
         Map<String, Object> httpJwksLoader = new HashMap<>();
         httpJwksLoader.put("connectTimeoutSeconds", 10);
         httpJwksLoader.put("readTimeoutSeconds", 10);
-        httpJwksLoader.put("sizeLimit", parserConfig.getMaxBufferSize());
+        httpJwksLoader.put("sizeLimit", parserConfig.getMaxTokenSize());
         httpJwksLoader.put("cacheTtlSeconds", 600);
         httpJwksLoader.put("cacheSize", 10);
         httpJwksLoader.put("backgroundRefreshEnabled", true);

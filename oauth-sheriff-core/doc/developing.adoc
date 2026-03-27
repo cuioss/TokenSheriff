@@ -166,7 +166,6 @@ Configure limits in `ParserConfig` to prevent attacks:
 * `maxTokenSize` - Limits entire JWT token (default 8KB)
 * `maxPayloadSize` - Limits decoded JWT parts (default 8KB)
 * `maxStringLength` - Limits JSON string buffer size (default 4KB)
-* `maxBufferSize` - Reserved buffer size limit (not currently enforced; default 128KB)
 
 == Related Documentation
 

@@ -76,6 +76,7 @@ class MandatoryClaimsValidatorTest {
         IssuerConfig defaultIssuerConfig = IssuerConfig.builder()
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
+                .audienceValidationDisabled(true)
                 .build();
 
         validator = new MandatoryClaimsValidator(defaultIssuerConfig, securityEventCounter);
@@ -220,6 +221,7 @@ class MandatoryClaimsValidatorTest {
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
                 .claimSubOptional(true)
+                .audienceValidationDisabled(true)
                 .build();
 
         MandatoryClaimsValidator validatorWithOptionalSub = new MandatoryClaimsValidator(issuerConfigWithOptionalSub, securityEventCounter);
@@ -243,6 +245,7 @@ class MandatoryClaimsValidatorTest {
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
                 .claimSubOptional(true)
+                .audienceValidationDisabled(true)
                 .build();
 
         MandatoryClaimsValidator validatorWithOptionalSub = new MandatoryClaimsValidator(issuerConfigWithOptionalSub, securityEventCounter);
@@ -278,6 +281,7 @@ class MandatoryClaimsValidatorTest {
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
                 .claimSubOptional(false)  // Explicitly set to false
+                .audienceValidationDisabled(true)
                 .build();
 
         MandatoryClaimsValidator validatorWithMandatorySub = new MandatoryClaimsValidator(issuerConfigWithMandatorySub, new SecurityEventCounter());
@@ -293,6 +297,7 @@ class MandatoryClaimsValidatorTest {
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
                 .claimSubOptional(true)
+                .audienceValidationDisabled(true)
                 .build();
         MandatoryClaimsValidator validatorWithOptionalSub = new MandatoryClaimsValidator(issuerConfigWithOptionalSub, new SecurityEventCounter());
 
@@ -308,6 +313,7 @@ class MandatoryClaimsValidatorTest {
                 .issuerIdentifier("https://test-issuer.example.com")
                 .jwksContent("{\"keys\":[]}")
                 .claimSubOptional(true)
+                .audienceValidationDisabled(true)
                 .build();
 
         MandatoryClaimsValidator validatorWithOptionalSub = new MandatoryClaimsValidator(issuerConfigWithOptionalSub, securityEventCounter);

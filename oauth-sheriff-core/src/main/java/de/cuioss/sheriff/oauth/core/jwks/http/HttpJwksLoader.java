@@ -80,6 +80,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     private final AtomicReference<HttpAdapter<Jwks>> httpAdapter = new AtomicReference<>();
     private final AtomicReference<ScheduledFuture<?>> refreshTask = new AtomicReference<>();
     private SecurityEventCounter securityEventCounter;
+    private final AtomicReference<CompletableFuture<LoaderStatus>> initFuture = new AtomicReference<>();
     private final AtomicReference<String> resolvedIssuerIdentifier = new AtomicReference<>();
     private final AtomicReference<Jwks> currentJwksContent = new AtomicReference<>();
 
@@ -97,8 +98,15 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     public CompletableFuture<LoaderStatus> initJWKSLoader(SecurityEventCounter counter) {
         this.securityEventCounter = counter;
 
+        // Idempotency guard: if already initialized or loading, return existing future
+        CompletableFuture<LoaderStatus> existing = initFuture.get();
+        if (existing != null) {
+            LOGGER.debug("initJWKSLoader already called, returning existing future (status: %s)", status.get());
+            return existing;
+        }
+
         // Execute initialization asynchronously
-        return CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<LoaderStatus> future = CompletableFuture.supplyAsync(() -> {
             status.set(LoaderStatus.LOADING);
 
             // Resolve the adapter (may involve well-known discovery)
@@ -149,6 +157,12 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             status.set(finalStatus);
             return finalStatus;
         });
+
+        // Store the future atomically; if another thread beat us, return theirs
+        if (initFuture.compareAndSet(null, future)) {
+            return future;
+        }
+        return initFuture.get();
     }
 
     /**
@@ -328,6 +342,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         retiredKeys.clear();
         httpAdapter.set(null);
         currentJwksContent.set(null);
+        initFuture.set(null);
         status.set(LoaderStatus.UNDEFINED);
     }
 

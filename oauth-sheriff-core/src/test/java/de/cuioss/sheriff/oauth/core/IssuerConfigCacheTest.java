@@ -228,6 +228,7 @@ class IssuerConfigCacheTest {
             IssuerConfig config = IssuerConfig.builder()
                     .issuerIdentifier("https://test-unhealthy-issuer.com")
                     .jwksContent("invalid-jwks-content") // This will cause loader to be unhealthy
+                    .audienceValidationDisabled(true)
                     .build();
 
             // Initialize the config to make it unhealthy

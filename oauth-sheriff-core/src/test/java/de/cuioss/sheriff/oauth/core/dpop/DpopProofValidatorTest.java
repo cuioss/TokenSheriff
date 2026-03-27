@@ -66,6 +66,7 @@ class DpopProofValidatorTest {
                 .issuerIdentifier(TEST_ISSUER)
                 .dpopConfig(DpopConfig.builder().build())
                 .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
+                .audienceValidationDisabled(true)
                 .build();
 
         validator = new DpopProofValidator(issuerConfig, securityEventCounter, replayProtection);
@@ -112,6 +113,7 @@ class DpopProofValidatorTest {
                 .issuerIdentifier(TEST_ISSUER)
                 .dpopConfig(DpopConfig.builder().required(true).build())
                 .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
+                .audienceValidationDisabled(true)
                 .build();
         var requiredValidator = new DpopProofValidator(requiredConfig, securityEventCounter, replayProtection);
 
@@ -316,6 +318,7 @@ class DpopProofValidatorTest {
                 .issuerIdentifier(TEST_ISSUER)
                 .dpopConfig(DpopConfig.builder().required(true).build())
                 .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
+                .audienceValidationDisabled(true)
                 .build();
         var requiredValidator = new DpopProofValidator(requiredConfig, securityEventCounter, replayProtection);
 
