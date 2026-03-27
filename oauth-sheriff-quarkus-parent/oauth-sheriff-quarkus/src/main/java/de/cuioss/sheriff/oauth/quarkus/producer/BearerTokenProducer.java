@@ -270,30 +270,40 @@ public class BearerTokenProducer {
             if (cookieHeader == null) {
                 continue;
             }
-            String[] cookies = cookieHeader.split(";");
-            for (String cookie : cookies) {
-                String trimmed = cookie.trim();
-                int eqIndex = trimmed.indexOf('=');
-                if (eqIndex > 0) {
-                    String name = trimmed.substring(0, eqIndex).trim();
-                    if (tokenCookieName.equals(name)) {
-                        String value = trimmed.substring(eqIndex + 1).trim();
-                        // Remove optional surrounding double quotes per RFC 6265
-                        if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
-                            value = value.substring(1, value.length() - 1);
-                        }
-                        if (value.isEmpty()) {
-                            LOGGER.debug("Cookie '%s' found but value is empty", tokenCookieName);
-                            return Optional.empty();
-                        }
-                        LOGGER.debug("Token extracted from cookie '%s'", tokenCookieName);
-                        return Optional.of(value);
-                    }
-                }
+            Optional<String> result = findCookieValue(cookieHeader);
+            if (result.isPresent()) {
+                return result;
             }
         }
 
         LOGGER.debug("Cookie '%s' not found in Cookie header", tokenCookieName);
+        return Optional.empty();
+    }
+
+    private Optional<String> findCookieValue(String cookieHeader) {
+        String[] cookies = cookieHeader.split(";");
+        for (String cookie : cookies) {
+            String trimmed = cookie.trim();
+            int eqIndex = trimmed.indexOf('=');
+            if (eqIndex <= 0) {
+                continue;
+            }
+            String name = trimmed.substring(0, eqIndex).trim();
+            if (!tokenCookieName.equals(name)) {
+                continue;
+            }
+            String value = trimmed.substring(eqIndex + 1).trim();
+            // Remove optional surrounding double quotes per RFC 6265
+            if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+                value = value.substring(1, value.length() - 1);
+            }
+            if (value.isEmpty()) {
+                LOGGER.debug("Cookie '%s' found but value is empty", tokenCookieName);
+                return Optional.empty();
+            }
+            LOGGER.debug("Token extracted from cookie '%s'", tokenCookieName);
+            return Optional.of(value);
+        }
         return Optional.empty();
     }
 
@@ -368,7 +378,7 @@ public class BearerTokenProducer {
     @RequestScoped
     public JsonWebToken produceJsonWebToken() {
         return getAccessTokenContent()
-                .map(token -> (JsonWebToken) token)
+                .map(JsonWebToken.class::cast)
                 .orElse(EmptyJsonWebToken.INSTANCE);
     }
 
