@@ -56,6 +56,7 @@ class IssuerConfigResolverTest {
         void shouldAcceptValidConfig() {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
 
@@ -79,6 +80,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should accept ParserConfig in 4-arg constructor")
         void shouldAcceptParserConfig() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
             ParserConfig parserConfig = ParserConfig.builder().build();
@@ -129,6 +132,7 @@ class IssuerConfigResolverTest {
         void shouldDiscoverIssuerFromProperties() {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
@@ -144,8 +148,10 @@ class IssuerConfigResolverTest {
         void shouldDiscoverMultipleIssuers() {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(ANOTHER_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(ANOTHER_ISSUER), "https://other.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(ANOTHER_ISSUER), "https://other.com/jwks"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
@@ -167,8 +173,10 @@ class IssuerConfigResolverTest {
         void shouldSkipDisabledIssuers() {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(ANOTHER_ISSUER), "false",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(ANOTHER_ISSUER), "https://other.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(ANOTHER_ISSUER), "https://other.com/jwks"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
@@ -188,6 +196,7 @@ class IssuerConfigResolverTest {
         void shouldRespectEnabledProperty(String enabledValue, boolean expectedEnabled) {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), enabledValue,
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
@@ -202,17 +211,17 @@ class IssuerConfigResolverTest {
         }
 
         @Test
-        @DisplayName("should default to enabled when not specified")
-        void shouldDefaultToEnabledWhenNotSpecified() {
+        @DisplayName("should default to disabled when enabled not specified")
+        void shouldDefaultToDisabledWhenNotSpecified() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
 
-            List<IssuerConfig> result = resolver.resolveIssuerConfigs();
-
-            assertEquals(1, result.size(), "Should find issuer");
-            assertTrue(result.getFirst().isEnabled(), "Should default to enabled");
+            // Default is now disabled — require explicit enabled=true
+            assertThrows(IllegalStateException.class, resolver::resolveIssuerConfigs,
+                    "Should throw when no enabled issuers found (default is disabled)");
         }
     }
 
@@ -224,6 +233,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should configure HTTP JWKS URL with timeouts")
         void shouldConfigureHttpJwksUrl() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
                     JwtPropertyKeys.ISSUERS.CONNECT_TIMEOUT_SECONDS.formatted(TEST_ISSUER), "30",
                     JwtPropertyKeys.ISSUERS.READ_TIMEOUT_SECONDS.formatted(TEST_ISSUER), "60"
@@ -241,6 +252,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should configure well-known URL with refresh interval")
         void shouldConfigureWellKnownUrl() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted(TEST_ISSUER), "https://example.com/.well-known/openid_configuration",
                     JwtPropertyKeys.ISSUERS.REFRESH_INTERVAL_SECONDS.formatted(TEST_ISSUER), "3600"
             ));
@@ -257,6 +270,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should reject mutually exclusive JWKS sources")
         void shouldRejectMutuallyExclusiveJwksSources() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
                     JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted(TEST_ISSUER), "https://example.com/.well-known/openid_configuration"
             ));
@@ -281,6 +296,7 @@ class IssuerConfigResolverTest {
         void shouldConfigureIssuerIdentifier() {
             String issuerIdentifier = "https://example.com";
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), issuerIdentifier,
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
@@ -297,6 +313,8 @@ class IssuerConfigResolverTest {
         void shouldConfigureAudiences() {
             String audiences = "client1,client2,client3";
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.EXPECTED_AUDIENCE.formatted(TEST_ISSUER), audiences,
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
@@ -317,6 +335,8 @@ class IssuerConfigResolverTest {
         void shouldConfigureClientIds() {
             String clientIds = "id1, id2 , id3";
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.EXPECTED_CLIENT_ID.formatted(TEST_ISSUER), clientIds,
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
@@ -337,6 +357,8 @@ class IssuerConfigResolverTest {
         void shouldConfigureAlgorithmPreferences() {
             String algorithms = "RS256,ES256,PS256";
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.ALGORITHM_PREFERENCES.formatted(TEST_ISSUER), algorithms,
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
@@ -363,6 +385,8 @@ class IssuerConfigResolverTest {
         })
         void shouldConfigureClaimSubOptional(String claimSubOptionalValue, boolean expectedClaimSubOptional) {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.CLAIM_SUB_OPTIONAL.formatted(TEST_ISSUER), claimSubOptionalValue,
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
@@ -380,6 +404,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should default claimSubOptional to false when not specified")
         void shouldDefaultClaimSubOptionalToFalse() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
@@ -395,6 +421,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should configure clock skew seconds from property")
         void shouldConfigureClockSkewSeconds() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
                     JwtPropertyKeys.ISSUERS.CLOCK_SKEW_SECONDS.formatted(TEST_ISSUER), "120"
             ));
@@ -412,6 +440,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should default clock skew seconds to 60 when not specified")
         void shouldDefaultClockSkewSecondsTo60() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
@@ -428,6 +458,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should configure max token age seconds from property")
         void shouldConfigureMaxTokenAgeSeconds() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
                     JwtPropertyKeys.ISSUERS.MAX_TOKEN_AGE_SECONDS.formatted(TEST_ISSUER), "300"
             ));
@@ -445,6 +477,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should default max token age seconds to null when not specified")
         void shouldDefaultMaxTokenAgeSecondsToNull() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
@@ -466,6 +500,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should configure DPoP when enabled with defaults")
         void shouldConfigureDpopWhenEnabled() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
                     JwtPropertyKeys.ISSUERS.DPOP_ENABLED.formatted(TEST_ISSUER), "true"
             ));
@@ -486,6 +522,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should not configure DPoP when disabled")
         void shouldNotConfigureDpopWhenDisabled() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
                     JwtPropertyKeys.ISSUERS.DPOP_ENABLED.formatted(TEST_ISSUER), "false"
             ));
@@ -501,6 +539,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should not configure DPoP when not specified")
         void shouldNotConfigureDpopWhenNotSpecified() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
@@ -515,6 +555,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should configure DPoP with custom values")
         void shouldConfigureDpopWithCustomValues() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
                     JwtPropertyKeys.ISSUERS.DPOP_ENABLED.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.DPOP_REQUIRED.formatted(TEST_ISSUER), "true",
@@ -545,6 +587,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should log discovery and resolution process")
         void shouldLogDiscoveryAndResolution() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
@@ -561,6 +605,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should log JWKS source configuration")
         void shouldLogJwksSourceConfiguration() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
@@ -575,8 +621,10 @@ class IssuerConfigResolverTest {
         void shouldLogDisabledIssuerSkipping() {
             TestConfig config = new TestConfig(Map.of(
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
                     JwtPropertyKeys.ISSUERS.ENABLED.formatted(ANOTHER_ISSUER), "false",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(ANOTHER_ISSUER), "https://other.com",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(ANOTHER_ISSUER), "https://other.com/jwks"
             ));
             IssuerConfigResolver resolver = new IssuerConfigResolver(config);
@@ -591,6 +639,8 @@ class IssuerConfigResolverTest {
         @DisplayName("should log claimSubOptional configuration")
         void shouldLogClaimSubOptionalConfiguration() {
             TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
                     JwtPropertyKeys.ISSUERS.CLAIM_SUB_OPTIONAL.formatted(TEST_ISSUER), "true",
                     JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
             ));

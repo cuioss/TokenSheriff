@@ -15,9 +15,8 @@
  */
 package de.cuioss.sheriff.oauth.core;
 
+import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
-import de.cuioss.test.juli.LogAsserts;
-import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -25,8 +24,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 @EnableGeneratorController
 @EnableTestLogger
@@ -44,18 +42,17 @@ class TokenTypeTest {
 
     @ParameterizedTest
     @NullAndEmptySource
-    @DisplayName("Should return UNKNOWN for null or empty type claims without logging")
+    @DisplayName("Should throw TokenValidationException for null or empty type claims")
     void shouldDefaultToUnknownForNullOrEmpty(String invalidType) {
-        assertEquals(TokenType.UNKNOWN, TokenType.fromTypeClaim(invalidType), "Invalid type should return UNKNOWN");
-        // No warning expected for null or empty
+        assertThrows(TokenValidationException.class, () -> TokenType.fromTypeClaim(invalidType),
+                "Null or empty type should throw TokenValidationException (fail-closed)");
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"invalid", "not_a_token_type", "custom_token"})
-    @DisplayName("Should return UNKNOWN for invalid type claims and log warning")
+    @DisplayName("Should throw TokenValidationException for invalid type claims")
     void shouldDefaultToUnknownAndLogWarning(String invalidType) {
-        assertEquals(TokenType.UNKNOWN, TokenType.fromTypeClaim(invalidType), "Invalid type should return UNKNOWN");
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
-                JWTValidationLogMessages.WARN.UNKNOWN_TOKEN_TYPE.resolveIdentifierString());
+        assertThrows(TokenValidationException.class, () -> TokenType.fromTypeClaim(invalidType),
+                "Invalid type should throw TokenValidationException (fail-closed)");
     }
 }
