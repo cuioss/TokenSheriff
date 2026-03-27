@@ -211,6 +211,7 @@ class NonValidatingJwtParserJweTest {
 
             JweDecryptionConfig config = JweDecryptionConfig.builder()
                     .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                    .compressionEnabled(true)
                     .build();
 
             NonValidatingJwtParser parser = NonValidatingJwtParser.builder()

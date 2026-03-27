@@ -213,8 +213,10 @@ public class KeyProcessor {
             return jwk.alg();
         }
 
-        // Determine algorithm based on curve
-        String curve = jwk.crv() != null ? jwk.crv() : "P-256";
-        return JwkKeyHandler.determineEcAlgorithm(curve);
+        // Determine algorithm based on curve — null curve is rejected
+        if (jwk.crv() == null) {
+            throw new IllegalArgumentException("EC key is missing required 'crv' parameter");
+        }
+        return JwkKeyHandler.determineEcAlgorithm(jwk.crv());
     }
 }

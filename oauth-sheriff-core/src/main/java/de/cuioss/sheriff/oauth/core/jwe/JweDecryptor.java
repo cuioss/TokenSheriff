@@ -313,6 +313,8 @@ public class JweDecryptor {
     }
 
     private byte[] decompress(byte[] data) {
+        // RFC 7516 §4.1.3 mandates raw DEFLATE (RFC 1951) without zlib wrapper.
+        // No fallback to zlib-wrapped format.
         Inflater inflater = new Inflater(true); // nowrap=true for raw DEFLATE
         inflater.setInput(data);
         try (ByteArrayOutputStream out = new ByteArrayOutputStream(data.length * 2)) {
@@ -321,23 +323,9 @@ public class JweDecryptor {
             while (!inflater.finished()) {
                 int count = inflater.inflate(buffer);
                 if (count == 0 && !inflater.finished()) {
-                    // Try without nowrap for compatibility (some implementations use zlib wrapper)
-                    inflater.end();
-                    inflater = new Inflater();
-                    inflater.setInput(data);
-                    out.reset();
-                    totalWritten = 0;
-                    while (!inflater.finished()) {
-                        count = inflater.inflate(buffer);
-                        totalWritten += count;
-                        if (totalWritten > MAX_DECOMPRESSED_SIZE) {
-                            throw new TokenValidationException(
-                                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                                    "Decompressed JWE payload exceeds maximum size limit");
-                        }
-                        out.write(buffer, 0, count);
-                    }
-                    return out.toByteArray();
+                    throw new TokenValidationException(
+                            SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                            "Failed to decompress JWE payload: not valid raw DEFLATE (RFC 1951)");
                 }
                 totalWritten += count;
                 if (totalWritten > MAX_DECOMPRESSED_SIZE) {

@@ -387,6 +387,7 @@ class JweDecryptorTest {
 
             JweDecryptionConfig config = JweDecryptionConfig.builder()
                     .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                    .compressionEnabled(true)
                     .build();
 
             JwtHeader header = parseHeader(parts[0]);

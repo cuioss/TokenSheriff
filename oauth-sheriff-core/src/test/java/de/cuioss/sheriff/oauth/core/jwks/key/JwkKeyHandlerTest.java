@@ -247,9 +247,8 @@ class JwkKeyHandlerTest {
     void shouldReturnDefaultAlgorithmForUnknownCurve() {
         String curve = "unknown-curve";
 
-        String algorithm = JwkKeyHandler.determineEcAlgorithm(curve);
-
-        assertEquals("ES256", algorithm, "Default algorithm should be ES256 for unknown curve");
+        assertThrows(IllegalArgumentException.class, () -> JwkKeyHandler.determineEcAlgorithm(curve),
+                "Unknown curve should throw IllegalArgumentException (fail-closed)");
     }
 
     @Test

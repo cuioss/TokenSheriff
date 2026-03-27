@@ -21,7 +21,6 @@ import de.cuioss.sheriff.oauth.core.test.generator.ClaimControlParameter;
 import de.cuioss.sheriff.oauth.quarkus.annotation.BearerAuth;
 import de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenProducer;
 import de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenResult;
-import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import jakarta.interceptor.InvocationContext;
 import jakarta.ws.rs.WebApplicationException;
@@ -31,10 +30,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 
-import static de.cuioss.test.juli.LogAsserts.assertSingleLogMessagePresentContaining;
 import static org.easymock.EasyMock.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link BearerTokenInterceptor}.
@@ -169,20 +166,19 @@ class BearerTokenInterceptorTest {
     }
 
     @Test
-    @DisplayName("Should proceed when annotation not found (with warning)")
-    void shouldProceedWhenAnnotationNotFound() throws Exception {
+    @DisplayName("Should throw IllegalStateException when annotation not found (fail closed)")
+    void shouldThrowWhenAnnotationNotFound() throws Exception {
         TestResource resource = new TestResource();
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithoutAnnotation")).times(2);
         expect(invocationContext.getTarget()).andReturn(resource);
-        expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
-        Object result = interceptor.validateBearerToken(invocationContext);
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> interceptor.validateBearerToken(invocationContext));
 
-        assertEquals("success", result);
-        assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
-                "@BearerAuth annotation not found");
+        assertTrue(exception.getMessage().contains("@BearerAuth annotation not found"),
+                "Exception message should mention missing annotation");
         verify(invocationContext);
     }
 

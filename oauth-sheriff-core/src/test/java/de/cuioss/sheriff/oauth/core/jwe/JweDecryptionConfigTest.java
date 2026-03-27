@@ -89,7 +89,7 @@ class JweDecryptionConfigTest {
                 .build();
 
         assertEquals(32 * 1024, config.getMaxEncryptedTokenSize());
-        assertTrue(config.isCompressionEnabled());
+        assertFalse(config.isCompressionEnabled());
     }
 
     @Test

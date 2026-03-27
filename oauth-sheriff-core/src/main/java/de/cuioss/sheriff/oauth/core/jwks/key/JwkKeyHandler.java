@@ -236,14 +236,15 @@ public final class JwkKeyHandler {
      * Determine the EC algorithm based on the curve.
      *
      * @param curve the curve name
-     * @return the algorithm name, defaults to "ES256" for unknown curves
+     * @return the algorithm name
+     * @throws IllegalArgumentException if the curve is not supported
      */
     public static String determineEcAlgorithm(String curve) {
         return switch (curve) {
             case "P-256" -> "ES256";
             case "P-384" -> "ES384";
             case "P-521" -> "ES512";
-            default -> "ES256"; // Default to ES256
+            default -> throw new IllegalArgumentException("Unsupported EC curve: " + curve);
         };
     }
 }

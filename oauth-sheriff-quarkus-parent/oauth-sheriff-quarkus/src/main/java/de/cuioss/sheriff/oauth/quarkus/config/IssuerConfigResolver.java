@@ -206,7 +206,7 @@ public class IssuerConfigResolver {
         return config.getOptionalValue(
                 JwtPropertyKeys.ISSUERS.ENABLED.formatted(issuerName),
                 Boolean.class
-        ).orElse(true); // Default to enabled if not explicitly disabled
+        ).orElse(false); // Default to disabled — require explicit enabled=true
     }
 
     /**
@@ -494,8 +494,11 @@ public class IssuerConfigResolver {
         if (issuerIdentifier.isPresent()) {
             builder.issuerIdentifier(issuerIdentifier.get());
         } else {
-            // Use the issuer name as fallback if no explicit identifier is configured
-            builder.issuerIdentifier(issuerName);
+            throw new IllegalStateException(
+                    "Issuer '%s' requires explicit 'issuer-identifier' when using direct JWKS URL. "
+                            .formatted(issuerName)
+                            + "Configure '%s' in application properties."
+                            .formatted(JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(issuerName)));
         }
 
         // Configure URLs - let the builder handle mutual exclusivity validation
