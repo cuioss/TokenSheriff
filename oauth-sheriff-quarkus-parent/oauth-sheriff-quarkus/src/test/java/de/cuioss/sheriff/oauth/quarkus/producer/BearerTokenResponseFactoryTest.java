@@ -52,8 +52,10 @@ class BearerTokenResponseFactoryTest {
         @DisplayName("should return 200 OK with security headers")
         void shouldReturn200WithSecurityHeaders() {
             var tokenContent = createTestToken();
-            var result = BearerTokenResult.success(tokenContent,
-                    Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
+            var result = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.FULLY_VERIFIED)
+                    .accessTokenContent(tokenContent)
+                    .build();
 
             Response response = BearerTokenResponseFactory.createResponse(result);
 
@@ -294,7 +296,10 @@ class BearerTokenResponseFactoryTest {
         @DisplayName("should include security headers in all responses")
         void shouldIncludeSecurityHeadersInAllResponses() {
             var testCases = Map.of(
-                    "success", BearerTokenResult.success(createTestToken(), Set.of(), Set.of(), Set.of()),
+                    "success", BearerTokenResult.builder()
+                            .status(BearerTokenStatus.FULLY_VERIFIED)
+                            .accessTokenContent(createTestToken())
+                            .build(),
                     "couldNotAccess", BearerTokenResult.couldNotAccessRequest(Set.of(), Set.of(), Set.of()),
                     "noToken", BearerTokenResult.noTokenGiven(Set.of(), Set.of(), Set.of()),
                     "parsingError", BearerTokenResult.parsingError(new TokenValidationException(SecurityEventCounter.EventType.INVALID_JWT_FORMAT, "test"), Set.of(), Set.of(), Set.of()),

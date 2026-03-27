@@ -78,7 +78,7 @@ class DSLJsonSecurityTest {
         WellKnownResult result = assertDoesNotThrow(() ->
                 dslJson.deserialize(WellKnownResult.class, validConfig.getBytes(), validConfig.getBytes().length)
         );
-        assertFalse(result.isEmpty());
+        assertNotNull(result.issuer());
         assertEquals("https://example.com", result.issuer());
         assertEquals("https://example.com/.well-known/jwks.json", result.jwksUri());
     }

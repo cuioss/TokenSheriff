@@ -21,7 +21,6 @@ import lombok.Getter;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Utility class for managing algorithm preferences for JWT signature validation.
@@ -100,20 +99,4 @@ public class SignatureAlgorithmPreferences {
         return preferredAlgorithms.contains(algorithm);
     }
 
-    /**
-     * Gets the most preferred algorithm from a list of available algorithms.
-     *
-     * @param availableAlgorithms the list of available algorithms
-     * @return an Optional containing the most preferred algorithm if available, empty otherwise
-     */
-    public Optional<String> getMostPreferredAlgorithm(List<String> availableAlgorithms) {
-        if (availableAlgorithms == null || availableAlgorithms.isEmpty()) {
-            return Optional.empty();
-        }
-
-        // Find the first algorithm in the preferred list that is also in the available list
-        return preferredAlgorithms.stream()
-                .filter(availableAlgorithms::contains)
-                .findFirst();
-    }
 }
