@@ -40,7 +40,7 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.ERR
  * <p><strong>CDI Usage:</strong></p>
  * <pre>{@code
  * @Inject
- * @ServletObjectsResolver(ServletObjectsResolver.Variant.VERTX)
+ * @ServletObjectsResolver
  * HttpServletRequestResolver resolver;
  * }</pre>
  *
@@ -51,7 +51,7 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.ERR
  * @author Oliver Wolff
  */
 @ApplicationScoped
-@ServletObjectsResolver(ServletObjectsResolver.Variant.VERTX)
+@ServletObjectsResolver
 public class VertxServletObjectsResolver implements HttpServletRequestResolver {
 
     private static final CuiLogger LOGGER = new CuiLogger(VertxServletObjectsResolver.class);

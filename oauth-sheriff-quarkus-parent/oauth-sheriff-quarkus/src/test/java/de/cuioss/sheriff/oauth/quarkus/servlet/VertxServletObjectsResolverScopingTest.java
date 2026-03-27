@@ -55,7 +55,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class VertxServletObjectsResolverScopingTest {
 
     @Inject
-    @ServletObjectsResolver(ServletObjectsResolver.Variant.VERTX)
+    @ServletObjectsResolver
     HttpServletRequestResolver resolver;
 
     @Test
@@ -215,7 +215,7 @@ class VertxServletObjectsResolverScopingTest {
     public static class ScopingTestEndpoint {
 
         @Inject
-        @ServletObjectsResolver(ServletObjectsResolver.Variant.VERTX)
+        @ServletObjectsResolver
         HttpServletRequestResolver resolver;
 
         @GET

@@ -77,17 +77,6 @@ class SecurityEventCounterTest {
     }
 
     @Test
-    @DisplayName("Should reset specific counter")
-    void shouldResetSpecificCounter() {
-        var counter = new SecurityEventCounter();
-        counter.increment(SecurityEventCounter.EventType.TOKEN_EMPTY);
-        counter.increment(SecurityEventCounter.EventType.MISSING_CLAIM);
-        counter.reset(SecurityEventCounter.EventType.TOKEN_EMPTY);
-        assertEquals(0, counter.getCount(SecurityEventCounter.EventType.TOKEN_EMPTY), "TOKEN_EMPTY counter should be reset to 0");
-        assertEquals(1, counter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM), "MISSING_CLAIM counter should remain 1");
-    }
-
-    @Test
     @DisplayName("Should get all counters")
     void shouldGetAllCounters() {
         var counter = new SecurityEventCounter();

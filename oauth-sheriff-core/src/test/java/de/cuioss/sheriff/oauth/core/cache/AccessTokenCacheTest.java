@@ -17,7 +17,6 @@ package de.cuioss.sheriff.oauth.core.cache;
 
 import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.oauth.core.ParserConfig;
-import de.cuioss.sheriff.oauth.core.TokenType;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
@@ -410,7 +409,7 @@ class AccessTokenCacheTest {
         AccessTokenContent generated = tokenHolder.asAccessTokenContent();
 
         // Create a new instance with our specified raw token
-        return new AccessTokenContent(generated.getClaims(), rawToken, TokenType.ACCESS_TOKEN.getTypeClaimName(), createEmptyMapRepresentation());
+        return new AccessTokenContent(generated.getClaims(), rawToken, createEmptyMapRepresentation());
     }
 
     @Test

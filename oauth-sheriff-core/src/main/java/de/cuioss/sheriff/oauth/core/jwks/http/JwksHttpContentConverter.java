@@ -49,13 +49,6 @@ public class JwksHttpContentConverter extends StringContentConverter<Jwks> {
     private final DslJson<Object> dslJson;
 
     /**
-     * Creates a new JWKS content converter with default parser configuration.
-     */
-    public JwksHttpContentConverter() {
-        this(ParserConfig.builder().build());
-    }
-
-    /**
      * Creates a new JWKS content converter with specified parser configuration.
      *
      * @param parserConfig the parser configuration to use for DSL-JSON

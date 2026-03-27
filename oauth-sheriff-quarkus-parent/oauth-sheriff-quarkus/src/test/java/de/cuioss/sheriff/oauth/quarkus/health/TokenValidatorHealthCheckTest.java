@@ -26,6 +26,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -135,17 +136,16 @@ class TokenValidatorHealthCheckTest {
     class ErrorScenarios {
 
         @Test
-        @DisplayName("should handle null issuer configurations in constructor")
-        void shouldHandleNullTokenValidatorInConstructor() {
-            TokenValidatorHealthCheck healthCheckWithNull = new TokenValidatorHealthCheck(null);
+        @DisplayName("should handle empty issuer configurations")
+        void shouldHandleEmptyIssuerConfigurations() {
+            // CDI constructor injection guarantees non-null; test empty list instead
+            TokenValidatorHealthCheck healthCheckEmpty = new TokenValidatorHealthCheck(List.of());
 
-            assertNotNull(healthCheckWithNull, "Health check should be created even with null issuer configurations");
-
-            HealthCheckResponse response = healthCheckWithNull.call();
+            HealthCheckResponse response = healthCheckEmpty.call();
 
             assertNotNull(response, "Response should not be null");
             assertEquals(HealthCheckResponse.Status.DOWN, response.getStatus(),
-                    "Status should be DOWN for null issuer configurations");
+                    "Status should be DOWN for empty issuer configurations");
             assertEquals("jwt-validator", response.getName(),
                     "Health check should have correct name");
 

@@ -73,7 +73,7 @@ Cross-cutting concerns:
 SecurityEventCounter counter = tokenValidator.getSecurityEventCounter();
 long invalidTokens = counter.getCount(EventType.INVALID_JWT_FORMAT);
 Map<EventType, Long> allCounts = counter.getCounters();
-counter.reset(EventType.INVALID_JWT_FORMAT);
+counter.reset();
 ----
 
 Event categories: `INVALID_STRUCTURE` (malformed tokens, size violations), `INVALID_SIGNATURE` (verification failures), `SEMANTIC_ISSUES` (expired tokens, audience mismatches).
