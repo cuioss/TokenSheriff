@@ -33,6 +33,7 @@ import org.jspecify.annotations.Nullable;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Objects;
 
 /**
  * This class provides a unified way to parse JWT tokens and extract common information
@@ -148,7 +149,7 @@ public class NonValidatingJwtParser {
 
     private NonValidatingJwtParser(ParserConfig config, SecurityEventCounter securityEventCounter,
             @Nullable JweDecryptionConfig jweDecryptionConfig) {
-        this.config = config != null ? config : ParserConfig.builder().build();
+        this.config = Objects.requireNonNull(config, "ParserConfig must not be null");
         this.securityEventCounter = securityEventCounter;
         this.jweDecryptionConfig = jweDecryptionConfig;
         this.jweDecryptor = jweDecryptionConfig != null ? new JweDecryptor() : null;
@@ -244,7 +245,7 @@ public class NonValidatingJwtParser {
      * @return the DecodedJwt if parsing is successful
      * @throws TokenValidationException if the token is invalid or cannot be parsed
      */
-    public DecodedJwt decode(String token, boolean logWarnings) {
+    DecodedJwt decode(String token, boolean logWarnings) {
         return decodeInternal(token, logWarnings, true);
     }
 

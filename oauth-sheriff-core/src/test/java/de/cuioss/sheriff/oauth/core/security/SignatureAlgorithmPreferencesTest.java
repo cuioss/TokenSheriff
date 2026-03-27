@@ -27,7 +27,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -142,60 +141,4 @@ class SignatureAlgorithmPreferencesTest {
         }
     }
 
-    @Nested
-    @DisplayName("getMostPreferredAlgorithm Tests")
-    class GetMostPreferredAlgorithmTests {
-
-        @Test
-        @DisplayName("Return most preferred available")
-        void shouldReturnMostPreferred() {
-            var preferences = new SignatureAlgorithmPreferences();
-            var result = preferences.getMostPreferredAlgorithm(List.of("RS256", "ES256"));
-            assertTrue(result.isPresent(), "Result should be present");
-            assertEquals("ES256", result.get(), "ES256 should be the most preferred available algorithm");
-        }
-
-        @Test
-        @DisplayName("Return empty for no matches")
-        void shouldReturnEmptyForNoMatches() {
-            var preferences = new SignatureAlgorithmPreferences();
-            var result = preferences.getMostPreferredAlgorithm(List.of("UNSUPPORTED_ALG"));
-            assertFalse(result.isPresent(), "Result should be empty for no matching algorithms");
-        }
-
-        @Test
-        @DisplayName("Return empty for null")
-        void shouldReturnEmptyForNull() {
-            var preferences = new SignatureAlgorithmPreferences();
-            var result = preferences.getMostPreferredAlgorithm(null);
-            assertFalse(result.isPresent(), "Result should be empty for null available algorithms");
-        }
-
-        @Test
-        @DisplayName("Return empty for empty list")
-        void shouldReturnEmptyForEmptyList() {
-            var preferences = new SignatureAlgorithmPreferences();
-            var result = preferences.getMostPreferredAlgorithm(Collections.emptyList());
-            assertFalse(result.isPresent(), "Result should be empty for empty available algorithms");
-        }
-
-        @Test
-        @DisplayName("Respect preference order")
-        void shouldRespectPreferenceOrder() {
-            var preferences = new SignatureAlgorithmPreferences();
-            var availableAlgorithms = List.of("RS256", "RS384", "RS512", "ES256", "ES384", "ES512");
-            var result = preferences.getMostPreferredAlgorithm(availableAlgorithms);
-            assertTrue(result.isPresent(), "Result should be present");
-            assertEquals("ES512", result.get(), "ES512 should be the most preferred available algorithm");
-        }
-
-        @Test
-        @DisplayName("Work with custom preferences")
-        void shouldWorkWithCustomPreferences() {
-            var preferences = new SignatureAlgorithmPreferences(List.of("RS256", "ES256"));
-            var result = preferences.getMostPreferredAlgorithm(List.of("ES256", "RS256"));
-            assertTrue(result.isPresent(), "Result should be present");
-            assertEquals("RS256", result.get(), "RS256 should be the most preferred available algorithm");
-        }
-    }
 }

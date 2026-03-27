@@ -206,6 +206,15 @@ public final class ParserConfig {
         }
 
         public ParserConfig build() {
+            if (maxTokenSize <= 0) {
+                throw new IllegalArgumentException("maxTokenSize must be positive, but was: " + maxTokenSize);
+            }
+            if (maxPayloadSize <= 0) {
+                throw new IllegalArgumentException("maxPayloadSize must be positive, but was: " + maxPayloadSize);
+            }
+            if (maxStringLength <= 0) {
+                throw new IllegalArgumentException("maxStringLength must be positive, but was: " + maxStringLength);
+            }
             return new ParserConfig(maxTokenSize, maxPayloadSize, maxStringLength);
         }
     }

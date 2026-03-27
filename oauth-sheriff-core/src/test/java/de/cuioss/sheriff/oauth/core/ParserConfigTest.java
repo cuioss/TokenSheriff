@@ -98,17 +98,51 @@ class ParserConfigTest implements ShouldImplementEqualsAndHashCode<ParserConfig>
     }
 
     @Test
-    @DisplayName("Should handle zero values")
-    void shouldHandleZeroValues() {
-        var config = ParserConfig.builder()
-                .maxTokenSize(0)
-                .maxPayloadSize(0)
-                .maxStringLength(0)
-                .build();
+    @DisplayName("Should reject zero maxTokenSize")
+    void shouldRejectZeroMaxTokenSize() {
+        var builder = ParserConfig.builder().maxTokenSize(0);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxTokenSize"));
+    }
 
-        assertEquals(0, config.getMaxTokenSize());
-        assertEquals(0, config.getMaxPayloadSize());
-        assertEquals(0, config.getMaxStringLength());
+    @Test
+    @DisplayName("Should reject zero maxPayloadSize")
+    void shouldRejectZeroMaxPayloadSize() {
+        var builder = ParserConfig.builder().maxPayloadSize(0);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxPayloadSize"));
+    }
+
+    @Test
+    @DisplayName("Should reject zero maxStringLength")
+    void shouldRejectZeroMaxStringLength() {
+        var builder = ParserConfig.builder().maxStringLength(0);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxStringLength"));
+    }
+
+    @Test
+    @DisplayName("Should reject negative maxTokenSize")
+    void shouldRejectNegativeMaxTokenSize() {
+        var builder = ParserConfig.builder().maxTokenSize(-1);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxTokenSize"));
+    }
+
+    @Test
+    @DisplayName("Should reject negative maxPayloadSize")
+    void shouldRejectNegativeMaxPayloadSize() {
+        var builder = ParserConfig.builder().maxPayloadSize(-100);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxPayloadSize"));
+    }
+
+    @Test
+    @DisplayName("Should reject negative maxStringLength")
+    void shouldRejectNegativeMaxStringLength() {
+        var builder = ParserConfig.builder().maxStringLength(-42);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxStringLength"));
     }
 
     @Test
