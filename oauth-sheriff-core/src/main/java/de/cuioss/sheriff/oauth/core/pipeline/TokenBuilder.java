@@ -83,6 +83,8 @@ public class TokenBuilder {
      */
     public Optional<AccessTokenContent> createAccessToken(DecodedJwt decodedJwt) {
         MapRepresentation body = decodedJwt.getBody();
+        // Design Decision: Optional.empty() is the correct return for empty body.
+        // Caller (AccessTokenValidationPipeline) handles this case explicitly.
         if (body.isEmpty()) {
             return Optional.empty();
         }

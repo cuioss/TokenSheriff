@@ -54,6 +54,8 @@ import java.util.*;
  * @since 1.0
  * @author Oliver Wolff
  */
+// Design Decision: MP-JWT coupling (extends JsonWebToken) is intentional. Provides
+// java.security.Principal integration and MicroProfile JWT Auth injection compatibility.
 public interface TokenContent extends MinimalTokenContent, JsonWebToken {
 
     /**

@@ -109,7 +109,9 @@ public class MandatoryClaimsValidator {
      * @return {@code true} if validation should be skipped, {@code false} otherwise
      */
     private boolean shouldSkipClaimValidation(String claimName) {
-        // Skip validation for "sub" claim if issuer configuration allows it
+        // Design Decision: sub-only skip is intentional, tied to IssuerConfig.claimSubOptional
+        // (see H-4). A generic Set<ClaimName> optionalClaims would be premature until additional
+        // IdP-specific claim exemptions are needed.
         return ClaimName.SUBJECT.getName().equals(claimName) && issuerConfig.isClaimSubOptional();
     }
 

@@ -164,8 +164,14 @@ public enum ClaimName {
 
     /**
      * The "upn" (user principal name) claim is a MicroProfile JWT specific claim that uniquely
-     * identifies the subject or user principal of the token. It serves as the primary source
-     * for {@code java.security.Principal.getName()} with a defined fallback chain:
+     * identifies the subject or user principal of the token.
+     * <p>
+     * Design Decision: UPN lives in core (not Quarkus layer) because core's
+     * {@code TokenContent.getName()} depends on the MP-JWT fallback chain. Moving it would
+     * require decoupling TokenContent from JsonWebToken first (see H-5).
+     * <p>
+     * It serves as the primary source for {@code java.security.Principal.getName()} with a
+     * defined fallback chain:
      * {@code upn} -> {@code preferred_username} -> {@code sub}.
      * Optional for all token types.
      *
