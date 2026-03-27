@@ -75,17 +75,6 @@ ParserConfig standard = ParserConfig.builder()
         .build();
 ----
 
-=== Legacy System Support
-
-[source,java]
-----
-ParserConfig legacy = ParserConfig.builder()
-        .maxTokenSize(16 * 1024)     // 16KB tokens
-        .maxPayloadSize(16 * 1024)   // 16KB payloads
-        .maxStringLength(8 * 1024)   // 8KB strings
-        .build();
-----
-
 == Monitoring and Tuning
 
 When tokens are rejected due to size limits, the library logs detailed error messages indicating which limit was exceeded. Start with defaults, monitor for size-related validation errors, then adjust based on actual token characteristics.

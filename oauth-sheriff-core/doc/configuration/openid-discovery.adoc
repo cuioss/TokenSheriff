@@ -137,8 +137,6 @@ public class MultiProviderDiscovery {
 === Initial Latency
 
 * Discovery adds startup latency (network request)
-* Consider async initialization for non-critical paths
-* Cache discovery results when possible
 
 === Security Best Practices
 

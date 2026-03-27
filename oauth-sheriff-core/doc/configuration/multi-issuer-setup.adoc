@@ -123,7 +123,7 @@ public class DynamicTokenValidator {
 
 == Best Practices
 
-* Use full URLs with protocol as issuer identifiers (`https://issuer.example.com`)
+* Use full URLs with protocol as issuer identifiers (`https://issuer.example.com`) -> IDP-Config
 * Include realm/tenant for multi-tenant providers (`/auth/realms/main`)
 * Never use wildcard or fallback issuers in production
 * Validate audience claims for each issuer

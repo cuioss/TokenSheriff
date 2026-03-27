@@ -151,7 +151,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * When configured, the {@link de.cuioss.sheriff.oauth.core.pipeline.validator.TokenHeaderValidator}
      * will validate that the token's "typ" header matches this value
      * (e.g., "at+jwt" per RFC 9068).
-     * When {@code null}, no token type validation is performed (default, backward compatible).
+     * When {@code null}, no token type validation is performed (default).
      *
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068">RFC 9068</a>
      */
@@ -534,7 +534,7 @@ public class IssuerConfig implements LoadingStatusProvider {
          * The comparison is case-insensitive per RFC convention.
          * </p>
          * <p>
-         * When not set (default), no token type validation is performed for backward compatibility.
+         * When not set (default), no token type validation is performed.
          * </p>
          *
          * @param expectedTokenType the expected token type value (e.g., "at+jwt")

@@ -28,7 +28,7 @@ import java.util.Optional;
  * <p>
  * This class provides methods to get preferred algorithms and check if an algorithm is supported
  * during JWT signature verification at runtime. It implements cryptographic agility by allowing 
- * configuration of preferred algorithms and supporting algorithm migration.
+ * configuration of preferred algorithms and supporting algorithm rotation.
  * <p>
  * For more details on the security aspects, see the
  * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
