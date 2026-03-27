@@ -1,0 +1,280 @@
+= Pre-1.0 Code Findings: Compatibility vs. Correct Design
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+Semantic analysis of all production code (not keyword search) asking one question per artifact: _"Does this exist because it is the right design, or because we are afraid to break something?"_
+
+Pre-1.0 means: no deprecation, no legacy support, no transitional code, no backward compatibility shims. Breaking changes are free.
+
+Date: 2026-03-27
+
+== Critical (Security Impact)
+
+These findings represent cases where leniency, silent fallbacks, or fail-open behavior in a security library could lead to vulnerabilities.
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|C-1
+|`JwkKeyHandler:241-248`
+|Unknown EC curve silently defaults to `ES256` instead of throwing. Inconsistent with `getEcParameterSpec` (line 194) which correctly throws for unsupported curves.
+|Throw `IllegalArgumentException` for unknown curves.
+
+|C-2
+|`JweDecryptor:315-362`
+|DEFLATE decompression falls back from raw DEFLATE to zlib-wrapped. Comment says _"for compatibility (some implementations use zlib wrapper)"_. RFC 7516 specifies raw DEFLATE only.
+|Remove the fallback. Reject non-compliant zlib-wrapped input.
+
+|C-3
+|`JweDecryptionConfig:122`
+|JWE compression enabled by default (`compressionEnabled = true`). Compression oracles (BREACH-style attacks) are a known risk. The infrastructure to reject compressed tokens already exists.
+|Change default to `false`. Require explicit opt-in.
+
+|C-4
+|`AudienceValidator:84-98`
+|When audience is configured but missing from an access token, validation silently passes (debug log only). Also uses `azp` as fallback for `aud` — semantically different claims. If a deployer configures `expectedAudience`, they expect it to be enforced.
+|Reject access tokens with missing `aud` when `expectedAudience` is configured. Remove `azp`-as-`aud` fallback.
+
+|C-5
+|`TokenType:88-96`
+|`fromTypeClaim()` returns `UNKNOWN` (with empty mandatory claims set) for unrecognized type strings. A token with a garbage `typ` claim bypasses all mandatory claim checks.
+|Throw `TokenValidationException` for unrecognized types.
+
+|C-6
+|`BearerTokenInterceptor:117-119`
+|Security interceptor fails open: when `@BearerAuth` annotation is not found (CDI proxy edge case), it warns and calls `ctx.proceed()` — executing without authentication.
+|Fail closed: throw `IllegalStateException`.
+
+|C-7
+|`IssuerConfigResolver:494-498`
+|Config key name (e.g., `"keycloak"`) used as fallback `issuerIdentifier` when not explicitly configured. The config property key silently becomes the `iss` value to match against tokens.
+|Require explicit `issuer-identifier` when using direct JWKS URL. Fail at startup with a clear error.
+
+|C-8
+|`IssuerConfigResolver:209`
+|Issuer defaults to enabled (`.orElse(true)`) when `enabled` property is not set. A typo in the property name silently activates an issuer with partial config.
+|Default to `false`. Require explicit `enabled=true`.
+
+|C-9
+|`JwksParser:84-109`
+|When JWKS parsing fails, silently falls back to parsing as a bare single JWK. A JWKS endpoint returning a bare JWK is non-compliant per RFC 7517 Section 5.
+|Remove the bare JWK fallback, or make it opt-in via config.
+|===
+
+== High (API / Design)
+
+Design issues that affect the 1.0 API contract, create false security assumptions, or embed compatibility workarounds.
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|H-1
+|`ParserConfig:95-142`
+|`maxBufferSize` field is configured, stored, documented, included in `equals`/`hashCode` — but never enforced. DSL-JSON `Settings` has no buffer-size API. Creates a false sense of security.
+|Remove the field entirely, or wire it into actual enforcement.
+
+|H-2
+|`IssuerConfig:116-119`
+|`expectedAudience` defaults to `Set.of()`. `AudienceValidator` (line 69) skips validation entirely when empty. Combined with H-3, this means audience validation is silently disabled by default.
+|Require `expectedAudience` at build time, or provide an explicit `audienceValidationDisabled` flag.
+
+|H-3
+|`TokenClaimValidator:95-103`
+|Constructor warns when `expectedAudience` / `expectedClientId` are empty but proceeds. Validation is silently skipped at runtime with only a startup log warning.
+|Require these at construction or force explicit opt-out.
+
+|H-4
+|`IssuerConfig:128-147`
+|`claimSubOptional` is an ad-hoc escape hatch. Javadoc says _"a workaround for identity providers that don't include the subject claim."_ Will accumulate siblings (`claimIatOptional`, etc.) over time.
+|Replace with a configurable `Set<ClaimName> optionalClaims` per issuer.
+
+|H-5
+|`TokenContent:57`
+|Core interface extends `org.eclipse.microprofile.jwt.JsonWebToken`. Drags MP-JWT coupling into core: `upn` claim, `Principal`, epoch-second APIs. The `getName()` fallback chain (lines 96-104) is MP-JWT spec, not the library's concern.
+|Move `JsonWebToken` to a Quarkus-layer adapter. Keep core free of MP-JWT dependency.
+
+|H-6
+|`IssuerConfig:249-258` + `IssuerConfigCache:102-107`
+|Double JWKS initialization. `initSecurityEventCounter` calls `initJWKSLoader().join()` (blocking). Then `IssuerConfigCache` calls `initJWKSLoader()` again (async). Comment says _"For now, we block on completion — proper async handling will be in C6"_.
+|Remove the blocking init. Use a single async init path.
+
+|H-7
+|`VertxHttpServletRequestAdapter`
+|826-line adapter implementing full `HttpServletRequest`. 27 methods throw `UnsupportedOperationException`. Production usage is headers only (`getHeaderNames()`, `getHeaders()`).
+|Change core API to accept a header map or minimal interface instead of `HttpServletRequest`.
+|===
+
+== Medium (Dead Code / Unnecessary API Surface)
+
+Code that is unused in production, structurally questionable, or adds API surface without justification.
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|M-1
+|`ParserConfig:210-238`
+|Builder accepts zero and negative size limits. No validation. Other builders in the codebase (e.g., `IssuerConfig`) validate inputs.
+|Add `Preconditions.checkArgument(value > 0)` to each setter.
+
+|M-2
+|`DecodedJwt:73-84`
+|Null-tolerant getters return synthetic fallback objects (blank `JwtHeader`, empty `MapRepresentation`) instead of failing. Record fields are always set by `NonValidatingJwtParser`, so null is a bug.
+|Validate non-null in constructor. Remove null-coalescing getters.
+
+|M-3
+|`NonValidatingJwtParser:203-249`
+|Three public `decode` methods including `decode(String, boolean)` — opaque boolean parameter. Only caller passes `false`.
+|Keep `decode(String)` and `decodeOpaqueToken(String)`. Remove the boolean overload.
+
+|M-4
+|`SecurityEventCounter:114-117`
+|Success event types (`ACCESS_TOKEN_CREATED`, etc.) have `null` LogRecord and `null` Category. Calling `getId()` or `getDescription()` on these throws NPE.
+|Either give success types proper metadata or separate them into a different type.
+
+|M-5
+|`SignatureAlgorithmPreferences:109-118`
+|`getMostPreferredAlgorithm()` has zero production callers. Only called in tests.
+|Remove it.
+
+|M-6
+|`WellKnownResult:77-93`
+|`EMPTY` sentinel using `"about:empty"` magic strings with a three-way `isEmpty()` check (identity, magic string, null fields). Never referenced from production code outside the class.
+|Use `Optional.empty()` instead.
+
+|M-7
+|`WellKnownResult:179-193`
+|`supportsFullOAuthFlows()` and `isMinimal()` — zero production callers. Only called in tests.
+|Remove them. The library validates JWTs; it does not initiate OAuth flows.
+
+|M-8
+|`HttpWellKnownResolver:122-155`
+|Exposes `getAuthorizationEndpoint()`, `getTokenEndpoint()`, `getUserinfoEndpoint()`. Never called in production. Only called in tests.
+|Remove them. `getWellKnownResult()` provides access to the full document if needed.
+
+|M-9
+|`BearerTokenStatus:56`
+|`COULD_NOT_ACCESS_REQUEST` status value and its factory method `BearerTokenResult.couldNotAccessRequest()` are dead code — never produced in any production path.
+|Remove the status, factory method, and response handler.
+
+|M-10
+|`BearerTokenResult:116-130`
+|`success()` static factory method is unused in production. `BearerTokenProducer` builds success results directly via the builder.
+|Remove or make it the canonical success path.
+
+|M-11
+|`IssuerConfigResolver:75-125`
+|Four telescoping constructors. Only the 4-arg constructor is used in production (`TokenValidatorProducer:119`). The 1-, 2-, and 3-arg constructors are test-only.
+|Keep only the 4-arg constructor. Tests can use it directly.
+
+|M-12
+|`NonValidatingJwtParser:151`
+|Constructor silently replaces null `ParserConfig` with default. The builder already initializes the field. Belt-and-suspenders pattern hides programming errors.
+|Require non-null in constructor.
+
+|M-13
+|`TokenBuilder:84-93`
+|`createAccessToken()` returns `Optional.empty()` when body is empty. At this pipeline stage (after parsing, issuer extraction, signature verification), an empty body is an impossible state. Same for `createIdToken` (line 101).
+|Throw `TokenValidationException` instead of returning `Optional.empty()`.
+|===
+
+== Low (Cleanup)
+
+Minor issues worth addressing before 1.0 to avoid permanent API commitments.
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|L-1
+|`IdentityMapper:43-48`
+|Silently `toString()`s non-String claim values (numbers, booleans, nested objects). A malformed token with a JSON object as `iss` becomes `{foo=bar}`.
+|Reject unexpected types or log a warning.
+
+|L-2
+|`CollectionClaimHandler:84-88`
+|`providesValues(null/empty)` returns `true` (vacuous truth). Calling code with a misconfigured empty required-scopes list silently passes.
+|Throw `IllegalArgumentException` on null. Document empty-set behavior.
+
+|L-3
+|`KeycloakDefaultGroupsMapper:64-78`
+|Ignores `claimName` parameter; always reads hardcoded `"groups"` claim. Same for `KeycloakDefaultRolesMapper` (hardcodes `"realm_access"`).
+|Either make the interface contract explicit about fixed-source mappers or remove the unused parameter.
+
+|L-4
+|`AccessTokenContent:157-162`
+|Dual-source `getEmail()`: constructor field takes precedence, then falls back to claims map. Two sources of truth for the same field.
+|Use claims map as the single source.
+
+|L-5
+|`ServletObjectsResolver:41-63`
+|CDI qualifier with a `Variant` enum containing exactly one value: `VERTX`. Every injection site must specify `@ServletObjectsResolver(Variant.VERTX)` for zero benefit.
+|Remove the enum. Use a simple qualifier or inject directly.
+
+|L-6
+|`JwksHttpContentConverter:54-56`
+|No-arg constructor creates a default `ParserConfig`. Only used in one test. Production always passes explicit config.
+|Remove the no-arg constructor.
+
+|L-7
+|`TokenValidatorHealthCheck:54`
+|Null-checks CDI-injected `issuerConfigs` field. CDI constructor injection guarantees non-null or fails at startup.
+|Remove the null check. Keep only `isEmpty()`.
+
+|L-8
+|`BearerTokenProducer:137-139`
+|Public `getAccessTokenContent()` discards all error information from `BearerTokenResult`. Callers cannot distinguish "no token" from "expired" from "invalid signature".
+|Make it private or change return type to `BearerTokenResult`.
+
+|L-9
+|`ClaimName:166-174`
+|`UPN` claim is a MicroProfile JWT Auth invention, not an RFC or OIDC claim. Only consumer is `TokenContent.getName()` (MP-JWT principal fallback chain).
+|Move to Quarkus layer together with H-5.
+
+|L-10
+|`MandatoryClaimsValidator:100-113`
+|`shouldSkipClaimValidation` is a point-fix for `sub` only. Related to H-4 (`claimSubOptional`).
+|Will be resolved by implementing H-4's configurable optional claims set.
+
+|L-11
+|`AccessTokenValidationPipeline:204-249`
+|Inconsistent null guards on map lookups. `signatureValidators.get()` has a null check (line 214); `headerValidators.get()` and `claimValidators.get()` do not — would NPE.
+|Either validate all map lookups consistently or guarantee non-null at construction time.
+
+|L-12
+|`SecurityEventCounter:211-213`
+|`reset(EventType)` overload is only called in tests. The no-arg `reset()` is used in production (`JwtMetricsCollector`).
+|Remove the `reset(EventType)` overload.
+|===
+
+== Summary
+
+[cols="1,1,1"]
+|===
+|Severity |Count |Key Theme
+
+|Critical
+|9
+|Lenient defaults, fail-open behavior, silent fallbacks in security paths
+
+|High
+|7
+|Dead config fields, MP-JWT coupling in core, compatibility workarounds baked into API
+
+|Medium
+|13
+|Dead code, unused API surface, missing input validation
+
+|Low
+|12
+|Minor cleanup, design inconsistencies, single-use abstractions
+|===
+
+Total: 41 findings across all production Java code.
