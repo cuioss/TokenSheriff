@@ -70,20 +70,16 @@ public final class AccessTokenContent extends BaseTokenContent {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private final String email;
-
     /**
-     * Constructs a new AccessTokenContent with the given claims, raw token, and email.
+     * Constructs a new AccessTokenContent with the given claims, raw token, and raw payload.
      *
      * @param claims     the token claims
      * @param rawToken   the raw token string
-     * @param email      the user's email address
      * @param rawPayload the raw JSON payload for ClaimMapper processing
      */
-    public AccessTokenContent(Map<String, ClaimValue> claims, String rawToken, String email,
+    public AccessTokenContent(Map<String, ClaimValue> claims, String rawToken,
             MapRepresentation rawPayload) {
         super(claims, rawToken, TokenType.ACCESS_TOKEN, rawPayload);
-        this.email = email;
     }
 
     /**
@@ -149,15 +145,12 @@ public final class AccessTokenContent extends BaseTokenContent {
     }
 
     /**
-     * Gets the email address associated with this token.
-     * If not provided in the constructor, tries to extract from the claims.
+     * Gets the email address associated with this token, derived from the
+     * {@link ClaimName#EMAIL} claim in the claims map.
      *
      * @return an Optional containing the email if present, or empty otherwise
      */
     public Optional<String> getEmail() {
-        if (email != null) {
-            return Optional.of(email);
-        }
         return getClaimOption(ClaimName.EMAIL).map(ClaimValue::getOriginalString);
     }
 

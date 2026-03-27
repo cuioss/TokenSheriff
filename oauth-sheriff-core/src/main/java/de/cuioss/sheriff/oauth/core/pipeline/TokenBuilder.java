@@ -91,7 +91,7 @@ public class TokenBuilder {
 
         Map<String, ClaimValue> claims = extractClaims(body);
 
-        return Optional.of(new AccessTokenContent(claims, decodedJwt.rawToken(), null, body));
+        return Optional.of(new AccessTokenContent(claims, decodedJwt.rawToken(), body));
     }
 
     /**

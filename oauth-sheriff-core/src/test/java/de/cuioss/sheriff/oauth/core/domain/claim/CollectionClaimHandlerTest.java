@@ -20,10 +20,7 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.tools.logging.CuiLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.NullAndEmptySource;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -74,15 +71,24 @@ class CollectionClaimHandlerTest {
                 "Should return false when claim does not provide all expected values");
     }
 
-    @ParameterizedTest
-    @NullAndEmptySource
-    @DisplayName("Handle null and empty expected values")
-    void shouldHandleNullAndEmptyExpectedValues(Collection<String> expectedValues) {
+    @Test
+    @DisplayName("Handle empty expected values")
+    void shouldHandleEmptyExpectedValues() {
         ClaimValue claimValue = ClaimValue.forList(TEST_STRING, TEST_VALUES);
         CollectionClaimHandler handler = new CollectionClaimHandler(claimValue);
 
-        assertTrue(handler.providesValues(expectedValues),
-                "Should return true when expected values is null or empty");
+        assertTrue(handler.providesValues(Collections.emptyList()),
+                "Should return true when expected values is empty");
+    }
+
+    @Test
+    @DisplayName("Reject null expected values")
+    void shouldRejectNullExpectedValues() {
+        ClaimValue claimValue = ClaimValue.forList(TEST_STRING, TEST_VALUES);
+        CollectionClaimHandler handler = new CollectionClaimHandler(claimValue);
+
+        assertThrows(NullPointerException.class, () -> handler.providesValues(null),
+                "Should throw NullPointerException when expected values is null");
     }
 
     @Test

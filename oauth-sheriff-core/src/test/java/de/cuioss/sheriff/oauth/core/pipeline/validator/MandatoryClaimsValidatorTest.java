@@ -86,7 +86,7 @@ class MandatoryClaimsValidatorTest {
     @DisplayName("Should pass validation for access token with all mandatory claims")
     void shouldPassValidationForAccessTokenWithAllMandatoryClaims() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         assertDoesNotThrow(() -> validator.validateMandatoryClaims(token));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
@@ -108,7 +108,7 @@ class MandatoryClaimsValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.SUBJECT.getName());
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateMandatoryClaims(token));
@@ -126,7 +126,7 @@ class MandatoryClaimsValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.EXPIRATION.getName());
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateMandatoryClaims(token));
@@ -142,7 +142,7 @@ class MandatoryClaimsValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.ISSUED_AT.getName());
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateMandatoryClaims(token));
@@ -158,7 +158,7 @@ class MandatoryClaimsValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.put(ClaimName.SUBJECT.getName(), ClaimValue.forPlainString(""));
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         assertDoesNotThrow(() -> validator.validateMandatoryClaims(token));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
@@ -172,7 +172,7 @@ class MandatoryClaimsValidatorTest {
         claims.remove(ClaimName.SUBJECT.getName());
         claims.remove(ClaimName.EXPIRATION.getName());
         claims.remove(ClaimName.ISSUED_AT.getName());
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateMandatoryClaims(token));
@@ -190,7 +190,7 @@ class MandatoryClaimsValidatorTest {
         TestTokenHolder accessTokenHolder = TestTokenGenerators.accessTokens().next();
         TestTokenHolder idTokenHolder = TestTokenGenerators.idTokens().next();
 
-        AccessTokenContent accessToken = new AccessTokenContent(accessTokenHolder.getClaims(), accessTokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent accessToken = new AccessTokenContent(accessTokenHolder.getClaims(), accessTokenHolder.getRawToken(), createEmptyMapRepresentation());
         IdTokenContent idToken = new IdTokenContent(idTokenHolder.getClaims(), idTokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         assertNotEquals(TokenType.ACCESS_TOKEN.getMandatoryClaims(), TokenType.ID_TOKEN.getMandatoryClaims());
@@ -205,7 +205,7 @@ class MandatoryClaimsValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.SUBJECT.getName());
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateMandatoryClaims(token));
@@ -230,7 +230,7 @@ class MandatoryClaimsValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.SUBJECT.getName());
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         // Should pass validation even without subject claim
         assertDoesNotThrow(() -> validatorWithOptionalSub.validateMandatoryClaims(token));
@@ -255,7 +255,7 @@ class MandatoryClaimsValidatorTest {
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.SUBJECT.getName());
         claims.remove(ClaimName.EXPIRATION.getName()); // Remove non-optional claim
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         // Should fail validation due to missing expiration claim (even though subject is optional)
         TokenValidationException exception = assertThrows(TokenValidationException.class,
@@ -274,7 +274,7 @@ class MandatoryClaimsValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.SUBJECT.getName());
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         // Test with claimSubOptional=false (default): should fail
         IssuerConfig issuerConfigWithMandatorySub = IssuerConfig.builder()

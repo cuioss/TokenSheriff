@@ -82,7 +82,7 @@ class AuthorizedPartyValidatorTest {
     void shouldSkipValidationWhenNoExpectedClientIdConfigured() {
         AuthorizedPartyValidator emptyValidator = new AuthorizedPartyValidator(Set.of(), securityEventCounter);
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         assertDoesNotThrow(() -> emptyValidator.validateAuthorizedParty(token));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
@@ -94,7 +94,7 @@ class AuthorizedPartyValidatorTest {
     void shouldValidateAuthorizedPartySuccessfullyWhenItMatchesExpectedClientId() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         tokenHolder.withClaim(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(EXPECTED_CLIENT_ID_1));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         assertDoesNotThrow(() -> validator.validateAuthorizedParty(token));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
@@ -106,7 +106,7 @@ class AuthorizedPartyValidatorTest {
     void shouldValidateAuthorizedPartySuccessfullyWhenItMatchesOneOfMultipleExpectedClientIds() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         tokenHolder.withClaim(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(EXPECTED_CLIENT_ID_2));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         assertDoesNotThrow(() -> validator.validateAuthorizedParty(token));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
@@ -119,7 +119,7 @@ class AuthorizedPartyValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.AUTHORIZED_PARTY.getName());
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAuthorizedParty(token));
@@ -134,7 +134,7 @@ class AuthorizedPartyValidatorTest {
     void shouldFailValidationWhenAuthorizedPartyClaimIsEmpty() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         tokenHolder.withClaim(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(""));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAuthorizedParty(token));
@@ -151,7 +151,7 @@ class AuthorizedPartyValidatorTest {
     void shouldFailValidationWhenAuthorizedPartyDoesNotMatchExpectedClientId() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         tokenHolder.withClaim(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(UNEXPECTED_CLIENT_ID));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAuthorizedParty(token));
@@ -170,7 +170,7 @@ class AuthorizedPartyValidatorTest {
     void shouldIncludeExpectedClientIdsInErrorMessageForMismatch() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         tokenHolder.withClaim(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(UNEXPECTED_CLIENT_ID));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAuthorizedParty(token));
@@ -187,7 +187,7 @@ class AuthorizedPartyValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.put(ClaimName.AUTHORIZED_PARTY.getName(), null);
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), "test@example.com", createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAuthorizedParty(token));

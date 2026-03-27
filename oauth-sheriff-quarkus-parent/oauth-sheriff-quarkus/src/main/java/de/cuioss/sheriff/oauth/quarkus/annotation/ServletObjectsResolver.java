@@ -23,18 +23,18 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * CDI qualifier for identifying different implementations of servlet objects resolvers.
- * 
- * <p>This qualifier allows for different implementations of servlet object resolution
- * to be injected based on the variant specified.</p>
- * 
+ * CDI qualifier for the Vertx-based servlet objects resolver.
+ *
+ * <p>This qualifier identifies the {@code HttpServletRequestResolver} implementation
+ * that uses Quarkus Vertx {@code HttpServerRequest} to access HTTP context.</p>
+ *
  * <p>Usage example:</p>
  * <pre>{@code
  * @Inject
- * @ServletObjectsResolver(ServletObjectsResolver.Variant.VERTX)
+ * @ServletObjectsResolver
  * HttpServletRequestResolver resolver;
  * }</pre>
- * 
+ *
  * @since 1.0
  * @author Oliver Wolff
  */
@@ -42,22 +42,4 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER, ElementType.TYPE})
 public @interface ServletObjectsResolver {
-
-    /**
-     * The variant of servlet objects resolver to use.
-     * 
-     * @return the resolver variant
-     */
-    Variant value() default Variant.VERTX;
-
-    /**
-     * Enum defining the different variants of servlet objects resolvers.
-     */
-    enum Variant {
-        /**
-         * Vertx-based resolver that uses Quarkus Vertx HttpServerRequest to access servlet objects.
-         * This is the only variant and works reliably in Quarkus environments.
-         */
-        VERTX
-    }
 }

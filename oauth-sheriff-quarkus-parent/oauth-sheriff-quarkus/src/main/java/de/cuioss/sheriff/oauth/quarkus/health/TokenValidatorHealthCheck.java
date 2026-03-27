@@ -51,7 +51,7 @@ public class TokenValidatorHealthCheck implements HealthCheck {
 
     @Override
     public HealthCheckResponse call() {
-        if (issuerConfigs == null || issuerConfigs.isEmpty()) {
+        if (issuerConfigs.isEmpty()) {
             return createErrorResponse(ERROR_NO_ISSUER_CONFIGS);
         }
 

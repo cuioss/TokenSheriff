@@ -159,7 +159,7 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
     @DisplayName("Return email from claims")
     void shouldReturnEmailFromClaims(TestTokenHolder tokenHolder) {
         tokenHolder.withClaim(ClaimName.EMAIL.getName(), ClaimValue.forPlainString(TEST_EMAIL));
-        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), null, createEmptyMapRepresentation());
+        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         Optional<String> email = accessTokenContent.getEmail();
 
@@ -173,7 +173,7 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
     void shouldReturnPreferredUsernameWhenPresent(TestTokenHolder tokenHolder) {
         String username = "testuser";
         tokenHolder.withClaim(ClaimName.PREFERRED_USERNAME.getName(), ClaimValue.forPlainString(username));
-        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), TEST_EMAIL, createEmptyMapRepresentation());
+        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         Optional<String> preferredUsername = accessTokenContent.getPreferredUsername();
 
@@ -198,7 +198,7 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
     @DisplayName("Provide scopes when all expected are present")
     void shouldProvideScopesWhenAllExpectedArePresent(TestTokenHolder tokenHolder) {
         List<String> allScopes = tokenHolder.getClaims().get(ClaimName.SCOPE.getName()).getAsList();
-        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), TEST_EMAIL, createEmptyMapRepresentation());
+        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         List<String> expectedScopes = allScopes.size() > 1 ?
                 allScopes.subList(0, allScopes.size() - 1) : allScopes;
@@ -212,7 +212,7 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
     @DisplayName("Not provide scopes when some missing")
     void shouldNotProvideScopesWhenSomeMissing(TestTokenHolder tokenHolder) {
         List<String> existingScopes = tokenHolder.getClaims().get(ClaimName.SCOPE.getName()).getAsList();
-        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), TEST_EMAIL, createEmptyMapRepresentation());
+        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         List<String> expectedScopes = new ArrayList<>(existingScopes);
         expectedScopes.add("non_existent_scope");
@@ -225,7 +225,7 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
     @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 2)
     @DisplayName("Provide empty scopes")
     void shouldProvideEmptyScopes(TestTokenHolder tokenHolder) {
-        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), TEST_EMAIL, createEmptyMapRepresentation());
+        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         boolean result = accessTokenContent.providesScopes(Collections.emptyList());
 

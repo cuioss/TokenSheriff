@@ -25,10 +25,14 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * A {@link ClaimMapper} implementation for mapping Keycloak's default roles structure.
+ * A fixed-source {@link ClaimMapper} that always reads from the {@code "realm_access.roles"}
+ * path in the token payload, regardless of the {@code claimName} parameter passed to
+ * {@link #map(MapRepresentation, String)}.
  * <p>
- * This mapper extracts roles from Keycloak's standard {@code realm_access.roles} claim
- * and maps them to the expected {@code roles} claim format used by the OAuth Sheriff library.
+ * This is intentional: Keycloak always stores realm roles in the nested
+ * {@code realm_access.roles} structure, so the source path is fixed by the identity
+ * provider's convention. The {@code claimName} parameter identifies the <em>target</em>
+ * claim in OAuth Sheriff's model (e.g., {@code ROLES}), not the source claim in the token.
  * <p>
  * Keycloak by default stores realm roles in a nested structure:
  * <pre>

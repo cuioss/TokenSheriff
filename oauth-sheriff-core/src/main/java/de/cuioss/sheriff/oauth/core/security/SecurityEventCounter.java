@@ -205,12 +205,4 @@ public class SecurityEventCounter {
         counters.clear();
     }
 
-    /**
-     * Resets the counter for the specified event type to zero.
-     * 
-     * @param eventType the type of security event to reset
-     */
-    public void reset(EventType eventType) {
-        counters.remove(eventType);
-    }
 }

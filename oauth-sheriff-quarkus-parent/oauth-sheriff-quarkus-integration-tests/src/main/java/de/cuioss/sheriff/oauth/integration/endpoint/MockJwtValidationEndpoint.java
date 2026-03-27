@@ -83,7 +83,7 @@ public class MockJwtValidationEndpoint {
     @Inject
     public MockJwtValidationEndpoint(
             TokenValidator tokenValidator,
-            @ServletObjectsResolver(ServletObjectsResolver.Variant.VERTX) HttpServletRequestResolver servletObjectsResolver) {
+            @ServletObjectsResolver HttpServletRequestResolver servletObjectsResolver) {
         this.tokenValidator = tokenValidator;
         this.servletObjectsResolver = servletObjectsResolver;
         LOGGER.debug("MockJwtValidationEndpoint initialized with TokenValidator and HttpServletRequestResolver");

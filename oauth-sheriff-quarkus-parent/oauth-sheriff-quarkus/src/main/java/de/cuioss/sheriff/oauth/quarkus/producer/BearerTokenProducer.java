@@ -123,7 +123,7 @@ public class BearerTokenProducer {
 
     @Inject
     public BearerTokenProducer(TokenValidator tokenValidator,
-            @ServletObjectsResolver(ServletObjectsResolver.Variant.VERTX) HttpServletRequestResolver servletObjectsResolver) {
+            @ServletObjectsResolver HttpServletRequestResolver servletObjectsResolver) {
         this.tokenValidator = tokenValidator;
         this.servletObjectsResolver = servletObjectsResolver;
     }
@@ -134,7 +134,7 @@ public class BearerTokenProducer {
      *
      * @return Optional containing validated AccessTokenContent, or empty if validation fails
      */
-    public Optional<AccessTokenContent> getAccessTokenContent() {
+    private Optional<AccessTokenContent> getAccessTokenContent() {
         return getBearerTokenResult(Collections.emptySet(), Collections.emptySet(), Collections.emptySet()).getAccessTokenContent();
     }
 
