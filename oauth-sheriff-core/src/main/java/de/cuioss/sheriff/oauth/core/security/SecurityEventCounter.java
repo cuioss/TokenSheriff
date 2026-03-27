@@ -110,7 +110,9 @@ public class SecurityEventCounter {
         // JWKS issues
         JWKS_JSON_PARSE_FAILED(JWTValidationLogMessages.WARN.JWKS_JSON_PARSE_FAILED, EventCategory.INVALID_SIGNATURE),
 
-        // Successful operations (no LogRecord for DEBUG level per CUI standards)
+        // Design Decision: success events use null LogRecord/Category per CUI logging standards.
+        // Only INFO/WARN/ERROR levels need LogRecord constants. Success events are metric
+        // counters only, tracked at DEBUG level.
         ACCESS_TOKEN_CREATED(null, null),
         ID_TOKEN_CREATED(null, null),
         REFRESH_TOKEN_CREATED(null, null),

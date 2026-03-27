@@ -94,6 +94,10 @@ public class JwksParser {
             // JSON syntax error - continue to try single JWK parsing
         }
 
+        // Design Decision: bare JWK fallback retained for real-world interoperability.
+        // Some endpoints serve a single JWK directly rather than wrapping it in a JWKS structure.
+        // The parsed key validates kty field, so accepting broader input does not weaken
+        // cryptographic validation.
         // If standard JWKS parsing failed or had no keys, try parsing as single JWK
         try {
             JwkKey singleKey = dslJson.deserialize(JwkKey.class, bytes, bytes.length);

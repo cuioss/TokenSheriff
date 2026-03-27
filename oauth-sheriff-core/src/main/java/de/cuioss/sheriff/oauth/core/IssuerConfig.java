@@ -128,9 +128,12 @@ public class IssuerConfig implements LoadingStatusProvider {
     /**
      * Whether the "sub" (subject) claim is optional for this issuer.
      * <p>
+     * Design Decision: pragmatic accommodation for identity providers (e.g., Keycloak) that omit
+     * the subject claim in access tokens. Default is secure ({@code false}). This is intentional
+     * and not a compatibility workaround.
+     * <p>
      * When set to {@code true}, the mandatory claims validator will not require the "sub" claim
-     * to be present in tokens from this issuer. This provides a workaround for identity providers
-     * that don't include the subject claim in access tokens by default.
+     * to be present in tokens from this issuer.
      * </p>
      * <p>
      * <strong>Warning:</strong> Setting this to {@code true} relaxes RFC 7519 compliance.

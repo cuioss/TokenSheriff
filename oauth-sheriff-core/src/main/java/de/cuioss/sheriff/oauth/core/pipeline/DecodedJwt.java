@@ -67,6 +67,9 @@ String rawToken
 ) {
     /**
      * Gets the header of the JWT token.
+     * <p>
+     * Design Decision: null-object pattern simplifies consumer code. NonValidatingJwtParser
+     * guarantees non-null fields; the fallback exists as defense-in-depth.
      *
      * @return the JwtHeader, never null (minimal header with empty algorithm if not present)
      */
