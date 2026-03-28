@@ -1,6 +1,6 @@
 ---
 name: run-benchmark-suite
-description: Run full benchmark suite with ablation sweep, connection sweep, JFR profiling, and doc updates
+description: Run full benchmark suite with ablation sweep, connection sweep, JFR profiling, and doc updates. Use this skill whenever the user wants to run benchmarks, performance tests, load tests, measure throughput or latency, profile with JFR, do a connection sweep, or update benchmark analysis documents — even if they don't use the exact term "benchmark suite".
 user-invocable: true
 ---
 
@@ -36,6 +36,12 @@ All benchmark commands run from `benchmarking/benchmark-integration-wrk/` relati
    - `target/benchmark-results/keycloak-logs-*.txt`
    - `target/benchmark-results/wrk/*.txt` (for non-2xx errors)
 5. Report results summary to the user.
+
+## Error Handling
+
+- If a benchmark run fails mid-sweep (container crash, OOM, non-2xx spike), stop the current workflow, report which iteration failed, and offer to re-run from that point.
+- If containers are left running after an interrupted sweep, always clean up with the stop script before re-running.
+- If `target/benchmark-results/` contains stale data from a previous run, warn the user before overwriting.
 
 ## Workflow 2: Connection Sweep (`phase=connections`)
 
@@ -79,9 +85,9 @@ All benchmark commands run from `benchmarking/benchmark-integration-wrk/` relati
 
 1. Read current benchmark results from `target/benchmark-results/`.
 2. Update these analysis documents with fresh data:
-   - `benchmarking/doc/Analysis-03.2026-Integration.adoc` — connection sweep tables (throughput, avg latency, P99)
-   - `benchmarking/doc/Analysis-03.2026-Latency-Decomposition.adoc` — ablation decomposition table + six-layer decomposition
-   - `benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc` — JFR analysis (only if JFR data available)
+   - Find the most recent `benchmarking/doc/Analysis-*-Integration.adoc` — connection sweep tables (throughput, avg latency, P99)
+   - Find the most recent `benchmarking/doc/Analysis-*-Latency-Decomposition.adoc` — ablation decomposition table + six-layer decomposition
+   - Find the most recent `benchmarking/doc/Analysis-*-JFR-Profiling.adoc` — JFR analysis (only if JFR data available)
 3. Preserve existing document structure; only update data tables and numbers.
 
 ## Workflow 5: All (`phase=all`, default)
@@ -93,8 +99,8 @@ Execute workflows 1 through 4 sequentially. Stop and report if any workflow fail
 | File | Purpose |
 |------|---------|
 | `benchmarking/benchmark-integration-wrk/pom.xml` | Maven profiles: benchmark, benchmark-jfr, quick, stress, max, autoscale |
-| `benchmarking/doc/Analysis-03.2026-Integration.adoc` | Connection sweep data tables |
-| `benchmarking/doc/Analysis-03.2026-Latency-Decomposition.adoc` | Ablation decomposition |
-| `benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc` | JFR analysis |
+| `benchmarking/doc/Analysis-*-Integration.adoc` | Connection sweep data tables (find the most recent) |
+| `benchmarking/doc/Analysis-*-Latency-Decomposition.adoc` | Ablation decomposition (find the most recent) |
+| `benchmarking/doc/Analysis-*-JFR-Profiling.adoc` | JFR analysis (find the most recent) |
 | `oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/scripts/start-integration-container.sh` | Container lifecycle start (supports COMPOSE_OVERRIDE) |
 | `oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/scripts/stop-integration-container.sh` | Container lifecycle stop (supports COMPOSE_OVERRIDE) |

@@ -1,6 +1,6 @@
 ---
 name: semantic-code-analysis
-description: Semantic analysis of production code to find compatibility shims, fail-open behavior, dead code, and unnecessary API surface
+description: Semantic analysis of production code to find compatibility shims, fail-open behavior, dead code, and unnecessary API surface. Use this skill whenever the user asks for a pre-release audit, API surface review, code cleanup before a release, dead code detection, security audit of fail-open behavior, or wants to reduce unnecessary complexity — even if they phrase it differently.
 user-invocable: true
 ---
 
@@ -17,6 +17,13 @@ Deep analysis of all production code asking one question per artifact: _"Does th
 - `output`: Output file path (default: `doc/code-findings.adoc`).
 
 ## Analysis Methodology
+
+### Scope and Progress
+
+When `scope=all`, the analysis covers every production module — this can be a large amount of code. To keep analysis tractable:
+- Process one module/package at a time, reporting findings incrementally.
+- After completing each module, provide a brief progress update before moving to the next.
+- If the user wants to stop early, the findings so far are still valid and useful.
 
 ### Phase 1: Inventory
 
