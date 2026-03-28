@@ -152,4 +152,4 @@ Total: N findings across all production code.
 - **Concrete recommendations**: Every finding must have a specific, actionable fix.
 - **No false positives**: Only report findings where the issue is confirmed by reading the code.
 - **Production code only**: Do not analyze test code, generated code, or build scripts.
-- **Exclude framework boilerplate**: Do not flag standard framework patterns (CDI producers, JAX-RS resources) unless they contain actual issues.
+- **Exclude framework boilerplate**: Do not flag standard framework patterns (e.g., dependency injection producers, REST resource classes, ORM mappings) unless they contain actual issues.
