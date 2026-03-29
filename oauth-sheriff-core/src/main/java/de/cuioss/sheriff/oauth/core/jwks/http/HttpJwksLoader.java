@@ -177,7 +177,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
         if (config.getWellKnownConfig() != null) {
             // Well-known discovery - the resolver itself uses HttpAdapter for retry!
-            HttpWellKnownResolver resolver = config.getWellKnownConfig().createResolver();
+            HttpWellKnownResolver resolver = config.getWellKnownConfig().createResolver(securityEventCounter);
 
             // This call may block but we're in async context
             Optional<String> jwksUri = resolver.getJwksUri();

@@ -194,15 +194,15 @@ public class NonValidatingJwtParser {
      *   <li>Uses standard Java Base64 decoder</li>
      * </ul>
      * <p>
-     * This method logs warnings when decoding fails. Use {@link #decode(String, boolean)}
-     * to control warning logging behavior.
+     * This method logs warnings when decoding fails. Use {@link #decodeQuietly(String)}
+     * to suppress warning logging.
      *
      * @param token the JWT token string to parse
      * @return the DecodedJwt if parsing is successful
      * @throws TokenValidationException if the token is invalid or cannot be parsed
      */
     public DecodedJwt decode(String token) {
-        return decode(token, true);
+        return decodeInternal(token, true, true);
     }
 
     /**
@@ -228,7 +228,10 @@ public class NonValidatingJwtParser {
     }
 
     /**
-     * Decodes a JWT token and returns a DecodedJwt object containing the decoded parts.
+     * Decodes a JWT token without logging warnings, but still tracking security events.
+     * <p>
+     * This method is useful when re-parsing a previously validated token (e.g., for
+     * DPoP validation of cached tokens) where decoding warnings are not desired.
      * <p>
      * Security considerations:
      * <ul>
@@ -236,17 +239,13 @@ public class NonValidatingJwtParser {
      *   <li>Implements size checks to prevent overflow attacks</li>
      *   <li>Uses standard Java Base64 decoder</li>
      * </ul>
-     * <p>
-     * This method allows controlling whether warnings are logged when decoding fails.
-     * This is useful when checking if a token is a JWT without logging warnings.
      *
-     * @param token       the JWT token string to parse
-     * @param logWarnings whether to log warnings when decoding fails
+     * @param token the JWT token string to parse
      * @return the DecodedJwt if parsing is successful
      * @throws TokenValidationException if the token is invalid or cannot be parsed
      */
-    DecodedJwt decode(String token, boolean logWarnings) {
-        return decodeInternal(token, logWarnings, true);
+    DecodedJwt decodeQuietly(String token) {
+        return decodeInternal(token, false, true);
     }
 
     /**

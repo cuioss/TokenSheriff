@@ -57,7 +57,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("RFC 7519 JWT Compliance Tests")
 class RFC7519JWTComplianceTest {
     // No longer need a tokenValidator field as we'll create it on demand using tokenHolder.getIssuerConfig()
-    private final ValidationContext validationContext = new ValidationContext(60);
+    private final ValidationContext validationContext = new ValidationContext(60, null);
 
     @Nested
     @DisplayName("Section 4.1: Registered Claim Names")

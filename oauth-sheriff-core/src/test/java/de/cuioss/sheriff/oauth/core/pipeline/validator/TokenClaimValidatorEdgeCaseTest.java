@@ -59,7 +59,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Tests TokenClaimValidator edge cases")
 class TokenClaimValidatorEdgeCaseTest {
     private final SecurityEventCounter securityEventCounter = new SecurityEventCounter();
-    private final ValidationContext validationContext = new ValidationContext(60);
+    private final ValidationContext validationContext = new ValidationContext(60, null);
 
     // Helper method to create a TokenClaimValidator with the shared SecurityEventCounter
     private TokenClaimValidator createValidator(IssuerConfig issuerConfig) {
@@ -204,9 +204,6 @@ class TokenClaimValidatorEdgeCaseTest {
                     .expectedClientId(TestTokenHolder.TEST_CLIENT_ID)
                     .jwksContent("{}")  // Empty JWKS content
                     .build();
-
-            // Initialize the JwksLoader
-            issuerConfig.initSecurityEventCounter(securityEventCounter);
 
             // Create a TokenSignatureValidator with a custom JwksLoader that simulates network failure
             var signatureValidator = new TokenSignatureValidator(new FailingJwksKeyLoader(), securityEventCounter, new SignatureAlgorithmPreferences());

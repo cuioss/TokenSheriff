@@ -61,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class TokenClaimValidatorTest {
 
     private static final SecurityEventCounter SECURITY_EVENT_COUNTER = new SecurityEventCounter();
-    private static final ValidationContext VALIDATION_CONTEXT = new ValidationContext(60);
+    private static final ValidationContext VALIDATION_CONTEXT = new ValidationContext(60, null);
 
     private TokenClaimValidator createValidator(IssuerConfig issuerConfig) {
         return new TokenClaimValidator(issuerConfig, SECURITY_EVENT_COUNTER);

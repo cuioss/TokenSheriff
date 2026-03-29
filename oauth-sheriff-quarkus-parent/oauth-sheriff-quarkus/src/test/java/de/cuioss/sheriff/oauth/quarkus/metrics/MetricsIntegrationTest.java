@@ -19,7 +19,6 @@ import de.cuioss.sheriff.oauth.core.TokenValidator;
 import de.cuioss.sheriff.oauth.core.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
-import de.cuioss.sheriff.oauth.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.oauth.quarkus.config.JwtTestProfile;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -67,17 +66,17 @@ class MetricsIntegrationTest {
         assertThrows(TokenValidationException.class, () -> tokenValidator.createAccessToken(request),
                 "Should have thrown TokenValidationException for invalid token");
 
-        assertNotNull(meterRegistry.find(JwtPropertyKeys.METRICS.VALIDATION_ERRORS).counters(),
+        assertNotNull(meterRegistry.find(MetricIdentifier.VALIDATION.ERRORS).counters(),
                 "Error counters should be registered");
 
-        assertFalse(meterRegistry.find(JwtPropertyKeys.METRICS.VALIDATION_ERRORS).counters().isEmpty(), "Error counters should be registered");
+        assertFalse(meterRegistry.find(MetricIdentifier.VALIDATION.ERRORS).counters().isEmpty(), "Error counters should be registered");
     }
 
     @Test
     @DisplayName("Should register JWKs cache size metrics")
     void shouldRegisterJwksCacheSizeMetrics() {
         // Verify that JWKS cache size gauges are registered
-        assertNotNull(meterRegistry.find(JwtPropertyKeys.METRICS.JWKS_CACHE_SIZE).gauges(),
+        assertNotNull(meterRegistry.find(MetricIdentifier.JWKS.CACHE_SIZE).gauges(),
                 "JWKS cache size gauges should be registered");
     }
 
@@ -95,7 +94,7 @@ class MetricsIntegrationTest {
             }
 
             // Look for a counter with this event type
-            boolean hasMetricForEventType = !meterRegistry.find(JwtPropertyKeys.METRICS.VALIDATION_ERRORS)
+            boolean hasMetricForEventType = !meterRegistry.find(MetricIdentifier.VALIDATION.ERRORS)
                     .tag("event_type", eventType.name())
                     .counters().isEmpty();
 
@@ -145,7 +144,7 @@ class MetricsIntegrationTest {
                         " but got " + thrownException.getClass().getSimpleName() +
                         " for scenario: " + description);
 
-        assertFalse(meterRegistry.find(JwtPropertyKeys.METRICS.VALIDATION_ERRORS).counters().isEmpty(),
+        assertFalse(meterRegistry.find(MetricIdentifier.VALIDATION.ERRORS).counters().isEmpty(),
                 "Error counters should be registered for scenario: " + description);
     }
 }

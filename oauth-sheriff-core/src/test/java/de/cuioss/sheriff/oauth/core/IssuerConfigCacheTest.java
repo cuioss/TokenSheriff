@@ -231,9 +231,6 @@ class IssuerConfigCacheTest {
                     .audienceValidationDisabled(true)
                     .build();
 
-            // Initialize the config to make it unhealthy
-            config.initSecurityEventCounter(securityEventCounter);
-
             IssuerConfigCache resolver = new IssuerConfigCache(
                     List.of(config),
                     securityEventCounter

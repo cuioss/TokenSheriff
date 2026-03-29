@@ -37,6 +37,13 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Comprehensive HttpServletRequest adapter that provides extensive mapping from Vertx HttpServerRequest.
  *
+ * <p><strong>Design Decision:</strong> This adapter exists to satisfy the {@link HttpServletRequestResolver}
+ * interface contract, which requires {@link HttpServletRequestResolver#resolveHttpServletRequest()} to return
+ * an {@link jakarta.servlet.http.HttpServletRequest}. Primary production header access in
+ * {@link VertxServletObjectsResolver} bypasses this adapter entirely via a direct
+ * {@link HttpServletRequestResolver#resolveHeaderMap()} override that reads from the Vertx
+ * {@code headers()} MultiMap, avoiding the overhead of the full servlet adapter.</p>
+ *
  * <p>This adapter implements as many HttpServletRequest methods as possible using Vertx data,
  * providing a robust compatibility layer for servlet-based APIs. Methods that cannot be implemented
  * with Vertx data throw {@link UnsupportedOperationException} with descriptive messages indicating

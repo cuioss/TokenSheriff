@@ -92,7 +92,7 @@ class NonValidatingJwtParserTest {
             assertEquals(1735689600, body.getNumber("exp").orElse(0).intValue(), "Expiration should match expected");
 
             // Verify signature
-            assertTrue(jwt.getSignature().isPresent(), "Signature should be present");
+            assertNotNull(jwt.signature(), "Signature should be present");
 
             // Verify extracted fields
             assertTrue(jwt.getIssuer().isPresent(), "Issuer should be present");

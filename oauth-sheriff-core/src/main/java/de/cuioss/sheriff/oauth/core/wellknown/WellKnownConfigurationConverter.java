@@ -51,22 +51,13 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
     private final int maxContentSize;
 
     /**
-     * Creates a WellKnownResult content converter with the specified DSL-JSON instance.
-     *
-     * @param dslJson the DSL-JSON instance containing JSON security settings
-     */
-    public WellKnownConfigurationConverter(DslJson<Object> dslJson) {
-        this(dslJson, new SecurityEventCounter(), 8 * 1024); // Default 8KB limit
-    }
-
-    /**
      * Creates a WellKnownResult content converter with full configuration.
      *
      * @param dslJson the DSL-JSON instance containing JSON security settings
      * @param securityEventCounter the security event counter for tracking violations
      * @param maxContentSize maximum allowed JSON content size in bytes
      */
-    public WellKnownConfigurationConverter(DslJson<Object> dslJson,
+    WellKnownConfigurationConverter(DslJson<Object> dslJson,
             SecurityEventCounter securityEventCounter,
             int maxContentSize) {
         this.dslJson = dslJson;

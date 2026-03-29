@@ -272,13 +272,12 @@ public class JWKSKeyLoader implements JwksLoader {
 
 
     /**
-     * Checks if this loader contains valid keys.
+     * Gets the map of key IDs to {@link KeyInfo} objects.
      *
-     * @return true if the loader contains at least one valid key, false otherwise
+     * @return an unmodifiable view of the key info map, or empty map if not yet initialized
      */
-    public boolean isNotEmpty() {
-        ensureInitialized();
-        return keyInfoMap != null && !keyInfoMap.isEmpty();
+    public Map<String, KeyInfo> getKeyInfoMap() {
+        return keyInfoMap != null ? Map.copyOf(keyInfoMap) : Map.of();
     }
 
     private void ensureInitialized() {

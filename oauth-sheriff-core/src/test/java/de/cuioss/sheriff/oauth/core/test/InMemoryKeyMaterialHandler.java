@@ -58,7 +58,7 @@ public class InMemoryKeyMaterialHandler {
     /**
      * Default key ID used when no key ID is specified.
      */
-    public static final String DEFAULT_KEY_ID = "default-key-id";
+    public static final String DEFAULT_KEY_ID = "test-key-id";
 
     /**
      * Supported signature algorithms.

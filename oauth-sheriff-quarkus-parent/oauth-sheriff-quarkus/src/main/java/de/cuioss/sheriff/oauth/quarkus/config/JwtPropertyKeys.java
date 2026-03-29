@@ -575,11 +575,6 @@ public final class JwtPropertyKeys {
         public static final String BASE = PREFIX + ".health";
 
         /**
-         * Whether health checks are enabled.
-         */
-        public static final String ENABLED = BASE + DOT_ENABLED;
-
-        /**
          * Properties related to JWKS endpoint health checks.
          */
         @UtilityClass
@@ -594,59 +589,22 @@ public final class JwtPropertyKeys {
              */
             public static final String CACHE_SECONDS = BASE + ".cache-seconds";
 
-            /**
-             * The timeout in seconds for health check requests.
-             */
-            public static final String TIMEOUT_SECONDS = BASE + ".timeout-seconds";
-
         }
     }
 
     /**
-     * Properties related to metrics.
+     * Interval for metrics collection in seconds.
+     * Property: "sheriff.oauth.metrics.collection.interval"
+     * <p>
+     * Controls how frequently the {@link de.cuioss.sheriff.oauth.quarkus.metrics.JwtMetricsCollector}
+     * updates Micrometer metrics from the internal counters and monitors.
+     * </p>
+     * <p>
+     * Default value is {@code 10s} for production environments.
+     * For integration tests, this can be set to {@code 2s} for faster testing.
+     * </p>
      */
-    @UtilityClass
-    public static final class METRICS {
-        /**
-         * Base path for metrics configurations.
-         */
-        public static final String BASE = PREFIX + ".validation";
-
-        /**
-         * Counter for validation errors by type.
-         */
-        public static final String VALIDATION_ERRORS = BASE + ".errors";
-
-        /**
-         * Timer for JWT validation pipeline steps.
-         */
-        public static final String VALIDATION_DURATION = BASE + ".duration";
-
-        /**
-         * Interval for metrics collection in seconds.
-         * Template: "sheriff.oauth.metrics.collection.interval"
-         * <p>
-         * Controls how frequently the {@link de.cuioss.sheriff.oauth.quarkus.metrics.JwtMetricsCollector}
-         * updates Micrometer metrics from the internal counters and monitors.
-         * </p>
-         * <p>
-         * Default value is {@code 10s} for production environments.
-         * For integration tests, this can be set to {@code 2s} for faster testing.
-         * </p>
-         */
-        public static final String COLLECTION_INTERVAL = PREFIX + ".metrics.collection.interval";
-
-        /**
-         * Base path for JWKS metrics.
-         */
-        public static final String JWKS_BASE = PREFIX + DOT_JWKS;
-
-        /**
-         * Gauge for JWKS cache size.
-         */
-        public static final String JWKS_CACHE_SIZE = JWKS_BASE + ".cache.size";
-
-    }
+    public static final String METRICS_COLLECTION_INTERVAL = PREFIX + ".metrics.collection.interval";
 
     /**
      * Properties related to HTTP access log filtering configuration.

@@ -17,6 +17,7 @@ package de.cuioss.sheriff.oauth.core.jwks.http;
 
 import de.cuioss.sheriff.oauth.core.jwks.key.KeyInfo;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
+import de.cuioss.sheriff.oauth.core.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.oauth.core.test.dispatcher.JwksResolveDispatcher;
 import de.cuioss.sheriff.oauth.core.util.LoaderStatus;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -72,9 +73,9 @@ class SimpleHttpJwksLoaderTest {
         assertEquals(1, moduleDispatcher.getCallCounter());
 
         // Load a key - should use already loaded keys
-        Optional<KeyInfo> keyInfo = httpJwksLoader.getKeyInfo("default-key-id");
+        Optional<KeyInfo> keyInfo = httpJwksLoader.getKeyInfo(InMemoryKeyMaterialHandler.DEFAULT_KEY_ID);
         assertTrue(keyInfo.isPresent());
-        assertEquals("default-key-id", keyInfo.get().keyId());
+        assertEquals(InMemoryKeyMaterialHandler.DEFAULT_KEY_ID, keyInfo.get().keyId());
 
         // Should still have called endpoint only once (cached)
         assertEquals(1, moduleDispatcher.getCallCounter());
@@ -83,8 +84,8 @@ class SimpleHttpJwksLoaderTest {
     @Test
     void caching() {
         // Multiple calls should only hit endpoint once
-        httpJwksLoader.getKeyInfo("default-key-id");
-        httpJwksLoader.getKeyInfo("default-key-id");
+        httpJwksLoader.getKeyInfo(InMemoryKeyMaterialHandler.DEFAULT_KEY_ID);
+        httpJwksLoader.getKeyInfo(InMemoryKeyMaterialHandler.DEFAULT_KEY_ID);
         httpJwksLoader.getKeyInfo("another-key-id");
         httpJwksLoader.getLoaderStatus();
 
@@ -95,7 +96,7 @@ class SimpleHttpJwksLoaderTest {
     void retryOnLoad() {
         // The RetryUtil should handle transient failures automatically
         // This test verifies basic functionality works
-        Optional<KeyInfo> keyInfo = httpJwksLoader.getKeyInfo("default-key-id");
+        Optional<KeyInfo> keyInfo = httpJwksLoader.getKeyInfo(InMemoryKeyMaterialHandler.DEFAULT_KEY_ID);
         assertTrue(keyInfo.isPresent());
         assertNotNull(keyInfo.get().key());
     }

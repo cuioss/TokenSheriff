@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnableGeneratorController
 class TokenContentTest {
 
-    private final ValidationContext validationContext = new ValidationContext(60);
+    private final ValidationContext validationContext = new ValidationContext(60, null);
 
     @Test
     @DisplayName("Should provide access to claims")

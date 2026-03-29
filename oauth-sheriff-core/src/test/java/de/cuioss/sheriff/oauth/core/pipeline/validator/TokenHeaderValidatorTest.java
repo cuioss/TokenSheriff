@@ -56,8 +56,6 @@ class TokenHeaderValidatorTest {
 
     // Helper method to create a TokenHeaderValidator with the shared SecurityEventCounter
     private TokenHeaderValidator createValidator(IssuerConfig issuerConfig) {
-        // Initialize the IssuerConfig with the SecurityEventCounter so JwksLoader is created
-        issuerConfig.initSecurityEventCounter(SECURITY_EVENT_COUNTER);
         return new TokenHeaderValidator(issuerConfig, SECURITY_EVENT_COUNTER);
     }
 

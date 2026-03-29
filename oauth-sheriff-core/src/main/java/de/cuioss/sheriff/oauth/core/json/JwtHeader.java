@@ -120,75 +120,12 @@ String apv
     }
 
     /**
-     * Gets the JWK Set URL parameter as Optional.
-     * 
-     * @return Optional containing the JWK Set URL, empty if null
-     */
-    public Optional<String> getJku() {
-        return Optional.ofNullable(jku);
-    }
-
-    /**
      * Gets the JSON Web Key parameter as Optional.
      * 
      * @return Optional containing the JWK, empty if null
      */
     public Optional<String> getJwk() {
         return Optional.ofNullable(jwk);
-    }
-
-    /**
-     * Gets the X.509 URL parameter as Optional.
-     * 
-     * @return Optional containing the X.509 URL, empty if null
-     */
-    public Optional<String> getX5u() {
-        return Optional.ofNullable(x5u);
-    }
-
-    /**
-     * Gets the X.509 Certificate Chain parameter as Optional.
-     * 
-     * @return Optional containing the X.509 certificate chain, empty if null
-     */
-    public Optional<String> getX5c() {
-        return Optional.ofNullable(x5c);
-    }
-
-    /**
-     * Gets the X.509 Certificate SHA-1 Thumbprint parameter as Optional.
-     * 
-     * @return Optional containing the thumbprint, empty if null
-     */
-    public Optional<String> getX5t() {
-        return Optional.ofNullable(x5t);
-    }
-
-    /**
-     * Gets the X.509 Certificate SHA-256 Thumbprint parameter as Optional.
-     * 
-     * @return Optional containing the SHA-256 thumbprint, empty if null
-     */
-    public Optional<String> getX5tS256() {
-        return Optional.ofNullable(x5tS256);
-    }
-
-    /**
-     * Gets the content type parameter as Optional.
-     * 
-     * @return Optional containing the content type, empty if null
-     */
-    public Optional<String> getCty() {
-        return Optional.ofNullable(cty);
-    }
-
-    /**
-     * Gets the critical parameter as Optional.
-     * 
-     * @return Optional containing the critical parameter, empty if null
-     */
-    public Optional<String> getCrit() {
-        return Optional.ofNullable(crit);
     }
 
     /**

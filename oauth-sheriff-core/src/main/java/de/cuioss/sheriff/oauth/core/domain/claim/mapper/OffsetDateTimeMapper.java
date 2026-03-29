@@ -27,7 +27,8 @@ import java.util.Optional;
 /**
  * A {@link ClaimMapper} implementation for mapping date-time claims.
  * According to JWT specification (RFC 7519), date-time values are represented as NumericDate,
- * which is the number of seconds from 1970-01-01T00:00:00Z UTC until the specified UTC date/time.
+ * which is the number of seconds from 1970-01-01T00:00:00Z UTC until the specified date/time.
+ * The resulting {@link OffsetDateTime} uses the system default zone offset rather than UTC.
  *
  * @since 1.0
  */
@@ -50,11 +51,13 @@ public class OffsetDateTimeMapper implements ClaimMapper {
         Number numberValue = optionalNumber.get();
 
         // According to JWT specification (RFC 7519), date-time values are represented as NumericDate,
-        // which is the number of seconds from 1970-01-01T00:00:00Z UTC until the specified UTC date/time.
+        // which is the number of seconds from 1970-01-01T00:00:00Z UTC.
         // Handle numeric timestamp (seconds since epoch) - this is the standard format
         long epochSeconds = numberValue.longValue();
         String originalValue = String.valueOf(epochSeconds);
 
+        // Design decision: ZoneId.systemDefault() is used intentionally. All temporal comparisons
+        // (e.g., exp, nbf, iat) are instant-based, so the zone offset has no functional impact.
         OffsetDateTime offsetDateTime = OffsetDateTime.ofInstant(
                 Instant.ofEpochSecond(epochSeconds),
                 ZoneId.systemDefault()

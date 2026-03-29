@@ -19,6 +19,7 @@ import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.SecureSSLContextProvider;
 import de.cuioss.sheriff.oauth.core.ParserConfig;
+import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
@@ -81,10 +82,11 @@ public class WellKnownConfig {
     /**
      * Creates a new HttpWellKnownResolver using this configuration.
      *
+     * @param securityEventCounter the shared security event counter
      * @return a configured HttpWellKnownResolver instance
      */
-    public HttpWellKnownResolver createResolver() {
-        return new HttpWellKnownResolver(this);
+    public HttpWellKnownResolver createResolver(SecurityEventCounter securityEventCounter) {
+        return new HttpWellKnownResolver(this, securityEventCounter);
     }
 
     /**

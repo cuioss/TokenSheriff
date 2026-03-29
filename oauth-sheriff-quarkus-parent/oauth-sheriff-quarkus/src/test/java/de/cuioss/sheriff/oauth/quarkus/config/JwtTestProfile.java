@@ -61,9 +61,7 @@ public class JwtTestProfile implements QuarkusTestProfile {
         config.put(JwtPropertyKeys.PARSER.MAX_PAYLOAD_SIZE, "8192");
         config.put(JwtPropertyKeys.PARSER.MAX_STRING_LENGTH, "4096");
         // Health check configuration
-        config.put(JwtPropertyKeys.HEALTH.ENABLED, "true");
         config.put(JwtPropertyKeys.HEALTH.JWKS.CACHE_SECONDS, "30");
-        config.put(JwtPropertyKeys.HEALTH.JWKS.TIMEOUT_SECONDS, "5");
 
         return config;
     }

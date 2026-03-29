@@ -523,7 +523,7 @@ class DpopProofValidatorTest {
 
         var body = new MapRepresentation(bodyMap);
         var header = new JwtHeader(
-                "RS256", null, "default-key-id", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                "RS256", null, "test-key-id", null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         return new DecodedJwt(header, body, "dummy-sig", new String[]{"a", "b", "c"}, "a.b.c");
     }
