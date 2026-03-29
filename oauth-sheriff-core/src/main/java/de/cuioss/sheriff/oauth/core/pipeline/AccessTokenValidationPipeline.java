@@ -296,7 +296,7 @@ public class AccessTokenValidationPipeline {
         DpopProofValidator dpopValidator = dpopValidators.get(issuerIdentifier);
         if (dpopValidator != null) {
             // Re-decode the token to get access to cnf.jkt for DPoP validation
-            DecodedJwt decodedJwt = jwtParser.decode(tokenString, false);
+            DecodedJwt decodedJwt = jwtParser.decodeQuietly(tokenString);
             dpopValidator.validate(request, decodedJwt, tokenString);
         }
     }

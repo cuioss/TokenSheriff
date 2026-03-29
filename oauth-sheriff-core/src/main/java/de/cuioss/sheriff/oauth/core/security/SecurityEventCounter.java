@@ -133,32 +133,6 @@ public class SecurityEventCounter {
             return category;
         }
 
-        /**
-         * @return the numeric identifier for this event type
-         */
-        public int getId() {
-            return logRecord.getIdentifier();
-        }
-
-        /**
-         * @return a human-readable description of this event type
-         */
-        public String getDescription() {
-            return logRecord.getTemplate();
-        }
-
-        /**
-         * Returns the corresponding log record from {@link JWTValidationLogMessages}
-         * that is associated with this event type.
-         * <p>
-         * This method provides a bidirectional link between the event type and its
-         * corresponding log message, allowing for consistent error reporting and logging.
-         * 
-         * @return the corresponding log record from JWTValidationLogMessages
-         */
-        public LogRecord getLogRecord() {
-            return logRecord;
-        }
     }
 
     private final ConcurrentHashMap<EventType, AtomicLong> counters = new ConcurrentHashMap<>();

@@ -21,6 +21,7 @@ import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.oauth.quarkus.annotation.ServletObjectsResolver;
+import de.cuioss.sheriff.oauth.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.oauth.quarkus.metrics.MetricIdentifier;
 import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolver;
 import de.cuioss.tools.logging.CuiLogger;
@@ -115,10 +116,10 @@ public class BearerTokenProducer {
     private final TokenValidator tokenValidator;
     private final HttpServletRequestResolver servletObjectsResolver;
 
-    @ConfigProperty(name = "sheriff.oauth.token.header", defaultValue = "Authorization")
+    @ConfigProperty(name = JwtPropertyKeys.TOKEN.HEADER, defaultValue = "Authorization")
     String tokenHeader;
 
-    @ConfigProperty(name = "sheriff.oauth.token.cookie-name", defaultValue = "Bearer")
+    @ConfigProperty(name = JwtPropertyKeys.TOKEN.COOKIE_NAME, defaultValue = "Bearer")
     String tokenCookieName;
 
     @Inject

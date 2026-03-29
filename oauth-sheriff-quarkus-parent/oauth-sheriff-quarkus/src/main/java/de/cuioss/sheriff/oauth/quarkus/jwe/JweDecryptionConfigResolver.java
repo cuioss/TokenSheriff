@@ -59,6 +59,7 @@ public class JweDecryptionConfigResolver {
      * Resolves JWE decryption configuration from properties.
      *
      * @return the resolved config, or {@code null} if JWE is not configured
+     * @throws IllegalStateException if JWE is explicitly configured but key loading fails
      */
     public @Nullable JweDecryptionConfig resolveJweDecryptionConfig() {
         // Check if any JWE property is present
@@ -108,8 +109,10 @@ public class JweDecryptionConfigResolver {
             LOGGER.info(INFO.JWE_DECRYPTION_CONFIG_RESOLVED, jweConfig.getKeyCount());
             return jweConfig;
         } catch (IllegalStateException | IllegalArgumentException e) {
-            LOGGER.warn(WARN.JWE_KEY_LOADING_FAILED, e.getMessage());
-            return null;
+            throw new IllegalStateException(
+                    "JWE decryption is explicitly configured but key loading failed. "
+                            + "Fix the key configuration or remove JWE properties to disable JWE decryption. "
+                            + "Cause: " + e.getMessage(), e);
         }
     }
 

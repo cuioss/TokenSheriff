@@ -599,6 +599,18 @@ public final class JWTValidationLogMessages {
                 .identifier(164)
                 .template("Custom validation rule rejected token: %s")
                 .build();
+
+        public static final LogRecord JWK_MISSING_KID = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(165)
+                .template("JWK entry without 'kid' field skipped — kid is required for key identification")
+                .build();
+
+        public static final LogRecord JWK_RSA_DEFAULTING_TO_RS256 = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(166)
+                .template("RSA JWK without 'alg' field — defaulting to RS256 for key ID: %s")
+                .build();
     }
 
 }

@@ -240,24 +240,6 @@ public class IssuerConfig implements LoadingStatusProvider {
     @Nullable
     JwksLoader jwksLoader;
 
-    /**
-     * Validates that the security event counter is not null.
-     * <p>
-     * This method performs parameter validation only. The actual JWKS loading is triggered
-     * by {@link IssuerConfigCache}, which calls {@link JwksLoader#initJWKSLoader(SecurityEventCounter)}
-     * asynchronously. This avoids double initialization and redundant HTTP requests.
-     * <p>
-     * This method is retained for API compatibility with callers that need to validate
-     * the counter parameter early (e.g., Quarkus CDI producers).
-     *
-     * @param securityEventCounter the counter for security events, must not be null
-     * @throws NullPointerException if securityEventCounter is null
-     */
-    public void initSecurityEventCounter(SecurityEventCounter securityEventCounter) {
-        Objects.requireNonNull(securityEventCounter, "securityEventCounter must not be null");
-        // No-op: JWKS loading is handled by IssuerConfigCache.initJWKSLoader()
-    }
-
 
     /**
      * Gets the issuer identifier for token validation.
@@ -882,11 +864,6 @@ public class IssuerConfig implements LoadingStatusProvider {
          *   <li>File-based loader (if {@link #jwksFilePath(String)} is configured)</li>
          *   <li>In-memory loader (if {@link #jwksContent(String)} is configured)</li>
          * </ol>
-         * <p>
-         * <strong>Note:</strong> The {@link SecurityEventCounter} is not initialized during build.
-         * It must be set later via {@link IssuerConfig#initSecurityEventCounter(SecurityEventCounter)}
-         * before the configuration can be used for token validation.
-         * </p>
          *
          * @return a fully configured and validated {@link IssuerConfig} instance
          * @throws IllegalArgumentException if the configuration is invalid or incomplete

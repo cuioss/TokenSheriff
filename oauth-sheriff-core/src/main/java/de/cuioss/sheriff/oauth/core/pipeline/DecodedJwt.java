@@ -68,13 +68,12 @@ String rawToken
     /**
      * Gets the header of the JWT token.
      * <p>
-     * Design Decision: null-object pattern simplifies consumer code. NonValidatingJwtParser
-     * guarantees non-null fields; the fallback exists as defense-in-depth.
+     * The parser guarantees non-null headers, so this simply returns the record field.
      *
-     * @return the JwtHeader, never null (minimal header with empty algorithm if not present)
+     * @return the JwtHeader
      */
     public JwtHeader getHeader() {
-        return header != null ? header : new JwtHeader("", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        return header;
     }
 
     /**
@@ -84,15 +83,6 @@ String rawToken
      */
     public MapRepresentation getBody() {
         return body != null ? body : MapRepresentation.empty();
-    }
-
-    /**
-     * Gets the signature of the JWT token.
-     *
-     * @return an Optional containing the signature if present
-     */
-    public Optional<String> getSignature() {
-        return Optional.ofNullable(signature);
     }
 
     /**
@@ -299,6 +289,8 @@ String rawToken
         }
 
         public DecodedJwt build() {
+            Objects.requireNonNull(header, "header");
+            Objects.requireNonNull(rawToken, "rawToken");
             return new DecodedJwt(header, body, signature, parts, rawToken);
         }
     }

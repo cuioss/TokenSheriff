@@ -122,11 +122,6 @@ public class TokenValidatorProducer {
         // Create SecurityEventCounter for proper initialization
         SecurityEventCounter eventCounter = new SecurityEventCounter();
 
-        // Initialize each IssuerConfig with SecurityEventCounter so JwksLoader can be used
-        for (IssuerConfig issuerConfig : issuerConfigs) {
-            issuerConfig.initSecurityEventCounter(eventCounter);
-        }
-
 
         // Resolve cache config using the dedicated resolver
         AccessTokenCacheConfigResolver cacheConfigResolver = new AccessTokenCacheConfigResolver(config);

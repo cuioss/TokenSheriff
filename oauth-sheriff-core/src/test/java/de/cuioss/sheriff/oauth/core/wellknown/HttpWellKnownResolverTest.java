@@ -17,6 +17,7 @@ package de.cuioss.sheriff.oauth.core.wellknown;
 
 import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.oauth.core.json.WellKnownResult;
+import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.test.dispatcher.WellKnownDispatcher;
 import de.cuioss.sheriff.oauth.core.util.LoaderStatus;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -70,7 +71,7 @@ class HttpWellKnownResolverTest {
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
 
-        resolver = config.createResolver();
+        resolver = config.createResolver(new SecurityEventCounter());
 
         // Test JWKS URI resolution
         Optional<String> jwksUri = resolver.getJwksUri();
@@ -99,7 +100,7 @@ class HttpWellKnownResolverTest {
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
 
-        resolver = config.createResolver();
+        resolver = config.createResolver(new SecurityEventCounter());
 
         // Test issuer resolution
         Optional<String> issuer = resolver.getIssuer();
@@ -125,7 +126,7 @@ class HttpWellKnownResolverTest {
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
 
-        resolver = config.createResolver();
+        resolver = config.createResolver(new SecurityEventCounter());
 
         // Test multiple endpoint resolutions
         Optional<String> issuer = resolver.getIssuer();
@@ -165,7 +166,7 @@ class HttpWellKnownResolverTest {
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
 
-        resolver = config.createResolver();
+        resolver = config.createResolver(new SecurityEventCounter());
 
         // All endpoint resolutions should return empty
         assertFalse(resolver.getJwksUri().isPresent(), "JWKS URI should not be available on error");
@@ -193,7 +194,7 @@ class HttpWellKnownResolverTest {
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
 
-        resolver = config.createResolver();
+        resolver = config.createResolver(new SecurityEventCounter());
 
         // JWKS URI should not be available
         assertFalse(resolver.getJwksUri().isPresent(), "JWKS URI should not be available when missing from response");
@@ -219,7 +220,7 @@ class HttpWellKnownResolverTest {
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
 
-        resolver = config.createResolver();
+        resolver = config.createResolver(new SecurityEventCounter());
 
         // Test complete result access
         Optional<WellKnownResult> result = resolver.getWellKnownResult();

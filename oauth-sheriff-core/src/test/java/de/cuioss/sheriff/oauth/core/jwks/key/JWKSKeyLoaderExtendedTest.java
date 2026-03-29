@@ -112,7 +112,7 @@ class JWKSKeyLoaderExtendedTest {
                     .build();
             keyLoader.initJWKSLoader(securityEventCounter);
 
-            assertFalse(keyLoader.isNotEmpty(), "Loader should reject JWKS with excessive properties");
+            assertTrue(keyLoader.getKeyInfoMap().isEmpty(), "Loader should reject JWKS with excessive properties");
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, JWTValidationLogMessages.WARN.RSA_KEY_PARSE_FAILED.resolveIdentifierString());
         }
 
@@ -126,7 +126,7 @@ class JWKSKeyLoaderExtendedTest {
                     .build();
             keyLoader.initJWKSLoader(securityEventCounter);
 
-            assertFalse(keyLoader.isNotEmpty(), "Loader should reject JWKS with empty keys array");
+            assertTrue(keyLoader.getKeyInfoMap().isEmpty(), "Loader should reject JWKS with empty keys array");
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, JWTValidationLogMessages.WARN.JWKS_KEYS_ARRAY_EMPTY.resolveIdentifierString());
         }
 
@@ -147,7 +147,7 @@ class JWKSKeyLoaderExtendedTest {
                     .build();
             keyLoader.initJWKSLoader(securityEventCounter);
 
-            assertFalse(keyLoader.isNotEmpty(), "Loader should reject JWKS with excessive keys");
+            assertTrue(keyLoader.getKeyInfoMap().isEmpty(), "Loader should reject JWKS with excessive keys");
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, JWTValidationLogMessages.WARN.JWKS_KEYS_ARRAY_TOO_LARGE.resolveIdentifierString());
         }
     }
@@ -244,7 +244,7 @@ class JWKSKeyLoaderExtendedTest {
                     .build();
             keyLoader.initJWKSLoader(securityEventCounter);
 
-            assertTrue(keyLoader.isNotEmpty(), "Loader created with builder should parse JWKS");
+            assertFalse(keyLoader.getKeyInfoMap().isEmpty(), "Loader created with builder should parse JWKS");
             assertEquals(JwksType.MEMORY, keyLoader.getJwksType(), "Loader should have correct JWKS type");
         }
 
@@ -257,14 +257,25 @@ class JWKSKeyLoaderExtendedTest {
         }
 
         @Test
-        @DisplayName("Should throw exception when loader is used without initialization")
-        void shouldThrowExceptionWhenLoaderIsUsedWithoutInitialization() {
+        @DisplayName("Should return empty map when getKeyInfoMap is called without initialization")
+        void shouldReturnEmptyMapWhenGetKeyInfoMapCalledWithoutInitialization() {
             JWKSKeyLoader keyLoader = JWKSKeyLoader.builder()
                     .jwksContent("{\"keys\":[]}")
                     .build();
 
-            assertThrows(IllegalStateException.class, keyLoader::isNotEmpty,
-                    "Loader should throw exception when used before initialization");
+            assertTrue(keyLoader.getKeyInfoMap().isEmpty(),
+                    "Loader should return empty map before initialization");
+        }
+
+        @Test
+        @DisplayName("Should throw exception when getKeyInfo is called without initialization")
+        void shouldThrowExceptionWhenGetKeyInfoCalledWithoutInitialization() {
+            JWKSKeyLoader keyLoader = JWKSKeyLoader.builder()
+                    .jwksContent("{\"keys\":[]}")
+                    .build();
+
+            assertThrows(IllegalStateException.class, () -> keyLoader.getKeyInfo("test-kid"),
+                    "Loader should throw exception when getKeyInfo is called before initialization");
         }
     }
 }

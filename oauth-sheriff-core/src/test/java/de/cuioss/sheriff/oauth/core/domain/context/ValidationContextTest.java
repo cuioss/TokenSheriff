@@ -39,9 +39,9 @@ class ValidationContextTest {
     class Constructors {
 
         @Test
-        @DisplayName("Single-arg constructor should set clockSkew and null maxTokenAge")
-        void singleArgConstructor() {
-            var ctx = new ValidationContext(CLOCK_SKEW);
+        @DisplayName("Two-arg production constructor should set clockSkew and null maxTokenAge")
+        void productionConstructor() {
+            var ctx = new ValidationContext(CLOCK_SKEW, null);
             assertEquals(CLOCK_SKEW, ctx.getClockSkewSeconds());
             assertNull(ctx.getMaxTokenAgeSeconds());
             assertNotNull(ctx.getCurrentTime());

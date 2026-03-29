@@ -64,7 +64,7 @@ class WellKnownResultConverterTest {
     @BeforeEach
     void setUp() {
         ParserConfig config = ParserConfig.builder().build();
-        converter = new WellKnownConfigurationConverter(config.getDslJson());
+        converter = new WellKnownConfigurationConverter(config.getDslJson(), new SecurityEventCounter(), 8 * 1024);
     }
 
     @Test
@@ -140,7 +140,7 @@ class WellKnownResultConverterTest {
         ParserConfig restrictedConfig = ParserConfig.builder()
                 .maxPayloadSize(50) // Very small size to trigger the error
                 .build();
-        WellKnownConfigurationConverter restrictedConverter = new WellKnownConfigurationConverter(restrictedConfig.getDslJson());
+        WellKnownConfigurationConverter restrictedConverter = new WellKnownConfigurationConverter(restrictedConfig.getDslJson(), new SecurityEventCounter(), 8 * 1024);
 
         String largeJson = "{\"issuer\": \"" + "x".repeat(100) + "\"}";
         Optional<WellKnownResult> result = restrictedConverter.convert(largeJson);

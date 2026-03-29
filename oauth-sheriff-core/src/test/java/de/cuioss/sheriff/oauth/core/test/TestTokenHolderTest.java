@@ -275,7 +275,7 @@ class TestTokenHolderTest {
             assertEquals("test-subject", decodedJwt.getBody().getString(ClaimName.SUBJECT.getName()).orElse(""), "Subject should match");
 
             // Verify signature
-            assertTrue(decodedJwt.getSignature().isPresent(), "Signature should be present");
+            assertNotNull(decodedJwt.signature(), "Signature should be present");
 
             // Verify convenience methods
             assertEquals(tokenHolder.getIssuer(), decodedJwt.getIssuer().orElse(null), "Issuer from convenience method should match");
@@ -609,21 +609,6 @@ class TestTokenHolderTest {
 
             assertTrue(exception.getMessage().contains("REFRESH_TOKEN"),
                     "Exception message should mention REFRESH_TOKEN");
-            assertTrue(exception.getMessage().contains("ACCESS_TOKEN"),
-                    "Exception message should mention ACCESS_TOKEN");
-        }
-
-        @Test
-        @DisplayName("asAccessTokenContent should throw IllegalStateException for UNKNOWN token type")
-        void asAccessTokenContentShouldThrowIllegalStateExceptionForUnknownToken() {
-            var tokenHolder = new TestTokenHolder(TokenType.UNKNOWN, ClaimControlParameter.builder().build());
-
-            IllegalStateException exception = assertThrows(IllegalStateException.class,
-                    tokenHolder::asAccessTokenContent,
-                    "Should throw IllegalStateException for UNKNOWN token type");
-
-            assertTrue(exception.getMessage().contains("UNKNOWN"),
-                    "Exception message should mention UNKNOWN");
             assertTrue(exception.getMessage().contains("ACCESS_TOKEN"),
                     "Exception message should mention ACCESS_TOKEN");
         }

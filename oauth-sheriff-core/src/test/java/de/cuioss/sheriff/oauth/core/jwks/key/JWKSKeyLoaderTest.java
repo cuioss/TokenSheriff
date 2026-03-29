@@ -143,7 +143,7 @@ class JWKSKeyLoaderTest {
         @Test
         @DisplayName("Should report not empty when keys are present")
         void shouldReportNotEmptyWhenKeysArePresent() {
-            boolean notEmpty = keyLoader.isNotEmpty();
+            boolean notEmpty = !keyLoader.getKeyInfoMap().isEmpty();
             assertTrue(notEmpty, "Loader should report not empty when keys are present");
         }
 
@@ -155,8 +155,7 @@ class JWKSKeyLoaderTest {
                     .jwksContent(emptyJwksContent)
                     .build();
             emptyLoader.initJWKSLoader(new SecurityEventCounter());
-            boolean notEmpty = emptyLoader.isNotEmpty();
-            assertFalse(notEmpty, "Loader should report empty when no keys are present");
+            assertTrue(emptyLoader.getKeyInfoMap().isEmpty(), "Loader should report empty when no keys are present");
         }
     }
 
@@ -176,7 +175,7 @@ class JWKSKeyLoaderTest {
                     .parserConfig(customConfig)
                     .build();
             loaderWithCustomConfig.initJWKSLoader(new SecurityEventCounter());
-            assertTrue(loaderWithCustomConfig.isNotEmpty(),
+            assertFalse(loaderWithCustomConfig.getKeyInfoMap().isEmpty(),
                     "Loader should parse valid JWKS with custom config");
         }
 
@@ -198,7 +197,7 @@ class JWKSKeyLoaderTest {
                     .parserConfig(restrictiveConfig)
                     .build();
             loader.initJWKSLoader(new SecurityEventCounter());
-            assertFalse(loader.isNotEmpty(), "Loader should reject content exceeding maximum size");
+            assertTrue(loader.getKeyInfoMap().isEmpty(), "Loader should reject content exceeding maximum size");
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR, JWKS_CONTENT_SIZE_EXCEEDED.resolveIdentifierString());
         }
 

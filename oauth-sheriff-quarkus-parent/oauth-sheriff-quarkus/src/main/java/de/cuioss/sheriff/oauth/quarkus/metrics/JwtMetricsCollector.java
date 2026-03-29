@@ -171,7 +171,7 @@ public class JwtMetricsCollector {
      * The interval can be configured via the property: sheriff.oauth.metrics.collection.interval
      * Default: 10s (production), can be set to 2s for faster integration testing.
      */
-    @Scheduled(every = "${" + JwtPropertyKeys.METRICS.COLLECTION_INTERVAL + ":10s}")
+    @Scheduled(every = "${" + JwtPropertyKeys.METRICS_COLLECTION_INTERVAL + ":10s}")
     public void updateCounters() {
         updateSecurityEventCounters();
     }

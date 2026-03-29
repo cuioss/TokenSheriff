@@ -175,9 +175,7 @@ public void processRequest(String jwtString) {
 sheriff.oauth.parser.max-token-size=8192
 
 # Health check configuration
-sheriff.oauth.health.enabled=true
 sheriff.oauth.health.jwks.cache-seconds=60
-sheriff.oauth.health.jwks.timeout-seconds=5
 ----
 
 === Issuer-Specific Configuration

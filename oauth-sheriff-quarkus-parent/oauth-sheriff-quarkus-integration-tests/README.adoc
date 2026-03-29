@@ -316,7 +316,6 @@ sheriff.oauth.issuers.keycloak.enabled=true
 sheriff.oauth.issuers.integration.enabled=true
 
 # Health checks
-sheriff.oauth.health.enabled=true
 
 # HTTPS configuration
 quarkus.http.ssl-port=8443

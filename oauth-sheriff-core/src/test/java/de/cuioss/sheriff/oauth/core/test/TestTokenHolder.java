@@ -642,10 +642,8 @@ public class TestTokenHolder implements TokenContent {
                     claimsMap.put(ClaimName.TYPE.getName(), ClaimValue.forPlainString(TokenType.REFRESH_TOKEN.getTypeClaimName()));
                     break;
 
-                case UNKNOWN:
                 default:
-                    // Add token type
-                    claimsMap.put(ClaimName.TYPE.getName(), ClaimValue.forPlainString("unknown"));
+                    // Should not happen - all known token types are handled above
                     break;
             }
         }

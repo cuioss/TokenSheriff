@@ -90,7 +90,7 @@ public class ClientIpExtractor {
      * @param headers Map of HTTP header names to values (case-insensitive lookup expected)
      * @return The extracted client IP address, or "unknown" if none found
      */
-    public static String extractClientIp(Map<String, String> headers) {
+    static String extractClientIp(Map<String, String> headers) {
         // Check standard headers first
         for (String headerName : PROXY_HEADERS) {
             String result = extractFromHeader(headers, headerName);

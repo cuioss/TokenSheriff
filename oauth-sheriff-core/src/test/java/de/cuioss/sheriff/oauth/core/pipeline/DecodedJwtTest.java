@@ -62,8 +62,8 @@ class DecodedJwtTest {
         assertEquals(ISSUER, actualBody.getString("iss").orElse(null));
         assertEquals("test-subject", actualBody.getString("sub").orElse(null));
 
-        assertTrue(jwt.getSignature().isPresent());
-        assertEquals(SIGNATURE, jwt.getSignature().get());
+        assertNotNull(jwt.signature());
+        assertEquals(SIGNATURE, jwt.signature());
 
         assertTrue(jwt.getIssuer().isPresent());
         assertEquals(ISSUER, jwt.getIssuer().get());
@@ -88,7 +88,7 @@ class DecodedJwtTest {
 
         MapRepresentation actualBody = jwt.body();
         assertNull(actualBody);
-        assertFalse(jwt.getSignature().isPresent());
+        assertNull(jwt.signature());
         assertFalse(jwt.getIssuer().isPresent());
         assertFalse(jwt.getKid().isPresent());
         assertFalse(jwt.getAlg().isPresent());
@@ -108,8 +108,8 @@ class DecodedJwtTest {
         MapRepresentation actualBody = jwt.body();
         assertNull(actualBody);
 
-        assertTrue(jwt.getSignature().isPresent());
-        assertEquals(SIGNATURE, jwt.getSignature().get());
+        assertNotNull(jwt.signature());
+        assertEquals(SIGNATURE, jwt.signature());
 
         assertFalse(jwt.getIssuer().isPresent());
         assertFalse(jwt.getKid().isPresent());
@@ -142,8 +142,8 @@ class DecodedJwtTest {
         assertEquals(ISSUER, actualBody.getString("iss").orElse(null));
         assertEquals("test-subject", actualBody.getString("sub").orElse(null));
 
-        assertTrue(jwt.getSignature().isPresent());
-        assertEquals(SIGNATURE, jwt.getSignature().get());
+        assertNotNull(jwt.signature());
+        assertEquals(SIGNATURE, jwt.signature());
 
         assertTrue(jwt.getIssuer().isPresent());
         assertEquals(ISSUER, jwt.getIssuer().get());
@@ -156,6 +156,32 @@ class DecodedJwtTest {
 
         assertEquals(PARTS, jwt.parts());
         assertEquals(RAW_TOKEN, jwt.rawToken());
+    }
+
+    @Test
+    @DisplayName("Builder should reject null header")
+    void builderShouldRejectNullHeader() {
+        assertThrows(NullPointerException.class, () ->
+                        DecodedJwt.builder()
+                                .body(createTestBody())
+                                .signature(SIGNATURE)
+                                .parts(PARTS)
+                                .rawToken(RAW_TOKEN)
+                                .build(),
+                "Builder should throw NullPointerException when header is null");
+    }
+
+    @Test
+    @DisplayName("Builder should reject null rawToken")
+    void builderShouldRejectNullRawToken() {
+        assertThrows(NullPointerException.class, () ->
+                        DecodedJwt.builder()
+                                .header(createTestHeader())
+                                .body(createTestBody())
+                                .signature(SIGNATURE)
+                                .parts(PARTS)
+                                .build(),
+                "Builder should throw NullPointerException when rawToken is null");
     }
 
     @Test

@@ -173,8 +173,8 @@ class JweDecryptionConfigResolverTest {
     }
 
     @Test
-    @DisplayName("Should warn and skip keystore when alias is missing")
-    void shouldWarnWhenKeystoreAliasMissing() throws Exception {
+    @DisplayName("Should throw when keystore configured without alias — no keys loaded means fail-closed")
+    void shouldThrowWhenKeystoreAliasMissing() throws Exception {
         Path dummyKeystore = tempDir.resolve("dummy.p12");
         Files.writeString(dummyKeystore, "dummy-content");
 
@@ -185,29 +185,25 @@ class JweDecryptionConfigResolverTest {
         TestConfig config = new TestConfig(props);
         JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(config);
 
-        // Should return null because keystore loading is skipped without alias
-        // and no other key source is provided
-        JweDecryptionConfig result = resolver.resolveJweDecryptionConfig();
-
-        // The result could be non-null (empty config with defaults) or null depending on implementation
-        // The keystore key loading was skipped, so no keys were loaded
-        if (result != null) {
-            assertEquals(0, result.getKeyCount());
-        }
+        // JWE is explicitly configured but no keys can be loaded (alias missing),
+        // so builder.build() fails and the resolver throws fail-closed
+        var exception = assertThrows(IllegalStateException.class,
+                resolver::resolveJweDecryptionConfig);
+        assertTrue(exception.getMessage().contains("key loading failed"));
     }
 
     @Test
-    @DisplayName("Should return null when key loading fails")
-    void shouldReturnNullWhenKeyLoadingFails() {
+    @DisplayName("Should throw when key loading fails for explicitly configured JWE")
+    void shouldThrowWhenKeyLoadingFails() {
         Map<String, String> props = new HashMap<>();
         props.put(JwtPropertyKeys.JWE.DECRYPTION_KEY_PATH, "/nonexistent/path/key.pem");
 
         TestConfig config = new TestConfig(props);
         JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(config);
 
-        // Should return null (graceful error handling)
-        JweDecryptionConfig result = resolver.resolveJweDecryptionConfig();
-        assertNull(result);
+        var exception = assertThrows(IllegalStateException.class,
+                resolver::resolveJweDecryptionConfig);
+        assertTrue(exception.getMessage().contains("key loading failed"));
     }
 
     private Path createRsaPemFile(String filename) throws Exception {

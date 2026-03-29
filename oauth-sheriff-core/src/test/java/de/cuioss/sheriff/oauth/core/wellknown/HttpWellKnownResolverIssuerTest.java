@@ -17,6 +17,7 @@ package de.cuioss.sheriff.oauth.core.wellknown;
 
 import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.oauth.core.json.WellKnownResult;
+import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.test.dispatcher.WellKnownDispatcher;
 import de.cuioss.sheriff.oauth.core.util.LoaderStatus;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -67,7 +68,7 @@ class HttpWellKnownResolverIssuerTest {
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
 
-        resolver = config.createResolver();
+        resolver = config.createResolver(new SecurityEventCounter());
 
         // Get issuer - should return the discovered issuer
         Optional<String> issuer = resolver.getIssuer();
@@ -95,7 +96,7 @@ class HttpWellKnownResolverIssuerTest {
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
 
-        resolver = config.createResolver();
+        resolver = config.createResolver(new SecurityEventCounter());
 
         // Issuer should not be available when discovery fails
         Optional<String> issuer = resolver.getIssuer();
@@ -122,7 +123,7 @@ class HttpWellKnownResolverIssuerTest {
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
 
-        resolver = config.createResolver();
+        resolver = config.createResolver(new SecurityEventCounter());
 
         // Issuer should not be available when missing from response
         Optional<String> issuer = resolver.getIssuer();
@@ -146,7 +147,7 @@ class HttpWellKnownResolverIssuerTest {
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
 
-        resolver = config.createResolver();
+        resolver = config.createResolver(new SecurityEventCounter());
 
         // Get issuer multiple times
         Optional<String> issuer1 = resolver.getIssuer();
@@ -178,7 +179,7 @@ class HttpWellKnownResolverIssuerTest {
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
 
-        resolver = config.createResolver();
+        resolver = config.createResolver(new SecurityEventCounter());
 
         // Should still return the issuer even if it's invalid (validation is not the resolver's job)
         Optional<String> issuer = resolver.getIssuer();
@@ -204,7 +205,7 @@ class HttpWellKnownResolverIssuerTest {
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
 
-        resolver = config.createResolver();
+        resolver = config.createResolver(new SecurityEventCounter());
 
         // Should still work with minimal configuration
         Optional<String> issuer = resolver.getIssuer();
