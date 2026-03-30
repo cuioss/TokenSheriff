@@ -210,9 +210,6 @@ public class TokenHeaderValidator {
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068">RFC 9068</a>
      */
     private void validateTokenType(DecodedJwt decodedJwt) {
-        if (issuerConfig.isTokenTypeValidationDisabled()) {
-            return; // Token type validation explicitly disabled for this issuer
-        }
         var expectedType = issuerConfig.getExpectedTokenType();
         if (expectedType == null || expectedType.isBlank()) {
             return; // No token type validation configured

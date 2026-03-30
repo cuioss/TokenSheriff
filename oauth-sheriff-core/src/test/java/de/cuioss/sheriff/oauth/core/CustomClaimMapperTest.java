@@ -59,7 +59,6 @@ class CustomClaimMapperTest {
                 .expectedClientId(TestTokenHolder.TEST_CLIENT_ID)
                 .jwksContent(jwksContent)
                 .claimMapper(ROLE_CLAIM, roleMapper)
-                .tokenTypeValidationDisabled(true)
                 .build();
 
         tokenValidator = TokenValidator.builder().issuerConfig(issuerConfig).build();
@@ -97,7 +96,6 @@ class CustomClaimMapperTest {
                 .expectedAudience(TestTokenHolder.TEST_AUDIENCE)
                 .expectedClientId(TestTokenHolder.TEST_CLIENT_ID)
                 .jwksContent(jwksContent)
-                .tokenTypeValidationDisabled(true)
                 .build();
 
         TokenValidator factoryWithoutCustomMapper = TokenValidator.builder()

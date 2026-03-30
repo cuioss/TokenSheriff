@@ -217,30 +217,21 @@ public final class JwtPropertyKeys {
         public static final String ACCESS_TOKEN_AUDIENCE_OPTIONAL = BASE + "access-token-audience-optional";
 
         /**
-         * Expected JWT "typ" header value for this issuer.
+         * Expected JWT "typ" header value for this issuer (e.g., "at+jwt").
          * Template: "sheriff.oauth.issuers.%s.expected-token-type"
          * <p>
-         * Default value is {@code "at+jwt"} per RFC 9068. Tokens with a missing or mismatched
-         * "typ" header will be rejected unless {@link #TOKEN_TYPE_VALIDATION_DISABLED} is set.
+         * When configured, tokens with a missing or mismatched "typ" header will be rejected.
+         * When not set (default), no token type validation is performed.
+         * </p>
+         * <p>
+         * <strong>Security recommendation:</strong> Set to {@code "at+jwt"} if your IdP issues
+         * RFC 9068-compliant tokens to prevent token type confusion attacks.
          * </p>
          *
          * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068">RFC 9068</a>
          * @see de.cuioss.sheriff.oauth.core.IssuerConfig#getExpectedTokenType()
          */
         public static final String EXPECTED_TOKEN_TYPE = BASE + "expected-token-type";
-
-        /**
-         * Explicitly disable token type (typ header) validation for this issuer.
-         * Template: "sheriff.oauth.issuers.%s.token-type-validation-disabled"
-         * <p>
-         * Set to {@code true} for identity providers that do not set {@code typ: at+jwt}
-         * per RFC 9068 (e.g., older Keycloak versions, Azure AD B2C).
-         * Default value is {@code false}.
-         * </p>
-         *
-         * @see de.cuioss.sheriff.oauth.core.IssuerConfig#isTokenTypeValidationDisabled()
-         */
-        public static final String TOKEN_TYPE_VALIDATION_DISABLED = BASE + "token-type-validation-disabled";
 
         /**
          * Clock skew tolerance in seconds for time-based claim validation (exp, nbf).

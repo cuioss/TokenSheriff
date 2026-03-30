@@ -77,7 +77,6 @@ class OAuth2JWTBestPracticesComplianceTest {
                 .expectedAudience(TestTokenHolder.TEST_AUDIENCE)
                 .expectedClientId(TestTokenHolder.TEST_CLIENT_ID)
                 .jwksContent(jwksContent)
-                .tokenTypeValidationDisabled(true)
                 .build();
 
         // Create validation factory
@@ -289,7 +288,6 @@ class OAuth2JWTBestPracticesComplianceTest {
                             .expectedClientId(TestTokenHolder.TEST_CLIENT_ID)
                             .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                             .algorithmPreferences(new SignatureAlgorithmPreferences())
-                            .tokenTypeValidationDisabled(true)
                             .build())
                     .build();
             var largeTokenRequest = AccessTokenRequest.of(largeToken);

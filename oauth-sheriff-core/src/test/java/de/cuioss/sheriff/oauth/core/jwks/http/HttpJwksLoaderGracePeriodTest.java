@@ -460,7 +460,6 @@ class HttpJwksLoaderGracePeriodTest {
                     .issuerIdentifier("test-issuer")
                     .jwksLoader(loader)
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
 
             // Create TokenValidator with cache disabled to ensure fresh validation
@@ -572,7 +571,6 @@ class HttpJwksLoaderGracePeriodTest {
                     .issuerIdentifier("test-issuer")
                     .jwksLoader(loader)
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
 
             // No need to call initSecurityEventCounter - TokenValidator will handle it

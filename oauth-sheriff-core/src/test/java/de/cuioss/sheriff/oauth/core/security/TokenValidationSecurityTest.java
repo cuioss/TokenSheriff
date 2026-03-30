@@ -68,7 +68,6 @@ class TokenValidationSecurityTest {
                 .issuerIdentifier("Token-Test-testIssuer")
                 .expectedAudience(TestTokenHolder.TEST_AUDIENCE)
                 .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
-                .tokenTypeValidationDisabled(true)
                 .build();
 
         // Create validation factory
