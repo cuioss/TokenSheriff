@@ -72,13 +72,6 @@ class MetricsIntegrationTest {
         assertFalse(meterRegistry.find(MetricIdentifier.VALIDATION.ERRORS).counters().isEmpty(), "Error counters should be registered");
     }
 
-    @Test
-    @DisplayName("Should register JWKs cache size metrics")
-    void shouldRegisterJwksCacheSizeMetrics() {
-        // Verify that JWKS cache size gauges are registered
-        assertNotNull(meterRegistry.find(MetricIdentifier.JWKS.CACHE_SIZE).gauges(),
-                "JWKS cache size gauges should be registered");
-    }
 
     @Test
     @DisplayName("Should register metrics for all security event types")

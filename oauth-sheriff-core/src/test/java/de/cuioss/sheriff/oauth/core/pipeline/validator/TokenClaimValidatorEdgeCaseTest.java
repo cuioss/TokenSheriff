@@ -17,6 +17,7 @@ package de.cuioss.sheriff.oauth.core.pipeline.validator;
 
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
 import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages;
+import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.context.ValidationContext;
@@ -299,7 +300,7 @@ class TokenClaimValidatorEdgeCaseTest {
      */
     private static class FailingJwksKeyLoader extends JWKSKeyLoader {
         public FailingJwksKeyLoader() {
-            super("{}", null, new JwkAlgorithmPreferences(), JwksType.MEMORY); // Empty JWKS
+            super("{}", ParserConfig.builder().build(), new JwkAlgorithmPreferences(), JwksType.MEMORY); // Empty JWKS
             initJWKSLoader(new SecurityEventCounter());
         }
 

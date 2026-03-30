@@ -69,7 +69,6 @@ import lombok.ToString;
  *
  * @since 1.0
  */
-@Builder
 @Getter
 @EqualsAndHashCode
 @ToString

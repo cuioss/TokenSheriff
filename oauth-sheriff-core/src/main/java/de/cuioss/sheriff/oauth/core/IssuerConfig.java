@@ -164,13 +164,54 @@ public class IssuerConfig implements LoadingStatusProvider {
     boolean claimSubOptional;
 
     /**
+     * Whether the audience ("aud") claim is optional for access tokens from this issuer.
+     * <p>
+     * Design Decision: pragmatic accommodation for identity providers that omit
+     * the audience claim in access tokens. Default is secure ({@code false}).
+     * </p>
+     * <p>
+     * When set to {@code true}, access tokens without an "aud" claim will pass audience
+     * validation even when {@link #expectedAudience} is configured. ID tokens always
+     * require the "aud" claim regardless of this setting.
+     * </p>
+     * <p>
+     * <strong>Warning:</strong> Setting this to {@code true} means that when
+     * {@code expectedAudience} is configured, an access token that simply omits the
+     * "aud" claim will bypass audience validation entirely — a confused deputy risk.
+     * RFC 9068 Section 4 requires "aud" for JWT access tokens. Use this option only
+     * when your IdP is known to omit the "aud" claim in access tokens and you cannot
+     * configure it to include it.
+     * </p>
+     * <p>
+     * Default value is {@code false} (audience claim is required for access tokens
+     * when {@code expectedAudience} is configured).
+     * </p>
+     *
+     * @see de.cuioss.sheriff.oauth.core.domain.claim.ClaimName#AUDIENCE
+     * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-4">RFC 9068 - 4. JWT Access Token Claims</a>
+     */
+    boolean accessTokenAudienceOptional;
+
+    /**
      * The expected value for the JWT "typ" header parameter.
+     * <p>
      * When configured, the {@link de.cuioss.sheriff.oauth.core.pipeline.validator.TokenHeaderValidator}
      * will validate that the token's "typ" header matches this value
-     * (e.g., "at+jwt" per RFC 9068).
-     * When {@code null}, no token type validation is performed (default).
+     * (e.g., "at+jwt" per RFC 9068). The comparison is case-insensitive per RFC convention.
+     * </p>
+     * <p>
+     * When {@code null} (default), no token type validation is performed.
+     * </p>
+     * <p>
+     * <strong>Warning:</strong> Without token type validation, an attacker may substitute
+     * a JWT of one type (e.g., an ID token) into the position of another (e.g., an access token).
+     * RFC 9068 Section 2.1 requires {@code typ: at+jwt} for JWT access tokens. If your identity
+     * provider issues RFC 9068-compliant tokens, set this to {@code "at+jwt"} to prevent
+     * type confusion attacks. Many IdPs (Keycloak, Azure AD in certain modes) do not set
+     * {@code typ: at+jwt} by default — verify your IdP's behavior before enabling.
+     * </p>
      *
-     * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068">RFC 9068</a>
+     * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-2.1">RFC 9068 - 2.1. Header</a>
      */
     @Nullable
     String expectedTokenType;
@@ -341,6 +382,7 @@ public class IssuerConfig implements LoadingStatusProvider {
         private boolean audienceValidationDisabled = false;
         private Set<String> expectedClientId;
         private boolean claimSubOptional = false;
+        private boolean accessTokenAudienceOptional = false;
         private String expectedTokenType;
         private DpopConfig dpopConfig;
         private int clockSkewSeconds = 60;
@@ -522,6 +564,19 @@ public class IssuerConfig implements LoadingStatusProvider {
          */
         public IssuerConfigBuilder claimSubOptional(boolean claimSubOptional) {
             this.claimSubOptional = claimSubOptional;
+            return this;
+        }
+
+        /**
+         * Sets whether the audience claim is optional for access tokens from this issuer.
+         *
+         * @param accessTokenAudienceOptional {@code true} to allow access tokens without audience claim,
+         *                                     {@code false} to require it when expectedAudience is configured
+         * @return this builder instance for method chaining
+         * @see de.cuioss.sheriff.oauth.core.domain.claim.ClaimName#AUDIENCE
+         */
+        public IssuerConfigBuilder accessTokenAudienceOptional(boolean accessTokenAudienceOptional) {
+            this.accessTokenAudienceOptional = accessTokenAudienceOptional;
             return this;
         }
 
@@ -890,8 +945,8 @@ public class IssuerConfig implements LoadingStatusProvider {
             }
 
             return new IssuerConfig(enabled, issuerIdentifier, expectedAudience, audienceValidationDisabled,
-                    expectedClientId, claimSubOptional, expectedTokenType, dpopConfig, clockSkewSeconds,
-                    maxTokenAgeSeconds, algorithmPreferences, claimMappers, jwksLoader);
+                    expectedClientId, claimSubOptional, accessTokenAudienceOptional, expectedTokenType,
+                    dpopConfig, clockSkewSeconds, maxTokenAgeSeconds, algorithmPreferences, claimMappers, jwksLoader);
         }
 
         private void validateConfiguration() {
@@ -940,7 +995,7 @@ public class IssuerConfig implements LoadingStatusProvider {
     @SuppressWarnings("java:S107") // ok for private constructor
     private IssuerConfig(boolean enabled, @Nullable String issuerIdentifier, @Nullable Set<String> expectedAudience,
             boolean audienceValidationDisabled, @Nullable Set<String> expectedClientId,
-            boolean claimSubOptional, @Nullable String expectedTokenType,
+            boolean claimSubOptional, boolean accessTokenAudienceOptional, @Nullable String expectedTokenType,
             @Nullable DpopConfig dpopConfig, int clockSkewSeconds, @Nullable Integer maxTokenAgeSeconds,
             @Nullable SignatureAlgorithmPreferences algorithmPreferences,
             @Nullable Map<String, ClaimMapper> claimMappers, @Nullable JwksLoader jwksLoader) {
@@ -950,6 +1005,7 @@ public class IssuerConfig implements LoadingStatusProvider {
         this.audienceValidationDisabled = audienceValidationDisabled;
         this.expectedClientId = expectedClientId != null ? expectedClientId : Set.of();
         this.claimSubOptional = claimSubOptional;
+        this.accessTokenAudienceOptional = accessTokenAudienceOptional;
         this.expectedTokenType = expectedTokenType;
         this.dpopConfig = dpopConfig;
         this.clockSkewSeconds = clockSkewSeconds;

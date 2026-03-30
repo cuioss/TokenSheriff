@@ -15,12 +15,15 @@
  */
 package de.cuioss.sheriff.oauth.core.domain.context;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * Request object for access token validation, carrying the token string and HTTP headers.
+ * Request object for access token validation, carrying the token string, HTTP headers,
+ * and optionally the HTTP request URI and method for DPoP htu/htm validation (RFC 9449).
  * <p>
  * This record is immutable and thread-safe. The HTTP headers map is defensively copied
  * at construction time.
@@ -31,14 +34,22 @@ import java.util.Objects;
  * AccessTokenRequest request = AccessTokenRequest.of(tokenString);
  *
  * // With HTTP headers (production scenarios with DPoP support)
- * AccessTokenRequest request = new AccessTokenRequest(tokenString, httpHeaders);
+ * AccessTokenRequest request = AccessTokenRequest.of(tokenString, httpHeaders);
+ *
+ * // With full HTTP context (DPoP htu/htm validation)
+ * AccessTokenRequest request = new AccessTokenRequest(tokenString, httpHeaders, requestUri, requestMethod);
  * </pre>
  *
  * @param tokenString the raw token string, must not be null
  * @param httpHeaders the HTTP headers from the original request, defensively copied
+ * @param requestUri the full HTTP request URI (scheme + host + path), nullable
+ * @param requestMethod the HTTP method (GET, POST, etc.), nullable
  * @since 1.0
  */
-public record AccessTokenRequest(String tokenString, Map<String, List<String>> httpHeaders)
+public record AccessTokenRequest(String tokenString, Map<String, List<String>> httpHeaders,
+@Nullable
+    String requestUri, @Nullable
+    String requestMethod)
         implements TokenValidationRequest {
 
     /**
@@ -46,6 +57,8 @@ public record AccessTokenRequest(String tokenString, Map<String, List<String>> h
      *
      * @param tokenString the raw token string, must not be null
      * @param httpHeaders the HTTP headers, must not be null (may be empty)
+     * @param requestUri the full HTTP request URI, may be null
+     * @param requestMethod the HTTP method, may be null
      */
     public AccessTokenRequest {
         Objects.requireNonNull(tokenString, "tokenString must not be null");
@@ -59,9 +72,22 @@ public record AccessTokenRequest(String tokenString, Map<String, List<String>> h
      * Suitable for test scenarios or callers that do not have access to HTTP context.
      *
      * @param tokenString the raw token string, must not be null
-     * @return a new AccessTokenRequest with an empty header map
+     * @return a new AccessTokenRequest with an empty header map and no URI/method
      */
     public static AccessTokenRequest of(String tokenString) {
-        return new AccessTokenRequest(tokenString, Map.of());
+        return new AccessTokenRequest(tokenString, Map.of(), null, null);
+    }
+
+    /**
+     * Convenience factory for creating a request with HTTP headers but no URI/method.
+     * <p>
+     * Suitable for callers that have HTTP headers but do not need DPoP htu/htm validation.
+     *
+     * @param tokenString the raw token string, must not be null
+     * @param httpHeaders the HTTP headers, must not be null
+     * @return a new AccessTokenRequest with the specified headers and no URI/method
+     */
+    public static AccessTokenRequest of(String tokenString, Map<String, List<String>> httpHeaders) {
+        return new AccessTokenRequest(tokenString, httpHeaders, null, null);
     }
 }

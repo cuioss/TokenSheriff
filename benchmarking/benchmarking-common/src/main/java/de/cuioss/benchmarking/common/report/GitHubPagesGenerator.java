@@ -26,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Files.Data.BENCHMARK_DATA_JSON;
@@ -132,7 +133,7 @@ public class GitHubPagesGenerator {
             @SuppressWarnings("unchecked") Map<String, Object> data = JsonSerializationHelper.jsonToMap(content);
             // Count benchmarks from the benchmarks list
             Object benchmarks = data.get(BENCHMARKS);
-            int count = (benchmarks instanceof java.util.List<?> list) ? list.size() : 0;
+            int count = benchmarks instanceof List<?> list ? list.size() : 0;
             summary.put(TOTAL_BENCHMARKS, count);
             // Get performance grade from overview
             Object overview = data.get(OVERVIEW);

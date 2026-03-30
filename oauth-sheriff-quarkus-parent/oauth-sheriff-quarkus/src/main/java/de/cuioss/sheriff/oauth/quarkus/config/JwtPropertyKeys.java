@@ -205,6 +205,18 @@ public final class JwtPropertyKeys {
         public static final String CLAIM_SUB_OPTIONAL = BASE + "claim-sub-optional";
 
         /**
+         * Whether the audience claim is optional for access tokens from this issuer.
+         * Template: "sheriff.oauth.issuers.%s.access-token-audience-optional"
+         * <p>
+         * Default value is {@code false} (audience claim is required for access tokens
+         * when expected-audience is configured).
+         * </p>
+         *
+         * @see de.cuioss.sheriff.oauth.core.IssuerConfig#isAccessTokenAudienceOptional()
+         */
+        public static final String ACCESS_TOKEN_AUDIENCE_OPTIONAL = BASE + "access-token-audience-optional";
+
+        /**
          * Expected JWT "typ" header value for this issuer (e.g., "at+jwt").
          * Template: "sheriff.oauth.issuers.%s.expected-token-type"
          * <p>

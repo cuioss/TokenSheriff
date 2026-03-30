@@ -59,22 +59,6 @@ public final class MetricIdentifier {
     }
 
     /**
-     * Metrics related to JWKS operations.
-     */
-    @UtilityClass
-    public static final class JWKS {
-        /**
-         * Base path for JWKS metrics.
-         */
-        public static final String BASE = PREFIX + ".jwks";
-
-        /**
-         * Gauge for JWKS cache size.
-         */
-        public static final String CACHE_SIZE = BASE + ".cache.size";
-    }
-
-    /**
      * Metrics related to JWT validation pipeline.
      */
     @UtilityClass
