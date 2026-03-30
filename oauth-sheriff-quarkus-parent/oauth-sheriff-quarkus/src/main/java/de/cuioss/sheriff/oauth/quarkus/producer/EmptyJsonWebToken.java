@@ -31,6 +31,7 @@ import java.util.Set;
  *
  * @since 1.0
  */
+@SuppressWarnings("java:S6548") // Singleton is intentional — single "no token" sentinel per MP-JWT spec
 final class EmptyJsonWebToken implements JsonWebToken {
 
     static final EmptyJsonWebToken INSTANCE = new EmptyJsonWebToken();

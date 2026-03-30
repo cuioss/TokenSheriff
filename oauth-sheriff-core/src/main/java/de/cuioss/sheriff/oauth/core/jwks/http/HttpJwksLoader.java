@@ -112,18 +112,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             // Resolve the adapter (may involve well-known discovery)
             Optional<HttpAdapter<Jwks>> adapterOpt = resolveJWKSAdapter();
             if (adapterOpt.isEmpty()) {
-                status.set(LoaderStatus.ERROR);
-                boolean isWellKnownFailure = config.getWellKnownConfig() != null;
-                String errorDetail = isWellKnownFailure
-                        ? "Well-known discovery failed"
-                        : "No HTTP handler configured";
-
-                // Log appropriate message based on failure type
-                if (isWellKnownFailure) {
-                    LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
-                }
-                LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, errorDetail, getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
-                return LoaderStatus.ERROR;
+                return handleAdapterResolutionFailure();
             }
 
             HttpAdapter<Jwks> adapter = adapterOpt.get();
@@ -163,6 +152,23 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             return future;
         }
         return initFuture.get();
+    }
+
+    /**
+     * Handles the case where JWKS adapter resolution failed (well-known discovery or HTTP handler).
+     */
+    private LoaderStatus handleAdapterResolutionFailure() {
+        status.set(LoaderStatus.ERROR);
+        boolean isWellKnownFailure = config.getWellKnownConfig() != null;
+        String errorDetail = isWellKnownFailure
+                ? "Well-known discovery failed"
+                : "No HTTP handler configured";
+
+        if (isWellKnownFailure) {
+            LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
+        }
+        LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, errorDetail, getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
+        return LoaderStatus.ERROR;
     }
 
     /**

@@ -254,7 +254,7 @@ public class IssuerConfigResolver {
         config.getOptionalValue(
                 JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(issuerName),
                 Boolean.class
-        ).ifPresent(disabled -> builder.audienceValidationDisabled(disabled));
+        ).ifPresent(builder::audienceValidationDisabled);
     }
 
     /**

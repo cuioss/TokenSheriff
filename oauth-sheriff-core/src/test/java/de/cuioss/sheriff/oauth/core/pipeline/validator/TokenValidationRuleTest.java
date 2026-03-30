@@ -94,8 +94,9 @@ class TokenValidationRuleTest {
                 .tokenValidationRule(rejectingRule)
                 .build();
 
+        var request = AccessTokenRequest.of(validToken);
         var exception = assertThrows(TokenValidationException.class,
-                () -> validator.createAccessToken(AccessTokenRequest.of(validToken)));
+                () -> validator.createAccessToken(request));
 
         assertEquals(SecurityEventCounter.EventType.CUSTOM_RULE_REJECTED, exception.getEventType());
         assertTrue(exception.getMessage().contains("blocked subject"));
@@ -125,8 +126,9 @@ class TokenValidationRuleTest {
                 .tokenValidationRule(thirdRule)
                 .build();
 
+        var request = AccessTokenRequest.of(validToken);
         assertThrows(TokenValidationException.class,
-                () -> validator.createAccessToken(AccessTokenRequest.of(validToken)));
+                () -> validator.createAccessToken(request));
 
         assertEquals(List.of("first", "failing"), executionOrder,
                 "Third rule should not execute after second rule fails");

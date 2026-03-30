@@ -294,24 +294,19 @@ public class BearerTokenProducer {
         for (String cookie : cookies) {
             String trimmed = cookie.trim();
             int eqIndex = trimmed.indexOf('=');
-            if (eqIndex <= 0) {
-                continue;
+            if (eqIndex > 0 && tokenCookieName.equals(trimmed.substring(0, eqIndex).trim())) {
+                String value = trimmed.substring(eqIndex + 1).trim();
+                // Remove optional surrounding double quotes per RFC 6265
+                if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+                    value = value.substring(1, value.length() - 1);
+                }
+                if (value.isEmpty()) {
+                    LOGGER.debug("Cookie '%s' found but value is empty", tokenCookieName);
+                    return Optional.empty();
+                }
+                LOGGER.debug("Token extracted from cookie '%s'", tokenCookieName);
+                return Optional.of(value);
             }
-            String name = trimmed.substring(0, eqIndex).trim();
-            if (!tokenCookieName.equals(name)) {
-                continue;
-            }
-            String value = trimmed.substring(eqIndex + 1).trim();
-            // Remove optional surrounding double quotes per RFC 6265
-            if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
-                value = value.substring(1, value.length() - 1);
-            }
-            if (value.isEmpty()) {
-                LOGGER.debug("Cookie '%s' found but value is empty", tokenCookieName);
-                return Optional.empty();
-            }
-            LOGGER.debug("Token extracted from cookie '%s'", tokenCookieName);
-            return Optional.of(value);
         }
         return Optional.empty();
     }
