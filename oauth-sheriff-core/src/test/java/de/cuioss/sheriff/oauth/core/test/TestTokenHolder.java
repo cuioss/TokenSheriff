@@ -283,10 +283,7 @@ public class TestTokenHolder implements TokenContent {
         var config = IssuerConfig.builder()
                 .issuerIdentifier(issuer)
                 .jwksContent(jwksContent)
-                .algorithmPreferences(new SignatureAlgorithmPreferences())
-                // Test tokens don't set typ header — disable type validation for general test usage.
-                // Tests specifically verifying token type validation should create their own IssuerConfig.
-                .tokenTypeValidationDisabled(true);
+                .algorithmPreferences(new SignatureAlgorithmPreferences());
 
         // Add audience and client ID
         for (String aud : audience) {

@@ -71,7 +71,6 @@ class TokenHeaderValidatorTest {
                     .issuerIdentifier("test-issuer")
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
 
             // When creating the validator
@@ -92,7 +91,6 @@ class TokenHeaderValidatorTest {
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                     .algorithmPreferences(customAlgorithmPreferences)
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
 
             // When creating the validator
@@ -117,7 +115,6 @@ class TokenHeaderValidatorTest {
                     .issuerIdentifier("test-issuer")
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
             TokenHeaderValidator validator = createValidator(issuerConfig);
 
@@ -142,7 +139,6 @@ class TokenHeaderValidatorTest {
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                     .algorithmPreferences(customAlgorithmPreferences)
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
             TokenHeaderValidator validator = createValidator(issuerConfig);
 
@@ -178,7 +174,6 @@ class TokenHeaderValidatorTest {
                     .issuerIdentifier("test-issuer")
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
             TokenHeaderValidator validator = createValidator(issuerConfig);
 
@@ -216,7 +211,6 @@ class TokenHeaderValidatorTest {
                     .issuerIdentifier("test-issuer")
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
             TokenHeaderValidator validator = createValidator(issuerConfig);
 
@@ -271,7 +265,6 @@ class TokenHeaderValidatorTest {
                     .issuerIdentifier("test-issuer")
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
             TokenHeaderValidator validator = createValidator(issuerConfig);
 
@@ -317,7 +310,6 @@ class TokenHeaderValidatorTest {
                     .issuerIdentifier("test-issuer")
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
             TokenHeaderValidator validator = createValidator(issuerConfig);
 
@@ -383,7 +375,6 @@ class TokenHeaderValidatorTest {
                     .issuerIdentifier("test-issuer")
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
             TokenHeaderValidator validator = createValidator(issuerConfig);
 
@@ -440,7 +431,6 @@ class TokenHeaderValidatorTest {
                     .issuerIdentifier("test-issuer")
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
             TokenHeaderValidator validator = createValidator(issuerConfig);
 
@@ -486,7 +476,6 @@ class TokenHeaderValidatorTest {
                     .issuerIdentifier("test-issuer")
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                     .audienceValidationDisabled(true)
-                    .tokenTypeValidationDisabled(true)
                     .build();
             TokenHeaderValidator validator = createValidator(issuerConfig);
 

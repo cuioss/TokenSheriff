@@ -70,7 +70,6 @@ class ClientConfusionAttackTest {
                 .expectedClientId(ALTERNATIVE_CLIENT_ID) // Use a different client ID
                 .expectedAudience(TestTokenHolder.TEST_AUDIENCE)
                 .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
-                .tokenTypeValidationDisabled(true)
                 .build();
 
         // Create a token validator with the modified issuer config

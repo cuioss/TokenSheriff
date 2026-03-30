@@ -62,7 +62,6 @@ class TokenValidatorSecurityEventTest {
                 .expectedClientId(TestTokenHolder.TEST_CLIENT_ID)
                 .jwksContent(jwksContent)
                 .algorithmPreferences(new SignatureAlgorithmPreferences())
-                .tokenTypeValidationDisabled(true)
                 .build();
 
         // Create validation factory

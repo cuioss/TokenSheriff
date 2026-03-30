@@ -50,9 +50,8 @@ public class JwtTestProfile implements QuarkusTestProfile {
         config.put(JwtPropertyKeys.ISSUERS.JWKS_CONTENT.formatted("default"),
                 "{\"keys\":[{\"kty\":\"RSA\",\"use\":\"sig\",\"kid\":\"default-key-1\",\"alg\":\"RS256\",\"n\":\"nzyis1ZjfNB0bBgKFMSvvkTtwlvBsaJq7S5wA-kzeVOVpVWwkWdVha4s38XM_pa_yr47av7-z3VTmvDRyAHcaT92whREFpLv9cj5lTeJSibyr_Mrm_YtjCZVWgaOYIhwrXwKLqPr_11inWsAkfIytvHWTxZYEcXLgAXFuUuaS3uF9gEiNQwzGTU1v0FqkqTBr4B8nW3HCN47XUu0t8Y0e3zvAIhySnxIZi9aDaPvSlAeZ7VVl5ivy_43QvTRpM3eBFs9A1Y9a9aCtHSP8KXRTYhH2TvPxLOOFg0Lu-pwrps6CqvbeZjQlqCh9cGowQ\",\"e\":\"AQAB\"}]}");
 
-        // Disable audience and token type validation for test (no real audience/typ in tests)
+        // Disable audience validation for test (no real audience in tests)
         config.put(JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted("default"), "true");
-        config.put(JwtPropertyKeys.ISSUERS.TOKEN_TYPE_VALIDATION_DISABLED.formatted("default"), "true");
 
         // Disable test-issuer from application.properties
         config.put(JwtPropertyKeys.ISSUERS.ENABLED.formatted("test-issuer"), "false");
