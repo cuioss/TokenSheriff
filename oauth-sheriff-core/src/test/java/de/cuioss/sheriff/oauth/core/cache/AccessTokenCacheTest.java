@@ -74,7 +74,7 @@ class AccessTokenCacheTest {
                 .maxSize(10)
                 .evictionIntervalSeconds(300L) // Use longer interval to avoid race conditions in tests
                 .build();
-        cache = new AccessTokenCache(config, securityEventCounter);
+        cache = new AccessTokenCache(config, securityEventCounter, 0);
     }
 
     @AfterEach
@@ -479,7 +479,7 @@ class AccessTokenCacheTest {
                 .maxSize(5)
                 .evictionIntervalSeconds(300L)
                 .build();
-        cache = new AccessTokenCache(config, securityEventCounter);
+        cache = new AccessTokenCache(config, securityEventCounter, 0);
 
         int threadCount = 5; // Reduced thread count
         int tokensPerThread = 3; // Reduced tokens per thread
@@ -544,7 +544,7 @@ class AccessTokenCacheTest {
                 .maxSize(100)
                 .evictionIntervalSeconds(300L)
                 .build();
-        cache = new AccessTokenCache(config, securityEventCounter);
+        cache = new AccessTokenCache(config, securityEventCounter, 0);
 
         // When - fill cache to capacity
         for (int i = 0; i < 100; i++) {
@@ -602,7 +602,7 @@ class AccessTokenCacheTest {
                 .maxSize(0)
                 .evictionIntervalSeconds(300L)
                 .build();
-        cache = new AccessTokenCache(config, securityEventCounter);
+        cache = new AccessTokenCache(config, securityEventCounter, 0);
 
         // When - try to cache tokens
         for (int i = 0; i < 10; i++) {
@@ -639,7 +639,7 @@ class AccessTokenCacheTest {
                 .maxSize(10) // Reduced size
                 .evictionIntervalSeconds(1L) // Run eviction every second
                 .build();
-        cache = new AccessTokenCache(config, securityEventCounter);
+        cache = new AccessTokenCache(config, securityEventCounter, 0);
 
         // When - add 5 tokens that will expire in 2 seconds
         OffsetDateTime expirationTime = OffsetDateTime.now().plusSeconds(2);

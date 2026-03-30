@@ -79,34 +79,22 @@ class DecodedJwtTest {
     }
 
     @Test
-    @DisplayName("Should create DecodedJwt with null values")
-    void shouldCreateDecodedJwtWithNullValues() {
-
-        DecodedJwt jwt = new DecodedJwt(null, null, null, PARTS, RAW_TOKEN);
-        JwtHeader actualHeader = jwt.header();
-        assertNull(actualHeader);
-
-        MapRepresentation actualBody = jwt.body();
-        assertNull(actualBody);
-        assertNull(jwt.signature());
-        assertFalse(jwt.getIssuer().isPresent());
-        assertFalse(jwt.getKid().isPresent());
-        assertFalse(jwt.getAlg().isPresent());
-        assertEquals(PARTS, jwt.parts());
-        assertEquals(RAW_TOKEN, jwt.rawToken());
+    @DisplayName("Should reject null body")
+    void shouldRejectNullBody() {
+        assertThrows(NullPointerException.class,
+                () -> new DecodedJwt(null, null, null, PARTS, RAW_TOKEN));
     }
 
     @Test
-    @DisplayName("Should create DecodedJwt with null header and body")
-    void shouldCreateDecodedJwtWithNullHeaderAndBody() {
+    @DisplayName("Should create DecodedJwt with null header but non-null body")
+    void shouldCreateDecodedJwtWithNullHeader() {
 
-        // Use actual null values, not "empty" objects
-        DecodedJwt jwt = new DecodedJwt(null, null, SIGNATURE, PARTS, RAW_TOKEN);
+        MapRepresentation body = MapRepresentation.empty();
+        DecodedJwt jwt = new DecodedJwt(null, body, SIGNATURE, PARTS, RAW_TOKEN);
         JwtHeader actualHeader = jwt.header();
         assertNull(actualHeader);
 
-        MapRepresentation actualBody = jwt.body();
-        assertNull(actualBody);
+        assertNotNull(jwt.body());
 
         assertNotNull(jwt.signature());
         assertEquals(SIGNATURE, jwt.signature());

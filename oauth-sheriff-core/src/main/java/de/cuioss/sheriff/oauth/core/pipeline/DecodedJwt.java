@@ -66,6 +66,14 @@ String[] parts,
 String rawToken
 ) {
     /**
+     * Compact constructor that validates the body is non-null.
+     * A properly decoded JWT must always have a parseable body.
+     */
+    public DecodedJwt {
+        Objects.requireNonNull(body, "body must not be null");
+    }
+
+    /**
      * Gets the header of the JWT token.
      * <p>
      * The parser guarantees non-null headers, so this simply returns the record field.
@@ -79,10 +87,10 @@ String rawToken
     /**
      * Gets the body of the JWT token.
      *
-     * @return the body MapRepresentation, never null (empty MapRepresentation if not present)
+     * @return the body MapRepresentation, never null
      */
     public MapRepresentation getBody() {
-        return body != null ? body : MapRepresentation.empty();
+        return body;
     }
 
     /**
@@ -91,7 +99,7 @@ String rawToken
      * @return an Optional containing the issuer if present
      */
     public Optional<String> getIssuer() {
-        return body != null ? body.getString(ClaimName.ISSUER.getName()) : Optional.empty();
+        return body.getString(ClaimName.ISSUER.getName());
     }
 
     /**

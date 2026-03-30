@@ -99,8 +99,7 @@ public class TokenClaimValidator {
         }
 
         if (MoreCollections.isEmpty(expectedClientId)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_RECOMMENDED_ELEMENT, "azp claim validation (expectedClientId)");
-            securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT);
+            LOGGER.debug("No expectedClientId configured — azp claim validation disabled (optional per OIDC spec)");
         }
     }
 

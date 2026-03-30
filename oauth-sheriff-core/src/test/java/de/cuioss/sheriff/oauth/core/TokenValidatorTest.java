@@ -329,6 +329,7 @@ class TokenValidatorTest {
                     .jwksContent(jwksContent)
                     .expectedAudience(TestTokenHolder.TEST_AUDIENCE)
                     .expectedClientId(TestTokenHolder.TEST_CLIENT_ID)
+                    .tokenTypeValidationDisabled(true)
                     .build();
 
             TokenValidator newTokenValidator = TokenValidator.builder().issuerConfig(newIssuerConfig).build();

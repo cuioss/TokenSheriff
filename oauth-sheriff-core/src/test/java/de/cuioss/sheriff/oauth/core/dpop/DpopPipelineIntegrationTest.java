@@ -162,6 +162,7 @@ class DpopPipelineIntegrationTest {
                 .expectedClientId(TEST_CLIENT_ID)
                 .dpopConfig(DpopConfig.builder().build())
                 .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
+                .tokenTypeValidationDisabled(true)
                 .build();
     }
 

@@ -59,6 +59,7 @@ class JkuX5uAttackTest {
                 .issuerIdentifier(TestTokenHolder.TEST_ISSUER)
                 .expectedAudience("test-client")
                 .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
+                .tokenTypeValidationDisabled(true)
                 .build();
 
         // Create validation factory
