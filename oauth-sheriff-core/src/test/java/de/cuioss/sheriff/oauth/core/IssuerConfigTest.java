@@ -299,6 +299,53 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
         }
 
         @Test
+        @DisplayName("Should build with accessTokenAudienceOptional")
+        void shouldBuildWithAccessTokenAudienceOptional() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .expectedAudience(TEST_AUDIENCE)
+                    .accessTokenAudienceOptional(true)
+                    .build();
+            assertTrue(config.isAccessTokenAudienceOptional());
+        }
+
+        @Test
+        @DisplayName("Should build with expectedTokenType")
+        void shouldBuildWithExpectedTokenType() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .audienceValidationDisabled(true)
+                    .expectedTokenType("at+jwt")
+                    .build();
+            assertEquals("at+jwt", config.getExpectedTokenType());
+        }
+
+        @Test
+        @DisplayName("Should have null expectedTokenType by default")
+        void shouldHaveNullExpectedTokenTypeByDefault() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .audienceValidationDisabled(true)
+                    .build();
+            assertNull(config.getExpectedTokenType());
+        }
+
+        @Test
+        @DisplayName("Should build with maxTokenAgeSeconds null to disable")
+        void shouldBuildWithNullMaxTokenAgeSeconds() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .audienceValidationDisabled(true)
+                    .maxTokenAgeSeconds(null)
+                    .build();
+            assertNull(config.getMaxTokenAgeSeconds());
+        }
+
+        @Test
         @DisplayName("Should log warning when claimSubOptional is true")
         void shouldLogWarningWhenClaimSubOptionalIsTrue() {
             // Build config with claimSubOptional set to true
