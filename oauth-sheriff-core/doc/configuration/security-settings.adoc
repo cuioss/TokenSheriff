@@ -71,6 +71,51 @@ ParserConfig standard = ParserConfig.builder()
         .build();
 ----
 
+== Token Type Validation (RFC 9068)
+
+By default, no token type (`typ` header) validation is performed. This is a deliberate design decision:
+
+* RFC 9068 Section 2.1 requires `typ: at+jwt` for JWT access tokens
+* Validating this prevents **token type confusion attacks** (e.g., substituting an ID token for an access token)
+* However, most major IdPs do **not** set `typ: at+jwt`:
+** **Keycloak** sets `typ: JWT`
+** **Zitadel** sets `typ: JWT` or omits it
+** **Dex** omits the `typ` header entirely
+** **Azure AD B2C** uses proprietary `typ` values
+
+Defaulting to `"at+jwt"` would break nearly every real-world deployment. Defaulting to `"JWT"` would accept any JWT type, providing no security benefit against type confusion.
+
+=== Enabling Token Type Validation
+
+If your IdP issues RFC 9068-compliant tokens, enable validation per-issuer:
+
+[source,java]
+----
+IssuerConfig.builder()
+    .issuerIdentifier("https://rfc9068-compliant.example.com")
+    .expectedTokenType("at+jwt")  // Reject tokens without typ: at+jwt
+    // ...
+    .build();
+----
+
+Quarkus configuration:
+
+[source,properties]
+----
+sheriff.oauth.issuers.myissuer.expected-token-type=at+jwt
+----
+
+=== Recommendation
+
+Verify your IdP's actual token `typ` header value before enabling. Decode a token from your IdP and inspect the header:
+
+[source,bash]
+----
+echo '<jwt-header-part>' | base64 -d | jq .typ
+----
+
+If it returns `"at+jwt"`, you can safely enable validation.
+
 == Monitoring and Tuning
 
 When tokens are rejected due to size limits, the library logs detailed error messages indicating which limit was exceeded. Start with defaults, monitor for size-related validation errors, then adjust based on actual token characteristics.
