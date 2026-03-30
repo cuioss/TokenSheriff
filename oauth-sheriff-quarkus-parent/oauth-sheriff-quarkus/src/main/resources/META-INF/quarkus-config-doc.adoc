@@ -26,7 +26,7 @@ Properties under `sheriff.oauth.issuers.<name>.*` — one block per issuer.
 |`expected-client-id` |String (csv) |— |Expected `azp` / `client_id` claim values
 |`algorithm-preferences` |String (csv) |— |Allowed signature algorithms (default: all supported)
 |`claim-sub-optional` |boolean |`false` |Allow missing `sub` claim
-|`expected-token-type` |String |— |Expected `typ` header (e.g. `at+jwt` per RFC 9068)
+|`expected-token-type` |String |— (disabled) |Expected `typ` header value. Set to `at+jwt` for RFC 9068-compliant IdPs. Most IdPs (Keycloak, Zitadel, Dex) do *not* set `at+jwt` — verify before enabling.
 |===
 
 === JWKS Source (mutually exclusive)

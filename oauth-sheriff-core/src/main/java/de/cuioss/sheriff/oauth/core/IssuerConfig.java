@@ -192,6 +192,20 @@ public class IssuerConfig implements LoadingStatusProvider {
      */
     boolean accessTokenAudienceOptional;
 
+    // Design Decision: expectedTokenType defaults to null (no token type validation).
+    //
+    // RFC 9068 Section 2.1 requires typ: at+jwt for JWT access tokens, and validating this
+    // would prevent token type confusion attacks (e.g., substituting an ID token for an
+    // access token). However, most major IdPs do NOT set typ: at+jwt:
+    //   - Keycloak sets typ: JWT
+    //   - Zitadel sets typ: JWT or omits it
+    //   - Dex omits the typ header entirely
+    //   - Azure AD B2C uses proprietary typ values
+    //
+    // Defaulting to "at+jwt" would break nearly every real-world deployment. Defaulting to
+    // "JWT" would accept everything and provide no security value (any JWT type passes).
+    // Therefore: opt-in via expected-token-type=at+jwt for IdPs that support RFC 9068.
+
     /**
      * The expected value for the JWT "typ" header parameter.
      * <p>
