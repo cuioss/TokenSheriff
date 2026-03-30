@@ -48,8 +48,8 @@ import java.util.Objects;
  */
 public record AccessTokenRequest(String tokenString, Map<String, List<String>> httpHeaders,
 @Nullable
-    String requestUri, @Nullable
-    String requestMethod)
+String requestUri, @Nullable
+        String requestMethod)
         implements TokenValidationRequest {
 
     /**

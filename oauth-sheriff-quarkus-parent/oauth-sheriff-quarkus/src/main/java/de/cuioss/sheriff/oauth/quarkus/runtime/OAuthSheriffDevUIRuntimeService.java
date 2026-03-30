@@ -90,7 +90,7 @@ public class OAuthSheriffDevUIRuntimeService {
 
         boolean isEnabled = isJwtEnabled();
         status.put("enabled", isEnabled);
-        status.put("validatorPresent", tokenValidator != null);
+        status.put("validatorPresent", true);
         status.put("status", isEnabled ? "ACTIVE" : "INACTIVE");
 
         if (isEnabled) {
@@ -253,7 +253,7 @@ public class OAuthSheriffDevUIRuntimeService {
         Map<String, Object> health = new HashMap<>();
 
         boolean configValid = isJwtEnabled();
-        boolean validatorAvailable = tokenValidator != null;
+        boolean validatorAvailable = true;
 
         health.put("configurationValid", configValid);
         health.put("tokenValidatorAvailable", validatorAvailable);
@@ -292,10 +292,8 @@ public class OAuthSheriffDevUIRuntimeService {
      * @return number of enabled issuers
      */
     private int countEnabledIssuers() {
-        // Count only enabled issuers
-        return (int) issuerConfigs.stream()
-                .filter(IssuerConfig::isEnabled)
-                .count();
+        // IssuerConfigResolver already filters to only enabled issuers
+        return issuerConfigs.size();
     }
 
 }

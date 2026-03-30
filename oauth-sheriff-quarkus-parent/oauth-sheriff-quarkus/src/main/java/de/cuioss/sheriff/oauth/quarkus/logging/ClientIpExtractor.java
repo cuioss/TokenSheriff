@@ -19,7 +19,6 @@ import jakarta.ws.rs.core.MultivaluedMap;
 import lombok.experimental.UtilityClass;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Utility class for extracting client IP addresses from HTTP headers.
@@ -84,31 +83,6 @@ public class ClientIpExtractor {
     }
 
     /**
-     * Extracts the client IP address from HTTP headers.
-     * Follows standard proxy header priority and fallback chain.
-     *
-     * @param headers Map of HTTP header names to values (case-insensitive lookup expected)
-     * @return The extracted client IP address, or "unknown" if none found
-     */
-    static String extractClientIp(Map<String, String> headers) {
-        // Check standard headers first
-        for (String headerName : PROXY_HEADERS) {
-            String result = extractFromHeader(headers, headerName);
-            if (result != null) {
-                return result;
-            }
-        }
-
-        // Special case: RFC 7239 Forwarded header (more complex parsing)
-        String result = extractFromForwardedHeader(headers);
-        if (result != null) {
-            return result;
-        }
-
-        return "unknown";
-    }
-
-    /**
      * Extracts IP address from a standard proxy header (MultivaluedMap version).
      * Handles comma-separated values by taking the first (original client) IP.
      *
@@ -124,23 +98,6 @@ public class ClientIpExtractor {
                 // For comma-separated values, take the first (original client)
                 return headerValue.split(",")[0].trim();
             }
-        }
-        return null;
-    }
-
-    /**
-     * Extracts IP address from a standard proxy header.
-     * Handles comma-separated values by taking the first (original client) IP.
-     *
-     * @param headers Map of HTTP headers
-     * @param headerName Name of the header to check
-     * @return The extracted IP address, or null if not found/empty
-     */
-    private static String extractFromHeader(Map<String, String> headers, String headerName) {
-        String headerValue = headers.get(headerName);
-        if (headerValue != null && !headerValue.trim().isEmpty()) {
-            // For comma-separated values, take the first (original client)
-            return headerValue.split(",")[0].trim();
         }
         return null;
     }
@@ -172,27 +129,4 @@ public class ClientIpExtractor {
         return null;
     }
 
-    /**
-     * Extracts IP address from RFC 7239 Forwarded header.
-     * Parses the complex "for=IP; proto=http" format.
-     *
-     * @param headers Map of HTTP headers
-     * @return The extracted IP address, or null if not found/parseable
-     */
-    private static String extractFromForwardedHeader(Map<String, String> headers) {
-        String standardForwarded = headers.get("Forwarded");
-        if (standardForwarded != null && !standardForwarded.trim().isEmpty()) {
-            // Parse "for=IP" from Forwarded header
-            String[] parts = standardForwarded.split(";");
-            for (String part : parts) {
-                String trimmed = part.trim();
-                if (trimmed.startsWith("for=")) {
-                    String forValue = trimmed.substring(4);
-                    // Remove quotes and brackets if present, take IP before port
-                    return forValue.replaceAll("[\"\\[\\]]", "").split(":")[0];
-                }
-            }
-        }
-        return null;
-    }
 }

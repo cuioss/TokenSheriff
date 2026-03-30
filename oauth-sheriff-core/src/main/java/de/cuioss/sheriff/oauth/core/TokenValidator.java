@@ -322,6 +322,14 @@ public class TokenValidator implements Closeable {
                 this.securityEventCounter);
         LOGGER.debug("IdTokenValidationPipeline initialized");
 
+        // Compute maximum clock skew across all issuers for cache expiration tolerance.
+        // The cache is shared across issuers, so we use the most lenient skew to avoid
+        // evicting tokens that would still be valid for their respective issuer.
+        int maxClockSkew = issuerConfigs.stream()
+                .mapToInt(IssuerConfig::getClockSkewSeconds)
+                .max()
+                .orElse(0);
+
         // Construct AccessTokenValidationPipeline (full validation, with cache and metrics)
         // Pipeline creates its own AccessTokenCache from config
         this.accessTokenPipeline = new AccessTokenValidationPipeline(
@@ -335,7 +343,8 @@ public class TokenValidator implements Closeable {
                 tokenValidationRules,
                 cacheConfig,
                 this.securityEventCounter,
-                this.performanceMonitor);
+                this.performanceMonitor,
+                maxClockSkew);
         LOGGER.debug("AccessTokenValidationPipeline initialized with cache maxSize=%s, evictionInterval=%ss",
                 cacheConfig.getMaxSize(), cacheConfig.getEvictionIntervalSeconds());
 
@@ -420,11 +429,12 @@ public class TokenValidator implements Closeable {
     }
 
     /**
-     * Shuts down the DPoP replay protection scheduler if active.
+     * Shuts down internal resources (cache eviction executor, DPoP replay protection).
      * This should be called when the TokenValidator is no longer needed.
      */
     @Override
     public void close() {
+        accessTokenPipeline.shutdown();
         if (dpopReplayProtection != null) {
             dpopReplayProtection.close();
         }

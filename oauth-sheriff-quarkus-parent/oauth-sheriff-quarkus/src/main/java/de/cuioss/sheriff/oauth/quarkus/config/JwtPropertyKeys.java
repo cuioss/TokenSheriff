@@ -114,7 +114,7 @@ public final class JwtPropertyKeys {
          * token validation and will not attempt to use the underlying {@link JwksLoader}.
          * This allows for easy enabling/disabling of specific issuers without removing
          * their configuration.
-         * Default value is {@code true}.
+         * Default value is {@code false}.
          * </p>
          *
          * @see de.cuioss.sheriff.oauth.core.IssuerConfig
@@ -217,17 +217,30 @@ public final class JwtPropertyKeys {
         public static final String ACCESS_TOKEN_AUDIENCE_OPTIONAL = BASE + "access-token-audience-optional";
 
         /**
-         * Expected JWT "typ" header value for this issuer (e.g., "at+jwt").
+         * Expected JWT "typ" header value for this issuer.
          * Template: "sheriff.oauth.issuers.%s.expected-token-type"
          * <p>
-         * When configured, tokens with a missing or mismatched "typ" header will be rejected.
-         * When not set (default), no token type validation is performed.
+         * Default value is {@code "at+jwt"} per RFC 9068. Tokens with a missing or mismatched
+         * "typ" header will be rejected unless {@link #TOKEN_TYPE_VALIDATION_DISABLED} is set.
          * </p>
          *
          * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068">RFC 9068</a>
          * @see de.cuioss.sheriff.oauth.core.IssuerConfig#getExpectedTokenType()
          */
         public static final String EXPECTED_TOKEN_TYPE = BASE + "expected-token-type";
+
+        /**
+         * Explicitly disable token type (typ header) validation for this issuer.
+         * Template: "sheriff.oauth.issuers.%s.token-type-validation-disabled"
+         * <p>
+         * Set to {@code true} for identity providers that do not set {@code typ: at+jwt}
+         * per RFC 9068 (e.g., older Keycloak versions, Azure AD B2C).
+         * Default value is {@code false}.
+         * </p>
+         *
+         * @see de.cuioss.sheriff.oauth.core.IssuerConfig#isTokenTypeValidationDisabled()
+         */
+        public static final String TOKEN_TYPE_VALIDATION_DISABLED = BASE + "token-type-validation-disabled";
 
         /**
          * Clock skew tolerance in seconds for time-based claim validation (exp, nbf).

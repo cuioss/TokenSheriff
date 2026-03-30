@@ -329,6 +329,19 @@ public class IssuerConfigResolver {
      * Configures the expected token type from properties.
      */
     private void configureExpectedTokenType(IssuerConfig.IssuerConfigBuilder builder, String issuerName) {
+        // Check if token type validation is explicitly disabled
+        boolean tokenTypeDisabled = config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.TOKEN_TYPE_VALIDATION_DISABLED.formatted(issuerName),
+                Boolean.class
+        ).orElse(false);
+
+        if (tokenTypeDisabled) {
+            builder.tokenTypeValidationDisabled(true);
+            LOGGER.debug("Token type validation disabled for %s", issuerName);
+            return;
+        }
+
+        // Override default expectedTokenType if explicitly configured
         Optional<String> expectedTokenType = config.getOptionalValue(
                 JwtPropertyKeys.ISSUERS.EXPECTED_TOKEN_TYPE.formatted(issuerName),
                 String.class

@@ -94,10 +94,6 @@ public class JweDecryptionConfigResolver {
                 loadMultipleKeys(builder, multiKeyPaths);
             }
 
-            // Configure default key ID
-            config.getOptionalValue(JwtPropertyKeys.JWE.DEFAULT_KEY_ID, String.class)
-                    .ifPresent(defaultKid -> LOGGER.debug("Default JWE key ID: %s", defaultKid));
-
             // Configure algorithm preferences
             configureAlgorithmPreferences(builder);
 

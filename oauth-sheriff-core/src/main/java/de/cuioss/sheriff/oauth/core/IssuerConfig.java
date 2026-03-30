@@ -195,26 +195,36 @@ public class IssuerConfig implements LoadingStatusProvider {
     /**
      * The expected value for the JWT "typ" header parameter.
      * <p>
-     * When configured, the {@link de.cuioss.sheriff.oauth.core.pipeline.validator.TokenHeaderValidator}
-     * will validate that the token's "typ" header matches this value
-     * (e.g., "at+jwt" per RFC 9068). The comparison is case-insensitive per RFC convention.
+     * Defaults to {@code "at+jwt"} per RFC 9068 Section 2.1 to prevent token type confusion
+     * attacks (e.g., using an ID token as an access token).
+     * The comparison is case-insensitive per RFC convention.
      * </p>
      * <p>
-     * When {@code null} (default), no token type validation is performed.
-     * </p>
-     * <p>
-     * <strong>Warning:</strong> Without token type validation, an attacker may substitute
-     * a JWT of one type (e.g., an ID token) into the position of another (e.g., an access token).
-     * RFC 9068 Section 2.1 requires {@code typ: at+jwt} for JWT access tokens. If your identity
-     * provider issues RFC 9068-compliant tokens, set this to {@code "at+jwt"} to prevent
-     * type confusion attacks. Many IdPs (Keycloak, Azure AD in certain modes) do not set
-     * {@code typ: at+jwt} by default — verify your IdP's behavior before enabling.
+     * If your identity provider does not set {@code typ: at+jwt} (e.g., older Keycloak versions,
+     * Azure AD B2C), set {@link #tokenTypeValidationDisabled} to {@code true} to disable
+     * this check.
      * </p>
      *
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-2.1">RFC 9068 - 2.1. Header</a>
      */
     @Nullable
     String expectedTokenType;
+
+    /**
+     * Whether token type (typ header) validation is explicitly disabled for this issuer.
+     * <p>
+     * When {@code true}, token type validation is skipped regardless of {@link #expectedTokenType}.
+     * When {@code false} (default), tokens are validated against {@link #expectedTokenType}.
+     * </p>
+     * <p>
+     * Set this to {@code true} for identity providers that do not set the {@code typ} header
+     * per RFC 9068 (e.g., older Keycloak versions, Azure AD B2C, some OIDC providers).
+     * </p>
+     * <p>
+     * Default value is {@code false} (token type validation is enabled with default {@code "at+jwt"}).
+     * </p>
+     */
+    boolean tokenTypeValidationDisabled;
 
     /**
      * Optional DPoP (Demonstrating Proof of Possession) configuration per RFC 9449.
@@ -383,7 +393,8 @@ public class IssuerConfig implements LoadingStatusProvider {
         private Set<String> expectedClientId;
         private boolean claimSubOptional = false;
         private boolean accessTokenAudienceOptional = false;
-        private String expectedTokenType;
+        private String expectedTokenType = "at+jwt";
+        private boolean tokenTypeValidationDisabled = false;
         private DpopConfig dpopConfig;
         private int clockSkewSeconds = 60;
         private Integer maxTokenAgeSeconds;
@@ -597,6 +608,20 @@ public class IssuerConfig implements LoadingStatusProvider {
          */
         public IssuerConfigBuilder expectedTokenType(String expectedTokenType) {
             this.expectedTokenType = expectedTokenType;
+            return this;
+        }
+
+        /**
+         * Disables token type (typ header) validation for this issuer.
+         * <p>
+         * Use this for identity providers that do not set {@code typ: at+jwt} per RFC 9068.
+         * </p>
+         *
+         * @param tokenTypeValidationDisabled {@code true} to disable token type validation
+         * @return this builder instance for method chaining
+         */
+        public IssuerConfigBuilder tokenTypeValidationDisabled(boolean tokenTypeValidationDisabled) {
+            this.tokenTypeValidationDisabled = tokenTypeValidationDisabled;
             return this;
         }
 
@@ -946,6 +971,7 @@ public class IssuerConfig implements LoadingStatusProvider {
 
             return new IssuerConfig(enabled, issuerIdentifier, expectedAudience, audienceValidationDisabled,
                     expectedClientId, claimSubOptional, accessTokenAudienceOptional, expectedTokenType,
+                    tokenTypeValidationDisabled,
                     dpopConfig, clockSkewSeconds, maxTokenAgeSeconds, algorithmPreferences, claimMappers, jwksLoader);
         }
 
@@ -996,6 +1022,7 @@ public class IssuerConfig implements LoadingStatusProvider {
     private IssuerConfig(boolean enabled, @Nullable String issuerIdentifier, @Nullable Set<String> expectedAudience,
             boolean audienceValidationDisabled, @Nullable Set<String> expectedClientId,
             boolean claimSubOptional, boolean accessTokenAudienceOptional, @Nullable String expectedTokenType,
+            boolean tokenTypeValidationDisabled,
             @Nullable DpopConfig dpopConfig, int clockSkewSeconds, @Nullable Integer maxTokenAgeSeconds,
             @Nullable SignatureAlgorithmPreferences algorithmPreferences,
             @Nullable Map<String, ClaimMapper> claimMappers, @Nullable JwksLoader jwksLoader) {
@@ -1007,6 +1034,7 @@ public class IssuerConfig implements LoadingStatusProvider {
         this.claimSubOptional = claimSubOptional;
         this.accessTokenAudienceOptional = accessTokenAudienceOptional;
         this.expectedTokenType = expectedTokenType;
+        this.tokenTypeValidationDisabled = tokenTypeValidationDisabled;
         this.dpopConfig = dpopConfig;
         this.clockSkewSeconds = clockSkewSeconds;
         this.maxTokenAgeSeconds = maxTokenAgeSeconds;

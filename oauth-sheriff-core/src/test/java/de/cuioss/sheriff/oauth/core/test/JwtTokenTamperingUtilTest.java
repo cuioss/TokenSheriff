@@ -58,6 +58,7 @@ class JwtTokenTamperingUtilTest {
                 .expectedClientId(TestTokenHolder.TEST_CLIENT_ID)
                 .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
                 .algorithmPreferences(new SignatureAlgorithmPreferences())
+                .tokenTypeValidationDisabled(true)
                 .build();
         tokenValidator = TokenValidator.builder().parserConfig(config).issuerConfig(issuerConfig).build();
 

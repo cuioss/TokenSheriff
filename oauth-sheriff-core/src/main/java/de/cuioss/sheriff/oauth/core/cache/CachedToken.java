@@ -62,13 +62,14 @@ public final class CachedToken {
     private final OffsetDateTime expirationTime;
 
     /**
-     * Checks if this cached token has expired.
-     * 
+     * Checks if this cached token has expired, accounting for clock skew tolerance.
+     *
      * @param currentTime the current time to check against
-     * @return true if the token has expired, false otherwise
+     * @param clockSkewSeconds the clock skew tolerance in seconds (subtracted from current time)
+     * @return true if the token has expired even with clock skew tolerance, false otherwise
      */
-    public boolean isExpired(OffsetDateTime currentTime) {
-        return expirationTime.isBefore(currentTime);
+    public boolean isExpired(OffsetDateTime currentTime, int clockSkewSeconds) {
+        return expirationTime.isBefore(currentTime.minusSeconds(clockSkewSeconds));
     }
 
     /**
