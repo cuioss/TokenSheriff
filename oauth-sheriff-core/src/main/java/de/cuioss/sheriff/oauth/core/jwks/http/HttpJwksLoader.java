@@ -371,6 +371,14 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * Resolves the issuer identifier from discovered and configured sources.
      * Implements the issuer resolution logic with precedence rules.
      *
+     * Design Decision: The configured issuer always takes precedence over the discovered
+     * issuer. This is intentional — the configured value acts as the operator's trust anchor.
+     * A mismatch is audited (WARN log + ISSUER_MISMATCH security counter) but does not fail
+     * initialization, because trailing-slash or scheme-case differences between configured and
+     * discovered values are common in real deployments (e.g., Keycloak). Rogue-IdP tokens
+     * still fail validation because the JWT {@code iss} claim is checked against the configured
+     * (not discovered) value at token validation time.
+     *
      * @param discoveredIssuer the issuer from well-known discovery (nullable)
      * @param configuredIssuer the configured issuer from configuration (nullable)
      * @return Optional containing the resolved issuer, or empty if no issuer available

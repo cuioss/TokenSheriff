@@ -190,7 +190,7 @@ public class IssuerConfigResolver {
      */
     private IssuerConfig createIssuerConfig(String issuerName) {
         IssuerConfig.IssuerConfigBuilder builder = IssuerConfig.builder()
-                .enabled(isIssuerEnabled(issuerName));
+                .enabled(true);
 
         // Configure core properties
         configureIssuerIdentifier(builder, issuerName);
@@ -198,6 +198,7 @@ public class IssuerConfigResolver {
         configureClientId(builder, issuerName);
         configureAlgorithmPreferences(builder, issuerName);
         configureClaimSubOptional(builder, issuerName);
+        configureAccessTokenAudienceOptional(builder, issuerName);
         configureExpectedTokenType(builder, issuerName);
         configureClockSkew(builder, issuerName);
         configureMaxTokenAge(builder, issuerName);
@@ -310,6 +311,21 @@ public class IssuerConfigResolver {
     }
 
     /**
+     * Configures access token audience optional flag from properties.
+     */
+    private void configureAccessTokenAudienceOptional(IssuerConfig.IssuerConfigBuilder builder, String issuerName) {
+        Optional<Boolean> accessTokenAudienceOptional = config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.ACCESS_TOKEN_AUDIENCE_OPTIONAL.formatted(issuerName),
+                Boolean.class
+        );
+
+        if (accessTokenAudienceOptional.isPresent()) {
+            builder.accessTokenAudienceOptional(accessTokenAudienceOptional.get());
+            LOGGER.debug("Set access token audience optional for %s: %s", issuerName, accessTokenAudienceOptional.get());
+        }
+    }
+
+    /**
      * Configures the expected token type from properties.
      */
     private void configureExpectedTokenType(IssuerConfig.IssuerConfigBuilder builder, String issuerName) {
@@ -386,9 +402,10 @@ public class IssuerConfigResolver {
                     Long.class
             ).ifPresent(dpopBuilder::nonceCacheTtlSeconds);
 
-            builder.dpopConfig(dpopBuilder.build());
+            var dpopConfig = dpopBuilder.build();
+            builder.dpopConfig(dpopConfig);
             LOGGER.debug("Configured DPoP for %s: required=%s", issuerName,
-                    dpopBuilder.build().isRequired());
+                    dpopConfig.isRequired());
         }
     }
 

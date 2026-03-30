@@ -96,7 +96,7 @@ public interface HttpServletRequestResolver {
      * @throws IllegalStateException if headers cannot be extracted from the request
      */
    
-    default Map<String, List<String>> createHeaderMapFromRequest(HttpServletRequest request)
+    private Map<String, List<String>> createHeaderMapFromRequest(HttpServletRequest request)
             throws IllegalStateException {
 
         Map<String, List<String>> headerMap = new HashMap<>();
@@ -117,5 +117,27 @@ public interface HttpServletRequestResolver {
         }
 
         return headerMap;
+    }
+
+    /**
+     * Resolves the full HTTP request URI (scheme + host + path) from the current context.
+     * Used for DPoP htu claim validation per RFC 9449.
+     *
+     * @return the request URI as a string, or null if not available
+     */
+    default String resolveRequestUri() {
+        HttpServletRequest request = resolveHttpServletRequest();
+        return request.getRequestURL().toString();
+    }
+
+    /**
+     * Resolves the HTTP method from the current context.
+     * Used for DPoP htm claim validation per RFC 9449.
+     *
+     * @return the HTTP method (GET, POST, etc.), or null if not available
+     */
+    default String resolveRequestMethod() {
+        HttpServletRequest request = resolveHttpServletRequest();
+        return request.getMethod();
     }
 }

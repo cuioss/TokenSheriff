@@ -42,7 +42,7 @@ class AccessTokenRequestTest {
     @DisplayName("should create request with token string and headers")
     void shouldCreateWithHeaders() {
         Map<String, List<String>> headers = Map.of("authorization", List.of("Bearer " + TOKEN));
-        var request = new AccessTokenRequest(TOKEN, headers);
+        var request = AccessTokenRequest.of(TOKEN, headers);
         assertEquals(TOKEN, request.tokenString());
         assertEquals(1, request.httpHeaders().size());
         assertEquals(List.of("Bearer " + TOKEN), request.httpHeaders().get("authorization"));
@@ -57,7 +57,7 @@ class AccessTokenRequestTest {
     @Test
     @DisplayName("should reject null headers")
     void shouldRejectNullHeaders() {
-        assertThrows(NullPointerException.class, () -> new AccessTokenRequest(TOKEN, null));
+        assertThrows(NullPointerException.class, () -> new AccessTokenRequest(TOKEN, null, null, null));
     }
 
     @Test
@@ -66,7 +66,7 @@ class AccessTokenRequestTest {
         Map<String, List<String>> mutableHeaders = new HashMap<>();
         mutableHeaders.put("authorization", new ArrayList<>(List.of("Bearer token")));
 
-        var request = new AccessTokenRequest(TOKEN, mutableHeaders);
+        var request = AccessTokenRequest.of(TOKEN, mutableHeaders);
         mutableHeaders.put("x-new-header", List.of("value"));
 
         assertFalse(request.httpHeaders().containsKey("x-new-header"));
@@ -75,7 +75,7 @@ class AccessTokenRequestTest {
     @Test
     @DisplayName("should return immutable headers")
     void shouldReturnImmutableHeaders() {
-        var request = new AccessTokenRequest(TOKEN, Map.of("key", List.of("value")));
+        var request = AccessTokenRequest.of(TOKEN, Map.of("key", List.of("value")));
         var headers = request.httpHeaders();
         var newValue = List.of("val");
         assertThrows(UnsupportedOperationException.class,

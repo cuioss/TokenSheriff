@@ -184,9 +184,17 @@ public class BearerTokenProducer {
         }
 
         try {
-            // Pass HTTP headers through to the validation pipeline for DPoP and typ support
+            // Pass HTTP headers and request context through for DPoP htu/htm validation (RFC 9449)
+            String requestUri = null;
+            String requestMethod = null;
+            try {
+                requestUri = servletObjectsResolver.resolveRequestUri();
+                requestMethod = servletObjectsResolver.resolveRequestMethod();
+            } catch (UnsupportedOperationException | IllegalStateException e) {
+                LOGGER.debug("Could not resolve request URI/method for DPoP htu/htm validation: %s", e.getMessage());
+            }
             AccessTokenContent tokenContent = tokenValidator.createAccessToken(
-                    new AccessTokenRequest(bearerToken, headerMap));
+                    new AccessTokenRequest(bearerToken, headerMap, requestUri, requestMethod));
 
             // Determine missing scopes, roles, and groups
             Set<String> missingScopes = tokenContent.determineMissingScopes(requiredScopes);

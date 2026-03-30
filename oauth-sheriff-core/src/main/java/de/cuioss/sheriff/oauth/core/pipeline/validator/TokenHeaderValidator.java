@@ -23,7 +23,6 @@ import de.cuioss.sheriff.oauth.core.json.JwtHeader;
 import de.cuioss.sheriff.oauth.core.pipeline.DecodedJwt;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
-import lombok.Builder;
 
 /**
  * Validator for JWT Token headers.
@@ -45,7 +44,6 @@ import lombok.Builder;
  * @since 1.0
  * @author Oliver Wolff
  */
-@Builder
 public class TokenHeaderValidator {
 
     private static final CuiLogger LOGGER = new CuiLogger(TokenHeaderValidator.class);

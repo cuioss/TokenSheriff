@@ -77,6 +77,7 @@ public class SecurityEventCounter {
         TOKEN_AGE_EXCEEDED(JWTValidationLogMessages.WARN.TOKEN_AGE_EXCEEDED, EventCategory.SEMANTIC_ISSUES),
         TOKEN_NBF_FUTURE(JWTValidationLogMessages.WARN.TOKEN_NBF_FUTURE, EventCategory.SEMANTIC_ISSUES),
         AUDIENCE_MISMATCH(JWTValidationLogMessages.WARN.AUDIENCE_MISMATCH, EventCategory.SEMANTIC_ISSUES),
+        ACCESS_TOKEN_AUDIENCE_MISSING(JWTValidationLogMessages.WARN.ACCESS_TOKEN_AUDIENCE_MISSING, EventCategory.SEMANTIC_ISSUES),
         AZP_MISMATCH(JWTValidationLogMessages.WARN.AZP_MISMATCH, EventCategory.SEMANTIC_ISSUES),
         NO_ISSUER_CONFIG(JWTValidationLogMessages.WARN.NO_ISSUER_CONFIG, EventCategory.SEMANTIC_ISSUES),
         ISSUER_MISMATCH(JWTValidationLogMessages.WARN.ISSUER_MISMATCH, EventCategory.SEMANTIC_ISSUES),
@@ -90,6 +91,8 @@ public class SecurityEventCounter {
         DPOP_REPLAY_DETECTED(JWTValidationLogMessages.WARN.DPOP_REPLAY_DETECTED, EventCategory.SEMANTIC_ISSUES),
         DPOP_ATH_MISMATCH(JWTValidationLogMessages.WARN.DPOP_ATH_MISMATCH, EventCategory.SEMANTIC_ISSUES),
         DPOP_CNF_MISSING(JWTValidationLogMessages.WARN.DPOP_CNF_MISSING, EventCategory.SEMANTIC_ISSUES),
+        DPOP_HTU_MISMATCH(JWTValidationLogMessages.WARN.DPOP_HTU_MISMATCH, EventCategory.SEMANTIC_ISSUES),
+        DPOP_HTM_MISMATCH(JWTValidationLogMessages.WARN.DPOP_HTM_MISMATCH, EventCategory.SEMANTIC_ISSUES),
 
         // Custom validation rule issues
         CUSTOM_RULE_REJECTED(JWTValidationLogMessages.WARN.CUSTOM_RULE_REJECTED, EventCategory.SEMANTIC_ISSUES),

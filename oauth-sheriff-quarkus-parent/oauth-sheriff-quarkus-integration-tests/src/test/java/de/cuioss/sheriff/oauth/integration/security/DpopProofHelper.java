@@ -54,16 +54,32 @@ public class DpopProofHelper {
     }
 
     /**
-     * Creates a DPoP proof for the resource server with {@code ath} claim.
-     * OAuth Sheriff validates ath but not htm/htu, so those are omitted.
+     * Creates a DPoP proof for the resource server with {@code ath}, {@code htm}, and {@code htu} claims.
+     * RFC 9449 requires all three for resource server DPoP validation.
      */
     public String createResourceProof(String rawAccessToken) {
-        String bodyJson = """
-                {"jti":"%s","iat":%d,"ath":"%s"}""".formatted(
+        return createResourceProof(rawAccessToken, "POST", null);
+    }
+
+    /**
+     * Creates a DPoP proof for the resource server with {@code ath}, {@code htm}, and {@code htu} claims.
+     *
+     * @param rawAccessToken the raw access token string for ath computation
+     * @param htm            the HTTP method
+     * @param htu            the HTTP URI (optional — omitted if null)
+     */
+    public String createResourceProof(String rawAccessToken, String htm, String htu) {
+        var sb = new StringBuilder();
+        sb.append("{\"jti\":\"%s\",\"iat\":%d,\"ath\":\"%s\",\"htm\":\"%s\"".formatted(
                 UUID.randomUUID().toString(),
                 System.currentTimeMillis() / 1000,
-                computeAth(rawAccessToken));
-        return buildSignedProof(bodyJson);
+                computeAth(rawAccessToken),
+                htm));
+        if (htu != null) {
+            sb.append(",\"htu\":\"%s\"".formatted(htu));
+        }
+        sb.append("}");
+        return buildSignedProof(sb.toString());
     }
 
     /**
@@ -71,7 +87,7 @@ public class DpopProofHelper {
      */
     public String createResourceProofWithIat(String rawAccessToken, long iatSeconds) {
         String bodyJson = """
-                {"jti":"%s","iat":%d,"ath":"%s"}""".formatted(
+                {"jti":"%s","iat":%d,"ath":"%s","htm":"POST","htu":"https://localhost/jwt/validate"}""".formatted(
                 UUID.randomUUID().toString(),
                 iatSeconds,
                 computeAth(rawAccessToken));
@@ -83,7 +99,7 @@ public class DpopProofHelper {
      */
     public String createResourceProofWithAth(String wrongAth) {
         String bodyJson = """
-                {"jti":"%s","iat":%d,"ath":"%s"}""".formatted(
+                {"jti":"%s","iat":%d,"ath":"%s","htm":"POST","htu":"https://localhost/jwt/validate"}""".formatted(
                 UUID.randomUUID().toString(),
                 System.currentTimeMillis() / 1000,
                 wrongAth);
@@ -93,12 +109,13 @@ public class DpopProofHelper {
     /**
      * Creates a DPoP proof with a specific {@code jti} (for replay testing).
      */
-    public String createResourceProofWithJti(String rawAccessToken, String jti) {
+    public String createResourceProofWithJti(String rawAccessToken, String jti, String htm, String htu) {
         String bodyJson = """
-                {"jti":"%s","iat":%d,"ath":"%s"}""".formatted(
+                {"jti":"%s","iat":%d,"ath":"%s","htm":"%s","htu":"%s"}""".formatted(
                 jti,
                 System.currentTimeMillis() / 1000,
-                computeAth(rawAccessToken));
+                computeAth(rawAccessToken),
+                htm, htu);
         return buildSignedProof(bodyJson);
     }
 

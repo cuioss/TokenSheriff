@@ -99,25 +99,12 @@ public class ValidationContext {
      * @param clockSkewSeconds the clock skew tolerance in seconds
      * @param maxTokenAgeSeconds the maximum token age in seconds, or null to disable
      */
-    ValidationContext(OffsetDateTime currentTime, int clockSkewSeconds, Integer maxTokenAgeSeconds) {
+    public ValidationContext(OffsetDateTime currentTime, int clockSkewSeconds, Integer maxTokenAgeSeconds) {
         this.currentTime = currentTime;
         this.clockSkewSeconds = clockSkewSeconds;
         this.maxTokenAgeSeconds = maxTokenAgeSeconds;
     }
 
-    /**
-     * Creates a new ValidationContext with a specific time, intended for testing purposes.
-     * <p>
-     * This factory method provides controlled time injection for deterministic test behavior.
-     *
-     * @param currentTime the current time to use for validation
-     * @param clockSkewSeconds the clock skew tolerance in seconds
-     * @param maxTokenAgeSeconds the maximum token age in seconds, or null to disable
-     * @return a new ValidationContext with the specified parameters
-     */
-    public static ValidationContext forTesting(OffsetDateTime currentTime, int clockSkewSeconds, Integer maxTokenAgeSeconds) {
-        return new ValidationContext(currentTime, clockSkewSeconds, maxTokenAgeSeconds);
-    }
 
     /**
      * Gets the current time plus the clock skew tolerance.

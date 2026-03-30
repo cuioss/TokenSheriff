@@ -165,7 +165,7 @@ class ExpirationValidatorTest {
         OffsetDateTime exactBoundaryNotBefore = fixedTime.plusSeconds(60);
 
         // Create a context with the fixed time
-        ValidationContext testContext = ValidationContext.forTesting(fixedTime, 60, null);
+        ValidationContext testContext = new ValidationContext(fixedTime, 60, null);
 
         tokenHolder.withClaim(ClaimName.NOT_BEFORE.getName(),
                 ClaimValue.forDateTime(String.valueOf(exactBoundaryNotBefore.toEpochSecond()), exactBoundaryNotBefore));
@@ -186,7 +186,7 @@ class ExpirationValidatorTest {
         AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         // Context without maxTokenAgeSeconds -> validation disabled
-        ValidationContext noAgeContext = ValidationContext.forTesting(fixedTime, 60, null);
+        ValidationContext noAgeContext = new ValidationContext(fixedTime, 60, null);
         assertDoesNotThrow(() -> validator.validateTokenAge(token, noAgeContext));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED));
     }
@@ -201,7 +201,7 @@ class ExpirationValidatorTest {
                 ClaimValue.forDateTime(String.valueOf(issuedAt.toEpochSecond()), issuedAt));
         AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
-        ValidationContext ageContext = ValidationContext.forTesting(fixedTime, 60, 300);
+        ValidationContext ageContext = new ValidationContext(fixedTime, 60, 300);
         assertDoesNotThrow(() -> validator.validateTokenAge(token, ageContext));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED));
     }
@@ -216,7 +216,7 @@ class ExpirationValidatorTest {
                 ClaimValue.forDateTime(String.valueOf(issuedAt.toEpochSecond()), issuedAt));
         AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
-        ValidationContext ageContext = ValidationContext.forTesting(fixedTime, 60, 300);
+        ValidationContext ageContext = new ValidationContext(fixedTime, 60, 300);
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateTokenAge(token, ageContext));
         assertEquals(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED, exception.getEventType());

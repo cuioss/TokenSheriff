@@ -87,7 +87,8 @@ public class TokenClaimValidator {
         this.expectedAudience = issuerConfig.getExpectedAudience();
         this.expectedClientId = issuerConfig.getExpectedClientId();
 
-        this.audienceValidator = new AudienceValidator(expectedAudience, securityEventCounter);
+        this.audienceValidator = new AudienceValidator(expectedAudience, securityEventCounter,
+                issuerConfig.isAccessTokenAudienceOptional());
         this.expirationValidator = new ExpirationValidator(securityEventCounter);
         this.mandatoryClaimsValidator = new MandatoryClaimsValidator(issuerConfig, securityEventCounter);
         this.authorizedPartyValidator = new AuthorizedPartyValidator(expectedClientId, securityEventCounter);
