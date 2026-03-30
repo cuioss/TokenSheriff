@@ -389,25 +389,24 @@ public class IssuerConfig implements LoadingStatusProvider {
      */
     @SuppressWarnings("JavadocLinkAsPlainText")
     public static class IssuerConfigBuilder {
-        // Lombok-generated fields
         private boolean enabled = true;
-        private String issuerIdentifier;
-        private Set<String> expectedAudience;
+        private @Nullable String issuerIdentifier;
+        private @Nullable Set<String> expectedAudience;
         private boolean audienceValidationDisabled = false;
-        private Set<String> expectedClientId;
+        private @Nullable Set<String> expectedClientId;
         private boolean claimSubOptional = false;
         private boolean accessTokenAudienceOptional = false;
-        private String expectedTokenType;
-        private DpopConfig dpopConfig;
+        private @Nullable String expectedTokenType;
+        private @Nullable DpopConfig dpopConfig;
         private int clockSkewSeconds = 60;
-        private Integer maxTokenAgeSeconds;
+        private @Nullable Integer maxTokenAgeSeconds;
         private SignatureAlgorithmPreferences algorithmPreferences = new SignatureAlgorithmPreferences();
-        private Map<String, ClaimMapper> claimMappers;
-        private JwksLoader jwksLoader;
+        private @Nullable Map<String, ClaimMapper> claimMappers;
+        private @Nullable JwksLoader jwksLoader;
 
-        private HttpJwksLoaderConfig httpJwksLoaderConfig;
-        private String jwksFilePath;
-        private String jwksContent;
+        private @Nullable HttpJwksLoaderConfig httpJwksLoaderConfig;
+        private @Nullable String jwksFilePath;
+        private @Nullable String jwksContent;
 
         /**
          * Sets whether this issuer configuration is enabled.
@@ -664,7 +663,7 @@ public class IssuerConfig implements LoadingStatusProvider {
          * @return this builder instance for method chaining
          * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.token.age</a>
          */
-        public IssuerConfigBuilder maxTokenAgeSeconds(Integer maxTokenAgeSeconds) {
+        public IssuerConfigBuilder maxTokenAgeSeconds(@Nullable Integer maxTokenAgeSeconds) {
             if (null != maxTokenAgeSeconds) {
                 Preconditions.checkArgument(maxTokenAgeSeconds >= 0, "maxTokenAgeSeconds must not be negative, but was %s", maxTokenAgeSeconds);
             }
@@ -731,21 +730,6 @@ public class IssuerConfig implements LoadingStatusProvider {
                 this.claimMappers = new LinkedHashMap<>();
             }
             this.claimMappers.put(key, claimMapper);
-            return this;
-        }
-
-        /**
-         * Sets the complete map of custom claim mappers.
-         * <p>
-         * This replaces any previously configured claim mappers. Each mapper in the map
-         * will be used to process the corresponding claim during token validation.
-         * </p>
-         *
-         * @param claimMappers a map where keys are claim names and values are the custom mappers
-         * @return this builder instance for method chaining
-         */
-        public IssuerConfigBuilder claimMappers(Map<String, ClaimMapper> claimMappers) {
-            this.claimMappers = claimMappers;
             return this;
         }
 
