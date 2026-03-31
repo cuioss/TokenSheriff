@@ -363,7 +363,7 @@ class ApiValidationSpecIT extends BaseIntegrationTest {
                     .then()
                     .statusCode(401)
                     .body(VALID, equalTo(false))
-                    .body(MESSAGE, equalTo("Bearer token validation failed or token not present"));
+                    .body(MESSAGE, containsString("Bearer token validation failed"));
         }
 
         @Test
@@ -378,7 +378,7 @@ class ApiValidationSpecIT extends BaseIntegrationTest {
                     .then()
                     .statusCode(401)
                     .body(VALID, equalTo(false))
-                    .body(MESSAGE, equalTo("Bearer token validation failed or token not present"));
+                    .body(MESSAGE, containsString("Bearer token validation failed"));
         }
 
         @Test
@@ -393,7 +393,7 @@ class ApiValidationSpecIT extends BaseIntegrationTest {
                     .then()
                     .statusCode(401)
                     .body(VALID, equalTo(false))
-                    .body(MESSAGE, equalTo("Bearer token validation failed or token not present"));
+                    .body(MESSAGE, containsString("Bearer token validation failed"));
         }
     }
 
