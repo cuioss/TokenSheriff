@@ -253,19 +253,15 @@ public class OAuthSheriffDevUIRuntimeService {
         Map<String, Object> health = new HashMap<>();
 
         boolean configValid = isJwtEnabled();
-        boolean validatorAvailable = true;
 
         health.put("configurationValid", configValid);
-        health.put("tokenValidatorAvailable", validatorAvailable);
-        health.put("securityCounterAvailable", true); // Metrics are always enabled in runtime
+        health.put("tokenValidatorAvailable", true);
+        health.put("securityCounterAvailable", true);
         health.put("overallStatus", "HEALTHY");
 
-        if (configValid && validatorAvailable) {
+        if (configValid) {
             health.put(MESSAGE, "All JWT components are healthy and operational");
             health.put(HEALTH_STATUS, "UP");
-        } else if (configValid) {
-            health.put(MESSAGE, "Configuration is valid but validator is not available");
-            health.put(HEALTH_STATUS, "DOWN");
         } else {
             health.put(MESSAGE, "JWT validation is disabled or misconfigured");
             health.put(HEALTH_STATUS, "DOWN");
