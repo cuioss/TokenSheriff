@@ -98,11 +98,14 @@ public class JwtValidationEndpoint {
                 LOGGER.debug("BasicToken authorized but no AccessTokenContent present");
             }
         } else {
-            LOGGER.debug("BasicToken authorization failed");
+            String detail = tokenResult.getErrorMessage().orElse("token not present");
+            LOGGER.warn("BasicToken authorization failed: %s (status=%s)", detail, tokenResult.getStatus());
         }
-        // Return consistent JSON format for authorization header tests
+        String message = "Bearer token validation failed: "
+                + tokenResult.getErrorMessage().orElse("token not present")
+                + " (status=" + tokenResult.getStatus() + ")";
         return Response.status(Response.Status.UNAUTHORIZED)
-                .entity(new ValidationResponse(false, "Bearer token validation failed or token not present"))
+                .entity(new ValidationResponse(false, message))
                 .build();
     }
 
