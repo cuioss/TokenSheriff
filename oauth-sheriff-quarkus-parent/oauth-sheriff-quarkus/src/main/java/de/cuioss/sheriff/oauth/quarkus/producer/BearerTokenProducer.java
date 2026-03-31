@@ -190,7 +190,7 @@ public class BearerTokenProducer {
             try {
                 requestUri = servletObjectsResolver.resolveRequestUri();
                 requestMethod = servletObjectsResolver.resolveRequestMethod();
-            } catch (UnsupportedOperationException | IllegalStateException e) {
+            } catch (Exception e) {
                 LOGGER.debug("Could not resolve request URI/method for DPoP htu/htm validation: %s", e.getMessage());
             }
             AccessTokenContent tokenContent = tokenValidator.createAccessToken(
@@ -217,8 +217,7 @@ public class BearerTokenProducer {
                         .build();
             }
         } catch (TokenValidationException e) {
-            // No need to use logger.warn, because precise logging already took place in the library
-            LOGGER.debug(e, "Bearer token validation failed: %s", e.getMessage());
+            LOGGER.warn("Bearer token validation failed: %s (eventType=%s)", e.getMessage(), e.getEventType());
             return BearerTokenResult.parsingError(e, requiredScopes, requiredRoles, requiredGroups);
         }
     }
