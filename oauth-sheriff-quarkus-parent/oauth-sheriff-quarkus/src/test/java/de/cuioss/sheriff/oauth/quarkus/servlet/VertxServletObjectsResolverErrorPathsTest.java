@@ -100,4 +100,72 @@ class VertxServletObjectsResolverErrorPathsTest {
 
         verify(vertxRequestInstance);
     }
+
+    @Test
+    @DisplayName("resolveRequestUri should throw when CDI Instance is unsatisfied")
+    void resolveRequestUriShouldThrowWhenUnsatisfied() {
+        expect(vertxRequestInstance.isUnsatisfied()).andReturn(true);
+        replay(vertxRequestInstance);
+
+        assertThrows(IllegalStateException.class, () -> resolver.resolveRequestUri());
+        verify(vertxRequestInstance);
+    }
+
+    @Test
+    @DisplayName("resolveRequestUri should throw when HttpServerRequest is null")
+    void resolveRequestUriShouldThrowWhenNull() {
+        expect(vertxRequestInstance.isUnsatisfied()).andReturn(false);
+        expect(vertxRequestInstance.get()).andReturn(null);
+        replay(vertxRequestInstance);
+
+        assertThrows(IllegalStateException.class, () -> resolver.resolveRequestUri());
+        verify(vertxRequestInstance);
+    }
+
+    @Test
+    @DisplayName("resolveRequestMethod should throw when CDI Instance is unsatisfied")
+    void resolveRequestMethodShouldThrowWhenUnsatisfied() {
+        expect(vertxRequestInstance.isUnsatisfied()).andReturn(true);
+        replay(vertxRequestInstance);
+
+        assertThrows(IllegalStateException.class, () -> resolver.resolveRequestMethod());
+        verify(vertxRequestInstance);
+    }
+
+    @Test
+    @DisplayName("resolveRequestMethod should throw when HttpServerRequest is null")
+    void resolveRequestMethodShouldThrowWhenNull() {
+        expect(vertxRequestInstance.isUnsatisfied()).andReturn(false);
+        expect(vertxRequestInstance.get()).andReturn(null);
+        replay(vertxRequestInstance);
+
+        assertThrows(IllegalStateException.class, () -> resolver.resolveRequestMethod());
+        verify(vertxRequestInstance);
+    }
+
+    @Test
+    @DisplayName("resolveRequestUri should return absolute URI from Vertx request")
+    void resolveRequestUriShouldReturnAbsoluteUri() {
+        HttpServerRequest mockRequest = createMock(HttpServerRequest.class);
+        expect(vertxRequestInstance.isUnsatisfied()).andReturn(false);
+        expect(vertxRequestInstance.get()).andReturn(mockRequest);
+        expect(mockRequest.absoluteURI()).andReturn("https://localhost:8443/jwt/validate");
+        replay(vertxRequestInstance, mockRequest);
+
+        assertEquals("https://localhost:8443/jwt/validate", resolver.resolveRequestUri());
+        verify(vertxRequestInstance, mockRequest);
+    }
+
+    @Test
+    @DisplayName("resolveRequestMethod should return HTTP method from Vertx request")
+    void resolveRequestMethodShouldReturnMethod() {
+        HttpServerRequest mockRequest = createMock(HttpServerRequest.class);
+        expect(vertxRequestInstance.isUnsatisfied()).andReturn(false);
+        expect(vertxRequestInstance.get()).andReturn(mockRequest);
+        expect(mockRequest.method()).andReturn(io.vertx.core.http.HttpMethod.POST);
+        replay(vertxRequestInstance, mockRequest);
+
+        assertEquals("POST", resolver.resolveRequestMethod());
+        verify(vertxRequestInstance, mockRequest);
+    }
 }
