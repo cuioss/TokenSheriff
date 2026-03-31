@@ -663,6 +663,7 @@ public class IssuerConfig implements LoadingStatusProvider {
          * @return this builder instance for method chaining
          * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.token.age</a>
          */
+        @SuppressWarnings("java:S2589") // Null check is intentional — parameter is @Nullable
         public IssuerConfigBuilder maxTokenAgeSeconds(@Nullable Integer maxTokenAgeSeconds) {
             if (null != maxTokenAgeSeconds) {
                 Preconditions.checkArgument(maxTokenAgeSeconds >= 0, "maxTokenAgeSeconds must not be negative, but was %s", maxTokenAgeSeconds);
