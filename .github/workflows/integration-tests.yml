@@ -25,6 +25,9 @@ jobs:
         verify -Pmulti-idp-tests -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
       reports-folder: |
         oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/target/failsafe-reports
+      report-logs: |
+        oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/target/app-logs-*.txt
+        oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/target/keycloak-logs-*.txt
     secrets:
       RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
       RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
