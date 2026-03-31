@@ -187,11 +187,13 @@ services:
     environment:
       ZITADEL_MASTERKEY: "IntegrationTestMasterkey32Bytes!"
       ZITADEL_EXTERNALSECURE: "false"
-      # Use Docker hostname — both app container and test JVM reach Zitadel via this name
-      # Test JVM: http://localhost:3080 with Host header "zitadel:3080"
-      # App container: http://zitadel:8080 (direct Docker DNS)
+      # EXTERNALPORT must match the internal listening port (8080) so that Zitadel serves
+      # JWKS keys when accessed from inside Docker (Host: zitadel:8080). The external port
+      # mapping (3080:8080) is only for the host. Tokens will have iss: http://zitadel:8080.
+      # Test JVM: http://localhost:3080 with Host header "zitadel:8080"
+      # App container: http://zitadel:8080 (direct Docker DNS, Host matches EXTERNALDOMAIN:EXTERNALPORT)
       ZITADEL_EXTERNALDOMAIN: "zitadel"
-      ZITADEL_EXTERNALPORT: "3080"
+      ZITADEL_EXTERNALPORT: "8080"
       # Database configuration
       ZITADEL_DATABASE_POSTGRES_HOST: zitadel-db
       ZITADEL_DATABASE_POSTGRES_PORT: "5432"

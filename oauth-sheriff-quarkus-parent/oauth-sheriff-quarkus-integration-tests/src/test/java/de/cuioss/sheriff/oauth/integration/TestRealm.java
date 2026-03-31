@@ -290,7 +290,7 @@ public class TestRealm {
                 ZITADEL_BASE_URL, ZITADEL_TOKEN_ENDPOINT,
                 "Zitadel", ZITADEL_CAPABILITIES,
                 defaultScopes,
-                Map.of("Host", "zitadel:3080"));
+                Map.of("Host", "zitadel:8080"));
     }
 
     private static Properties loadZitadelCredentials() {

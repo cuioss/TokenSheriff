@@ -10,7 +10,7 @@
 set -e
 
 ZITADEL_URL="http://localhost:3080"
-ZITADEL_HOST="zitadel:3080"
+ZITADEL_HOST="zitadel:8080"
 PAT_FILE="${PAT_FILE:-/tmp/zitadel-admin-pat/zitadel-admin-sa.pat}"
 OUTPUT_DIR="${OUTPUT_DIR:-.}"
 OUTPUT_FILE="${OUTPUT_DIR}/target/zitadel-credentials.properties"
