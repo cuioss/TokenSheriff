@@ -22,7 +22,8 @@ jobs:
     with:
       report-name: oauth-sheriff-multi-idp-tests
       maven-args-input: |
-        verify -Pmulti-idp-tests -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
+        install -DskipTests -DskipITs -pl oauth-sheriff-core,oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus,oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-deployment -am
+        verify -Pmulti-idp-tests -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests
       reports-folder: |
         oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/target/failsafe-reports
       report-logs: |
