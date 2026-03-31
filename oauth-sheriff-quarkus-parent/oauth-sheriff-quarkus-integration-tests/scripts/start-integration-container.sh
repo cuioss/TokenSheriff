@@ -119,7 +119,7 @@ fi
 if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
     echo "Waiting for Zitadel to be ready..."
     for i in {1..60}; do
-        if curl -s -H "Host: zitadel:3080" http://localhost:3080/debug/ready > /dev/null 2>&1; then
+        if curl -s -H "Host: zitadel:8080" http://localhost:3080/debug/ready > /dev/null 2>&1; then
             echo "Zitadel is ready!"
             break
         fi
@@ -185,24 +185,40 @@ for i in {1..30}; do
     sleep 1
 done
 
-# Verify IdP JWKS endpoints are reachable (health check only — token validation is the integration tests' job)
+# Verify IdP JWKS endpoints are reachable and Zitadel keys are populated
 if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
-    echo "Verifying IdP JWKS endpoints are reachable..."
-    for idp_check in "Zitadel:http://localhost:3080/oauth/v2/keys:zitadel:3080" "Dex:https://localhost:2556/dex/keys"; do
-        IDP_NAME="${idp_check%%:*}"
-        REMAINING="${idp_check#*:}"
-        IDP_URL="${REMAINING}"
-        HOST_HEADER=""
-        # Extract optional host header (format: url:host_header)
-        if [[ "$IDP_NAME" == "Zitadel" ]]; then
-            IDP_URL="http://localhost:3080/oauth/v2/keys"
-            HOST_HEADER="-H Host:zitadel:3080"
+    echo "Verifying IdP endpoints..."
+
+    # Dex: just check JWKS reachability
+    DEX_STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" https://localhost:2556/dex/keys 2>/dev/null)
+    echo "  Dex JWKS: ${DEX_STATUS}"
+
+    # Zitadel: issue a token first (forces Zitadel to publish signing keys to JWKS),
+    # then wait for JWKS to contain at least one key.
+    SVC_ID=$(grep 'service.client-id' "${PROJECT_DIR}/target/zitadel-credentials.properties" | cut -d= -f2)
+    SVC_SECRET=$(grep 'service.client-secret' "${PROJECT_DIR}/target/zitadel-credentials.properties" | cut -d= -f2)
+    PROJECT_ID=$(grep 'project.id' "${PROJECT_DIR}/target/zitadel-credentials.properties" | cut -d= -f2)
+
+    # Trigger key publication by issuing a token
+    curl -s -H "Host: zitadel:8080" -u "${SVC_ID}:${SVC_SECRET}" -X POST http://localhost:3080/oauth/v2/token \
+        -d "grant_type=client_credentials&scope=openid" > /dev/null 2>&1
+
+    # Wait for JWKS to contain at least one key (max 30s)
+    echo "  Waiting for Zitadel JWKS keys to be published..."
+    for i in {1..30}; do
+        KEY_COUNT=$(curl -s -H "Host: zitadel:8080" http://localhost:3080/oauth/v2/keys 2>/dev/null \
+            | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('keys',[])))" 2>/dev/null)
+        if [ "$KEY_COUNT" -gt 0 ] 2>/dev/null; then
+            echo "  Zitadel JWKS: ${KEY_COUNT} key(s) available (attempt $i)"
+            # Wait one JWKS refresh cycle (10s) so the Quarkus app picks up the keys
+            echo "  Waiting 12s for Quarkus JWKS background refresh to pick up keys..."
+            sleep 12
+            break
         fi
-        STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" ${HOST_HEADER} "${IDP_URL}" 2>/dev/null)
-        echo "  ${IDP_NAME} JWKS: ${STATUS}"
-        if [ "$STATUS" != "200" ]; then
-            echo "Warning: ${IDP_NAME} JWKS endpoint returned ${STATUS} — integration tests may fail"
+        if [ $i -eq 30 ]; then
+            echo "  Warning: Zitadel JWKS still empty after 30s — Zitadel integration tests may fail"
         fi
+        sleep 1
     done
 fi
 
