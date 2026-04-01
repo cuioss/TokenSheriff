@@ -102,6 +102,31 @@ class VertxServletObjectsResolverErrorPathsTest {
     }
 
     @Test
+    @DisplayName("resolveHeaderMap should throw when CDI Instance is unsatisfied")
+    void resolveHeaderMapShouldThrowWhenUnsatisfied() {
+        expect(vertxRequestInstance.isUnsatisfied()).andReturn(true);
+        replay(vertxRequestInstance);
+
+        assertThrows(IllegalStateException.class, () -> resolver.resolveHeaderMap());
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
+                OAuthSheriffQuarkusLogMessages.ERROR.VERTX_REQUEST_CONTEXT_UNAVAILABLE.resolveIdentifierString());
+        verify(vertxRequestInstance);
+    }
+
+    @Test
+    @DisplayName("resolveHeaderMap should throw when HttpServerRequest is null")
+    void resolveHeaderMapShouldThrowWhenNull() {
+        expect(vertxRequestInstance.isUnsatisfied()).andReturn(false);
+        expect(vertxRequestInstance.get()).andReturn(null);
+        replay(vertxRequestInstance);
+
+        assertThrows(IllegalStateException.class, () -> resolver.resolveHeaderMap());
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
+                OAuthSheriffQuarkusLogMessages.ERROR.VERTX_REQUEST_CONTEXT_UNAVAILABLE.resolveIdentifierString());
+        verify(vertxRequestInstance);
+    }
+
+    @Test
     @DisplayName("resolveRequestUri should throw when CDI Instance is unsatisfied")
     void resolveRequestUriShouldThrowWhenUnsatisfied() {
         expect(vertxRequestInstance.isUnsatisfied()).andReturn(true);
