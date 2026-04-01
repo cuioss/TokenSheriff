@@ -75,6 +75,7 @@ import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
 import io.quarkus.devui.spi.page.CardPageBuildItem;
 import io.quarkus.devui.spi.page.Page;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
+import de.cuioss.sheriff.oauth.quarkus.producer.JsonWebTokenAdapter;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.jandex.DotName;
 
@@ -208,8 +209,9 @@ public class OAuthSheriffProcessor {
                 TokenContent.class,
                 BaseTokenContent.class,
                 MinimalTokenContent.class,
-                // MicroProfile JWT interface - needed for default method resolution in native image
+                // MicroProfile JWT interface and adapter for CDI injection
                 JsonWebToken.class,
+                JsonWebTokenAdapter.class,
                 // Claim handling classes - need full reflection for enum handling
                 ClaimValue.class,
                 ClaimName.class,

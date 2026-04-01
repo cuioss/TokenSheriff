@@ -85,7 +85,7 @@ class RFC7519JWTComplianceTest {
             assertNotNull(result, "Token should be parsed successfully");
 
             // Subject claim is mandatory per RFC 7519
-            Optional<String> subject = result.getSubjectOption();
+            Optional<String> subject = result.getSubject();
             assertTrue(subject.isPresent(), "Subject must be present according to RFC 7519");
         }
 
@@ -302,7 +302,7 @@ class RFC7519JWTComplianceTest {
             assertNotNull(result.getIssuer());
 
             // Subject claim is mandatory per RFC 7519
-            Optional<String> subject = result.getSubjectOption();
+            Optional<String> subject = result.getSubject();
             assertTrue(subject.isPresent(), "Subject must be present according to RFC 7519");
 
             assertNotNull(result.getExpirationDateTime());

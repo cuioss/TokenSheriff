@@ -165,7 +165,7 @@ public class InstanceEndpoint {
         AccessTokenContent token = tokenResult.getAccessTokenContent()
                 .orElseThrow(() -> new IllegalStateException("Token content missing after successful authorization"));
         // OAuthSheriff-specific API with richer types
-        String userId = Objects.toString(token.getSubject(), "unknown");
+        String userId = token.getSubject().orElse("unknown");
         OffsetDateTime expiry = token.getExpirationDateTime();
         List<String> scopes = token.getScopes();
         return Response.ok("Data for user: " + userId).build();

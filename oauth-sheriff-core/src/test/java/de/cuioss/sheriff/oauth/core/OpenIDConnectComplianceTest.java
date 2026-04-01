@@ -103,7 +103,7 @@ class OpenIDConnectComplianceTest {
 
             // Since we explicitly set the subject claim, it should always be present
             // regardless of claimSubOptional configuration
-            Optional<String> resultSubject = result.getSubjectOption();
+            Optional<String> resultSubject = result.getSubject();
             assertTrue(resultSubject.isPresent(), "Subject should be present when explicitly set");
             assertEquals(subject, resultSubject.get());
         }

@@ -51,6 +51,12 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- MicroProfile JWT Auth API for JsonWebToken adapter -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.jwt</groupId>
+            <artifactId>microprofile-jwt-auth-api</artifactId>
+            <version>2.1</version>
+        </dependency>
         <!-- Runtime-specific dependencies can be added here -->
         <!-- All common dependencies are inherited from parent -->
         <dependency>

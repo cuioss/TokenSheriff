@@ -352,7 +352,6 @@ public class TestTokenHolder implements TokenContent {
      *
      * @return the audience as a list of strings, or empty list if not present
      */
-    @Override
     public Set<String> getAudience() {
         if (claims.containsKey(ClaimName.AUDIENCE.getName())) {
             return new LinkedHashSet<>(claims.get(ClaimName.AUDIENCE.getName()).getAsList());

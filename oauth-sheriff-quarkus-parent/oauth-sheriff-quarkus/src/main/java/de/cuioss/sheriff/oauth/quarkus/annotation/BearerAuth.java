@@ -84,7 +84,7 @@ import java.lang.annotation.Target;
  *     AccessTokenContent token = tokenResult.getAccessTokenContent()
  *         .orElseThrow(() -> new IllegalStateException("Token not available"));
  *
- *     String userId = Objects.toString(token.getSubject(), "unknown");
+ *     String userId = token.getSubject().orElse("unknown");
  *
  *     return Response.ok(data).build();
  * }
