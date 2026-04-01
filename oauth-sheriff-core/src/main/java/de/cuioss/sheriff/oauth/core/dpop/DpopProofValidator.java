@@ -339,6 +339,11 @@ public class DpopProofValidator {
     private void validateHtuHtm(MapRepresentation bodyMap, AccessTokenRequest request) {
         if (request.requestUri() == null || request.requestUri().isBlank()
                 || request.requestMethod() == null || request.requestMethod().isBlank()) {
+            if (config.isRequired()) {
+                securityEventCounter.increment(EventType.DPOP_PROOF_INVALID);
+                throw new TokenValidationException(EventType.DPOP_PROOF_INVALID,
+                        "DPoP htu/htm validation failed: request context missing but DPoP is required");
+            }
             LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTU_HTM_SKIPPED);
             return;
         }
@@ -380,7 +385,7 @@ public class DpopProofValidator {
      */
     private static String stripQueryAndFragment(String uri) {
         try {
-            var parsed = URI.create(uri);
+            var parsed = new URI(uri);
             return new URI(parsed.getScheme(), parsed.getAuthority(), parsed.getPath(),
                     null, null).toString();
         } catch (URISyntaxException e) {
