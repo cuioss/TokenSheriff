@@ -34,11 +34,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Mock JWT validation endpoint for performance decomposition benchmarking.
@@ -156,7 +152,7 @@ public class MockJwtValidationEndpoint {
         // Call tokenValidator.createAccessToken() DIRECTLY — no Instance.get(), no CDI producer, no @Timed
         try {
             AccessTokenContent token = tokenValidator.createAccessToken(
-                    new AccessTokenRequest(extraction.token(), headerMap));
+                    AccessTokenRequest.of(extraction.token(), headerMap));
 
             var data = new HashMap<String, Object>();
             data.put("subject", Objects.toString(token.getSubject(), "not-present"));

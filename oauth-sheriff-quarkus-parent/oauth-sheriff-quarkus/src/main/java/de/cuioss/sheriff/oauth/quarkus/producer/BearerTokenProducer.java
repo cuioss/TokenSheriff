@@ -21,6 +21,7 @@ import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.oauth.quarkus.annotation.ServletObjectsResolver;
+import de.cuioss.sheriff.oauth.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.oauth.quarkus.metrics.MetricIdentifier;
 import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolver;
 import de.cuioss.tools.logging.CuiLogger;
@@ -115,10 +116,10 @@ public class BearerTokenProducer {
     private final TokenValidator tokenValidator;
     private final HttpServletRequestResolver servletObjectsResolver;
 
-    @ConfigProperty(name = "sheriff.oauth.token.header", defaultValue = "Authorization")
+    @ConfigProperty(name = JwtPropertyKeys.TOKEN.HEADER, defaultValue = "Authorization")
     String tokenHeader;
 
-    @ConfigProperty(name = "sheriff.oauth.token.cookie-name", defaultValue = "Bearer")
+    @ConfigProperty(name = JwtPropertyKeys.TOKEN.COOKIE_NAME, defaultValue = "Bearer")
     String tokenCookieName;
 
     @Inject
@@ -183,9 +184,10 @@ public class BearerTokenProducer {
         }
 
         try {
-            // Pass HTTP headers through to the validation pipeline for DPoP and typ support
+            // Pass HTTP headers and request context through for DPoP htu/htm validation (RFC 9449)
+            String[] requestContext = resolveRequestContext();
             AccessTokenContent tokenContent = tokenValidator.createAccessToken(
-                    new AccessTokenRequest(bearerToken, headerMap));
+                    new AccessTokenRequest(bearerToken, headerMap, requestContext[0], requestContext[1]));
 
             // Determine missing scopes, roles, and groups
             Set<String> missingScopes = tokenContent.determineMissingScopes(requiredScopes);
@@ -208,12 +210,30 @@ public class BearerTokenProducer {
                         .build();
             }
         } catch (TokenValidationException e) {
-            // No need to use logger.warn, because precise logging already took place in the library
-            LOGGER.debug(e, "Bearer token validation failed: %s", e.getMessage());
+            LOGGER.warn("Bearer token validation failed: %s (eventType=%s)", e.getMessage(), e.getEventType());
             return BearerTokenResult.parsingError(e, requiredScopes, requiredRoles, requiredGroups);
         }
     }
 
+
+    /**
+     * Resolves the HTTP request URI and method for DPoP htu/htm validation.
+     * Returns a two-element array where index 0 is the request URI and index 1 is the request method.
+     * Both values default to {@code null} if resolution fails.
+     *
+     * @return a two-element String array with [requestUri, requestMethod]
+     */
+    private String[] resolveRequestContext() {
+        try {
+            return new String[]{
+                    servletObjectsResolver.resolveRequestUri(),
+                    servletObjectsResolver.resolveRequestMethod()
+            };
+        } catch (Exception e) {
+            LOGGER.debug("Could not resolve request URI/method for DPoP htu/htm validation: %s", e.getMessage());
+            return new String[]{null, null};
+        }
+    }
 
     /**
      * Extracts the bearer token from the provided HTTP header map.
@@ -285,24 +305,19 @@ public class BearerTokenProducer {
         for (String cookie : cookies) {
             String trimmed = cookie.trim();
             int eqIndex = trimmed.indexOf('=');
-            if (eqIndex <= 0) {
-                continue;
+            if (eqIndex > 0 && tokenCookieName.equals(trimmed.substring(0, eqIndex).trim())) {
+                String value = trimmed.substring(eqIndex + 1).trim();
+                // Remove optional surrounding double quotes per RFC 6265
+                if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+                    value = value.substring(1, value.length() - 1);
+                }
+                if (value.isEmpty()) {
+                    LOGGER.debug("Cookie '%s' found but value is empty", tokenCookieName);
+                    return Optional.empty();
+                }
+                LOGGER.debug("Token extracted from cookie '%s'", tokenCookieName);
+                return Optional.of(value);
             }
-            String name = trimmed.substring(0, eqIndex).trim();
-            if (!tokenCookieName.equals(name)) {
-                continue;
-            }
-            String value = trimmed.substring(eqIndex + 1).trim();
-            // Remove optional surrounding double quotes per RFC 6265
-            if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
-                value = value.substring(1, value.length() - 1);
-            }
-            if (value.isEmpty()) {
-                LOGGER.debug("Cookie '%s' found but value is empty", tokenCookieName);
-                return Optional.empty();
-            }
-            LOGGER.debug("Token extracted from cookie '%s'", tokenCookieName);
-            return Optional.of(value);
         }
         return Optional.empty();
     }

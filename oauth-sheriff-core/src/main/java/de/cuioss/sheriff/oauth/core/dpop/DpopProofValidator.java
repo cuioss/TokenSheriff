@@ -34,6 +34,8 @@ import de.cuioss.tools.logging.CuiLogger;
 import de.cuioss.tools.logging.LogRecord;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
@@ -144,7 +146,7 @@ public class DpopProofValidator {
         String expectedThumbprint = cnfJkt.get();
 
         DecodedDpopProof decoded = decodeDpopProofJwt(dpopProofString);
-        validateDpopProofHeaderAndSignature(decoded, expectedThumbprint, rawAccessToken);
+        validateDpopProofHeaderAndSignature(decoded, expectedThumbprint, rawAccessToken, request);
     }
 
     /**
@@ -233,7 +235,7 @@ public class DpopProofValidator {
      * validates claims, and checks the JWK thumbprint against the expected value.
      */
     private void validateDpopProofHeaderAndSignature(DecodedDpopProof decoded, String expectedThumbprint,
-            String rawAccessToken) {
+            String rawAccessToken, AccessTokenRequest request) {
         MapRepresentation headerMap = decoded.headerMap();
 
         // Validate alg header: must be asymmetric
@@ -255,7 +257,7 @@ public class DpopProofValidator {
         // Validate DPoP proof signature
         verifyDpopSignature(decoded.parts().toArray(String[]::new), proofPublicKey, alg);
 
-        validateDpopClaims(decoded.bodyMap(), rawAccessToken);
+        validateDpopClaims(decoded.bodyMap(), rawAccessToken, request);
 
         // Validate JWK Thumbprint
         String computedThumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
@@ -271,13 +273,15 @@ public class DpopProofValidator {
     }
 
     /**
-     * Validates the {@code jti}, {@code iat}, and {@code ath} claims of a DPoP proof JWT payload.
+     * Validates the {@code jti}, {@code iat}, {@code ath}, {@code htu}, and {@code htm} claims
+     * of a DPoP proof JWT payload per RFC 9449.
      *
      * @param bodyMap        the decoded DPoP proof payload
      * @param rawAccessToken the raw access token string used to verify the {@code ath} claim
+     * @param request        the access token request containing HTTP context for htu/htm validation
      * @throws TokenValidationException if any claim is missing, invalid, or fails validation
      */
-    private void validateDpopClaims(MapRepresentation bodyMap, String rawAccessToken) {
+    private void validateDpopClaims(MapRepresentation bodyMap, String rawAccessToken, AccessTokenRequest request) {
         // Validate jti (replay protection)
         Optional<String> jti = bodyMap.getString("jti");
         if (jti.isEmpty()) {
@@ -319,6 +323,74 @@ public class DpopProofValidator {
             securityEventCounter.increment(EventType.DPOP_ATH_MISMATCH);
             throw new TokenValidationException(EventType.DPOP_ATH_MISMATCH,
                     "DPoP proof ath claim does not match access token hash");
+        }
+
+        // Validate htm and htu (RFC 9449 Section 4.3)
+        validateHtuHtm(bodyMap, request);
+    }
+
+    /**
+     * Validates the {@code htu} (HTTP URI) and {@code htm} (HTTP method) claims of the DPoP proof
+     * against the actual HTTP request per RFC 9449 Section 4.3.
+     * <p>
+     * If the request does not carry URI/method information, validation is skipped with a WARN log.
+     * The {@code htu} comparison strips query string and fragment per RFC 9449.
+     */
+    private void validateHtuHtm(MapRepresentation bodyMap, AccessTokenRequest request) {
+        if (request.requestUri() == null || request.requestUri().isBlank()
+                || request.requestMethod() == null || request.requestMethod().isBlank()) {
+            if (config.isRequired()) {
+                securityEventCounter.increment(EventType.DPOP_PROOF_INVALID);
+                throw new TokenValidationException(EventType.DPOP_PROOF_INVALID,
+                        "DPoP htu/htm validation failed: request context missing but DPoP is required");
+            }
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTU_HTM_SKIPPED);
+            return;
+        }
+
+        // Validate htm (HTTP method)
+        Optional<String> htm = bodyMap.getString("htm");
+        if (htm.isEmpty()) {
+            rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_MISSING_CLAIM,
+                    "DPoP proof is missing required claim: htm");
+        }
+        if (!request.requestMethod().equalsIgnoreCase(htm.get())) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTM_MISMATCH, htm.get(), request.requestMethod());
+            securityEventCounter.increment(EventType.DPOP_HTM_MISMATCH);
+            throw new TokenValidationException(EventType.DPOP_HTM_MISMATCH,
+                    "DPoP proof htm claim '%s' does not match request method '%s'"
+                            .formatted(htm.get(), request.requestMethod()));
+        }
+
+        // Validate htu (HTTP URI) — strip query and fragment per RFC 9449
+        Optional<String> htu = bodyMap.getString("htu");
+        if (htu.isEmpty()) {
+            rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_MISSING_CLAIM,
+                    "DPoP proof is missing required claim: htu");
+        }
+        String normalizedHtu = stripQueryAndFragment(htu.get());
+        String normalizedRequestUri = stripQueryAndFragment(request.requestUri());
+        if (!normalizedHtu.equals(normalizedRequestUri)) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTU_MISMATCH, htu.get(), request.requestUri());
+            securityEventCounter.increment(EventType.DPOP_HTU_MISMATCH);
+            throw new TokenValidationException(EventType.DPOP_HTU_MISMATCH,
+                    "DPoP proof htu claim '%s' does not match request URI '%s'"
+                            .formatted(htu.get(), request.requestUri()));
+        }
+    }
+
+    /**
+     * Strips query string and fragment from a URI per RFC 9449 Section 4.3.
+     * Returns the URI with only scheme, authority, and path.
+     */
+    private static String stripQueryAndFragment(String uri) {
+        try {
+            var parsed = new URI(uri);
+            return new URI(parsed.getScheme(), parsed.getAuthority(), parsed.getPath(),
+                    null, null).toString();
+        } catch (URISyntaxException e) {
+            // If URI is malformed, return as-is and let comparison fail
+            return uri;
         }
     }
 

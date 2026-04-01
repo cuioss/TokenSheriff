@@ -599,6 +599,42 @@ public final class JWTValidationLogMessages {
                 .identifier(164)
                 .template("Custom validation rule rejected token: %s")
                 .build();
+
+        public static final LogRecord JWK_MISSING_KID = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(165)
+                .template("JWK entry without 'kid' field skipped — kid is required for key identification")
+                .build();
+
+        public static final LogRecord JWK_RSA_DEFAULTING_TO_RS256 = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(166)
+                .template("RSA JWK without 'alg' field — defaulting to RS256 for key ID: %s")
+                .build();
+
+        public static final LogRecord ACCESS_TOKEN_AUDIENCE_MISSING = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(167)
+                .template("Access token is missing required audience claim. Expected audience: %s")
+                .build();
+
+        public static final LogRecord DPOP_HTU_MISMATCH = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(168)
+                .template("DPoP proof htu claim '%s' does not match request URI '%s'")
+                .build();
+
+        public static final LogRecord DPOP_HTM_MISMATCH = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(169)
+                .template("DPoP proof htm claim '%s' does not match request method '%s'")
+                .build();
+
+        public static final LogRecord DPOP_HTU_HTM_SKIPPED = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(170)
+                .template("DPoP htu/htm validation skipped — request URI or method not available in AccessTokenRequest")
+                .build();
     }
 
 }

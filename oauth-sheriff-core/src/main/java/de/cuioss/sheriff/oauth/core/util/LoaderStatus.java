@@ -32,6 +32,10 @@ public enum LoaderStatus {
     OK("ok"),
     /** The loader has encountered an error and couldn't load any keys or content */
     ERROR("error"),
+    // Design Decision: LOADING is set during async initialization by HttpJwksLoader and
+    // HttpWellKnownResolver. No production code branches distinctly on LOADING vs ERROR —
+    // health checks treat any non-OK status as DOWN. The value exists to provide diagnostic
+    // clarity in status reporting (e.g., "loading" vs "error" in health endpoint output).
     /** A loading operation is currently in progress */
     LOADING("loading"),
     /** The loader's status hasn't been determined yet */

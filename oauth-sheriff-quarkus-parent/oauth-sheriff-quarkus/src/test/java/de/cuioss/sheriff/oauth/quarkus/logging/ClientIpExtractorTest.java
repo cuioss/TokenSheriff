@@ -19,9 +19,8 @@ import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import java.util.HashMap;
-import java.util.Map;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -31,10 +30,38 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class ClientIpExtractorTest {
 
+    @ParameterizedTest(name = "Header ''{0}'' with value ''{1}'' should extract IP ''{2}''")
+    @CsvSource({
+            "X-Forwarded-For,          192.168.1.100,                              192.168.1.100",
+            "X-Forwarded-For,          '203.0.113.1,198.51.100.101,198.51.100.102', 203.0.113.1",
+            "CF-Connecting-IP,         203.0.113.50,                               203.0.113.50",
+            "True-Client-IP,           198.51.100.200,                             198.51.100.200",
+            "X-Real-IP,                10.0.0.100,                                 10.0.0.100",
+            "Fastly-Client-IP,         172.16.0.50,                                172.16.0.50",
+            "X-Client-IP,              192.168.100.25,                              192.168.100.25",
+            "X-Originating-IP,         10.1.1.1,                                   10.1.1.1",
+            "Forwarded,                for=203.0.113.1; proto=https,               203.0.113.1",
+            "Forwarded,                'for=\"203.0.113.1\"; proto=https',         203.0.113.1",
+            "Forwarded,                for=[2001:db8::1]; proto=https,             2001",
+            "Forwarded,                for=203.0.113.1:8080; proto=https,          203.0.113.1",
+            "X-Forwarded-For,          '  192.168.1.1  ',                          192.168.1.1",
+            "X-Forwarded-For,          2001:db8::1,                                2001:db8::1",
+            "X-Forwarded-For,          '203.0.113.1,2001:db8::1',                  203.0.113.1",
+    })
+    @DisplayName("Should extract IP from single header")
+    void shouldExtractIpFromSingleHeader(String headerName, String headerValue, String expectedIp) {
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
+        headers.putSingle(headerName, headerValue);
+
+        String result = ClientIpExtractor.extractClientIp(headers);
+
+        assertEquals(expectedIp, result);
+    }
+
     @Test
     @DisplayName("Should return unknown when no headers provided")
     void shouldReturnUnknownWhenNoHeaders() {
-        Map<String, String> headers = new HashMap<>();
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
 
         String result = ClientIpExtractor.extractClientIp(headers);
 
@@ -42,156 +69,24 @@ class ClientIpExtractorTest {
     }
 
     @Test
-    @DisplayName("Should extract IP from X-Forwarded-For header")
-    void shouldExtractFromXForwardedFor() {
-        Map<String, String> headers = Map.of("X-Forwarded-For", "192.168.1.100");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("192.168.1.100", result);
-    }
-
-    @Test
-    @DisplayName("Should extract first IP from comma-separated X-Forwarded-For")
-    void shouldExtractFirstFromCommaSeparatedXForwardedFor() {
-        Map<String, String> headers = Map.of("X-Forwarded-For", "203.0.113.1,198.51.100.101,198.51.100.102");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("203.0.113.1", result);
-    }
-
-    @Test
-    @DisplayName("Should extract IP from Cloudflare CF-Connecting-IP header")
-    void shouldExtractFromCloudflareHeader() {
-        Map<String, String> headers = Map.of("CF-Connecting-IP", "203.0.113.50");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("203.0.113.50", result);
-    }
-
-    @Test
     @DisplayName("Should prioritize CF-Connecting-IP over X-Real-IP")
     void shouldPrioritizeCloudflareOverXRealIP() {
-        Map<String, String> headers = Map.of(
-                "CF-Connecting-IP", "203.0.113.50",
-                "X-Real-IP", "10.0.0.1"
-        );
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
+        headers.putSingle("CF-Connecting-IP", "203.0.113.50");
+        headers.putSingle("X-Real-IP", "10.0.0.1");
 
         String result = ClientIpExtractor.extractClientIp(headers);
 
         assertEquals("203.0.113.50", result);
-    }
-
-    @Test
-    @DisplayName("Should extract IP from True-Client-IP header")
-    void shouldExtractFromTrueClientIP() {
-        Map<String, String> headers = Map.of("True-Client-IP", "198.51.100.200");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("198.51.100.200", result);
-    }
-
-    @Test
-    @DisplayName("Should extract IP from X-Real-IP header")
-    void shouldExtractFromXRealIP() {
-        Map<String, String> headers = Map.of("X-Real-IP", "10.0.0.100");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("10.0.0.100", result);
-    }
-
-    @Test
-    @DisplayName("Should extract IP from Fastly-Client-IP header")
-    void shouldExtractFromFastlyClientIP() {
-        Map<String, String> headers = Map.of("Fastly-Client-IP", "172.16.0.50");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("172.16.0.50", result);
-    }
-
-    @Test
-    @DisplayName("Should extract IP from X-Client-IP header")
-    void shouldExtractFromXClientIP() {
-        Map<String, String> headers = Map.of("X-Client-IP", "192.168.100.25");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("192.168.100.25", result);
-    }
-
-    @Test
-    @DisplayName("Should extract IP from X-Originating-IP header")
-    void shouldExtractFromXOriginatingIP() {
-        Map<String, String> headers = Map.of("X-Originating-IP", "10.1.1.1");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("10.1.1.1", result);
-    }
-
-    @Test
-    @DisplayName("Should extract IP from RFC 7239 Forwarded header")
-    void shouldExtractFromForwardedHeader() {
-        Map<String, String> headers = Map.of("Forwarded", "for=203.0.113.1; proto=https");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("203.0.113.1", result);
-    }
-
-    @Test
-    @DisplayName("Should extract IP from Forwarded header with quotes")
-    void shouldExtractFromForwardedHeaderWithQuotes() {
-        Map<String, String> headers = Map.of("Forwarded", "for=\"203.0.113.1\"; proto=https");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("203.0.113.1", result);
-    }
-
-    @Test
-    @DisplayName("Should extract IP from Forwarded header with brackets")
-    void shouldExtractFromForwardedHeaderWithBrackets() {
-        Map<String, String> headers = Map.of("Forwarded", "for=[2001:db8::1]; proto=https");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("2001", result);
-    }
-
-    @Test
-    @DisplayName("Should extract IP from Forwarded header with port")
-    void shouldExtractFromForwardedHeaderWithPort() {
-        Map<String, String> headers = Map.of("Forwarded", "for=203.0.113.1:8080; proto=https");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("203.0.113.1", result);
     }
 
     @Test
     @DisplayName("Should handle empty header values")
     void shouldHandleEmptyHeaderValues() {
-        Map<String, String> headers = Map.of(
-                "X-Forwarded-For", "",
-                "CF-Connecting-IP", "   ",
-                "X-Real-IP", "192.168.1.1"
-        );
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("192.168.1.1", result);
-    }
-
-    @Test
-    @DisplayName("Should trim whitespace from extracted IP")
-    void shouldTrimWhitespaceFromExtractedIP() {
-        Map<String, String> headers = Map.of("X-Forwarded-For", "  192.168.1.1  ");
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
+        headers.putSingle("X-Forwarded-For", "");
+        headers.putSingle("CF-Connecting-IP", "   ");
+        headers.putSingle("X-Real-IP", "192.168.1.1");
 
         String result = ClientIpExtractor.extractClientIp(headers);
 
@@ -201,12 +96,11 @@ class ClientIpExtractorTest {
     @Test
     @DisplayName("Should follow priority order correctly")
     void shouldFollowPriorityOrder() {
-        Map<String, String> headers = Map.of(
-                "Remote-Addr", "10.0.0.1",           // Lowest priority
-                "X-Real-IP", "10.0.0.2",            // Medium priority
-                "CF-Connecting-IP", "10.0.0.3",     // High priority
-                "X-Forwarded-For", "10.0.0.4"       // Highest priority
-        );
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
+        headers.putSingle("Remote-Addr", "10.0.0.1");           // Lowest priority
+        headers.putSingle("X-Real-IP", "10.0.0.2");            // Medium priority
+        headers.putSingle("CF-Connecting-IP", "10.0.0.3");     // High priority
+        headers.putSingle("X-Forwarded-For", "10.0.0.4");      // Highest priority
 
         String result = ClientIpExtractor.extractClientIp(headers);
 
@@ -216,10 +110,9 @@ class ClientIpExtractorTest {
     @Test
     @DisplayName("Should handle comma-separated values in multiple headers")
     void shouldHandleCommaSeparatedInMultipleHeaders() {
-        Map<String, String> headers = Map.of(
-                "X-Real-IP", "10.0.0.1,10.0.0.2",
-                "X-Forwarded-For", "203.0.113.1,198.51.100.1"
-        );
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
+        headers.putSingle("X-Real-IP", "10.0.0.1,10.0.0.2");
+        headers.putSingle("X-Forwarded-For", "203.0.113.1,198.51.100.1");
 
         String result = ClientIpExtractor.extractClientIp(headers);
 
@@ -229,34 +122,13 @@ class ClientIpExtractorTest {
     @Test
     @DisplayName("Should handle malformed Forwarded header gracefully")
     void shouldHandleMalformedForwardedHeader() {
-        Map<String, String> headers = Map.of(
-                "Forwarded", "malformed=value; not-for=something",
-                "X-Real-IP", "10.0.0.1"
-        );
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
+        headers.putSingle("Forwarded", "malformed=value; not-for=something");
+        headers.putSingle("X-Real-IP", "10.0.0.1");
 
         String result = ClientIpExtractor.extractClientIp(headers);
 
         assertEquals("10.0.0.1", result); // Should fall back to X-Real-IP
-    }
-
-    @Test
-    @DisplayName("Should handle IPv6 addresses")
-    void shouldHandleIPv6Addresses() {
-        Map<String, String> headers = Map.of("X-Forwarded-For", "2001:db8::1");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("2001:db8::1", result);
-    }
-
-    @Test
-    @DisplayName("Should handle mixed IPv4 and IPv6 in comma-separated values")
-    void shouldHandleMixedIPVersions() {
-        Map<String, String> headers = Map.of("X-Forwarded-For", "203.0.113.1,2001:db8::1");
-
-        String result = ClientIpExtractor.extractClientIp(headers);
-
-        assertEquals("203.0.113.1", result); // Should pick first IP
     }
 
     @Test

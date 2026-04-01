@@ -35,6 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -235,14 +236,14 @@ public class JWKSKeyLoader implements JwksLoader {
      * @param jwkAlgorithmPreferences the JWK algorithm preferences for parsing validation, must not be null
      * @param jwksType the type of JWKS source, must not be null
      */
-    public JWKSKeyLoader(
+    protected JWKSKeyLoader(
             String jwksContent,
             ParserConfig parserConfig,
             JwkAlgorithmPreferences jwkAlgorithmPreferences,
             JwksType jwksType) {
         this.jwksContent = jwksContent;
         this.jwks = null;
-        this.parserConfig = parserConfig != null ? parserConfig : ParserConfig.builder().build();
+        this.parserConfig = Objects.requireNonNull(parserConfig, "parserConfig must not be null");
         this.jwkAlgorithmPreferences = jwkAlgorithmPreferences;
         this.jwksType = jwksType;
         this.status = LoaderStatus.UNDEFINED;
@@ -257,14 +258,14 @@ public class JWKSKeyLoader implements JwksLoader {
      * @param jwkAlgorithmPreferences the JWK algorithm preferences for parsing validation, must not be null
      * @param jwksType the type of JWKS source, must not be null
      */
-    public JWKSKeyLoader(
+    protected JWKSKeyLoader(
             Jwks jwks,
             ParserConfig parserConfig,
             JwkAlgorithmPreferences jwkAlgorithmPreferences,
             JwksType jwksType) {
         this.jwksContent = null;
         this.jwks = jwks;
-        this.parserConfig = parserConfig != null ? parserConfig : ParserConfig.builder().build();
+        this.parserConfig = Objects.requireNonNull(parserConfig, "parserConfig must not be null");
         this.jwkAlgorithmPreferences = jwkAlgorithmPreferences;
         this.jwksType = jwksType;
         this.status = LoaderStatus.UNDEFINED;
@@ -272,13 +273,12 @@ public class JWKSKeyLoader implements JwksLoader {
 
 
     /**
-     * Checks if this loader contains valid keys.
+     * Gets the map of key IDs to {@link KeyInfo} objects.
      *
-     * @return true if the loader contains at least one valid key, false otherwise
+     * @return an unmodifiable view of the key info map, or empty map if not yet initialized
      */
-    public boolean isNotEmpty() {
-        ensureInitialized();
-        return keyInfoMap != null && !keyInfoMap.isEmpty();
+    Map<String, KeyInfo> getKeyInfoMap() {
+        return keyInfoMap != null ? Map.copyOf(keyInfoMap) : Map.of();
     }
 
     private void ensureInitialized() {

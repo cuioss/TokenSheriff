@@ -127,6 +127,7 @@ public class DynamicTokenValidator {
 * Include realm/tenant for multi-tenant providers (`/auth/realms/main`)
 * Never use wildcard or fallback issuers in production
 * Validate audience claims for each issuer
+* Enable `expectedTokenType("at+jwt")` for RFC 9068-compliant IdPs (see link:security-settings.adoc#token-type-validation-rfc-9068[Token Type Validation])
 * Configure appropriate JWKS refresh intervals
 * Use access token caching for high-traffic applications
 

@@ -173,38 +173,6 @@ public final class OAuthSheriffQuarkusLogMessages {
                 .identifier(52)
                 .build();
 
-        // JWKS Startup Messages (061-070)
-
-        public static final LogRecord JWKS_STARTUP_SERVICE_INITIALIZED = LogRecordModel.builder()
-                .template("JWKS startup service activated for background key loading")
-                .prefix(PREFIX)
-                .identifier(60)
-                .build();
-
-        public static final LogRecord STARTING_ASYNCHRONOUS_JWKS_INITIALIZATION = LogRecordModel.builder()
-                .template("Starting asynchronous JWKS initialization for %s issuer(s)")
-                .prefix(PREFIX)
-                .identifier(61)
-                .build();
-
-        public static final LogRecord NO_ISSUER_CONFIGURATIONS_FOUND = LogRecordModel.builder()
-                .template("No issuer configurations found - skipping JWKS initialization")
-                .prefix(PREFIX)
-                .identifier(62)
-                .build();
-
-        public static final LogRecord BACKGROUND_JWKS_INITIALIZATION_COMPLETED = LogRecordModel.builder()
-                .template("Background JWKS initialization completed successfully")
-                .prefix(PREFIX)
-                .identifier(63)
-                .build();
-
-        public static final LogRecord BACKGROUND_JWKS_LOADING_COMPLETED_FOR_ISSUER = LogRecordModel.builder()
-                .template("Background JWKS loading completed for issuer: %s with status: %s")
-                .prefix(PREFIX)
-                .identifier(64)
-                .build();
-
         // JWE Configuration Messages (031-040)
 
         public static final LogRecord JWE_DECRYPTION_CONFIG_RESOLVING = LogRecordModel.builder()
@@ -268,32 +236,12 @@ public final class OAuthSheriffQuarkusLogMessages {
                 .identifier(128)
                 .build();
 
-        // JWKS Startup Warnings (131-140)
-
-        public static final LogRecord BACKGROUND_JWKS_LOADING_FAILED_FOR_ISSUER = LogRecordModel.builder()
-                .template("Background JWKS loading failed for issuer %s: %s")
-                .prefix(PREFIX)
-                .identifier(131)
-                .build();
-
         // Metrics Warnings (133-140)
 
         public static final LogRecord NO_MICROMETER_COUNTER_FOUND = LogRecordModel.builder()
                 .template("No Micrometer counter found for event type %s, delta %s lost")
                 .prefix(PREFIX)
                 .identifier(133)
-                .build();
-
-        public static final LogRecord JWKS_LOADING_RETRY_WARNING = LogRecordModel.builder()
-                .template("JWKS loading failed for issuer %s: %s - will retry via background refresh")
-                .prefix(PREFIX)
-                .identifier(134)
-                .build();
-
-        public static final LogRecord BACKGROUND_JWKS_ISSUES_WARNING = LogRecordModel.builder()
-                .template("Background JWKS initialization encountered issues: %s - on-demand loading will handle this")
-                .prefix(PREFIX)
-                .identifier(135)
                 .build();
 
         // JWE Warnings (141-145)
@@ -304,19 +252,6 @@ public final class OAuthSheriffQuarkusLogMessages {
                 .identifier(141)
                 .build();
 
-        public static final LogRecord JWE_KEY_LOADING_FAILED = LogRecordModel.builder()
-                .template("Failed to load JWE decryption keys, JWE support disabled: %s")
-                .prefix(PREFIX)
-                .identifier(142)
-                .build();
-
-        // Interceptor Warnings (136-145)
-
-        public static final LogRecord BEARER_TOKEN_ANNOTATION_NOT_FOUND = LogRecordModel.builder()
-                .template("@BearerAuth annotation not found on method or class: %s")
-                .prefix(PREFIX)
-                .identifier(136)
-                .build();
     }
 
     /**

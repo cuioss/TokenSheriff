@@ -18,7 +18,6 @@ package de.cuioss.sheriff.oauth.core;
 import de.cuioss.sheriff.oauth.core.domain.claim.mapper.IdentityMapper;
 import de.cuioss.sheriff.oauth.core.jwks.JwksLoader;
 import de.cuioss.sheriff.oauth.core.jwks.http.HttpJwksLoaderConfig;
-import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
@@ -188,9 +187,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                             .build())
                     .audienceValidationDisabled(true)
                     .build();
-            var securityEventCounter = new SecurityEventCounter();
 
-            config.initSecurityEventCounter(securityEventCounter);
             assertNotNull(config.getJwksLoader());
         }
 
@@ -205,9 +202,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                     .jwksFilePath(jwksFilePath.toString())
                     .audienceValidationDisabled(true)
                     .build();
-            var securityEventCounter = new SecurityEventCounter();
 
-            config.initSecurityEventCounter(securityEventCounter);
             assertNotNull(config.getJwksLoader());
         }
 
@@ -219,9 +214,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                     .jwksContent(TEST_JWKS_CONTENT)
                     .audienceValidationDisabled(true)
                     .build();
-            var securityEventCounter = new SecurityEventCounter();
 
-            config.initSecurityEventCounter(securityEventCounter);
             assertNotNull(config.getJwksLoader());
             JwksLoader jwksLoader = config.getJwksLoader();
             LOGGER.debug("JwksLoader initialized: %s", jwksLoader);
@@ -234,19 +227,6 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
             var exception = assertThrows(IllegalArgumentException.class, builder::build);
 
             assertTrue(exception.getMessage().contains("No JwksLoader configuration is present"));
-        }
-
-        @SuppressWarnings("DataFlowIssue")
-        @Test
-        @DisplayName("Should throw exception when securityEventCounter is null")
-        void shouldThrowExceptionWhenSecurityEventCounterIsNull() {
-            var config = IssuerConfig.builder()
-                    .issuerIdentifier("test-issuer")
-                    .jwksContent(TEST_JWKS_CONTENT)
-                    .audienceValidationDisabled(true)
-                    .build();
-            assertThrows(NullPointerException.class,
-                    () -> config.initSecurityEventCounter(null));
         }
     }
 
@@ -316,6 +296,53 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                         .enabled(false)
                         .build();
             });
+        }
+
+        @Test
+        @DisplayName("Should build with accessTokenAudienceOptional")
+        void shouldBuildWithAccessTokenAudienceOptional() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .expectedAudience(TEST_AUDIENCE)
+                    .accessTokenAudienceOptional(true)
+                    .build();
+            assertTrue(config.isAccessTokenAudienceOptional());
+        }
+
+        @Test
+        @DisplayName("Should build with expectedTokenType")
+        void shouldBuildWithExpectedTokenType() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .audienceValidationDisabled(true)
+                    .expectedTokenType("at+jwt")
+                    .build();
+            assertEquals("at+jwt", config.getExpectedTokenType());
+        }
+
+        @Test
+        @DisplayName("Should have null expectedTokenType by default")
+        void shouldHaveNullExpectedTokenTypeByDefault() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .audienceValidationDisabled(true)
+                    .build();
+            assertNull(config.getExpectedTokenType());
+        }
+
+        @Test
+        @DisplayName("Should build with maxTokenAgeSeconds null to disable")
+        void shouldBuildWithNullMaxTokenAgeSeconds() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksContent(TEST_JWKS_CONTENT)
+                    .audienceValidationDisabled(true)
+                    .maxTokenAgeSeconds(null)
+                    .build();
+            assertNull(config.getMaxTokenAgeSeconds());
         }
 
         @Test

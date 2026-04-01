@@ -24,7 +24,7 @@ import jakarta.enterprise.inject.Instance;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
+
 
 import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.INFO;
 
@@ -73,7 +73,7 @@ public class TokenValidationRuleRegistry {
                         })
                         .sorted(Comparator.comparingInt(DiscoverableTokenValidationRule::getPriority))
                         .map(DiscoverableTokenValidationRule::getRule)
-                        .collect(Collectors.toList()));
+                        .toList());
 
         if (registeredRules.isEmpty()) {
             LOGGER.info(INFO.NO_CUSTOM_VALIDATION_RULES_DISCOVERED);

@@ -67,20 +67,6 @@ class MapRepresentationTest {
     }
 
     @Test
-    @DisplayName("Basic boolean access")
-    void shouldAccessBooleanValues() {
-        Map<String, Object> data = Map.of(
-                "email_verified", true,
-                "phone_verified", false
-        );
-        MapRepresentation map = new MapRepresentation(data);
-
-        assertEquals(Optional.of(true), map.getBoolean("email_verified"));
-        assertEquals(Optional.of(false), map.getBoolean("phone_verified"));
-        assertEquals(Optional.empty(), map.getBoolean("nonexistent"));
-    }
-
-    @Test
     @DisplayName("List access - KeycloakDefaultRolesMapper pattern")
     void shouldAccessKeycloakRolesPattern() {
         // Simulates the Keycloak realm_access.roles structure
@@ -257,9 +243,6 @@ class MapRepresentationTest {
         // List value accessed as string should return empty
         assertEquals(Optional.empty(), map.getString("list_as_string"));
 
-        // String value accessed as boolean should return empty
-        assertEquals(Optional.empty(), map.getBoolean("boolean_as_string"));
-
         // But correct type access should work
         assertEquals(Optional.of("123"), map.getString("number_as_string"));
         assertEquals(Optional.of(123), map.getNumber("string_as_number"));
@@ -318,7 +301,6 @@ class MapRepresentationTest {
 
         assertEquals(Optional.empty(), map.getString("null_value"));
         assertEquals(Optional.empty(), map.getNumber("null_value"));
-        assertEquals(Optional.empty(), map.getBoolean("null_value"));
         assertEquals(Optional.empty(), map.getList("null_value"));
         assertEquals(Optional.empty(), map.getMap("null_value"));
         assertEquals(Optional.empty(), map.getNestedMap("null_value"));

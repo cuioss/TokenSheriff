@@ -56,8 +56,6 @@ class TokenHeaderValidatorTest {
 
     // Helper method to create a TokenHeaderValidator with the shared SecurityEventCounter
     private TokenHeaderValidator createValidator(IssuerConfig issuerConfig) {
-        // Initialize the IssuerConfig with the SecurityEventCounter so JwksLoader is created
-        issuerConfig.initSecurityEventCounter(SECURITY_EVENT_COUNTER);
         return new TokenHeaderValidator(issuerConfig, SECURITY_EVENT_COUNTER);
     }
 
@@ -180,7 +178,7 @@ class TokenHeaderValidatorTest {
             TokenHeaderValidator validator = createValidator(issuerConfig);
 
             // And a validation with a missing algorithm (manually created since generators always include alg)
-            DecodedJwt decodedJwt = new DecodedJwt(null, null, null, new String[]{"", "", ""}, "");
+            DecodedJwt decodedJwt = new DecodedJwt(null, MapRepresentation.empty(), null, new String[]{"", "", ""}, "");
 
             // When validating the validation, it should throw an exception
             var request = AccessTokenRequest.of("test");
@@ -473,7 +471,7 @@ class TokenHeaderValidatorTest {
         @Test
         @DisplayName("Should accept token when no expected token type is configured")
         void shouldAcceptTokenWhenNoExpectedTokenTypeConfigured() {
-            // Given a validator with no expectedTokenType configured (default)
+            // Given a validator with token type validation disabled
             var issuerConfig = IssuerConfig.builder()
                     .issuerIdentifier("test-issuer")
                     .jwksContent(InMemoryJWKSFactory.createDefaultJwks())

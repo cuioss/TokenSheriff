@@ -33,7 +33,5 @@ cui:
       max-payload-size: 8192
       max-string-length: 4096
     health:
-      enabled: true
       jwks:
         cache-seconds: 30
-        timeout-seconds: 5

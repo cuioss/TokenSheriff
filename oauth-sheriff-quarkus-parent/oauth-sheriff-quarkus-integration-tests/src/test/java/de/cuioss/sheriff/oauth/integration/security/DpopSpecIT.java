@@ -21,7 +21,10 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.UUID;
 import java.util.stream.Stream;
+
+import io.restassured.RestAssured;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
@@ -39,6 +42,10 @@ class DpopSpecIT extends BaseIntegrationTest {
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String JWT_VALIDATE_PATH = "/jwt/validate";
     private static final String AUTHORIZATION = "Authorization";
+
+    private static String resourceUri() {
+        return RestAssured.baseURI + ":" + RestAssured.port + JWT_VALIDATE_PATH;
+    }
 
     static Stream<TestRealm> dpopProviders() {
         // Add future DPoP-capable providers here
@@ -65,7 +72,7 @@ class DpopSpecIT extends BaseIntegrationTest {
         var dpopHelper = new DpopProofHelper();
         var tokenResponse = realm.obtainDpopBoundToken(dpopHelper);
         String accessToken = tokenResponse.accessToken();
-        String resourceProof = dpopHelper.createResourceProof(accessToken);
+        String resourceProof = dpopHelper.createResourceProof(accessToken, "POST", resourceUri());
 
         given()
                 .contentType("application/json")
@@ -89,7 +96,7 @@ class DpopSpecIT extends BaseIntegrationTest {
         String accessToken = tokenResponse.accessToken();
 
         for (int i = 0; i < 3; i++) {
-            String freshProof = dpopHelper.createResourceProof(accessToken);
+            String freshProof = dpopHelper.createResourceProof(accessToken, "POST", resourceUri());
             given()
                     .contentType("application/json")
                     .header(AUTHORIZATION, BEARER_PREFIX + accessToken)
@@ -147,7 +154,7 @@ class DpopSpecIT extends BaseIntegrationTest {
         String accessToken = tokenResponse.accessToken();
 
         var wrongKeyHelper = DpopProofHelper.createWithDifferentKey();
-        String wrongProof = wrongKeyHelper.createResourceProof(accessToken);
+        String wrongProof = wrongKeyHelper.createResourceProof(accessToken, "POST", resourceUri());
 
         given()
                 .contentType("application/json")
@@ -168,8 +175,8 @@ class DpopSpecIT extends BaseIntegrationTest {
         var tokenResponse = realm.obtainDpopBoundToken(dpopHelper);
         String accessToken = tokenResponse.accessToken();
 
-        String fixedJti = "replay-test-" + java.util.UUID.randomUUID();
-        String proof = dpopHelper.createResourceProofWithJti(accessToken, fixedJti);
+        String fixedJti = "replay-test-" + UUID.randomUUID();
+        String proof = dpopHelper.createResourceProofWithJti(accessToken, fixedJti, "POST", resourceUri());
 
         // First request — should succeed
         given()

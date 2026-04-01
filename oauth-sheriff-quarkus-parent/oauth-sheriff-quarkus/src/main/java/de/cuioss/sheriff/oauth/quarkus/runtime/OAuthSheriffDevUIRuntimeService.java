@@ -90,7 +90,7 @@ public class OAuthSheriffDevUIRuntimeService {
 
         boolean isEnabled = isJwtEnabled();
         status.put("enabled", isEnabled);
-        status.put("validatorPresent", tokenValidator != null);
+        status.put("validatorPresent", true);
         status.put("status", isEnabled ? "ACTIVE" : "INACTIVE");
 
         if (isEnabled) {
@@ -144,23 +144,22 @@ public class OAuthSheriffDevUIRuntimeService {
         configMap.put("enabled", isEnabled);
         configMap.put("logLevel", "INFO");
 
-        // Parser configuration section
+        // Parser configuration section — values from actual runtime config
         Map<String, Object> parser = new HashMap<>();
         parser.put("maxTokenSize", parserConfig.getMaxTokenSize());
-        parser.put("clockSkewSeconds", 60);
-        parser.put("requireExpirationTime", true);
-        parser.put("requireNotBeforeTime", false);
-        parser.put("requireIssuedAtTime", false);
+        parser.put("maxPayloadSize", parserConfig.getMaxPayloadSize());
+        parser.put("maxStringLength", parserConfig.getMaxStringLength());
+        // Clock skew is per-issuer; show first issuer's value or default
+        int clockSkew = issuerConfigs.isEmpty() ? 60 : issuerConfigs.getFirst().getClockSkewSeconds();
+        parser.put("clockSkewSeconds", clockSkew);
         configMap.put("parser", parser);
 
-        // HTTP JWKS loader configuration section
+        // HTTP JWKS loader configuration section — documented defaults
+        // (HttpJwksLoaderConfig is not accessible from this service)
         Map<String, Object> httpJwksLoader = new HashMap<>();
-        httpJwksLoader.put("connectTimeoutSeconds", 10);
-        httpJwksLoader.put("readTimeoutSeconds", 10);
+        httpJwksLoader.put("connectTimeoutSeconds", "per-issuer (default: 10)");
+        httpJwksLoader.put("readTimeoutSeconds", "per-issuer (default: 10)");
         httpJwksLoader.put("sizeLimit", parserConfig.getMaxTokenSize());
-        httpJwksLoader.put("cacheTtlSeconds", 600);
-        httpJwksLoader.put("cacheSize", 10);
-        httpJwksLoader.put("backgroundRefreshEnabled", true);
         configMap.put("httpJwksLoader", httpJwksLoader);
 
         // Issuers configuration section
@@ -173,8 +172,10 @@ public class OAuthSheriffDevUIRuntimeService {
             issuerDetail.put("jwksUri", ic.getJwksLoader() != null ? "configured" : null);
             issuerDetail.put("audience", ic.getExpectedAudience().isEmpty() ? null
                     : String.join(", ", ic.getExpectedAudience()));
-            issuerDetail.put("publicKeyLocation", null);
-            issuerDetail.put("algorithmPreference", null);
+            issuerDetail.put("clockSkewSeconds", ic.getClockSkewSeconds());
+            issuerDetail.put("expectedTokenType", ic.getExpectedTokenType());
+            issuerDetail.put("claimSubOptional", ic.isClaimSubOptional());
+            issuerDetail.put("dpopEnabled", ic.getDpopConfig() != null);
             issuersMap.put(name, issuerDetail);
         }
         configMap.put("issuers", issuersMap);
@@ -252,19 +253,11 @@ public class OAuthSheriffDevUIRuntimeService {
         Map<String, Object> health = new HashMap<>();
 
         boolean configValid = isJwtEnabled();
-        boolean validatorAvailable = tokenValidator != null;
-
         health.put("configurationValid", configValid);
-        health.put("tokenValidatorAvailable", validatorAvailable);
-        health.put("securityCounterAvailable", true); // Metrics are always enabled in runtime
-        health.put("overallStatus", "HEALTHY");
 
-        if (configValid && validatorAvailable) {
+        if (configValid) {
             health.put(MESSAGE, "All JWT components are healthy and operational");
             health.put(HEALTH_STATUS, "UP");
-        } else if (configValid) {
-            health.put(MESSAGE, "Configuration is valid but validator is not available");
-            health.put(HEALTH_STATUS, "DOWN");
         } else {
             health.put(MESSAGE, "JWT validation is disabled or misconfigured");
             health.put(HEALTH_STATUS, "DOWN");
@@ -291,10 +284,8 @@ public class OAuthSheriffDevUIRuntimeService {
      * @return number of enabled issuers
      */
     private int countEnabledIssuers() {
-        // Count only enabled issuers
-        return (int) issuerConfigs.stream()
-                .filter(IssuerConfig::isEnabled)
-                .count();
+        // IssuerConfigResolver already filters to only enabled issuers
+        return issuerConfigs.size();
     }
 
 }

@@ -110,12 +110,12 @@ class TokenBuilderTest {
         }
 
         @Test
-        @DisplayName("createAccessToken should handle DecodedJwt with missing body")
-        void createAccessTokenShouldHandleDecodedJwtWithMissingBody() {
-            DecodedJwt decodedJwt = new DecodedJwt(null, null, null, new String[]{"", "", ""}, "test-validation");
+        @DisplayName("createAccessToken should handle DecodedJwt with empty body")
+        void createAccessTokenShouldHandleDecodedJwtWithEmptyBody() {
+            DecodedJwt decodedJwt = new DecodedJwt(null, MapRepresentation.empty(), null, new String[]{"", "", ""}, "test-validation");
 
             Optional<AccessTokenContent> result = tokenBuilder.createAccessToken(decodedJwt);
-            assertTrue(result.isEmpty(), "Should return empty Optional when body is missing");
+            assertTrue(result.isEmpty(), "Should return empty Optional when body is empty");
         }
     }
 
@@ -145,12 +145,12 @@ class TokenBuilderTest {
         }
 
         @Test
-        @DisplayName("createIdToken should handle DecodedJwt with missing body")
-        void createIdTokenShouldHandleDecodedJwtWithMissingBody() {
-            DecodedJwt decodedJwt = new DecodedJwt(null, null, null, new String[]{"", "", ""}, "test-validation");
+        @DisplayName("createIdToken should handle DecodedJwt with empty body")
+        void createIdTokenShouldHandleDecodedJwtWithEmptyBody() {
+            DecodedJwt decodedJwt = new DecodedJwt(null, MapRepresentation.empty(), null, new String[]{"", "", ""}, "test-validation");
 
             Optional<IdTokenContent> result = tokenBuilder.createIdToken(decodedJwt);
-            assertTrue(result.isEmpty(), "Should return empty Optional when body is missing");
+            assertTrue(result.isEmpty(), "Should return empty Optional when body is empty");
         }
     }
 

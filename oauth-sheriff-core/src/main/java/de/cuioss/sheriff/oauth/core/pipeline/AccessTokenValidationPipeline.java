@@ -110,6 +110,7 @@ public class AccessTokenValidationPipeline {
      * @param cacheConfig the cache configuration for access token caching
      * @param securityEventCounter the security event counter for tracking operations
      * @param performanceMonitor the monitor for recording performance metrics
+     * @param maxClockSkewSeconds the maximum clock skew tolerance across all issuers (for cache expiration)
      */
     @SuppressWarnings("java:S107") // Many dependencies are required
     public AccessTokenValidationPipeline(NonValidatingJwtParser jwtParser,
@@ -122,7 +123,8 @@ public class AccessTokenValidationPipeline {
             List<TokenValidationRule> customValidationRules,
             AccessTokenCacheConfig cacheConfig,
             SecurityEventCounter securityEventCounter,
-            TokenValidatorMonitor performanceMonitor) {
+            TokenValidatorMonitor performanceMonitor,
+            int maxClockSkewSeconds) {
         this.jwtParser = jwtParser;
         this.issuerConfigCache = issuerConfigCache;
         this.signatureValidators = signatureValidators;
@@ -131,7 +133,7 @@ public class AccessTokenValidationPipeline {
         this.headerValidators = headerValidators;
         this.dpopValidators = dpopValidators;
         this.customValidationRules = List.copyOf(customValidationRules);
-        this.cache = new AccessTokenCache(cacheConfig, securityEventCounter);
+        this.cache = new AccessTokenCache(cacheConfig, securityEventCounter, maxClockSkewSeconds);
         this.securityEventCounter = securityEventCounter;
         this.performanceMonitor = performanceMonitor;
     }
@@ -296,8 +298,16 @@ public class AccessTokenValidationPipeline {
         DpopProofValidator dpopValidator = dpopValidators.get(issuerIdentifier);
         if (dpopValidator != null) {
             // Re-decode the token to get access to cnf.jkt for DPoP validation
-            DecodedJwt decodedJwt = jwtParser.decode(tokenString, false);
+            DecodedJwt decodedJwt = jwtParser.decodeQuietly(tokenString);
             dpopValidator.validate(request, decodedJwt, tokenString);
         }
+    }
+
+    /**
+     * Shuts down the internal cache eviction executor. Must be called when the pipeline
+     * is no longer needed to prevent daemon thread leaks.
+     */
+    public void shutdown() {
+        cache.shutdown();
     }
 }

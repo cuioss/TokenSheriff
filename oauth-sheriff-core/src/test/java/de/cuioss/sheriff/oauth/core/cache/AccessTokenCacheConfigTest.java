@@ -82,7 +82,7 @@ class AccessTokenCacheConfigTest {
                 .build();
 
         // When
-        AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter);
+        AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter, 0);
 
         // Then
         assertNotNull(cache);
@@ -102,7 +102,7 @@ class AccessTokenCacheConfigTest {
                 OffsetDateTime.now().plusHours(1));
 
         // When
-        AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter);
+        AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter, 0);
 
         // Then - cache is created but calls validation function directly (no caching)
         assertNotNull(cache);
@@ -223,7 +223,7 @@ class AccessTokenCacheConfigTest {
                 .build();
 
         // When
-        AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter);
+        AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter, 0);
 
         // Then
         assertNotNull(cache);

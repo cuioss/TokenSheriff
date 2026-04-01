@@ -112,18 +112,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             // Resolve the adapter (may involve well-known discovery)
             Optional<HttpAdapter<Jwks>> adapterOpt = resolveJWKSAdapter();
             if (adapterOpt.isEmpty()) {
-                status.set(LoaderStatus.ERROR);
-                boolean isWellKnownFailure = config.getWellKnownConfig() != null;
-                String errorDetail = isWellKnownFailure
-                        ? "Well-known discovery failed"
-                        : "No HTTP handler configured";
-
-                // Log appropriate message based on failure type
-                if (isWellKnownFailure) {
-                    LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
-                }
-                LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, errorDetail, getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
-                return LoaderStatus.ERROR;
+                return handleAdapterResolutionFailure();
             }
 
             HttpAdapter<Jwks> adapter = adapterOpt.get();
@@ -166,6 +155,23 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     }
 
     /**
+     * Handles the case where JWKS adapter resolution failed (well-known discovery or HTTP handler).
+     */
+    private LoaderStatus handleAdapterResolutionFailure() {
+        status.set(LoaderStatus.ERROR);
+        boolean isWellKnownFailure = config.getWellKnownConfig() != null;
+        String errorDetail = isWellKnownFailure
+                ? "Well-known discovery failed"
+                : "No HTTP handler configured";
+
+        if (isWellKnownFailure) {
+            LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
+        }
+        LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, errorDetail, getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
+        return LoaderStatus.ERROR;
+    }
+
+    /**
      * Resolves the JWKS adapter based on configuration.
      * For well-known: performs discovery to get JWKS URL and validates issuer
      * For direct: uses the configured HTTP handler
@@ -177,7 +183,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
         if (config.getWellKnownConfig() != null) {
             // Well-known discovery - the resolver itself uses HttpAdapter for retry!
-            HttpWellKnownResolver resolver = config.getWellKnownConfig().createResolver();
+            HttpWellKnownResolver resolver = config.getWellKnownConfig().createResolver(securityEventCounter);
 
             // This call may block but we're in async context
             Optional<String> jwksUri = resolver.getJwksUri();
@@ -370,6 +376,14 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     /**
      * Resolves the issuer identifier from discovered and configured sources.
      * Implements the issuer resolution logic with precedence rules.
+     *
+     * Design Decision: The configured issuer always takes precedence over the discovered
+     * issuer. This is intentional — the configured value acts as the operator's trust anchor.
+     * A mismatch is audited (WARN log + ISSUER_MISMATCH security counter) but does not fail
+     * initialization, because trailing-slash or scheme-case differences between configured and
+     * discovered values are common in real deployments (e.g., Keycloak). Rogue-IdP tokens
+     * still fail validation because the JWT {@code iss} claim is checked against the configured
+     * (not discovered) value at token validation time.
      *
      * @param discoveredIssuer the issuer from well-known discovery (nullable)
      * @param configuredIssuer the configured issuer from configuration (nullable)

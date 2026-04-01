@@ -66,33 +66,31 @@ String[] parts,
 String rawToken
 ) {
     /**
+     * Compact constructor that validates the body is non-null.
+     * A properly decoded JWT must always have a parseable body.
+     */
+    public DecodedJwt {
+        Objects.requireNonNull(body, "body must not be null");
+    }
+
+    /**
      * Gets the header of the JWT token.
      * <p>
-     * Design Decision: null-object pattern simplifies consumer code. NonValidatingJwtParser
-     * guarantees non-null fields; the fallback exists as defense-in-depth.
+     * The parser guarantees non-null headers, so this simply returns the record field.
      *
-     * @return the JwtHeader, never null (minimal header with empty algorithm if not present)
+     * @return the JwtHeader
      */
     public JwtHeader getHeader() {
-        return header != null ? header : new JwtHeader("", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        return header;
     }
 
     /**
      * Gets the body of the JWT token.
      *
-     * @return the body MapRepresentation, never null (empty MapRepresentation if not present)
+     * @return the body MapRepresentation, never null
      */
     public MapRepresentation getBody() {
-        return body != null ? body : MapRepresentation.empty();
-    }
-
-    /**
-     * Gets the signature of the JWT token.
-     *
-     * @return an Optional containing the signature if present
-     */
-    public Optional<String> getSignature() {
-        return Optional.ofNullable(signature);
+        return body;
     }
 
     /**
@@ -101,7 +99,7 @@ String rawToken
      * @return an Optional containing the issuer if present
      */
     public Optional<String> getIssuer() {
-        return body != null ? body.getString(ClaimName.ISSUER.getName()) : Optional.empty();
+        return body.getString(ClaimName.ISSUER.getName());
     }
 
     /**
@@ -299,6 +297,8 @@ String rawToken
         }
 
         public DecodedJwt build() {
+            Objects.requireNonNull(header, "header");
+            Objects.requireNonNull(rawToken, "rawToken");
             return new DecodedJwt(header, body, signature, parts, rawToken);
         }
     }

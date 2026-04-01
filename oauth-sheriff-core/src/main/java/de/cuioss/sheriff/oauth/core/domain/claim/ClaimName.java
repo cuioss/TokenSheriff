@@ -191,33 +191,6 @@ public enum ClaimName {
         this.claimMapper = claimMapper;
     }
 
-    /**
-     * Gets the claim name string.
-     *
-     * @return the claim name
-     */
-    public String getName() {
-        return name;
-    }
-
-    /**
-     * Gets the claim value type.
-     *
-     * @return the claim value type
-     */
-    public ClaimValueType getValueType() {
-        return valueType;
-    }
-
-    /**
-     * Gets the specification description.
-     *
-     * @return the specification description
-     */
-    public String getSpec() {
-        return spec;
-    }
-
     // Thread-safe cache for ClaimName lookups to improve performance
     private static final Map<String, Optional<ClaimName>> CLAIM_NAME_CACHE = new ConcurrentHashMap<>();
 
@@ -228,15 +201,6 @@ public enum ClaimName {
      */
     public ClaimValue map(MapRepresentation mapRepresentation) {
         return claimMapper.map(mapRepresentation, getName());
-    }
-
-    /**
-     * Gets the claim mapper for this claim.
-     *
-     * @return the ClaimMapper instance
-     */
-    public ClaimMapper getClaimMapper() {
-        return claimMapper;
     }
 
     /**

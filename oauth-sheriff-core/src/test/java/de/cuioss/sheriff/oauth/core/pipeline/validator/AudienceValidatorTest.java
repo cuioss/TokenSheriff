@@ -76,13 +76,13 @@ class AudienceValidatorTest {
     @BeforeEach
     void setup() {
         securityEventCounter = new SecurityEventCounter();
-        validator = new AudienceValidator(EXPECTED_AUDIENCES, securityEventCounter);
+        validator = new AudienceValidator(EXPECTED_AUDIENCES, securityEventCounter, false);
     }
 
     @Test
     @DisplayName("Should skip validation when no expected audience configured")
     void shouldSkipValidationWhenNoExpectedAudienceConfigured() {
-        AudienceValidator emptyValidator = new AudienceValidator(Set.of(), securityEventCounter);
+        AudienceValidator emptyValidator = new AudienceValidator(Set.of(), securityEventCounter, false);
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
@@ -185,27 +185,45 @@ class AudienceValidatorTest {
     }
 
     @Test
-    @DisplayName("Should pass for missing audience in access token when no azp fallback")
-    void shouldPassForMissingAudienceInAccessTokenWhenNoAzpFallback() {
+    @DisplayName("Should reject access token with missing audience when accessTokenAudienceOptional=false")
+    void shouldRejectAccessTokenWithMissingAudienceByDefault() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.AUDIENCE.getName());
         claims.remove(ClaimName.AUTHORIZED_PARTY.getName());
         AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
-        assertDoesNotThrow(() -> validator.validateAudience(token));
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> validator.validateAudience(token));
+        assertEquals(SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING, exception.getEventType());
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING));
     }
 
     @Test
-    @DisplayName("Should fail when azp fallback does not match expected audience")
-    void shouldFailWhenAzpFallbackDoesNotMatchExpectedAudience() {
+    @DisplayName("Should pass for missing audience in access token when accessTokenAudienceOptional=true")
+    void shouldPassForMissingAudienceInAccessTokenWhenOptional() {
+        AudienceValidator lenientValidator = new AudienceValidator(EXPECTED_AUDIENCES, securityEventCounter, true);
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
+        claims.remove(ClaimName.AUDIENCE.getName());
+        claims.remove(ClaimName.AUTHORIZED_PARTY.getName());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
+
+        assertDoesNotThrow(() -> lenientValidator.validateAudience(token));
+    }
+
+    @Test
+    @DisplayName("Should reject access token when azp fallback does not match expected audience")
+    void shouldRejectWhenAzpFallbackDoesNotMatchExpectedAudience() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.AUDIENCE.getName());
         claims.put(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(UNEXPECTED_AUDIENCE));
         AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
-        assertDoesNotThrow(() -> validator.validateAudience(token));
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> validator.validateAudience(token));
+        assertEquals(SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING, exception.getEventType());
     }
 
     @Test

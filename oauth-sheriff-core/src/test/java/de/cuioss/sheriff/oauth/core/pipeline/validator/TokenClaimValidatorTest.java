@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.oauth.core.pipeline.validator;
 
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
-import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages;
 import de.cuioss.sheriff.oauth.core.TokenType;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
@@ -28,8 +27,6 @@ import de.cuioss.sheriff.oauth.core.test.TestTokenHolder;
 import de.cuioss.sheriff.oauth.core.test.generator.TestTokenGenerators;
 import de.cuioss.sheriff.oauth.core.test.junit.TestTokenSource;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
-import de.cuioss.test.juli.LogAsserts;
-import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -61,7 +58,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class TokenClaimValidatorTest {
 
     private static final SecurityEventCounter SECURITY_EVENT_COUNTER = new SecurityEventCounter();
-    private static final ValidationContext VALIDATION_CONTEXT = new ValidationContext(60);
+    private static final ValidationContext VALIDATION_CONTEXT = new ValidationContext(60, null);
 
     private TokenClaimValidator createValidator(IssuerConfig issuerConfig) {
         return new TokenClaimValidator(issuerConfig, SECURITY_EVENT_COUNTER);
@@ -113,8 +110,8 @@ class TokenClaimValidatorTest {
         }
 
         @Test
-        @DisplayName("Log warning when missing expected client ID")
-        void shouldLogWarningWhenMissingExpectedClientId() {
+        @DisplayName("No warning when missing expected client ID (azp is optional per OIDC spec)")
+        void shouldNotWarnWhenMissingExpectedClientId() {
             long initialCount = SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT);
 
             var issuerConfig = IssuerConfig.builder()
@@ -127,13 +124,14 @@ class TokenClaimValidatorTest {
 
             assertNotNull(validator, "Validator should not be null");
             assertTrue(validator.getExpectedClientId().isEmpty(), "Expected client ID should be empty");
-            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, JWTValidationLogMessages.WARN.MISSING_RECOMMENDED_ELEMENT.resolveIdentifierString());
-            assertEquals(initialCount + 1, SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT));
+            // Missing clientId no longer increments security event counter (azp is optional per OIDC spec)
+            assertEquals(initialCount, SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT),
+                    "Missing clientId should not increment security event counter");
         }
 
         @Test
-        @DisplayName("Log warning only for missing client ID when audience validation is disabled")
-        void shouldLogWarningOnlyForMissingClientIdWhenAudienceValidationDisabled() {
+        @DisplayName("No warning for missing client ID when audience validation is disabled")
+        void shouldNotWarnForMissingClientIdWhenAudienceValidationDisabled() {
             long initialCount = SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT);
 
             var issuerConfig = IssuerConfig.builder()
@@ -147,9 +145,9 @@ class TokenClaimValidatorTest {
             assertNotNull(validator, "Validator should not be null");
             assertTrue(validator.getExpectedAudience().isEmpty(), "Expected audience should be empty");
             assertTrue(validator.getExpectedClientId().isEmpty(), "Expected client ID should be empty");
-            // Only clientId warning fires; audience warning is suppressed when audienceValidationDisabled=true
-            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, JWTValidationLogMessages.WARN.MISSING_RECOMMENDED_ELEMENT.resolveIdentifierString());
-            assertEquals(initialCount + 1, SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT));
+            // Neither audience nor clientId should increment counter
+            assertEquals(initialCount, SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT),
+                    "Missing clientId should not increment security event counter");
         }
     }
 

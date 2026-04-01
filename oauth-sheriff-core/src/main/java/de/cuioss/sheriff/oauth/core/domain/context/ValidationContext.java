@@ -69,29 +69,6 @@ public class ValidationContext {
     private final Integer maxTokenAgeSeconds;
 
     /**
-     * Creates a new ValidationContext with the current time captured at creation.
-     *
-     * @param clockSkewSeconds the clock skew tolerance in seconds (typically 60)
-     */
-    public ValidationContext(int clockSkewSeconds) {
-        this.currentTime = OffsetDateTime.now();
-        this.clockSkewSeconds = clockSkewSeconds;
-        this.maxTokenAgeSeconds = null;
-    }
-
-    /**
-     * Creates a new ValidationContext with a specific time for testing purposes.
-     *
-     * @param currentTime the current time to use for validation
-     * @param clockSkewSeconds the clock skew tolerance in seconds
-     */
-    public ValidationContext(OffsetDateTime currentTime, int clockSkewSeconds) {
-        this.currentTime = currentTime;
-        this.clockSkewSeconds = clockSkewSeconds;
-        this.maxTokenAgeSeconds = null;
-    }
-
-    /**
      * Creates a new ValidationContext with token age validation.
      *
      * @param clockSkewSeconds the clock skew tolerance in seconds
@@ -115,6 +92,7 @@ public class ValidationContext {
         this.clockSkewSeconds = clockSkewSeconds;
         this.maxTokenAgeSeconds = maxTokenAgeSeconds;
     }
+
 
     /**
      * Gets the current time plus the clock skew tolerance.

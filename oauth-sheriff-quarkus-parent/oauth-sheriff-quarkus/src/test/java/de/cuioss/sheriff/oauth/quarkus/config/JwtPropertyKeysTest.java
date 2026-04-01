@@ -146,26 +146,6 @@ class JwtPropertyKeysTest {
         void shouldHaveCorrectJwksHealthProperties() {
             assertEquals("sheriff.oauth.health.jwks", JwtPropertyKeys.HEALTH.JWKS.BASE);
             assertTrue(JwtPropertyKeys.HEALTH.JWKS.CACHE_SECONDS.startsWith(JwtPropertyKeys.HEALTH.JWKS.BASE));
-            assertTrue(JwtPropertyKeys.HEALTH.JWKS.TIMEOUT_SECONDS.startsWith(JwtPropertyKeys.HEALTH.JWKS.BASE));
-        }
-    }
-
-    @Nested
-    @DisplayName("Metrics Properties")
-    class MetricsProperties {
-
-        @Test
-        @DisplayName("should have correct metrics base paths")
-        void shouldHaveCorrectMetricsBasePaths() {
-            assertEquals("sheriff.oauth.validation", JwtPropertyKeys.METRICS.BASE);
-            assertEquals("sheriff.oauth.jwks", JwtPropertyKeys.METRICS.JWKS_BASE);
-        }
-
-        @Test
-        @DisplayName("should have metrics properties with correct prefixes")
-        void shouldHaveMetricsPropertiesWithCorrectPrefixes() {
-            assertTrue(JwtPropertyKeys.METRICS.VALIDATION_ERRORS.startsWith(JwtPropertyKeys.METRICS.BASE));
-            assertTrue(JwtPropertyKeys.METRICS.JWKS_CACHE_SIZE.startsWith(JwtPropertyKeys.METRICS.JWKS_BASE));
         }
     }
 }

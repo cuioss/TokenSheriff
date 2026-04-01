@@ -202,7 +202,7 @@ class BearerTokenProducerTest {
 
         assertEquals(BearerTokenStatus.PARSING_ERROR, result.getStatus());
         assertFalse(result.getAccessTokenContent().isPresent());
-        assertSingleLogMessagePresentContaining(TestLogLevel.DEBUG,
+        assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
                 "Bearer token validation failed: Invalid signature");
 
         verify(tokenValidator);

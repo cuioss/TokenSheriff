@@ -181,7 +181,7 @@ public class TokenValidatorMonitor {
      *
      * @param measurementType the type of measurement to reset
      */
-    public void reset(MeasurementType measurementType) {
+    void reset(MeasurementType measurementType) {
         StripedRingBuffer buffer = measurementBuffers[measurementType.ordinal()];
         if (buffer != null) {
             buffer.reset();
@@ -191,7 +191,7 @@ public class TokenValidatorMonitor {
     /**
      * Resets all measurements for all enabled types.
      */
-    public void resetAll() {
+    void resetAll() {
         for (StripedRingBuffer buffer : measurementBuffers) {
             if (buffer != null) {
                 buffer.reset();

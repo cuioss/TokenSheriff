@@ -47,7 +47,7 @@ import java.util.concurrent.ScheduledExecutorService;
  *     .build();
  *
  * // Create cache instance
- * AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter);
+ * AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter, 60);
  * </pre>
  *
  * @since 1.0
@@ -126,7 +126,7 @@ public class AccessTokenCacheConfig {
      * @return the scheduled executor service or null if caching is disabled
      */
     public ScheduledExecutorService getOrCreateScheduledExecutorService() {
-        if (maxSize == 0) {
+        if (!isCachingEnabled()) {
             return null;
         }
         return Objects.requireNonNullElseGet(scheduledExecutorService, () -> Executors.newSingleThreadScheduledExecutor(r -> {
@@ -134,13 +134,5 @@ public class AccessTokenCacheConfig {
             thread.setDaemon(true);
             return thread;
         }));
-    }
-
-    public int getMaxSize() {
-        return maxSize;
-    }
-
-    public long getEvictionIntervalSeconds() {
-        return evictionIntervalSeconds;
     }
 }

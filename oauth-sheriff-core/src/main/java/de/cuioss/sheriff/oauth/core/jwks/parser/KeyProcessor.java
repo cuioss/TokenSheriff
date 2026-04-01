@@ -77,7 +77,11 @@ public class KeyProcessor {
             return Optional.empty();
         }
 
-        String kid = jwk.getKid().isPresent() ? jwk.kid() : "default-key-id";
+        if (jwk.getKid().isEmpty()) {
+            LOGGER.warn(WARN.JWK_MISSING_KID);
+            return Optional.empty();
+        }
+        String kid = jwk.kid();
 
         KeyInfo keyInfo = switch (kty) {
             case RSA_KEY_TYPE -> processRsaKey(jwk, kid);
@@ -149,7 +153,11 @@ public class KeyProcessor {
         try {
             var publicKey = JwkKeyHandler.parseRsaKey(jwk);
             // Determine algorithm if not specified
-            String alg = jwk.alg() != null ? jwk.alg() : "RS256"; // Default to RS256
+            String alg = jwk.alg();
+            if (alg == null) {
+                alg = "RS256";
+                LOGGER.warn(WARN.JWK_RSA_DEFAULTING_TO_RS256, kid);
+            }
             LOGGER.debug("Parsed RSA key with ID: %s and algorithm: %s", kid, alg);
             return new KeyInfo(publicKey, alg, kid);
         } catch (InvalidKeySpecException | IllegalStateException e) {
@@ -192,7 +200,7 @@ public class KeyProcessor {
         try {
             var publicKey = JwkKeyHandler.parseOkpKey(jwk);
             // EdDSA always uses the single algorithm identifier "EdDSA"
-            String alg = jwk.alg() != null ? jwk.alg() : "EdDSA";
+            String alg = jwk.alg() != null ? jwk.alg() : JwkKeyHandler.determineOkpAlgorithm();
             LOGGER.debug("Parsed OKP key with ID: %s and algorithm: %s", kid, alg);
             return new KeyInfo(publicKey, alg, kid);
         } catch (InvalidKeySpecException | IllegalStateException e) {

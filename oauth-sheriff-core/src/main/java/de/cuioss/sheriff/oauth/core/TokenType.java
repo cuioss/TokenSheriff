@@ -18,7 +18,6 @@ package de.cuioss.sheriff.oauth.core;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
-import de.cuioss.tools.logging.CuiLogger;
 import lombok.Getter;
 
 import java.util.Collections;
@@ -37,7 +36,7 @@ import static de.cuioss.sheriff.oauth.core.domain.claim.ClaimName.*;
  *   <li>{@link #ACCESS_TOKEN}: Standard OAuth2 access token with "Bearer" type claim</li>
  *   <li>{@link #ID_TOKEN}: OpenID Connect ID-Token with "ID" type claim</li>
  *   <li>{@link #REFRESH_TOKEN}: OAuth2 Refresh-Token with "Refresh" type claim</li>
- *   <li>{@link #UNKNOWN}: Fallback type for unrecognized or missing type claims</li>
+ *   <li>Unrecognized type claims result in a {@link de.cuioss.sheriff.oauth.core.exception.TokenValidationException} (fail-closed)</li>
  * </ul>
  * <p>
  * Implements requirements:
@@ -55,10 +54,7 @@ public enum TokenType {
 
     ACCESS_TOKEN("Bearer", new TreeSet<>(List.of(ISSUER, EXPIRATION, ISSUED_AT, SUBJECT))),
     ID_TOKEN("ID", new TreeSet<>(List.of(ISSUER, EXPIRATION, ISSUED_AT, SUBJECT, AUDIENCE))),
-    REFRESH_TOKEN("Refresh", Collections.emptySortedSet()),
-    UNKNOWN("unknown", Collections.emptySortedSet());
-
-    private static final CuiLogger LOGGER = new CuiLogger(TokenType.class);
+    REFRESH_TOKEN("Refresh", Collections.emptySortedSet());
 
     @Getter
     private final String typeClaimName;

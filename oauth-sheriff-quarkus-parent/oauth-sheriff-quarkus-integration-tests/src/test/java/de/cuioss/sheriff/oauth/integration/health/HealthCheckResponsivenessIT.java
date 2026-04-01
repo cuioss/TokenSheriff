@@ -141,7 +141,7 @@ class HealthCheckResponsivenessIT extends BaseIntegrationTest {
     }
 
     private record HealthCheckTimingResult(int checkId, String type, Duration responseTime,
-                                           boolean success, String status) {
+    boolean success, String status) {
     }
 
     private record HealthCheckType(String name, String url) {

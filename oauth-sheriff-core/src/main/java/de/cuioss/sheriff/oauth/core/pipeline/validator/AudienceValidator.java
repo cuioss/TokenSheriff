@@ -59,6 +59,8 @@ public class AudienceValidator {
 
     private final SecurityEventCounter securityEventCounter;
 
+    private final boolean accessTokenAudienceOptional;
+
     /**
      * Validates the audience claim of the token.
      *
@@ -93,8 +95,15 @@ public class AudienceValidator {
                     SecurityEventCounter.EventType.MISSING_CLAIM,
                     "Missing required audience claim in ID token. Expected audience: " + expectedAudience + ", Available claims: " + token.getClaims().keySet()
             );
+        } else if (accessTokenAudienceOptional) {
+            LOGGER.debug("Audience claim is optional for access tokens (accessTokenAudienceOptional=true), validation passes");
         } else {
-            LOGGER.debug("Audience claim is optional for access tokens, so if it's not present, validation passes");
+            LOGGER.warn(JWTValidationLogMessages.WARN.ACCESS_TOKEN_AUDIENCE_MISSING, expectedAudience);
+            securityEventCounter.increment(SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING);
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING,
+                    "Access token is missing required audience claim. Expected audience: " + expectedAudience
+                            + ". Set accessTokenAudienceOptional(true) if your IdP omits the aud claim.");
         }
     }
 

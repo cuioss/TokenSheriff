@@ -119,15 +119,6 @@ public class TokenValidatorProducer {
         IssuerConfigResolver issuerConfigResolver = new IssuerConfigResolver(config, retryConfig, claimMapperRegistry, parserConfig);
         issuerConfigs = issuerConfigResolver.resolveIssuerConfigs();
 
-        // Create SecurityEventCounter for proper initialization
-        SecurityEventCounter eventCounter = new SecurityEventCounter();
-
-        // Initialize each IssuerConfig with SecurityEventCounter so JwksLoader can be used
-        for (IssuerConfig issuerConfig : issuerConfigs) {
-            issuerConfig.initSecurityEventCounter(eventCounter);
-        }
-
-
         // Resolve cache config using the dedicated resolver
         AccessTokenCacheConfigResolver cacheConfigResolver = new AccessTokenCacheConfigResolver(config);
         AccessTokenCacheConfig cacheConfig = cacheConfigResolver.resolveCacheConfig();
@@ -157,9 +148,9 @@ public class TokenValidatorProducer {
 
         tokenValidator = builder.build();
 
-        // Use the same SecurityEventCounter instance we used for initialization
-        // Note: tokenValidator.getSecurityEventCounter() returns the same instance
-        this.securityEventCounter = eventCounter;
+        // Extract the SecurityEventCounter from the built TokenValidator so the CDI-produced
+        // bean is the same instance that actually counts events during validation
+        this.securityEventCounter = tokenValidator.getSecurityEventCounter();
 
         LOGGER.info(INFO.JWT_VALIDATION_COMPONENTS_INITIALIZED, issuerConfigs.size());
     }

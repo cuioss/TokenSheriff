@@ -164,13 +164,68 @@ public class IssuerConfig implements LoadingStatusProvider {
     boolean claimSubOptional;
 
     /**
-     * The expected value for the JWT "typ" header parameter.
-     * When configured, the {@link de.cuioss.sheriff.oauth.core.pipeline.validator.TokenHeaderValidator}
-     * will validate that the token's "typ" header matches this value
-     * (e.g., "at+jwt" per RFC 9068).
-     * When {@code null}, no token type validation is performed (default).
+     * Whether the audience ("aud") claim is optional for access tokens from this issuer.
+     * <p>
+     * Design Decision: pragmatic accommodation for identity providers that omit
+     * the audience claim in access tokens. Default is secure ({@code false}).
+     * </p>
+     * <p>
+     * When set to {@code true}, access tokens without an "aud" claim will pass audience
+     * validation even when {@link #expectedAudience} is configured. ID tokens always
+     * require the "aud" claim regardless of this setting.
+     * </p>
+     * <p>
+     * <strong>Warning:</strong> Setting this to {@code true} means that when
+     * {@code expectedAudience} is configured, an access token that simply omits the
+     * "aud" claim will bypass audience validation entirely — a confused deputy risk.
+     * RFC 9068 Section 4 requires "aud" for JWT access tokens. Use this option only
+     * when your IdP is known to omit the "aud" claim in access tokens and you cannot
+     * configure it to include it.
+     * </p>
+     * <p>
+     * Default value is {@code false} (audience claim is required for access tokens
+     * when {@code expectedAudience} is configured).
+     * </p>
      *
-     * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068">RFC 9068</a>
+     * @see de.cuioss.sheriff.oauth.core.domain.claim.ClaimName#AUDIENCE
+     * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-4">RFC 9068 - 4. JWT Access Token Claims</a>
+     */
+    boolean accessTokenAudienceOptional;
+
+    // Design Decision: expectedTokenType defaults to null (no token type validation).
+    //
+    // RFC 9068 Section 2.1 requires typ: at+jwt for JWT access tokens, and validating this
+    // would prevent token type confusion attacks (e.g., substituting an ID token for an
+    // access token). However, most major IdPs do NOT set typ: at+jwt:
+    //   - Keycloak sets typ: JWT
+    //   - Zitadel sets typ: JWT or omits it
+    //   - Dex omits the typ header entirely
+    //   - Azure AD B2C uses proprietary typ values
+    //
+    // Defaulting to "at+jwt" would break nearly every real-world deployment. Defaulting to
+    // "JWT" would accept everything and provide no security value (any JWT type passes).
+    // Therefore: opt-in via expected-token-type=at+jwt for IdPs that support RFC 9068.
+
+    /**
+     * The expected value for the JWT "typ" header parameter.
+     * <p>
+     * When configured (e.g., {@code "at+jwt"}), the
+     * {@link de.cuioss.sheriff.oauth.core.pipeline.validator.TokenHeaderValidator}
+     * will validate that the token's "typ" header matches this value.
+     * The comparison is case-insensitive per RFC convention.
+     * </p>
+     * <p>
+     * When {@code null} (default), no token type validation is performed.
+     * </p>
+     * <p>
+     * <strong>Security recommendation:</strong> Set this to {@code "at+jwt"} if your identity
+     * provider issues RFC 9068-compliant tokens. This prevents token type confusion attacks
+     * (e.g., using an ID token as an access token). Most IdPs (Keycloak, Zitadel, Dex,
+     * Azure AD B2C) do not set {@code typ: at+jwt} by default — verify your IdP's behavior
+     * before enabling.
+     * </p>
+     *
+     * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-2.1">RFC 9068 - 2.1. Header</a>
      */
     @Nullable
     String expectedTokenType;
@@ -239,24 +294,6 @@ public class IssuerConfig implements LoadingStatusProvider {
      */
     @Nullable
     JwksLoader jwksLoader;
-
-    /**
-     * Validates that the security event counter is not null.
-     * <p>
-     * This method performs parameter validation only. The actual JWKS loading is triggered
-     * by {@link IssuerConfigCache}, which calls {@link JwksLoader#initJWKSLoader(SecurityEventCounter)}
-     * asynchronously. This avoids double initialization and redundant HTTP requests.
-     * <p>
-     * This method is retained for API compatibility with callers that need to validate
-     * the counter parameter early (e.g., Quarkus CDI producers).
-     *
-     * @param securityEventCounter the counter for security events, must not be null
-     * @throws NullPointerException if securityEventCounter is null
-     */
-    public void initSecurityEventCounter(SecurityEventCounter securityEventCounter) {
-        Objects.requireNonNull(securityEventCounter, "securityEventCounter must not be null");
-        // No-op: JWKS loading is handled by IssuerConfigCache.initJWKSLoader()
-    }
 
 
     /**
@@ -352,24 +389,24 @@ public class IssuerConfig implements LoadingStatusProvider {
      */
     @SuppressWarnings("JavadocLinkAsPlainText")
     public static class IssuerConfigBuilder {
-        // Lombok-generated fields
         private boolean enabled = true;
-        private String issuerIdentifier;
-        private Set<String> expectedAudience;
+        private @Nullable String issuerIdentifier;
+        private @Nullable Set<String> expectedAudience;
         private boolean audienceValidationDisabled = false;
-        private Set<String> expectedClientId;
+        private @Nullable Set<String> expectedClientId;
         private boolean claimSubOptional = false;
-        private String expectedTokenType;
-        private DpopConfig dpopConfig;
+        private boolean accessTokenAudienceOptional = false;
+        private @Nullable String expectedTokenType;
+        private @Nullable DpopConfig dpopConfig;
         private int clockSkewSeconds = 60;
-        private Integer maxTokenAgeSeconds;
+        private @Nullable Integer maxTokenAgeSeconds;
         private SignatureAlgorithmPreferences algorithmPreferences = new SignatureAlgorithmPreferences();
-        private Map<String, ClaimMapper> claimMappers;
-        private JwksLoader jwksLoader;
+        private @Nullable Map<String, ClaimMapper> claimMappers;
+        private @Nullable JwksLoader jwksLoader;
 
-        private HttpJwksLoaderConfig httpJwksLoaderConfig;
-        private String jwksFilePath;
-        private String jwksContent;
+        private @Nullable HttpJwksLoaderConfig httpJwksLoaderConfig;
+        private @Nullable String jwksFilePath;
+        private @Nullable String jwksContent;
 
         /**
          * Sets whether this issuer configuration is enabled.
@@ -544,6 +581,19 @@ public class IssuerConfig implements LoadingStatusProvider {
         }
 
         /**
+         * Sets whether the audience claim is optional for access tokens from this issuer.
+         *
+         * @param accessTokenAudienceOptional {@code true} to allow access tokens without audience claim,
+         *                                     {@code false} to require it when expectedAudience is configured
+         * @return this builder instance for method chaining
+         * @see de.cuioss.sheriff.oauth.core.domain.claim.ClaimName#AUDIENCE
+         */
+        public IssuerConfigBuilder accessTokenAudienceOptional(boolean accessTokenAudienceOptional) {
+            this.accessTokenAudienceOptional = accessTokenAudienceOptional;
+            return this;
+        }
+
+        /**
          * Sets the expected JWT "typ" header parameter value for this issuer.
          * <p>
          * When configured, the {@link de.cuioss.sheriff.oauth.core.pipeline.validator.TokenHeaderValidator}
@@ -613,7 +663,8 @@ public class IssuerConfig implements LoadingStatusProvider {
          * @return this builder instance for method chaining
          * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.token.age</a>
          */
-        public IssuerConfigBuilder maxTokenAgeSeconds(Integer maxTokenAgeSeconds) {
+        @SuppressWarnings("java:S2589") // Null check is intentional — parameter is @Nullable
+        public IssuerConfigBuilder maxTokenAgeSeconds(@Nullable Integer maxTokenAgeSeconds) {
             if (null != maxTokenAgeSeconds) {
                 Preconditions.checkArgument(maxTokenAgeSeconds >= 0, "maxTokenAgeSeconds must not be negative, but was %s", maxTokenAgeSeconds);
             }
@@ -680,21 +731,6 @@ public class IssuerConfig implements LoadingStatusProvider {
                 this.claimMappers = new LinkedHashMap<>();
             }
             this.claimMappers.put(key, claimMapper);
-            return this;
-        }
-
-        /**
-         * Sets the complete map of custom claim mappers.
-         * <p>
-         * This replaces any previously configured claim mappers. Each mapper in the map
-         * will be used to process the corresponding claim during token validation.
-         * </p>
-         *
-         * @param claimMappers a map where keys are claim names and values are the custom mappers
-         * @return this builder instance for method chaining
-         */
-        public IssuerConfigBuilder claimMappers(Map<String, ClaimMapper> claimMappers) {
-            this.claimMappers = claimMappers;
             return this;
         }
 
@@ -882,11 +918,6 @@ public class IssuerConfig implements LoadingStatusProvider {
          *   <li>File-based loader (if {@link #jwksFilePath(String)} is configured)</li>
          *   <li>In-memory loader (if {@link #jwksContent(String)} is configured)</li>
          * </ol>
-         * <p>
-         * <strong>Note:</strong> The {@link SecurityEventCounter} is not initialized during build.
-         * It must be set later via {@link IssuerConfig#initSecurityEventCounter(SecurityEventCounter)}
-         * before the configuration can be used for token validation.
-         * </p>
          *
          * @return a fully configured and validated {@link IssuerConfig} instance
          * @throws IllegalArgumentException if the configuration is invalid or incomplete
@@ -913,8 +944,8 @@ public class IssuerConfig implements LoadingStatusProvider {
             }
 
             return new IssuerConfig(enabled, issuerIdentifier, expectedAudience, audienceValidationDisabled,
-                    expectedClientId, claimSubOptional, expectedTokenType, dpopConfig, clockSkewSeconds,
-                    maxTokenAgeSeconds, algorithmPreferences, claimMappers, jwksLoader);
+                    expectedClientId, claimSubOptional, accessTokenAudienceOptional, expectedTokenType,
+                    dpopConfig, clockSkewSeconds, maxTokenAgeSeconds, algorithmPreferences, claimMappers, jwksLoader);
         }
 
         private void validateConfiguration() {
@@ -963,7 +994,7 @@ public class IssuerConfig implements LoadingStatusProvider {
     @SuppressWarnings("java:S107") // ok for private constructor
     private IssuerConfig(boolean enabled, @Nullable String issuerIdentifier, @Nullable Set<String> expectedAudience,
             boolean audienceValidationDisabled, @Nullable Set<String> expectedClientId,
-            boolean claimSubOptional, @Nullable String expectedTokenType,
+            boolean claimSubOptional, boolean accessTokenAudienceOptional, @Nullable String expectedTokenType,
             @Nullable DpopConfig dpopConfig, int clockSkewSeconds, @Nullable Integer maxTokenAgeSeconds,
             @Nullable SignatureAlgorithmPreferences algorithmPreferences,
             @Nullable Map<String, ClaimMapper> claimMappers, @Nullable JwksLoader jwksLoader) {
@@ -973,6 +1004,7 @@ public class IssuerConfig implements LoadingStatusProvider {
         this.audienceValidationDisabled = audienceValidationDisabled;
         this.expectedClientId = expectedClientId != null ? expectedClientId : Set.of();
         this.claimSubOptional = claimSubOptional;
+        this.accessTokenAudienceOptional = accessTokenAudienceOptional;
         this.expectedTokenType = expectedTokenType;
         this.dpopConfig = dpopConfig;
         this.clockSkewSeconds = clockSkewSeconds;

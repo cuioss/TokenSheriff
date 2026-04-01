@@ -121,8 +121,8 @@ class TokenValidationSpecIT extends BaseIntegrationTest {
     @TestFactory
     @Order(4)
     @DisplayName("Validate refresh token with offline_access scope")
-    Stream<DynamicTest> validateRefreshTokenWithOfflineAccess() {
-        return TestProviders.offlineAccessProviders()
+    void validateRefreshTokenWithOfflineAccess() {
+        TestProviders.offlineAccessProviders()
                 .map(realm -> DynamicTest.dynamicTest("[" + realm + "]", () -> {
                     var tokenResponse = realm.obtainValidTokenWithScopes(
                             "openid profile email offline_access");

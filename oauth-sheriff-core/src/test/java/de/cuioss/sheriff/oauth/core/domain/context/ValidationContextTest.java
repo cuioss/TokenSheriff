@@ -39,9 +39,9 @@ class ValidationContextTest {
     class Constructors {
 
         @Test
-        @DisplayName("Single-arg constructor should set clockSkew and null maxTokenAge")
-        void singleArgConstructor() {
-            var ctx = new ValidationContext(CLOCK_SKEW);
+        @DisplayName("Two-arg production constructor should set clockSkew and null maxTokenAge")
+        void productionConstructor() {
+            var ctx = new ValidationContext(CLOCK_SKEW, null);
             assertEquals(CLOCK_SKEW, ctx.getClockSkewSeconds());
             assertNull(ctx.getMaxTokenAgeSeconds());
             assertNotNull(ctx.getCurrentTime());
@@ -50,7 +50,7 @@ class ValidationContextTest {
         @Test
         @DisplayName("Two-arg constructor with time should set clockSkew and null maxTokenAge")
         void twoArgWithTimeConstructor() {
-            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW);
+            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW, null);
             assertEquals(FIXED_TIME, ctx.getCurrentTime());
             assertEquals(CLOCK_SKEW, ctx.getClockSkewSeconds());
             assertNull(ctx.getMaxTokenAgeSeconds());
@@ -105,7 +105,7 @@ class ValidationContextTest {
         @Test
         @DisplayName("Should return false when maxTokenAgeSeconds is null")
         void shouldReturnFalseWhenDisabled() {
-            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW);
+            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW, null);
             assertFalse(ctx.isTokenAgeValidationEnabled());
         }
     }
@@ -117,7 +117,7 @@ class ValidationContextTest {
         @Test
         @DisplayName("Should return true for clearly expired token")
         void shouldReturnTrueForExpiredToken() {
-            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW);
+            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW, null);
             var expiration = FIXED_TIME.minusHours(1);
             assertTrue(ctx.isExpired(expiration));
         }
@@ -125,7 +125,7 @@ class ValidationContextTest {
         @Test
         @DisplayName("Should return false for non-expired token")
         void shouldReturnFalseForNonExpiredToken() {
-            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW);
+            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW, null);
             var expiration = FIXED_TIME.plusHours(1);
             assertFalse(ctx.isExpired(expiration));
         }
@@ -133,7 +133,7 @@ class ValidationContextTest {
         @Test
         @DisplayName("Should tolerate clock skew - token expired less than skew seconds ago")
         void shouldTolerateClockSkew() {
-            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW);
+            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW, null);
             // Token expired 30 seconds ago, but clock skew is 60s, so still valid
             var expiration = FIXED_TIME.minusSeconds(30);
             assertFalse(ctx.isExpired(expiration));
@@ -142,7 +142,7 @@ class ValidationContextTest {
         @Test
         @DisplayName("Should expire when beyond clock skew tolerance")
         void shouldExpireBeyondClockSkew() {
-            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW);
+            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW, null);
             // Token expired 61 seconds ago, clock skew is 60s -> expired
             var expiration = FIXED_TIME.minusSeconds(61);
             assertTrue(ctx.isExpired(expiration));
@@ -151,7 +151,7 @@ class ValidationContextTest {
         @Test
         @DisplayName("Should not expire at exact clock skew boundary")
         void shouldNotExpireAtExactBoundary() {
-            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW);
+            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW, null);
             // Token expired exactly 60 seconds ago, clock skew is 60s
             // expiration + clockSkew == currentTime -> isBefore returns false
             var expiration = FIXED_TIME.minusSeconds(60);
@@ -161,7 +161,7 @@ class ValidationContextTest {
         @Test
         @DisplayName("Should apply zero clock skew correctly")
         void shouldApplyZeroClockSkew() {
-            var ctx = new ValidationContext(FIXED_TIME, 0);
+            var ctx = new ValidationContext(FIXED_TIME, 0, null);
             // Token expired 1 second ago with no clock skew -> expired
             var expiration = FIXED_TIME.minusSeconds(1);
             assertTrue(ctx.isExpired(expiration));
@@ -211,7 +211,7 @@ class ValidationContextTest {
         @Test
         @DisplayName("Should throw IllegalStateException when token age validation is disabled")
         void shouldThrowWhenDisabled() {
-            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW);
+            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW, null);
             var issuedAt = FIXED_TIME.minusSeconds(100);
             assertThrows(IllegalStateException.class, () -> ctx.isTokenTooOld(issuedAt));
         }

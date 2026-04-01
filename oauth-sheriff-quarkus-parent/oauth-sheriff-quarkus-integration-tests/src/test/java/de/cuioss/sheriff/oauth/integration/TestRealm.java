@@ -22,11 +22,7 @@ import io.restassured.specification.RequestSpecification;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 
 import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.*;
@@ -116,7 +112,7 @@ public class TestRealm {
     /** Default scopes for providers that don't specify their own. */
     private static final String DEFAULT_SCOPES = "openid profile email";
 
-    private enum GrantType { PASSWORD, CLIENT_CREDENTIALS }
+    private enum GrantType {PASSWORD, CLIENT_CREDENTIALS}
 
     private final String realmIdentifier;
     private final String clientId;
@@ -133,18 +129,18 @@ public class TestRealm {
 
     /** ROPC constructor (Keycloak, Dex). */
     private TestRealm(String realmIdentifier, String clientId, String clientSecret,
-                      String username, String password, String baseUrl,
-                      String tokenEndpoint, String providerName,
-                      Set<Capability> capabilities) {
+            String username, String password, String baseUrl,
+            String tokenEndpoint, String providerName,
+            Set<Capability> capabilities) {
         this(realmIdentifier, clientId, clientSecret, username, password,
                 baseUrl, tokenEndpoint, providerName, capabilities, DEFAULT_SCOPES);
     }
 
     /** ROPC constructor with custom default scopes. */
     private TestRealm(String realmIdentifier, String clientId, String clientSecret,
-                      String username, String password, String baseUrl,
-                      String tokenEndpoint, String providerName,
-                      Set<Capability> capabilities, String defaultScopes) {
+            String username, String password, String baseUrl,
+            String tokenEndpoint, String providerName,
+            Set<Capability> capabilities, String defaultScopes) {
         this.realmIdentifier = realmIdentifier;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
@@ -161,9 +157,9 @@ public class TestRealm {
 
     /** Client credentials constructor (Zitadel). */
     private TestRealm(String realmIdentifier, String clientId, String clientSecret,
-                      String baseUrl, String tokenEndpoint, String providerName,
-                      Set<Capability> capabilities, String defaultScopes,
-                      Map<String, String> extraHeaders) {
+            String baseUrl, String tokenEndpoint, String providerName,
+            Set<Capability> capabilities, String defaultScopes,
+            Map<String, String> extraHeaders) {
         this.realmIdentifier = realmIdentifier;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
@@ -294,7 +290,7 @@ public class TestRealm {
                 ZITADEL_BASE_URL, ZITADEL_TOKEN_ENDPOINT,
                 "Zitadel", ZITADEL_CAPABILITIES,
                 defaultScopes,
-                Map.of("Host", "zitadel:3080"));
+                Map.of("Host", "zitadel:8080"));
     }
 
     private static Properties loadZitadelCredentials() {

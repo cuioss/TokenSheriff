@@ -17,6 +17,7 @@ package de.cuioss.sheriff.oauth.core.pipeline.validator;
 
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
 import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages;
+import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.context.ValidationContext;
@@ -59,7 +60,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Tests TokenClaimValidator edge cases")
 class TokenClaimValidatorEdgeCaseTest {
     private final SecurityEventCounter securityEventCounter = new SecurityEventCounter();
-    private final ValidationContext validationContext = new ValidationContext(60);
+    private final ValidationContext validationContext = new ValidationContext(60, null);
 
     // Helper method to create a TokenClaimValidator with the shared SecurityEventCounter
     private TokenClaimValidator createValidator(IssuerConfig issuerConfig) {
@@ -197,17 +198,6 @@ class TokenClaimValidatorEdgeCaseTest {
             // This test simulates a network failure during key retrieval
             // by using a JwksKeyLoader that throws an exception
 
-            // Given an IssuerConfig with empty JWKS content
-            var issuerConfig = IssuerConfig.builder()
-                    .issuerIdentifier("test-issuer")
-                    .expectedAudience(TestTokenHolder.TEST_AUDIENCE)
-                    .expectedClientId(TestTokenHolder.TEST_CLIENT_ID)
-                    .jwksContent("{}")  // Empty JWKS content
-                    .build();
-
-            // Initialize the JwksLoader
-            issuerConfig.initSecurityEventCounter(securityEventCounter);
-
             // Create a TokenSignatureValidator with a custom JwksLoader that simulates network failure
             var signatureValidator = new TokenSignatureValidator(new FailingJwksKeyLoader(), securityEventCounter, new SignatureAlgorithmPreferences());
 
@@ -302,7 +292,7 @@ class TokenClaimValidatorEdgeCaseTest {
      */
     private static class FailingJwksKeyLoader extends JWKSKeyLoader {
         public FailingJwksKeyLoader() {
-            super("{}", null, new JwkAlgorithmPreferences(), JwksType.MEMORY); // Empty JWKS
+            super("{}", ParserConfig.builder().build(), new JwkAlgorithmPreferences(), JwksType.MEMORY); // Empty JWKS
             initJWKSLoader(new SecurityEventCounter());
         }
 

@@ -87,7 +87,8 @@ public class TokenClaimValidator {
         this.expectedAudience = issuerConfig.getExpectedAudience();
         this.expectedClientId = issuerConfig.getExpectedClientId();
 
-        this.audienceValidator = new AudienceValidator(expectedAudience, securityEventCounter);
+        this.audienceValidator = new AudienceValidator(expectedAudience, securityEventCounter,
+                issuerConfig.isAccessTokenAudienceOptional());
         this.expirationValidator = new ExpirationValidator(securityEventCounter);
         this.mandatoryClaimsValidator = new MandatoryClaimsValidator(issuerConfig, securityEventCounter);
         this.authorizedPartyValidator = new AuthorizedPartyValidator(expectedClientId, securityEventCounter);
@@ -98,8 +99,7 @@ public class TokenClaimValidator {
         }
 
         if (MoreCollections.isEmpty(expectedClientId)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_RECOMMENDED_ELEMENT, "azp claim validation (expectedClientId)");
-            securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_RECOMMENDED_ELEMENT);
+            LOGGER.debug("No expectedClientId configured — azp claim validation disabled (optional per OIDC spec)");
         }
     }
 

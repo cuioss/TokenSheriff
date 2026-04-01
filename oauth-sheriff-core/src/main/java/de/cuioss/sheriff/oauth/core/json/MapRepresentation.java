@@ -167,21 +167,6 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
     }
 
     /**
-     * Gets a value as a Boolean.
-     *
-     * @param key the key to look up
-     * @return Optional containing the boolean value, or empty if not found or not a boolean
-     */
-    public Optional<Boolean> getBoolean(String key) {
-        if (data == null) return Optional.empty();
-        Object value = data.get(key);
-        if (value instanceof Boolean boolean1) {
-            return Optional.of(boolean1);
-        }
-        return Optional.empty();
-    }
-
-    /**
      * Gets a value as a List.
      *
      * @param key the key to look up

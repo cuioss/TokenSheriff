@@ -17,7 +17,6 @@ package de.cuioss.sheriff.oauth.core.cache;
 
 import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages;
 import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
-import de.cuioss.sheriff.oauth.core.exception.InternalCacheException;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.metrics.MeasurementType;
 import de.cuioss.sheriff.oauth.core.metrics.MetricsTicker;
@@ -83,6 +82,13 @@ public class AccessTokenCache {
     private final SecurityEventCounter securityEventCounter;
 
     /**
+     * Clock skew tolerance in seconds, used when checking token expiration in the cache.
+     * This should be the maximum clock skew across all configured issuers so that tokens
+     * are only evicted when expired even for the most lenient issuer.
+     */
+    private final int clockSkewSeconds;
+
+    /**
      * Background executor for expired token eviction.
      */
     private final ScheduledExecutorService evictionExecutor;
@@ -92,15 +98,18 @@ public class AccessTokenCache {
      *
      * @param config the cache configuration
      * @param securityEventCounter the security event counter for tracking cache hits
+     * @param clockSkewSeconds the maximum clock skew tolerance in seconds across all issuers
      */
     public AccessTokenCache(
             AccessTokenCacheConfig config,
-            SecurityEventCounter securityEventCounter) {
+            SecurityEventCounter securityEventCounter,
+            int clockSkewSeconds) {
 
         this.maxSize = config.getMaxSize();
+        this.clockSkewSeconds = clockSkewSeconds;
         this.securityEventCounter = securityEventCounter;
 
-        if (this.maxSize > 0) {
+        if (config.isCachingEnabled()) {
             // Only initialize cache structures when caching is enabled
             this.cache = new ConcurrentHashMap<>(this.maxSize);
 
@@ -141,8 +150,7 @@ public class AccessTokenCache {
             String tokenString,
             TokenValidatorMonitor performanceMonitor) {
 
-        // If cache size is 0, caching is disabled
-        if (maxSize == 0) {
+        if (cache == null) {
             return Optional.empty();
         }
 
@@ -158,11 +166,11 @@ public class AccessTokenCache {
 
         if (existing != null) {
             OffsetDateTime now = OffsetDateTime.now();
-            if (existing.verifyToken(tokenString) && !existing.isExpired(now)) {
+            if (existing.verifyToken(tokenString) && !existing.isExpired(now, clockSkewSeconds)) {
                 // True cache hit - valid cached token
                 securityEventCounter.increment(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT);
                 return Optional.of(existing.getContent());
-            } else if (existing.isExpired(now)) {
+            } else if (existing.isExpired(now, clockSkewSeconds)) {
                 // Token is expired - remove from cache and throw exception
                 cache.remove(cacheKey, existing);
                 LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_EXPIRED);
@@ -192,15 +200,14 @@ public class AccessTokenCache {
      * @param tokenString the raw JWT token string as cache key
      * @param content the validated access token content to cache
      * @param performanceMonitor the monitor for recording CACHE_STORE metrics
-     * @throws InternalCacheException if token has no expiration or cache store fails
+     * @throws TokenValidationException if the token cannot be cached
      */
     public void put(
             String tokenString,
             AccessTokenContent content,
             TokenValidatorMonitor performanceMonitor) {
 
-        // If cache size is 0, caching is disabled
-        if (maxSize == 0) {
+        if (cache == null) {
             return;
         }
 
@@ -286,7 +293,7 @@ public class AccessTokenCache {
 
         // Collect expired keys (thread-safe iteration)
         for (Map.Entry<Integer, CachedToken> entry : cache.entrySet()) {
-            if (entry.getValue().isExpired(now)) {
+            if (entry.getValue().isExpired(now, clockSkewSeconds)) {
                 expiredKeys.add(entry.getKey());
             }
         }

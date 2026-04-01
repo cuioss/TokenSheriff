@@ -39,10 +39,13 @@ if docker compose logs "$APP_SERVICE_NAME" > "$APP_LOG_FILE_PATH" 2>&1; then
     echo "Successfully dumped $LOG_SIZE lines ($FILE_SIZE)"
     echo "Full path: $APP_LOG_FILE_PATH"
 
-    # Echo JWE-related diagnostic lines to stdout for CI visibility
+    # Echo diagnostic lines to stdout for CI visibility
     echo ""
-    echo "JWE diagnostic lines from app container:"
-    grep -i "jwe\|decryption" "$APP_LOG_FILE_PATH" || echo "  (no JWE-related log lines found)"
+    echo "=== WARNING/ERROR lines from app container ==="
+    grep -i "WARN\|ERROR\|WARNING\|SEVERE" "$APP_LOG_FILE_PATH" | grep -v "Node.js\|deprecated" || echo "  (none)"
+    echo ""
+    echo "=== OAuth Sheriff lines from app container ==="
+    grep -i "OAuthSheriff\|issuer\|JWKS\|Bearer\|token.*valid" "$APP_LOG_FILE_PATH" | head -30 || echo "  (none)"
     echo ""
 else
     echo "Warning: Could not dump app logs (container may not be running)"

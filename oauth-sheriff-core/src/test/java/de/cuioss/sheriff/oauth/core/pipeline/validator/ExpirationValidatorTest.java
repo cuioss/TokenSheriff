@@ -69,7 +69,7 @@ class ExpirationValidatorTest {
     void setup() {
         securityEventCounter = new SecurityEventCounter();
         validator = new ExpirationValidator(securityEventCounter);
-        context = new ValidationContext(60); // 60 seconds clock skew
+        context = new ValidationContext(60, null); // 60 seconds clock skew
     }
 
     @Test
@@ -165,7 +165,7 @@ class ExpirationValidatorTest {
         OffsetDateTime exactBoundaryNotBefore = fixedTime.plusSeconds(60);
 
         // Create a context with the fixed time
-        ValidationContext testContext = new ValidationContext(fixedTime, 60);
+        ValidationContext testContext = new ValidationContext(fixedTime, 60, null);
 
         tokenHolder.withClaim(ClaimName.NOT_BEFORE.getName(),
                 ClaimValue.forDateTime(String.valueOf(exactBoundaryNotBefore.toEpochSecond()), exactBoundaryNotBefore));
@@ -186,7 +186,7 @@ class ExpirationValidatorTest {
         AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
 
         // Context without maxTokenAgeSeconds -> validation disabled
-        ValidationContext noAgeContext = new ValidationContext(fixedTime, 60);
+        ValidationContext noAgeContext = new ValidationContext(fixedTime, 60, null);
         assertDoesNotThrow(() -> validator.validateTokenAge(token, noAgeContext));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED));
     }

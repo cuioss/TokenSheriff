@@ -72,7 +72,7 @@ class OpenIDConnectComplianceTest {
         tokenValidator = TokenValidator.builder().issuerConfig(issuerConfig).build();
 
         // Initialize validation context
-        validationContext = new ValidationContext(60);
+        validationContext = new ValidationContext(60, null);
     }
 
     @Nested

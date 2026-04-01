@@ -62,8 +62,8 @@ class DecodedJwtTest {
         assertEquals(ISSUER, actualBody.getString("iss").orElse(null));
         assertEquals("test-subject", actualBody.getString("sub").orElse(null));
 
-        assertTrue(jwt.getSignature().isPresent());
-        assertEquals(SIGNATURE, jwt.getSignature().get());
+        assertNotNull(jwt.signature());
+        assertEquals(SIGNATURE, jwt.signature());
 
         assertTrue(jwt.getIssuer().isPresent());
         assertEquals(ISSUER, jwt.getIssuer().get());
@@ -79,37 +79,25 @@ class DecodedJwtTest {
     }
 
     @Test
-    @DisplayName("Should create DecodedJwt with null values")
-    void shouldCreateDecodedJwtWithNullValues() {
-
-        DecodedJwt jwt = new DecodedJwt(null, null, null, PARTS, RAW_TOKEN);
-        JwtHeader actualHeader = jwt.header();
-        assertNull(actualHeader);
-
-        MapRepresentation actualBody = jwt.body();
-        assertNull(actualBody);
-        assertFalse(jwt.getSignature().isPresent());
-        assertFalse(jwt.getIssuer().isPresent());
-        assertFalse(jwt.getKid().isPresent());
-        assertFalse(jwt.getAlg().isPresent());
-        assertEquals(PARTS, jwt.parts());
-        assertEquals(RAW_TOKEN, jwt.rawToken());
+    @DisplayName("Should reject null body")
+    void shouldRejectNullBody() {
+        assertThrows(NullPointerException.class,
+                () -> new DecodedJwt(null, null, null, PARTS, RAW_TOKEN));
     }
 
     @Test
-    @DisplayName("Should create DecodedJwt with null header and body")
-    void shouldCreateDecodedJwtWithNullHeaderAndBody() {
+    @DisplayName("Should create DecodedJwt with null header but non-null body")
+    void shouldCreateDecodedJwtWithNullHeader() {
 
-        // Use actual null values, not "empty" objects
-        DecodedJwt jwt = new DecodedJwt(null, null, SIGNATURE, PARTS, RAW_TOKEN);
+        MapRepresentation body = MapRepresentation.empty();
+        DecodedJwt jwt = new DecodedJwt(null, body, SIGNATURE, PARTS, RAW_TOKEN);
         JwtHeader actualHeader = jwt.header();
         assertNull(actualHeader);
 
-        MapRepresentation actualBody = jwt.body();
-        assertNull(actualBody);
+        assertNotNull(jwt.body());
 
-        assertTrue(jwt.getSignature().isPresent());
-        assertEquals(SIGNATURE, jwt.getSignature().get());
+        assertNotNull(jwt.signature());
+        assertEquals(SIGNATURE, jwt.signature());
 
         assertFalse(jwt.getIssuer().isPresent());
         assertFalse(jwt.getKid().isPresent());
@@ -142,8 +130,8 @@ class DecodedJwtTest {
         assertEquals(ISSUER, actualBody.getString("iss").orElse(null));
         assertEquals("test-subject", actualBody.getString("sub").orElse(null));
 
-        assertTrue(jwt.getSignature().isPresent());
-        assertEquals(SIGNATURE, jwt.getSignature().get());
+        assertNotNull(jwt.signature());
+        assertEquals(SIGNATURE, jwt.signature());
 
         assertTrue(jwt.getIssuer().isPresent());
         assertEquals(ISSUER, jwt.getIssuer().get());
@@ -156,6 +144,30 @@ class DecodedJwtTest {
 
         assertEquals(PARTS, jwt.parts());
         assertEquals(RAW_TOKEN, jwt.rawToken());
+    }
+
+    @Test
+    @DisplayName("Builder should reject null header")
+    void builderShouldRejectNullHeader() {
+        var builder = DecodedJwt.builder()
+                .body(createTestBody())
+                .signature(SIGNATURE)
+                .parts(PARTS)
+                .rawToken(RAW_TOKEN);
+        assertThrows(NullPointerException.class, builder::build,
+                "Builder should throw NullPointerException when header is null");
+    }
+
+    @Test
+    @DisplayName("Builder should reject null rawToken")
+    void builderShouldRejectNullRawToken() {
+        var builder = DecodedJwt.builder()
+                .header(createTestHeader())
+                .body(createTestBody())
+                .signature(SIGNATURE)
+                .parts(PARTS);
+        assertThrows(NullPointerException.class, builder::build,
+                "Builder should throw NullPointerException when rawToken is null");
     }
 
     @Test

@@ -114,7 +114,7 @@ public final class JwtPropertyKeys {
          * token validation and will not attempt to use the underlying {@link JwksLoader}.
          * This allows for easy enabling/disabling of specific issuers without removing
          * their configuration.
-         * Default value is {@code true}.
+         * Default value is {@code false}.
          * </p>
          *
          * @see de.cuioss.sheriff.oauth.core.IssuerConfig
@@ -205,11 +205,27 @@ public final class JwtPropertyKeys {
         public static final String CLAIM_SUB_OPTIONAL = BASE + "claim-sub-optional";
 
         /**
+         * Whether the audience claim is optional for access tokens from this issuer.
+         * Template: "sheriff.oauth.issuers.%s.access-token-audience-optional"
+         * <p>
+         * Default value is {@code false} (audience claim is required for access tokens
+         * when expected-audience is configured).
+         * </p>
+         *
+         * @see de.cuioss.sheriff.oauth.core.IssuerConfig#isAccessTokenAudienceOptional()
+         */
+        public static final String ACCESS_TOKEN_AUDIENCE_OPTIONAL = BASE + "access-token-audience-optional";
+
+        /**
          * Expected JWT "typ" header value for this issuer (e.g., "at+jwt").
          * Template: "sheriff.oauth.issuers.%s.expected-token-type"
          * <p>
          * When configured, tokens with a missing or mismatched "typ" header will be rejected.
          * When not set (default), no token type validation is performed.
+         * </p>
+         * <p>
+         * <strong>Security recommendation:</strong> Set to {@code "at+jwt"} if your IdP issues
+         * RFC 9068-compliant tokens to prevent token type confusion attacks.
          * </p>
          *
          * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068">RFC 9068</a>
@@ -575,11 +591,6 @@ public final class JwtPropertyKeys {
         public static final String BASE = PREFIX + ".health";
 
         /**
-         * Whether health checks are enabled.
-         */
-        public static final String ENABLED = BASE + DOT_ENABLED;
-
-        /**
          * Properties related to JWKS endpoint health checks.
          */
         @UtilityClass
@@ -594,59 +605,22 @@ public final class JwtPropertyKeys {
              */
             public static final String CACHE_SECONDS = BASE + ".cache-seconds";
 
-            /**
-             * The timeout in seconds for health check requests.
-             */
-            public static final String TIMEOUT_SECONDS = BASE + ".timeout-seconds";
-
         }
     }
 
     /**
-     * Properties related to metrics.
+     * Interval for metrics collection in seconds.
+     * Property: "sheriff.oauth.metrics.collection.interval"
+     * <p>
+     * Controls how frequently the {@link de.cuioss.sheriff.oauth.quarkus.metrics.JwtMetricsCollector}
+     * updates Micrometer metrics from the internal counters and monitors.
+     * </p>
+     * <p>
+     * Default value is {@code 10s} for production environments.
+     * For integration tests, this can be set to {@code 2s} for faster testing.
+     * </p>
      */
-    @UtilityClass
-    public static final class METRICS {
-        /**
-         * Base path for metrics configurations.
-         */
-        public static final String BASE = PREFIX + ".validation";
-
-        /**
-         * Counter for validation errors by type.
-         */
-        public static final String VALIDATION_ERRORS = BASE + ".errors";
-
-        /**
-         * Timer for JWT validation pipeline steps.
-         */
-        public static final String VALIDATION_DURATION = BASE + ".duration";
-
-        /**
-         * Interval for metrics collection in seconds.
-         * Template: "sheriff.oauth.metrics.collection.interval"
-         * <p>
-         * Controls how frequently the {@link de.cuioss.sheriff.oauth.quarkus.metrics.JwtMetricsCollector}
-         * updates Micrometer metrics from the internal counters and monitors.
-         * </p>
-         * <p>
-         * Default value is {@code 10s} for production environments.
-         * For integration tests, this can be set to {@code 2s} for faster testing.
-         * </p>
-         */
-        public static final String COLLECTION_INTERVAL = PREFIX + ".metrics.collection.interval";
-
-        /**
-         * Base path for JWKS metrics.
-         */
-        public static final String JWKS_BASE = PREFIX + DOT_JWKS;
-
-        /**
-         * Gauge for JWKS cache size.
-         */
-        public static final String JWKS_CACHE_SIZE = JWKS_BASE + ".cache.size";
-
-    }
+    public static final String METRICS_COLLECTION_INTERVAL = PREFIX + ".metrics.collection.interval";
 
     /**
      * Properties related to HTTP access log filtering configuration.

@@ -63,9 +63,7 @@ export const devui = {
       getHealthInfo: jest.fn(() =>
         Promise.resolve({
           configurationValid: true,
-          tokenValidatorAvailable: false,
-          securityCounterAvailable: false,
-          overallStatus: 'BUILD_TIME',
+          healthStatus: 'DOWN',
           message: 'Health information will be available at runtime',
         })
       ),
@@ -245,10 +243,8 @@ export const mockScenarios = {
 
     devui.jsonRPC.CuiJwtDevUI.getHealthInfo.mockResolvedValue({
       configurationValid: false,
-      tokenValidatorAvailable: false,
-      securityCounterAvailable: false,
-      overallStatus: 'ISSUES_DETECTED',
-      issues: ['No JWT issuers configured', 'TokenValidator bean not available'],
+      healthStatus: 'DOWN',
+      message: 'JWT validation is disabled or misconfigured',
     });
   },
 

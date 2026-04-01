@@ -20,6 +20,7 @@ import de.cuioss.http.client.adapter.HttpAdapter;
 import de.cuioss.http.client.adapter.ResilientHttpAdapter;
 import de.cuioss.http.client.result.HttpResult;
 import de.cuioss.sheriff.oauth.core.json.WellKnownResult;
+import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.util.LoaderStatus;
 import de.cuioss.sheriff.oauth.core.util.LoadingStatusProvider;
 import de.cuioss.tools.logging.CuiLogger;
@@ -62,9 +63,13 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
      * </ul>
      *
      * @param config the well-known configuration containing HTTP handler and parser settings
+     * @param securityEventCounter the shared security event counter for tracking violations
      */
-    public HttpWellKnownResolver(WellKnownConfig config) {
-        var converter = new WellKnownConfigurationConverter(config.getParserConfig().getDslJson());
+    public HttpWellKnownResolver(WellKnownConfig config, SecurityEventCounter securityEventCounter) {
+        var converter = new WellKnownConfigurationConverter(
+                config.getParserConfig().getDslJson(),
+                securityEventCounter,
+                config.getParserConfig().getMaxPayloadSize());
 
         // Create base adapter with ETag caching
         HttpAdapter<WellKnownResult> baseAdapter = ETagAwareHttpAdapter.<WellKnownResult>builder()

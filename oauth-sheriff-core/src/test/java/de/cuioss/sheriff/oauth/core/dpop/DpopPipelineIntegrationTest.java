@@ -74,7 +74,7 @@ class DpopPipelineIntegrationTest {
         try (TokenValidator validator = TokenValidator.builder()
                      .issuerConfig(issuerConfig)
                      .build()) {
-            AccessTokenRequest request = new AccessTokenRequest(accessToken,
+            AccessTokenRequest request = AccessTokenRequest.of(accessToken,
                     Map.of("dpop", List.of(dpopProof)));
 
             AccessTokenContent result = validator.createAccessToken(request);
@@ -95,13 +95,13 @@ class DpopPipelineIntegrationTest {
 
             // First call — full validation, token gets cached
             String proof1 = createDpopProof(dpopClientKeyPair, dpopJwkMap, accessToken);
-            AccessTokenRequest request1 = new AccessTokenRequest(accessToken,
+            AccessTokenRequest request1 = AccessTokenRequest.of(accessToken,
                     Map.of("dpop", List.of(proof1)));
             AccessTokenContent result1 = validator.createAccessToken(request1);
 
             // Second call — same token, NEW DPoP proof → succeeds via cache hit + fresh DPoP
             String proof2 = createDpopProof(dpopClientKeyPair, dpopJwkMap, accessToken);
-            AccessTokenRequest request2 = new AccessTokenRequest(accessToken,
+            AccessTokenRequest request2 = AccessTokenRequest.of(accessToken,
                     Map.of("dpop", List.of(proof2)));
             AccessTokenContent result2 = validator.createAccessToken(request2);
 
@@ -122,12 +122,12 @@ class DpopPipelineIntegrationTest {
 
             // First call — success, token cached, jti stored in replay protection
             String proof = createDpopProof(dpopClientKeyPair, dpopJwkMap, accessToken);
-            AccessTokenRequest request1 = new AccessTokenRequest(accessToken,
+            AccessTokenRequest request1 = AccessTokenRequest.of(accessToken,
                     Map.of("dpop", List.of(proof)));
             assertNotNull(validator.createAccessToken(request1));
 
             // Second call — same proof (replayed jti) → fails even though token is cached
-            AccessTokenRequest request2 = new AccessTokenRequest(accessToken,
+            AccessTokenRequest request2 = AccessTokenRequest.of(accessToken,
                     Map.of("dpop", List.of(proof)));
             var ex = assertThrows(TokenValidationException.class,
                     () -> validator.createAccessToken(request2));

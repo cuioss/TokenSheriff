@@ -163,6 +163,11 @@ public final class AccessTokenContent extends BaseTokenContent {
         return getClaimOption(ClaimName.PREFERRED_USERNAME).map(ClaimValue::getOriginalString);
     }
 
+    // Design Decision: The *AndDebugIf*Missing methods (providesScopesAndDebugIfScopesAreMissing,
+    // providesRolesAndDebugIfRolesMissing, providesGroupsAndDebugIfGroupsMissing) are intentional
+    // public API for library consumers performing authorization checks with debug logging.
+    // They have zero internal callers but are part of the 1.0 public contract.
+
     /**
      * Checks if the token provides all expected scopes.
      *
