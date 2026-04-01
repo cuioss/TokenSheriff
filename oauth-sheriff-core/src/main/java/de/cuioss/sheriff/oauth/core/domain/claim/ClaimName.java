@@ -167,7 +167,7 @@ public enum ClaimName {
      * {@code upn} -> {@code preferred_username} -> {@code sub}.
      * Optional for all token types.
      */
-    UPN("upn", ClaimValueType.STRING, "The \"upn\" (user principal name) claim uniquely identifies the subject or user principal of the token. MicroProfile JWT specific claim with fallback chain: upn -> preferred_username -> sub.", new IdentityMapper());
+    UPN("upn", ClaimValueType.STRING, "The \"upn\" (user principal name) claim uniquely identifies the subject or user principal of the token. Commonly used with a fallback chain: upn -> preferred_username -> sub.", new IdentityMapper());
 
     private final String name;
     private final ClaimValueType valueType;

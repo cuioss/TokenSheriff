@@ -20,6 +20,7 @@ import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.token.TokenContent;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
+import java.time.OffsetDateTime;
 import java.util.*;
 
 /**
@@ -125,9 +126,7 @@ public final class JsonWebTokenAdapter implements JsonWebToken {
         if (knownClaim.isPresent()) {
             var type = knownClaim.get().getValueType();
             return (T) switch (type) {
-                case DATETIME -> claimValue.getDateTime() != null
-                        ? claimValue.getDateTime().toEpochSecond()
-                        : null;
+                case DATETIME -> Optional.ofNullable(claimValue.getDateTime()).map(OffsetDateTime::toEpochSecond).orElse(null);
                 case STRING_LIST -> new LinkedHashSet<>(claimValue.getAsList());
                 default -> claimValue.getOriginalString();
             };
