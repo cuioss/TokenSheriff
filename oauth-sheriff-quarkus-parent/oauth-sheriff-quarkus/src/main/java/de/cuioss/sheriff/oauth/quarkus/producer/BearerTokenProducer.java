@@ -185,16 +185,9 @@ public class BearerTokenProducer {
 
         try {
             // Pass HTTP headers and request context through for DPoP htu/htm validation (RFC 9449)
-            String requestUri = null;
-            String requestMethod = null;
-            try {
-                requestUri = servletObjectsResolver.resolveRequestUri();
-                requestMethod = servletObjectsResolver.resolveRequestMethod();
-            } catch (Exception e) {
-                LOGGER.debug("Could not resolve request URI/method for DPoP htu/htm validation: %s", e.getMessage());
-            }
+            String[] requestContext = resolveRequestContext();
             AccessTokenContent tokenContent = tokenValidator.createAccessToken(
-                    new AccessTokenRequest(bearerToken, headerMap, requestUri, requestMethod));
+                    new AccessTokenRequest(bearerToken, headerMap, requestContext[0], requestContext[1]));
 
             // Determine missing scopes, roles, and groups
             Set<String> missingScopes = tokenContent.determineMissingScopes(requiredScopes);
@@ -222,6 +215,25 @@ public class BearerTokenProducer {
         }
     }
 
+
+    /**
+     * Resolves the HTTP request URI and method for DPoP htu/htm validation.
+     * Returns a two-element array where index 0 is the request URI and index 1 is the request method.
+     * Both values default to {@code null} if resolution fails.
+     *
+     * @return a two-element String array with [requestUri, requestMethod]
+     */
+    private String[] resolveRequestContext() {
+        try {
+            return new String[]{
+                    servletObjectsResolver.resolveRequestUri(),
+                    servletObjectsResolver.resolveRequestMethod()
+            };
+        } catch (Exception e) {
+            LOGGER.debug("Could not resolve request URI/method for DPoP htu/htm validation: %s", e.getMessage());
+            return new String[]{null, null};
+        }
+    }
 
     /**
      * Extracts the bearer token from the provided HTTP header map.

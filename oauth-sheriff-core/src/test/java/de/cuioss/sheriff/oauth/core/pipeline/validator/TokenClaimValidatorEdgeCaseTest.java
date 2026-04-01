@@ -198,14 +198,6 @@ class TokenClaimValidatorEdgeCaseTest {
             // This test simulates a network failure during key retrieval
             // by using a JwksKeyLoader that throws an exception
 
-            // Given an IssuerConfig with empty JWKS content
-            var issuerConfig = IssuerConfig.builder()
-                    .issuerIdentifier("test-issuer")
-                    .expectedAudience(TestTokenHolder.TEST_AUDIENCE)
-                    .expectedClientId(TestTokenHolder.TEST_CLIENT_ID)
-                    .jwksContent("{}")  // Empty JWKS content
-                    .build();
-
             // Create a TokenSignatureValidator with a custom JwksLoader that simulates network failure
             var signatureValidator = new TokenSignatureValidator(new FailingJwksKeyLoader(), securityEventCounter, new SignatureAlgorithmPreferences());
 
