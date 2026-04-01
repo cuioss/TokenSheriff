@@ -149,26 +149,24 @@ class DecodedJwtTest {
     @Test
     @DisplayName("Builder should reject null header")
     void builderShouldRejectNullHeader() {
-        assertThrows(NullPointerException.class, () ->
-                        DecodedJwt.builder()
-                                .body(createTestBody())
-                                .signature(SIGNATURE)
-                                .parts(PARTS)
-                                .rawToken(RAW_TOKEN)
-                                .build(),
+        var builder = DecodedJwt.builder()
+                .body(createTestBody())
+                .signature(SIGNATURE)
+                .parts(PARTS)
+                .rawToken(RAW_TOKEN);
+        assertThrows(NullPointerException.class, builder::build,
                 "Builder should throw NullPointerException when header is null");
     }
 
     @Test
     @DisplayName("Builder should reject null rawToken")
     void builderShouldRejectNullRawToken() {
-        assertThrows(NullPointerException.class, () ->
-                        DecodedJwt.builder()
-                                .header(createTestHeader())
-                                .body(createTestBody())
-                                .signature(SIGNATURE)
-                                .parts(PARTS)
-                                .build(),
+        var builder = DecodedJwt.builder()
+                .header(createTestHeader())
+                .body(createTestBody())
+                .signature(SIGNATURE)
+                .parts(PARTS);
+        assertThrows(NullPointerException.class, builder::build,
                 "Builder should throw NullPointerException when rawToken is null");
     }
 
