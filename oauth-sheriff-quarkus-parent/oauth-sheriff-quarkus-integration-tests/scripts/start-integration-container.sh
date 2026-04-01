@@ -210,9 +210,19 @@ if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
             | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('keys',[])))" 2>/dev/null)
         if [ "$KEY_COUNT" -gt 0 ] 2>/dev/null; then
             echo "  Zitadel JWKS: ${KEY_COUNT} key(s) available (attempt $i)"
-            # Wait one JWKS refresh cycle (10s) so the Quarkus app picks up the keys
-            echo "  Waiting 12s for Quarkus JWKS background refresh to pick up keys..."
-            sleep 12
+            # Poll Quarkus readiness endpoint until JWKS keys are loaded by background refresh
+            echo "  Waiting for Quarkus to pick up Zitadel JWKS keys (readiness check)..."
+            for j in {1..30}; do
+                READY=$(curl -k -s -o /dev/null -w "%{http_code}" https://localhost:10443/q/health/ready 2>/dev/null)
+                if [ "$READY" = "200" ]; then
+                    echo "  Quarkus readiness confirmed (attempt $j)"
+                    break
+                fi
+                if [ $j -eq 30 ]; then
+                    echo "  Warning: Quarkus readiness not confirmed after 30s"
+                fi
+                sleep 1
+            done
             break
         fi
         if [ $i -eq 30 ]; then
