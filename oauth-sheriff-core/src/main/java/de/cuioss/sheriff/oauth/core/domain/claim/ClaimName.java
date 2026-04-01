@@ -29,8 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Includes information about whether each claim is mandatory according to its
  * respective specification.
  * <p>
- * This is a replacement for the org.eclipse.microprofile.jwt.ClaimNames interface
- * to provide a standardized set of JWT claim names and types.
+ * Provides a standardized set of JWT claim names and types.
  *
  * @since 1.0
  */
@@ -163,19 +162,10 @@ public enum ClaimName {
     AUTHORIZED_PARTY("azp", ClaimValueType.STRING, "The \"azp\" (authorized party) claim identifies the party to which the ID Token was issued. Optional by OpenID Connect Core 1.0 for ID_TOKEN type.", new IdentityMapper()),
 
     /**
-     * The "upn" (user principal name) claim is a MicroProfile JWT specific claim that uniquely
-     * identifies the subject or user principal of the token.
-     * <p>
-     * Design Decision: UPN lives in core (not Quarkus layer) because core's
-     * {@code TokenContent.getName()} depends on the MP-JWT fallback chain. Moving it would
-     * require decoupling TokenContent from JsonWebToken first (see H-5).
-     * <p>
-     * It serves as the primary source for {@code java.security.Principal.getName()} with a
-     * defined fallback chain:
+     * The "upn" (user principal name) claim uniquely identifies the subject or user principal
+     * of the token. Commonly used for principal name resolution with a fallback chain:
      * {@code upn} -> {@code preferred_username} -> {@code sub}.
      * Optional for all token types.
-     *
-     * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MicroProfile JWT Auth 2.1</a>
      */
     UPN("upn", ClaimValueType.STRING, "The \"upn\" (user principal name) claim uniquely identifies the subject or user principal of the token. MicroProfile JWT specific claim with fallback chain: upn -> preferred_username -> sub.", new IdentityMapper());
 

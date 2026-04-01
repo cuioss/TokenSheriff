@@ -155,7 +155,7 @@ public class MockJwtValidationEndpoint {
                     AccessTokenRequest.of(extraction.token(), headerMap));
 
             var data = new HashMap<String, Object>();
-            data.put("subject", Objects.toString(token.getSubject(), "not-present"));
+            data.put("subject", token.getSubject().orElse("not-present"));
             data.put("scopes", token.getScopes());
             data.put("roles", token.getRoles());
             data.put("groups", token.getGroups());

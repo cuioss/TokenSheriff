@@ -52,7 +52,7 @@ import java.lang.annotation.Target;
  *         AccessTokenContent token = tokenResult.getAccessTokenContent()
  *                 .orElseThrow(() -> new IllegalStateException("Token content missing after successful authorization"));
  *         // Use validated token
- *         return Response.ok(token.getSubject()).build();
+ *         return Response.ok(token.getSubject().orElse("unknown")).build();
  *     }
  * }
  * }</pre>

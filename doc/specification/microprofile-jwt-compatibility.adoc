@@ -28,59 +28,60 @@ OAuthSheriff is **not** an MP-JWT implementation. It is a purpose-built, product
 
 The approach is:
 
-* **Core types**: `TokenContent extends JsonWebToken` — every validated token IS a `Principal` and `JsonWebToken`
-* **Spec method signatures**: MP-JWT method names and return types are the primary API for standard claims
+* **Core types**: `TokenContent` is framework-agnostic — no dependency on `JsonWebToken`
+* **Quarkus adapter**: `JsonWebTokenAdapter` wraps `TokenContent` to provide the `JsonWebToken` interface for CDI injection
+* **Clean API separation**: Core uses `Optional`-returning accessors; the adapter bridges to MP-JWT's nullable contract
 * **OAuthSheriff extensions**: Multi-issuer support, DPoP, custom claim mappers, sealed token hierarchy, security event tracking — all preserved as additional API surface
 
 == Adopted Features
 
 === `JsonWebToken` Interface (`org.eclipse.microprofile.jwt.JsonWebToken`)
 
-`TokenContent` extends `JsonWebToken`, making every validated token a `java.security.Principal`. This enables standard Jakarta Security integration:
+The Quarkus module provides a `JsonWebTokenAdapter` that wraps `TokenContent` and implements `JsonWebToken`, making it available as a `java.security.Principal`. This enables standard Jakarta Security integration:
 
 [source,java]
 ----
-@Inject JsonWebToken callerPrincipal;  // MP-JWT standard injection
+@Inject JsonWebToken callerPrincipal;  // MP-JWT standard injection via adapter
 @Inject Principal principal;            // Jakarta Security standard injection
 ----
 
-The spec method signatures are adopted as the **primary API**:
+The adapter bridges between OAuthSheriff's clean API and the MP-JWT spec signatures:
 
 [cols="3,2,2"]
 |===
-|Method |Return Type |Source
+|JsonWebToken Method |Core TokenContent API |Notes
 
 |`getName()`
-|`String`
+|`getClaimOption(UPN)` / `getSubject()`
 |UPN fallback: `upn` -> `preferred_username` -> `sub`
 
 |`getSubject()`
-|`String` (nullable)
-|Replaces `Optional<String>` (convenience: `getSubjectOption()`)
+|`getSubject()` -> `Optional<String>`
+|Adapter returns nullable; core returns Optional
 
 |`getExpirationTime()`
-|`long` (epoch seconds)
-|Replaces `OffsetDateTime` (convenience: `getExpirationDateTime()`)
+|`getExpirationDateTime()` -> `OffsetDateTime`
+|Adapter returns epoch seconds; core returns rich type
 
 |`getIssuedAtTime()`
-|`long` (epoch seconds)
-|Replaces `OffsetDateTime` (convenience: `getIssuedAtDateTime()`)
+|`getIssuedAtDateTime()` -> `OffsetDateTime`
+|Adapter returns epoch seconds; core returns rich type
 
 |`getGroups()`
-|`Set<String>`
-|From `groups` claim
+|`AccessTokenContent.getGroups()`
+|Only on concrete type in core
 
 |`getAudience()`
-|`Set<String>`
-|From `aud` claim
+|`AccessTokenContent.getAudience()` / `IdTokenContent.getAudience()`
+|Only on concrete types in core
 
 |`getClaimNames()`
-|`Set<String>`
-|All claim keys in token
+|`getClaimNames()`
+|Same signature on both
 
 |`getClaim(String)`
-|`<T> T`
-|Generic claim access with type conversion
+|`getClaimOption(ClaimName)`
+|Adapter provides typed conversion
 |===
 
 === `upn` Claim (User Principal Name)

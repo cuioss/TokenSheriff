@@ -83,15 +83,28 @@ public final class AccessTokenContent extends BaseTokenContent {
     }
 
     /**
+     * Gets the token ID (jti) claim value.
+     * <p>
+     * The 'jti' claim is mandatory for access tokens per
+     * <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-2.2">RFC 9068 Section 2.2</a>.
+     *
+     * @return the token ID
+     * @throws IllegalStateException if the jti claim is not present
+     */
+    public String getTokenId() {
+        return getClaimOption(ClaimName.TOKEN_ID)
+                .map(ClaimValue::getOriginalString)
+                .orElseThrow(() -> new IllegalStateException("Token ID (jti) claim not present in access token"));
+    }
+
+    /**
      * Gets the audience claim value.
      * <p>
      * 'aud' is optional for {@link TokenType#ACCESS_TOKEN}.
-     * Returns a {@link Set} per the {@link org.eclipse.microprofile.jwt.JsonWebToken#getAudience()} contract.
      * Returns an empty set if not present (audience is optional for access tokens).
      *
      * @return the audience as a set of strings, or an empty set if not present
      */
-    @Override
     public Set<String> getAudience() {
         return getClaimOption(ClaimName.AUDIENCE)
                 .map(ClaimValue::getAsList)
@@ -132,11 +145,9 @@ public final class AccessTokenContent extends BaseTokenContent {
      * Gets the groups from the token claims.
      * <p>
      * The "groups" claim is a common but not standardized claim used for group-based access control.
-     * Returns a {@link Set} per the {@link org.eclipse.microprofile.jwt.JsonWebToken#getGroups()} contract.
      *
      * @return a Set of group strings, or an empty set if the groups claim is not present
      */
-    @Override
     public Set<String> getGroups() {
         return getClaimOption(ClaimName.GROUPS)
                 .map(ClaimValue::getAsList)

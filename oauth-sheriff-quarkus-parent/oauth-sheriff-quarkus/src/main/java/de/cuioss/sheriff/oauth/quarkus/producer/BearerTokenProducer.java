@@ -65,8 +65,8 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.WAR
  *         }
  *         AccessTokenContent token = tokenResult.getAccessTokenContent()
  *                 .orElseThrow(() -> new IllegalStateException("Token content missing after successful authorization"));
- *         // Use validated token - getSubject() returns String (nullable)
- *         return Response.ok(Objects.toString(token.getSubject(), "unknown")).build();
+ *         // Use validated token - getSubject() returns Optional&lt;String&gt;
+ *         return Response.ok(token.getSubject().orElse("unknown")).build();
  *     }
  * }
  * }</pre>
@@ -393,7 +393,7 @@ public class BearerTokenProducer {
     @RequestScoped
     public JsonWebToken produceJsonWebToken() {
         return getAccessTokenContent()
-                .map(JsonWebToken.class::cast)
+                .<JsonWebToken>map(JsonWebTokenAdapter::new)
                 .orElse(EmptyJsonWebToken.INSTANCE);
     }
 
