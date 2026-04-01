@@ -293,9 +293,6 @@ class OAuthSheriffDevUIRuntimeServiceTest {
 
             assertNotNull(result, "Result should not be null");
             assertNotNull(result.get("configurationValid"), "Configuration valid status should be present");
-            assertNotNull(result.get("tokenValidatorAvailable"), "Token validator available status should be present");
-            assertEquals(true, result.get("securityCounterAvailable"), "Security counter should always be available");
-            assertEquals("HEALTHY", result.get("overallStatus"), "Overall status should be HEALTHY");
             assertNotNull(result.get("message"), "Message should be present");
             assertNotNull(result.get("healthStatus"), "Health status should be present");
 
@@ -312,28 +309,18 @@ class OAuthSheriffDevUIRuntimeServiceTest {
             assertNotNull(result, "Result should not be null");
 
             boolean configValid = (Boolean) result.get("configurationValid");
-            boolean validatorAvailable = (Boolean) result.get("tokenValidatorAvailable");
             String healthStatus = (String) result.get("healthStatus");
             String message = (String) result.get("message");
 
-            // Test the health determination logic
-            if (configValid && validatorAvailable) {
-                assertEquals("UP", healthStatus, "Health should be UP when config is valid and validator is available");
+            if (configValid) {
+                assertEquals("UP", healthStatus, "Health should be UP when config is valid");
                 assertTrue(message.contains("healthy") || message.contains("operational"),
                         "Message should indicate healthy state");
-            } else if (configValid) {
-                assertEquals("DOWN", healthStatus, "Health should be DOWN when config is valid but validator unavailable");
-                assertTrue(message.contains("validator") && message.contains("not available"),
-                        "Message should indicate validator unavailability");
             } else {
                 assertEquals("DOWN", healthStatus, "Health should be DOWN when config is invalid");
                 assertTrue(message.contains("disabled") || message.contains("misconfigured"),
                         "Message should indicate configuration issues");
             }
-
-            // Security counter should always be available in runtime
-            assertEquals(true, result.get("securityCounterAvailable"),
-                    "Security counter should always be available in runtime");
         }
 
     }

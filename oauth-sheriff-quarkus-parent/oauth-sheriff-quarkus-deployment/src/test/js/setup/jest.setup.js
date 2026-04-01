@@ -149,9 +149,7 @@ global.devUI = {
       getHealthInfo: jest.fn(() =>
         Promise.resolve({
           configurationValid: true,
-          tokenValidatorAvailable: false,
-          securityCounterAvailable: false,
-          overallStatus: 'BUILD_TIME',
+          healthStatus: 'DOWN',
           message: 'Health information will be available at runtime',
         })
       ),

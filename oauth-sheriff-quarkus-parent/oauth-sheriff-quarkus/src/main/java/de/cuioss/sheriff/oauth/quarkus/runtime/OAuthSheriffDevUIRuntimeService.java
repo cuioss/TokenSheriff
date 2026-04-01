@@ -253,11 +253,7 @@ public class OAuthSheriffDevUIRuntimeService {
         Map<String, Object> health = new HashMap<>();
 
         boolean configValid = isJwtEnabled();
-
         health.put("configurationValid", configValid);
-        health.put("tokenValidatorAvailable", true);
-        health.put("securityCounterAvailable", true);
-        health.put("overallStatus", "HEALTHY");
 
         if (configValid) {
             health.put(MESSAGE, "All JWT components are healthy and operational");
