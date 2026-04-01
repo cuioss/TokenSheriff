@@ -567,6 +567,49 @@ class DpopProofValidatorTest {
                 computeAth(accessToken));
     }
 
+    private String buildDpopProofWithHtuHtm(KeyPair keyPair, Map<String, Object> jwkMap, String alg,
+            String accessToken, String htm, String htu) {
+        return buildDpopProofInternalWithHtuHtm(keyPair, jwkMap, alg, "dpop+jwt",
+                UUID.randomUUID().toString(), System.currentTimeMillis() / 1000,
+                computeAth(accessToken), htm, htu);
+    }
+
+    private String buildDpopProofInternalWithHtuHtm(KeyPair signingKeyPair, Map<String, Object> headerJwkMap,
+            String alg, String typ,
+            String jti, long iat, String ath, String htm, String htu) {
+        // Build header JSON
+        String jwkJson = mapToJson(headerJwkMap);
+        String headerJson = """
+                {"typ":"%s","alg":"%s","jwk":%s}""".formatted(typ, alg, jwkJson);
+
+        // Build body JSON with htm and htu
+        String bodyJson = """
+                {"jti":"%s","iat":%d,"ath":"%s","htm":"%s","htu":"%s"}""".formatted(jti, iat, ath, htm, htu);
+
+        // Encode
+        String encodedHeader = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+        String encodedBody = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(bodyJson.getBytes(StandardCharsets.UTF_8));
+
+        String dataToSign = encodedHeader + "." + encodedBody;
+
+        // Sign
+        try {
+            Signature signer = Signature.getInstance("SHA256withRSA");
+            signer.initSign(signingKeyPair.getPrivate());
+            signer.update(dataToSign.getBytes(StandardCharsets.UTF_8));
+            byte[] signatureBytes = signer.sign();
+
+            String encodedSignature = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(signatureBytes);
+
+            return dataToSign + "." + encodedSignature;
+        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
+            throw new IllegalStateException("Failed to sign DPoP proof", e);
+        }
+    }
+
     private String buildDpopProofInternal(KeyPair signingKeyPair, Map<String, Object> headerJwkMap,
             String alg, String typ,
             String jti, long iat, String ath) {
@@ -702,6 +745,161 @@ class DpopProofValidatorTest {
                 .claim("ath", computeAth(accessToken))
                 .signWith(privateKey, sigAlgorithm)
                 .compact();
+    }
+
+    // === HTU/HTM Validation Tests ===
+
+    @Nested
+    @DisplayName("HTU/HTM Validation Tests")
+    class HtuHtmValidationTests {
+
+        @Test
+        @DisplayName("Should skip htu/htm validation when requestUri is null")
+        void shouldSkipWhenRequestUriIsNull() {
+            KeyPair keyPair = generateRsaKeyPair();
+            Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+
+            String rawAccessToken = "some.access.token";
+            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+            // Proof without htm/htu claims — should still pass because request has no URI
+            String dpopProof = buildDpopProof(keyPair, jwkMap, "RS256", rawAccessToken);
+
+            AccessTokenRequest request = AccessTokenRequest.of(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)));
+
+            assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken));
+        }
+
+        @Test
+        @DisplayName("Should skip htu/htm validation when requestMethod is blank")
+        void shouldSkipWhenRequestMethodIsBlank() {
+            KeyPair keyPair = generateRsaKeyPair();
+            Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+
+            String rawAccessToken = "some.access.token";
+            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+            String dpopProof = buildDpopProof(keyPair, jwkMap, "RS256", rawAccessToken);
+
+            // requestUri present but requestMethod blank -> should skip htu/htm validation
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)), "https://api.example.com/resource", "");
+
+            assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken));
+        }
+
+        @Test
+        @DisplayName("Should reject proof with missing htm claim when request has URI and method")
+        void shouldRejectMissingHtmClaim() {
+            KeyPair keyPair = generateRsaKeyPair();
+            Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+
+            String rawAccessToken = "some.access.token";
+            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+            // Proof without htm/htu — will fail because request carries URI and method
+            String dpopProof = buildDpopProof(keyPair, jwkMap, "RS256", rawAccessToken);
+
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)),
+                    "https://api.example.com/resource", "GET");
+
+            var ex = assertThrows(TokenValidationException.class,
+                    () -> validator.validate(request, accessToken, rawAccessToken));
+            assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
+            assertTrue(ex.getMessage().contains("htm"));
+        }
+
+        @Test
+        @DisplayName("Should reject proof with mismatched htm (POST vs GET)")
+        void shouldRejectMismatchedHtm() {
+            KeyPair keyPair = generateRsaKeyPair();
+            Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+
+            String rawAccessToken = "some.access.token";
+            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+            // Proof says POST, request says GET
+            String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken,
+                    "POST", "https://api.example.com/resource");
+
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)),
+                    "https://api.example.com/resource", "GET");
+
+            var ex = assertThrows(TokenValidationException.class,
+                    () -> validator.validate(request, accessToken, rawAccessToken));
+            assertEquals(EventType.DPOP_HTM_MISMATCH, ex.getEventType());
+        }
+
+        @Test
+        @DisplayName("Should reject proof with mismatched htu")
+        void shouldRejectMismatchedHtu() {
+            KeyPair keyPair = generateRsaKeyPair();
+            Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+
+            String rawAccessToken = "some.access.token";
+            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+            // Proof says different URI than request
+            String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken,
+                    "GET", "https://api.example.com/other");
+
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)),
+                    "https://api.example.com/resource", "GET");
+
+            var ex = assertThrows(TokenValidationException.class,
+                    () -> validator.validate(request, accessToken, rawAccessToken));
+            assertEquals(EventType.DPOP_HTU_MISMATCH, ex.getEventType());
+        }
+
+        @Test
+        @DisplayName("Should accept proof with matching htm and htu")
+        void shouldAcceptMatchingHtmAndHtu() {
+            KeyPair keyPair = generateRsaKeyPair();
+            Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+
+            String rawAccessToken = "some.access.token";
+            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+            String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken,
+                    "GET", "https://api.example.com/resource");
+
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)),
+                    "https://api.example.com/resource", "GET");
+
+            assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken));
+        }
+
+        @Test
+        @DisplayName("Should strip query string from htu for comparison")
+        void shouldStripQueryStringFromHtu() {
+            KeyPair keyPair = generateRsaKeyPair();
+            Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+
+            String rawAccessToken = "some.access.token";
+            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+            // Proof htu has no query, request URI has query — should match after stripping
+            String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken,
+                    "GET", "https://api.example.com/resource");
+
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)),
+                    "https://api.example.com/resource?page=1&size=10", "GET");
+
+            assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken));
+        }
     }
 
     /**
