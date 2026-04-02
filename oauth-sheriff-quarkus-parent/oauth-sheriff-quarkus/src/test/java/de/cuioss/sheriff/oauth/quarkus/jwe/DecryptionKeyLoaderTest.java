@@ -161,6 +161,48 @@ class DecryptionKeyLoaderTest {
         assertEquals(keyPair.getPrivate(), loaded);
     }
 
+    @Test
+    @DisplayName("Should throw with suppressed RSA exception when both RSA and EC parsing fail")
+    void shouldThrowWithSuppressedExceptionForCorruptedKey() {
+        // Create corrupted PKCS8 data that is valid base64 but not a valid key for RSA or EC
+        byte[] corruptedKeyBytes = new byte[]{0x30, 0x0D, 0x06, 0x09, 0x2A, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+        String corruptedPem = "-----BEGIN PRIVATE KEY-----\n"
+                + Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(corruptedKeyBytes)
+                + "\n-----END PRIVATE KEY-----\n";
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> DecryptionKeyLoader.parsePemContent(corruptedPem)
+        );
+
+        // Verify the exception message indicates failure
+        assertTrue(exception.getMessage().contains("not RSA or EC"),
+                "Exception message should indicate both RSA and EC parsing failed");
+
+        // Verify the RSA exception is attached as suppressed on the cause
+        Throwable cause = exception.getCause();
+        assertNotNull(cause, "Should have a cause from EC parsing failure");
+        assertEquals(1, cause.getSuppressed().length,
+                "EC exception should have RSA exception as suppressed");
+    }
+
+    @Test
+    @DisplayName("Should parse EC key via RSA-first-then-EC fallback path")
+    void shouldParseEcKeyViaFallbackPath() throws Exception {
+        // EC key will fail RSA parsing first, then succeed as EC
+        KeyPair ecKeyPair = generateEcKeyPair();
+        String ecPem = "-----BEGIN PRIVATE KEY-----\n"
+                + Base64.getMimeEncoder(64, "\n".getBytes())
+                .encodeToString(ecKeyPair.getPrivate().getEncoded())
+                + "\n-----END PRIVATE KEY-----\n";
+
+        PrivateKey loaded = DecryptionKeyLoader.parsePemContent(ecPem);
+
+        assertNotNull(loaded);
+        assertInstanceOf(ECPrivateKey.class, loaded);
+        assertEquals(ecKeyPair.getPrivate(), loaded);
+    }
+
     private KeyPair generateRsaKeyPair() throws GeneralSecurityException {
         KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
         gen.initialize(2048);
