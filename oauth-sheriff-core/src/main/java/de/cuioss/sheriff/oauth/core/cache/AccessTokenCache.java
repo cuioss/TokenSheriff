@@ -328,6 +328,16 @@ public class AccessTokenCache {
         LOGGER.debug("AccessTokenCache shut down");
     }
 
+    // MessageDigest is not thread-safe — use ThreadLocal to avoid per-call getInstance() overhead
+    private static final ThreadLocal<MessageDigest> SHA256_DIGEST = ThreadLocal.withInitial(() -> {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 is required by the Java specification; this should never happen
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
+    });
+
     /**
      * Computes the SHA-256 digest of the given token string and returns it as a hex string.
      * SHA-256 provides collision-resistant cache keys, eliminating the risk of
@@ -337,14 +347,10 @@ public class AccessTokenCache {
      * @return hex-encoded SHA-256 digest
      */
     private static String sha256Hex(String tokenString) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(tokenString.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            // SHA-256 is required by the Java specification; this should never happen
-            throw new IllegalStateException("SHA-256 algorithm not available", e);
-        }
+        MessageDigest digest = SHA256_DIGEST.get();
+        digest.reset();
+        byte[] hash = digest.digest(tokenString.getBytes(StandardCharsets.UTF_8));
+        return HexFormat.of().formatHex(hash);
     }
 
     /**

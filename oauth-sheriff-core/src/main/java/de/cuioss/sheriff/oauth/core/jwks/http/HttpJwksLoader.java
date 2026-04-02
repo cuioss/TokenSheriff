@@ -333,7 +333,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                     // cui-rewrite:disable InvalidExceptionUsageRecipe
                     // Intentional catch-all: ScheduledExecutorService silently cancels the task on uncaught exceptions
                     catch (Exception e) {
-                        LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+                        LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
                     }
                 },
                 config.getRefreshIntervalSeconds(),

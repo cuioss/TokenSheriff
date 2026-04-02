@@ -322,10 +322,11 @@ public class JWKSKeyLoader implements JwksLoader {
     }
 
     @Override
-    public CompletableFuture<LoaderStatus> initJWKSLoader(SecurityEventCounter securityEventCounter) {
-        if (initialized.compareAndSet(false, true)) {
+    public synchronized CompletableFuture<LoaderStatus> initJWKSLoader(SecurityEventCounter securityEventCounter) {
+        if (!initialized.get()) {
             this.securityEventCounter = securityEventCounter;
             initializeKeys();
+            initialized.set(true);
             LOGGER.debug("JWKSKeyLoader initialized with SecurityEventCounter");
         }
         return CompletableFuture.completedFuture(status);
