@@ -76,6 +76,34 @@ class DpopConfigTest {
     }
 
     @Test
+    void shouldRejectProofMaxAgeExceeding3600() {
+        var builder = DpopConfig.builder().proofMaxAgeSeconds(3601);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("must not exceed 3600"));
+    }
+
+    @Test
+    void shouldAcceptProofMaxAgeAtBoundary3600() {
+        // Exactly 3600 should be accepted
+        DpopConfig config = DpopConfig.builder().proofMaxAgeSeconds(3600).build();
+        assertEquals(3600, config.getProofMaxAgeSeconds());
+    }
+
+    @Test
+    void shouldRejectNonceCacheTtlExceeding86400() {
+        var builder = DpopConfig.builder().nonceCacheTtlSeconds(86401);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("must not exceed 86400"));
+    }
+
+    @Test
+    void shouldAcceptNonceCacheTtlAtBoundary86400() {
+        // Exactly 86400 should be accepted
+        DpopConfig config = DpopConfig.builder().nonceCacheTtlSeconds(86400).build();
+        assertEquals(86400, config.getNonceCacheTtlSeconds());
+    }
+
+    @Test
     void shouldImplementEqualsAndHashCode() {
         DpopConfig config1 = DpopConfig.builder().build();
         DpopConfig config2 = DpopConfig.builder().build();

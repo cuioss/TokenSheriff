@@ -89,6 +89,29 @@ class ValidationContextTest {
             assertNull(ctx.getMaxTokenAgeSeconds());
             assertFalse(ctx.isTokenAgeValidationEnabled());
         }
+
+        @Test
+        @DisplayName("Two-arg constructor should reject negative clockSkewSeconds")
+        void twoArgShouldRejectNegativeClockSkew() {
+            var exception = assertThrows(IllegalArgumentException.class,
+                    () -> new ValidationContext(-1, null));
+            assertTrue(exception.getMessage().contains("clockSkewSeconds must not be negative"));
+        }
+
+        @Test
+        @DisplayName("Three-arg constructor should reject negative clockSkewSeconds")
+        void threeArgShouldRejectNegativeClockSkew() {
+            var exception = assertThrows(IllegalArgumentException.class,
+                    () -> new ValidationContext(FIXED_TIME, -5, null));
+            assertTrue(exception.getMessage().contains("clockSkewSeconds must not be negative"));
+        }
+
+        @Test
+        @DisplayName("Both constructors should accept zero clockSkewSeconds")
+        void shouldAcceptZeroClockSkew() {
+            assertDoesNotThrow(() -> new ValidationContext(0, null));
+            assertDoesNotThrow(() -> new ValidationContext(FIXED_TIME, 0, null));
+        }
     }
 
     @Nested

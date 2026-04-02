@@ -144,6 +144,37 @@ class ClientIpExtractorTest {
     }
 
     @Test
+    @DisplayName("Should return fallbackAddress when no proxy headers exist")
+    void shouldReturnFallbackAddressWhenNoProxyHeaders() {
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
+
+        String result = ClientIpExtractor.extractClientIp(headers, "192.168.1.50");
+
+        assertEquals("192.168.1.50", result);
+    }
+
+    @Test
+    @DisplayName("Should return unknown when no proxy headers and fallbackAddress is null")
+    void shouldReturnUnknownWhenNoProxyHeadersAndNullFallback() {
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
+
+        String result = ClientIpExtractor.extractClientIp(headers, null);
+
+        assertEquals("unknown", result);
+    }
+
+    @Test
+    @DisplayName("Should prioritize proxy headers over fallbackAddress")
+    void shouldPrioritizeProxyHeadersOverFallback() {
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
+        headers.putSingle("X-Forwarded-For", "203.0.113.1");
+
+        String result = ClientIpExtractor.extractClientIp(headers, "10.0.0.99");
+
+        assertEquals("203.0.113.1", result);
+    }
+
+    @Test
     @DisplayName("Should handle MultivaluedMap with multiple values")
     void shouldHandleMultivaluedMapWithMultipleValues() {
         MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();

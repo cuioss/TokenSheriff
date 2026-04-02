@@ -212,6 +212,56 @@ class AccessTokenCacheConfigTest {
     }
 
     @Test
+    void validateShouldPassForValidConfig() {
+        // Given
+        AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
+                .maxSize(100)
+                .evictionIntervalSeconds(300L)
+                .build();
+
+        // When / Then - should not throw
+        assertDoesNotThrow(config::validate);
+    }
+
+    @Test
+    void validateShouldPassWhenCachingDisabled() {
+        // Given - maxSize=0, evictionIntervalSeconds irrelevant
+        AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
+                .maxSize(0)
+                .evictionIntervalSeconds(0L)
+                .build();
+
+        // When / Then - should not throw because maxSize is 0
+        assertDoesNotThrow(config::validate);
+    }
+
+    @Test
+    void validateShouldThrowWhenMaxSizePositiveAndEvictionIntervalZero() {
+        // Given
+        AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
+                .maxSize(100)
+                .evictionIntervalSeconds(0L)
+                .build();
+
+        // When / Then
+        var exception = assertThrows(IllegalArgumentException.class, config::validate);
+        assertTrue(exception.getMessage().contains("evictionIntervalSeconds must be positive"));
+    }
+
+    @Test
+    void validateShouldThrowWhenMaxSizePositiveAndEvictionIntervalNegative() {
+        // Given
+        AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
+                .maxSize(100)
+                .evictionIntervalSeconds(-5L)
+                .build();
+
+        // When / Then
+        var exception = assertThrows(IllegalArgumentException.class, config::validate);
+        assertTrue(exception.getMessage().contains("evictionIntervalSeconds must be positive"));
+    }
+
+    @Test
     void createCacheWithProvidedExecutor() {
         // Given
         SecurityEventCounter securityEventCounter = new SecurityEventCounter();

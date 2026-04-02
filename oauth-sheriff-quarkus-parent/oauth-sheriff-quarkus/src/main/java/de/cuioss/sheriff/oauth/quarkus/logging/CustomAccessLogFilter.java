@@ -210,7 +210,7 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
                 }
             }
         } catch (Exception e) {
-            LOGGER.debug("Could not resolve Vert.x remote address: %s", e.getMessage());
+            LOGGER.debug(e, "Could not resolve Vert.x remote address");
         }
         return null;
     }
