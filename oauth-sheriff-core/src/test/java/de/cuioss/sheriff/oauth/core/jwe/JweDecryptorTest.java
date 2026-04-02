@@ -15,6 +15,8 @@
  */
 package de.cuioss.sheriff.oauth.core.jwe;
 
+import com.dslplatform.json.DslJson;
+import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.json.JwtHeader;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
@@ -40,12 +42,14 @@ class JweDecryptorTest {
     private JweDecryptor decryptor;
     private SecurityEventCounter counter;
     private KeyPair rsaEncryptionKeyPair;
+    private DslJson<Object> dslJson;
 
     @BeforeEach
     void setUp() {
         decryptor = new JweDecryptor();
         counter = new SecurityEventCounter();
         rsaEncryptionKeyPair = JweTestTokenFactory.generateRsaKeyPair();
+        dslJson = ParserConfig.builder().build().getDslJson();
     }
 
     @Nested
@@ -88,7 +92,7 @@ class JweDecryptorTest {
             JwtHeader header = parseHeader(parts[0]);
 
             // Decrypt
-            String innerJws = decryptor.decrypt(parts, header, config, counter);
+            String innerJws = decryptor.decrypt(parts, header, config, counter, dslJson);
 
             // Verify result is a valid JWS (3 parts)
             assertNotNull(innerJws);
@@ -112,13 +116,13 @@ class JweDecryptorTest {
                     .build();
 
             // Create a fake header with RSA1_5
-            JwtHeader header = new JwtHeader("RSA1_5", null, null, null, null, null, null, null, null, null, null,
+            JwtHeader header = new JwtHeader("RSA1_5", null, null, null, null,
                     "A128GCM", null, null, null, null);
 
             String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter));
+                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM));
         }
 
@@ -129,13 +133,13 @@ class JweDecryptorTest {
                     .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
                     .build();
 
-            JwtHeader header = new JwtHeader("RSA-OAEP", null, null, null, null, null, null, null, null, null, null,
+            JwtHeader header = new JwtHeader("RSA-OAEP", null, null, null, null,
                     "A192GCM", null, null, null, null);
 
             String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter));
+                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM));
         }
 
@@ -158,7 +162,7 @@ class JweDecryptorTest {
                     .build();
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter));
+                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
         }
 
         @Test
@@ -177,7 +181,7 @@ class JweDecryptorTest {
                     .build();
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter));
+                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
         }
 
         @Test
@@ -196,7 +200,7 @@ class JweDecryptorTest {
                     .build();
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter));
+                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
         }
 
         @Test
@@ -216,7 +220,7 @@ class JweDecryptorTest {
                     .build();
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter));
+                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_KEY_NOT_FOUND));
         }
     }
@@ -240,7 +244,7 @@ class JweDecryptorTest {
                     .decryptionKey("my-kid", rsaEncryptionKeyPair.getPrivate())
                     .build();
 
-            String innerJws = decryptor.decrypt(parts, header, config, counter);
+            String innerJws = decryptor.decrypt(parts, header, config, counter, dslJson);
             assertNotNull(innerJws);
             assertEquals(3, innerJws.split("\\.").length);
         }
@@ -260,7 +264,7 @@ class JweDecryptorTest {
                     .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
                     .build();
 
-            String innerJws = decryptor.decrypt(parts, header, config, counter);
+            String innerJws = decryptor.decrypt(parts, header, config, counter, dslJson);
             assertNotNull(innerJws);
         }
     }
@@ -296,7 +300,7 @@ class JweDecryptorTest {
 
             JwtHeader header = parseHeader(parts[0]);
 
-            String innerJws = decryptor.decrypt(parts, header, config, counter);
+            String innerJws = decryptor.decrypt(parts, header, config, counter, dslJson);
             assertNotNull(innerJws);
             assertEquals(3, innerJws.split("\\.").length);
             assertEquals(0, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
@@ -323,7 +327,7 @@ class JweDecryptorTest {
                     .build();
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter));
+                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
         }
 
         @Test
@@ -348,7 +352,7 @@ class JweDecryptorTest {
                     .build();
 
             TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter));
+                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
             assertTrue(ex.getMessage().contains("curve does not match"));
         }
 
@@ -360,13 +364,13 @@ class JweDecryptorTest {
                     .build();
 
             // Header with ECDH-ES but no epk
-            JwtHeader header = new JwtHeader("ECDH-ES", null, null, null, null, null, null, null, null, null, null,
+            JwtHeader header = new JwtHeader("ECDH-ES", null, null, null, null,
                     "A128GCM", null, null, null, null);
 
             String[] parts = {"header", "", "iv", "ciphertext", "authTag"};
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter));
+                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
         }
     }
 
@@ -394,7 +398,7 @@ class JweDecryptorTest {
             assertTrue(header.getZip().isPresent());
             assertEquals("DEF", header.getZip().get());
 
-            String innerJws = decryptor.decrypt(parts, header, config, counter);
+            String innerJws = decryptor.decrypt(parts, header, config, counter, dslJson);
             assertNotNull(innerJws);
             assertEquals(3, innerJws.split("\\.").length);
         }
@@ -406,13 +410,13 @@ class JweDecryptorTest {
                     .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
                     .build();
 
-            JwtHeader header = new JwtHeader("RSA-OAEP", null, null, null, null, null, null, null, null, null, null,
+            JwtHeader header = new JwtHeader("RSA-OAEP", null, null, null, null,
                     "A256GCM", "GZIP", null, null, null);
 
             String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
 
             TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter));
+                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
             assertTrue(ex.getMessage().contains("Unsupported compression"));
         }
 
@@ -424,13 +428,13 @@ class JweDecryptorTest {
                     .compressionEnabled(false)
                     .build();
 
-            JwtHeader header = new JwtHeader("RSA-OAEP", null, null, null, null, null, null, null, null, null, null,
+            JwtHeader header = new JwtHeader("RSA-OAEP", null, null, null, null,
                     "A256GCM", "DEF", null, null, null);
 
             String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
 
             TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter));
+                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
             assertTrue(ex.getMessage().contains("compression is disabled"));
         }
     }
@@ -443,7 +447,7 @@ class JweDecryptorTest {
         String kid = extractField(json, "kid");
         String zip = extractField(json, "zip");
         String epk = extractEpkObject(json);
-        return new JwtHeader(alg, null, kid, null, null, null, null, null, null, null, null,
+        return new JwtHeader(alg, null, kid, null, null,
                 enc, zip, epk, null, null);
     }
 

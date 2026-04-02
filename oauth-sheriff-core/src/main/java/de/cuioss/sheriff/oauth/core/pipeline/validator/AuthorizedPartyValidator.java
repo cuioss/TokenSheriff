@@ -71,7 +71,7 @@ public class AuthorizedPartyValidator {
         }
 
         var azpObj = token.getClaimOption(ClaimName.AUTHORIZED_PARTY);
-        if (azpObj.isEmpty() || azpObj.get().isEmpty()) {
+        if (azpObj.isEmpty()) {
             LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_CLAIM, ClaimName.AUTHORIZED_PARTY.getName());
             securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_CLAIM);
             throw new TokenValidationException(

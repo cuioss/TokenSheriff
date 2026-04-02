@@ -18,7 +18,6 @@ package de.cuioss.sheriff.oauth.core.pipeline.validator;
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
 import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
-import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.token.TokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
@@ -116,27 +115,7 @@ public class MandatoryClaimsValidator {
     }
 
     private boolean isClaimMissing(TokenContent tokenContent, String claimName) {
-        if (!tokenContent.getClaims().containsKey(claimName)) {
-            return true;
-        }
-
-        ClaimValue claimValue = tokenContent.getClaims().get(claimName);
-        if (!claimValue.isPresent()) {
-            logMissingClaimValue(claimName, claimValue);
-            return true;
-        }
-
-        return false;
-    }
-
-    private void logMissingClaimValue(String claimName, ClaimValue claimValue) {
-        var claimNameEnum = ClaimName.fromString(claimName);
-        if (claimNameEnum.isPresent()) {
-            LOGGER.debug("Claim %s is present but not set as expected: %s. Specification: %s",
-                    claimName, claimValue, claimNameEnum.get().getSpec());
-        } else {
-            LOGGER.debug("Claim %s is present but not set as expected: %s", claimName, claimValue);
-        }
+        return !tokenContent.getClaims().containsKey(claimName);
     }
 
     private void handleMissingClaims(TokenContent tokenContent, SortedSet<String> missingClaims) {

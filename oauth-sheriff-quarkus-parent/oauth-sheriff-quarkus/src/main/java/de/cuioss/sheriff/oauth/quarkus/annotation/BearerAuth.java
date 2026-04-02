@@ -51,7 +51,12 @@ import java.lang.annotation.Target;
  * }
  * }</pre>
  *
- * <h2>Class-Level Application:</h2>
+ * <h2>Class-Level Application and Merging:</h2>
+ * When both class-level and method-level {@code @BearerAuth} annotations are present,
+ * their requirements are <strong>merged</strong> (union). The resulting required scopes,
+ * roles, and groups are the union of both annotation levels. This allows defining
+ * baseline security requirements at the class level and adding method-specific
+ * requirements on individual endpoints.
  * <pre>{@code
  * @Path("/api")
  * @BearerAuth(requiredRoles = {"admin"})
@@ -68,8 +73,7 @@ import java.lang.annotation.Target;
  *     @Path("/settings")
  *     @BearerAuth(requiredScopes = {"admin:settings"})
  *     public Response getSettings() {
- *         // Method-level annotation adds additional requirements
- *         // Requires both admin role (from class) and admin:settings scope
+ *         // Merged: requires admin role (from class) AND admin:settings scope (from method)
  *         return Response.ok(settings).build();
  *     }
  * }

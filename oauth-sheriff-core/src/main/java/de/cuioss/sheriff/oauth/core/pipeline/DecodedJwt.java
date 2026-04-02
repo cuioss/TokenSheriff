@@ -16,8 +16,10 @@
 package de.cuioss.sheriff.oauth.core.pipeline;
 
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
+import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.json.JwtHeader;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
+import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 
 import java.util.Arrays;
 import java.util.Base64;
@@ -66,31 +68,35 @@ String[] parts,
 String rawToken
 ) {
     /**
-     * Compact constructor that validates the body is non-null.
+     * Compact constructor that validates the body is non-null and parts format.
      * A properly decoded JWT must always have a parseable body.
+     * If parts are provided, they must contain exactly 3 elements (header.payload.signature).
      */
     public DecodedJwt {
         Objects.requireNonNull(body, "body must not be null");
+        if (parts != null && parts.length != 3) {
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
+                    "JWT format is invalid: expected 3 parts (header.payload.signature) but found %s"
+                            .formatted(parts.length)
+            );
+        }
     }
 
     /**
-     * Gets the header of the JWT token.
-     * <p>
-     * The parser guarantees non-null headers, so this simply returns the record field.
+     * Creates a DecodedJwt from all its components.
      *
-     * @return the JwtHeader
+     * @param header the decoded header as a JwtHeader, must not be null
+     * @param body the decoded payload (body) as a MapRepresentation, must not be null
+     * @param signature the signature part as a String
+     * @param parts the original token parts (header.payload.signature)
+     * @param rawToken the original raw token string
+     * @return a new DecodedJwt instance
+     * @throws NullPointerException if header or body is null
      */
-    public JwtHeader getHeader() {
-        return header;
-    }
-
-    /**
-     * Gets the body of the JWT token.
-     *
-     * @return the body MapRepresentation, never null
-     */
-    public MapRepresentation getBody() {
-        return body;
+    public static DecodedJwt of(JwtHeader header, MapRepresentation body, String signature, String[] parts, String rawToken) {
+        Objects.requireNonNull(header, "header must not be null");
+        return new DecodedJwt(header, body, signature, parts, rawToken);
     }
 
     /**
@@ -137,11 +143,9 @@ String rawToken
      *                               cannot be decoded from Base64URL format
      */
     public byte[] getSignatureAsDecodedBytes() {
-        // Validate precondition: parts array must exist and have exactly 3 elements
-        if (parts == null || parts.length != 3) {
+        if (parts == null) {
             throw new IllegalStateException(
-                    "JWT format is invalid: expected 3 parts (header.payload.signature) but found %s"
-                            .formatted(parts == null ? "null" : parts.length)
+                    "JWT format is invalid: parts array is null"
             );
         }
 
@@ -172,11 +176,9 @@ String rawToken
      * @throws IllegalStateException if the JWT format is invalid (not 3 parts)
      */
     public String getDataToVerify() {
-        // Validate precondition: parts array must exist and have exactly 3 elements
-        if (parts == null || parts.length != 3) {
+        if (parts == null) {
             throw new IllegalStateException(
-                    "JWT format is invalid: expected 3 parts (header.payload.signature) but found %s"
-                            .formatted(parts == null ? "null" : parts.length)
+                    "JWT format is invalid: parts array is null"
             );
         }
 
@@ -251,55 +253,4 @@ String rawToken
         return token.substring(0, 10) + "...";
     }
 
-    /**
-     * Creates a builder for constructing DecodedJwt instances.
-     *
-     * @return a new DecodedJwtBuilder instance
-     */
-    public static DecodedJwtBuilder builder() {
-        return new DecodedJwtBuilder();
-    }
-
-    /**
-     * Builder class for creating DecodedJwt instances.
-     * Provides a fluent API for constructing DecodedJwt records.
-     */
-    public static class DecodedJwtBuilder {
-        private JwtHeader header;
-        private MapRepresentation body;
-        private String signature;
-        private String[] parts;
-        private String rawToken;
-
-        public DecodedJwtBuilder header(JwtHeader header) {
-            this.header = header;
-            return this;
-        }
-
-        public DecodedJwtBuilder body(MapRepresentation body) {
-            this.body = body;
-            return this;
-        }
-
-        public DecodedJwtBuilder signature(String signature) {
-            this.signature = signature;
-            return this;
-        }
-
-        public DecodedJwtBuilder parts(String[] parts) {
-            this.parts = parts;
-            return this;
-        }
-
-        public DecodedJwtBuilder rawToken(String rawToken) {
-            this.rawToken = rawToken;
-            return this;
-        }
-
-        public DecodedJwt build() {
-            Objects.requireNonNull(header, "header");
-            Objects.requireNonNull(rawToken, "rawToken");
-            return new DecodedJwt(header, body, signature, parts, rawToken);
-        }
-    }
 }

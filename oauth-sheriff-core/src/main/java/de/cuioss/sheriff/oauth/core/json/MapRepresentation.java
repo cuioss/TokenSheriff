@@ -107,16 +107,6 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
     }
 
     /**
-     * Factory method to create an empty MapRepresentation.
-     *
-     * @return an empty MapRepresentation
-     */
-    public static MapRepresentation empty() {
-        return new MapRepresentation(Map.of());
-    }
-
-
-    /**
      * Checks if the map contains a key.
      *
      * @param key the key to check

@@ -64,10 +64,8 @@ class DirectDeserializationTest {
         WellKnownResult config = dslJson.deserialize(WellKnownResult.class, bytes, bytes.length);
 
         assertNotNull(config);
-        assertEquals("https://example.com", config.issuer());
-        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri());
-        assertEquals("https://example.com/auth", config.authorizationEndpoint());
-        assertEquals("https://example.com/token", config.tokenEndpoint());
+        assertEquals("https://example.com", config.issuer);
+        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri);
     }
 
     @Test
@@ -78,10 +76,8 @@ class DirectDeserializationTest {
         WellKnownResult config = dslJson.deserialize(WellKnownResult.class, bytes, bytes.length);
 
         assertNotNull(config);
-        assertEquals("https://example.com", config.issuer());
-        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri());
-        assertNull(config.authorizationEndpoint());
-        assertNull(config.tokenEndpoint());
+        assertEquals("https://example.com", config.issuer);
+        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri);
     }
 
     @Test

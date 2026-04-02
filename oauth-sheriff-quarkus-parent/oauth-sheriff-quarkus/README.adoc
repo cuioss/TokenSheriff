@@ -94,13 +94,6 @@ For comprehensive metrics configuration, Prometheus queries, alerting examples, 
 
 === Runtime Services
 
-==== OAuthSheriffRecorder
-Quarkus recorder placeholder for future runtime initialization:
-
-* link:src/main/java/de/cuioss/sheriff/oauth/quarkus/runtime/OAuthSheriffRecorder.java[OAuthSheriffRecorder]
-* Currently empty — all components are managed by CDI
-* Available for future runtime initialization needs called from the deployment processor
-
 ==== OAuthSheriffDevUIRuntimeService
 Runtime service for DevUI integration:
 

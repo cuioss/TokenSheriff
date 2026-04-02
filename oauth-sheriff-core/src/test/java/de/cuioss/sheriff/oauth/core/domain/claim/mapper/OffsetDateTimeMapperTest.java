@@ -106,16 +106,13 @@ class OffsetDateTimeMapperTest {
     }
 
     @Test
-    @DisplayName("Handle null claim value")
+    @DisplayName("Handle null claim value - returns null for absent claim")
     void shouldHandleNullClaimValue() {
         JsonObject jsonObject = createJsonObjectWithNullClaim();
 
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
 
-        assertNotNull(result, "Result should not be null");
-        assertNull(result.getOriginalString(), "Original string should be null");
-        assertNull(result.getDateTime(), "DateTime should be null for null claim value");
-        assertEquals(ClaimValueType.DATETIME, result.getType(), "Type should be DATETIME");
+        assertNull(result, "Should return null for null/absent claim");
     }
 
     @ParameterizedTest
@@ -151,29 +148,19 @@ class OffsetDateTimeMapperTest {
     }
 
     @Test
-    @DisplayName("Handle missing claim")
+    @DisplayName("Handle missing claim - returns null")
     void shouldHandleMissingClaim() {
         JsonObject jsonObject = Json.createObjectBuilder().build();
-
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
-
-        assertNotNull(result, "Result should not be null");
-        assertNull(result.getOriginalString(), "Original string should be null");
-        assertNull(result.getDateTime(), "DateTime should be null for missing claim");
-        assertEquals(ClaimValueType.DATETIME, result.getType(), "Type should be DATETIME");
+        assertNull(result, "Should return null for missing claim");
     }
 
     @Test
-    @DisplayName("Handle empty JsonObject")
+    @DisplayName("Handle empty JsonObject - returns null")
     void shouldHandleEmptyJsonObject() {
         JsonObject emptyJsonObject = Json.createObjectBuilder().build();
-
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(emptyJsonObject), CLAIM_NAME);
-
-        assertNotNull(result, "Result should not be null");
-        assertNull(result.getOriginalString(), "Original string should be null");
-        assertNull(result.getDateTime(), "DateTime should be null for empty JsonObject");
-        assertEquals(ClaimValueType.DATETIME, result.getType(), "Type should be DATETIME");
+        assertNull(result, "Should return null for empty JsonObject");
     }
 
     @Test

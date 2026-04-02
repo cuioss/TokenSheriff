@@ -15,14 +15,11 @@
  */
 package de.cuioss.sheriff.oauth.core.pipeline.validator;
 
-import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages;
-import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
-import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.test.TestTokenHolder;
 import de.cuioss.sheriff.oauth.core.test.generator.TestTokenGenerators;
@@ -34,7 +31,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -56,17 +52,6 @@ class AuthorizedPartyValidatorTest {
     private static final String UNEXPECTED_CLIENT_ID = "unknown-client";
     private static final Set<String> EXPECTED_CLIENT_IDS = Set.of(EXPECTED_CLIENT_ID_1, EXPECTED_CLIENT_ID_2);
 
-    /**
-     * Creates an empty MapRepresentation for tests that don't need specific payload data.
-     */
-    private static MapRepresentation createEmptyMapRepresentation() {
-        try {
-            DslJson<Object> dslJson = ParserConfig.builder().build().getDslJson();
-            return MapRepresentation.fromJson(dslJson, "{}");
-        } catch (IOException e) {
-            throw new AssertionError("Failed to create empty MapRepresentation", e);
-        }
-    }
 
     private SecurityEventCounter securityEventCounter;
     private AuthorizedPartyValidator validator;
@@ -82,7 +67,7 @@ class AuthorizedPartyValidatorTest {
     void shouldSkipValidationWhenNoExpectedClientIdConfigured() {
         AuthorizedPartyValidator emptyValidator = new AuthorizedPartyValidator(Set.of(), securityEventCounter);
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         assertDoesNotThrow(() -> emptyValidator.validateAuthorizedParty(token));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
@@ -94,7 +79,7 @@ class AuthorizedPartyValidatorTest {
     void shouldValidateAuthorizedPartySuccessfullyWhenItMatchesExpectedClientId() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         tokenHolder.withClaim(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(EXPECTED_CLIENT_ID_1));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         assertDoesNotThrow(() -> validator.validateAuthorizedParty(token));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
@@ -106,7 +91,7 @@ class AuthorizedPartyValidatorTest {
     void shouldValidateAuthorizedPartySuccessfullyWhenItMatchesOneOfMultipleExpectedClientIds() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         tokenHolder.withClaim(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(EXPECTED_CLIENT_ID_2));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         assertDoesNotThrow(() -> validator.validateAuthorizedParty(token));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
@@ -119,7 +104,7 @@ class AuthorizedPartyValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.AUTHORIZED_PARTY.getName());
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAuthorizedParty(token));
@@ -134,7 +119,7 @@ class AuthorizedPartyValidatorTest {
     void shouldFailValidationWhenAuthorizedPartyClaimIsEmpty() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         tokenHolder.withClaim(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(""));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAuthorizedParty(token));
@@ -151,7 +136,7 @@ class AuthorizedPartyValidatorTest {
     void shouldFailValidationWhenAuthorizedPartyDoesNotMatchExpectedClientId() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         tokenHolder.withClaim(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(UNEXPECTED_CLIENT_ID));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAuthorizedParty(token));
@@ -170,7 +155,7 @@ class AuthorizedPartyValidatorTest {
     void shouldIncludeExpectedClientIdsInErrorMessageForMismatch() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         tokenHolder.withClaim(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(UNEXPECTED_CLIENT_ID));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAuthorizedParty(token));
@@ -187,7 +172,7 @@ class AuthorizedPartyValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.put(ClaimName.AUTHORIZED_PARTY.getName(), null);
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAuthorizedParty(token));

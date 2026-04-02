@@ -50,7 +50,7 @@ import java.util.Set;
  * @since 1.0
  * @author Oliver Wolff
  */
-public interface TokenContent extends MinimalTokenContent {
+public sealed interface TokenContent extends MinimalTokenContent permits BaseTokenContent {
 
     /**
      * Gets all claims in this token.

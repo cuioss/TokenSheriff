@@ -82,9 +82,18 @@ public class AccessLogFilterConfigResolver {
         return value.map(string -> Arrays.stream(string.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
-                .map(Integer::parseInt)
+                .map(s -> parseInteger(key, s))
                 .toList()).orElse(Collections.emptyList());
 
+    }
+
+    private static int parseInteger(String propertyKey, String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                    "Invalid integer value '%s' for configuration property '%s'".formatted(value, propertyKey), e);
+        }
     }
 
     private List<String> resolveStringList(String key) {

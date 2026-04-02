@@ -109,7 +109,7 @@ public class AudienceValidator {
 
     private boolean isAzpClaimMatchingExpectedAudience(TokenContent token) {
         var azpClaim = token.getClaimOption(ClaimName.AUTHORIZED_PARTY);
-        if (azpClaim.isPresent() && !azpClaim.get().isEmpty()) {
+        if (azpClaim.isPresent()) {
             String azp = azpClaim.get().getOriginalString();
             if (expectedAudience.contains(azp)) {
                 LOGGER.debug("Audience claim is missing but azp claim matches expected audience: %s", azp);

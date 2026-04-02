@@ -25,7 +25,8 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.OffsetDateTime;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -46,24 +47,6 @@ class ClaimValueTest implements ShouldHandleObjectContracts<ClaimValue> {
         assertEquals(ClaimValueType.STRING, value.getType());
         assertTrue(value.getAsList().isEmpty());
         assertNull(value.getDateTime());
-        assertTrue(value.isPresent());
-        assertFalse(value.isEmpty());
-    }
-
-    @Test
-    @DisplayName("Create ClaimValue for sorted set")
-    void shouldCreateForSortedSet() {
-        SortedSet<String> set = new TreeSet<>(List.of("value1", "value2", "value3"));
-        List<String> expectedList = new ArrayList<>(set);
-
-        ClaimValue value = ClaimValue.forSortedSet(TEST_STRING, set);
-
-        assertEquals(TEST_STRING, value.getOriginalString());
-        assertEquals(ClaimValueType.STRING_LIST, value.getType());
-        assertEquals(expectedList, value.getAsList());
-        assertNull(value.getDateTime());
-        assertTrue(value.isPresent());
-        assertFalse(value.isEmpty());
     }
 
     @Test
@@ -77,8 +60,6 @@ class ClaimValueTest implements ShouldHandleObjectContracts<ClaimValue> {
         assertEquals(ClaimValueType.STRING_LIST, value.getType());
         assertEquals(list, value.getAsList());
         assertNull(value.getDateTime());
-        assertTrue(value.isPresent());
-        assertFalse(value.isEmpty());
     }
 
     @Test
@@ -90,8 +71,6 @@ class ClaimValueTest implements ShouldHandleObjectContracts<ClaimValue> {
         assertEquals(ClaimValueType.DATETIME, value.getType());
         assertTrue(value.getAsList().isEmpty());
         assertEquals(TEST_DATE, value.getDateTime());
-        assertTrue(value.isPresent());
-        assertFalse(value.isEmpty());
     }
 
     @ParameterizedTest
@@ -100,66 +79,27 @@ class ClaimValueTest implements ShouldHandleObjectContracts<ClaimValue> {
     @DisplayName("Handle null and empty strings")
     void shouldHandleNullAndEmptyStrings(String input) {
         ClaimValue value = ClaimValue.forPlainString(input);
-
         assertEquals(input, value.getOriginalString());
-        if (input == null) {
-            assertTrue(value.isEmpty());
-            assertFalse(value.isPresent());
-        } else {
-            assertFalse(value.isEmpty());
-            assertTrue(value.isPresent());
-        }
-    }
-
-    @Test
-    @DisplayName("Create default claim values")
-    void shouldCreateEmptyClaimValues() {
-        ClaimValue stringValue = ClaimValue.createEmptyClaimValue(ClaimValueType.STRING);
-        assertNull(stringValue.getOriginalString());
-        assertEquals(ClaimValueType.STRING, stringValue.getType());
-
-        ClaimValue listValue = ClaimValue.createEmptyClaimValue(ClaimValueType.STRING_LIST);
-        assertNull(listValue.getOriginalString());
-        assertEquals(ClaimValueType.STRING_LIST, listValue.getType());
-        assertTrue(listValue.getAsList().isEmpty());
-
-        ClaimValue dateTimeValue = ClaimValue.createEmptyClaimValue(ClaimValueType.DATETIME);
-        assertNull(dateTimeValue.getOriginalString());
-        assertEquals(ClaimValueType.DATETIME, dateTimeValue.getType());
-        assertNull(dateTimeValue.getDateTime());
     }
 
     @Test
     @DisplayName("Check if value is present for claim value type")
     void shouldCheckIfValueIsPresentForClaimValueType() {
         ClaimValue presentString = ClaimValue.forPlainString(TEST_STRING);
-        ClaimValue nullString = ClaimValue.forPlainString(null);
-
-        SortedSet<String> nonEmptySet = new TreeSet<>(Set.of("value"));
-        ClaimValue nonEmptySetValue = ClaimValue.forSortedSet("original", nonEmptySet);
 
         List<String> emptyList = Collections.emptyList();
         List<String> nonEmptyList = List.of("value");
-        ClaimValue emptyListValue = ClaimValue.forList(null, emptyList);
+        ClaimValue emptyListValue = ClaimValue.forList("original", emptyList);
         ClaimValue nonEmptyListValue = ClaimValue.forList("original", nonEmptyList);
 
-        ClaimValue nullDateTime = ClaimValue.forDateTime(null, null);
+        ClaimValue nullDateTime = ClaimValue.forDateTime("original", null);
         ClaimValue nonNullDateTime = ClaimValue.forDateTime("original", TEST_DATE);
 
         assertFalse(presentString.isNotPresentForClaimValueType());
-        assertTrue(nullString.isNotPresentForClaimValueType());
-        assertFalse(nonEmptySetValue.isNotPresentForClaimValueType());
         assertTrue(emptyListValue.isNotPresentForClaimValueType());
         assertFalse(nonEmptyListValue.isNotPresentForClaimValueType());
         assertTrue(nullDateTime.isNotPresentForClaimValueType());
         assertFalse(nonNullDateTime.isNotPresentForClaimValueType());
-    }
-
-    @Test
-    @DisplayName("Throw NullPointerException for null claim value type")
-    void shouldThrowExceptionForNullType() {
-        assertThrows(NullPointerException.class, () -> ClaimValue.createEmptyClaimValue(null),
-                "Should throw NullPointerException when null is passed to createEmptyClaimValue");
     }
 
     @Override

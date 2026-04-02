@@ -20,6 +20,7 @@ import de.cuioss.sheriff.oauth.core.jwks.JwksType;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.oauth.core.test.InMemoryKeyMaterialHandler;
+import de.cuioss.sheriff.oauth.core.util.LoaderStatus;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -112,7 +113,7 @@ class JWKSKeyLoaderExtendedTest {
                     .build();
             keyLoader.initJWKSLoader(securityEventCounter);
 
-            assertTrue(keyLoader.getKeyInfoMap().isEmpty(), "Loader should reject JWKS with excessive properties");
+            assertSame(LoaderStatus.ERROR, keyLoader.getLoaderStatus(), "Loader should reject JWKS with excessive properties");
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, JWTValidationLogMessages.WARN.RSA_KEY_PARSE_FAILED.resolveIdentifierString());
         }
 
@@ -126,7 +127,7 @@ class JWKSKeyLoaderExtendedTest {
                     .build();
             keyLoader.initJWKSLoader(securityEventCounter);
 
-            assertTrue(keyLoader.getKeyInfoMap().isEmpty(), "Loader should reject JWKS with empty keys array");
+            assertSame(LoaderStatus.ERROR, keyLoader.getLoaderStatus(), "Loader should reject JWKS with empty keys array");
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, JWTValidationLogMessages.WARN.JWKS_KEYS_ARRAY_EMPTY.resolveIdentifierString());
         }
 
@@ -147,7 +148,7 @@ class JWKSKeyLoaderExtendedTest {
                     .build();
             keyLoader.initJWKSLoader(securityEventCounter);
 
-            assertTrue(keyLoader.getKeyInfoMap().isEmpty(), "Loader should reject JWKS with excessive keys");
+            assertSame(LoaderStatus.ERROR, keyLoader.getLoaderStatus(), "Loader should reject JWKS with excessive keys");
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, JWTValidationLogMessages.WARN.JWKS_KEYS_ARRAY_TOO_LARGE.resolveIdentifierString());
         }
     }
@@ -244,7 +245,7 @@ class JWKSKeyLoaderExtendedTest {
                     .build();
             keyLoader.initJWKSLoader(securityEventCounter);
 
-            assertFalse(keyLoader.getKeyInfoMap().isEmpty(), "Loader created with builder should parse JWKS");
+            assertNotSame(LoaderStatus.ERROR, keyLoader.getLoaderStatus(), "Loader created with builder should parse JWKS");
             assertEquals(JwksType.MEMORY, keyLoader.getJwksType(), "Loader should have correct JWKS type");
         }
 
@@ -257,14 +258,14 @@ class JWKSKeyLoaderExtendedTest {
         }
 
         @Test
-        @DisplayName("Should return empty map when getKeyInfoMap is called without initialization")
-        void shouldReturnEmptyMapWhenGetKeyInfoMapCalledWithoutInitialization() {
+        @DisplayName("Should report UNDEFINED status before initialization")
+        void shouldReportUndefinedStatusBeforeInitialization() {
             JWKSKeyLoader keyLoader = JWKSKeyLoader.builder()
                     .jwksContent("{\"keys\":[]}")
                     .build();
 
-            assertTrue(keyLoader.getKeyInfoMap().isEmpty(),
-                    "Loader should return empty map before initialization");
+            assertEquals(LoaderStatus.UNDEFINED, keyLoader.getLoaderStatus(),
+                    "Loader should report UNDEFINED status before initialization");
         }
 
         @Test

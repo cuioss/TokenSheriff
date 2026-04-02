@@ -205,7 +205,7 @@ public class OAuthSheriffProcessor {
                 // Token content classes - need full reflection for getter/setter access
                 AccessTokenContent.class,
                 IdTokenContent.class,
-                RefreshTokenContent.class,
+                UnvalidatedRefreshToken.class,
                 TokenContent.class,
                 BaseTokenContent.class,
                 MinimalTokenContent.class,

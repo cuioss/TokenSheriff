@@ -18,7 +18,9 @@ package de.cuioss.sheriff.oauth.core.jwe;
 import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
+import de.cuioss.sheriff.oauth.core.json.JwkKey;
 import de.cuioss.sheriff.oauth.core.json.JwtHeader;
+import de.cuioss.sheriff.oauth.core.jwks.key.JwkKeyHandler;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 
@@ -28,15 +30,17 @@ import javax.crypto.Mac;
 import javax.crypto.spec.*;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import java.security.*;
+import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.security.PrivateKey;
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
-import java.security.spec.*;
+import java.security.spec.ECParameterSpec;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.MGF1ParameterSpec;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Map;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
@@ -59,7 +63,6 @@ public class JweDecryptor {
 
     private static final CuiLogger LOGGER = new CuiLogger(JweDecryptor.class);
     private static final int MAX_DECOMPRESSED_SIZE = 256 * 1024; // 256KB limit for compression bomb protection
-    private static final DslJson<Object> DSL_JSON = new DslJson<>(new DslJson.Settings<>());
 
     /**
      * Decrypts a JWE token and returns the inner plaintext (typically a JWS string).
@@ -68,11 +71,13 @@ public class JweDecryptor {
      * @param jweHeader the decoded JWE header
      * @param config the decryption configuration
      * @param counter the security event counter
+     * @param dslJson the configured DslJson instance for JSON parsing (with security limits)
      * @return the decrypted plaintext string
      * @throws TokenValidationException if decryption fails
      */
     public String decrypt(String[] jweParts, JwtHeader jweHeader,
-            JweDecryptionConfig config, SecurityEventCounter counter) {
+            JweDecryptionConfig config, SecurityEventCounter counter,
+            DslJson<Object> dslJson) {
         String alg = jweHeader.alg();
         String enc = jweHeader.enc();
 
@@ -131,7 +136,7 @@ public class JweDecryptor {
             byte[] aad = jweParts[0].getBytes(StandardCharsets.US_ASCII);
 
             // Decrypt Content Encryption Key (CEK)
-            byte[] cek = decryptCek(alg, encryptedKey, decryptionKey, jweHeader, enc);
+            byte[] cek = decryptCek(alg, encryptedKey, decryptionKey, jweHeader, enc, dslJson);
 
             try {
                 // Decrypt content
@@ -158,11 +163,11 @@ public class JweDecryptor {
     }
 
     private byte[] decryptCek(String alg, byte[] encryptedKey, PrivateKey key,
-            JwtHeader header, String enc) throws GeneralSecurityException {
+            JwtHeader header, String enc, DslJson<Object> dslJson) throws GeneralSecurityException {
         return switch (alg) {
             case "RSA-OAEP" -> decryptCekRsaOaep(encryptedKey, key);
             case "RSA-OAEP-256" -> decryptCekRsaOaep256(encryptedKey, key);
-            case "ECDH-ES" -> deriveCekEcdhEs(header, key, enc);
+            case "ECDH-ES" -> deriveCekEcdhEs(header, key, enc, dslJson);
             default -> throw new IllegalArgumentException("Unsupported key management algorithm: " + alg);
         };
     }
@@ -187,15 +192,15 @@ public class JweDecryptor {
     }
 
     @SuppressWarnings("java:S3776") // Complexity justified: key agreement requires multiple steps
-    private byte[] deriveCekEcdhEs(JwtHeader header, PrivateKey key, String enc)
-            throws GeneralSecurityException {
+    private byte[] deriveCekEcdhEs(JwtHeader header, PrivateKey key, String enc,
+            DslJson<Object> dslJson) throws GeneralSecurityException {
         // Parse ephemeral public key from header
         String epkJson = header.getEpk().orElseThrow(() ->
                 new TokenValidationException(
                         SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
                         "ECDH-ES requires epk (ephemeral public key) in JWE header"));
 
-        ECPublicKey ephemeralKey = parseEcPublicKeyFromJwk(epkJson);
+        ECPublicKey ephemeralKey = parseEcPublicKeyFromJwk(epkJson, dslJson);
 
         // Validate the private key is EC
         if (!(key instanceof ECPrivateKey ecPrivateKey)) {
@@ -375,54 +380,29 @@ public class JweDecryptor {
         }
     }
 
-    @SuppressWarnings("java:S3776") // Complexity justified: EC key parsing from JWK requires multiple steps
-    private static ECPublicKey parseEcPublicKeyFromJwk(String epkJson) {
+    /**
+     * Parses an EC public key from an EPK JSON string by deserializing to a {@link JwkKey}
+     * and delegating to {@link JwkKeyHandler#parseEcKey(JwkKey)}.
+     *
+     * @param epkJson the EPK JSON string from the JWE header
+     * @param dslJson the configured DslJson instance for JSON parsing
+     * @return the parsed EC public key
+     * @throws TokenValidationException if parsing fails
+     */
+    private static ECPublicKey parseEcPublicKeyFromJwk(String epkJson, DslJson<Object> dslJson) {
         try {
-            // Use dsl-json for robust EPK parsing
-            @SuppressWarnings("unchecked")
-            Map<String, Object> jwkMap = DSL_JSON.deserialize(
-                    Map.class,
-                    epkJson.getBytes(StandardCharsets.UTF_8),
-                    epkJson.length());
+            byte[] epkBytes = epkJson.getBytes(StandardCharsets.UTF_8);
+            JwkKey jwkKey = dslJson.deserialize(JwkKey.class, epkBytes, epkBytes.length);
 
-            if (jwkMap == null) {
+            if (jwkKey == null) {
                 throw new IllegalArgumentException("EPK JSON parsed to null");
             }
 
-            String crv = (String) jwkMap.get("crv");
-            String xB64 = (String) jwkMap.get("x");
-            String yB64 = (String) jwkMap.get("y");
-
-            if (crv == null || xB64 == null || yB64 == null) {
-                throw new IllegalArgumentException("EPK JWK is missing required fields: crv, x, or y");
-            }
-
-            byte[] x = Base64.getUrlDecoder().decode(xB64);
-            byte[] y = Base64.getUrlDecoder().decode(yB64);
-
-            // Determine EC parameters from curve name
-            String stdName = switch (crv) {
-                case "P-256" -> "secp256r1";
-                case "P-384" -> "secp384r1";
-                case "P-521" -> "secp521r1";
-                default -> throw new IllegalArgumentException("Unsupported EC curve: %s".formatted(crv));
-            };
-
-            ECParameterSpec params = getEcParameterSpec(stdName);
-            ECPoint point = new ECPoint(new BigInteger(1, x), new BigInteger(1, y));
-            ECPublicKeySpec keySpec = new ECPublicKeySpec(point, params);
-            KeyFactory keyFactory = KeyFactory.getInstance("EC");
-            return (ECPublicKey) keyFactory.generatePublic(keySpec);
-        } catch (GeneralSecurityException | IOException | ClassCastException e) {
+            return (ECPublicKey) JwkKeyHandler.parseEcKey(jwkKey);
+        } catch (IOException | InvalidKeySpecException | ClassCastException e) {
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
                     "Failed to parse ephemeral EC public key: %s".formatted(e.getMessage()), e);
         }
-    }
-
-    private static ECParameterSpec getEcParameterSpec(String stdName) throws GeneralSecurityException {
-        AlgorithmParameters params = AlgorithmParameters.getInstance("EC");
-        params.init(new ECGenParameterSpec(stdName));
-        return params.getParameterSpec(ECParameterSpec.class);
     }
 }

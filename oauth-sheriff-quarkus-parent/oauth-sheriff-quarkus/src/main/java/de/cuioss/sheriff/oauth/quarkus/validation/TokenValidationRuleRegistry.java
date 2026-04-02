@@ -25,7 +25,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-
 import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.INFO;
 
 /**

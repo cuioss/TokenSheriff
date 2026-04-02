@@ -24,7 +24,7 @@
  *   <li>{@link de.cuioss.sheriff.oauth.core.domain.token.BaseTokenContent} - Abstract base implementation of token content</li>
  *   <li>{@link de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent} - Specialized implementation for OAuth2 access tokens</li>
  *   <li>{@link de.cuioss.sheriff.oauth.core.domain.token.IdTokenContent} - Specialized implementation for OpenID Connect ID tokens</li>
- *   <li>{@link de.cuioss.sheriff.oauth.core.domain.token.RefreshTokenContent} - Specialized implementation for OAuth2 refresh tokens</li>
+ *   <li>{@link de.cuioss.sheriff.oauth.core.domain.token.UnvalidatedRefreshToken} - Unvalidated container for OAuth2 refresh tokens</li>
  * </ul>
  * <p>
  * The token implementations:

@@ -99,11 +99,11 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
             }
 
             // Validate required fields
-            if (config.issuer() == null || config.issuer().trim().isEmpty()) {
+            if (config.issuer == null || config.issuer.trim().isEmpty()) {
                 LOGGER.error(JWTValidationLogMessages.ERROR.JSON_PARSE_FAILED, "Missing required field: issuer");
                 return Optional.empty();
             }
-            if (config.jwksUri() == null || config.jwksUri().trim().isEmpty()) {
+            if (config.jwksUri == null || config.jwksUri.trim().isEmpty()) {
                 LOGGER.error(JWTValidationLogMessages.ERROR.JSON_PARSE_FAILED, "Missing required field: jwks_uri");
                 return Optional.empty();
             }
@@ -144,14 +144,23 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
 
     /**
      * Determines if an IOException is caused by a DSL-JSON security limit violation.
+     * <p>
+     * DSL-JSON's {@code limitStringBuffer} and {@code limitDigitsBuffer} settings throw
+     * IOExceptions with specific message patterns when limits are exceeded. This method
+     * checks for those specific patterns rather than generic substrings like "buffer"
+     * or "limit" that could match unrelated errors.
+     *
+     * @param errorMessage the exception message to inspect
+     * @return true if the message indicates a DSL-JSON security limit violation
      */
     private boolean isSecurityLimitViolation(String errorMessage) {
         if (errorMessage == null) {
             return false;
         }
-        return errorMessage.contains("buffer") ||
-                errorMessage.contains("limit") ||
-                errorMessage.contains("too large") ||
-                errorMessage.contains("exceeded");
+        // DSL-JSON limitStringBuffer throws: "String buffer limit exceeded..."
+        // DSL-JSON limitDigitsBuffer throws: "Digits buffer limit exceeded..."
+        return errorMessage.contains("buffer limit exceeded")
+                || errorMessage.contains("Maximum JSON string")
+                || errorMessage.contains("too large to fit");
     }
 }

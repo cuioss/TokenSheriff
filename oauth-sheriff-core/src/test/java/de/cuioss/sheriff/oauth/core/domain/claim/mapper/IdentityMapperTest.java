@@ -27,7 +27,7 @@ import jakarta.json.JsonObjectBuilder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.EmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -67,15 +67,20 @@ class IdentityMapperTest {
         assertEquals(ClaimValueType.STRING, result.getType(), "Type should be STRING");
     }
 
-    @ParameterizedTest
-    @NullAndEmptySource
-    @ValueSource(strings = {" ", "\t", "\n"})
-    @DisplayName("Should handle null, empty, and whitespace inputs")
-    void shouldHandleSpecialInputs(String input) {
+    @Test
+    @DisplayName("Should handle null input - returns null for absent claim")
+    void shouldHandleNullInput() {
+        JsonObject jsonObject = createJsonObjectWithNullClaim(CLAIM_NAME);
+        ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
+        assertNull(result, "Should return null for null claim");
+    }
 
-        JsonObject jsonObject = input == null
-                ? createJsonObjectWithNullClaim(CLAIM_NAME)
-                : createJsonObjectWithStringClaim(CLAIM_NAME, input);
+    @ParameterizedTest
+    @EmptySource
+    @ValueSource(strings = {" ", "\t", "\n"})
+    @DisplayName("Should handle empty and whitespace inputs")
+    void shouldHandleEmptyAndWhitespaceInputs(String input) {
+        JsonObject jsonObject = createJsonObjectWithStringClaim(CLAIM_NAME, input);
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
         assertNotNull(result, "Result should not be null");
         assertEquals(input, result.getOriginalString(), "Original string should be preserved");
@@ -135,25 +140,19 @@ class IdentityMapperTest {
     }
 
     @Test
-    @DisplayName("Should handle missing claim")
+    @DisplayName("Should handle missing claim - returns null")
     void shouldHandleMissingClaim() {
-
         JsonObject jsonObject = Json.createObjectBuilder().build();
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
-        assertNotNull(result, "Result should not be null");
-        assertNull(result.getOriginalString(), "Original string should be null");
-        assertEquals(ClaimValueType.STRING, result.getType(), "Type should be STRING");
+        assertNull(result, "Should return null for missing claim");
     }
 
     @Test
-    @DisplayName("Should handle empty JsonObject")
+    @DisplayName("Should handle empty JsonObject - returns null")
     void shouldHandleEmptyJsonObject() {
-
         JsonObject emptyJsonObject = Json.createObjectBuilder().build();
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(emptyJsonObject), CLAIM_NAME);
-        assertNotNull(result, "Result should not be null");
-        assertNull(result.getOriginalString(), "Original string should be null");
-        assertEquals(ClaimValueType.STRING, result.getType(), "Type should be STRING");
+        assertNull(result, "Should return null for empty JsonObject");
     }
 
     // Helper methods

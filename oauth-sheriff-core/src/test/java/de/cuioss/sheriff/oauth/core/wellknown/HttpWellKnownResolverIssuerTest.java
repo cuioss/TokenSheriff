@@ -216,9 +216,8 @@ class HttpWellKnownResolverIssuerTest {
         Optional<String> jwksUri = resolver.getJwksUri();
         assertTrue(jwksUri.isPresent(), "JWKS URI should be available from minimal config");
 
-        // Other endpoints should not be available in minimal config
+        // WellKnownResult should be available with core fields
         Optional<WellKnownResult> result = resolver.getWellKnownResult();
         assertTrue(result.isPresent(), "WellKnownResult should be available");
-        assertNull(result.get().authorizationEndpoint(), "Authorization endpoint should not be in minimal config");
     }
 }

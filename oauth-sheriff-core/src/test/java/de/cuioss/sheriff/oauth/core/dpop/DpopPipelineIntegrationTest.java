@@ -51,6 +51,8 @@ class DpopPipelineIntegrationTest {
     private static final String TEST_AUDIENCE = "test-audience";
     private static final String TEST_CLIENT_ID = "test-client";
     private static final String DEFAULT_KEY_ID = InMemoryKeyMaterialHandler.DEFAULT_KEY_ID;
+    private static final String RESOURCE_URI = "https://resource.example.org/protectedresource";
+    private static final String RESOURCE_METHOD = "GET";
 
     private KeyPair dpopClientKeyPair;
     private Map<String, Object> dpopJwkMap;
@@ -74,8 +76,9 @@ class DpopPipelineIntegrationTest {
         try (TokenValidator validator = TokenValidator.builder()
                      .issuerConfig(issuerConfig)
                      .build()) {
-            AccessTokenRequest request = AccessTokenRequest.of(accessToken,
-                    Map.of("dpop", List.of(dpopProof)));
+            AccessTokenRequest request = new AccessTokenRequest(accessToken,
+                    Map.of("dpop", List.of(dpopProof)),
+                    RESOURCE_URI, RESOURCE_METHOD);
 
             AccessTokenContent result = validator.createAccessToken(request);
             assertNotNull(result);
@@ -95,14 +98,16 @@ class DpopPipelineIntegrationTest {
 
             // First call — full validation, token gets cached
             String proof1 = createDpopProof(dpopClientKeyPair, dpopJwkMap, accessToken);
-            AccessTokenRequest request1 = AccessTokenRequest.of(accessToken,
-                    Map.of("dpop", List.of(proof1)));
+            AccessTokenRequest request1 = new AccessTokenRequest(accessToken,
+                    Map.of("dpop", List.of(proof1)),
+                    RESOURCE_URI, RESOURCE_METHOD);
             AccessTokenContent result1 = validator.createAccessToken(request1);
 
             // Second call — same token, NEW DPoP proof → succeeds via cache hit + fresh DPoP
             String proof2 = createDpopProof(dpopClientKeyPair, dpopJwkMap, accessToken);
-            AccessTokenRequest request2 = AccessTokenRequest.of(accessToken,
-                    Map.of("dpop", List.of(proof2)));
+            AccessTokenRequest request2 = new AccessTokenRequest(accessToken,
+                    Map.of("dpop", List.of(proof2)),
+                    RESOURCE_URI, RESOURCE_METHOD);
             AccessTokenContent result2 = validator.createAccessToken(request2);
 
             // Both return same token content (from cache)
@@ -122,13 +127,15 @@ class DpopPipelineIntegrationTest {
 
             // First call — success, token cached, jti stored in replay protection
             String proof = createDpopProof(dpopClientKeyPair, dpopJwkMap, accessToken);
-            AccessTokenRequest request1 = AccessTokenRequest.of(accessToken,
-                    Map.of("dpop", List.of(proof)));
+            AccessTokenRequest request1 = new AccessTokenRequest(accessToken,
+                    Map.of("dpop", List.of(proof)),
+                    RESOURCE_URI, RESOURCE_METHOD);
             assertNotNull(validator.createAccessToken(request1));
 
             // Second call — same proof (replayed jti) → fails even though token is cached
-            AccessTokenRequest request2 = AccessTokenRequest.of(accessToken,
-                    Map.of("dpop", List.of(proof)));
+            AccessTokenRequest request2 = new AccessTokenRequest(accessToken,
+                    Map.of("dpop", List.of(proof)),
+                    RESOURCE_URI, RESOURCE_METHOD);
             var ex = assertThrows(TokenValidationException.class,
                     () -> validator.createAccessToken(request2));
             assertEquals(EventType.DPOP_REPLAY_DETECTED, ex.getEventType());
@@ -200,12 +207,14 @@ class DpopPipelineIntegrationTest {
         String headerJson = """
                 {"typ":"dpop+jwt","alg":"RS256","jwk":%s}""".formatted(jwkJson);
 
-        // Build body JSON
+        // Build body JSON with htm/htu for validateHtuHtm
         String bodyJson = """
-                {"jti":"%s","iat":%d,"ath":"%s"}""".formatted(
+                {"jti":"%s","iat":%d,"ath":"%s","htm":"%s","htu":"%s"}""".formatted(
                 UUID.randomUUID().toString(),
                 System.currentTimeMillis() / 1000,
-                computeAth(accessToken));
+                computeAth(accessToken),
+                RESOURCE_METHOD,
+                RESOURCE_URI);
 
         // Encode
         String encodedHeader = Base64.getUrlEncoder().withoutPadding()

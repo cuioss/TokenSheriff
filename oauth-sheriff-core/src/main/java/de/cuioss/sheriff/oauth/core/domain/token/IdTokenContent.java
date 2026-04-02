@@ -18,10 +18,8 @@ package de.cuioss.sheriff.oauth.core.domain.token;
 import de.cuioss.sheriff.oauth.core.TokenType;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
-import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
-import lombok.experimental.SuperBuilder;
 
 import java.io.Serial;
 import java.util.LinkedHashSet;
@@ -62,7 +60,6 @@ import java.util.Set;
  */
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-@SuperBuilder
 public final class IdTokenContent extends BaseTokenContent {
 
     @Serial
@@ -71,13 +68,11 @@ public final class IdTokenContent extends BaseTokenContent {
     /**
      * Constructs a new IdTokenContent with the given claims and raw token.
      *
-     * @param claims     the token claims
-     * @param rawToken   the raw token string
-     * @param rawPayload the raw JSON payload for ClaimMapper processing
+     * @param claims   the token claims
+     * @param rawToken the raw token string
      */
-    public IdTokenContent(Map<String, ClaimValue> claims, String rawToken,
-            MapRepresentation rawPayload) {
-        super(claims, rawToken, TokenType.ID_TOKEN, rawPayload);
+    public IdTokenContent(Map<String, ClaimValue> claims, String rawToken) {
+        super(claims, rawToken, TokenType.ID_TOKEN);
     }
 
     /**

@@ -69,58 +69,59 @@ class KeycloakDefaultGroupsMapperTest {
 
         assertNotNull(result);
         assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertTrue(result.isPresent());
         assertEquals(expectedGroups, result.getAsList());
         assertNotNull(result.getOriginalString());
     }
 
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("edgeCaseGroupsProvider")
-    @DisplayName("Handle edge cases for groups claim")
-    void shouldHandleGroupsEdgeCases(String testCase, JsonObject jsonObject, boolean shouldBePresent, String expectedOriginalString) {
+    @Test
+    @DisplayName("Handle missing groups claim - returns null")
+    void shouldHandleMissingGroupsClaim() {
+        JsonObject jsonObject = Json.createObjectBuilder()
+                .add("sub", "user123")
+                .add("iss", "https://keycloak.example.com")
+                .build();
+
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
-
-        assertNotNull(result);
-        assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertEquals(shouldBePresent, result.isPresent());
-        assertTrue(result.getAsList().isEmpty());
-
-        if (expectedOriginalString != null) {
-            assertEquals(expectedOriginalString, result.getOriginalString());
-        }
+        assertNull(result, "Should return null for missing groups claim");
     }
 
-    private static Stream<Arguments> edgeCaseGroupsProvider() {
-        return Stream.of(
-                Arguments.of("missing groups claim",
-                        Json.createObjectBuilder()
-                                .add("sub", "user123")
-                                .add("iss", "https://keycloak.example.com")
-                                .build(),
-                        false,
-                        null),
-                Arguments.of("empty groups array",
-                        Json.createObjectBuilder()
-                                .add("sub", "user123")
-                                .add("groups", Json.createArrayBuilder().build())
-                                .build(),
-                        true,
-                        "[]"),
-                Arguments.of("non-array groups value",
-                        Json.createObjectBuilder()
-                                .add("sub", "user123")
-                                .add("groups", "test-group")
-                                .build(),
-                        false,
-                        null),
-                Arguments.of("null groups",
-                        Json.createObjectBuilder()
-                                .add("sub", "user123")
-                                .addNull("groups")
-                                .build(),
-                        false,
-                        null)
-        );
+    @Test
+    @DisplayName("Handle empty groups array")
+    void shouldHandleEmptyGroupsArray() {
+        JsonObject jsonObject = Json.createObjectBuilder()
+                .add("sub", "user123")
+                .add("groups", Json.createArrayBuilder().build())
+                .build();
+
+        ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
+        assertNotNull(result);
+        assertEquals(ClaimValueType.STRING_LIST, result.getType());
+        assertTrue(result.getAsList().isEmpty());
+        assertEquals("[]", result.getOriginalString());
+    }
+
+    @Test
+    @DisplayName("Handle non-array groups value - returns null")
+    void shouldHandleNonArrayGroupsValue() {
+        JsonObject jsonObject = Json.createObjectBuilder()
+                .add("sub", "user123")
+                .add("groups", "test-group")
+                .build();
+
+        ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
+        assertNull(result, "Should return null for non-array groups value");
+    }
+
+    @Test
+    @DisplayName("Handle null groups - returns null")
+    void shouldHandleNullGroups() {
+        JsonObject jsonObject = Json.createObjectBuilder()
+                .add("sub", "user123")
+                .addNull("groups")
+                .build();
+
+        ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
+        assertNull(result, "Should return null for null groups");
     }
 
     @Test
@@ -133,7 +134,6 @@ class KeycloakDefaultGroupsMapperTest {
 
         assertNotNull(result);
         assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertTrue(result.isPresent());
         assertEquals(expectedGroups, result.getAsList());
         assertEquals(1, result.getAsList().size());
         assertEquals("/admin-group", result.getAsList().getFirst());
@@ -149,7 +149,6 @@ class KeycloakDefaultGroupsMapperTest {
 
         assertNotNull(result);
         assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertTrue(result.isPresent());
         assertEquals(expectedGroups, result.getAsList());
     }
 

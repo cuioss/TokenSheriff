@@ -24,13 +24,28 @@ import java.util.List;
  * Utility class for extracting client IP addresses from HTTP headers.
  * Handles the complex logic of determining the original client IP address
  * through various proxy chains, CDN configurations, and load balancers.
- * 
+ *
  * <p>This class follows 2024 industry standards for IP extraction, supporting
  * headers from major CDN providers (Cloudflare, Akamai, Fastly), load balancers,
  * and proxy configurations.</p>
- * 
+ *
  * <p>The extraction follows a priority order from most trusted to least trusted
  * headers, with special handling for comma-separated values and RFC 7239 format.</p>
+ *
+ * <p><strong>Security Warning — Proxy Trust Model:</strong></p>
+ * <ul>
+ *   <li>The proxy headers inspected by this class (e.g. {@code X-Forwarded-For},
+ *       {@code CF-Connecting-IP}) are <strong>only trustworthy when the application
+ *       is deployed behind a trusted reverse proxy</strong> that overwrites or
+ *       validates these headers before forwarding the request.</li>
+ *   <li>In direct-client deployments (no reverse proxy), <strong>all proxy headers
+ *       can be spoofed</strong> by the client, making the extracted IP unreliable
+ *       for security decisions such as rate limiting or audit logging.</li>
+ *   <li>The application should use Quarkus's proxy trust configuration
+ *       ({@code quarkus.http.proxy.proxy-address-forwarding},
+ *       {@code quarkus.http.proxy.trusted-proxies}) to limit which upstream
+ *       addresses are allowed to set forwarding headers.</li>
+ * </ul>
  *
  * @since 1.0
  */

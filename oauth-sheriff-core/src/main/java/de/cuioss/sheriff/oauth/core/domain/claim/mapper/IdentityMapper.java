@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.oauth.core.domain.claim.mapper;
 
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
-import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValueType;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 
 import java.util.Optional;
@@ -34,7 +33,7 @@ public class IdentityMapper implements ClaimMapper {
 
         Optional<Object> optionalValue = mapRepresentation.getValue(claimName);
         if (optionalValue.isEmpty()) {
-            return ClaimValue.createEmptyClaimValue(ClaimValueType.STRING);
+            return null;
         }
         Object value = optionalValue.get();
 

@@ -63,6 +63,12 @@ public class SignatureAlgorithmPreferences {
      * @param preferredAlgorithms the list of preferred algorithms in order of preference
      */
     public SignatureAlgorithmPreferences(List<String> preferredAlgorithms) {
+        for (String alg : preferredAlgorithms) {
+            if (REJECTED_ALGORITHMS.contains(alg)) {
+                throw new IllegalArgumentException(
+                        "Algorithm '%s' is in the rejected algorithms list and cannot be used as a preferred algorithm".formatted(alg));
+            }
+        }
         this.preferredAlgorithms = Collections.unmodifiableList(preferredAlgorithms);
     }
 

@@ -15,8 +15,9 @@
  */
 package de.cuioss.sheriff.oauth.core.pipeline;
 
+import de.cuioss.sheriff.oauth.core.TokenType;
 import de.cuioss.sheriff.oauth.core.domain.context.RefreshTokenRequest;
-import de.cuioss.sheriff.oauth.core.domain.token.RefreshTokenContent;
+import de.cuioss.sheriff.oauth.core.domain.token.UnvalidatedRefreshToken;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.test.TestTokenHolder;
 import de.cuioss.sheriff.oauth.core.test.generator.TestTokenGenerators;
@@ -54,11 +55,11 @@ class RefreshTokenValidationPipelineTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.refreshTokens().next();
         String tokenString = tokenHolder.getRawToken();
 
-        RefreshTokenContent result = pipeline.validate(RefreshTokenRequest.of(tokenString));
+        UnvalidatedRefreshToken result = pipeline.validate(RefreshTokenRequest.of(tokenString));
 
         assertNotNull(result);
         assertEquals(tokenString, result.getRawToken());
-        assertFalse(result.getClaims().isEmpty(), "Should have extracted claims from JWT");
+        assertEquals(TokenType.REFRESH_TOKEN, result.getTokenType());
     }
 
     @Test
@@ -67,11 +68,11 @@ class RefreshTokenValidationPipelineTest {
         // Opaque refresh tokens are not JWTs
         String opaqueToken = "opaque_refresh_token_12345";
 
-        RefreshTokenContent result = pipeline.validate(RefreshTokenRequest.of(opaqueToken));
+        UnvalidatedRefreshToken result = pipeline.validate(RefreshTokenRequest.of(opaqueToken));
 
         assertNotNull(result);
         assertEquals(opaqueToken, result.getRawToken());
-        assertTrue(result.getClaims().isEmpty(), "Opaque tokens should have empty claims");
+        assertEquals(TokenType.REFRESH_TOKEN, result.getTokenType());
     }
 
     @Test
@@ -80,11 +81,11 @@ class RefreshTokenValidationPipelineTest {
         // Invalid JWT format should not throw exception for refresh tokens
         String invalidJwt = "not.a.valid.jwt.token";
 
-        RefreshTokenContent result = pipeline.validate(RefreshTokenRequest.of(invalidJwt));
+        UnvalidatedRefreshToken result = pipeline.validate(RefreshTokenRequest.of(invalidJwt));
 
         assertNotNull(result);
         assertEquals(invalidJwt, result.getRawToken());
-        assertTrue(result.getClaims().isEmpty());
+        assertEquals(TokenType.REFRESH_TOKEN, result.getTokenType());
     }
 
     @Test
@@ -95,7 +96,7 @@ class RefreshTokenValidationPipelineTest {
         String tokenString = tokenHolder.getRawToken();
 
         assertDoesNotThrow(() -> {
-            RefreshTokenContent result = pipeline.validate(RefreshTokenRequest.of(tokenString));
+            UnvalidatedRefreshToken result = pipeline.validate(RefreshTokenRequest.of(tokenString));
             assertNotNull(result);
         });
     }

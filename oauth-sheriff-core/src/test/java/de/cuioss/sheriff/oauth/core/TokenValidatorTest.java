@@ -104,10 +104,7 @@ class TokenValidatorTest {
 
             assertNotNull(parsedToken, "Parsed token should not be null");
             assertEquals(token, parsedToken.getRawToken(), "Raw token should match");
-            assertNotNull(parsedToken.getClaims(), "Claims should not be null");
-            assertFalse(parsedToken.getClaims().isEmpty(), "Claims should not be empty");
-            assertTrue(parsedToken.getClaims().containsKey(ClaimName.SUBJECT.getName()), "Should contain 'sub' claim");
-            assertTrue(parsedToken.getClaims().containsKey(ClaimName.ISSUER.getName()), "Should contain 'iss' claim");
+            assertEquals(TokenType.REFRESH_TOKEN, parsedToken.getTokenType(), "Token type should be REFRESH_TOKEN");
         }
 
         @Test
@@ -118,8 +115,7 @@ class TokenValidatorTest {
 
             assertNotNull(parsedToken, "Parsed token should not be null");
             assertEquals(token, parsedToken.getRawToken(), "Raw token should match");
-            assertNotNull(parsedToken.getClaims(), "Claims should not be null");
-            assertTrue(parsedToken.getClaims().isEmpty(), "Claims should be empty for non-JWT");
+            assertEquals(TokenType.REFRESH_TOKEN, parsedToken.getTokenType(), "Token type should be REFRESH_TOKEN");
         }
 
         @ParameterizedTest

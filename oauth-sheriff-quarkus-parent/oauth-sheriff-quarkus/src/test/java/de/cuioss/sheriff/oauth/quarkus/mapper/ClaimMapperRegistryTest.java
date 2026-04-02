@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.oauth.quarkus.mapper;
 
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
-import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValueType;
 import de.cuioss.sheriff.oauth.core.domain.claim.mapper.ClaimMapper;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -41,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ClaimMapperRegistryTest {
 
     private static final ClaimMapper DUMMY_MAPPER =
-            (mapRepresentation, claimName) -> ClaimValue.createEmptyClaimValue(ClaimValueType.STRING_LIST);
+            (mapRepresentation, claimName) -> ClaimValue.forList("dummy", List.of());
 
     @Test
     @DisplayName("should initialize with no mappers")
@@ -71,9 +70,9 @@ class ClaimMapperRegistryTest {
     @DisplayName("should register multiple mappers for different claims")
     void shouldRegisterMultipleMappersForDifferentClaims() {
         ClaimMapper rolesMapper = (mapRepresentation, claimName) ->
-                ClaimValue.createEmptyClaimValue(ClaimValueType.STRING_LIST);
+                ClaimValue.forList("roles", List.of());
         ClaimMapper groupsMapper = (mapRepresentation, claimName) ->
-                ClaimValue.createEmptyClaimValue(ClaimValueType.STRING_LIST);
+                ClaimValue.forList("groups", List.of());
 
         var mapper1 = createDiscoverableMapper("roles", rolesMapper, true);
         var mapper2 = createDiscoverableMapper("groups", groupsMapper, true);

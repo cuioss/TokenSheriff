@@ -109,7 +109,7 @@ public class TokenHeaderValidator {
      */
     @SuppressWarnings("java:S3655") // owolff: False Positive: isPresent is checked before calling get()
     private void validateNoEmbeddedJwk(DecodedJwt decodedJwt) {
-        JwtHeader header = decodedJwt.getHeader();
+        JwtHeader header = decodedJwt.header();
         if (header.getJwk().isPresent()) {
             LOGGER.warn(JWTValidationLogMessages.WARN.UNSUPPORTED_ALGORITHM, "Embedded JWK");
             securityEventCounter.increment(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM);
@@ -162,7 +162,7 @@ public class TokenHeaderValidator {
         if (kid.isEmpty()) {
             LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_CLAIM, "kid");
             securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_CLAIM);
-            JwtHeader header = decodedJwt.getHeader();
+            JwtHeader header = decodedJwt.header();
             StringBuilder headerInfo = new StringBuilder("Available header claims:");
             boolean hasAny = false;
 
@@ -215,7 +215,7 @@ public class TokenHeaderValidator {
             return; // No token type validation configured
         }
 
-        var actualType = decodedJwt.getHeader().getTyp();
+        var actualType = decodedJwt.header().getTyp();
         if (actualType.isEmpty() || !expectedType.equalsIgnoreCase(actualType.get())) {
             String actual = actualType.orElse("(missing)");
             LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_TYPE_MISMATCH, actual, expectedType);

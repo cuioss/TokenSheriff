@@ -78,12 +78,8 @@ class WellKnownResultMappingTest {
         WellKnownResult config = mapToWellKnownConfiguration(jsonMap);
 
         assertNotNull(config);
-        assertEquals("https://example.com", config.issuer());
-        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri());
-        assertEquals("https://example.com/auth", config.authorizationEndpoint());
-        assertEquals("https://example.com/token", config.tokenEndpoint());
-        assertTrue(config.authorizationEndpoint() != null && config.tokenEndpoint() != null);
-        assertFalse(config.authorizationEndpoint() == null && config.tokenEndpoint() == null);
+        assertEquals("https://example.com", config.issuer);
+        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri);
     }
 
     @Test
@@ -101,12 +97,8 @@ class WellKnownResultMappingTest {
         WellKnownResult config = mapToWellKnownConfiguration(jsonMap);
 
         assertNotNull(config);
-        assertEquals("https://example.com", config.issuer());
-        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri());
-        assertNull(config.authorizationEndpoint());
-        assertNull(config.tokenEndpoint());
-        assertFalse(config.authorizationEndpoint() != null && config.tokenEndpoint() != null);
-        assertTrue(config.authorizationEndpoint() == null && config.tokenEndpoint() == null);
+        assertEquals("https://example.com", config.issuer);
+        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri);
     }
 
     @Test
@@ -136,10 +128,8 @@ class WellKnownResultMappingTest {
 
         assertTrue(result.isPresent());
         WellKnownResult config = result.get();
-        assertEquals("https://example.com", config.issuer());
-        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri());
-        assertEquals("https://example.com/auth", config.authorizationEndpoint());
-        assertEquals("https://example.com/token", config.tokenEndpoint());
+        assertEquals("https://example.com", config.issuer);
+        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri);
     }
 
     /**
@@ -166,8 +156,6 @@ class WellKnownResultMappingTest {
     private WellKnownResult mapToWellKnownConfiguration(Map<String, Object> jsonMap) {
         String issuer = (String) jsonMap.get("issuer");
         String jwksUri = (String) jsonMap.get("jwks_uri");
-        String authorizationEndpoint = (String) jsonMap.get("authorization_endpoint");
-        String tokenEndpoint = (String) jsonMap.get("token_endpoint");
 
         // Validate required fields
         if (issuer == null || issuer.trim().isEmpty()) {
@@ -177,6 +165,9 @@ class WellKnownResultMappingTest {
             throw new IllegalArgumentException("Missing required field: jwks_uri");
         }
 
-        return new WellKnownResult(issuer, jwksUri, authorizationEndpoint, tokenEndpoint, null);
+        var result = new WellKnownResult();
+        result.issuer = issuer;
+        result.jwksUri = jwksUri;
+        return result;
     }
 }

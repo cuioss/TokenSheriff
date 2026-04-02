@@ -39,6 +39,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Implementation of {@link JwksLoader} that loads JWKS from string content.
@@ -83,7 +84,7 @@ public class JWKSKeyLoader implements JwksLoader {
     // Fields for deferred initialization
     private final String jwksContent;
     private final Jwks jwks;
-    private volatile boolean initialized = false;
+    private final AtomicBoolean initialized = new AtomicBoolean(false);
 
     /**
      * Builder for JWKSKeyLoader.
@@ -272,17 +273,8 @@ public class JWKSKeyLoader implements JwksLoader {
     }
 
 
-    /**
-     * Gets the map of key IDs to {@link KeyInfo} objects.
-     *
-     * @return an unmodifiable view of the key info map, or empty map if not yet initialized
-     */
-    Map<String, KeyInfo> getKeyInfoMap() {
-        return keyInfoMap != null ? Map.copyOf(keyInfoMap) : Map.of();
-    }
-
     private void ensureInitialized() {
-        if (!initialized) {
+        if (!initialized.get()) {
             throw new IllegalStateException("JWKSKeyLoader not initialized. Call initJWKSLoader() first.");
         }
     }
@@ -330,16 +322,13 @@ public class JWKSKeyLoader implements JwksLoader {
     }
 
     @Override
-    public CompletableFuture<LoaderStatus> initJWKSLoader(SecurityEventCounter securityEventCounter) {
-        if (!initialized) {
+    public synchronized CompletableFuture<LoaderStatus> initJWKSLoader(SecurityEventCounter securityEventCounter) {
+        if (!initialized.get()) {
             this.securityEventCounter = securityEventCounter;
-            this.initialized = true;
             initializeKeys();
+            initialized.set(true);
             LOGGER.debug("JWKSKeyLoader initialized with SecurityEventCounter");
-            // Return completed future with current status after initialization
-            return CompletableFuture.completedFuture(status);
         }
-        // Already initialized, return current status immediately
         return CompletableFuture.completedFuture(status);
     }
 

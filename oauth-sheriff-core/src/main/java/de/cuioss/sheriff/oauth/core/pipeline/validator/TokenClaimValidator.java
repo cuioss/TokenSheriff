@@ -101,6 +101,11 @@ public class TokenClaimValidator {
         if (MoreCollections.isEmpty(expectedClientId)) {
             LOGGER.debug("No expectedClientId configured — azp claim validation disabled (optional per OIDC spec)");
         }
+
+        if (issuerConfig.getExpectedTokenType() == null) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_RECOMMENDED_ELEMENT,
+                    "expectedTokenType (typ header validation disabled, set expected-token-type for RFC 9068 IdPs)");
+        }
     }
 
 

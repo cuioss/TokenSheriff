@@ -25,10 +25,6 @@ Handles build-time processing:
 * Registers `HttpJwksLoader` for runtime initialization (native image support)
 * Configures DevUI components for development mode
 
-=== OAuthSheriffRecorder
-
-Leverages CDI for component management. All runtime initialization is handled by CDI; health checks are automatically discovered through annotations (`@ApplicationScoped`, `@Readiness`, `@Liveness`).
-
 === Health Checks
 
 * `JwksEndpointHealthCheck` (`@Readiness`): Monitors JWKS endpoint connectivity

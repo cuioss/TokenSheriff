@@ -15,6 +15,8 @@
  */
 package de.cuioss.sheriff.oauth.core.jwks.parser;
 
+import de.cuioss.sheriff.oauth.core.ParserConfig;
+import de.cuioss.sheriff.oauth.core.json.Jwks;
 import de.cuioss.sheriff.oauth.core.security.JwkAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.test.juli.LogAsserts;
@@ -50,10 +52,10 @@ class KeyProcessorRsaDefaultAlgorithmTest {
                 .formatted(TEST_KID, RSA_N, RSA_E);
 
         // Parse via JwksParser to get JwkKey objects
-        var dslJson = de.cuioss.sheriff.oauth.core.ParserConfig.builder().build().getDslJson();
+        var dslJson = ParserConfig.builder().build().getDslJson();
         try {
             byte[] bytes = jwksJson.getBytes();
-            var jwks = dslJson.deserialize(de.cuioss.sheriff.oauth.core.json.Jwks.class, bytes, bytes.length);
+            var jwks = dslJson.deserialize(Jwks.class, bytes, bytes.length);
 
             var jwkKey = jwks.getKeys().orElseThrow().stream()
                     .filter(k -> TEST_KID.equals(k.getKid().orElse(null)))

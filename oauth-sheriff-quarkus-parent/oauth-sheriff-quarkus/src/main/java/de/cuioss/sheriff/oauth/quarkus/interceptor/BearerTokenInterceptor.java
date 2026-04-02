@@ -27,9 +27,11 @@ import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InvocationContext;
 import jakarta.ws.rs.WebApplicationException;
 
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Interceptor for declarative Bearer token validation at method level.
@@ -93,11 +95,49 @@ public class BearerTokenInterceptor {
     }
 
     /**
+     * Holds the merged authentication requirements from class-level and method-level
+     * {@link BearerAuth} annotations.
+     *
+     * @param requiredScopes the union of required scopes from both annotation levels
+     * @param requiredRoles  the union of required roles from both annotation levels
+     * @param requiredGroups the union of required groups from both annotation levels
+     */
+    private record MergedAuth(Set<String> requiredScopes, Set<String> requiredRoles, Set<String> requiredGroups) {
+
+        /**
+         * Creates a MergedAuth from a single BearerAuth annotation.
+         */
+        static MergedAuth fromAnnotation(BearerAuth annotation) {
+            return new MergedAuth(
+                    annotation.requiredScopes().length > 0 ? Set.copyOf(List.of(annotation.requiredScopes())) : Set.of(),
+                    annotation.requiredRoles().length > 0 ? Set.copyOf(List.of(annotation.requiredRoles())) : Set.of(),
+                    annotation.requiredGroups().length > 0 ? Set.copyOf(List.of(annotation.requiredGroups())) : Set.of()
+            );
+        }
+
+        /**
+         * Creates a MergedAuth by computing the union of two BearerAuth annotations.
+         */
+        static MergedAuth merge(BearerAuth classLevel, BearerAuth methodLevel) {
+            return new MergedAuth(
+                    unionOf(classLevel.requiredScopes(), methodLevel.requiredScopes()),
+                    unionOf(classLevel.requiredRoles(), methodLevel.requiredRoles()),
+                    unionOf(classLevel.requiredGroups(), methodLevel.requiredGroups())
+            );
+        }
+
+        private static Set<String> unionOf(String[] first, String[] second) {
+            return Stream.concat(Arrays.stream(first), Arrays.stream(second))
+                    .collect(Collectors.toUnmodifiableSet());
+        }
+    }
+
+    /**
      * Intercepts method calls to validate bearer tokens declaratively.
      * <p>
      * This method follows the interceptor pattern for security validation:
      * <ol>
-     *   <li>Extract annotation parameters from method or class level</li>
+     *   <li>Extract and merge annotation parameters from method and class level</li>
      *   <li>Delegate to BearerTokenProducer for validation</li>
      *   <li>If validation fails, throw WebApplicationException with error response</li>
      *   <li>If validation succeeds, proceed with method execution</li>
@@ -110,33 +150,15 @@ public class BearerTokenInterceptor {
      */
     @AroundInvoke
     public Object validateBearerToken(InvocationContext ctx) throws Exception {
-        // Extract annotation from method or class level
-        BearerAuth annotation = extractAnnotation(ctx);
-        if (annotation == null) {
-            // Fail closed: missing annotation means security configuration error
-            throw new IllegalStateException(
-                    "@BearerAuth annotation not found on method '%s' or its declaring class. "
-                            .formatted(ctx.getMethod().getName())
-                            + "Security interceptor cannot proceed without authentication configuration.");
-        }
-
-        // Extract requirements from annotation
-        Set<String> requiredScopes = annotation.requiredScopes().length > 0
-                ? Set.copyOf(List.of(annotation.requiredScopes()))
-                : Collections.emptySet();
-        Set<String> requiredRoles = annotation.requiredRoles().length > 0
-                ? Set.copyOf(List.of(annotation.requiredRoles()))
-                : Collections.emptySet();
-        Set<String> requiredGroups = annotation.requiredGroups().length > 0
-                ? Set.copyOf(List.of(annotation.requiredGroups()))
-                : Collections.emptySet();
+        // Extract and merge annotations from method and class level
+        MergedAuth mergedAuth = extractMergedAuth(ctx);
 
         LOGGER.debug("Validating bearer token with scopes: %s, roles: %s, groups: %s",
-                requiredScopes, requiredRoles, requiredGroups);
+                mergedAuth.requiredScopes(), mergedAuth.requiredRoles(), mergedAuth.requiredGroups());
 
         // Delegate validation to BearerTokenProducer
         BearerTokenResult result = bearerTokenProducer.getBearerTokenResult(
-                requiredScopes, requiredRoles, requiredGroups);
+                mergedAuth.requiredScopes(), mergedAuth.requiredRoles(), mergedAuth.requiredGroups());
 
         // Handle validation failure
         if (result.isNotSuccessfullyAuthorized()) {
@@ -150,20 +172,33 @@ public class BearerTokenInterceptor {
     }
 
     /**
-     * Extracts the BearerAuth annotation from the invocation context.
-     * Checks both method level and class level annotations (method takes precedence).
+     * Extracts and merges {@link BearerAuth} annotations from both the method and its
+     * declaring class. If both levels are annotated, the requirements are merged (union
+     * of requiredScopes, requiredRoles, requiredGroups). If only one level is annotated,
+     * its values are used directly.
      *
      * @param ctx the invocation context
-     * @return the BearerAuth annotation, or null if not found
+     * @return the merged authentication requirements
+     * @throws IllegalStateException if no {@code @BearerAuth} annotation is found at either level
      */
-    private BearerAuth extractAnnotation(InvocationContext ctx) {
-        // Check method level first
-        BearerAuth annotation = ctx.getMethod().getAnnotation(BearerAuth.class);
-        if (annotation != null) {
-            return annotation;
+    private MergedAuth extractMergedAuth(InvocationContext ctx) {
+        BearerAuth methodAnnotation = ctx.getMethod().getAnnotation(BearerAuth.class);
+        BearerAuth classAnnotation = ctx.getTarget().getClass().getAnnotation(BearerAuth.class);
+
+        if (methodAnnotation != null && classAnnotation != null) {
+            return MergedAuth.merge(classAnnotation, methodAnnotation);
+        }
+        if (methodAnnotation != null) {
+            return MergedAuth.fromAnnotation(methodAnnotation);
+        }
+        if (classAnnotation != null) {
+            return MergedAuth.fromAnnotation(classAnnotation);
         }
 
-        // Fallback to class level
-        return ctx.getTarget().getClass().getAnnotation(BearerAuth.class);
+        // Fail closed: missing annotation means security configuration error
+        throw new IllegalStateException(
+                "@BearerAuth annotation not found on method '%s' or its declaring class. "
+                        .formatted(ctx.getMethod().getName())
+                        + "Security interceptor cannot proceed without authentication configuration.");
     }
 }

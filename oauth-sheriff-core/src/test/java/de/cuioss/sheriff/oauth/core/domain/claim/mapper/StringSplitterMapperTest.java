@@ -107,9 +107,16 @@ class StringSplitterMapperTest {
     @ValueSource(strings = {" ", "\t", "\n"})
     @DisplayName("Handle null, empty, and whitespace inputs")
     void shouldHandleSpecialInputs(String input) throws Exception {
-        String jsonString = input == null
-                ? "{\"" + CLAIM_NAME + "\": null}"
-                : "{\"" + CLAIM_NAME + "\": \"" + input.replace("\"", "\\\"").replace("\n", "\\n").replace("\t", "\\t") + "\"}";
+        if (input == null) {
+            // Null input means absent claim, mapper now returns null
+            String jsonString = "{\"" + CLAIM_NAME + "\": null}";
+            DslJson<Object> dslJson = ParserConfig.builder().build().getDslJson();
+            MapRepresentation mapRepresentation = MapRepresentation.fromJson(dslJson, jsonString);
+            ClaimValue result = commaMapper.map(mapRepresentation, CLAIM_NAME);
+            assertNull(result, "Should return null for null claim");
+            return;
+        }
+        String jsonString = "{\"" + CLAIM_NAME + "\": \"" + input.replace("\"", "\\\"").replace("\n", "\\n").replace("\t", "\\t") + "\"}";
         DslJson<Object> dslJson = ParserConfig.builder().build().getDslJson();
         MapRepresentation mapRepresentation = MapRepresentation.fromJson(dslJson, jsonString);
 
@@ -122,7 +129,7 @@ class StringSplitterMapperTest {
     }
 
     @Test
-    @DisplayName("Handle missing claim")
+    @DisplayName("Handle missing claim - returns null")
     void shouldHandleMissingClaim() throws Exception {
         String jsonString = "{}";
         DslJson<Object> dslJson = ParserConfig.builder().build().getDslJson();
@@ -130,10 +137,7 @@ class StringSplitterMapperTest {
 
         ClaimValue result = commaMapper.map(mapRepresentation, CLAIM_NAME);
 
-        assertNotNull(result, "Result should not be null");
-        assertNull(result.getOriginalString(), "Original string should be null");
-        assertEquals(ClaimValueType.STRING_LIST, result.getType(), "Type should be STRING_LIST");
-        assertTrue(result.getAsList().isEmpty(), "Value list should be empty");
+        assertNull(result, "Should return null for missing claim");
     }
 
     @ParameterizedTest

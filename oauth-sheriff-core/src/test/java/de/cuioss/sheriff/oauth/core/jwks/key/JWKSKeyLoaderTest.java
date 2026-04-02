@@ -20,6 +20,7 @@ import de.cuioss.sheriff.oauth.core.security.JwkAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.oauth.core.test.InMemoryKeyMaterialHandler;
+import de.cuioss.sheriff.oauth.core.util.LoaderStatus;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -143,8 +144,7 @@ class JWKSKeyLoaderTest {
         @Test
         @DisplayName("Should report not empty when keys are present")
         void shouldReportNotEmptyWhenKeysArePresent() {
-            boolean notEmpty = !keyLoader.getKeyInfoMap().isEmpty();
-            assertTrue(notEmpty, "Loader should report not empty when keys are present");
+            assertTrue(keyLoader.getKeyInfo(TEST_KID).isPresent(), "Loader should report not empty when keys are present");
         }
 
         @Test
@@ -155,7 +155,7 @@ class JWKSKeyLoaderTest {
                     .jwksContent(emptyJwksContent)
                     .build();
             emptyLoader.initJWKSLoader(new SecurityEventCounter());
-            assertTrue(emptyLoader.getKeyInfoMap().isEmpty(), "Loader should report empty when no keys are present");
+            assertEquals(LoaderStatus.ERROR, emptyLoader.getLoaderStatus(), "Loader should report empty when no keys are present");
         }
     }
 
@@ -175,7 +175,7 @@ class JWKSKeyLoaderTest {
                     .parserConfig(customConfig)
                     .build();
             loaderWithCustomConfig.initJWKSLoader(new SecurityEventCounter());
-            assertFalse(loaderWithCustomConfig.getKeyInfoMap().isEmpty(),
+            assertTrue(loaderWithCustomConfig.getKeyInfo(TEST_KID).isPresent(),
                     "Loader should parse valid JWKS with custom config");
         }
 
@@ -197,7 +197,7 @@ class JWKSKeyLoaderTest {
                     .parserConfig(restrictiveConfig)
                     .build();
             loader.initJWKSLoader(new SecurityEventCounter());
-            assertTrue(loader.getKeyInfoMap().isEmpty(), "Loader should reject content exceeding maximum size");
+            assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus(), "Loader should reject content exceeding maximum size");
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR, JWKS_CONTENT_SIZE_EXCEEDED.resolveIdentifierString());
         }
 

@@ -21,7 +21,7 @@ import de.cuioss.sheriff.oauth.core.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.oauth.core.domain.context.RefreshTokenRequest;
 import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.domain.token.IdTokenContent;
-import de.cuioss.sheriff.oauth.core.domain.token.RefreshTokenContent;
+import de.cuioss.sheriff.oauth.core.domain.token.UnvalidatedRefreshToken;
 import de.cuioss.sheriff.oauth.core.dpop.DpopProofValidator;
 import de.cuioss.sheriff.oauth.core.dpop.DpopReplayProtection;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
@@ -112,7 +112,7 @@ import java.util.Map;
  * IdTokenContent idToken = tokenValidator.createIdToken(IdTokenRequest.of(tokenString));
  *
  * // Parse a refresh token
- * RefreshTokenContent refreshToken = tokenValidator.createRefreshToken(RefreshTokenRequest.of(tokenString));
+ * UnvalidatedRefreshToken refreshToken = tokenValidator.createRefreshToken(RefreshTokenRequest.of(tokenString));
  *
  * // Access the security event counter for monitoring
  * SecurityEventCounter securityEventCounter = tokenValidator.getSecurityEventCounter();
@@ -413,14 +413,14 @@ public class TokenValidator implements Closeable {
      * @return The parsed refresh token
      * @throws TokenValidationException if the token is invalid
      */
-    public RefreshTokenContent createRefreshToken(RefreshTokenRequest request) {
+    public UnvalidatedRefreshToken createRefreshToken(RefreshTokenRequest request) {
         LOGGER.debug("Creating refresh token");
 
         // Pre-pipeline validation (null, blank, size)
         tokenStringValidator.validate(request.tokenString());
 
         // Delegate to refresh token pipeline (handles minimal validation, no caching, no metrics)
-        RefreshTokenContent refreshToken = refreshTokenPipeline.validate(request);
+        UnvalidatedRefreshToken refreshToken = refreshTokenPipeline.validate(request);
 
         LOGGER.debug("Successfully created Refresh-Token");
         securityEventCounter.increment(SecurityEventCounter.EventType.REFRESH_TOKEN_CREATED);

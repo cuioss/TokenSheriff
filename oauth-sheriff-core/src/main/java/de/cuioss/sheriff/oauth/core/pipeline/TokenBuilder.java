@@ -82,7 +82,7 @@ public class TokenBuilder {
      * @return an Optional containing the AccessTokenContent if it could be created, empty otherwise
      */
     public Optional<AccessTokenContent> createAccessToken(DecodedJwt decodedJwt) {
-        MapRepresentation body = decodedJwt.getBody();
+        MapRepresentation body = decodedJwt.body();
         // Design Decision: Optional.empty() is the correct return for empty body.
         // Caller (AccessTokenValidationPipeline) handles this case explicitly.
         if (body.isEmpty()) {
@@ -91,7 +91,7 @@ public class TokenBuilder {
 
         Map<String, ClaimValue> claims = extractClaims(body);
 
-        return Optional.of(new AccessTokenContent(claims, decodedJwt.rawToken(), body));
+        return Optional.of(new AccessTokenContent(claims, decodedJwt.rawToken()));
     }
 
     /**
@@ -101,14 +101,14 @@ public class TokenBuilder {
      * @return an Optional containing the IdTokenContent if it could be created, empty otherwise
      */
     public Optional<IdTokenContent> createIdToken(DecodedJwt decodedJwt) {
-        MapRepresentation body = decodedJwt.getBody();
+        MapRepresentation body = decodedJwt.body();
         if (body.isEmpty()) {
             return Optional.empty();
         }
 
         Map<String, ClaimValue> claims = extractClaims(body);
 
-        return Optional.of(new IdTokenContent(claims, decodedJwt.rawToken(), body));
+        return Optional.of(new IdTokenContent(claims, decodedJwt.rawToken()));
     }
 
 
@@ -128,7 +128,9 @@ public class TokenBuilder {
             if (mapper != null) {
                 // Use the configured mapper (either built-in or custom)
                 ClaimValue claimValue = mapper.map(mapRepresentation, key);
-                claims.put(key, claimValue);
+                if (claimValue != null) {
+                    claims.put(key, claimValue);
+                }
             } else {
                 // Fallback for unknown claims - use identity mapping
                 Optional<String> stringValue = mapRepresentation.getString(key);

@@ -21,7 +21,6 @@ import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
-import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolver;
 import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolverMock;
@@ -57,14 +56,11 @@ class BearerTokenProducerTest {
     private HttpServletRequestResolverMock servletResolverMock;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         tokenValidator = createMock(TokenValidator.class);
         servletResolverMock = new HttpServletRequestResolverMock();
         HttpServletRequestResolver servletResolver = servletResolverMock;
-        producer = new BearerTokenProducer(tokenValidator, servletResolver);
-        // Set default values that would normally be injected by CDI @ConfigProperty
-        setField(producer, "tokenHeader", "Authorization");
-        setField(producer, "tokenCookieName", "Bearer");
+        producer = new BearerTokenProducer(tokenValidator, servletResolver, "Authorization", "Bearer");
     }
 
     @Test
@@ -427,6 +423,6 @@ class BearerTokenProducerTest {
         claims.put(ClaimName.ISSUED_AT.getName(), ClaimValue.forDateTime(
                 String.valueOf(now.toEpochSecond()), now));
         claims.putAll(additionalClaims);
-        return new AccessTokenContent(claims, "raw-token", MapRepresentation.empty());
+        return new AccessTokenContent(claims, "raw-token");
     }
 }

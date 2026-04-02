@@ -67,6 +67,11 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
     void shouldMapClaimsFromJsonObject(ClaimName claimName, JsonObject jsonObject, ClaimValue expectedValue) {
         ClaimValue result = claimName.map(convertJsonObjectToMapRepresentation(jsonObject));
 
+        if (expectedValue == null) {
+            assertNull(result, "Result should be null for absent claims");
+            return;
+        }
+
         assertNotNull(result, "Result should not be null");
         assertEquals(expectedValue.getType(), result.getType(), "Type should match expected");
         assertEquals(expectedValue.getOriginalString(), result.getOriginalString(), "Original string should match expected");
@@ -200,13 +205,13 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
                 Arguments.of(
                         ClaimName.ISSUER,
                         Json.createObjectBuilder().build(),
-                        ClaimValue.createEmptyClaimValue(ClaimValueType.STRING)
+                        null
                 ),
 
                 Arguments.of(
                         ClaimName.SUBJECT,
                         createJsonObjectWithNullClaim("sub"),
-                        ClaimValue.createEmptyClaimValue(ClaimValueType.STRING)
+                        null
                 )
         );
     }
