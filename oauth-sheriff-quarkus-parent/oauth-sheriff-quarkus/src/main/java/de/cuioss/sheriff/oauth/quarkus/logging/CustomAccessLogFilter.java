@@ -209,7 +209,7 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
                     return request.remoteAddress().host();
                 }
             }
-        } catch (Exception e) {
+        } catch (IllegalStateException | jakarta.enterprise.inject.CreationException e) {
             LOGGER.debug(e, "Could not resolve Vert.x remote address");
         }
         return null;
