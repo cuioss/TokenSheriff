@@ -40,6 +40,7 @@ import java.util.Optional;
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc8414">RFC 8414 - OAuth 2.0 Authorization Server Metadata</a>
  */
 @CompiledJson
+@SuppressWarnings("java:S1104") // Public fields required by DSL-JSON @CompiledJson for class-based deserialization
 public class WellKnownResult {
 
     public String issuer;

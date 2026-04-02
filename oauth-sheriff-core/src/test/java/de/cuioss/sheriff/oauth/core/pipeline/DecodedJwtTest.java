@@ -146,8 +146,9 @@ class DecodedJwtTest {
     @Test
     @DisplayName("Static factory should reject null header")
     void staticFactoryShouldRejectNullHeader() {
+        var body = createTestBody();
         assertThrows(NullPointerException.class,
-                () -> DecodedJwt.of(null, createTestBody(), SIGNATURE, PARTS, RAW_TOKEN),
+                () -> DecodedJwt.of(null, body, SIGNATURE, PARTS, RAW_TOKEN),
                 "Static factory should throw NullPointerException when header is null");
     }
 

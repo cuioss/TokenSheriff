@@ -562,12 +562,6 @@ class DpopProofValidatorTest {
                 computeAth(accessToken), htm, htu);
     }
 
-    private String buildDpopProofWithJti(KeyPair keyPair, Map<String, Object> jwkMap, String alg,
-            String accessToken, String jti) {
-        return buildDpopProofInternal(keyPair, jwkMap, alg, "dpop+jwt",
-                jti, System.currentTimeMillis() / 1000, computeAth(accessToken));
-    }
-
     private String buildDpopProofWithJtiAndHtuHtm(KeyPair keyPair, Map<String, Object> jwkMap, String alg,
             String accessToken, String jti, String htm, String htu) {
         return buildDpopProofInternalWithHtuHtm(keyPair, jwkMap, alg, "dpop+jwt",

@@ -56,7 +56,7 @@ class BearerTokenProducerTest {
     private HttpServletRequestResolverMock servletResolverMock;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         tokenValidator = createMock(TokenValidator.class);
         servletResolverMock = new HttpServletRequestResolverMock();
         HttpServletRequestResolver servletResolver = servletResolverMock;
