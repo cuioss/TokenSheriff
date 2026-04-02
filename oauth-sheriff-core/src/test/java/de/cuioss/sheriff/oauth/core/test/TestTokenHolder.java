@@ -22,6 +22,7 @@ import de.cuioss.sheriff.oauth.core.TokenType;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
+import de.cuioss.sheriff.oauth.core.domain.token.IdTokenContent;
 import de.cuioss.sheriff.oauth.core.domain.token.TokenContent;
 import de.cuioss.sheriff.oauth.core.json.JwtHeader;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
@@ -62,7 +63,7 @@ import java.util.*;
  * The keyId and signingAlgorithm are generated using Generators.fixedValues() with a defined list.
  * Uses RS256 as the default test algorithm and the default key ID.
  */
-public class TestTokenHolder implements TokenContent {
+public class TestTokenHolder {
 
     public static final String TEST_ISSUER = "Token-Test-testIssuer";
     /**
@@ -134,7 +135,32 @@ public class TestTokenHolder implements TokenContent {
         this.cachedRawToken = null; // Will be generated on demand
     }
 
-    @Override
+    /**
+     * Gets the subject from the claims map.
+     *
+     * @return an Optional containing the subject if present
+     */
+    public Optional<String> getSubject() {
+        var subClaim = claims.get(ClaimName.SUBJECT.getName());
+        if (subClaim == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(subClaim.getOriginalString());
+    }
+
+    /**
+     * Gets the issuer from the claims map.
+     *
+     * @return the issuer string, or throws if not present
+     */
+    public String getIssuer() {
+        var issuerClaim = claims.get(ClaimName.ISSUER.getName());
+        if (issuerClaim == null) {
+            throw new IllegalStateException("Issuer claim not present");
+        }
+        return issuerClaim.getOriginalString();
+    }
+
     public String getRawToken() {
         // If we already have a cached token and no mutations have occurred, return it
         if (cachedRawToken != null) {
@@ -464,49 +490,35 @@ public class TestTokenHolder implements TokenContent {
             throw new IllegalStateException("Cannot convert token of type " + tokenType + " to AccessTokenContent. Only ACCESS_TOKEN is supported.");
         }
 
-        return new AccessTokenContent(claims, getRawToken(), createMapRepresentationFromClaims());
+        return new AccessTokenContent(claims, getRawToken());
     }
 
     /**
-     * Creates a MapRepresentation from the current claims using DSL-JSON parsing.
-     * This converts claims to JSON and then parses with DSL-JSON for proper validation.
+     * Converts this TestTokenHolder to an IdTokenContent.
      *
-     * @return a MapRepresentation containing the claims data
+     * @return an IdTokenContent instance representing this token
+     * @throws IllegalStateException if the token type is not ID_TOKEN
      */
-    private MapRepresentation createMapRepresentationFromClaims() {
-        try {
-            // Build JSON from claims
-            StringBuilder jsonBuilder = new StringBuilder("{");
-            boolean first = true;
-            for (Map.Entry<String, ClaimValue> entry : claims.entrySet()) {
-                if (!first) {
-                    jsonBuilder.append(",");
-                }
-                jsonBuilder.append("\"").append(entry.getKey()).append("\":");
-                ClaimValue value = entry.getValue();
-                if (value.getOriginalString() != null) {
-                    jsonBuilder.append("\"").append(value.getOriginalString().replace("\"", "\\\"")).append("\"");
-                } else {
-                    // ClaimValue always has a list if it doesn't have a string
-                    jsonBuilder.append("[");
-                    boolean firstItem = true;
-                    for (String item : value.getAsList()) {
-                        if (!firstItem) jsonBuilder.append(",");
-                        jsonBuilder.append("\"").append(item.replace("\"", "\\\"")).append("\"");
-                        firstItem = false;
-                    }
-                    jsonBuilder.append("]");
-                }
-                first = false;
-            }
-            jsonBuilder.append("}");
-
-            // Parse with DSL-JSON
-            DslJson<Object> dslJson = ParserConfig.builder().build().getDslJson();
-            return MapRepresentation.fromJson(dslJson, jsonBuilder.toString());
-        } catch (IOException e) {
-            throw new AssertionError("Failed to create MapRepresentation from claims", e);
+    public IdTokenContent asIdTokenContent() {
+        if (tokenType != TokenType.ID_TOKEN) {
+            throw new IllegalStateException("Cannot convert token of type " + tokenType + " to IdTokenContent. Only ID_TOKEN is supported.");
         }
+
+        return new IdTokenContent(claims, getRawToken());
+    }
+
+    /**
+     * Converts this TestTokenHolder to the appropriate TokenContent subtype.
+     *
+     * @return a TokenContent instance representing this token
+     * @throws IllegalStateException if the token type is not ACCESS_TOKEN or ID_TOKEN
+     */
+    public TokenContent asTokenContent() {
+        return switch (tokenType) {
+            case ACCESS_TOKEN -> asAccessTokenContent();
+            case ID_TOKEN -> asIdTokenContent();
+            default -> throw new IllegalStateException("Cannot convert token of type " + tokenType + " to TokenContent.");
+        };
     }
 
     private Map<String, ClaimValue> generateClaims() {

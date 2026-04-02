@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.oauth.core.domain.token;
 
 import de.cuioss.sheriff.oauth.core.TokenType;
+import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -31,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit test for {@link MinimalTokenContent} interface.
  * <p>
  * Tests the interface contract using concrete implementations.
- * 
+ *
  * @author Oliver Wolff
  */
 @EnableGeneratorController
@@ -40,7 +42,7 @@ class MinimalTokenContentTest {
     @Test
     @DisplayName("Should provide raw token access")
     void shouldProvideRawTokenAccess() {
-        MinimalTokenContent content = new TestMinimalTokenContent("test-token", TokenType.ACCESS_TOKEN);
+        MinimalTokenContent content = new UnvalidatedRefreshToken("test-token", Map.of());
 
         assertEquals("test-token", content.getRawToken());
     }
@@ -48,32 +50,26 @@ class MinimalTokenContentTest {
     @Test
     @DisplayName("Should provide token type access")
     void shouldProvideTokenTypeAccess() {
-        MinimalTokenContent accessToken = new TestMinimalTokenContent("token1", TokenType.ACCESS_TOKEN);
-        assertEquals(TokenType.ACCESS_TOKEN, accessToken.getTokenType());
-
-        MinimalTokenContent idToken = new TestMinimalTokenContent("token2", TokenType.ID_TOKEN);
-        assertEquals(TokenType.ID_TOKEN, idToken.getTokenType());
-
-        MinimalTokenContent refreshToken = new TestMinimalTokenContent("token3", TokenType.REFRESH_TOKEN);
+        MinimalTokenContent refreshToken = new UnvalidatedRefreshToken("token3", Map.of());
         assertEquals(TokenType.REFRESH_TOKEN, refreshToken.getTokenType());
     }
 
     @Test
     @DisplayName("Should handle null raw token")
     void shouldHandleNullRawToken() {
-        MinimalTokenContent content = new TestMinimalTokenContent(null, TokenType.ACCESS_TOKEN);
+        MinimalTokenContent content = new UnvalidatedRefreshToken(null, Map.of());
 
         assertNull(content.getRawToken());
-        assertEquals(TokenType.ACCESS_TOKEN, content.getTokenType());
+        assertEquals(TokenType.REFRESH_TOKEN, content.getTokenType());
     }
 
     @Test
     @DisplayName("Should handle empty raw token")
     void shouldHandleEmptyRawToken() {
-        MinimalTokenContent content = new TestMinimalTokenContent("", TokenType.ID_TOKEN);
+        MinimalTokenContent content = new UnvalidatedRefreshToken("", Map.of());
 
         assertEquals("", content.getRawToken());
-        assertEquals(TokenType.ID_TOKEN, content.getTokenType());
+        assertEquals(TokenType.REFRESH_TOKEN, content.getTokenType());
     }
 
     @Test
@@ -85,16 +81,16 @@ class MinimalTokenContentTest {
                 ZXhwIjoxNjQwOTk1MjAwLCJpYXQiOjE2NDA5OTE2MDBdfQ\
                 .signature-part-here""";
 
-        MinimalTokenContent content = new TestMinimalTokenContent(longToken, TokenType.ACCESS_TOKEN);
+        MinimalTokenContent content = new UnvalidatedRefreshToken(longToken, Map.of());
 
         assertEquals(longToken, content.getRawToken());
-        assertEquals(TokenType.ACCESS_TOKEN, content.getTokenType());
+        assertEquals(TokenType.REFRESH_TOKEN, content.getTokenType());
     }
 
     @Test
     @DisplayName("Should be serializable")
     void shouldBeSerializable() throws Exception {
-        TestMinimalTokenContent original = new TestMinimalTokenContent("test-token", TokenType.ID_TOKEN);
+        UnvalidatedRefreshToken original = new UnvalidatedRefreshToken("test-token", Map.of());
 
         // Serialize
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -105,7 +101,7 @@ class MinimalTokenContentTest {
         // Deserialize
         ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
         ObjectInputStream ois = new ObjectInputStream(bais);
-        TestMinimalTokenContent deserialized = (TestMinimalTokenContent) ois.readObject();
+        UnvalidatedRefreshToken deserialized = (UnvalidatedRefreshToken) ois.readObject();
         ois.close();
 
         // Verify
@@ -116,7 +112,7 @@ class MinimalTokenContentTest {
     @Test
     @DisplayName("Should maintain consistency across calls")
     void shouldMaintainConsistencyAcrossCalls() {
-        MinimalTokenContent content = new TestMinimalTokenContent("consistent-token", TokenType.REFRESH_TOKEN);
+        MinimalTokenContent content = new UnvalidatedRefreshToken("consistent-token", Map.of());
 
         // Multiple calls should return the same values
         assertEquals("consistent-token", content.getRawToken());
@@ -129,75 +125,19 @@ class MinimalTokenContentTest {
     }
 
     @Test
-    @DisplayName("Should work with all token types")
-    void shouldWorkWithAllTokenTypes() {
-        for (TokenType tokenType : TokenType.values()) {
-            MinimalTokenContent content = new TestMinimalTokenContent("token-for-" + tokenType, tokenType);
-
-            assertEquals("token-for-" + tokenType, content.getRawToken());
-            assertEquals(tokenType, content.getTokenType());
-        }
-    }
-
-    @Test
     @DisplayName("Should support different token implementations")
     void shouldSupportDifferentTokenImplementations() {
-        // Different implementations should work the same way
-        MinimalTokenContent impl1 = new TestMinimalTokenContent("token1", TokenType.ACCESS_TOKEN);
-        MinimalTokenContent impl2 = new AlternativeTestMinimalTokenContent("token2", TokenType.ID_TOKEN);
+        // Test that different permitted implementations of the sealed interface work correctly
+        MinimalTokenContent refreshToken = new UnvalidatedRefreshToken("refresh-token", Map.of());
+        Map<String, ClaimValue> claims = Map.of("sub", ClaimValue.forPlainString("user"));
+        MinimalTokenContent accessToken = new AccessTokenContent(claims, "access-token");
 
-        assertNotNull(impl1.getRawToken());
-        assertNotNull(impl1.getTokenType());
-        assertNotNull(impl2.getRawToken());
-        assertNotNull(impl2.getTokenType());
+        assertNotNull(refreshToken.getRawToken());
+        assertNotNull(refreshToken.getTokenType());
+        assertNotNull(accessToken.getRawToken());
+        assertNotNull(accessToken.getTokenType());
 
-        assertNotEquals(impl1.getRawToken(), impl2.getRawToken());
-        assertNotEquals(impl1.getTokenType(), impl2.getTokenType());
-    }
-
-    // Test implementations
-
-    private static class TestMinimalTokenContent implements MinimalTokenContent {
-        private static final long serialVersionUID = 1L;
-
-        private final String rawToken;
-        private final TokenType tokenType;
-
-        public TestMinimalTokenContent(String rawToken, TokenType tokenType) {
-            this.rawToken = rawToken;
-            this.tokenType = tokenType;
-        }
-
-        @Override
-        public String getRawToken() {
-            return rawToken;
-        }
-
-        @Override
-        public TokenType getTokenType() {
-            return tokenType;
-        }
-    }
-
-    private static class AlternativeTestMinimalTokenContent implements MinimalTokenContent {
-        private static final long serialVersionUID = 1L;
-
-        private final String token;
-        private final TokenType type;
-
-        public AlternativeTestMinimalTokenContent(String token, TokenType type) {
-            this.token = token;
-            this.type = type;
-        }
-
-        @Override
-        public String getRawToken() {
-            return token;
-        }
-
-        @Override
-        public TokenType getTokenType() {
-            return type;
-        }
+        assertNotEquals(refreshToken.getRawToken(), accessToken.getRawToken());
+        assertNotEquals(refreshToken.getTokenType(), accessToken.getTokenType());
     }
 }

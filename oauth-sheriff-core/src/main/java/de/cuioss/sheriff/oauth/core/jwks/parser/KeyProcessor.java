@@ -69,13 +69,7 @@ public class KeyProcessor {
             return Optional.empty();
         }
 
-        // Extract key type directly from JwkKey
         String kty = jwk.kty();
-        if (kty == null || kty.trim().isEmpty()) {
-            LOGGER.warn(WARN.JWK_MISSING_KTY);
-            securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
-            return Optional.empty();
-        }
 
         if (jwk.getKid().isEmpty()) {
             LOGGER.warn(WARN.JWK_MISSING_KID);

@@ -330,6 +330,11 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                         // State errors (e.g., from orElseThrow when issuer not resolved)
                         LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
                     }
+                    // cui-rewrite:disable InvalidExceptionUsageRecipe
+                    // Intentional catch-all: ScheduledExecutorService silently cancels the task on uncaught exceptions
+                    catch (Exception e) {
+                        LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+                    }
                 },
                 config.getRefreshIntervalSeconds(),
                 config.getRefreshIntervalSeconds(),
@@ -343,6 +348,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         ScheduledFuture<?> task = refreshTask.get();
         if (task != null) {
             task.cancel(false);
+        }
+        if (config.isOwnsExecutor() && config.getScheduledExecutorService() != null) {
+            config.getScheduledExecutorService().shutdownNow();
         }
         currentKeys.set(null);
         retiredKeys.clear();

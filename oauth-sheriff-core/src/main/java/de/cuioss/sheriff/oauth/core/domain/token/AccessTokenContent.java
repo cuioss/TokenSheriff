@@ -19,11 +19,9 @@ import de.cuioss.sheriff.oauth.core.TokenType;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.claim.CollectionClaimHandler;
-import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
-import lombok.experimental.SuperBuilder;
 
 import java.io.Serial;
 import java.util.*;
@@ -62,39 +60,19 @@ import java.util.*;
  */
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-@SuperBuilder
 public final class AccessTokenContent extends BaseTokenContent {
-
-    private static final CuiLogger LOGGER = new CuiLogger(AccessTokenContent.class);
 
     @Serial
     private static final long serialVersionUID = 1L;
 
     /**
-     * Constructs a new AccessTokenContent with the given claims, raw token, and raw payload.
+     * Constructs a new AccessTokenContent with the given claims and raw token.
      *
-     * @param claims     the token claims
-     * @param rawToken   the raw token string
-     * @param rawPayload the raw JSON payload for ClaimMapper processing
+     * @param claims   the token claims
+     * @param rawToken the raw token string
      */
-    public AccessTokenContent(Map<String, ClaimValue> claims, String rawToken,
-            MapRepresentation rawPayload) {
-        super(claims, rawToken, TokenType.ACCESS_TOKEN, rawPayload);
-    }
-
-    /**
-     * Gets the token ID (jti) claim value.
-     * <p>
-     * The 'jti' claim is mandatory for access tokens per
-     * <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-2.2">RFC 9068 Section 2.2</a>.
-     *
-     * @return the token ID
-     * @throws IllegalStateException if the jti claim is not present
-     */
-    public String getTokenId() {
-        return getClaimOption(ClaimName.TOKEN_ID)
-                .map(ClaimValue::getOriginalString)
-                .orElseThrow(() -> new IllegalStateException("Token ID (jti) claim not present in access token"));
+    public AccessTokenContent(Map<String, ClaimValue> claims, String rawToken) {
+        super(claims, rawToken, TokenType.ACCESS_TOKEN);
     }
 
     /**

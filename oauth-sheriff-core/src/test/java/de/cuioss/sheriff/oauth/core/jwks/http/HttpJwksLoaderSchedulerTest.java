@@ -181,17 +181,10 @@ class HttpJwksLoaderSchedulerTest {
                 .atMost(3, SECONDS)
                 .until(() -> moduleDispatcher.getCallCounter() > initialCallCount);
 
-        // Verify background refresh update was logged (either JWKS_BACKGROUND_REFRESH_UPDATED or JWKS_KEYS_UPDATED)
-        try {
-            LogAsserts.assertLogMessagePresentContaining(
-                    TestLogLevel.INFO,
-                    JWTValidationLogMessages.INFO.JWKS_BACKGROUND_REFRESH_UPDATED.resolveIdentifierString());
-        } catch (AssertionError e) {
-            // Background refresh might trigger JWKS_KEYS_UPDATED instead
-            LogAsserts.assertLogMessagePresentContaining(
-                    TestLogLevel.INFO,
-                    JWTValidationLogMessages.INFO.JWKS_KEYS_UPDATED.resolveIdentifierString());
-        }
+        // Verify background refresh update was logged
+        LogAsserts.assertLogMessagePresentContaining(
+                TestLogLevel.INFO,
+                JWTValidationLogMessages.INFO.JWKS_KEYS_UPDATED.resolveIdentifierString());
 
         loader.close();
     }

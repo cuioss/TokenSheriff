@@ -78,6 +78,7 @@ public class DpopProofValidator {
     private final SecurityEventCounter securityEventCounter;
     private final DpopReplayProtection replayProtection;
     private final SignatureAlgorithmPreferences algorithmPreferences;
+    private final SignatureTemplateManager signatureTemplateManager;
     private final DslJson<Object> dslJson = new DslJson<>();
 
     /**
@@ -104,6 +105,7 @@ public class DpopProofValidator {
         this.securityEventCounter = securityEventCounter;
         this.replayProtection = replayProtection;
         this.algorithmPreferences = issuerConfig.getAlgorithmPreferences();
+        this.signatureTemplateManager = new SignatureTemplateManager(algorithmPreferences);
     }
 
     /**
@@ -182,7 +184,7 @@ public class DpopProofValidator {
      * @return an {@link Optional} containing the JWK thumbprint, or empty if not present
      */
     private Optional<String> extractCnfJkt(DecodedJwt accessTokenJwt) {
-        return accessTokenJwt.getBody().getNestedMap("cnf")
+        return accessTokenJwt.body().getNestedMap("cnf")
                 .flatMap(cnf -> cnf.getString("jkt"));
     }
 
@@ -339,13 +341,11 @@ public class DpopProofValidator {
     private void validateHtuHtm(MapRepresentation bodyMap, AccessTokenRequest request) {
         if (request.requestUri() == null || request.requestUri().isBlank()
                 || request.requestMethod() == null || request.requestMethod().isBlank()) {
-            if (config.isRequired()) {
-                securityEventCounter.increment(EventType.DPOP_PROOF_INVALID);
-                throw new TokenValidationException(EventType.DPOP_PROOF_INVALID,
-                        "DPoP htu/htm validation failed: request context missing but DPoP is required");
-            }
-            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTU_HTM_SKIPPED);
-            return;
+            // When a DPoP proof is present, htu/htm validation must not be skipped —
+            // a proof valid for a different endpoint would be accepted otherwise.
+            securityEventCounter.increment(EventType.DPOP_PROOF_INVALID);
+            throw new TokenValidationException(EventType.DPOP_PROOF_INVALID,
+                    "DPoP htu/htm validation failed: request URI and method are required when a DPoP proof is present");
         }
 
         // Validate htm (HTTP method)
@@ -434,8 +434,7 @@ public class DpopProofValidator {
 
     private void verifyDpopSignature(String[] parts, PublicKey publicKey, String algorithm) {
         try {
-            SignatureTemplateManager sigManager = new SignatureTemplateManager(algorithmPreferences);
-            Signature verifier = sigManager.getSignatureInstance(algorithm);
+            Signature verifier = signatureTemplateManager.getSignatureInstance(algorithm);
             verifier.initVerify(publicKey);
 
             String dataToVerify = parts[0] + "." + parts[1];

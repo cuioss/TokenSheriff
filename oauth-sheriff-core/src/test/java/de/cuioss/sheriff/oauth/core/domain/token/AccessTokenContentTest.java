@@ -15,12 +15,9 @@
  */
 package de.cuioss.sheriff.oauth.core.domain.token;
 
-import com.dslplatform.json.DslJson;
-import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.TokenType;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
-import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.sheriff.oauth.core.test.TestTokenHolder;
 import de.cuioss.sheriff.oauth.core.test.generator.ScopeGenerator;
 import de.cuioss.sheriff.oauth.core.test.generator.TestTokenGenerators;
@@ -34,7 +31,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -59,18 +55,6 @@ import static org.junit.jupiter.api.Assertions.*;
 class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenContent> {
 
     private static final String TEST_EMAIL = "test@example.com";
-
-    /**
-     * Creates an empty MapRepresentation for tests that don't need specific payload data.
-     */
-    private static MapRepresentation createEmptyMapRepresentation() {
-        try {
-            DslJson<Object> dslJson = ParserConfig.builder().build().getDslJson();
-            return MapRepresentation.fromJson(dslJson, "{}");
-        } catch (IOException e) {
-            throw new AssertionError("Failed to create empty MapRepresentation", e);
-        }
-    }
 
     private AccessTokenContent createTokenWithClaim(ClaimName claimName, ClaimValue claimValue) {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
@@ -159,7 +143,7 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
     @DisplayName("Return email from claims")
     void shouldReturnEmailFromClaims(TestTokenHolder tokenHolder) {
         tokenHolder.withClaim(ClaimName.EMAIL.getName(), ClaimValue.forPlainString(TEST_EMAIL));
-        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         Optional<String> email = accessTokenContent.getEmail();
 
@@ -173,7 +157,7 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
     void shouldReturnPreferredUsernameWhenPresent(TestTokenHolder tokenHolder) {
         String username = "testuser";
         tokenHolder.withClaim(ClaimName.PREFERRED_USERNAME.getName(), ClaimValue.forPlainString(username));
-        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         Optional<String> preferredUsername = accessTokenContent.getPreferredUsername();
 
@@ -198,7 +182,7 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
     @DisplayName("Provide scopes when all expected are present")
     void shouldProvideScopesWhenAllExpectedArePresent(TestTokenHolder tokenHolder) {
         List<String> allScopes = tokenHolder.getClaims().get(ClaimName.SCOPE.getName()).getAsList();
-        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         List<String> expectedScopes = allScopes.size() > 1 ?
                 allScopes.subList(0, allScopes.size() - 1) : allScopes;
@@ -212,7 +196,7 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
     @DisplayName("Not provide scopes when some missing")
     void shouldNotProvideScopesWhenSomeMissing(TestTokenHolder tokenHolder) {
         List<String> existingScopes = tokenHolder.getClaims().get(ClaimName.SCOPE.getName()).getAsList();
-        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         List<String> expectedScopes = new ArrayList<>(existingScopes);
         expectedScopes.add("non_existent_scope");
@@ -225,7 +209,7 @@ class AccessTokenContentTest implements ShouldHandleObjectContracts<AccessTokenC
     @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 2)
     @DisplayName("Provide empty scopes")
     void shouldProvideEmptyScopes(TestTokenHolder tokenHolder) {
-        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        var accessTokenContent = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         boolean result = accessTokenContent.providesScopes(Collections.emptyList());
 

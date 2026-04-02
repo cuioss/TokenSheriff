@@ -71,41 +71,10 @@ public final class JWTValidationLogMessages {
                 .template("Failed to load JWKS")
                 .build();
 
-        // New entries for direct logging conversions
-        public static final LogRecord UNSUPPORTED_JWKS_TYPE = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(204)
-                .template("Unsupported JwksType for HttpJwksLoader: %s")
-                .build();
-
         public static final LogRecord JSON_PARSE_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(205)
                 .template("Failed to parse JSON from %s: %s")
-                .build();
-
-        public static final LogRecord CACHE_TOKEN_NO_EXPIRATION = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(206)
-                .template("Token passed validation but has no expiration time - this indicates a validation bug")
-                .build();
-
-        public static final LogRecord CACHE_TOKEN_STORE_FAILED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(207)
-                .template("Unexpected error while caching token")
-                .build();
-
-        public static final LogRecord CACHE_VALIDATION_FUNCTION_NULL = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(208)
-                .template("Validation function returned null instead of throwing exception")
-                .build();
-
-        public static final LogRecord CACHE_EVICTION_FAILED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(209)
-                .template("Error during cache eviction")
                 .build();
 
         public static final LogRecord JWKS_INITIALIZATION_FAILED = LogRecordModel.builder()
@@ -142,25 +111,12 @@ public final class JWTValidationLogMessages {
                 .template("Keys updated due to data change - load state: %s")
                 .build();
 
-        public static final LogRecord JWKS_HTTP_LOADED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(3)
-                .template("Successfully loaded JWKS from HTTP endpoint")
-                .build();
-
         public static final LogRecord JWKS_BACKGROUND_REFRESH_STARTED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(4)
                 .template("Background JWKS refresh started with interval: %s seconds")
                 .build();
 
-        public static final LogRecord JWKS_BACKGROUND_REFRESH_UPDATED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(5)
-                .template("Background JWKS refresh updated keys, load state: %s")
-                .build();
-
-        // New entries for direct logging conversions
         public static final LogRecord ISSUER_CONFIG_SKIPPED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(6)
@@ -308,18 +264,6 @@ public final class JWTValidationLogMessages {
                 .template("Creating HttpJwksLoaderConfig with invalid JWKS URI. The loader will return empty results.")
                 .build();
 
-        public static final LogRecord JWKS_LOAD_FAILED_CACHED_CONTENT = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(117)
-                .template("Load operation failed but using cached content")
-                .build();
-
-        public static final LogRecord JWKS_LOAD_FAILED_NO_CACHE = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(118)
-                .template("Load operation failed with no cached content available")
-                .build();
-
         public static final LogRecord JWK_MISSING_KTY = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(119)
@@ -349,12 +293,6 @@ public final class JWTValidationLogMessages {
                 .prefix(PREFIX)
                 .identifier(123)
                 .template("Found unhealthy issuer config: %s")
-                .build();
-
-        public static final LogRecord BACKGROUND_REFRESH_SKIPPED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(124)
-                .template("Background refresh skipped - no HTTP cache available")
                 .build();
 
         public static final LogRecord BACKGROUND_REFRESH_FAILED = LogRecordModel.builder()
@@ -430,22 +368,10 @@ public final class JWTValidationLogMessages {
                 .template("Background refresh skipped - no HTTP handler available")
                 .build();
 
-        public static final LogRecord BACKGROUND_REFRESH_IO_ERROR = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(137)
-                .template("Background refresh IO error: %s for issuer: %s")
-                .build();
-
         public static final LogRecord BACKGROUND_REFRESH_PARSE_ERROR = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(138)
                 .template("Background refresh parse error: %s for issuer: %s")
-                .build();
-
-        public static final LogRecord BACKGROUND_REFRESH_KEY_ERROR = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(139)
-                .template("Background refresh key processing error: %s for issuer: %s")
                 .build();
 
         public static final LogRecord ISSUER_CONFIG_LOAD_FAILED = LogRecordModel.builder()

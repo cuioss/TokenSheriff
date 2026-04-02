@@ -15,14 +15,11 @@
  */
 package de.cuioss.sheriff.oauth.core.pipeline.validator;
 
-import com.dslplatform.json.DslJson;
-import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.context.ValidationContext;
 import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
-import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.test.TestTokenHolder;
 import de.cuioss.sheriff.oauth.core.test.generator.TestTokenGenerators;
@@ -32,7 +29,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -48,18 +44,6 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnableGeneratorController
 @DisplayName("ExpirationValidator")
 class ExpirationValidatorTest {
-
-    /**
-     * Creates an empty MapRepresentation for tests that don't need specific payload data.
-     */
-    private static MapRepresentation createEmptyMapRepresentation() {
-        try {
-            DslJson<Object> dslJson = ParserConfig.builder().build().getDslJson();
-            return MapRepresentation.fromJson(dslJson, "{}");
-        } catch (IOException e) {
-            throw new AssertionError("Failed to create empty MapRepresentation", e);
-        }
-    }
 
     private SecurityEventCounter securityEventCounter;
     private ExpirationValidator validator;
@@ -79,7 +63,7 @@ class ExpirationValidatorTest {
         OffsetDateTime futureExpiration = OffsetDateTime.now().plusHours(1);
         tokenHolder.withClaim(ClaimName.EXPIRATION.getName(),
                 ClaimValue.forDateTime(String.valueOf(futureExpiration.toEpochSecond()), futureExpiration));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         assertDoesNotThrow(() -> validator.validateNotExpired(token, context));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_EXPIRED));
@@ -92,7 +76,7 @@ class ExpirationValidatorTest {
         OffsetDateTime pastExpiration = OffsetDateTime.now().minusHours(1);
         tokenHolder.withClaim(ClaimName.EXPIRATION.getName(),
                 ClaimValue.forDateTime(String.valueOf(pastExpiration.toEpochSecond()), pastExpiration));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateNotExpired(token, context));
@@ -107,7 +91,7 @@ class ExpirationValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.NOT_BEFORE.getName());
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken());
 
         assertDoesNotThrow(() -> validator.validateNotBefore(token, context));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE));
@@ -120,7 +104,7 @@ class ExpirationValidatorTest {
         OffsetDateTime pastNotBefore = OffsetDateTime.now().minusHours(1);
         tokenHolder.withClaim(ClaimName.NOT_BEFORE.getName(),
                 ClaimValue.forDateTime(String.valueOf(pastNotBefore.toEpochSecond()), pastNotBefore));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         assertDoesNotThrow(() -> validator.validateNotBefore(token, context));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE));
@@ -133,7 +117,7 @@ class ExpirationValidatorTest {
         OffsetDateTime nearFutureNotBefore = OffsetDateTime.now().plusSeconds(30);
         tokenHolder.withClaim(ClaimName.NOT_BEFORE.getName(),
                 ClaimValue.forDateTime(String.valueOf(nearFutureNotBefore.toEpochSecond()), nearFutureNotBefore));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         assertDoesNotThrow(() -> validator.validateNotBefore(token, context));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE));
@@ -146,7 +130,7 @@ class ExpirationValidatorTest {
         OffsetDateTime farFutureNotBefore = OffsetDateTime.now().plusSeconds(120);
         tokenHolder.withClaim(ClaimName.NOT_BEFORE.getName(),
                 ClaimValue.forDateTime(String.valueOf(farFutureNotBefore.toEpochSecond()), farFutureNotBefore));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateNotBefore(token, context));
@@ -169,7 +153,7 @@ class ExpirationValidatorTest {
 
         tokenHolder.withClaim(ClaimName.NOT_BEFORE.getName(),
                 ClaimValue.forDateTime(String.valueOf(exactBoundaryNotBefore.toEpochSecond()), exactBoundaryNotBefore));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         assertDoesNotThrow(() -> validator.validateNotBefore(token, testContext));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE));
@@ -183,7 +167,7 @@ class ExpirationValidatorTest {
         OffsetDateTime issuedAt = fixedTime.minusHours(24); // very old token
         tokenHolder.withClaim(ClaimName.ISSUED_AT.getName(),
                 ClaimValue.forDateTime(String.valueOf(issuedAt.toEpochSecond()), issuedAt));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         // Context without maxTokenAgeSeconds -> validation disabled
         ValidationContext noAgeContext = new ValidationContext(fixedTime, 60, null);
@@ -199,7 +183,7 @@ class ExpirationValidatorTest {
         OffsetDateTime issuedAt = fixedTime.minusSeconds(100); // 100s old, max age 300 + 60 skew
         tokenHolder.withClaim(ClaimName.ISSUED_AT.getName(),
                 ClaimValue.forDateTime(String.valueOf(issuedAt.toEpochSecond()), issuedAt));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         ValidationContext ageContext = new ValidationContext(fixedTime, 60, 300);
         assertDoesNotThrow(() -> validator.validateTokenAge(token, ageContext));
@@ -214,7 +198,7 @@ class ExpirationValidatorTest {
         OffsetDateTime issuedAt = fixedTime.minusSeconds(400); // 400s old, max age 300 + 60 skew = 360
         tokenHolder.withClaim(ClaimName.ISSUED_AT.getName(),
                 ClaimValue.forDateTime(String.valueOf(issuedAt.toEpochSecond()), issuedAt));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         ValidationContext ageContext = new ValidationContext(fixedTime, 60, 300);
         TokenValidationException exception = assertThrows(TokenValidationException.class,
@@ -231,7 +215,7 @@ class ExpirationValidatorTest {
         OffsetDateTime currentTime = OffsetDateTime.now();
         tokenHolder.withClaim(ClaimName.NOT_BEFORE.getName(),
                 ClaimValue.forDateTime(String.valueOf(currentTime.toEpochSecond()), currentTime));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), createEmptyMapRepresentation());
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         assertDoesNotThrow(() -> validator.validateNotBefore(token, context));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE));

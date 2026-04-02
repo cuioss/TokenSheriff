@@ -97,10 +97,12 @@ class DpopProofValidatorTest {
         String rawAccessToken = "some.access.token";
         DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
 
-        String dpopProof = buildDpopProof(keyPair, jwkMap, "RS256", rawAccessToken);
+        String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken,
+                "GET", "https://resource.example.org/protectedresource");
 
-        AccessTokenRequest request = AccessTokenRequest.of(rawAccessToken,
-                Map.of("dpop", List.of(dpopProof)));
+        AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(dpopProof)),
+                "https://resource.example.org/protectedresource", "GET");
 
         assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken));
     }
@@ -186,15 +188,19 @@ class DpopProofValidatorTest {
         String rawAccessToken = "some.access.token";
         DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
 
-        // Use the same jti twice
+        // Use the same jti twice — need htm/htu in proofs since validateHtuHtm now rejects missing values
         String fixedJti = UUID.randomUUID().toString();
-        String dpopProof1 = buildDpopProofWithJti(keyPair, jwkMap, "RS256", rawAccessToken, fixedJti);
-        String dpopProof2 = buildDpopProofWithJti(keyPair, jwkMap, "RS256", rawAccessToken, fixedJti);
+        String dpopProof1 = buildDpopProofWithJtiAndHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, fixedJti,
+                "GET", "https://resource.example.org/protectedresource");
+        String dpopProof2 = buildDpopProofWithJtiAndHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, fixedJti,
+                "GET", "https://resource.example.org/protectedresource");
 
-        AccessTokenRequest request1 = AccessTokenRequest.of(rawAccessToken,
-                Map.of("dpop", List.of(dpopProof1)));
-        AccessTokenRequest request2 = AccessTokenRequest.of(rawAccessToken,
-                Map.of("dpop", List.of(dpopProof2)));
+        AccessTokenRequest request1 = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(dpopProof1)),
+                "https://resource.example.org/protectedresource", "GET");
+        AccessTokenRequest request2 = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(dpopProof2)),
+                "https://resource.example.org/protectedresource", "GET");
 
         // First should pass
         assertDoesNotThrow(() -> validator.validate(request1, accessToken, rawAccessToken));
@@ -255,10 +261,12 @@ class DpopProofValidatorTest {
         // Use a different thumbprint in the access token
         DecodedJwt accessToken = createAccessTokenJwt("wrong-thumbprint-value");
 
-        String dpopProof = buildDpopProof(keyPair, jwkMap, "RS256", rawAccessToken);
+        String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken,
+                "GET", "https://resource.example.org/protectedresource");
 
-        AccessTokenRequest request = AccessTokenRequest.of(rawAccessToken,
-                Map.of("dpop", List.of(dpopProof)));
+        AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(dpopProof)),
+                "https://resource.example.org/protectedresource", "GET");
 
         var ex = assertThrows(TokenValidationException.class,
                 () -> validator.validate(request, accessToken, rawAccessToken));
@@ -391,11 +399,13 @@ class DpopProofValidatorTest {
         String rawAccessToken = "some.access.token";
         DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
 
-        // Use uppercase typ
-        String dpopProof = buildDpopProofWithCustomTyp(keyPair, jwkMap, "RS256", rawAccessToken, "DPoP+JWT");
+        // Use uppercase typ with htm/htu
+        String dpopProof = buildDpopProofWithCustomTypAndHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, "DPoP+JWT",
+                "GET", "https://resource.example.org/protectedresource");
 
-        AccessTokenRequest request = AccessTokenRequest.of(rawAccessToken,
-                Map.of("dpop", List.of(dpopProof)));
+        AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(dpopProof)),
+                "https://resource.example.org/protectedresource", "GET");
 
         assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken));
     }
@@ -417,10 +427,12 @@ class DpopProofValidatorTest {
             String rawAccessToken = "some.access.token";
             DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
 
-            String dpopProof = buildDpopProofWithJjwt(ecPrivateKey, jwkMap, Jwts.SIG.ES256, rawAccessToken);
+            String dpopProof = buildDpopProofWithJjwt(ecPrivateKey, jwkMap, Jwts.SIG.ES256, rawAccessToken,
+                    "GET", "https://resource.example.org/protectedresource");
 
-            AccessTokenRequest request = AccessTokenRequest.of(rawAccessToken,
-                    Map.of("dpop", List.of(dpopProof)));
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)),
+                    "https://resource.example.org/protectedresource", "GET");
 
             assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken));
         }
@@ -436,10 +448,12 @@ class DpopProofValidatorTest {
             String rawAccessToken = "some.access.token";
             DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
 
-            String dpopProof = buildDpopProofWithJjwt(edPrivateKey, jwkMap, Jwts.SIG.EdDSA, rawAccessToken);
+            String dpopProof = buildDpopProofWithJjwt(edPrivateKey, jwkMap, Jwts.SIG.EdDSA, rawAccessToken,
+                    "GET", "https://resource.example.org/protectedresource");
 
-            AccessTokenRequest request = AccessTokenRequest.of(rawAccessToken,
-                    Map.of("dpop", List.of(dpopProof)));
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)),
+                    "https://resource.example.org/protectedresource", "GET");
 
             assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken));
         }
@@ -523,7 +537,7 @@ class DpopProofValidatorTest {
 
         var body = new MapRepresentation(bodyMap);
         var header = new JwtHeader(
-                "RS256", null, "test-key-id", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                "RS256", null, "test-key-id", null, null, null, null, null, null, null);
 
         return new DecodedJwt(header, body, "dummy-sig", new String[]{"a", "b", "c"}, "a.b.c");
     }
@@ -541,10 +555,23 @@ class DpopProofValidatorTest {
                 computeAth(accessToken));
     }
 
+    private String buildDpopProofWithCustomTypAndHtuHtm(KeyPair keyPair, Map<String, Object> jwkMap, String alg,
+            String accessToken, String typ, String htm, String htu) {
+        return buildDpopProofInternalWithHtuHtm(keyPair, jwkMap, alg, typ,
+                UUID.randomUUID().toString(), System.currentTimeMillis() / 1000,
+                computeAth(accessToken), htm, htu);
+    }
+
     private String buildDpopProofWithJti(KeyPair keyPair, Map<String, Object> jwkMap, String alg,
             String accessToken, String jti) {
         return buildDpopProofInternal(keyPair, jwkMap, alg, "dpop+jwt",
                 jti, System.currentTimeMillis() / 1000, computeAth(accessToken));
+    }
+
+    private String buildDpopProofWithJtiAndHtuHtm(KeyPair keyPair, Map<String, Object> jwkMap, String alg,
+            String accessToken, String jti, String htm, String htu) {
+        return buildDpopProofInternalWithHtuHtm(keyPair, jwkMap, alg, "dpop+jwt",
+                jti, System.currentTimeMillis() / 1000, computeAth(accessToken), htm, htu);
     }
 
     private String buildDpopProofWithIat(KeyPair keyPair, Map<String, Object> jwkMap, String alg,
@@ -737,12 +764,14 @@ class DpopProofValidatorTest {
     @SuppressWarnings("unchecked")
     private <A extends SignatureAlgorithm> String buildDpopProofWithJjwt(
             PrivateKey privateKey, Map<String, Object> jwkMap,
-            A sigAlgorithm, String accessToken) {
+            A sigAlgorithm, String accessToken, String htm, String htu) {
         return Jwts.builder()
                 .header().type("dpop+jwt").add("jwk", jwkMap).and()
                 .claim("jti", UUID.randomUUID().toString())
                 .claim("iat", System.currentTimeMillis() / 1000)
                 .claim("ath", computeAth(accessToken))
+                .claim("htm", htm)
+                .claim("htu", htu)
                 .signWith(privateKey, sigAlgorithm)
                 .compact();
     }
@@ -754,8 +783,8 @@ class DpopProofValidatorTest {
     class HtuHtmValidationTests {
 
         @Test
-        @DisplayName("Should skip htu/htm validation when requestUri is null")
-        void shouldSkipWhenRequestUriIsNull() {
+        @DisplayName("Should reject when requestUri is null (htu/htm required for DPoP)")
+        void shouldRejectWhenRequestUriIsNull() {
             KeyPair keyPair = generateRsaKeyPair();
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
@@ -763,18 +792,21 @@ class DpopProofValidatorTest {
             String rawAccessToken = "some.access.token";
             DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
 
-            // Proof without htm/htu claims — should still pass because request has no URI
+            // Proof without htm/htu claims — now rejected because request URI and method are required
             String dpopProof = buildDpopProof(keyPair, jwkMap, "RS256", rawAccessToken);
 
             AccessTokenRequest request = AccessTokenRequest.of(rawAccessToken,
                     Map.of("dpop", List.of(dpopProof)));
 
-            assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken));
+            var ex = assertThrows(TokenValidationException.class,
+                    () -> validator.validate(request, accessToken, rawAccessToken));
+            assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
+            assertTrue(ex.getMessage().contains("request URI and method are required"));
         }
 
         @Test
-        @DisplayName("Should skip htu/htm validation when requestMethod is blank")
-        void shouldSkipWhenRequestMethodIsBlank() {
+        @DisplayName("Should reject when requestMethod is blank (htu/htm required for DPoP)")
+        void shouldRejectWhenRequestMethodIsBlank() {
             KeyPair keyPair = generateRsaKeyPair();
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
@@ -784,11 +816,14 @@ class DpopProofValidatorTest {
 
             String dpopProof = buildDpopProof(keyPair, jwkMap, "RS256", rawAccessToken);
 
-            // requestUri present but requestMethod blank -> should skip htu/htm validation
+            // requestUri present but requestMethod blank -> now rejected
             AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
                     Map.of("dpop", List.of(dpopProof)), "https://api.example.com/resource", "");
 
-            assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken));
+            var ex = assertThrows(TokenValidationException.class,
+                    () -> validator.validate(request, accessToken, rawAccessToken));
+            assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
+            assertTrue(ex.getMessage().contains("request URI and method are required"));
         }
 
         @Test

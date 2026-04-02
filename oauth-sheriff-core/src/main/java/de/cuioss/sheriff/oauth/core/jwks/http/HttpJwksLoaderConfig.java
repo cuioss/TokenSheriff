@@ -117,6 +117,12 @@ public class HttpJwksLoaderConfig {
     private final ScheduledExecutorService scheduledExecutorService;
 
     /**
+     * Whether this config owns the executor (auto-created) and should shut it down on close.
+     */
+    @Getter
+    private final boolean ownsExecutor;
+
+    /**
      * The issuer identifier for this JWKS configuration.
      * Used for logging and identification purposes.
      */
@@ -153,6 +159,7 @@ public class HttpJwksLoaderConfig {
             WellKnownConfig wellKnownConfig,
             RetryConfig retryConfig,
             ScheduledExecutorService scheduledExecutorService,
+            boolean ownsExecutor,
             String issuerIdentifier,
             Duration keyRotationGracePeriod,
             int maxRetiredKeySets,
@@ -162,6 +169,7 @@ public class HttpJwksLoaderConfig {
         this.wellKnownConfig = wellKnownConfig;
         this.retryConfig = retryConfig;
         this.scheduledExecutorService = scheduledExecutorService;
+        this.ownsExecutor = ownsExecutor;
         this.issuerIdentifier = issuerIdentifier;
         this.keyRotationGracePeriod = keyRotationGracePeriod;
         this.maxRetiredKeySets = maxRetiredKeySets;
@@ -592,6 +600,7 @@ public class HttpJwksLoaderConfig {
 
             // Create default ScheduledExecutorService if not provided and refresh interval > 0
             ScheduledExecutorService executor = this.scheduledExecutorService;
+            boolean executorOwned = false;
             if (executor == null && refreshIntervalSeconds > 0) {
                 String hostName = jwksHttpHandler != null ? jwksHttpHandler.getUri().getHost() : "wellknown";
                 executor = Executors.newScheduledThreadPool(1, r -> {
@@ -599,6 +608,7 @@ public class HttpJwksLoaderConfig {
                     t.setDaemon(true);
                     return t;
                 });
+                executorOwned = true;
             }
 
             // Validate issuer requirement
@@ -614,6 +624,7 @@ public class HttpJwksLoaderConfig {
                     configuredWellKnownConfig,
                     retryConfig,
                     executor,
+                    executorOwned,
                     issuerIdentifier,
                     keyRotationGracePeriod,
                     maxRetiredKeySets,

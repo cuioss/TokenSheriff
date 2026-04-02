@@ -19,9 +19,10 @@ import de.cuioss.sheriff.oauth.core.domain.claim.mapper.*;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import lombok.Getter;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Defines standard JWT claim names and their expected value types.
@@ -181,8 +182,11 @@ public enum ClaimName {
         this.claimMapper = claimMapper;
     }
 
-    // Thread-safe cache for ClaimName lookups to improve performance
-    private static final Map<String, Optional<ClaimName>> CLAIM_NAME_CACHE = new ConcurrentHashMap<>();
+    // Pre-built immutable lookup map from claim name string to ClaimName enum constant.
+    // Bounded by the number of enum values — no unbounded growth from unknown names.
+    private static final Map<String, ClaimName> CLAIM_NAME_LOOKUP =
+            Arrays.stream(values())
+                    .collect(Collectors.toUnmodifiableMap(ClaimName::getName, c -> c));
 
     /**
      * Extract the claim value from the given JSON object using the appropriate mapper.
@@ -195,7 +199,8 @@ public enum ClaimName {
 
     /**
      * Gets a ClaimName by its string name.
-     * This method uses a thread-safe cache to improve performance for repeated lookups.
+     * Uses a pre-built immutable map for O(1) lookup. Unknown names return
+     * {@code Optional.empty()} without being cached, preventing unbounded cache growth.
      *
      * @param name the claim name string
      * @return an Optional containing the ClaimName if found, empty otherwise
@@ -204,25 +209,7 @@ public enum ClaimName {
         if (name == null) {
             return Optional.empty();
         }
-
-        // Check cache first for performance
-        return CLAIM_NAME_CACHE.computeIfAbsent(name, ClaimName::findClaimByName);
-    }
-
-    /**
-     * Internal method to find a ClaimName by its string name.
-     * Used by the cache when a new claim name is encountered.
-     *
-     * @param name the claim name string
-     * @return an Optional containing the ClaimName if found, empty otherwise
-     */
-    private static Optional<ClaimName> findClaimByName(String name) {
-        for (ClaimName claimName : values()) {
-            if (claimName.getName().equals(name)) {
-                return Optional.of(claimName);
-            }
-        }
-        return Optional.empty();
+        return Optional.ofNullable(CLAIM_NAME_LOOKUP.get(name));
     }
 
 }

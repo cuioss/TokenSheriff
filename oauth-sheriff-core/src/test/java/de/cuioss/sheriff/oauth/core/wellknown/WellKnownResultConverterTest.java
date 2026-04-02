@@ -74,12 +74,8 @@ class WellKnownResultConverterTest {
 
         assertTrue(result.isPresent());
         WellKnownResult config = result.get();
-        assertEquals("https://example.com", config.issuer());
-        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri());
-        assertEquals("https://example.com/auth", config.authorizationEndpoint());
-        assertEquals("https://example.com/token", config.tokenEndpoint());
-        assertNotNull(config.authorizationEndpoint());
-        assertNotNull(config.tokenEndpoint());
+        assertEquals("https://example.com", config.issuer);
+        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri);
     }
 
     @Test
@@ -89,12 +85,8 @@ class WellKnownResultConverterTest {
 
         assertTrue(result.isPresent());
         WellKnownResult config = result.get();
-        assertEquals("https://example.com", config.issuer());
-        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri());
-        assertNull(config.authorizationEndpoint());
-        assertNull(config.tokenEndpoint());
-        assertNull(config.authorizationEndpoint());
-        assertNull(config.tokenEndpoint());
+        assertEquals("https://example.com", config.issuer);
+        assertEquals("https://example.com/.well-known/jwks.json", config.jwksUri);
     }
 
     @Test

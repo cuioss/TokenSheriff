@@ -115,18 +115,18 @@ public class BearerTokenProducer {
 
     private final TokenValidator tokenValidator;
     private final HttpServletRequestResolver servletObjectsResolver;
-
-    @ConfigProperty(name = JwtPropertyKeys.TOKEN.HEADER, defaultValue = "Authorization")
-    String tokenHeader;
-
-    @ConfigProperty(name = JwtPropertyKeys.TOKEN.COOKIE_NAME, defaultValue = "Bearer")
-    String tokenCookieName;
+    private final String tokenHeader;
+    private final String tokenCookieName;
 
     @Inject
     public BearerTokenProducer(TokenValidator tokenValidator,
-            @ServletObjectsResolver HttpServletRequestResolver servletObjectsResolver) {
+            @ServletObjectsResolver HttpServletRequestResolver servletObjectsResolver,
+            @ConfigProperty(name = JwtPropertyKeys.TOKEN.HEADER, defaultValue = "Authorization") String tokenHeader,
+            @ConfigProperty(name = JwtPropertyKeys.TOKEN.COOKIE_NAME, defaultValue = "Bearer") String tokenCookieName) {
         this.tokenValidator = tokenValidator;
         this.servletObjectsResolver = servletObjectsResolver;
+        this.tokenHeader = tokenHeader;
+        this.tokenCookieName = tokenCookieName;
     }
 
     /**
@@ -210,6 +210,8 @@ public class BearerTokenProducer {
                         .build();
             }
         } catch (TokenValidationException e) {
+            // cui-rewrite:disable CuiLogRecordPatternRecipe
+            // Quarkus module has its own LogMessages class; this is a cross-module boundary log
             LOGGER.warn("Bearer token validation failed: %s (eventType=%s)", e.getMessage(), e.getEventType());
             return BearerTokenResult.parsingError(e, requiredScopes, requiredRoles, requiredGroups);
         }
@@ -229,7 +231,10 @@ public class BearerTokenProducer {
                     servletObjectsResolver.resolveRequestUri(),
                     servletObjectsResolver.resolveRequestMethod()
             };
-        } catch (Exception e) {
+        }
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
+        // Intentional: resolveRequestUri/Method may throw various runtime exceptions from Vert.x
+        catch (Exception e) {
             LOGGER.debug("Could not resolve request URI/method for DPoP htu/htm validation: %s", e.getMessage());
             return new String[]{null, null};
         }

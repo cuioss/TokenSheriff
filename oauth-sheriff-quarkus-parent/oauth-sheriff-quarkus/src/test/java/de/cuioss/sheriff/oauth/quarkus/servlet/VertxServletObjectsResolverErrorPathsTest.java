@@ -19,6 +19,7 @@ import de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.enterprise.inject.Instance;
 import org.junit.jupiter.api.BeforeEach;
@@ -187,7 +188,7 @@ class VertxServletObjectsResolverErrorPathsTest {
         HttpServerRequest mockRequest = createMock(HttpServerRequest.class);
         expect(vertxRequestInstance.isUnsatisfied()).andReturn(false);
         expect(vertxRequestInstance.get()).andReturn(mockRequest);
-        expect(mockRequest.method()).andReturn(io.vertx.core.http.HttpMethod.POST);
+        expect(mockRequest.method()).andReturn(HttpMethod.POST);
         replay(vertxRequestInstance, mockRequest);
 
         assertEquals("POST", resolver.resolveRequestMethod());

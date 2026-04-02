@@ -46,29 +46,11 @@ public record Jwks(List<JwkKey> keys) {
     }
 
     /**
-     * Creates an empty JWKS with no keys.
-     * 
-     * @return an empty JWKS instance
-     */
-    public static Jwks empty() {
-        return new Jwks(List.of());
-    }
-
-    /**
      * Checks if this JWKS contains any keys.
-     * 
+     *
      * @return true if keys list is null or empty, false otherwise
      */
     public boolean isEmpty() {
         return keys == null || keys.isEmpty();
-    }
-
-    /**
-     * Gets the number of keys in this JWKS.
-     * 
-     * @return the number of keys, or 0 if keys is null
-     */
-    public int size() {
-        return keys == null ? 0 : keys.size();
     }
 }

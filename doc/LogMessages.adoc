@@ -42,9 +42,7 @@ For more details about security events related to these log messages, see the Se
 |ID |Component |Message |Description
 |OAuthSheriff-001 |TOKEN |TokenValidator initialized with %s |Logged when TokenValidator is initialized with issuer configurations
 |OAuthSheriff-002 |JWKS |Keys updated due to data change - load state: %s |Logged when JWKS keys are updated due to data changes from the endpoint
-|OAuthSheriff-003 |JWKS |Successfully loaded JWKS from HTTP endpoint |Logged when JWKS is successfully loaded from HTTP endpoint
 |OAuthSheriff-004 |JWKS |Background JWKS refresh started with interval: %s seconds |Logged when background JWKS refresh is started with specified interval
-|OAuthSheriff-005 |JWKS |Background JWKS refresh updated keys, load state: %s |Logged when background JWKS refresh successfully updates keys
 |OAuthSheriff-006 |TOKEN |Skipping disabled issuer configuration %s |Logged when an issuer configuration is skipped because it's disabled
 |OAuthSheriff-007 |JWKS |Successfully resolved JWKS URI from well-known endpoint: %s |Logged when JWKS URI is successfully resolved via well-known discovery
 |OAuthSheriff-008 |RETRY |Retry operation '%s' completed successfully after %s attempts in %sms |Logged when a retry operation completes successfully with timing information
@@ -75,14 +73,11 @@ For more details about security events related to these log messages, see the Se
 |OAuthSheriff-114 |TOKEN |No configuration found for issuer: %s |Logged when no configuration is found for the issuer
 |OAuthSheriff-115 |TOKEN |Algorithm %s is explicitly rejected for security reasons |Logged when an algorithm is explicitly rejected for security reasons
 |OAuthSheriff-116 |JWKS |Creating HttpJwksLoaderConfig with invalid JWKS URI. The loader will return empty results. |Logged when an invalid JWKS URI is provided to HttpJwksLoaderConfig
-|OAuthSheriff-117 |JWKS |Load operation failed but using cached content |Logged when JWKS load operation fails but cached content is available and used
-|OAuthSheriff-118 |JWKS |Load operation failed with no cached content available |Logged when JWKS load operation fails and no cached content is available
 |OAuthSheriff-119 |JWKS |JWK is missing required field 'kty' |Logged when a JWK key is missing the required 'kty' parameter
 |OAuthSheriff-120 |JWKS |Unsupported key type: %s |Logged when an unsupported JWK key type is encountered
 |OAuthSheriff-121 |JWKS |Key ID exceeds maximum length: %s |Logged when a JWK key ID exceeds the maximum allowed length
 |OAuthSheriff-122 |JWKS |Invalid or unsupported algorithm: %s |Logged when an invalid or unsupported algorithm is encountered in a JWK
 |OAuthSheriff-123 |TOKEN |Found unhealthy issuer config: %s |Logged when an issuer configuration is found to be unhealthy during health checks
-|OAuthSheriff-124 |JWKS |Background refresh skipped - no HTTP cache available |Logged when background JWKS refresh is skipped due to missing HTTP cache
 |OAuthSheriff-125 |JWKS |Background JWKS refresh failed: %s |Logged when background JWKS refresh operation fails
 |OAuthSheriff-126 |JWKS |Failed to resolve JWKS URI from well-known resolver |Logged when JWKS URI resolution fails from well-known discovery
 |OAuthSheriff-127 |JWKS |JWKS object is null |Logged when JWKS object validation fails due to null object
@@ -95,9 +90,7 @@ For more details about security events related to these log messages, see the Se
 |OAuthSheriff-134 |ISSUER |IssuerConfig for issuer '%s' has claimSubOptional=true. This is not conform to RFC 7519 which requires the 'sub' claim for ACCESS_TOKEN and ID_TOKEN types. Use this setting only when necessary and ensure appropriate alternative validation mechanisms. |Logged when an issuer configuration has the subject claim marked as optional, which violates RFC 7519 requirements
 |OAuthSheriff-135 |JWKS |Invalid Base64 URL encoding detected for JWK field: %s |Logged when Base64 URL encoding validation fails for a JWK field
 |OAuthSheriff-136 |JWKS |Background refresh skipped - no HTTP handler available |Logged when background JWKS refresh is skipped because no HTTP handler is available
-|OAuthSheriff-137 |JWKS |Background refresh IO error: %s for issuer: %s |Logged when an IO error occurs during background JWKS refresh for a specific issuer
 |OAuthSheriff-138 |JWKS |Background refresh parse error: %s for issuer: %s |Logged when a JSON parsing error occurs during background JWKS refresh for a specific issuer
-|OAuthSheriff-139 |JWKS |Background refresh key processing error: %s for issuer: %s |Logged when a key processing error occurs during background JWKS refresh for a specific issuer
 |OAuthSheriff-140 |ISSUER |Failed to load issuer configuration for %s, status: %s |Logged when issuer configuration loading fails with a specific status
 |OAuthSheriff-141 |JWKS |Timeout waiting for JWKS to load for issuer: %s |Logged when JWKS loading times out for a specific issuer
 |OAuthSheriff-142 |JWKS |Interrupted while waiting for JWKS to load for issuer: %s |Logged when the thread is interrupted while waiting for JWKS to load
@@ -136,12 +129,7 @@ For more details about security events related to these log messages, see the Se
 |OAuthSheriff-201 |JWKS |JWKS content size exceeds maximum allowed size (upperLimit=%s, actual=%s) |Logged when the JWKS content size exceeds the maximum allowed size, showing both the configured upper limit and the actual content size
 |OAuthSheriff-202 |JWKS |Failed to parse JWKS JSON: %s |Logged when there is an error parsing the JWKS JSON
 |OAuthSheriff-203 |JWKS |Failed to load JWKS |Logged when a JWKS load operation fails
-|OAuthSheriff-204 |JWKS |Unsupported JwksType for HttpJwksLoader: %s |Logged when an unsupported JWKS type is encountered in HttpJwksLoader
 |OAuthSheriff-205 |WELLKNOWN |Failed to parse JSON from %s: %s |Logged when JSON parsing fails for a well-known discovery document
-|OAuthSheriff-206 |CACHE |Token passed validation but has no expiration time - this indicates a validation bug |Logged when a validated token unexpectedly has no expiration time, indicating a validation pipeline bug
-|OAuthSheriff-207 |CACHE |Unexpected error while caching token |Logged when an unexpected error occurs while storing a validated token in the cache
-|OAuthSheriff-208 |CACHE |Validation function returned null instead of throwing exception |Logged when a validation function unexpectedly returns null instead of throwing an exception on failure
-|OAuthSheriff-209 |CACHE |Error during cache eviction |Logged when an error occurs during background cache eviction operations
 |OAuthSheriff-210 |JWKS |JWKS initialization failed: %s for issuer: %s |Logged when JWKS initialization fails for a specific issuer with error details
 |OAuthSheriff-211 |JWKS |JWKS load execution failed: %s for issuer: %s |Logged when JWKS load execution fails for a specific issuer with error details
 |===

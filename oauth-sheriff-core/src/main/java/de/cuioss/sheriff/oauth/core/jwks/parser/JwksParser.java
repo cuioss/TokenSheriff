@@ -23,7 +23,6 @@ import de.cuioss.sheriff.oauth.core.json.Jwks;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter.EventType;
 import de.cuioss.tools.logging.CuiLogger;
-import lombok.RequiredArgsConstructor;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -42,7 +41,6 @@ import java.util.List;
  * </ul>
  * @since 1.0
  */
-@RequiredArgsConstructor
 public class JwksParser {
 
     private static final CuiLogger LOGGER = new CuiLogger(JwksParser.class);
@@ -67,19 +65,20 @@ public class JwksParser {
 
     /**
      * Parse JWKS content and extract individual JWK objects.
-     * 
+     *
      * @param jwksContent the JWKS content as a string
      * @return a list of parsed JWK objects, empty if parsing fails
      */
     public List<JwkKey> parse(String jwksContent) {
         List<JwkKey> result = new ArrayList<>();
 
+        // Encode once and reuse the byte array for both size validation and parsing
+        byte[] bytes = jwksContent.getBytes(StandardCharsets.UTF_8);
+
         // Check content size
-        if (!validateContentSize(jwksContent)) {
+        if (!validateContentSize(bytes)) {
             return result;
         }
-
-        byte[] bytes = jwksContent.getBytes(StandardCharsets.UTF_8);
 
         // First, try to parse as standard JWKS with "keys" array
         boolean jwksParsed = false;
@@ -152,12 +151,12 @@ public class JwksParser {
 
     /**
      * Validate JWKS content size to prevent memory exhaustion attacks.
-     * 
-     * @param jwksContent the JWKS content
+     *
+     * @param contentBytes the JWKS content as UTF-8 bytes
      * @return true if content size is within limits, false otherwise
      */
-    private boolean validateContentSize(String jwksContent) {
-        int actualSize = jwksContent.getBytes(StandardCharsets.UTF_8).length;
+    private boolean validateContentSize(byte[] contentBytes) {
+        int actualSize = contentBytes.length;
         int upperLimit = parserConfig.getMaxPayloadSize();
 
         if (actualSize > upperLimit) {

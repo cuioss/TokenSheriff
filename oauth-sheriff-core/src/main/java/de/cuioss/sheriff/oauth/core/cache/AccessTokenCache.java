@@ -25,11 +25,11 @@ import de.cuioss.sheriff.oauth.core.metrics.TokenValidatorMonitor;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * Features:
  * <ul>
- *   <li>Integer hashCode of tokens for cache keys</li>
+ *   <li>SHA-256 digest of tokens for cache keys (collision-resistant)</li>
  *   <li>Simple get/put API for explicit caching control</li>
  *   <li>Lock-free concurrent access via ConcurrentHashMap</li>
  *   <li>Configurable maximum cache size with automatic overflow eviction</li>
@@ -70,10 +70,10 @@ public class AccessTokenCache {
 
     /**
      * The main cache storage using ConcurrentHashMap for thread safety.
-     * Key: hashCode of token string
+     * Key: SHA-256 hex digest of token string (collision-resistant)
      * Value: CachedToken wrapper
      */
-    private final Map<Integer, CachedToken> cache;
+    private final Map<String, CachedToken> cache;
 
     /**
      * Security event counter for tracking cache hits.
@@ -157,8 +157,8 @@ public class AccessTokenCache {
         // Create metrics ticker for cache lookup
         MetricsTicker lookupTicker = MetricsTickerFactory.createStartedTicker(MeasurementType.CACHE_LOOKUP, performanceMonitor);
 
-        // Generate cache key from token string
-        int cacheKey = tokenString.hashCode();
+        // Generate collision-resistant cache key from token string
+        String cacheKey = sha256Hex(tokenString);
 
         // Try to get existing cached value
         CachedToken existing = cache.get(cacheKey);
@@ -180,7 +180,7 @@ public class AccessTokenCache {
                         "Cached token is expired"
                 );
             } else {
-                // Token verification failed - different token with same hash (unlikely but possible)
+                // Token verification failed - defense-in-depth for SHA-256 collision (negligible probability)
                 cache.remove(cacheKey, existing);
                 LOGGER.debug("Cached token verification failed - hash collision detected");
             }
@@ -216,8 +216,8 @@ public class AccessTokenCache {
 
         // Use try-finally to ensure ticker is always stopped, even on unexpected exceptions
         try {
-            // Generate cache key from token string
-            int cacheKey = tokenString.hashCode();
+            // Generate collision-resistant cache key from token string
+            String cacheKey = sha256Hex(tokenString);
 
             // Wrap validated token in CachedToken for storage
             // Note: expirationTime is guaranteed to be present because tokens are validated
@@ -289,10 +289,10 @@ public class AccessTokenCache {
      */
     private void evictExpiredTokens() {
         OffsetDateTime now = OffsetDateTime.now();
-        List<Integer> expiredKeys = new ArrayList<>();
+        List<String> expiredKeys = new ArrayList<>();
 
         // Collect expired keys (thread-safe iteration)
-        for (Map.Entry<Integer, CachedToken> entry : cache.entrySet()) {
+        for (Map.Entry<String, CachedToken> entry : cache.entrySet()) {
             if (entry.getValue().isExpired(now, clockSkewSeconds)) {
                 expiredKeys.add(entry.getKey());
             }
@@ -326,6 +326,25 @@ public class AccessTokenCache {
             cache.clear();
         }
         LOGGER.debug("AccessTokenCache shut down");
+    }
+
+    /**
+     * Computes the SHA-256 digest of the given token string and returns it as a hex string.
+     * SHA-256 provides collision-resistant cache keys, eliminating the risk of
+     * accidental collisions that {@code String.hashCode()} (32-bit) would have.
+     *
+     * @param tokenString the raw JWT token string
+     * @return hex-encoded SHA-256 digest
+     */
+    private static String sha256Hex(String tokenString) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(tokenString.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 is required by the Java specification; this should never happen
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
     }
 
     /**

@@ -23,20 +23,16 @@ import java.util.Optional;
 /**
  * Java representation of OpenID Connect Well-Known Configuration response.
  * <p>
- * This class represents the standard OpenID Connect Discovery 1.0 well-known configuration
- * document structure. It uses DSL-JSON's @CompiledJson for compile-time code generation,
- * enabling direct deserialization and optimal performance for native compilation.
+ * This class represents the core fields from the standard OpenID Connect Discovery 1.0
+ * well-known configuration document needed for JWT validation. It uses DSL-JSON's
+ * {@code @CompiledJson} for compile-time code generation, enabling direct deserialization
+ * and optimal performance for native compilation.
  * <p>
  * Key fields from RFC 8414 and OpenID Connect Discovery:
  * <ul>
  *   <li><strong>issuer</strong>: Authorization server's identifier URL</li>
  *   <li><strong>jwks_uri</strong>: URL of the authorization server's JWK Set document</li>
- *   <li><strong>authorization_endpoint</strong>: URL of the authorization endpoint</li>
- *   <li><strong>token_endpoint</strong>: URL of the token endpoint</li>
  * </ul>
- * <p>
- * This implementation prioritizes the core fields needed for JWT validation while
- * maintaining extensibility for additional OpenID Connect discovery fields.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -46,53 +42,10 @@ import java.util.Optional;
 @CompiledJson
 public class WellKnownResult {
 
-    @JsonAttribute(name = "issuer")
     public String issuer;
 
     @JsonAttribute(name = "jwks_uri")
     public String jwksUri;
-
-    @JsonAttribute(name = "authorization_endpoint")
-    public String authorizationEndpoint;
-
-    @JsonAttribute(name = "token_endpoint")
-    public String tokenEndpoint;
-
-    @JsonAttribute(name = "userinfo_endpoint")
-    public String userinfoEndpoint;
-
-    // Default constructor for DSL-JSON
-    public WellKnownResult() {
-    }
-
-    public WellKnownResult(String issuer, String jwksUri,
-            String authorizationEndpoint, String tokenEndpoint, String userinfoEndpoint) {
-        this.issuer = issuer;
-        this.jwksUri = jwksUri;
-        this.authorizationEndpoint = authorizationEndpoint;
-        this.tokenEndpoint = tokenEndpoint;
-        this.userinfoEndpoint = userinfoEndpoint;
-    }
-
-    public String issuer() {
-        return issuer;
-    }
-
-    public String jwksUri() {
-        return jwksUri;
-    }
-
-    public String authorizationEndpoint() {
-        return authorizationEndpoint;
-    }
-
-    public String tokenEndpoint() {
-        return tokenEndpoint;
-    }
-
-    public String userinfoEndpoint() {
-        return userinfoEndpoint;
-    }
 
     /**
      * Gets the issuer as Optional.
@@ -110,33 +63,6 @@ public class WellKnownResult {
      */
     public Optional<String> getJwksUri() {
         return Optional.ofNullable(jwksUri);
-    }
-
-    /**
-     * Gets the authorization endpoint as Optional.
-     *
-     * @return Optional containing the authorization endpoint, empty if null
-     */
-    public Optional<String> getAuthorizationEndpoint() {
-        return Optional.ofNullable(authorizationEndpoint);
-    }
-
-    /**
-     * Gets the token endpoint as Optional.
-     *
-     * @return Optional containing the token endpoint, empty if null
-     */
-    public Optional<String> getTokenEndpoint() {
-        return Optional.ofNullable(tokenEndpoint);
-    }
-
-    /**
-     * Gets the userinfo endpoint as Optional.
-     *
-     * @return Optional containing the userinfo endpoint, empty if null
-     */
-    public Optional<String> getUserinfoEndpoint() {
-        return Optional.ofNullable(userinfoEndpoint);
     }
 
 }

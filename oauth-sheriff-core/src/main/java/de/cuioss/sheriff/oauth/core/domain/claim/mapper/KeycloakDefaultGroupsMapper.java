@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.oauth.core.domain.claim.mapper;
 
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
-import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValueType;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.tools.logging.CuiLogger;
 
@@ -63,12 +62,12 @@ public class KeycloakDefaultGroupsMapper implements ClaimMapper {
     @Override
     public ClaimValue map(MapRepresentation mapRepresentation, String claimName) {
         LOGGER.debug("KeycloakDefaultGroupsMapper.map called for claim: %s", claimName);
-        LOGGER.debug("Input MapRepresentation: %s", mapRepresentation.toString());
+        LOGGER.debug("Input MapRepresentation: %s", mapRepresentation);
 
         Optional<List<String>> groupsValue = mapRepresentation.getStringList(GROUPS_CLAIM);
         if (groupsValue.isEmpty()) {
             LOGGER.debug("No groups claim found in token");
-            return ClaimValue.createEmptyClaimValue(ClaimValueType.STRING_LIST);
+            return null;
         }
 
         List<String> groupsList = groupsValue.get();

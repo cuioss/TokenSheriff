@@ -17,6 +17,7 @@ package de.cuioss.sheriff.oauth.core.pipeline;
 
 import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.oauth.core.ParserConfig;
+import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.json.JwtHeader;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Base64;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -89,7 +91,7 @@ class DecodedJwtTest {
     @DisplayName("Should create DecodedJwt with null header but non-null body")
     void shouldCreateDecodedJwtWithNullHeader() {
 
-        MapRepresentation body = MapRepresentation.empty();
+        MapRepresentation body = new MapRepresentation(Map.of());
         DecodedJwt jwt = new DecodedJwt(null, body, SIGNATURE, PARTS, RAW_TOKEN);
         JwtHeader actualHeader = jwt.header();
         assertNull(actualHeader);
@@ -108,18 +110,13 @@ class DecodedJwtTest {
     }
 
     @Test
-    @DisplayName("Should create DecodedJwt using builder")
-    void shouldCreateDecodedJwtUsingBuilder() {
+    @DisplayName("Should create DecodedJwt using static factory")
+    void shouldCreateDecodedJwtUsingStaticFactory() {
 
         JwtHeader header = createTestHeader();
         MapRepresentation body = createTestBody();
-        DecodedJwt jwt = DecodedJwt.builder()
-                .header(header)
-                .body(body)
-                .signature(SIGNATURE)
-                .parts(PARTS)
-                .rawToken(RAW_TOKEN)
-                .build();
+        DecodedJwt jwt = DecodedJwt.of(header, body, SIGNATURE, PARTS, RAW_TOKEN);
+
         JwtHeader actualHeader = jwt.header();
         assertNotNull(actualHeader);
         assertEquals(ALG, actualHeader.alg());
@@ -147,27 +144,11 @@ class DecodedJwtTest {
     }
 
     @Test
-    @DisplayName("Builder should reject null header")
-    void builderShouldRejectNullHeader() {
-        var builder = DecodedJwt.builder()
-                .body(createTestBody())
-                .signature(SIGNATURE)
-                .parts(PARTS)
-                .rawToken(RAW_TOKEN);
-        assertThrows(NullPointerException.class, builder::build,
-                "Builder should throw NullPointerException when header is null");
-    }
-
-    @Test
-    @DisplayName("Builder should reject null rawToken")
-    void builderShouldRejectNullRawToken() {
-        var builder = DecodedJwt.builder()
-                .header(createTestHeader())
-                .body(createTestBody())
-                .signature(SIGNATURE)
-                .parts(PARTS);
-        assertThrows(NullPointerException.class, builder::build,
-                "Builder should throw NullPointerException when rawToken is null");
+    @DisplayName("Static factory should reject null header")
+    void staticFactoryShouldRejectNullHeader() {
+        assertThrows(NullPointerException.class,
+                () -> DecodedJwt.of(null, createTestBody(), SIGNATURE, PARTS, RAW_TOKEN),
+                "Static factory should throw NullPointerException when header is null");
     }
 
     @Test
@@ -250,8 +231,8 @@ class DecodedJwtTest {
     }
 
     @Test
-    @DisplayName("Should throw IllegalStateException for invalid JWT format")
-    void shouldThrowIllegalStateExceptionForInvalidFormat() {
+    @DisplayName("Should throw IllegalStateException for null parts when getting signature bytes")
+    void shouldThrowIllegalStateExceptionForNullParts() {
         JwtHeader header = createTestHeader();
         MapRepresentation body = createTestBody();
 
@@ -259,14 +240,18 @@ class DecodedJwtTest {
         DecodedJwt jwtNullParts = new DecodedJwt(header, body, SIGNATURE, null, RAW_TOKEN);
         IllegalStateException exception = assertThrows(IllegalStateException.class, jwtNullParts::getSignatureAsDecodedBytes);
         assertTrue(exception.getMessage().contains("JWT format is invalid"));
-        assertTrue(exception.getMessage().contains("null"));
+    }
 
-        // Test with wrong number of parts
+    @Test
+    @DisplayName("Should reject wrong number of parts in constructor")
+    void shouldRejectWrongNumberOfPartsInConstructor() {
+        JwtHeader header = createTestHeader();
+        MapRepresentation body = createTestBody();
+
+        // Test with wrong number of parts - now rejected at construction time
         String[] wrongParts = {"header", "payload"};
-        DecodedJwt jwtWrongParts = new DecodedJwt(header, body, SIGNATURE, wrongParts, RAW_TOKEN);
-        exception = assertThrows(IllegalStateException.class, jwtWrongParts::getSignatureAsDecodedBytes);
-        assertTrue(exception.getMessage().contains("JWT format is invalid"));
-        assertTrue(exception.getMessage().contains("2"));
+        assertThrows(TokenValidationException.class,
+                () -> new DecodedJwt(header, body, SIGNATURE, wrongParts, RAW_TOKEN));
     }
 
     @Test
@@ -301,8 +286,8 @@ class DecodedJwtTest {
     }
 
     @Test
-    @DisplayName("Should throw IllegalStateException for invalid JWT format when getting data to verify")
-    void shouldThrowIllegalStateExceptionForInvalidFormatWhenGettingDataToVerify() {
+    @DisplayName("Should throw IllegalStateException for null parts when getting data to verify")
+    void shouldThrowIllegalStateExceptionForNullPartsWhenGettingDataToVerify() {
         JwtHeader header = createTestHeader();
         MapRepresentation body = createTestBody();
 
@@ -310,14 +295,6 @@ class DecodedJwtTest {
         DecodedJwt jwtNullParts = new DecodedJwt(header, body, SIGNATURE, null, RAW_TOKEN);
         IllegalStateException exception = assertThrows(IllegalStateException.class, jwtNullParts::getDataToVerify);
         assertTrue(exception.getMessage().contains("JWT format is invalid"));
-        assertTrue(exception.getMessage().contains("null"));
-
-        // Test with wrong number of parts
-        String[] wrongParts = {"header", "payload"};
-        DecodedJwt jwtWrongParts = new DecodedJwt(header, body, SIGNATURE, wrongParts, RAW_TOKEN);
-        exception = assertThrows(IllegalStateException.class, jwtWrongParts::getDataToVerify);
-        assertTrue(exception.getMessage().contains("JWT format is invalid"));
-        assertTrue(exception.getMessage().contains("2"));
     }
 
     private JwtHeader createTestHeader() {

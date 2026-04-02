@@ -17,6 +17,7 @@ package de.cuioss.sheriff.oauth.core.domain.claim.mapper;
 
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
+import org.jspecify.annotations.Nullable;
 
 /***
  * A functional interface for mapping a claim from a {@link MapRepresentation} to a {@link ClaimValue}.
@@ -50,10 +51,14 @@ public interface ClaimMapper {
 
     /**
      * Maps a claim from a {@link MapRepresentation} to a {@link ClaimValue}.
+     * <p>
+     * Returns {@code null} when the claim is absent from the map representation,
+     * indicating that the claim should not be stored in the token's claims map.
      *
      * @param mapRepresentation the map representation containing the claim
      * @param claimName the name of the claim in the map
-     * @return the mapped claim as a ClaimValue
+     * @return the mapped claim as a ClaimValue, or {@code null} if the claim is absent
      */
+    @Nullable
     ClaimValue map(MapRepresentation mapRepresentation, String claimName);
 }

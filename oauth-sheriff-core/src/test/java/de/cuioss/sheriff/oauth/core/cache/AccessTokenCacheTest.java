@@ -15,13 +15,10 @@
  */
 package de.cuioss.sheriff.oauth.core.cache;
 
-import com.dslplatform.json.DslJson;
-import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
-import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.sheriff.oauth.core.metrics.TokenValidatorMonitor;
 import de.cuioss.sheriff.oauth.core.metrics.TokenValidatorMonitorConfig;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
@@ -32,7 +29,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -46,18 +42,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @EnableTestLogger
 class AccessTokenCacheTest {
-
-    /**
-     * Creates an empty MapRepresentation for tests that don't need specific payload data.
-     */
-    private static MapRepresentation createEmptyMapRepresentation() {
-        try {
-            DslJson<Object> dslJson = ParserConfig.builder().build().getDslJson();
-            return MapRepresentation.fromJson(dslJson, "{}");
-        } catch (IOException e) {
-            throw new AssertionError("Failed to create empty MapRepresentation", e);
-        }
-    }
 
     private AccessTokenCache cache;
     private SecurityEventCounter securityEventCounter;
@@ -409,7 +393,7 @@ class AccessTokenCacheTest {
         AccessTokenContent generated = tokenHolder.asAccessTokenContent();
 
         // Create a new instance with our specified raw token
-        return new AccessTokenContent(generated.getClaims(), rawToken, createEmptyMapRepresentation());
+        return new AccessTokenContent(generated.getClaims(), rawToken);
     }
 
     @Test

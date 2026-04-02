@@ -25,11 +25,15 @@ import java.io.Serial;
 import java.util.Map;
 
 /**
- * Represents the content of an OAuth 2.0 Refresh Token in JWT format.
+ * Represents an <strong>unvalidated</strong> OAuth 2.0 Refresh Token container.
+ * <p>
+ * <strong>WARNING:</strong> The contents of this class have NOT been validated.
+ * Refresh tokens are often opaque strings and cannot be verified by the client.
+ * Never trust claims from this container for authorization decisions.
  * <p>
  * While most OAuth 2.0 implementations use opaque tokens for refresh tokens,
  * some authorization servers issue JWT-formatted refresh tokens. This class
- * provides a container for such JWT-based refresh tokens.
+ * provides a container for such tokens regardless of format.
  * <p>
  * Unlike {@link AccessTokenContent} and {@link IdTokenContent} which extend {@link BaseTokenContent},
  * this class implements {@link MinimalTokenContent} directly because:
@@ -38,11 +42,6 @@ import java.util.Map;
  *   <li>The structure can vary significantly between authorization servers</li>
  *   <li>Validation requirements are minimal for refresh tokens</li>
  * </ul>
- * <p>
- * This class maintains the raw token string and any claims that might be present in the
- * JWT structure.
- * However, it does not enforce specific validation rules as refresh tokens
- * are meant to be used only with the token endpoint, not validated by client applications.
  * <p>
  * This implementation follows guidance from:
  * <ul>
@@ -55,13 +54,20 @@ import java.util.Map;
  */
 @ToString
 @EqualsAndHashCode
-public final class RefreshTokenContent implements MinimalTokenContent {
+public final class UnvalidatedRefreshToken implements MinimalTokenContent {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
     @Getter
     private final String rawToken;
+
+    private final Map<String, ClaimValue> claims;
+
+    public UnvalidatedRefreshToken(String rawToken, Map<String, ClaimValue> claims) {
+        this.rawToken = rawToken;
+        this.claims = claims;
+    }
 
     /**
      * Returns the claims extracted from the refresh token JWT, if applicable.
@@ -70,13 +76,11 @@ public final class RefreshTokenContent implements MinimalTokenContent {
      * access to the raw claims. These claims are <em>not</em> validated in any way.
      * <p>
      * Never {@code null}, but may be empty.
+     *
+     * @return unvalidated claims map (package-private access)
      */
-    @Getter
-    private final Map<String, ClaimValue> claims;
-
-    public RefreshTokenContent(String rawToken, Map<String, ClaimValue> claims) {
-        this.rawToken = rawToken;
-        this.claims = claims;
+    Map<String, ClaimValue> getClaims() {
+        return claims;
     }
 
     /**

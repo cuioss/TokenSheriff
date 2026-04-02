@@ -92,7 +92,7 @@ public class CollectionClaimHandler {
             return true;
         }
         var availableValues = getValues();
-        @SuppressWarnings("SlowListContainsAll") // The implementation already uses a Set
+        @SuppressWarnings("SlowListContainsAll")
         var result = availableValues.containsAll(expectedValues);
         LOGGER.debug("Value check result=%s (expected=%s, available=%s)", result, expectedValues, availableValues);
         return result;

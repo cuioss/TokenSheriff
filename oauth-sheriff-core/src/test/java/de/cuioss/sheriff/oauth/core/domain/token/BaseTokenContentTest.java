@@ -18,7 +18,6 @@ package de.cuioss.sheriff.oauth.core.domain.token;
 import de.cuioss.sheriff.oauth.core.TokenType;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
-import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.sheriff.oauth.core.test.TestTokenHolder;
 import de.cuioss.sheriff.oauth.core.test.generator.TestTokenGenerators;
 import de.cuioss.sheriff.oauth.core.test.junit.TestTokenSource;
@@ -48,7 +47,7 @@ class BaseTokenContentTest implements ShouldHandleObjectContracts<AccessTokenCon
     @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 3)
     @DisplayName("Create BaseTokenContent with valid parameters")
     void shouldCreateBaseTokenContentWithValidParameters(TestTokenHolder tokenHolder) {
-        var content = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), MapRepresentation.empty());
+        var content = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         assertNotNull(content, "BaseTokenContent should not be null");
         assertEquals(tokenHolder.getClaims(), content.getClaims(), "Claims should match");
@@ -62,7 +61,7 @@ class BaseTokenContentTest implements ShouldHandleObjectContracts<AccessTokenCon
     void shouldReturnClaimOptionCorrectly(TestTokenHolder tokenHolder) {
         ClaimValue claimValue = ClaimValue.forPlainString("test-value");
         tokenHolder.withClaim(ClaimName.ISSUER.getName(), claimValue);
-        var content = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), MapRepresentation.empty());
+        var content = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         Optional<ClaimValue> claimOption = content.getClaimOption(ClaimName.ISSUER);
 
@@ -75,7 +74,7 @@ class BaseTokenContentTest implements ShouldHandleObjectContracts<AccessTokenCon
     @DisplayName("Return empty claim option when claim is not present")
     void shouldReturnEmptyClaimOptionWhenClaimIsNotPresent(TestTokenHolder tokenHolder) {
         tokenHolder.withoutClaim(ClaimName.ISSUER.getName());
-        var content = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), MapRepresentation.empty());
+        var content = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
         Optional<ClaimValue> claimOption = content.getClaimOption(ClaimName.ISSUER);
 
@@ -85,6 +84,6 @@ class BaseTokenContentTest implements ShouldHandleObjectContracts<AccessTokenCon
     @Override
     public AccessTokenContent getUnderTest() {
         var tokenHolder = TestTokenGenerators.accessTokens().next();
-        return new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken(), MapRepresentation.empty());
+        return new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
     }
 }

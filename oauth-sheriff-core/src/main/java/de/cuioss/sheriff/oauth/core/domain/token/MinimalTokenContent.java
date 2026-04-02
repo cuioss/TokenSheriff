@@ -39,7 +39,8 @@ import java.io.Serializable;
  * @since 1.0
  * @author Oliver Wolff
  */
-public interface MinimalTokenContent extends Serializable {
+public sealed interface MinimalTokenContent extends Serializable
+        permits TokenContent, UnvalidatedRefreshToken {
 
     /**
      * Gets the raw token string.

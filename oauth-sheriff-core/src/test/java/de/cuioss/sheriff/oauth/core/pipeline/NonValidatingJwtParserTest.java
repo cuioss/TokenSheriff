@@ -75,7 +75,7 @@ class NonValidatingJwtParserTest {
             DecodedJwt jwt = parser.decode(VALID_TOKEN);
 
             // Verify header
-            var header = jwt.getHeader();
+            var header = jwt.header();
             assertNotNull(header, "Header should be present");
             assertNotNull(header.alg(), "Algorithm should be present");
             assertEquals("RS256", header.alg(), "Algorithm should be RS256");
@@ -83,7 +83,7 @@ class NonValidatingJwtParserTest {
             assertEquals("test-key-id", header.getKid().orElse(""), "Key ID should match expected");
 
             // Verify body
-            var body = jwt.getBody();
+            var body = jwt.body();
             assertNotNull(body, "Body should be present");
             assertFalse(body.isEmpty(), "Body should not be empty");
             assertEquals("1234567890", body.getString("sub").orElse(""), "Subject should match expected");
@@ -429,7 +429,7 @@ class NonValidatingJwtParserTest {
             DecodedJwt result = parser.decode(tokenWithLargeArray);
 
             // Verify the array was parsed correctly
-            var header = result.getHeader();
+            var header = result.header();
             assertNotNull(header, "Header should be present");
             assertNotNull(header.alg(), "Algorithm should be present");
             // Note: With new header structure, the array would be in the body, not header
@@ -448,7 +448,7 @@ class NonValidatingJwtParserTest {
             DecodedJwt result = parser.decode(tokenWithLargeString);
 
             // Verify the string was parsed correctly
-            var header = result.getHeader();
+            var header = result.header();
             assertNotNull(header, "Header should be present");
             assertNotNull(header.alg(), "Algorithm should be present");
             // Note: With new header structure, the large string would be in the body, not header

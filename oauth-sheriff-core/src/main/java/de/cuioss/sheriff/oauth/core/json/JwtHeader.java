@@ -30,7 +30,6 @@ import java.util.Optional;
  *   <li>Algorithm specification for signature verification (JWS) or key management (JWE)</li>
  *   <li>Key identification for key lookup</li>
  *   <li>Content type information</li>
- *   <li>Key discovery metadata</li>
  *   <li>JWE-specific fields: content encryption algorithm, compression, ephemeral keys</li>
  * </ul>
  * <p>
@@ -49,14 +48,8 @@ import java.util.Optional;
  *            For JWE: key management algorithm (e.g., "RSA-OAEP", "ECDH-ES").
  * @param typ The "typ" (type) Header Parameter is used to declare the media type.
  * @param kid The "kid" (key ID) Header Parameter is a hint indicating which key was used.
- * @param jku The "jku" (JWK Set URL) Header Parameter.
  * @param jwk The "jwk" (JSON Web Key) Header Parameter.
- * @param x5u The "x5u" (X.509 URL) Header Parameter.
- * @param x5c The "x5c" (X.509 Certificate Chain) Header Parameter.
- * @param x5t The "x5t" (X.509 Certificate SHA-1 Thumbprint) Header Parameter.
- * @param x5tS256 The "x5t#S256" (X.509 Certificate SHA-256 Thumbprint) Header Parameter.
  * @param cty The "cty" (content type) Header Parameter.
- * @param crit The "crit" (critical) Header Parameter.
  * @param enc The "enc" (encryption algorithm) Header Parameter (JWE only, RFC 7516).
  *            Identifies the content encryption algorithm (e.g., "A256GCM", "A128CBC-HS256").
  *            Presence of this field distinguishes JWE from JWS headers.
@@ -77,14 +70,8 @@ public record JwtHeader(
 String alg,
 String typ,
 String kid,
-String jku,
 String jwk,
-String x5u,
-String x5c,
-String x5t,
-String x5tS256,
 String cty,
-String crit,
 String enc,
 String zip,
 String epk,

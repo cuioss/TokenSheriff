@@ -29,7 +29,7 @@ import jakarta.json.JsonObjectBuilder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.EmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -125,23 +125,26 @@ class JsonCollectionMapperTest {
                 "List element should match string representation of input boolean");
     }
 
+    @Test
+    @DisplayName("Handle null input - returns null for absent claim")
+    void shouldHandleNullInput() {
+        JsonObject jsonObject = createJsonObjectWithNullClaim(CLAIM_NAME);
+        ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
+        assertNull(result, "Should return null for null claim");
+    }
+
     @ParameterizedTest
-    @NullAndEmptySource
+    @EmptySource
     @ValueSource(strings = {" ", "\t", "\n"})
-    @DisplayName("Handle null, empty, and whitespace inputs")
-    void shouldHandleSpecialInputs(String input) {
-        JsonObject jsonObject = input == null
-                ? createJsonObjectWithNullClaim(CLAIM_NAME)
-                : createJsonObjectWithStringClaim(CLAIM_NAME, input);
+    @DisplayName("Handle empty and whitespace inputs")
+    void shouldHandleEmptyAndWhitespaceInputs(String input) {
+        JsonObject jsonObject = createJsonObjectWithStringClaim(CLAIM_NAME, input);
 
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
 
         assertNotNull(result, "Result should not be null");
         assertEquals(ClaimValueType.STRING_LIST, result.getType(), "Type should be STRING_LIST");
-
-        if (input == null) {
-            assertTrue(result.getAsList().isEmpty(), "List should be empty for null input");
-        } else if (input.trim().isEmpty()) {
+        if (input.trim().isEmpty()) {
             assertEquals(1, result.getAsList().size(), "List should have one element for empty/whitespace input");
             assertEquals(input, result.getAsList().getFirst(), "List element should match input string");
         }
@@ -180,27 +183,19 @@ class JsonCollectionMapperTest {
     }
 
     @Test
-    @DisplayName("Handle missing claim")
+    @DisplayName("Handle missing claim - returns null")
     void shouldHandleMissingClaim() {
         JsonObject jsonObject = Json.createObjectBuilder().build();
-
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
-
-        assertNotNull(result, "Result should not be null");
-        assertEquals(ClaimValueType.STRING_LIST, result.getType(), "Type should be STRING_LIST");
-        assertTrue(result.getAsList().isEmpty(), "List should be empty for missing claim");
+        assertNull(result, "Should return null for missing claim");
     }
 
     @Test
-    @DisplayName("Handle empty JSON object")
+    @DisplayName("Handle empty JSON object - returns null")
     void shouldHandleEmptyJsonObject() {
         JsonObject emptyJsonObject = Json.createObjectBuilder().build();
-
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(emptyJsonObject), CLAIM_NAME);
-
-        assertNotNull(result, "Result should not be null");
-        assertEquals(ClaimValueType.STRING_LIST, result.getType(), "Type should be STRING_LIST");
-        assertTrue(result.getAsList().isEmpty(), "List should be empty for empty JSON object");
+        assertNull(result, "Should return null for empty JSON object");
     }
 
     @Test

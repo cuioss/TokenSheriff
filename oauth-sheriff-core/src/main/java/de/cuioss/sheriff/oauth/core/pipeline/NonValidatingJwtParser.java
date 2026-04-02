@@ -70,17 +70,17 @@ import java.util.Objects;
  *     // Access the raw token
  *     String rawToken = jwt.getRawToken();
  *
- *     // For more complex operations, access the header and body JSON objects
- *     jwt.getHeader().ifPresent(header -> {
+ *     // For more complex operations, access the header and body via record accessors
+ *     var header = jwt.header();
+ *     if (header != null) {
  *         // Process header fields not covered by convenience methods
- *     });
+ *     }
  *
- *     jwt.getBody().ifPresent(body -> {
+ *     var body = jwt.body();
+ *     if (!body.isEmpty()) {
  *         // Process custom claims in the body
- *         if (body.containsKey("custom_claim")) {
- *             String customValue = body.getString("custom_claim");
- *         }
- *     });
+ *         body.getString("custom_claim").ifPresent(customValue -> {});
+ *     }
  * });
  * </pre>
  * <p>
@@ -345,7 +345,7 @@ public class NonValidatingJwtParser {
             }
 
             // Decrypt to get inner JWS string
-            String innerJws = jweDecryptor.decrypt(parts, jweHeader, jweDecryptionConfig, securityEventCounter);
+            String innerJws = jweDecryptor.decrypt(parts, jweHeader, jweDecryptionConfig, securityEventCounter, config.getDslJson());
 
             // Check inner JWS size
             if (innerJws.getBytes(StandardCharsets.UTF_8).length > config.getMaxTokenSize()) {

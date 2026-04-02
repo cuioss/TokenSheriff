@@ -17,7 +17,7 @@ package de.cuioss.sheriff.oauth.core.pipeline;
 
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.context.RefreshTokenRequest;
-import de.cuioss.sheriff.oauth.core.domain.token.RefreshTokenContent;
+import de.cuioss.sheriff.oauth.core.domain.token.UnvalidatedRefreshToken;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.tools.logging.CuiLogger;
@@ -35,7 +35,7 @@ import java.util.Map;
  * <ol>
  *   <li>Attempt to parse token as JWT (failures are allowed)</li>
  *   <li>Extract claims if JWT parsing succeeds, otherwise use empty claims</li>
- *   <li>Return RefreshTokenContent with token string and claims</li>
+ *   <li>Return UnvalidatedRefreshToken with token string and claims</li>
  * </ol>
  * <p>
  * <strong>Note:</strong> TokenStringValidator has already validated that the token
@@ -81,7 +81,7 @@ public class RefreshTokenValidationPipeline {
      * @param request the refresh token validation request (token string guaranteed non-null, non-blank, within size limits)
      * @return the validated refresh token content
      */
-    public RefreshTokenContent validate(RefreshTokenRequest request) {
+    public UnvalidatedRefreshToken validate(RefreshTokenRequest request) {
         LOGGER.debug("Validating refresh token");
         String tokenString = request.tokenString();
 
@@ -92,7 +92,7 @@ public class RefreshTokenValidationPipeline {
         Map<String, ClaimValue> claims = Map.of();
         try {
             DecodedJwt decoded = jwtParser.decodeOpaqueToken(tokenString);
-            MapRepresentation body = decoded.getBody();
+            MapRepresentation body = decoded.body();
             if (!body.isEmpty()) {
                 LOGGER.debug("Adding claims, because of being a JWT");
                 claims = TokenBuilder.extractClaimsForRefreshToken(body);
@@ -102,7 +102,7 @@ public class RefreshTokenValidationPipeline {
             LOGGER.debug("Ignoring validation exception for refresh token: %s", e.getMessage());
         }
 
-        var refreshToken = new RefreshTokenContent(tokenString, claims);
+        var refreshToken = new UnvalidatedRefreshToken(tokenString, claims);
         LOGGER.debug("Successfully validated refresh token");
 
         return refreshToken;

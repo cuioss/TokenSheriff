@@ -17,11 +17,9 @@ package de.cuioss.sheriff.oauth.core.domain.token;
 
 import de.cuioss.sheriff.oauth.core.TokenType;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
-import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
-import lombok.experimental.SuperBuilder;
 
 import java.io.Serial;
 import java.util.Map;
@@ -35,7 +33,7 @@ import java.util.Map;
  * <ul>
  *   <li>{@link AccessTokenContent} - For OAuth2/OIDC access tokens</li>
  *   <li>{@link IdTokenContent} - For OIDC ID tokens</li>
- *   <li>{@link RefreshTokenContent} - For OAuth2 refresh tokens</li>
+ *   <li>{@link UnvalidatedRefreshToken} - For OAuth2 refresh tokens</li>
  * </ul>
  * <p>
  * The class is immutable and thread-safe, implementing equality and string representation
@@ -50,7 +48,6 @@ import java.util.Map;
  */
 @ToString
 @EqualsAndHashCode
-@SuperBuilder
 public abstract sealed class BaseTokenContent implements TokenContent
         permits AccessTokenContent, IdTokenContent {
 
@@ -68,27 +65,16 @@ public abstract sealed class BaseTokenContent implements TokenContent
     private final TokenType tokenType;
 
     /**
-     * Raw JSON payload as Map representation for ClaimMapper processing.
-     * This contains the original deserialized JSON structure from DSL-JSON
-     * before it's processed into typed ClaimValue objects.
-     */
-    @Getter
-    private final MapRepresentation rawPayload;
-
-
-    /**
      * Constructor for BaseTokenContent.
      *
-     * @param claims     the token claims
-     * @param rawToken   the raw token string
-     * @param tokenType  the token type
-     * @param rawPayload the raw JSON payload for ClaimMapper processing
+     * @param claims    the token claims
+     * @param rawToken  the raw token string
+     * @param tokenType the token type
      */
     protected BaseTokenContent(Map<String, ClaimValue> claims, String rawToken,
-            TokenType tokenType, MapRepresentation rawPayload) {
+            TokenType tokenType) {
         this.claims = claims;
         this.rawToken = rawToken;
         this.tokenType = tokenType;
-        this.rawPayload = rawPayload;
     }
 }

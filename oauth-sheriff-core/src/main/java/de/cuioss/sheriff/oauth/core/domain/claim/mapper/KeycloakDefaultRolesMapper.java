@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.oauth.core.domain.claim.mapper;
 
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
-import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValueType;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.tools.logging.CuiLogger;
 
@@ -66,21 +65,21 @@ public class KeycloakDefaultRolesMapper implements ClaimMapper {
     @Override
     public ClaimValue map(MapRepresentation mapRepresentation, String claimName) {
         LOGGER.debug("KeycloakDefaultRolesMapper.map called for claim: %s", claimName);
-        LOGGER.debug("Input MapRepresentation: %s", mapRepresentation.toString());
+        LOGGER.debug("Input MapRepresentation: %s", mapRepresentation);
 
         Optional<MapRepresentation> realmAccessValue = mapRepresentation.getNestedMap(REALM_ACCESS_CLAIM);
         if (realmAccessValue.isEmpty()) {
             LOGGER.debug("No realm_access claim found in token");
-            return ClaimValue.createEmptyClaimValue(ClaimValueType.STRING_LIST);
+            return null;
         }
 
         MapRepresentation realmAccessObject = realmAccessValue.get();
-        LOGGER.debug("realm_access object: %s", realmAccessObject.toString());
+        LOGGER.debug("realm_access object: %s", realmAccessObject);
 
         Optional<List<String>> rolesValue = realmAccessObject.getStringList(ROLES_CLAIM);
         if (rolesValue.isEmpty()) {
             LOGGER.debug("No roles claim found in realm_access");
-            return ClaimValue.createEmptyClaimValue(ClaimValueType.STRING_LIST);
+            return null;
         }
 
         List<String> rolesList = rolesValue.get();

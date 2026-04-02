@@ -21,6 +21,7 @@ import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.context.ValidationContext;
+import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.domain.token.TokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.jwks.JwksType;
@@ -32,13 +33,11 @@ import de.cuioss.sheriff.oauth.core.security.JwkAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.core.test.TestTokenHolder;
-import de.cuioss.sheriff.oauth.core.test.generator.ClaimControlParameter;
 import de.cuioss.sheriff.oauth.core.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
-import lombok.NonNull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -230,8 +229,8 @@ class TokenClaimValidatorEdgeCaseTest {
         claims.put(ClaimName.EXPIRATION.getName(), ClaimValue.forDateTime(
                 String.valueOf(expirationTime.toEpochSecond()), expirationTime));
 
-        // Create a custom TokenContent with the modified claims
-        return new CustomTokenContent(validToken, claims);
+        // Create an AccessTokenContent with the modified claims
+        return new AccessTokenContent(claims, validToken.getRawToken());
     }
 
     /**
@@ -249,42 +248,20 @@ class TokenClaimValidatorEdgeCaseTest {
         claims.put(ClaimName.NOT_BEFORE.getName(), ClaimValue.forDateTime(
                 String.valueOf(notBeforeTime.toEpochSecond()), notBeforeTime));
 
-        // Create a custom TokenContent with the modified claims
-        return new CustomTokenContent(validToken, claims);
+        // Create an AccessTokenContent with the modified claims
+        return new AccessTokenContent(claims, validToken.getRawToken());
     }
 
     /**
      * Creates a valid validation using the TestTokenGenerators factory.
      *
-     * @return a valid TokenContent
+     * @return a TokenContent
      */
     private TokenContent createValidToken() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         // Set the authorized party to match the expected client ID
         tokenHolder.withClaim("azp", ClaimValue.forPlainString(TestTokenHolder.TEST_CLIENT_ID));
-        return tokenHolder;
-    }
-
-    /**
-     * Custom TokenContent implementation that allows overriding claims.
-     */
-    private static class CustomTokenContent extends TestTokenHolder {
-        private final Map<String, ClaimValue> customClaims;
-
-        public CustomTokenContent(TokenContent original, Map<String, ClaimValue> customClaims) {
-            super(original.getTokenType(), ClaimControlParameter.defaultForTokenType(original.getTokenType()));
-            this.customClaims = customClaims;
-        }
-
-        @Override
-        public @NonNull Map<String, ClaimValue> getClaims() {
-            return customClaims;
-        }
-
-        @Override
-        public String getRawToken() {
-            return super.getRawToken();
-        }
+        return tokenHolder.asAccessTokenContent();
     }
 
     /**

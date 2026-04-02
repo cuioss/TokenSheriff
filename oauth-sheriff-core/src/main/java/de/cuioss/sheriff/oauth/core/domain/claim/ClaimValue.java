@@ -22,10 +22,8 @@ import lombok.ToString;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.SortedSet;
 
 /**
  * Represents a typed claim value in a JWT Token.
@@ -107,25 +105,6 @@ public class ClaimValue implements Serializable {
     }
 
     /**
-     * Checks if the value is present (not null).
-     *
-     * @return true if the value is present, false otherwise
-     */
-    public boolean isPresent() {
-        return null != originalString;
-    }
-
-
-    /**
-     * Checks if the value is empty (null).
-     *
-     * @return true if the value is empty, false otherwise
-     */
-    public boolean isEmpty() {
-        return null == originalString;
-    }
-
-    /**
      * Checks if the claim value is NOT present for the current {@link ClaimValueType}.
      * For STRING_LIST, it checks if the list is empty.
      * For DATETIME, it checks if the dateTime is null.
@@ -133,9 +112,6 @@ public class ClaimValue implements Serializable {
      * @return true if the claim value is NOT present for the claim value type, false otherwise
      */
     public boolean isNotPresentForClaimValueType() {
-        if (!isPresent()) {
-            return true;
-        }
         return switch (getType()) {
             case STRING_LIST -> asList.isEmpty();
             case DATETIME -> dateTime == null;
@@ -150,16 +126,6 @@ public class ClaimValue implements Serializable {
      */
     public static ClaimValue forPlainString(String originalString) {
         return new ClaimValue(originalString, ClaimValueType.STRING, Collections.emptyList(), null);
-    }
-
-    /**
-     * Creates a ClaimValue for a sorted set of strings. With {@link ClaimValueType#STRING_LIST}.
-     *
-     * @param originalString the original string representation of the claim value
-     * @param sortedSet      the sorted set of string values
-     */
-    public static ClaimValue forSortedSet(String originalString, SortedSet<String> sortedSet) {
-        return new ClaimValue(originalString, ClaimValueType.STRING_LIST, new ArrayList<>(sortedSet), null);
     }
 
     /**
@@ -182,19 +148,4 @@ public class ClaimValue implements Serializable {
         return new ClaimValue(originalString, ClaimValueType.DATETIME, Collections.emptyList(), dateTime);
     }
 
-    /**
-     * Creates an empty ClaimValue for a missing or null claim.
-     * This method should be used when the JSON object is null, does not contain the claim,
-     * or the claim value is null.
-     *
-     * @param valueType the type of the claim value
-     * @return a default ClaimValue for the given type
-     */
-    public static ClaimValue createEmptyClaimValue(ClaimValueType valueType) {
-        return switch (valueType) {
-            case STRING -> forPlainString(null);
-            case STRING_LIST -> forList(null, Collections.emptyList());
-            case DATETIME -> forDateTime(null, null);
-        };
-    }
 }

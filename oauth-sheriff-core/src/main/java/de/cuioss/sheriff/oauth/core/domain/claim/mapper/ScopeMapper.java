@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.oauth.core.domain.claim.mapper;
 
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
-import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValueType;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.tools.string.Splitter;
 
@@ -38,7 +37,7 @@ public class ScopeMapper implements ClaimMapper {
     public ClaimValue map(MapRepresentation mapRepresentation, String claimName) {
         Optional<Object> optionalValue = mapRepresentation.getValue(claimName);
         if (optionalValue.isEmpty()) {
-            return ClaimValue.createEmptyClaimValue(ClaimValueType.STRING_LIST);
+            return null;
         }
         Object value = optionalValue.get();
 

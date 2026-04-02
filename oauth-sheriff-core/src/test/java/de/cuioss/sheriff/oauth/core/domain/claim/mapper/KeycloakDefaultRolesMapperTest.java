@@ -65,7 +65,6 @@ class KeycloakDefaultRolesMapperTest {
 
         assertNotNull(result);
         assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertTrue(result.isPresent());
         assertEquals(expectedRoles, result.getAsList());
         assertNotNull(result.getOriginalString());
     }
@@ -80,10 +79,7 @@ class KeycloakDefaultRolesMapperTest {
 
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
 
-        assertNotNull(result);
-        assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertFalse(result.isPresent());
-        assertTrue(result.getAsList().isEmpty());
+        assertNull(result, "Should return null for missing realm_access claim");
     }
 
     @Test
@@ -98,10 +94,7 @@ class KeycloakDefaultRolesMapperTest {
 
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
 
-        assertNotNull(result);
-        assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertFalse(result.isPresent());
-        assertTrue(result.getAsList().isEmpty());
+        assertNull(result, "Should return null when realm_access has no roles");
     }
 
     @Test
@@ -118,7 +111,6 @@ class KeycloakDefaultRolesMapperTest {
 
         assertNotNull(result);
         assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertTrue(result.isPresent());
         assertTrue(result.getAsList().isEmpty());
         assertEquals("[]", result.getOriginalString());
     }
@@ -133,10 +125,7 @@ class KeycloakDefaultRolesMapperTest {
 
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
 
-        assertNotNull(result);
-        assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertFalse(result.isPresent());
-        assertTrue(result.getAsList().isEmpty());
+        assertNull(result, "Should return null for non-object realm_access");
     }
 
     @Test
@@ -151,10 +140,7 @@ class KeycloakDefaultRolesMapperTest {
 
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
 
-        assertNotNull(result);
-        assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertFalse(result.isPresent());
-        assertTrue(result.getAsList().isEmpty());
+        assertNull(result, "Should return null for non-array roles value");
     }
 
     @Test
@@ -167,10 +153,7 @@ class KeycloakDefaultRolesMapperTest {
 
         ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(jsonObject), CLAIM_NAME);
 
-        assertNotNull(result);
-        assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertFalse(result.isPresent());
-        assertTrue(result.getAsList().isEmpty());
+        assertNull(result, "Should return null for null realm_access");
     }
 
     @Test
@@ -183,7 +166,6 @@ class KeycloakDefaultRolesMapperTest {
 
         assertNotNull(result);
         assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertTrue(result.isPresent());
         assertEquals(expectedRoles, result.getAsList());
         assertEquals(1, result.getAsList().size());
         assertEquals("user", result.getAsList().getFirst());
@@ -199,7 +181,6 @@ class KeycloakDefaultRolesMapperTest {
 
         assertNotNull(result);
         assertEquals(ClaimValueType.STRING_LIST, result.getType());
-        assertTrue(result.isPresent());
         assertEquals(expectedRoles, result.getAsList());
     }
 

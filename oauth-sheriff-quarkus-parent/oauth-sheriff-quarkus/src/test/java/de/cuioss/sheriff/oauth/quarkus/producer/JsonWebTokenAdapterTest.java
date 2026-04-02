@@ -15,9 +15,8 @@
  */
 package de.cuioss.sheriff.oauth.quarkus.producer;
 
-import de.cuioss.sheriff.oauth.core.TokenType;
-import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
+import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.domain.token.TokenContent;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.junit.jupiter.api.DisplayName;
@@ -25,7 +24,10 @@ import org.junit.jupiter.api.Test;
 
 import java.security.Principal;
 import java.time.OffsetDateTime;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -232,21 +234,6 @@ class JsonWebTokenAdapterTest {
     }
 
     private TokenContent createTokenContent(Map<String, ClaimValue> claims) {
-        return new TokenContent() {
-            @Override
-            public Map<String, ClaimValue> getClaims() {
-                return claims;
-            }
-
-            @Override
-            public String getRawToken() {
-                return "raw-token";
-            }
-
-            @Override
-            public TokenType getTokenType() {
-                return TokenType.ACCESS_TOKEN;
-            }
-        };
+        return new AccessTokenContent(claims, "raw-token");
     }
 }

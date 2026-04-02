@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.oauth.core.domain.claim.mapper;
 
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
-import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValueType;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 
 import java.time.Instant;
@@ -37,9 +36,9 @@ public class OffsetDateTimeMapper implements ClaimMapper {
     public ClaimValue map(MapRepresentation mapRepresentation, String claimName) {
         Optional<Object> claimValue = mapRepresentation.getValue(claimName);
 
-        // If claim doesn't exist, return empty
+        // If claim doesn't exist, return null (absent)
         if (claimValue.isEmpty()) {
-            return ClaimValue.createEmptyClaimValue(ClaimValueType.DATETIME);
+            return null;
         }
 
         // Check if the claim value is a number

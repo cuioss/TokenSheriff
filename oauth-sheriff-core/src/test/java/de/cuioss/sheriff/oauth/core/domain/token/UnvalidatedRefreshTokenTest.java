@@ -32,19 +32,19 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for {@link RefreshTokenContent}.
+ * Tests for {@link UnvalidatedRefreshToken}.
  */
 @EnableGeneratorController
-@DisplayName("Tests RefreshTokenContent functionality")
-class RefreshTokenContentTest implements ShouldHandleObjectContracts<RefreshTokenContent> {
+@DisplayName("Tests UnvalidatedRefreshToken functionality")
+class UnvalidatedRefreshTokenTest implements ShouldHandleObjectContracts<UnvalidatedRefreshToken> {
 
     @ParameterizedTest
     @TestTokenSource(value = TokenType.REFRESH_TOKEN, count = 3)
-    @DisplayName("Should create RefreshTokenContent with valid validation")
-    void shouldCreateRefreshTokenContentWithValidToken(TestTokenHolder tokenHolder) {
-        var refreshTokenContent = new RefreshTokenContent(tokenHolder.getRawToken(), tokenHolder.getClaims());
+    @DisplayName("Should create UnvalidatedRefreshToken with valid validation")
+    void shouldCreateUnvalidatedRefreshTokenWithValidToken(TestTokenHolder tokenHolder) {
+        var refreshTokenContent = new UnvalidatedRefreshToken(tokenHolder.getRawToken(), tokenHolder.getClaims());
 
-        assertNotNull(refreshTokenContent, "RefreshTokenContent should not be null");
+        assertNotNull(refreshTokenContent, "UnvalidatedRefreshToken should not be null");
         assertEquals(tokenHolder.getRawToken(), refreshTokenContent.getRawToken(), "Raw validation should match");
         assertEquals(TokenType.REFRESH_TOKEN, refreshTokenContent.getTokenType(), "Token type should be REFRESH_TOKEN");
         assertNotNull(refreshTokenContent.getClaims(), "Claims should not be null");
@@ -53,14 +53,14 @@ class RefreshTokenContentTest implements ShouldHandleObjectContracts<RefreshToke
 
     @ParameterizedTest
     @TestTokenSource(value = TokenType.REFRESH_TOKEN, count = 2)
-    @DisplayName("Should create RefreshTokenContent with claims")
-    void shouldCreateRefreshTokenContentWithClaims(TestTokenHolder tokenHolder) {
+    @DisplayName("Should create UnvalidatedRefreshToken with claims")
+    void shouldCreateUnvalidatedRefreshTokenWithClaims(TestTokenHolder tokenHolder) {
         String testValue = "test-value";
         tokenHolder.withClaim("test-claim", ClaimValue.forPlainString(testValue));
 
-        var refreshTokenContent = new RefreshTokenContent(tokenHolder.getRawToken(), tokenHolder.getClaims());
+        var refreshTokenContent = new UnvalidatedRefreshToken(tokenHolder.getRawToken(), tokenHolder.getClaims());
 
-        assertNotNull(refreshTokenContent, "RefreshTokenContent should not be null");
+        assertNotNull(refreshTokenContent, "UnvalidatedRefreshToken should not be null");
         assertEquals(tokenHolder.getRawToken(), refreshTokenContent.getRawToken(), "Raw validation should match");
         assertEquals(TokenType.REFRESH_TOKEN, refreshTokenContent.getTokenType(), "Token type should be REFRESH_TOKEN");
         assertNotNull(refreshTokenContent.getClaims(), "Claims should not be null");
@@ -70,11 +70,11 @@ class RefreshTokenContentTest implements ShouldHandleObjectContracts<RefreshToke
     }
 
     @Override
-    public RefreshTokenContent getUnderTest() {
+    public UnvalidatedRefreshToken getUnderTest() {
         Map<String, ClaimValue> anyClaims = new HashMap<>();
         for (int i = 0; i < Generators.integers(0, 5).next(); i++) {
             anyClaims.put(Generators.nonEmptyStrings().next(), new ClaimValueGenerator().next());
         }
-        return new RefreshTokenContent(Generators.nonEmptyStrings().next(), anyClaims);
+        return new UnvalidatedRefreshToken(Generators.nonEmptyStrings().next(), anyClaims);
     }
 }

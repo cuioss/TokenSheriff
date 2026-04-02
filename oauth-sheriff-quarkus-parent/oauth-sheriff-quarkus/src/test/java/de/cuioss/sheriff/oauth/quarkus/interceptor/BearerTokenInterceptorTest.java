@@ -44,6 +44,8 @@ class BearerTokenInterceptorTest {
     private BearerTokenProducer bearerTokenProducer;
     private InvocationContext invocationContext;
 
+    private final TestResource testResource = new TestResource();
+
     @BeforeEach
     void setUp() {
         bearerTokenProducer = createMock(BearerTokenProducer.class);
@@ -57,6 +59,7 @@ class BearerTokenInterceptorTest {
         TestTokenHolder tokenHolder = createValidToken();
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithScopes"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of("read"), Set.of(), Set.of()))
                 .andReturn(BearerTokenResult.builder()
                         .status(BearerTokenStatus.FULLY_VERIFIED)
@@ -75,6 +78,7 @@ class BearerTokenInterceptorTest {
     @DisplayName("Should throw WebApplicationException when validation fails")
     void shouldThrowWebApplicationExceptionWhenValidationFails() throws Exception {
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithScopes"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of("read"), Set.of(), Set.of()))
                 .andReturn(BearerTokenResult.noTokenGiven(Set.of("read"), Set.of(), Set.of()));
         replay(invocationContext, bearerTokenProducer);
@@ -92,6 +96,7 @@ class BearerTokenInterceptorTest {
         TestTokenHolder tokenHolder = createValidToken();
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithMultipleScopes"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of("read", "write", "admin"), Set.of(), Set.of()))
                 .andReturn(BearerTokenResult.builder()
                         .status(BearerTokenStatus.FULLY_VERIFIED)
@@ -111,6 +116,7 @@ class BearerTokenInterceptorTest {
         TestTokenHolder tokenHolder = createValidToken();
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithRoles"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of("user", "admin"), Set.of()))
                 .andReturn(BearerTokenResult.builder()
                         .status(BearerTokenStatus.FULLY_VERIFIED)
@@ -130,6 +136,7 @@ class BearerTokenInterceptorTest {
         TestTokenHolder tokenHolder = createValidToken();
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithGroups"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of("developers", "managers")))
                 .andReturn(BearerTokenResult.builder()
                         .status(BearerTokenStatus.FULLY_VERIFIED)
@@ -149,6 +156,7 @@ class BearerTokenInterceptorTest {
         TestTokenHolder tokenHolder = createValidToken();
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithAllRequirements"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(
                 Set.of("read", "write"),
                 Set.of("user"),
@@ -171,6 +179,7 @@ class BearerTokenInterceptorTest {
         TestTokenHolder tokenHolder = createValidToken();
 
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithEmptyAnnotation"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of()))
                 .andReturn(BearerTokenResult.builder()
                         .status(BearerTokenStatus.FULLY_VERIFIED)
@@ -187,10 +196,8 @@ class BearerTokenInterceptorTest {
     @Test
     @DisplayName("Should throw IllegalStateException when annotation not found (fail closed)")
     void shouldThrowWhenAnnotationNotFound() throws Exception {
-        TestResource resource = new TestResource();
-
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithoutAnnotation")).times(2);
-        expect(invocationContext.getTarget()).andReturn(resource);
+        expect(invocationContext.getTarget()).andReturn(testResource);
         replay(invocationContext, bearerTokenProducer);
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
@@ -226,6 +233,7 @@ class BearerTokenInterceptorTest {
     @DisplayName("Should return status 401 for missing scopes")
     void shouldReturn401ForMissingScopes() throws Exception {
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithScopes"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of("read"), Set.of(), Set.of()))
                 .andReturn(BearerTokenResult.constraintViolation(
                         Set.of("read"), Set.of(), Set.of()));
@@ -242,6 +250,7 @@ class BearerTokenInterceptorTest {
     @DisplayName("Should return status 403 for missing roles")
     void shouldReturn403ForMissingRoles() throws Exception {
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithRoles"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of("user", "admin"), Set.of()))
                 .andReturn(BearerTokenResult.constraintViolation(
                         Set.of(), Set.of("user"), Set.of()));

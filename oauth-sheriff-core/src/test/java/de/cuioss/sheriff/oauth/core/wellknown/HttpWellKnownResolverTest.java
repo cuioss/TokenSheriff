@@ -142,12 +142,6 @@ class HttpWellKnownResolverTest {
         assertEquals(baseUrl, issuer.get());
         assertEquals(baseUrl + "/oidc/jwks.json", jwksUri.get());
 
-        // Verify additional endpoints via WellKnownResult
-        var result = wellKnownResult.get();
-        assertEquals(baseUrl + "/protocol/openid-connect/auth", result.authorizationEndpoint());
-        assertEquals(baseUrl + "/protocol/openid-connect/token", result.tokenEndpoint());
-        assertEquals(baseUrl + "/protocol/openid-connect/userinfo", result.userinfoEndpoint());
-
         // Should only call the well-known endpoint once due to caching
         assertEquals(1, moduleDispatcher.getCallCounter(), "Well-known endpoint should be called once (cached)");
     }
@@ -229,6 +223,5 @@ class HttpWellKnownResolverTest {
         var wellKnown = result.get();
         assertNotNull(wellKnown.getIssuer(), "Issuer should be present in result");
         assertNotNull(wellKnown.getJwksUri(), "JWKS URI should be present in result");
-        assertNotNull(wellKnown.authorizationEndpoint(), "Authorization endpoint should be present in result");
     }
 }
