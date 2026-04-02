@@ -19,7 +19,6 @@ import de.cuioss.sheriff.oauth.core.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.oauth.core.pipeline.IdTokenValidationPipeline;
 import de.cuioss.sheriff.oauth.core.pipeline.NonValidatingJwtParser;
 import de.cuioss.sheriff.oauth.core.pipeline.TokenBuilder;
-import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenClaimValidator;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenHeaderValidator;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenSignatureValidator;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
@@ -33,7 +32,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for the defensive null-check branches in {@link IdTokenValidationPipeline}.

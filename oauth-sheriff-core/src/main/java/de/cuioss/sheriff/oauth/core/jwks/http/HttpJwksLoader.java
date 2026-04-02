@@ -34,10 +34,7 @@ import de.cuioss.tools.logging.CuiLogger;
 
 import java.time.Instant;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static de.cuioss.sheriff.oauth.core.JWTValidationLogMessages.ERROR;
@@ -326,14 +323,12 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                     } catch (IllegalArgumentException e) {
                         // JSON parsing or validation errors
                         LOGGER.warn(WARN.BACKGROUND_REFRESH_PARSE_ERROR, e.getMessage(), getResolvedIssuer());
-                    } catch (IllegalStateException e) {
-                        // State errors (e.g., from orElseThrow when issuer not resolved)
-                        LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
-                    }
-                    // cui-rewrite:disable InvalidExceptionUsageRecipe
-                    // Intentional catch-all: ScheduledExecutorService silently cancels the task on uncaught exceptions
-                    catch (Exception e) {
+                    } catch (CompletionException e) {
+                        // CompletableFuture.join() failures from getBlocking() (I/O, network errors)
                         LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+                    } catch (IllegalStateException e) {
+                        // State errors (e.g., from orElseThrow when issuer not resolved), includes CancellationException
+                        LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
                     }
                 },
                 config.getRefreshIntervalSeconds(),

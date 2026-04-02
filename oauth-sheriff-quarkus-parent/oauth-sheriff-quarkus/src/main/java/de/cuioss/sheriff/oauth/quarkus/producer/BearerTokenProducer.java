@@ -28,6 +28,7 @@ import de.cuioss.tools.logging.CuiLogger;
 import io.micrometer.core.annotation.Timed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.inject.CreationException;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Inject;
@@ -232,9 +233,7 @@ public class BearerTokenProducer {
                     servletObjectsResolver.resolveRequestMethod()
             };
         }
-        // cui-rewrite:disable InvalidExceptionUsageRecipe
-        // Intentional: resolveRequestUri/Method may throw various runtime exceptions from Vert.x
-        catch (Exception e) {
+        catch (IllegalStateException | UnsupportedOperationException | CreationException e) {
             LOGGER.debug("Could not resolve request URI/method for DPoP htu/htm validation: %s", e.getMessage());
             return new String[]{null, null};
         }

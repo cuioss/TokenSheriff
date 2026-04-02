@@ -21,14 +21,15 @@ import de.cuioss.tools.logging.CuiLogger;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.CreationException;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import org.jspecify.annotations.Nullable;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.container.ContainerResponseContext;
 import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.ext.Provider;
+import org.jspecify.annotations.Nullable;
 
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
@@ -209,7 +210,7 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
                     return request.remoteAddress().host();
                 }
             }
-        } catch (IllegalStateException | jakarta.enterprise.inject.CreationException e) {
+        } catch (IllegalStateException | CreationException e) {
             LOGGER.debug(e, "Could not resolve Vert.x remote address");
         }
         return null;
