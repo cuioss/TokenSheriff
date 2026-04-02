@@ -48,7 +48,7 @@ import java.util.Set;
  * @author Oliver Wolff
  */
 @RequiredArgsConstructor
-public class AudienceValidator {
+class AudienceValidator {
 
     private static final CuiLogger LOGGER = new CuiLogger(AudienceValidator.class);
     private static final String AUDIENCE_MATCHES_EXPECTED_AUDIENCE_S = "Token audience matches expected audience: %s";
@@ -96,7 +96,7 @@ public class AudienceValidator {
                     "Missing required audience claim in ID token. Expected audience: " + expectedAudience + ", Available claims: " + token.getClaims().keySet()
             );
         } else if (accessTokenAudienceOptional) {
-            LOGGER.debug("Audience claim is optional for access tokens (accessTokenAudienceOptional=true), validation passes");
+            LOGGER.warn(JWTValidationLogMessages.WARN.ACCESS_TOKEN_AUDIENCE_MISSING, expectedAudience);
         } else {
             LOGGER.warn(JWTValidationLogMessages.WARN.ACCESS_TOKEN_AUDIENCE_MISSING, expectedAudience);
             securityEventCounter.increment(SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING);

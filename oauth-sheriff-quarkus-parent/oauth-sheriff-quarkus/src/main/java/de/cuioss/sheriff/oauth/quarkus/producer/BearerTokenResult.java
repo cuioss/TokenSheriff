@@ -171,29 +171,6 @@ public class BearerTokenResult implements Serializable {
 
 
     /**
-     * Creates a BearerTokenResult for cases where the request could not be accessed.
-     * <p>
-     * Design decision: This factory method is intentional public API for library consumers
-     * to use in tests and custom implementations, even though {@link BearerTokenProducer}
-     * uses the builder directly.
-     *
-     * @param requiredScopes the scopes that were required for validation
-     * @param requiredRoles  the roles that were required for validation
-     * @param requiredGroups the groups that were required for validation
-     * @return a BearerTokenResult indicating request access failure
-     */
-
-    public static BearerTokenResult couldNotAccessRequest(Set<String> requiredScopes,
-            Set<String> requiredRoles, Set<String> requiredGroups) {
-        return builder()
-                .status(BearerTokenStatus.COULD_NOT_ACCESS_REQUEST)
-                .missingScopes(requiredScopes)
-                .missingRoles(requiredRoles)
-                .missingGroups(requiredGroups)
-                .build();
-    }
-
-    /**
      * Creates a BearerTokenResult for invalid bearer token requests (RFC 6750 violation).
      * <p>
      * This is used when the Authorization header contains "Bearer " but the token

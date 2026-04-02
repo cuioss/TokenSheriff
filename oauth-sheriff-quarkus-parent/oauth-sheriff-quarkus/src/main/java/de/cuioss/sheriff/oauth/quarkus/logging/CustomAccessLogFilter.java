@@ -19,14 +19,18 @@ import de.cuioss.sheriff.oauth.quarkus.config.AccessLogFilterConfig;
 import de.cuioss.sheriff.oauth.quarkus.config.AccessLogFilterConfigResolver;
 import de.cuioss.tools.logging.CuiLogger;
 import io.quarkus.runtime.annotations.RegisterForReflection;
+import io.vertx.core.http.HttpServerRequest;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import org.jspecify.annotations.Nullable;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.container.ContainerResponseContext;
 import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.ext.Provider;
 
+import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.time.Duration;
@@ -62,20 +66,24 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
 
 
     private final AccessLogFilterConfig config;
+    @Nullable
+    private final Instance<HttpServerRequest> vertxRequest;
     private final List<PathMatcher> includePathMatchers;
     private final List<PathMatcher> excludePathMatchers;
     private final boolean disabled;
 
     @Inject
-    public CustomAccessLogFilter(AccessLogFilterConfigResolver configResolver) {
+    public CustomAccessLogFilter(AccessLogFilterConfigResolver configResolver,
+            Instance<HttpServerRequest> vertxRequest) {
+        this.vertxRequest = vertxRequest;
         this.config = configResolver.resolveConfig();
 
         // Cache disabled state for performance optimization
         this.disabled = !config.isEnabled();
 
-        // Get pre-compiled path matchers from config
-        this.includePathMatchers = config.getIncludePathMatchers();
-        this.excludePathMatchers = config.getExcludePathMatchers();
+        // Compile and cache path matchers once at construction time
+        this.includePathMatchers = compilePathMatchers(config.getIncludePaths());
+        this.excludePathMatchers = compilePathMatchers(config.getExcludePaths());
 
         LOGGER.info(INFO.CUSTOM_ACCESS_LOG_FILTER_INITIALIZED, config);
     }
@@ -168,7 +176,8 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
             ContainerResponseContext responseContext,
             long duration) {
         String pattern = config.getPattern();
-        String remoteAddr = ClientIpExtractor.extractClientIp(requestContext.getHeaders());
+        String fallbackAddr = resolveVertxRemoteAddress();
+        String remoteAddr = ClientIpExtractor.extractClientIp(requestContext.getHeaders(), fallbackAddr);
         String userAgent = requestContext.getHeaderString("User-Agent");
 
         return pattern
@@ -178,6 +187,32 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
                 .replace("{duration}", String.valueOf(duration))
                 .replace("{remoteAddr}", remoteAddr)
                 .replace("{userAgent}", userAgent != null ? userAgent : "-");
+    }
+
+    private static List<PathMatcher> compilePathMatchers(List<String> patterns) {
+        return patterns.stream()
+                .map(pattern -> FileSystems.getDefault().getPathMatcher("glob:" + pattern))
+                .toList();
+    }
+
+    /**
+     * Resolves the direct TCP remote address from the Vert.x request context.
+     * Used as fallback when no proxy headers are present.
+     *
+     * @return the remote address host, or {@code null} if unavailable
+     */
+    private String resolveVertxRemoteAddress() {
+        try {
+            if (vertxRequest != null && !vertxRequest.isUnsatisfied()) {
+                var request = vertxRequest.get();
+                if (request != null && request.remoteAddress() != null) {
+                    return request.remoteAddress().host();
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Could not resolve Vert.x remote address: %s", e.getMessage());
+        }
+        return null;
     }
 
 }

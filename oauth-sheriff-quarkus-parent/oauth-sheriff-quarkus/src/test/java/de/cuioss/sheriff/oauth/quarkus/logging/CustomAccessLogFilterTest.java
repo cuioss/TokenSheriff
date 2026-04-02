@@ -41,7 +41,7 @@ class CustomAccessLogFilterTest {
         TestConfig config = new TestConfig(Map.of());
         AccessLogFilterConfigResolver resolver = new AccessLogFilterConfigResolver(config);
 
-        assertDoesNotThrow(() -> new CustomAccessLogFilter(resolver));
+        assertDoesNotThrow(() -> new CustomAccessLogFilter(resolver, null));
 
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "CustomAccessLogFilter initialized");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "enabled=false");
@@ -59,7 +59,7 @@ class CustomAccessLogFilterTest {
         ));
         AccessLogFilterConfigResolver resolver = new AccessLogFilterConfigResolver(config);
 
-        assertDoesNotThrow(() -> new CustomAccessLogFilter(resolver));
+        assertDoesNotThrow(() -> new CustomAccessLogFilter(resolver, null));
 
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "CustomAccessLogFilter initialized");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "enabled=false");
@@ -77,7 +77,7 @@ class CustomAccessLogFilterTest {
         ));
         AccessLogFilterConfigResolver resolver = new AccessLogFilterConfigResolver(config);
 
-        assertDoesNotThrow(() -> new CustomAccessLogFilter(resolver));
+        assertDoesNotThrow(() -> new CustomAccessLogFilter(resolver, null));
 
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "CustomAccessLogFilter initialized");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "enabled=false");
@@ -91,7 +91,7 @@ class CustomAccessLogFilterTest {
         ));
         AccessLogFilterConfigResolver resolver = new AccessLogFilterConfigResolver(config);
 
-        assertDoesNotThrow(() -> new CustomAccessLogFilter(resolver));
+        assertDoesNotThrow(() -> new CustomAccessLogFilter(resolver, null));
 
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "CustomAccessLogFilter initialized");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "enabled=false");
@@ -105,7 +105,7 @@ class CustomAccessLogFilterTest {
         ));
         AccessLogFilterConfigResolver resolver = new AccessLogFilterConfigResolver(config);
 
-        assertDoesNotThrow(() -> new CustomAccessLogFilter(resolver));
+        assertDoesNotThrow(() -> new CustomAccessLogFilter(resolver, null));
 
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "CustomAccessLogFilter initialized");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "enabled=true");

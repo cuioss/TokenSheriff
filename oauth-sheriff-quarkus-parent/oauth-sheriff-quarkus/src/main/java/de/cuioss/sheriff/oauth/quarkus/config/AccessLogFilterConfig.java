@@ -18,8 +18,6 @@ package de.cuioss.sheriff.oauth.quarkus.config;
 import lombok.Builder;
 import lombok.Value;
 
-import java.nio.file.FileSystems;
-import java.nio.file.PathMatcher;
 import java.util.List;
 
 /**
@@ -116,23 +114,21 @@ public class AccessLogFilterConfig {
     }
 
     /**
-     * Get compiled PathMatcher objects for include patterns.
-     * @return List of compiled PathMatcher objects
+     * Validates the configuration values.
+     *
+     * @throws IllegalArgumentException if the configuration is invalid
      */
-    public List<PathMatcher> getIncludePathMatchers() {
-        return getIncludePaths().stream()
-                .map(pathPattern -> FileSystems.getDefault().getPathMatcher("glob:" + pathPattern))
-                .toList();
-    }
-
-    /**
-     * Get compiled PathMatcher objects for exclude patterns.
-     * @return List of compiled PathMatcher objects
-     */
-    public List<PathMatcher> getExcludePathMatchers() {
-        return getExcludePaths().stream()
-                .map(pathPattern -> FileSystems.getDefault().getPathMatcher("glob:" + pathPattern))
-                .toList();
+    public void validate() {
+        if (minStatusCode < 100 || minStatusCode > 599) {
+            throw new IllegalArgumentException("minStatusCode must be in [100, 599], got: " + minStatusCode);
+        }
+        if (maxStatusCode < 100 || maxStatusCode > 599) {
+            throw new IllegalArgumentException("maxStatusCode must be in [100, 599], got: " + maxStatusCode);
+        }
+        if (minStatusCode > maxStatusCode) {
+            throw new IllegalArgumentException(
+                    "minStatusCode (%d) must not exceed maxStatusCode (%d)".formatted(minStatusCode, maxStatusCode));
+        }
     }
 
     @Override

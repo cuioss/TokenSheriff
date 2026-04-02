@@ -171,7 +171,5 @@ class JwksLoaderFactoryTest {
                 "FILE should not provide issuer identifier");
         assertFalse(JwksType.MEMORY.providesIssuerIdentifier(),
                 "MEMORY should not provide issuer identifier");
-        assertFalse(JwksType.NONE.providesIssuerIdentifier(),
-                "NONE should not provide issuer identifier");
     }
 }

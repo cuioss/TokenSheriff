@@ -112,7 +112,7 @@ public final class JsonWebTokenAdapter implements JsonWebToken {
 
     @Override
     public boolean containsClaim(String claimName) {
-        return delegate.containsClaim(claimName);
+        return delegate.getClaims().containsKey(claimName);
     }
 
     @Override

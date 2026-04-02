@@ -189,15 +189,6 @@ class TokenContentTest {
         assertTrue(names.contains("iat"));
     }
 
-    @Test
-    @DisplayName("containsClaim() should check claim presence")
-    void containsClaimShouldCheckPresence() {
-        var token = createTestToken();
-        assertTrue(token.containsClaim("iss"));
-        assertTrue(token.containsClaim("sub"));
-        assertFalse(token.containsClaim("nonexistent"));
-    }
-
     // Helper methods for creating test tokens
 
     private AccessTokenContent createTestToken() {

@@ -180,6 +180,7 @@ public class NonValidatingJwtParser {
         }
 
         public NonValidatingJwtParser build() {
+            Objects.requireNonNull(securityEventCounter, "SecurityEventCounter must not be null");
             return new NonValidatingJwtParser(config, securityEventCounter, jweDecryptionConfig);
         }
     }

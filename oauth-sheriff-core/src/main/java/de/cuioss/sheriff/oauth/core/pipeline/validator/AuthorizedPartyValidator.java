@@ -39,7 +39,7 @@ import java.util.Set;
  * @author Oliver Wolff
  */
 @RequiredArgsConstructor
-public class AuthorizedPartyValidator {
+class AuthorizedPartyValidator {
 
     private static final CuiLogger LOGGER = new CuiLogger(AuthorizedPartyValidator.class);
 

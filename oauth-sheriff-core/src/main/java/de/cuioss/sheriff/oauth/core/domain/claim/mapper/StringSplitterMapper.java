@@ -42,6 +42,9 @@ import java.util.Optional;
  * ClaimValue roles = commaMapper.map(jsonObject, "roles");
  * </pre>
  *
+ * @apiNote This mapper is part of the public SPI for library consumers building custom claim
+ * configurations. It is not used by any built-in {@link de.cuioss.sheriff.oauth.core.domain.claim.ClaimName}
+ * but is available for custom claim mapping setups via {@link de.cuioss.sheriff.oauth.core.IssuerConfig}.
  * @since 1.0
  */
 public class StringSplitterMapper implements ClaimMapper {

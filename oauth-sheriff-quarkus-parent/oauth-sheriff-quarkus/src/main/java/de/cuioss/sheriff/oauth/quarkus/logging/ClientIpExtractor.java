@@ -80,6 +80,20 @@ public class ClientIpExtractor {
      * @return The extracted client IP address, or "unknown" if none found
      */
     public static String extractClientIp(MultivaluedMap<String, String> headers) {
+        return extractClientIp(headers, null);
+    }
+
+    /**
+     * Extracts the client IP address from HTTP headers, falling back to the provided
+     * address (typically the Vert.x remote address) when no proxy headers are found.
+     *
+     * @param headers JAX-RS MultivaluedMap of HTTP headers
+     * @param fallbackAddress the direct connection address to use when no proxy headers are present,
+     *                        typically from {@code HttpServerRequest.remoteAddress().host()}.
+     *                        May be {@code null}, in which case {@code "unknown"} is returned as final fallback.
+     * @return The extracted client IP address
+     */
+    public static String extractClientIp(MultivaluedMap<String, String> headers, String fallbackAddress) {
         // Check standard headers first
         for (String headerName : PROXY_HEADERS) {
             String result = extractFromHeader(headers, headerName);
@@ -94,7 +108,7 @@ public class ClientIpExtractor {
             return result;
         }
 
-        return "unknown";
+        return fallbackAddress != null ? fallbackAddress : "unknown";
     }
 
     /**

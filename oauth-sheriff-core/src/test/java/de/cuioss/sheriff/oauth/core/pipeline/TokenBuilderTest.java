@@ -23,6 +23,7 @@ import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimValue;
 import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.domain.token.IdTokenContent;
+import de.cuioss.sheriff.oauth.core.json.JwtHeader;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.sheriff.oauth.core.test.TestTokenHolder;
 import de.cuioss.sheriff.oauth.core.test.generator.TestTokenGenerators;
@@ -112,7 +113,8 @@ class TokenBuilderTest {
         @Test
         @DisplayName("createAccessToken should handle DecodedJwt with empty body")
         void createAccessTokenShouldHandleDecodedJwtWithEmptyBody() {
-            DecodedJwt decodedJwt = new DecodedJwt(null, new MapRepresentation(Map.of()), null, new String[]{"", "", ""}, "test-validation");
+            var emptyHeader = new JwtHeader(null, null, null, null, null, null, null, null, null, null);
+            DecodedJwt decodedJwt = new DecodedJwt(emptyHeader, new MapRepresentation(Map.of()), null, new String[]{"", "", ""}, "test-validation");
 
             Optional<AccessTokenContent> result = tokenBuilder.createAccessToken(decodedJwt);
             assertTrue(result.isEmpty(), "Should return empty Optional when body is empty");
@@ -147,7 +149,8 @@ class TokenBuilderTest {
         @Test
         @DisplayName("createIdToken should handle DecodedJwt with empty body")
         void createIdTokenShouldHandleDecodedJwtWithEmptyBody() {
-            DecodedJwt decodedJwt = new DecodedJwt(null, new MapRepresentation(Map.of()), null, new String[]{"", "", ""}, "test-validation");
+            var emptyHeader = new JwtHeader(null, null, null, null, null, null, null, null, null, null);
+            DecodedJwt decodedJwt = new DecodedJwt(emptyHeader, new MapRepresentation(Map.of()), null, new String[]{"", "", ""}, "test-validation");
 
             Optional<IdTokenContent> result = tokenBuilder.createIdToken(decodedJwt);
             assertTrue(result.isEmpty(), "Should return empty Optional when body is empty");

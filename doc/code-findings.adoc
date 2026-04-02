@@ -8,144 +8,86 @@
 Semantic analysis of all production code asking one question per artifact:
 _"Does this exist because it is the right design, or because we are afraid to break something?"_
 
-Maturity: **pre-1.0** — Breaking changes are free. No deprecation cycles needed. Recommend removing/fixing everything.
+Maturity: **pre-1.0** — Breaking changes are free. No deprecation, no legacy support, no transitional code.
 
-Date: 2026-04-01
+Date: 2026-04-02
 
-Modules analyzed:
-
-* `oauth-sheriff-core` (~95 production source files)
-* `oauth-sheriff-quarkus` (~35 production source files)
-* `oauth-sheriff-quarkus-deployment` (1 file)
+Scope: `oauth-sheriff-core`, `oauth-sheriff-quarkus` (all production code, excluding benchmarking/BOM/test code)
 
 == Critical (Security Impact)
 
-No critical findings. The validation pipeline has strong security fundamentals:
+No critical findings. The codebase is consistently fail-closed in all main validation paths.
 
-* "none" algorithm explicitly rejected via hardcoded `REJECTED_ALGORITHMS` list
-* HMAC algorithms (HS256/HS384/HS512) blocked, preventing key confusion attacks
-* Embedded JWK attack (CVE-2018-0114) prevented in `TokenHeaderValidator`
-* Token size limits enforced at multiple layers
-* DPoP replay protection with jti tracking
-* All validators throw `TokenValidationException` on failure — no silent pass-through
+DPoP validation was specifically audited: `DpopProofValidator.validateHtuHtm()` correctly throws `TokenValidationException` when `requestUri` or `requestMethod` is null/blank (lines 342-349), preventing any fail-open when Vert.x context resolution fails in `BearerTokenProducer.resolveRequestContext()`.
 
 == High (API / Design)
 
-[cols="1,3,4,3"]
-|===
-|ID |Location |Issue |Recommendation
+No high findings after verification. The three original candidates were downgraded:
 
-|H-1
-|`JWKSKeyLoader:333-344`
-|**TOCTOU race in initialization.** `initJWKSLoader` checks `if (!initialized)` without synchronization. Two concurrent callers can both enter the block, causing double initialization and potential corruption of `keyInfoMap`. Compare with `HttpJwksLoader.initJWKSLoader` which correctly uses `AtomicReference.compareAndSet`.
-|Use `AtomicBoolean.compareAndSet(false, true)` or a `synchronized` block to make initialization idempotent.
+* `AudienceValidator` empty-set skip: By design — `TokenClaimValidator` constructor logs WARN (line 96-99), and the validator is always constructed through that path. Moved to Medium for the public visibility concern.
+* `SignatureTemplateManager` uncached algorithm fallback: `TokenHeaderValidator.validateAlgorithm()` rejects non-preferred algorithms *before* `SignatureTemplateManager` is called. The fallback only accepts the 10 known algorithms (switch default throws `IllegalArgumentException`). Moved to Medium as defense-in-depth.
+* DPoP context fail-open: False positive — core validator handles nulls correctly.
 
-|H-2
-|`HttpJwksLoader:306-336`
-|**Background refresh silent death.** The scheduled refresh task catches only `IllegalArgumentException` and `IllegalStateException`. Any other unchecked exception (NPE, OOME) causes `ScheduledExecutorService` to silently cancel the task permanently — no log, no retry, keys go stale.
-|Add a catch-all `catch (Exception e)` that logs WARN and does NOT rethrow, ensuring the scheduled task stays alive.
-
-|H-3
-|`DecodedJwt:83-93`
-|**Dual accessors on record.** `DecodedJwt` is a `record` with automatic accessors `header()`, `body()`, but also declares manual `getHeader()`, `getBody()`. Callers use both styles inconsistently. Confusing, duplicated API surface.
-|Remove `getHeader()` and `getBody()`. Migrate callers to record accessors `header()` and `body()`.
-
-|H-4
-|`BearerTokenInterceptor:159-168`
-|**@BearerAuth merging documented but not implemented.** `BearerAuth` Javadoc states method-level annotation "adds additional requirements" to class-level. But `extractAnnotation()` returns only the first match — method-level **replaces** class-level. A class `@BearerAuth(requiredRoles={"admin"})` with method `@BearerAuth(requiredScopes={"write"})` enforces only the scope, not the role.
-|Either implement annotation merging (safer for a security library) or fix the Javadoc to state method-level replaces class-level.
-|===
-
-== Medium (Dead Code / Unnecessary API Surface)
+== Medium (API / Design / Missing Validation)
 
 [cols="1,3,4,3"]
 |===
 |ID |Location |Issue |Recommendation
 
 |M-1
-|`BaseTokenContent:75-76`
-|**Dead `rawPayload` field.** `getRawPayload()` has zero callers anywhere in the codebase. The `MapRepresentation` lives in memory alongside the already-processed `claims` map, doubling per-token memory.
-|Remove `rawPayload` from `BaseTokenContent` and corresponding constructor parameters.
+|`IdTokenValidationPipeline:139-169`
+|**Missing null-checks on map lookups.** Unlike `AccessTokenValidationPipeline` (which checks for null and throws `IllegalStateException` at lines 207-209, 219-221, 232-234, 258-260), the ID token pipeline directly dereferences `headerValidators.get()`, `signatureValidators.get()`, `tokenBuilders.get()`, and `claimValidators.get()` without null checks. NPE on misconfiguration instead of a clear error.
+|Add the same null-check pattern as `AccessTokenValidationPipeline`, or extract a shared lookup helper.
 
 |M-2
-|`BaseTokenContent:53`, `AccessTokenContent:65`, `IdTokenContent:65`
-|**Unused `@SuperBuilder`.** No code calls `AccessTokenContent.builder()` or `IdTokenContent.builder()`. All instantiation uses explicit constructors. Dead generated code inflates API surface.
-|Remove `@SuperBuilder` from all three classes.
+|`AudienceValidator:98-99`
+|**`accessTokenAudienceOptional` bypass only logged at DEBUG.** When an access token omits the `aud` claim and `accessTokenAudienceOptional=true`, the confused-deputy risk is logged only at DEBUG level — invisible in production.
+|Log at WARN level when this path is taken, since it represents an active security relaxation per request.
 
 |M-3
-|`ClaimName:185`
-|**Unbounded cache with attacker-controlled keys.** `CLAIM_NAME_CACHE` is an unbounded `ConcurrentHashMap` that caches lookups including misses. Claim names in tokens are attacker-controlled — many unique fake claim names grow this cache without bound. Impact is limited by `ParserConfig` token size limits, but still worth addressing.
-|Only cache hits (known `ClaimName` values) or pre-populate from `values()` at class-load and skip caching misses.
+|`AudienceValidator:51` (class visibility)
+|**Internal class is public.** `AudienceValidator` is annotated `@apiNote ... internal ... not part of the public API` but the class is `public`. It can be independently constructed with an empty `expectedAudience`, which silently skips all audience validation (line 71-73).
+|Make the class package-private to match its documented intent.
 
 |M-4
-|`AccessTokenCache:161,220`
-|**Weak cache key via `hashCode()`.** Uses `tokenString.hashCode()` (32-bit) as `Integer` key. Realistic collision probability at 1000 entries. Collisions cause permanent cache eviction for affected tokens. Code documents this as intentional trade-off.
-|Use full token string or a cryptographic hash (SHA-256 truncated) as cache key.
+|`SignatureTemplateManager:114-122`
+|**Defense-in-depth: algorithm allowlist not enforced at crypto layer.** When an algorithm is not pre-cached, `getSignatureInstance()` creates a new template on-the-fly. `TokenHeaderValidator` validates the algorithm first, so this path is only reachable if a future code change bypasses header validation.
+|Throw `IllegalArgumentException` if the algorithm is not in the pre-cached set. The `default` case in `createSignatureTemplate` already rejects unknown algorithms, but non-preferred known algorithms would still get templates.
 
 |M-5
-|`JweDecryptor:62`
-|**Unhardened JSON parser for JWE.** Creates a standalone `DslJson` instance that bypasses the security-hardened `ParserConfig` (max payload size limits). Attacker-controlled `epk` field in JWE header is parsed without size checks.
-|Pass the configured `DslJson` instance through to `JweDecryptor`, or add a size check on the `epk` JSON before parsing.
+|`NonValidatingJwtParser` builder `:162-185`
+|**Builder allows construction without `SecurityEventCounter`.** The field defaults to `null`, causing NPE at parse time (e.g., `securityEventCounter.increment()` in `decodeInternal()`). Production always provides one via `TokenValidator`, but the builder API does not enforce it.
+|Add `Objects.requireNonNull(securityEventCounter)` in `build()`.
 
 |M-6
-|`JweDecryptor:378-421`
-|**Duplicated EC key parsing.** `parseEcPublicKeyFromJwk` duplicates the EC curve mapping and key construction from `JwkKeyHandler.parseEcKey`. Both have their own `getEcParameterSpec()` method. Security fixes to EC key parsing must be applied in two places.
-|Reuse `JwkKeyHandler.parseEcKey` by deserializing `epk` JSON to a `JwkKey` record first.
+|`ValidationContext:77-81`
+|**No validation on `clockSkewSeconds`.** Accepts negative values, which would cause `expirationTime.plusSeconds(negative)` to shrink the tolerance window, making valid tokens appear expired. The `IssuerConfig` defaults to 60 but `ValidationContext` constructors do not validate.
+|Add `if (clockSkewSeconds < 0) throw new IllegalArgumentException(...)` in both constructors.
 
 |M-7
-|`RefreshTokenValidationPipeline:84-109`
-|**Unvalidated token accepted silently.** Refresh tokens bypass all validation (by design for opaque tokens). Any arbitrary string is accepted and wrapped into `RefreshTokenContent`. The container's name does not signal this is unvalidated.
-|Rename to `UnvalidatedRefreshToken` or add a `validated=false` flag to prevent consumers from trusting claims.
+|`AccessTokenCacheConfig:74-82`
+|**No validation on `evictionIntervalSeconds`.** Accepts zero or negative values. Zero schedules eviction at maximum frequency; negative throws at `scheduleWithFixedDelay`. `@Builder.Default` is 10, but the builder allows any value.
+|Add validation: `evictionIntervalSeconds` must be positive when `maxSize > 0`.
 
 |M-8
-|`IssuerConfig:195-231`
-|**Token type validation disabled by default.** `expectedTokenType` defaults to `null`, enabling token type confusion (ID token presented as access token). Documented as intentional due to poor IdP compliance with RFC 9068.
-|Log a one-time startup warning when `expectedTokenType` is null indicating token type confusion protection is disabled.
+|`ClaimValue:99-105`
+|**Public constructor allows inconsistent state.** The constructor accepts any combination of fields, enabling invalid states (e.g., `STRING` type with non-null `dateTime`, or `DATETIME` type with a non-empty list). Three well-typed static factories exist (`forPlainString`, `forList`, `forDateTime`).
+|Make the constructor package-private. Force all callers through the static factories.
 
 |M-9
-|`WellKnownResult:56-95`
-|**Dead fields.** `authorizationEndpoint`, `tokenEndpoint`, `userinfoEndpoint` and their accessors have zero callers in production code. Dead API surface.
-|Remove the three unused fields and accessors.
+|`VertxHttpServletRequestAdapter` (833 lines)
+|**Oversized adapter — production bypasses it entirely.** Implements full `HttpServletRequest` but `VertxServletObjectsResolver` overrides `resolveHeaderMap()`, `resolveRequestUri()`, and `resolveRequestMethod()` with direct Vert.x calls. The adapter is only created in `resolveHttpServletRequest()`, which is never called in production. Its own Javadoc acknowledges this (line 41-44).
+|Evaluate whether `HttpServletRequestResolver.resolveHttpServletRequest()` can be removed from the interface. If kept for extensibility, make the adapter package-private and document as internal-only.
 
 |M-10
-|`JwtHeader:79-87`
-|**Dead record components.** Six fields (`jku`, `x5u`, `x5c`, `x5t`, `x5tS256`, `crit`) are stored but never accessed in production. DSL-JSON silently ignores unknown fields, so removal is safe.
-|Remove the six unused fields from the record.
+|`DecryptionKeyLoader:150-157`
+|**Silently swallows RSA exception.** Tries RSA first, catches `GeneralSecurityException ignored`, then tries EC. If the key IS RSA but has corrupted data, the error misleadingly says "not RSA or EC." The RSA-specific root cause is lost.
+|Store the RSA exception and attach it as a suppressed exception on the final EC `GeneralSecurityException`.
 
 |M-11
-|`JWTValidationLogMessages:75-450`
-|**12 unused LogRecord constants.** `ERROR.UNSUPPORTED_JWKS_TYPE` (204), `ERROR.CACHE_TOKEN_NO_EXPIRATION` (206-209), `INFO.JWKS_HTTP_LOADED` (3), `INFO.JWKS_BACKGROUND_REFRESH_UPDATED` (5), `WARN.BACKGROUND_REFRESH_SKIPPED` (124), `WARN.JWKS_LOAD_FAILED_CACHED_CONTENT` (117), `WARN.JWKS_LOAD_FAILED_NO_CACHE` (118), `WARN.BACKGROUND_REFRESH_IO_ERROR` (137), `WARN.BACKGROUND_REFRESH_KEY_ERROR` (139). Remnants of earlier refactoring.
-|Remove all 12 unused constants. Unblocks identifier renumbering before 1.0.
-
-|M-12
-|`ClaimValue:114-127`
-|**Magic null sentinel.** `isPresent()` and `isEmpty()` use `originalString == null` as sentinel for missing claim. `ClaimValue.forPlainString(null)` creates a "present but null" object — opposite of `Optional` semantics callers expect. Well-documented and consistently applied, but confusing API.
-|Use `Optional<ClaimValue>` in claims maps instead of sentinel objects with null internals. At minimum, document the behavior.
-
-|M-13
-|`MinimalTokenContent` interface
-|**Unsealed base interface.** `MinimalTokenContent` is not sealed, allowing third-party implementations that could bypass validation guarantees.
-|Seal to `permits BaseTokenContent, RefreshTokenContent`.
-
-|M-14
-|`RefreshTokenContent:74-75`
-|**Leaking internal claims.** `@Getter` on `claims` generates `getClaims()` not part of any interface contract. Exposes unvalidated data on a type that intentionally avoids `TokenContent`. Javadoc documents intent for JWT-formatted refresh tokens, but no production caller uses it.
-|Remove `@Getter` on `claims` to keep it internal.
-
-|M-15
-|`HttpJwksLoaderConfig:593-601`
-|**Executor thread leak.** Auto-created `ScheduledExecutorService` is never shut down — `close()` only cancels the `ScheduledFuture`. Daemon threads mitigate JVM shutdown impact but the executor pool is never properly closed.
-|Track ownership with an `ownsExecutor` flag. Shut down the service in `close()` when owned.
-
-|M-16
-|`ClientIpExtractor:44-58`
-|**Untrusted proxy headers.** `X-Forwarded-For` trusted at face value without documenting the trust model. Deployments without a reverse proxy get spoofable IPs in access logs.
-|Add Javadoc warning about the trust model. Consider a config option for trusted headers.
-
-|M-17
-|`BearerTokenProducer:119-124`
-|**Field injection for config.** `tokenHeader` and `tokenCookieName` use `@ConfigProperty` field injection on `@ApplicationScoped` bean, inconsistent with the rest of the class which uses constructor injection.
-|Move to constructor injection parameters for consistency.
+|`ClientIpExtractor:59-98`
+|**Trusts all proxy headers without verification.** Any client can send `X-Forwarded-For` or `CF-Connecting-IP` headers. Extracted IP is used in `CustomAccessLogFilter` for access logging. The Javadoc (lines 36-48) warns about this but the code has no enforcement mechanism. Impact limited to log injection — not used for security decisions.
+|Document that this class must only be used behind a configured reverse proxy. Consider falling back to Vert.x `remoteAddress()` when `quarkus.http.proxy.proxy-address-forwarding` is false.
 |===
 
 == Low (Cleanup)
@@ -155,132 +97,109 @@ No critical findings. The validation pipeline has strong security fundamentals:
 |ID |Location |Issue |Recommendation
 
 |L-1
-|`AccessTokenContent:68`
-|**Unused LOGGER field.** Declared but never referenced — all logging delegated elsewhere.
-|Remove.
+|`DpopProofValidator:307-309`
+|**Hardcoded 60s future tolerance.** DPoP proof freshness uses `age < -60` instead of the per-issuer `clockSkewSeconds`. The rest of the pipeline uses configurable clock skew consistently.
+|Use the issuer's `clockSkewSeconds` instead of the hardcoded `-60`.
 
 |L-2
-|`AccessTokenContent:94-98`
-|**Unused `getTokenId()`.** Zero callers in production or tests.
-|Remove before 1.0.
+|`DecodedJwt` compact constructor `:75-84`
+|**Does not validate `header` is non-null.** Validates `body` but not `header`. A null header silently returns `Optional.empty()` for `getKid()`/`getAlg()` instead of failing as structurally invalid. The `DecodedJwt.of()` factory (line 97-99) does check, but the direct constructor does not.
+|Add `Objects.requireNonNull(header, "header must not be null")` in the compact constructor.
 
 |L-3
-|`DecodedJwt:139-185`
-|**Duplicated precondition.** `getSignatureAsDecodedBytes()` and `getDataToVerify()` both duplicate the same `parts == null \|\| parts.length != 3` check.
-|Extract a private `validateParts()` or validate in the compact constructor.
+|`TokenContent.containsClaim(String)` `:118-120`
+|**Zero callers anywhere.** Default interface method not used in production or test code. Speculative API surface on the 1.0 public interface.
+|Remove before 1.0.
 
 |L-4
-|`DecodedJwt:259-304`
-|**Hand-rolled builder on a record.** Records are not designed for builder patterns. All fields are always set together.
-|Replace with a static factory `DecodedJwt.of(...)`.
+|`HttpWellKnownResolver.getWellKnownResult()` `:131-133`
+|**Test-only public method.** Zero production callers, only tests. Exposes the raw `WellKnownResult` object (which has mutable public fields), leaking internal details.
+|Reduce to package-private or remove.
 
 |L-5
-|`SignatureAlgorithmPreferences:60-66`
-|**Constructor accepts rejected algorithms.** Caller could pass `List.of("none")` — constructor does not validate against the rejected list.
-|Add constructor-time validation rejecting any algorithm in `REJECTED_ALGORITHMS`.
+|`StringSplitterMapper`
+|**Zero production callers.** Not used by any `ClaimName` or any production code. Only referenced in `OAuthSheriffProcessor` for GraalVM reflection registration and in a test.
+|Document as explicit public API for custom claim configurations, or remove. Can always be re-added.
 
 |L-6
-|`DpopProofValidator:339-349`
-|**htu/htm validation silently skipped.** When DPoP proof is present but `requestUri`/`requestMethod` are missing, validation is skipped with only a WARN log. A proof for a different endpoint is accepted.
-|Reject the proof rather than skipping validation when a DPoP proof is present.
+|`JwksType.NONE` `:32`
+|**Sentinel enum value — only used in Quarkus health check.** No core production code uses it. Could be replaced by `Optional<JwksType>` or null.
+|Consider removing; use null/Optional for "no JWKS configured."
 
 |L-7
-|`DpopProofValidator:435-437`
-|**`SignatureTemplateManager` created per call.** New instance on every DPoP validation causes unnecessary object churn.
-|Move creation to constructor.
+|`MapRepresentation` null checks on `data` `:115-127`
+|**Unnecessary null guards.** Every method checks `if (data == null)`, but factory methods (lines 86-106) always return `Map.of()` for null/empty input. The only way to get null data is via the direct constructor `new MapRepresentation(null)`.
+|Add null-coalescing in the compact constructor (`data = data != null ? data : Map.of()`) and remove per-method null checks.
 
 |L-8
-|`JwksParser:50-58`
-|**Unused 3-arg constructor.** `@RequiredArgsConstructor` generates it but all callers use the 2-arg constructor. `dslJson` is derived from `parserConfig`.
-|Remove `@RequiredArgsConstructor`, keep only the 2-arg constructor.
+|`OAuthSheriffDevUIRuntimeService:209`
+|**Dead null check for CDI-injected field.** `if (tokenValidator == null)` can never be true — `tokenValidator` is injected via `@Inject` constructor (line 64). CDI guarantees non-null constructor injection.
+|Remove the dead null check.
 
 |L-9
-|`Jwks:53-73`
-|**Unused convenience methods.** `empty()`, `isEmpty()`, `size()` not called from production code.
-|Remove `empty()` and `size()`. Keep `isEmpty()` if useful for future validation.
+|`OAuthSheriffDevUIRuntimeService:78-80`
+|**Test convenience constructor on production class.** Package-private two-arg constructor creates a default `ParserConfig`, disconnecting DevUI from runtime config in tests.
+|Move to a test helper or provide all dependencies.
 
 |L-10
-|`MapRepresentation:114-116`
-|**Unused `empty()` in production.** Never called in production code. Used extensively in tests (30+ usages) as test utility.
-|Remove if test utility is not considered part of public API contract.
+|`DpopConfig` builder
+|**No upper bound on `proofMaxAgeSeconds`.** Accepts `Long.MAX_VALUE`, which effectively disables proof freshness checking. Same for `nonceCacheTtlSeconds`.
+|Add a reasonable upper bound (e.g., 3600s) or log WARN for unreasonably large values.
 
 |L-11
-|`WellKnownConfigurationConverter:148-156`
-|**Fragile heuristic for security violations.** Uses substring matching (`contains("buffer")`, `contains("limit")`) on IOException messages. Any exception with "limit" in the message is misclassified.
-|Check for specific DSL-JSON exception types or match more specific strings.
+|`AccessLogFilterConfig:122-136`
+|**PathMatcher recompilation on every getter call.** `getIncludePathMatchers()`/`getExcludePathMatchers()` create new `PathMatcher` objects per invocation. `CustomAccessLogFilter` caches them (constructor), but the public methods are a performance trap for other callers.
+|Cache lazily in the config, or remove from public API.
 
 |L-12
-|`JwksParser:159-170`
-|**Double UTF-8 encoding.** `validateContentSize` encodes to bytes for size check, then `parse` encodes again. Wastes ~2x payload size for large inputs.
-|Encode once and pass the byte array through.
+|`AccessLogFilterConfig:44-53`
+|**No validation of status code ranges.** `minStatusCode=600` or `minStatusCode > maxStatusCode` silently produces no logging.
+|Validate: `minStatusCode` in `[100, 599]`, `maxStatusCode >= minStatusCode`.
 
 |L-13
-|`KeyProcessor:66-78`
-|**Duplicate kty validation.** `processKey` repeats the same null/empty check that `validateKeyParameters` already performs.
-|Remove the duplicate check in `processKey`.
+|`COULD_NOT_ACCESS_REQUEST` in `BearerTokenResult:186-194` / `BearerTokenStatus:56`
+|**Intentional API never produced internally.** The factory method and enum value exist as documented public API for library consumers (Javadoc line 176-178), but `BearerTokenProducer` never produces this status. May confuse consumers who expect all statuses to be reachable.
+|Document which statuses are produced by the built-in producer vs. available for custom implementations.
 
 |L-14
-|`JWKSKeyLoader:280-282`
-|**Test-only method in production.** `getKeyInfoMap()` only called from tests. Leaks internal state.
-|Remove. Tests should use the public `getKeyInfo(kid)` method.
-
-|L-15
-|`WellKnownResult:47-75`
-|**Mutable class with public fields.** Unlike all other JSON model classes (records), `WellKnownResult` has directly assignable public fields. Deliberate trade-off for DSL-JSON `@CompiledJson` performance, but DSL-JSON does support records.
-|Convert to a record for consistency and immutability.
-
-|L-16
-|`CollectionClaimHandler:95-96`
-|**Misleading `@SuppressWarnings`.** Comment says "implementation already uses a Set" but `asList` is `List<String>`. Only `ScopeMapper` produces a `TreeSet`-backed list; other mappers produce `ArrayList`.
-|Either store a `Set` internally or remove the misleading comment.
-
-|L-17
-|`OAuthSheriffRecorder:33-35`
-|**Empty recorder class.** Never referenced from `OAuthSheriffProcessor`. Dead code.
-|Remove.
-
-|L-18
-|`AccessLogFilterConfigResolver:85`
-|**No error handling on Integer.parseInt.** Non-integer config values cause cryptic `NumberFormatException`.
-|Wrap in try-catch with a clear error message including the property key.
-
-|L-19
-|`KeycloakDefaultGroupsMapper:66`, `KeycloakDefaultRolesMapper:69`
-|**Eager toString in debug log.** `mapRepresentation.toString()` called on every invocation even when debug is disabled.
-|Guard with `if (LOGGER.isDebugEnabled())` or use lazy evaluation without `.toString()`.
+|`WellKnownResult:46-49`
+|**Public mutable fields cached after validation.** `issuer` and `jwksUri` are `public` mutable fields (required by DSL-JSON `@CompiledJson`). After deserialization and validation, the object is cached in `HttpWellKnownResolver`. Practical risk is low since the cache reference is internal.
+|Copy to an immutable record after deserialization, or add a comment documenting the DSL-JSON constraint.
 |===
 
 == Summary
 
-[cols="1,1,1"]
+[cols="1,1,2"]
 |===
 |Severity |Count |Key Theme
 
 |Critical
 |0
-|Strong security fundamentals — no fail-open behavior
+|—
 
 |High
-|4
-|Race condition in JWKS init, silent task death, duplicate API, annotation merging gap
+|0
+|— (all candidates proven false positive or downgraded after code verification)
 
 |Medium
-|17
-|Dead fields/methods, unbounded caches, unhardened parsers, unvalidated containers
+|11
+|Inconsistent null-checks between pipelines, missing input validation on config values, public visibility of internal classes, oversized adapter, swallowed exceptions
 
 |Low
-|19
-|Unused code, test-only methods, missing input validation, cleanup
+|14
+|Hardcoded magic values, dead API surface, unnecessary null guards, test-only public methods, sentinel enums
 |===
 
-Total: **40 findings** across all production code in `oauth-sheriff-core` and `oauth-sheriff-quarkus`.
+Total: **25 findings** across all production code in `oauth-sheriff-core` and `oauth-sheriff-quarkus`.
 
-=== Top Priorities for Pre-1.0
+=== Key Themes
 
-1. **H-1**: Fix TOCTOU race in `JWKSKeyLoader.initJWKSLoader` — use `AtomicBoolean.compareAndSet`
-2. **H-2**: Add catch-all in `HttpJwksLoader` background refresh — prevent silent task death
-3. **H-4**: Resolve `@BearerAuth` annotation merging — documentation vs. behavior mismatch is a security gap
-4. **M-3**: Bound the `ClaimName` cache — attacker-controlled memory growth
-5. **M-5**: Harden `JweDecryptor` JSON parsing — use shared `ParserConfig` limits
-6. **M-4**: Fix `AccessTokenCache` key collisions — use full token string or crypto hash
-7. **H-3, M-1, M-2, M-9, M-10, M-11**: Remove dead API surface — clean public contract before 1.0 locks it
+1. **Input validation at boundaries** (M-6, M-7, M-8, L-10, L-12): Builders and constructors accept values that would cause incorrect behavior at runtime. Pre-1.0 is the ideal time to tighten these.
+
+2. **Consistency between pipelines** (M-1): The `IdTokenValidationPipeline` lacks the defensive null-checks present in `AccessTokenValidationPipeline`. Same author, same pattern — likely an oversight during the last refactor.
+
+3. **Defense-in-depth** (M-2, M-4): Security controls exist at one layer but could be reinforced at adjacent layers. The main validation path is correct, and these are not exploitable through normal usage.
+
+4. **Speculative API surface** (L-3, L-4, L-5, L-13): Methods and types that exist "in case someone needs them" but have zero internal callers. Remove or document before 1.0 to minimize the maintenance contract.
+
+5. **Internal visibility** (M-3, M-9): Classes documented as internal (`@apiNote ... not part of the public API`) but declared `public`. Pre-1.0 is the time to enforce intended visibility.

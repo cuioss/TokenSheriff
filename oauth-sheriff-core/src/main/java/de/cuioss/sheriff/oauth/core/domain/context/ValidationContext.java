@@ -75,6 +75,9 @@ public class ValidationContext {
      * @param maxTokenAgeSeconds the maximum token age in seconds, or null to disable
      */
     public ValidationContext(int clockSkewSeconds, Integer maxTokenAgeSeconds) {
+        if (clockSkewSeconds < 0) {
+            throw new IllegalArgumentException("clockSkewSeconds must not be negative: " + clockSkewSeconds);
+        }
         this.currentTime = OffsetDateTime.now();
         this.clockSkewSeconds = clockSkewSeconds;
         this.maxTokenAgeSeconds = maxTokenAgeSeconds;
@@ -88,6 +91,9 @@ public class ValidationContext {
      * @param maxTokenAgeSeconds the maximum token age in seconds, or null to disable
      */
     public ValidationContext(OffsetDateTime currentTime, int clockSkewSeconds, Integer maxTokenAgeSeconds) {
+        if (clockSkewSeconds < 0) {
+            throw new IllegalArgumentException("clockSkewSeconds must not be negative: " + clockSkewSeconds);
+        }
         this.currentTime = currentTime;
         this.clockSkewSeconds = clockSkewSeconds;
         this.maxTokenAgeSeconds = maxTokenAgeSeconds;

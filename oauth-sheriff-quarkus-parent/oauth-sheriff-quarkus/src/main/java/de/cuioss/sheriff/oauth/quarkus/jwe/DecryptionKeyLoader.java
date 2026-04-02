@@ -149,10 +149,17 @@ public class DecryptionKeyLoader {
      */
     private static PrivateKey parsePrivateKey(PKCS8EncodedKeySpec keySpec)
             throws GeneralSecurityException {
+        GeneralSecurityException rsaException;
         try {
             return KeyFactory.getInstance("RSA").generatePrivate(keySpec);
-        } catch (GeneralSecurityException ignored) {
+        } catch (GeneralSecurityException e) {
+            rsaException = e;
+        }
+        try {
             return KeyFactory.getInstance("EC").generatePrivate(keySpec);
+        } catch (GeneralSecurityException e) {
+            e.addSuppressed(rsaException);
+            throw e;
         }
     }
 }

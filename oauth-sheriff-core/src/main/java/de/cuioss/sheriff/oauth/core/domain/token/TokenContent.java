@@ -110,16 +110,6 @@ public sealed interface TokenContent extends MinimalTokenContent permits BaseTok
     }
 
     /**
-     * Checks if this token contains the specified claim.
-     *
-     * @param claimName the claim name to check
-     * @return true if the claim is present
-     */
-    default boolean containsClaim(String claimName) {
-        return getClaims().containsKey(claimName);
-    }
-
-    /**
      * Gets the expiration time as an OffsetDateTime.
      *
      * @return the expiration time

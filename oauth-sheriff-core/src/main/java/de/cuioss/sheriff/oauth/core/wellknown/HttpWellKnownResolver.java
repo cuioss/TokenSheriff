@@ -128,7 +128,7 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
      *
      * @return Optional containing the WellKnownResult if available, empty otherwise
      */
-    public Optional<WellKnownResult> getWellKnownResult() {
+    Optional<WellKnownResult> getWellKnownResult() {
         return ensureLoaded();
     }
 

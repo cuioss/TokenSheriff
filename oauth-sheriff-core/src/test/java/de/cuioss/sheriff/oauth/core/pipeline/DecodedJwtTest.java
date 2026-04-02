@@ -81,32 +81,19 @@ class DecodedJwtTest {
     }
 
     @Test
-    @DisplayName("Should reject null body")
-    void shouldRejectNullBody() {
+    @DisplayName("Should reject null header")
+    void shouldRejectNullHeader() {
+        MapRepresentation body = new MapRepresentation(Map.of());
         assertThrows(NullPointerException.class,
-                () -> new DecodedJwt(null, null, null, PARTS, RAW_TOKEN));
+                () -> new DecodedJwt(null, body, null, PARTS, RAW_TOKEN));
     }
 
     @Test
-    @DisplayName("Should create DecodedJwt with null header but non-null body")
-    void shouldCreateDecodedJwtWithNullHeader() {
-
-        MapRepresentation body = new MapRepresentation(Map.of());
-        DecodedJwt jwt = new DecodedJwt(null, body, SIGNATURE, PARTS, RAW_TOKEN);
-        JwtHeader actualHeader = jwt.header();
-        assertNull(actualHeader);
-
-        assertNotNull(jwt.body());
-
-        assertNotNull(jwt.signature());
-        assertEquals(SIGNATURE, jwt.signature());
-
-        assertFalse(jwt.getIssuer().isPresent());
-        assertFalse(jwt.getKid().isPresent());
-        assertFalse(jwt.getAlg().isPresent());
-
-        assertEquals(PARTS, jwt.parts());
-        assertEquals(RAW_TOKEN, jwt.rawToken());
+    @DisplayName("Should reject null body")
+    void shouldRejectNullBody() {
+        JwtHeader header = new JwtHeader(null, null, null, null, null, null, null, null, null, null);
+        assertThrows(NullPointerException.class,
+                () -> new DecodedJwt(header, null, null, PARTS, RAW_TOKEN));
     }
 
     @Test
