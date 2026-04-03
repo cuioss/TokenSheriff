@@ -21,7 +21,7 @@ Deep analysis of all production code asking one question per artifact: _"Does th
 ### Scope and Progress
 
 When `scope=all`, the analysis covers every production module — this can be a large amount of code. To keep analysis tractable:
-- Process one module/package at a time, reporting findings incrementally.
+- For multi-module projects, launch parallel analysis agents (one per module) to maximize throughput. Each agent receives the full pattern catalog and reports findings independently. The main agent then merges results and runs Phase 5.
 - After completing each module, provide a brief progress update before moving to the next.
 - If the user wants to stop early, the findings so far are still valid and useful.
 
@@ -45,6 +45,8 @@ Look specifically for these patterns:
 - **Lenient defaults**: Security features disabled by default requiring opt-in
 - **Compatibility decompression/parsing**: Accepting non-compliant input formats for interoperability
 
+For each security finding, describe the specific attack vector and verify it is mechanically possible. If the value in question is inside a signed or encrypted structure (e.g., a JWT claim), it cannot be tampered with by an attacker — do not report this as a vulnerability. Check whether the behavior matches the relevant RFC before classifying a default as "lenient."
+
 #### API / Design (High)
 - **Dead configuration**: Fields that are configured, stored, documented but never enforced
 - **False security assumptions**: Config that gives a sense of security but has no effect
@@ -53,12 +55,13 @@ Look specifically for these patterns:
 - **Oversized adapters**: Large adapter classes where production uses a tiny subset
 
 #### Dead Code / Unnecessary API Surface (Medium)
-- **Unused public methods**: Zero production callers, only called in tests
+- **Unused public methods**: Zero production callers across ALL modules (not just the current one), only called in tests
 - **Boolean parameter methods**: Opaque `decode(token, true)` style APIs
 - **Magic sentinels**: Special "empty" instances using magic strings
 - **Telescoping constructors**: Multiple constructors where only one is used in production
 - **Null-coalescing constructors**: Silently replacing null with defaults, hiding bugs
 - **Missing input validation**: Builders accepting invalid values (zero, negative)
+- **Per-call object creation**: Only flag if the constructor performs parsing, allocation, or I/O. If it only stores references, the overhead is negligible — do not report it.
 
 #### Cleanup (Low)
 - **Dual-source data**: Same value derivable from two sources (constructor field + claims map)
@@ -68,11 +71,12 @@ Look specifically for these patterns:
 - **Test-only public API**: Public methods/constructors that only tests call
 - **Inconsistent patterns**: Some map lookups null-checked, others not
 
-### Phase 3: Verification
+### Phase 3: Inline Verification
 
-For each finding:
+Quick sanity check during the scan — for each candidate finding, confirm it by reading the referenced code within the current module. Phase 5 performs the thorough cross-module verification after all findings are written.
+
 1. **Read the actual code** at the identified location to confirm the issue
-2. **Check for callers** — verify "unused" claims by searching production code
+2. **Check for callers within the current module** — verify "unused" claims by searching production code
 3. **Check for tests** — note existing test coverage
 4. **Assess severity** based on actual impact, not theoretical risk
 
@@ -166,3 +170,6 @@ Total: N findings across all production code.
 - **No false positives**: Only report findings where the issue is confirmed by reading the code.
 - **Production code only**: Do not analyze test code, generated code, or build scripts.
 - **Exclude framework boilerplate**: Do not flag standard framework patterns (e.g., dependency injection producers, REST resource classes, ORM mappings) unless they contain actual issues.
+- **Check deployment/build modules**: When recommending deletion or visibility changes to production types, verify they are not referenced by build/deployment modules (e.g., Quarkus deployment processors, annotation processors, module-info.java). These modules are excluded from the analysis scope but may depend on production types.
+- **Verify naming claims**: Before claiming a name is "misleading," trace the complete code path the name governs. If the name accurately describes what the code does, do not flag it.
+- **Respect design decisions**: If a pattern has an explicit design decision comment (e.g., `// Design Decision: ...`), evaluate whether the rationale is still valid rather than flagging the pattern as a finding.
