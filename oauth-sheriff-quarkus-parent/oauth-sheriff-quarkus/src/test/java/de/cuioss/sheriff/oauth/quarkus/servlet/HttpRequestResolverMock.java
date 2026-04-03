@@ -15,245 +15,139 @@
  */
 package de.cuioss.sheriff.oauth.quarkus.servlet;
 
-import jakarta.servlet.http.HttpServletRequest;
-import lombok.NonNull;
+import java.util.*;
 
 /**
- * Mock implementation of {@link HttpServletRequestResolver} for testing purposes.
- * 
- * <p>This mock uses {@link HttpServletRequestMock} internally and exposes header manipulation
- * methods for convenient test setup. It allows full control over the HTTP request context
- * during testing.</p>
- * 
- * <p>The mock can be configured to either return a mock HttpServletRequest or to simulate
- * the absence of a request context by throwing IllegalStateException.</p>
- * 
+ * Mock implementation of {@link HttpRequestResolver} for testing purposes.
+ *
+ * <p>This mock manages headers, request URI, and request method directly
+ * for convenient test setup.</p>
+ *
  * <p>Usage example:</p>
  * <pre>{@code
- * HttpServletRequestResolverMock mock = new HttpServletRequestResolverMock();
+ * HttpRequestResolverMock mock = new HttpRequestResolverMock();
  * mock.setBearerToken("mytoken123")
  *     .setHeader("X-Custom-Header", "value1")
  *     .addHeader("X-Custom-Header", "value2")
  *     .setMethod("POST")
  *     .setRequestURI("/api/test");
- * 
- * // Use in tests
- * HttpServletRequest request = mock.resolveHttpServletRequest();
+ *
  * Map<String, List<String>> headers = mock.resolveHeaderMap();
- * 
+ *
  * // Simulate absence of request context
  * mock.setRequestContextAvailable(false);
- * assertThrows(IllegalStateException.class, () -> mock.resolveHttpServletRequest());
+ * assertThrows(IllegalStateException.class, () -> mock.resolveHeaderMap());
  * }</pre>
  *
  * @author Oliver Wolff
  */
-public class HttpServletRequestResolverMock implements HttpServletRequestResolver {
+public class HttpRequestResolverMock implements HttpRequestResolver {
 
-    private final HttpServletRequestMock httpServletRequestMock;
+    private final Map<String, List<String>> headers = new LinkedHashMap<>();
     private boolean requestContextAvailable = true;
+    private String method = "GET";
+    private String requestUri = "/";
 
-    /**
-     * Creates a new HttpServletRequestResolverMock with default configuration.
-     * The mock will return a valid HttpServletRequest unless explicitly configured otherwise.
-     */
-    public HttpServletRequestResolverMock() {
-        this.httpServletRequestMock = new HttpServletRequestMock();
-    }
-
-    /**
-     * Creates a new HttpServletRequestResolverMock with the specified HttpServletRequestMock.
-     * 
-     * @param httpServletRequestMock the HttpServletRequestMock to use
-     */
-    public HttpServletRequestResolverMock(HttpServletRequestMock httpServletRequestMock) {
-        this.httpServletRequestMock = httpServletRequestMock;
-    }
-
-    @NonNull
     @Override
-    public HttpServletRequest resolveHttpServletRequest() throws IllegalStateException {
+    public Map<String, List<String>> resolveHeaderMap() throws IllegalStateException {
+        checkContext();
+        Map<String, List<String>> result = new HashMap<>();
+        for (var entry : headers.entrySet()) {
+            result.put(entry.getKey().toLowerCase(Locale.ROOT), new ArrayList<>(entry.getValue()));
+        }
+        return result;
+    }
+
+    @Override
+    public String resolveRequestUri() {
+        checkContext();
+        return requestUri;
+    }
+
+    @Override
+    public String resolveRequestMethod() {
+        checkContext();
+        return method;
+    }
+
+    private void checkContext() {
         if (!requestContextAvailable) {
             throw new IllegalStateException("Request context not available - mock configured to simulate absent context");
         }
-        return httpServletRequestMock;
     }
 
     // Configuration methods
 
-    /**
-     * Controls whether the mock should simulate an available request context.
-     * 
-     * @param available true to simulate available context, false to simulate absent context
-     * @return this mock for method chaining
-     */
-    public HttpServletRequestResolverMock setRequestContextAvailable(boolean available) {
+    public HttpRequestResolverMock setRequestContextAvailable(boolean available) {
         this.requestContextAvailable = available;
         return this;
     }
 
-    /**
-     * Gets the current request context availability setting.
-     * 
-     * @return true if request context is simulated as available, false otherwise
-     */
     public boolean isRequestContextAvailable() {
         return requestContextAvailable;
     }
 
-    /**
-     * Gets the underlying HttpServletRequestMock for direct manipulation.
-     * 
-     * @return the HttpServletRequestMock instance
-     */
-    public HttpServletRequestMock getHttpServletRequestMock() {
-        return httpServletRequestMock;
-    }
-
-    // Header manipulation methods - delegates to HttpServletRequestMock
-
-    /**
-     * Sets a header value, replacing any existing values for the same header name.
-     * 
-     * @param name the header name
-     * @param value the header value
-     * @return this mock for method chaining
-     */
-    public HttpServletRequestResolverMock setHeader(String name, String value) {
-        httpServletRequestMock.setHeader(name, value);
+    public HttpRequestResolverMock setHeader(String name, String value) {
+        headers.put(name, new ArrayList<>(List.of(value)));
         return this;
     }
 
-    /**
-     * Adds a header value to the existing values for the given header name.
-     * 
-     * @param name the header name
-     * @param value the header value to add
-     * @return this mock for method chaining
-     */
-    public HttpServletRequestResolverMock addHeader(String name, String value) {
-        httpServletRequestMock.addHeader(name, value);
+    public HttpRequestResolverMock addHeader(String name, String value) {
+        headers.computeIfAbsent(name, k -> new ArrayList<>()).add(value);
         return this;
     }
 
-    /**
-     * Removes all values for the given header name.
-     * 
-     * @param name the header name to remove
-     * @return this mock for method chaining
-     */
-    public HttpServletRequestResolverMock removeHeader(String name) {
-        httpServletRequestMock.removeHeader(name);
+    public HttpRequestResolverMock removeHeader(String name) {
+        headers.remove(name);
         return this;
     }
 
-    /**
-     * Clears all headers.
-     * 
-     * @return this mock for method chaining
-     */
-    public HttpServletRequestResolverMock clearHeaders() {
-        httpServletRequestMock.clearHeaders();
+    public HttpRequestResolverMock clearHeaders() {
+        headers.clear();
         return this;
     }
 
-    /**
-     * Sets the Authorization header with a Bearer token.
-     * 
-     * @param token the bearer token (without "Bearer " prefix)
-     * @return this mock for method chaining
-     */
-    public HttpServletRequestResolverMock setBearerToken(String token) {
-        httpServletRequestMock.setBearerToken(token);
+    public HttpRequestResolverMock setBearerToken(String token) {
+        return setHeader("Authorization", "Bearer " + token);
+    }
+
+    public HttpRequestResolverMock setMethod(String method) {
+        this.method = method;
         return this;
     }
 
-    // Request property setters - delegates to HttpServletRequestMock
-
-    /**
-     * Sets the HTTP method.
-     * 
-     * @param method the HTTP method (GET, POST, etc.)
-     * @return this mock for method chaining
-     */
-    public HttpServletRequestResolverMock setMethod(String method) {
-        httpServletRequestMock.setMethod(method);
+    public HttpRequestResolverMock setRequestURI(String requestUri) {
+        this.requestUri = requestUri;
         return this;
     }
 
-    /**
-     * Sets the request URI.
-     * 
-     * @param requestURI the request URI
-     * @return this mock for method chaining
-     */
-    public HttpServletRequestResolverMock setRequestURI(String requestURI) {
-        httpServletRequestMock.setRequestURI(requestURI);
-        return this;
-    }
+    // Convenience factory methods
 
-    /**
-     * Sets the context path.
-     * 
-     * @param contextPath the context path
-     * @return this mock for method chaining
-     */
-    public HttpServletRequestResolverMock setContextPath(String contextPath) {
-        httpServletRequestMock.setContextPath(contextPath);
-        return this;
-    }
-
-    // Convenience methods for testing
-
-    /**
-     * Creates a mock configured for a typical JWT bearer token scenario.
-     * 
-     * @param token the JWT token (without "Bearer " prefix)
-     * @return a configured mock with Authorization header set
-     */
-    public static HttpServletRequestResolverMock withBearerToken(String token) {
-        return new HttpServletRequestResolverMock()
+    public static HttpRequestResolverMock withBearerToken(String token) {
+        return new HttpRequestResolverMock()
                 .setBearerToken(token)
                 .setMethod("GET")
                 .setRequestURI("/api/protected");
     }
 
-    /**
-     * Creates a mock configured for a scenario without request context.
-     * 
-     * @return a configured mock that throws IllegalStateException
-     */
-    public static HttpServletRequestResolverMock withoutRequestContext() {
-        return new HttpServletRequestResolverMock()
+    public static HttpRequestResolverMock withoutRequestContext() {
+        return new HttpRequestResolverMock()
                 .setRequestContextAvailable(false);
     }
 
-    /**
-     * Creates a mock configured for a typical REST API request.
-     * 
-     * @param method the HTTP method
-     * @param requestURI the request URI
-     * @return a configured mock with basic request properties set
-     */
-    public static HttpServletRequestResolverMock withRequest(String method, String requestURI) {
-        return new HttpServletRequestResolverMock()
+    public static HttpRequestResolverMock withRequest(String method, String requestUri) {
+        return new HttpRequestResolverMock()
                 .setMethod(method)
-                .setRequestURI(requestURI)
+                .setRequestURI(requestUri)
                 .setHeader("Content-Type", "application/json")
                 .setHeader("Accept", "application/json");
     }
 
-    /**
-     * Resets the mock to its initial state with default configuration.
-     * 
-     * @return this mock for method chaining
-     */
-    public HttpServletRequestResolverMock reset() {
-        httpServletRequestMock.clearHeaders();
-        httpServletRequestMock.setMethod("GET");
-        httpServletRequestMock.setRequestURI("/");
-        httpServletRequestMock.setContextPath("");
-        this.requestContextAvailable = true;
+    public HttpRequestResolverMock reset() {
+        headers.clear();
+        method = "GET";
+        requestUri = "/";
+        requestContextAvailable = true;
         return this;
     }
 }
