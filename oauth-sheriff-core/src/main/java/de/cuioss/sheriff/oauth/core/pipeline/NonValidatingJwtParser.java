@@ -24,6 +24,7 @@ import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.sheriff.oauth.core.jwe.JweDecryptionConfig;
 import de.cuioss.sheriff.oauth.core.jwe.JweDecryptor;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
+import de.cuioss.tools.base.Preconditions;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
@@ -281,9 +282,10 @@ public class NonValidatingJwtParser {
     @SuppressWarnings("java:S3776") // owolff: Justified - complexity due to logging and security event tracking
     private DecodedJwt decodeInternal(String token, DecodeMode mode) {
         // Precondition: TokenStringValidator has already validated null, blank, and size limits
-        assert token != null && !token.isEmpty() : "TokenStringValidator precondition: token must not be null/empty";
-        assert token.getBytes(StandardCharsets.UTF_8).length <= config.getMaxTokenSize()
-                : "TokenStringValidator precondition: token size within limits";
+        Preconditions.checkArgument(token != null && !token.isEmpty(),
+                "TokenStringValidator precondition: token must not be null/empty");
+        Preconditions.checkArgument(token.getBytes(StandardCharsets.UTF_8).length <= config.getMaxTokenSize(),
+                "TokenStringValidator precondition: token size within limits (max: %s)", config.getMaxTokenSize());
 
         // Split token and validate format
         String[] parts = token.split("\\.");
