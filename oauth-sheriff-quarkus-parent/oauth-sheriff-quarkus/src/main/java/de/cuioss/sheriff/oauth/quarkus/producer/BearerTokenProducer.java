@@ -23,7 +23,7 @@ import de.cuioss.sheriff.oauth.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.oauth.quarkus.annotation.ServletObjectsResolver;
 import de.cuioss.sheriff.oauth.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.oauth.quarkus.metrics.MetricIdentifier;
-import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolver;
+import de.cuioss.sheriff.oauth.quarkus.servlet.HttpRequestResolver;
 import de.cuioss.tools.logging.CuiLogger;
 import io.micrometer.core.annotation.Timed;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -43,7 +43,7 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.WAR
 /**
  * CDI producer for extracting and validating bearer tokens from HTTP Authorization headers.
  * <p>
- * This producer extracts bearer tokens from the HTTP Authorization header using HttpServletRequestResolver,
+ * This producer extracts bearer tokens from the HTTP Authorization header using HttpRequestResolver,
  * validates them using the configured TokenValidator, and checks for required scopes, roles, and groups.
  * <p>
  * The producer provides both service methods that return {@link BearerTokenResult} with comprehensive
@@ -115,13 +115,13 @@ public class BearerTokenProducer {
     static final String COOKIE_HEADER_VALUE = "Cookie";
 
     private final TokenValidator tokenValidator;
-    private final HttpServletRequestResolver servletObjectsResolver;
+    private final HttpRequestResolver servletObjectsResolver;
     private final String tokenHeader;
     private final String tokenCookieName;
 
     @Inject
     public BearerTokenProducer(TokenValidator tokenValidator,
-            @ServletObjectsResolver HttpServletRequestResolver servletObjectsResolver,
+            @ServletObjectsResolver HttpRequestResolver servletObjectsResolver,
             @ConfigProperty(name = JwtPropertyKeys.TOKEN.HEADER, defaultValue = "Authorization") String tokenHeader,
             @ConfigProperty(name = JwtPropertyKeys.TOKEN.COOKIE_NAME, defaultValue = "Bearer") String tokenCookieName) {
         this.tokenValidator = tokenValidator;
@@ -252,7 +252,7 @@ public class BearerTokenProducer {
      * @return Optional containing the bearer token, or empty Optional if no token found
      */
     private Optional<String> extractBearerTokenFromHeaderMap(Map<String, List<String>> headerMap) {
-        // Header names are normalized to lowercase by HttpServletRequestResolver per RFC 9113 (HTTP/2)
+        // Header names are normalized to lowercase by HttpRequestResolver per RFC 9113 (HTTP/2)
         // and RFC 7230 (HTTP/1.1). Direct lookup with lowercase key is sufficient.
         List<String> authHeaders = headerMap.get("authorization");
 

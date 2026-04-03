@@ -54,7 +54,8 @@ public class AccessLogFilterConfig {
      * Specific HTTP status codes to always log, regardless of min/max range.
      * Useful for logging specific success codes (like 201, 202) along with errors.
      */
-    List<Integer> includeStatusCodes;
+    @Builder.Default
+    List<Integer> includeStatusCodes = List.of();
 
     /**
      * URL path patterns to include in logging.
@@ -62,7 +63,8 @@ public class AccessLogFilterConfig {
      * Uses simple glob patterns (* and **).
      * Empty list means all paths are eligible.
      */
-    List<String> includePaths;
+    @Builder.Default
+    List<String> includePaths = List.of();
 
     /**
      * URL path patterns to exclude from logging.
@@ -70,7 +72,8 @@ public class AccessLogFilterConfig {
      * Uses simple glob patterns (* and **).
      * Common exclusions: /health/*, /metrics/*, /jwt/validate
      */
-    List<String> excludePaths;
+    @Builder.Default
+    List<String> excludePaths = List.of();
 
     /**
      * Log format pattern.
@@ -91,27 +94,6 @@ public class AccessLogFilterConfig {
      */
     @Builder.Default
     boolean enabled = false;
-
-    /**
-     * Get include paths, defaulting to empty list if null.
-     */
-    public List<String> getIncludePaths() {
-        return includePaths != null ? includePaths : List.of();
-    }
-
-    /**
-     * Get exclude paths, defaulting to empty list if null.
-     */
-    public List<String> getExcludePaths() {
-        return excludePaths != null ? excludePaths : List.of();
-    }
-
-    /**
-     * Get include status codes, defaulting to empty list if null.
-     */
-    public List<Integer> getIncludeStatusCodes() {
-        return includeStatusCodes != null ? includeStatusCodes : List.of();
-    }
 
     /**
      * Validates the configuration values.

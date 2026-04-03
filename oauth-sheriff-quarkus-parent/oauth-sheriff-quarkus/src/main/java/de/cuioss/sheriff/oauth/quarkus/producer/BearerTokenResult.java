@@ -127,30 +127,6 @@ public class BearerTokenResult implements Serializable {
 
 
     /**
-     * Creates a BearerTokenResult for failed token validation due to constraint violations.
-     * <p>
-     * Design decision: This factory method is intentional public API for library consumers
-     * to use in tests and custom implementations, even though {@link BearerTokenProducer}
-     * uses the builder directly.
-     *
-     * @param missingScopes the scopes that are missing from the token
-     * @param missingRoles  the roles that are missing from the token
-     * @param missingGroups the groups that are missing from the token
-     * @return a BearerTokenResult indicating constraint violation
-     */
-
-    public static BearerTokenResult constraintViolation(Set<String> missingScopes,
-            Set<String> missingRoles, Set<String> missingGroups) {
-        return builder()
-                .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                .missingScopes(missingScopes)
-                .missingRoles(missingRoles)
-                .missingGroups(missingGroups)
-                .build();
-    }
-
-
-    /**
      * Creates a BearerTokenResult for cases where no token was provided.
      *
      * @param requiredScopes the scopes that were required for validation

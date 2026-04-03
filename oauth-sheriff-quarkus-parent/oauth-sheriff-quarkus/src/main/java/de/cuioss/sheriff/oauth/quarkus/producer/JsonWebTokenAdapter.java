@@ -139,7 +139,7 @@ public final class JsonWebTokenAdapter implements JsonWebToken {
      *
      * @return the wrapped token content
      */
-    public TokenContent getTokenContent() {
+    TokenContent getTokenContent() {
         return delegate;
     }
 }

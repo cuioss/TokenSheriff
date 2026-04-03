@@ -56,18 +56,6 @@ public class TokenStringValidator {
     private final SecurityEventCounter securityEventCounter;
 
     /**
-     * Creates a new TokenStringValidator with the specified configuration.
-     *
-     * @param parserConfig the parser configuration containing max token size
-     * @param securityEventCounter the security event counter for tracking violations
-     */
-    public TokenStringValidator(ParserConfig parserConfig,
-            SecurityEventCounter securityEventCounter) {
-        this.maxTokenSize = parserConfig.getMaxTokenSize();
-        this.securityEventCounter = securityEventCounter;
-    }
-
-    /**
      * Creates a new TokenStringValidator that uses the JWE max token size when JWE is configured.
      *
      * @param parserConfig the parser configuration

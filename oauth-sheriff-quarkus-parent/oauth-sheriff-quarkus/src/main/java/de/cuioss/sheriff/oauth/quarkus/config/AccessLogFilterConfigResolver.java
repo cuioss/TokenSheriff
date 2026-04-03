@@ -16,11 +16,11 @@
 package de.cuioss.sheriff.oauth.quarkus.config;
 
 import de.cuioss.tools.logging.CuiLogger;
-import lombok.RequiredArgsConstructor;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.Config;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,13 +43,17 @@ import static de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages.INF
  *
  * @since 1.0
  */
-@RequiredArgsConstructor
+@ApplicationScoped
 public class AccessLogFilterConfigResolver {
 
     private static final CuiLogger LOGGER = new CuiLogger(AccessLogFilterConfigResolver.class);
 
-
     private final Config config;
+
+    @Inject
+    public AccessLogFilterConfigResolver(Config config) {
+        this.config = config;
+    }
 
     /**
      * Resolves the access log filter configuration from the Quarkus configuration.
@@ -62,31 +66,33 @@ public class AccessLogFilterConfigResolver {
     public AccessLogFilterConfig resolveConfig() {
         LOGGER.info(INFO.RESOLVING_ACCESS_LOG_FILTER_CONFIG);
 
-        var resolvedConfig = AccessLogFilterConfig.builder()
-                .minStatusCode(config.getOptionalValue(JwtPropertyKeys.ACCESSLOG.MIN_STATUS_CODE, Integer.class)
-                        .orElse(400))
-                .maxStatusCode(config.getOptionalValue(JwtPropertyKeys.ACCESSLOG.MAX_STATUS_CODE, Integer.class)
-                        .orElse(599))
-                .includeStatusCodes(resolveIntegerList(JwtPropertyKeys.ACCESSLOG.INCLUDE_STATUS_CODES))
-                .includePaths(resolveStringList(JwtPropertyKeys.ACCESSLOG.INCLUDE_PATHS))
-                .excludePaths(resolveStringList(JwtPropertyKeys.ACCESSLOG.EXCLUDE_PATHS))
-                .pattern(config.getOptionalValue(JwtPropertyKeys.ACCESSLOG.PATTERN, String.class)
-                        .orElse("{remoteAddr} {method} {path} -> {status} ({duration}ms)"))
-                .enabled(config.getOptionalValue(JwtPropertyKeys.ACCESSLOG.ENABLED, Boolean.class)
-                        .orElse(false))
-                .build();
+        var builder = AccessLogFilterConfig.builder();
+        config.getOptionalValue(JwtPropertyKeys.ACCESSLOG.MIN_STATUS_CODE, Integer.class)
+                .ifPresent(builder::minStatusCode);
+        config.getOptionalValue(JwtPropertyKeys.ACCESSLOG.MAX_STATUS_CODE, Integer.class)
+                .ifPresent(builder::maxStatusCode);
+        resolveIntegerList(JwtPropertyKeys.ACCESSLOG.INCLUDE_STATUS_CODES)
+                .ifPresent(builder::includeStatusCodes);
+        resolveStringList(JwtPropertyKeys.ACCESSLOG.INCLUDE_PATHS)
+                .ifPresent(builder::includePaths);
+        resolveStringList(JwtPropertyKeys.ACCESSLOG.EXCLUDE_PATHS)
+                .ifPresent(builder::excludePaths);
+        config.getOptionalValue(JwtPropertyKeys.ACCESSLOG.PATTERN, String.class)
+                .ifPresent(builder::pattern);
+        config.getOptionalValue(JwtPropertyKeys.ACCESSLOG.ENABLED, Boolean.class)
+                .ifPresent(builder::enabled);
+        var resolvedConfig = builder.build();
         resolvedConfig.validate();
         return resolvedConfig;
     }
 
-    private List<Integer> resolveIntegerList(String key) {
-        Optional<String> value = config.getOptionalValue(key, String.class);
-        return value.map(string -> Arrays.stream(string.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .map(s -> parseInteger(key, s))
-                .toList()).orElse(Collections.emptyList());
-
+    private Optional<List<Integer>> resolveIntegerList(String key) {
+        return config.getOptionalValue(key, String.class)
+                .map(string -> Arrays.stream(string.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .map(s -> parseInteger(key, s))
+                        .toList());
     }
 
     private static int parseInteger(String propertyKey, String value) {
@@ -98,12 +104,11 @@ public class AccessLogFilterConfigResolver {
         }
     }
 
-    private List<String> resolveStringList(String key) {
-        Optional<String> value = config.getOptionalValue(key, String.class);
-        return value.map(string -> Arrays.stream(string.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .toList()).orElse(Collections.emptyList());
-
+    private Optional<List<String>> resolveStringList(String key) {
+        return config.getOptionalValue(key, String.class)
+                .map(string -> Arrays.stream(string.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .toList());
     }
 }

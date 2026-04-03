@@ -53,7 +53,7 @@ class ClientIpExtractorTest {
         MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
         headers.putSingle(headerName, headerValue);
 
-        String result = ClientIpExtractor.extractClientIp(headers);
+        String result = ClientIpExtractor.extractClientIp(headers, null);
 
         assertEquals(expectedIp, result);
     }
@@ -63,7 +63,7 @@ class ClientIpExtractorTest {
     void shouldReturnUnknownWhenNoHeaders() {
         MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
 
-        String result = ClientIpExtractor.extractClientIp(headers);
+        String result = ClientIpExtractor.extractClientIp(headers, null);
 
         assertEquals("unknown", result);
     }
@@ -75,7 +75,7 @@ class ClientIpExtractorTest {
         headers.putSingle("CF-Connecting-IP", "203.0.113.50");
         headers.putSingle("X-Real-IP", "10.0.0.1");
 
-        String result = ClientIpExtractor.extractClientIp(headers);
+        String result = ClientIpExtractor.extractClientIp(headers, null);
 
         assertEquals("203.0.113.50", result);
     }
@@ -88,7 +88,7 @@ class ClientIpExtractorTest {
         headers.putSingle("CF-Connecting-IP", "   ");
         headers.putSingle("X-Real-IP", "192.168.1.1");
 
-        String result = ClientIpExtractor.extractClientIp(headers);
+        String result = ClientIpExtractor.extractClientIp(headers, null);
 
         assertEquals("192.168.1.1", result);
     }
@@ -102,7 +102,7 @@ class ClientIpExtractorTest {
         headers.putSingle("CF-Connecting-IP", "10.0.0.3");     // High priority
         headers.putSingle("X-Forwarded-For", "10.0.0.4");      // Highest priority
 
-        String result = ClientIpExtractor.extractClientIp(headers);
+        String result = ClientIpExtractor.extractClientIp(headers, null);
 
         assertEquals("10.0.0.4", result); // Should pick X-Forwarded-For (highest priority)
     }
@@ -114,7 +114,7 @@ class ClientIpExtractorTest {
         headers.putSingle("X-Real-IP", "10.0.0.1,10.0.0.2");
         headers.putSingle("X-Forwarded-For", "203.0.113.1,198.51.100.1");
 
-        String result = ClientIpExtractor.extractClientIp(headers);
+        String result = ClientIpExtractor.extractClientIp(headers, null);
 
         assertEquals("203.0.113.1", result); // Should pick first from X-Forwarded-For
     }
@@ -126,7 +126,7 @@ class ClientIpExtractorTest {
         headers.putSingle("Forwarded", "malformed=value; not-for=something");
         headers.putSingle("X-Real-IP", "10.0.0.1");
 
-        String result = ClientIpExtractor.extractClientIp(headers);
+        String result = ClientIpExtractor.extractClientIp(headers, null);
 
         assertEquals("10.0.0.1", result); // Should fall back to X-Real-IP
     }
@@ -138,7 +138,7 @@ class ClientIpExtractorTest {
         headers.putSingle("CF-Connecting-IP", "203.0.113.100");
         headers.putSingle("X-Real-IP", "10.0.0.1");
 
-        String result = ClientIpExtractor.extractClientIp(headers);
+        String result = ClientIpExtractor.extractClientIp(headers, null);
 
         assertEquals("203.0.113.100", result); // Should prioritize CF-Connecting-IP
     }
@@ -181,7 +181,7 @@ class ClientIpExtractorTest {
         headers.add("X-Forwarded-For", "203.0.113.1,198.51.100.1");
         headers.add("X-Forwarded-For", "10.0.0.1"); // Second value should be ignored
 
-        String result = ClientIpExtractor.extractClientIp(headers);
+        String result = ClientIpExtractor.extractClientIp(headers, null);
 
         assertEquals("203.0.113.1", result); // Should take first value, then first IP from comma-separated
     }

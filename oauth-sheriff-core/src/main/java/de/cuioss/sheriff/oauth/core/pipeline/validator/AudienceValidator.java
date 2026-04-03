@@ -96,7 +96,7 @@ class AudienceValidator {
                     "Missing required audience claim in ID token. Expected audience: " + expectedAudience + ", Available claims: " + token.getClaims().keySet()
             );
         } else if (accessTokenAudienceOptional) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.ACCESS_TOKEN_AUDIENCE_MISSING, expectedAudience);
+            LOGGER.debug("Access token audience is optional and missing. Expected audience: %s", expectedAudience);
         } else {
             LOGGER.warn(JWTValidationLogMessages.WARN.ACCESS_TOKEN_AUDIENCE_MISSING, expectedAudience);
             securityEventCounter.increment(SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING);

@@ -25,14 +25,14 @@ import java.lang.annotation.Target;
 /**
  * CDI qualifier for the Vertx-based servlet objects resolver.
  *
- * <p>This qualifier identifies the {@code HttpServletRequestResolver} implementation
+ * <p>This qualifier identifies the {@code HttpRequestResolver} implementation
  * that uses Quarkus Vertx {@code HttpServerRequest} to access HTTP context.</p>
  *
  * <p>Usage example:</p>
  * <pre>{@code
  * @Inject
  * @ServletObjectsResolver
- * HttpServletRequestResolver resolver;
+ * HttpRequestResolver resolver;
  * }</pre>
  *
  * @since 1.0

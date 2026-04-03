@@ -41,8 +41,7 @@ import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenSignatureValidator;
 import de.cuioss.sheriff.oauth.core.security.JwkAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
-import de.cuioss.sheriff.oauth.quarkus.config.AccessLogFilterConfigProducer;
-import de.cuioss.sheriff.oauth.quarkus.config.IssuerConfigResolver;
+import de.cuioss.sheriff.oauth.quarkus.config.AccessLogFilterConfigResolver;
 import de.cuioss.sheriff.oauth.quarkus.config.ParserConfigResolver;
 import de.cuioss.sheriff.oauth.quarkus.interceptor.BearerTokenInterceptor;
 import de.cuioss.sheriff.oauth.quarkus.logging.CustomAccessLogFilter;
@@ -299,7 +298,6 @@ public class OAuthSheriffProcessor {
                 .addBeanClasses(
                         TokenValidatorProducer.class,
                         BearerTokenProducer.class,
-                        IssuerConfigResolver.class,
                         ParserConfigResolver.class,
                         VertxServletObjectsResolver.class,
                         JwtMetricsCollector.class,
@@ -311,7 +309,7 @@ public class OAuthSheriffProcessor {
                         TokenValidationRuleRegistry.class
                 )
                 // Register additional configuration producers using class references
-                .addBeanClass(AccessLogFilterConfigProducer.class)
+                .addBeanClass(AccessLogFilterConfigResolver.class)
                 .addBeanClass(CustomAccessLogFilter.class)
                 // Register interceptor infrastructure
                 .addBeanClass(BearerTokenInterceptor.class)
