@@ -169,9 +169,10 @@ class AccessTokenCacheTest {
                 });
 
         // When - second access should detect expiration and throw exception
+        OffsetDateTime checkTime = OffsetDateTime.now();
         TokenValidationException exception =
                 assertThrows(TokenValidationException.class, () ->
-                        cache.get(testToken, performanceMonitor, OffsetDateTime.now()));
+                        cache.get(testToken, performanceMonitor, checkTime));
 
         // Then
         assertEquals(SecurityEventCounter.EventType.TOKEN_EXPIRED, exception.getEventType());

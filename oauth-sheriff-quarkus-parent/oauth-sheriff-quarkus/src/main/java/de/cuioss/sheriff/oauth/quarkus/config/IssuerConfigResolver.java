@@ -22,7 +22,6 @@ import de.cuioss.sheriff.oauth.core.dpop.DpopConfig;
 import de.cuioss.sheriff.oauth.core.jwks.http.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.quarkus.mapper.ClaimMapperRegistry;
-import de.cuioss.tools.base.Preconditions;
 import de.cuioss.tools.logging.CuiLogger;
 import org.eclipse.microprofile.config.Config;
 import org.jspecify.annotations.Nullable;
@@ -470,10 +469,9 @@ public class IssuerConfigResolver {
         HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder builder = HttpJwksLoaderConfig.builder();
 
         // Use the already-resolved issuer identifier (required for direct JWKS configuration)
-        Preconditions.checkState(resolvedIssuerIdentifier.isPresent(),
-                "Issuer '%s' requires explicit 'issuer-identifier' when using direct JWKS URL. Configure '%s' in application properties.",
-                issuerName, JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(issuerName));
-        builder.issuerIdentifier(resolvedIssuerIdentifier.get());
+        builder.issuerIdentifier(resolvedIssuerIdentifier.orElseThrow(() -> new IllegalStateException(
+                "Issuer '%s' requires explicit 'issuer-identifier' when using direct JWKS URL. Configure '%s' in application properties."
+                        .formatted(issuerName, JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(issuerName)))));
 
         // Configure URLs - let the builder handle mutual exclusivity validation
         if (jwksUrl != null) {
