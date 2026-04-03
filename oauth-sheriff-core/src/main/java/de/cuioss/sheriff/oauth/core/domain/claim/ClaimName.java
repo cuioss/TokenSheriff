@@ -162,6 +162,15 @@ public enum ClaimName {
     AUTHORIZED_PARTY("azp", ClaimValueType.STRING, "The \"azp\" (authorized party) claim identifies the party to which the ID Token was issued. Optional by OpenID Connect Core 1.0 for ID_TOKEN type.", new IdentityMapper()),
 
     /**
+     * The "client_id" claim identifies the OAuth 2.0 client that requested the token.
+     * Defined by RFC 9068 Section 2.2 for JWT access tokens. Used as a fallback
+     * when the "azp" claim is absent for authorized party validation.
+     *
+     * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-2.2">RFC 9068 - JWT Access Tokens</a>
+     */
+    CLIENT_ID("client_id", ClaimValueType.STRING, "The \"client_id\" claim identifies the OAuth 2.0 client that requested the token. Defined by RFC 9068 Section 2.2 for JWT access tokens.", new IdentityMapper()),
+
+    /**
      * The "upn" (user principal name) claim uniquely identifies the subject or user principal
      * of the token. Commonly used for principal name resolution with a fallback chain:
      * {@code upn} -> {@code preferred_username} -> {@code sub}.

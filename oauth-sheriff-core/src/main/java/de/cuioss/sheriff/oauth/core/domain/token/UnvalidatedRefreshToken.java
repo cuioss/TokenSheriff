@@ -79,7 +79,7 @@ public final class UnvalidatedRefreshToken implements MinimalTokenContent {
      *
      * @return unvalidated claims map (package-private access)
      */
-    Map<String, ClaimValue> getClaims() {
+    public Map<String, ClaimValue> getClaims() {
         return claims;
     }
 

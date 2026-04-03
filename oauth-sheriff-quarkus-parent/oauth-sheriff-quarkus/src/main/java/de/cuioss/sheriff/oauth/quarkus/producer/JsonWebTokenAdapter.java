@@ -134,12 +134,4 @@ public final class JsonWebTokenAdapter implements JsonWebToken {
         return (T) claimValue.getOriginalString();
     }
 
-    /**
-     * Returns the underlying {@link TokenContent}.
-     *
-     * @return the wrapped token content
-     */
-    TokenContent getTokenContent() {
-        return delegate;
-    }
 }

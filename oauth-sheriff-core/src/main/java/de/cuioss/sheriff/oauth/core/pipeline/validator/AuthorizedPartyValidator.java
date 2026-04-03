@@ -71,17 +71,12 @@ class AuthorizedPartyValidator {
         }
 
         var azpObj = token.getClaimOption(ClaimName.AUTHORIZED_PARTY);
-        if (azpObj.isEmpty()) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_CLAIM, ClaimName.AUTHORIZED_PARTY.getName());
-            securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_CLAIM);
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.MISSING_CLAIM,
-                    "Missing required authorized party (azp) claim"
-            );
-        }
-
-        String azp = azpObj.get().getOriginalString();
-        if (!expectedClientId.contains(azp)) {
+        if (azpObj.isPresent()) {
+            String azp = azpObj.get().getOriginalString();
+            if (expectedClientId.contains(azp)) {
+                LOGGER.debug("Successfully validated authorized party via azp: %s", azp);
+                return;
+            }
             LOGGER.warn(JWTValidationLogMessages.WARN.AZP_MISMATCH, azp, expectedClientId);
             securityEventCounter.increment(SecurityEventCounter.EventType.AZP_MISMATCH);
             throw new TokenValidationException(
@@ -89,6 +84,28 @@ class AuthorizedPartyValidator {
                     "Authorized party mismatch: token azp '%s' does not match any expected client ID %s".formatted(azp, expectedClientId)
             );
         }
-        LOGGER.debug("Successfully validated authorized party: %s", azp);
+
+        // RFC 9068 fallback: check client_id claim when azp is absent
+        var clientIdObj = token.getClaimOption(ClaimName.CLIENT_ID);
+        if (clientIdObj.isPresent()) {
+            String clientId = clientIdObj.get().getOriginalString();
+            if (expectedClientId.contains(clientId)) {
+                LOGGER.warn(JWTValidationLogMessages.WARN.AZP_CLIENT_ID_FALLBACK, clientId);
+                return;
+            }
+            LOGGER.warn(JWTValidationLogMessages.WARN.AZP_MISMATCH, clientId, expectedClientId);
+            securityEventCounter.increment(SecurityEventCounter.EventType.AZP_MISMATCH);
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.AZP_MISMATCH,
+                    "Authorized party mismatch: token client_id '%s' does not match any expected client ID %s".formatted(clientId, expectedClientId)
+            );
+        }
+
+        LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_CLAIM, ClaimName.AUTHORIZED_PARTY.getName());
+        securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_CLAIM);
+        throw new TokenValidationException(
+                SecurityEventCounter.EventType.MISSING_CLAIM,
+                "Missing required authorized party claim (azp or client_id)"
+        );
     }
 }

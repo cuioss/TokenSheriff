@@ -233,7 +233,7 @@ String rawToken
             return "null";
         }
         if (token.length() <= 10) {
-            return token;
+            return token.substring(0, Math.min(4, token.length())) + "...";
         }
         return token.substring(0, 10) + "...";
     }

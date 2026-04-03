@@ -186,9 +186,9 @@ public class BearerTokenProducer {
 
         try {
             // Pass HTTP headers and request context through for DPoP htu/htm validation (RFC 9449)
-            String[] requestContext = resolveRequestContext();
+            RequestContext requestContext = resolveRequestContext();
             AccessTokenContent tokenContent = tokenValidator.createAccessToken(
-                    new AccessTokenRequest(bearerToken, headerMap, requestContext[0], requestContext[1]));
+                    new AccessTokenRequest(bearerToken, headerMap, requestContext.uri(), requestContext.method()));
 
             // Determine missing scopes, roles, and groups
             Set<String> missingScopes = tokenContent.determineMissingScopes(requiredScopes);
@@ -220,22 +220,27 @@ public class BearerTokenProducer {
 
 
     /**
+     * Holds the resolved HTTP request URI and method for DPoP htu/htm validation.
+     */
+    private record RequestContext(String uri, String method) {
+    }
+
+    /**
      * Resolves the HTTP request URI and method for DPoP htu/htm validation.
-     * Returns a two-element array where index 0 is the request URI and index 1 is the request method.
      * Both values default to {@code null} if resolution fails.
      *
-     * @return a two-element String array with [requestUri, requestMethod]
+     * @return a RequestContext with the resolved URI and method
      */
-    private String[] resolveRequestContext() {
+    private RequestContext resolveRequestContext() {
         try {
-            return new String[]{
+            return new RequestContext(
                     servletObjectsResolver.resolveRequestUri(),
                     servletObjectsResolver.resolveRequestMethod()
-            };
+            );
         }
         catch (IllegalStateException | UnsupportedOperationException | CreationException e) {
             LOGGER.debug("Could not resolve request URI/method for DPoP htu/htm validation: %s", e.getMessage());
-            return new String[]{null, null};
+            return new RequestContext(null, null);
         }
     }
 

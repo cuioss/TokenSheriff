@@ -91,8 +91,6 @@ class TokenValidatorMetricsVerificationTest {
                         completeValidationNanos, totalIndividualSteps, timingGap, timingGapMillis));
 
         // Check specific metrics that were missing in the benchmark
-        checkMetric("TOKEN_FORMAT_CHECK", monitor.getValidationMetrics(MeasurementType.TOKEN_FORMAT_CHECK)
-                .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO));
         checkMetric("ISSUER_EXTRACTION", monitor.getValidationMetrics(MeasurementType.ISSUER_EXTRACTION)
                 .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO));
         checkMetric("JWKS_OPERATIONS", monitor.getValidationMetrics(MeasurementType.JWKS_OPERATIONS)

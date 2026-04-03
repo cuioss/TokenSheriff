@@ -104,12 +104,13 @@ class AuthorizedPartyValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.AUTHORIZED_PARTY.getName());
+        claims.remove(ClaimName.CLIENT_ID.getName());
         AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAuthorizedParty(token));
         assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
-        assertTrue(exception.getMessage().contains("Missing required authorized party (azp) claim"));
+        assertTrue(exception.getMessage().contains("Missing required authorized party claim (azp or client_id)"));
         assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.AZP_MISMATCH));
     }
@@ -172,12 +173,13 @@ class AuthorizedPartyValidatorTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.put(ClaimName.AUTHORIZED_PARTY.getName(), null);
+        claims.remove(ClaimName.CLIENT_ID.getName());
         AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken());
 
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAuthorizedParty(token));
         assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
-        assertTrue(exception.getMessage().contains("Missing required authorized party (azp) claim"));
+        assertTrue(exception.getMessage().contains("Missing required authorized party claim (azp or client_id)"));
         assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
     }
 }

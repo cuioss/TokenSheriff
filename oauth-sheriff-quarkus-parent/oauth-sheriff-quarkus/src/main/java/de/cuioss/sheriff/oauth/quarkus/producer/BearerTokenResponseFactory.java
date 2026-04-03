@@ -85,23 +85,13 @@ public class BearerTokenResponseFactory {
      */
     static Response createResponse(BearerTokenResult result) {
         return switch (result.getStatus()) {
-            case FULLY_VERIFIED -> createSuccessResponse();
+            case FULLY_VERIFIED -> throw new IllegalStateException(
+                    "FULLY_VERIFIED is handled by BearerTokenResult directly, not the error response factory");
             case NO_TOKEN_GIVEN -> createNoTokenResponse();
             case PARSING_ERROR -> createParsingErrorResponse();
             case CONSTRAINT_VIOLATION -> createConstraintViolationResponse(result);
             case INVALID_REQUEST -> createInvalidRequestResponse(result);
         };
-    }
-
-    /**
-     * Creates a success response for fully verified tokens.
-     */
-    private static Response createSuccessResponse() {
-        return Response.ok()
-                .type(MediaType.APPLICATION_JSON)
-                .header(HEADER_CACHE_CONTROL, CACHE_CONTROL_VALUE)
-                .header(HEADER_PRAGMA, PRAGMA_VALUE)
-                .build();
     }
 
     /**

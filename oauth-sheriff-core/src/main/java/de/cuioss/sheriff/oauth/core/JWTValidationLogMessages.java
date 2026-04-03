@@ -556,6 +556,24 @@ public final class JWTValidationLogMessages {
                 .template("DPoP proof htm claim '%s' does not match request method '%s'")
                 .build();
 
+        public static final LogRecord AUDIENCE_AZP_FALLBACK = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(170)
+                .template("Audience claim missing but azp claim '%s' matches expected audience — using azp as fallback")
+                .build();
+
+        public static final LogRecord ACCESS_TOKEN_AUDIENCE_OPTIONAL_SKIPPED = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(171)
+                .template("Access token audience validation skipped (accessTokenAudienceOptional=true). Expected audience: %s")
+                .build();
+
+        public static final LogRecord AZP_CLIENT_ID_FALLBACK = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(172)
+                .template("azp claim missing, using client_id claim '%s' for authorized party validation (RFC 9068)")
+                .build();
+
     }
 
 }

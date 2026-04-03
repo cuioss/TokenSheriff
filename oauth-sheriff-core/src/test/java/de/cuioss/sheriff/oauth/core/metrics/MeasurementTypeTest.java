@@ -31,50 +31,48 @@ class MeasurementTypeTest {
     @Test
     @DisplayName("Should have ordinals matching description numbers for pipeline steps")
     void shouldHaveOrdinalsMatchingDescriptionNumbers() {
-        // Pipeline execution order (0-10)
+        // Pipeline execution order (0-9)
         assertEquals(0, MeasurementType.COMPLETE_VALIDATION.ordinal());
-        assertEquals(1, MeasurementType.TOKEN_FORMAT_CHECK.ordinal());
-        assertEquals(2, MeasurementType.TOKEN_PARSING.ordinal());
-        assertEquals(3, MeasurementType.ISSUER_EXTRACTION.ordinal());
-        assertEquals(4, MeasurementType.CACHE_LOOKUP.ordinal());
-        assertEquals(5, MeasurementType.ISSUER_CONFIG_RESOLUTION.ordinal());
-        assertEquals(6, MeasurementType.HEADER_VALIDATION.ordinal());
-        assertEquals(7, MeasurementType.SIGNATURE_VALIDATION.ordinal());
-        assertEquals(8, MeasurementType.TOKEN_BUILDING.ordinal());
-        assertEquals(9, MeasurementType.CLAIMS_VALIDATION.ordinal());
-        assertEquals(10, MeasurementType.CACHE_STORE.ordinal());
+        assertEquals(1, MeasurementType.TOKEN_PARSING.ordinal());
+        assertEquals(2, MeasurementType.ISSUER_EXTRACTION.ordinal());
+        assertEquals(3, MeasurementType.CACHE_LOOKUP.ordinal());
+        assertEquals(4, MeasurementType.ISSUER_CONFIG_RESOLUTION.ordinal());
+        assertEquals(5, MeasurementType.HEADER_VALIDATION.ordinal());
+        assertEquals(6, MeasurementType.SIGNATURE_VALIDATION.ordinal());
+        assertEquals(7, MeasurementType.TOKEN_BUILDING.ordinal());
+        assertEquals(8, MeasurementType.CLAIMS_VALIDATION.ordinal());
+        assertEquals(9, MeasurementType.CACHE_STORE.ordinal());
 
-        // Cross-cutting concerns (11-14)
-        assertEquals(11, MeasurementType.JWKS_OPERATIONS.ordinal());
-        assertEquals(12, MeasurementType.RETRY_ATTEMPT.ordinal());
-        assertEquals(13, MeasurementType.RETRY_COMPLETE.ordinal());
-        assertEquals(14, MeasurementType.RETRY_DELAY.ordinal());
+        // Cross-cutting concerns (10-13)
+        assertEquals(10, MeasurementType.JWKS_OPERATIONS.ordinal());
+        assertEquals(11, MeasurementType.RETRY_ATTEMPT.ordinal());
+        assertEquals(12, MeasurementType.RETRY_COMPLETE.ordinal());
+        assertEquals(13, MeasurementType.RETRY_DELAY.ordinal());
     }
 
     @Test
     @DisplayName("Should have descriptions starting with ordinal number")
     void shouldHaveDescriptionsStartingWithOrdinalNumber() {
         assertTrue(MeasurementType.COMPLETE_VALIDATION.getDescription().startsWith("0."));
-        assertTrue(MeasurementType.TOKEN_FORMAT_CHECK.getDescription().startsWith("1."));
-        assertTrue(MeasurementType.TOKEN_PARSING.getDescription().startsWith("2."));
-        assertTrue(MeasurementType.ISSUER_EXTRACTION.getDescription().startsWith("3."));
-        assertTrue(MeasurementType.CACHE_LOOKUP.getDescription().startsWith("4."));
-        assertTrue(MeasurementType.ISSUER_CONFIG_RESOLUTION.getDescription().startsWith("5."));
-        assertTrue(MeasurementType.HEADER_VALIDATION.getDescription().startsWith("6."));
-        assertTrue(MeasurementType.SIGNATURE_VALIDATION.getDescription().startsWith("7."));
-        assertTrue(MeasurementType.TOKEN_BUILDING.getDescription().startsWith("8."));
-        assertTrue(MeasurementType.CLAIMS_VALIDATION.getDescription().startsWith("9."));
-        assertTrue(MeasurementType.CACHE_STORE.getDescription().startsWith("10."));
-        assertTrue(MeasurementType.JWKS_OPERATIONS.getDescription().startsWith("11."));
-        assertTrue(MeasurementType.RETRY_ATTEMPT.getDescription().startsWith("12."));
-        assertTrue(MeasurementType.RETRY_COMPLETE.getDescription().startsWith("13."));
-        assertTrue(MeasurementType.RETRY_DELAY.getDescription().startsWith("14."));
+        assertTrue(MeasurementType.TOKEN_PARSING.getDescription().startsWith("1."));
+        assertTrue(MeasurementType.ISSUER_EXTRACTION.getDescription().startsWith("2."));
+        assertTrue(MeasurementType.CACHE_LOOKUP.getDescription().startsWith("3."));
+        assertTrue(MeasurementType.ISSUER_CONFIG_RESOLUTION.getDescription().startsWith("4."));
+        assertTrue(MeasurementType.HEADER_VALIDATION.getDescription().startsWith("5."));
+        assertTrue(MeasurementType.SIGNATURE_VALIDATION.getDescription().startsWith("6."));
+        assertTrue(MeasurementType.TOKEN_BUILDING.getDescription().startsWith("7."));
+        assertTrue(MeasurementType.CLAIMS_VALIDATION.getDescription().startsWith("8."));
+        assertTrue(MeasurementType.CACHE_STORE.getDescription().startsWith("9."));
+        assertTrue(MeasurementType.JWKS_OPERATIONS.getDescription().startsWith("10."));
+        assertTrue(MeasurementType.RETRY_ATTEMPT.getDescription().startsWith("11."));
+        assertTrue(MeasurementType.RETRY_COMPLETE.getDescription().startsWith("12."));
+        assertTrue(MeasurementType.RETRY_DELAY.getDescription().startsWith("13."));
     }
 
     @Test
-    @DisplayName("Should have all 16 enum values")
-    void shouldHaveAll16EnumValues() {
-        assertEquals(16, MeasurementType.values().length);
+    @DisplayName("Should have all 15 enum values")
+    void shouldHaveAll15EnumValues() {
+        assertEquals(15, MeasurementType.values().length);
     }
 
     @Test
@@ -83,18 +81,17 @@ class MeasurementTypeTest {
         // Verify the natural enum ordering matches pipeline execution
         MeasurementType[] values = MeasurementType.values();
 
-        // Main pipeline flow for access tokens (0-10)
+        // Main pipeline flow for access tokens (0-9)
         assertSame(MeasurementType.COMPLETE_VALIDATION, values[0]);
-        assertSame(MeasurementType.TOKEN_FORMAT_CHECK, values[1]);
-        assertSame(MeasurementType.TOKEN_PARSING, values[2]);
-        assertSame(MeasurementType.ISSUER_EXTRACTION, values[3]);
-        assertSame(MeasurementType.CACHE_LOOKUP, values[4]); // Early, before expensive signature
-        assertSame(MeasurementType.ISSUER_CONFIG_RESOLUTION, values[5]);
-        assertSame(MeasurementType.HEADER_VALIDATION, values[6]);
-        assertSame(MeasurementType.SIGNATURE_VALIDATION, values[7]); // Most expensive
-        assertSame(MeasurementType.TOKEN_BUILDING, values[8]);
-        assertSame(MeasurementType.CLAIMS_VALIDATION, values[9]);
-        assertSame(MeasurementType.CACHE_STORE, values[10]);
+        assertSame(MeasurementType.TOKEN_PARSING, values[1]);
+        assertSame(MeasurementType.ISSUER_EXTRACTION, values[2]);
+        assertSame(MeasurementType.CACHE_LOOKUP, values[3]); // Early, before expensive signature
+        assertSame(MeasurementType.ISSUER_CONFIG_RESOLUTION, values[4]);
+        assertSame(MeasurementType.HEADER_VALIDATION, values[5]);
+        assertSame(MeasurementType.SIGNATURE_VALIDATION, values[6]); // Most expensive
+        assertSame(MeasurementType.TOKEN_BUILDING, values[7]);
+        assertSame(MeasurementType.CLAIMS_VALIDATION, values[8]);
+        assertSame(MeasurementType.CACHE_STORE, values[9]);
     }
 
     @Test
