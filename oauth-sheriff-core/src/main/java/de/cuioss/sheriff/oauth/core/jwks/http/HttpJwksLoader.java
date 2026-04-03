@@ -330,6 +330,14 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                         // State errors (e.g., from orElseThrow when issuer not resolved), includes CancellationException
                         LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
                     }
+                    // cui-rewrite:disable InvalidExceptionUsageRecipe
+                    // Intentional catch-all safety net: ScheduledExecutorService silently cancels the task
+                    // on ANY uncaught exception (including NPE, ClassCastException, etc.) with no recovery.
+                    // Without this, a single unexpected failure permanently kills JWKS background refresh,
+                    // causing keys to never rotate — a silent availability degradation.
+                    catch (Exception e) {
+                        LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+                    }
                 },
                 config.getRefreshIntervalSeconds(),
                 config.getRefreshIntervalSeconds(),
