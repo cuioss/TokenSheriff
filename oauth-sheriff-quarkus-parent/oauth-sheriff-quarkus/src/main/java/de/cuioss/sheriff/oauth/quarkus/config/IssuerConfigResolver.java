@@ -470,7 +470,7 @@ public class IssuerConfigResolver {
 
         // Use the already-resolved issuer identifier (required for direct JWKS configuration)
         builder.issuerIdentifier(resolvedIssuerIdentifier.orElseThrow(() -> new IllegalStateException(
-                "Issuer '%s' requires explicit 'issuer-identifier' when using direct JWKS URL. Configure '%s' in application properties."
+"Issuer '%s' requires explicit 'issuer-identifier' when using HTTP JWKS or well-known discovery. Configure '%s' in application properties.".formatted(issuerIdentifier, configProperty)
                         .formatted(issuerName, JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(issuerName)))));
 
         // Configure URLs - let the builder handle mutual exclusivity validation
