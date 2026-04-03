@@ -47,7 +47,7 @@ class TokenStringValidatorTest {
         ParserConfig parserConfig = ParserConfig.builder()
                 .maxTokenSize(1000)
                 .build();
-        validator = new TokenStringValidator(parserConfig, securityEventCounter);
+        validator = new TokenStringValidator(parserConfig, securityEventCounter, null);
     }
 
     @ParameterizedTest

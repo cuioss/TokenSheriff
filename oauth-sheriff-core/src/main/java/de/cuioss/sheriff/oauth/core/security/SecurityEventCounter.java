@@ -121,6 +121,7 @@ public class SecurityEventCounter {
         REFRESH_TOKEN_CREATED(null, null),
         ACCESS_TOKEN_CACHE_HIT(null, null);
 
+        /** Logical link to the corresponding {@link LogRecord} — no getter needed, enforces pairing at compile time. */
         private final LogRecord logRecord;
         private final EventCategory category;
 

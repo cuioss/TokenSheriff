@@ -73,17 +73,6 @@ public class ClientIpExtractor {
     };
 
     /**
-     * Extracts the client IP address from HTTP headers.
-     * Follows standard proxy header priority and fallback chain.
-     *
-     * @param headers JAX-RS MultivaluedMap of HTTP headers
-     * @return The extracted client IP address, or "unknown" if none found
-     */
-    public static String extractClientIp(MultivaluedMap<String, String> headers) {
-        return extractClientIp(headers, null);
-    }
-
-    /**
      * Extracts the client IP address from HTTP headers, falling back to the provided
      * address (typically the Vert.x remote address) when no proxy headers are found.
      *

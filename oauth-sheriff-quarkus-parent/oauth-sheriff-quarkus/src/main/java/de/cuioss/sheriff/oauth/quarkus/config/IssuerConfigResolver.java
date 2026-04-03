@@ -23,7 +23,6 @@ import de.cuioss.sheriff.oauth.core.jwks.http.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.quarkus.mapper.ClaimMapperRegistry;
 import de.cuioss.tools.logging.CuiLogger;
-import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.Config;
 import org.jspecify.annotations.Nullable;
 
@@ -63,16 +62,6 @@ public class IssuerConfigResolver {
     private final RetryConfig retryConfig;
     private final @Nullable ClaimMapperRegistry claimMapperRegistry;
     private final @Nullable ParserConfig parserConfig;
-
-    /**
-     * CDI constructor. Uses default retry configuration.
-     *
-     * @param config the configuration instance to use for property resolution
-     */
-    @Inject
-    public IssuerConfigResolver(Config config) {
-        this(config, RetryConfig.defaults(), null, null);
-    }
 
     /**
      * Creates a new IssuerConfigResolver with the specified configuration, retry config,

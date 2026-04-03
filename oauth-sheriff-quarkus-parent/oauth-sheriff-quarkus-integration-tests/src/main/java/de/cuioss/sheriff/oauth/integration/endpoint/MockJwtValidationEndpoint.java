@@ -21,7 +21,7 @@ import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.integration.endpoint.JwtValidationEndpoint.ValidationResponse;
 import de.cuioss.sheriff.oauth.quarkus.annotation.ServletObjectsResolver;
-import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolver;
+import de.cuioss.sheriff.oauth.quarkus.servlet.HttpRequestResolver;
 import de.cuioss.tools.logging.CuiLogger;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -74,15 +74,15 @@ public class MockJwtValidationEndpoint {
 
     // Injected to replicate CDI wiring cost — same beans as BearerTokenProducer
     private final TokenValidator tokenValidator;
-    private final HttpServletRequestResolver servletObjectsResolver;
+    private final HttpRequestResolver servletObjectsResolver;
 
     @Inject
     public MockJwtValidationEndpoint(
             TokenValidator tokenValidator,
-            @ServletObjectsResolver HttpServletRequestResolver servletObjectsResolver) {
+            @ServletObjectsResolver HttpRequestResolver servletObjectsResolver) {
         this.tokenValidator = tokenValidator;
         this.servletObjectsResolver = servletObjectsResolver;
-        LOGGER.debug("MockJwtValidationEndpoint initialized with TokenValidator and HttpServletRequestResolver");
+        LOGGER.debug("MockJwtValidationEndpoint initialized with TokenValidator and HttpRequestResolver");
     }
 
     /**
@@ -91,7 +91,7 @@ public class MockJwtValidationEndpoint {
      * <p>
      * Processing flow:
      * <ol>
-     *   <li>Resolve HTTP header map via {@code HttpServletRequestResolver}</li>
+     *   <li>Resolve HTTP header map via {@code HttpRequestResolver}</li>
      *   <li>Extract Authorization header, parse Bearer prefix</li>
      *   <li>Skip JWT library validation</li>
      *   <li>Build same response structure with hardcoded claims</li>

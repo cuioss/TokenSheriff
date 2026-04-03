@@ -84,13 +84,18 @@ class BearerTokenResultTest {
         }
 
         @Test
-        @DisplayName("constraintViolation() should create CONSTRAINT_VIOLATION result with missing attributes")
+        @DisplayName("builder should create CONSTRAINT_VIOLATION result with missing attributes")
         void constraintViolationShouldCreateConstraintViolationResult() {
             var missingScopes = Set.of("write");
             var missingRoles = Set.of("admin");
             var missingGroups = Set.of("managers");
 
-            var result = BearerTokenResult.constraintViolation(missingScopes, missingRoles, missingGroups);
+            var result = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .missingScopes(missingScopes)
+                    .missingRoles(missingRoles)
+                    .missingGroups(missingGroups)
+                    .build();
 
             assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
             assertFalse(result.getAccessTokenContent().isPresent());
@@ -154,7 +159,12 @@ class BearerTokenResultTest {
                     .build();
             assertTrue(successResult.isSuccessfullyAuthorized());
 
-            var failureResult = BearerTokenResult.constraintViolation(Set.of("scope"), Set.of(), Set.of());
+            var failureResult = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .missingScopes(Set.of("scope"))
+                    .missingRoles(Set.of())
+                    .missingGroups(Set.of())
+                    .build();
             assertFalse(failureResult.isSuccessfullyAuthorized());
         }
 
@@ -167,7 +177,12 @@ class BearerTokenResultTest {
                     .build();
             assertFalse(successResult.isNotSuccessfullyAuthorized());
 
-            var failureResult = BearerTokenResult.constraintViolation(Set.of("scope"), Set.of(), Set.of());
+            var failureResult = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .missingScopes(Set.of("scope"))
+                    .missingRoles(Set.of())
+                    .missingGroups(Set.of())
+                    .build();
             assertTrue(failureResult.isNotSuccessfullyAuthorized());
         }
 
@@ -248,7 +263,12 @@ class BearerTokenResultTest {
         @DisplayName("factory methods should handle empty sets gracefully")
         void factoryMethodsShouldHandleEmptySets() {
             var emptySet = Collections.<String>emptySet();
-            var result = BearerTokenResult.constraintViolation(emptySet, emptySet, emptySet);
+            var result = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .missingScopes(emptySet)
+                    .missingRoles(emptySet)
+                    .missingGroups(emptySet)
+                    .build();
 
             assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
             assertTrue(result.getMissingScopes().isEmpty());
@@ -264,8 +284,18 @@ class BearerTokenResultTest {
         @Test
         @DisplayName("results with same data should be equal")
         void resultsWithSameDataShouldBeEqual() {
-            var result1 = BearerTokenResult.constraintViolation(Set.of("scope"), Set.of("role"), Set.of("group"));
-            var result2 = BearerTokenResult.constraintViolation(Set.of("scope"), Set.of("role"), Set.of("group"));
+            var result1 = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .missingScopes(Set.of("scope"))
+                    .missingRoles(Set.of("role"))
+                    .missingGroups(Set.of("group"))
+                    .build();
+            var result2 = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .missingScopes(Set.of("scope"))
+                    .missingRoles(Set.of("role"))
+                    .missingGroups(Set.of("group"))
+                    .build();
 
             assertEquals(result1, result2);
             assertEquals(result1.hashCode(), result2.hashCode());
@@ -274,8 +304,18 @@ class BearerTokenResultTest {
         @Test
         @DisplayName("results with different data should not be equal")
         void resultsWithDifferentDataShouldNotBeEqual() {
-            var result1 = BearerTokenResult.constraintViolation(Set.of("scope1"), Set.of(), Set.of());
-            var result2 = BearerTokenResult.constraintViolation(Set.of("scope2"), Set.of(), Set.of());
+            var result1 = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .missingScopes(Set.of("scope1"))
+                    .missingRoles(Set.of())
+                    .missingGroups(Set.of())
+                    .build();
+            var result2 = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .missingScopes(Set.of("scope2"))
+                    .missingRoles(Set.of())
+                    .missingGroups(Set.of())
+                    .build();
 
             assertNotEquals(result1, result2);
         }
@@ -283,7 +323,12 @@ class BearerTokenResultTest {
         @Test
         @DisplayName("toString should provide meaningful output")
         void toStringShouldProvideMeaningfulOutput() {
-            var result = BearerTokenResult.constraintViolation(Set.of("scope"), Set.of("role"), Set.of("group"));
+            var result = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .missingScopes(Set.of("scope"))
+                    .missingRoles(Set.of("role"))
+                    .missingGroups(Set.of("group"))
+                    .build();
             var toString = result.toString();
 
             assertNotNull(toString);
@@ -315,7 +360,12 @@ class BearerTokenResultTest {
         @Test
         @DisplayName("should delegate to BearerTokenResponseFactory for failed authorization")
         void shouldDelegateToResponseFactoryForFailedAuthorization() {
-            var result = BearerTokenResult.constraintViolation(Set.of("read"), Set.of(), Set.of());
+            var result = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .missingScopes(Set.of("read"))
+                    .missingRoles(Set.of())
+                    .missingGroups(Set.of())
+                    .build();
 
             var response = result.createErrorResponse();
 
@@ -339,7 +389,12 @@ class BearerTokenResultTest {
             case NO_TOKEN_GIVEN -> BearerTokenResult.noTokenGiven(Set.of(), Set.of(), Set.of());
             case PARSING_ERROR -> BearerTokenResult.parsingError(
                     new TokenValidationException(EventType.INVALID_JWT_FORMAT, "test"), Set.of(), Set.of(), Set.of());
-            case CONSTRAINT_VIOLATION -> BearerTokenResult.constraintViolation(Set.of(), Set.of(), Set.of());
+            case CONSTRAINT_VIOLATION -> BearerTokenResult.builder()
+                    .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .missingScopes(Set.of())
+                    .missingRoles(Set.of())
+                    .missingGroups(Set.of())
+                    .build();
             case INVALID_REQUEST -> BearerTokenResult.invalidRequest("Invalid token format", Set.of(), Set.of(), Set.of());
         };
     }

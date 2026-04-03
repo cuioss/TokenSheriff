@@ -556,11 +556,6 @@ public final class JWTValidationLogMessages {
                 .template("DPoP proof htm claim '%s' does not match request method '%s'")
                 .build();
 
-        public static final LogRecord DPOP_HTU_HTM_SKIPPED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(170)
-                .template("DPoP htu/htm validation skipped — request URI or method not available in AccessTokenRequest")
-                .build();
     }
 
 }

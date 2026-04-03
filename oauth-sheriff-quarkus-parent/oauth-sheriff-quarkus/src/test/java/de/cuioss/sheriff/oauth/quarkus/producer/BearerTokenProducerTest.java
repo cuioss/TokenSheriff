@@ -22,8 +22,8 @@ import de.cuioss.sheriff.oauth.core.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.oauth.core.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
-import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolver;
-import de.cuioss.sheriff.oauth.quarkus.servlet.HttpServletRequestResolverMock;
+import de.cuioss.sheriff.oauth.quarkus.servlet.HttpRequestResolver;
+import de.cuioss.sheriff.oauth.quarkus.servlet.HttpRequestResolverMock;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.easymock.Capture;
@@ -53,13 +53,13 @@ class BearerTokenProducerTest {
 
     private BearerTokenProducer producer;
     private TokenValidator tokenValidator;
-    private HttpServletRequestResolverMock servletResolverMock;
+    private HttpRequestResolverMock servletResolverMock;
 
     @BeforeEach
     void setUp() {
         tokenValidator = createMock(TokenValidator.class);
-        servletResolverMock = new HttpServletRequestResolverMock();
-        HttpServletRequestResolver servletResolver = servletResolverMock;
+        servletResolverMock = new HttpRequestResolverMock();
+        HttpRequestResolver servletResolver = servletResolverMock;
         producer = new BearerTokenProducer(tokenValidator, servletResolver, "Authorization", "Bearer");
     }
 

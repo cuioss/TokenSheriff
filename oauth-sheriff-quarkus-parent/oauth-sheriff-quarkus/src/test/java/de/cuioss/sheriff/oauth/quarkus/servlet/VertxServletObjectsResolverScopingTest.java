@@ -21,7 +21,6 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.inject.Inject;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -30,6 +29,8 @@ import jakarta.ws.rs.core.Response;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.*;
 
@@ -56,7 +57,7 @@ class VertxServletObjectsResolverScopingTest {
 
     @Inject
     @ServletObjectsResolver
-    HttpServletRequestResolver resolver;
+    HttpRequestResolver resolver;
 
     @Test
     @DisplayName("Should verify request isolation in single-threaded scenario")
@@ -216,21 +217,25 @@ class VertxServletObjectsResolverScopingTest {
 
         @Inject
         @ServletObjectsResolver
-        HttpServletRequestResolver resolver;
+        HttpRequestResolver resolver;
 
         @GET
         @Path("/request-info")
         @Produces(MediaType.TEXT_PLAIN)
         public Response getRequestInfo() {
             try {
-                HttpServletRequest request = resolver.resolveHttpServletRequest();
+                Map<String, List<String>> headerMap = resolver.resolveHeaderMap();
+                String requestUri = resolver.resolveRequestUri();
+                String requestMethod = resolver.resolveRequestMethod();
+
+                List<String> requestIdValues = headerMap.get("x-request-id");
+                List<String> testDataValues = headerMap.get("x-test-data");
 
                 StringBuilder info = new StringBuilder();
-                info.append("Request Method: ").append(request.getMethod()).append("\n");
-                info.append("Request URI: ").append(request.getRequestURI()).append("\n");
-                info.append("X-Request-ID: ").append(request.getHeader("X-Request-ID")).append("\n");
-                info.append("X-Test-Data: ").append(request.getHeader("X-Test-Data")).append("\n");
-                info.append("HttpServletRequest Instance: ").append(request.hashCode()).append("\n");
+                info.append("Request Method: ").append(requestMethod).append("\n");
+                info.append("Request URI: ").append(requestUri).append("\n");
+                info.append("X-Request-ID: ").append(requestIdValues != null ? requestIdValues.getFirst() : "null").append("\n");
+                info.append("X-Test-Data: ").append(testDataValues != null ? testDataValues.getFirst() : "null").append("\n");
                 info.append("Thread: ").append(Thread.currentThread().getName()).append("\n");
                 info.append("Timestamp: ").append(System.currentTimeMillis()).append("\n");
 

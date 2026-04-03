@@ -52,57 +52,6 @@ class VertxServletObjectsResolverErrorPathsTest {
     }
 
     @Test
-    @DisplayName("Should throw IllegalStateException when CDI Instance is unsatisfied")
-    void shouldThrowExceptionWhenInstanceIsUnsatisfied() {
-        // Given - mock Instance.isUnsatisfied() to return true
-        expect(vertxRequestInstance.isUnsatisfied()).andReturn(true);
-        replay(vertxRequestInstance);
-
-        // When/Then - should throw IllegalStateException
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> resolver.resolveHttpServletRequest(),
-                "Should throw IllegalStateException when Instance is unsatisfied"
-        );
-
-        // Verify exception message
-        assertEquals("Vertx HttpServerRequest bean is not available in CDI context",
-                exception.getMessage());
-
-        // Verify error logging
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
-                OAuthSheriffQuarkusLogMessages.ERROR.VERTX_REQUEST_CONTEXT_UNAVAILABLE.resolveIdentifierString());
-
-        verify(vertxRequestInstance);
-    }
-
-    @Test
-    @DisplayName("Should throw IllegalStateException when HttpServerRequest is null")
-    void shouldThrowExceptionWhenRequestIsNull() {
-        // Given - mock Instance to be satisfied but return null
-        expect(vertxRequestInstance.isUnsatisfied()).andReturn(false);
-        expect(vertxRequestInstance.get()).andReturn(null);
-        replay(vertxRequestInstance);
-
-        // When/Then - should throw IllegalStateException
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> resolver.resolveHttpServletRequest(),
-                "Should throw IllegalStateException when HttpServerRequest is null"
-        );
-
-        // Verify exception message
-        assertEquals("Vertx HttpServerRequest is null - no active request context available",
-                exception.getMessage());
-
-        // Verify error logging
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
-                OAuthSheriffQuarkusLogMessages.ERROR.VERTX_REQUEST_CONTEXT_UNAVAILABLE.resolveIdentifierString());
-
-        verify(vertxRequestInstance);
-    }
-
-    @Test
     @DisplayName("resolveHeaderMap should throw when CDI Instance is unsatisfied")
     void resolveHeaderMapShouldThrowWhenUnsatisfied() {
         expect(vertxRequestInstance.isUnsatisfied()).andReturn(true);

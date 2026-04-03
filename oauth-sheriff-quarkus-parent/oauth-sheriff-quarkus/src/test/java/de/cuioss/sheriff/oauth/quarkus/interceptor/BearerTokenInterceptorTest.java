@@ -235,8 +235,12 @@ class BearerTokenInterceptorTest {
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithScopes"));
         expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of("read"), Set.of(), Set.of()))
-                .andReturn(BearerTokenResult.constraintViolation(
-                        Set.of("read"), Set.of(), Set.of()));
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                        .missingScopes(Set.of("read"))
+                        .missingRoles(Set.of())
+                        .missingGroups(Set.of())
+                        .build());
         replay(invocationContext, bearerTokenProducer);
 
         WebApplicationException exception = assertThrows(WebApplicationException.class,
@@ -252,8 +256,12 @@ class BearerTokenInterceptorTest {
         expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithRoles"));
         expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of("user", "admin"), Set.of()))
-                .andReturn(BearerTokenResult.constraintViolation(
-                        Set.of(), Set.of("user"), Set.of()));
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                        .missingScopes(Set.of())
+                        .missingRoles(Set.of("user"))
+                        .missingGroups(Set.of())
+                        .build());
         replay(invocationContext, bearerTokenProducer);
 
         WebApplicationException exception = assertThrows(WebApplicationException.class,
