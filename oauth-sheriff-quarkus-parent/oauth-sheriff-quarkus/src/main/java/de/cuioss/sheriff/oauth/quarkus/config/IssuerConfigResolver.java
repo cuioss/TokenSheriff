@@ -468,9 +468,9 @@ public class IssuerConfigResolver {
             @Nullable String wellKnownUrl, Optional<String> resolvedIssuerIdentifier) {
         HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder builder = HttpJwksLoaderConfig.builder();
 
-        // Use the already-resolved issuer identifier (required for direct JWKS configuration)
+        // Use the already-resolved issuer identifier (required for HTTP JWKS configuration)
         builder.issuerIdentifier(resolvedIssuerIdentifier.orElseThrow(() -> new IllegalStateException(
-"Issuer '%s' requires explicit 'issuer-identifier' when using HTTP JWKS or well-known discovery. Configure '%s' in application properties.".formatted(issuerIdentifier, configProperty)
+                "Issuer '%s' requires explicit 'issuer-identifier' when using HTTP JWKS or well-known discovery. Configure '%s' in application properties."
                         .formatted(issuerName, JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(issuerName)))));
 
         // Configure URLs - let the builder handle mutual exclusivity validation
