@@ -160,11 +160,17 @@ public class DpopConfig {
             if (proofMaxAgeSeconds <= 0) {
                 throw new IllegalArgumentException("proofMaxAgeSeconds must be positive, got: " + proofMaxAgeSeconds);
             }
+            if (proofMaxAgeSeconds > 3600) {
+                throw new IllegalArgumentException("proofMaxAgeSeconds must not exceed 3600 (1 hour), got: " + proofMaxAgeSeconds);
+            }
             if (nonceCacheSize <= 0) {
                 throw new IllegalArgumentException("nonceCacheSize must be positive, got: " + nonceCacheSize);
             }
             if (nonceCacheTtlSeconds <= 0) {
                 throw new IllegalArgumentException("nonceCacheTtlSeconds must be positive, got: " + nonceCacheTtlSeconds);
+            }
+            if (nonceCacheTtlSeconds > 86400) {
+                throw new IllegalArgumentException("nonceCacheTtlSeconds must not exceed 86400 (24 hours), got: " + nonceCacheTtlSeconds);
             }
             return new DpopConfig(required, proofMaxAgeSeconds, nonceCacheSize, nonceCacheTtlSeconds);
         }

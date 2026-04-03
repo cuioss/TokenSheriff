@@ -47,15 +47,6 @@ public enum BearerTokenStatus {
     FULLY_VERIFIED,
 
     /**
-     * The HTTP request could not be accessed to extract the bearer token.
-     * <p>
-     * This occurs when the HttpServletRequest is not available in the current
-     * context, typically in non-web environments or when the servlet resolver
-     * fails to provide the request object.
-     */
-    COULD_NOT_ACCESS_REQUEST,
-
-    /**
      * No bearer token was provided in the Authorization header.
      * <p>
      * This indicates that either:

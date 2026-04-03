@@ -34,6 +34,9 @@ import java.util.Optional;
  *   <li><strong>jwks_uri</strong>: URL of the authorization server's JWK Set document</li>
  * </ul>
  *
+ * <p><strong>Note:</strong> Fields are {@code public} per DSL-JSON {@code @CompiledJson} requirement
+ * for class-based deserialization. After deserialization, this object should be treated as read-only.
+ *
  * @since 1.0
  * @author Oliver Wolff
  * @see <a href="https://openid.net/specs/openid-connect-discovery-1_0.html">OpenID Connect Discovery</a>

@@ -33,7 +33,6 @@ import java.util.stream.Collectors;
  * HTTP Status Code mappings:
  * <ul>
  *   <li>FULLY_VERIFIED: 200 (OK) - Should not be called for successful validation</li>
- *   <li>COULD_NOT_ACCESS_REQUEST: 500 (Internal Server Error) - Server-side issue</li>
  *   <li>NO_TOKEN_GIVEN: 401 (Unauthorized) - Missing Bearer token</li>
  *   <li>PARSING_ERROR: 401 (Unauthorized) - Invalid or expired token</li>
  *   <li>CONSTRAINT_VIOLATION: 401 (Unauthorized) for missing scopes, 403 (Forbidden) for missing roles/groups</li>
@@ -76,7 +75,7 @@ public class BearerTokenResponseFactory {
     // Error Messages
     private static final String ERROR_MSG_INVALID_TOKEN = "The access token is invalid";
     private static final String ERROR_MSG_HIGHER_PRIVILEGES = "The request requires higher privileges than provided by the access token";
-    private static final String ERROR_MSG_SERVER_ERROR = "Internal server error: Unable to access request context";
+
 
     /**
      * Creates an appropriate HTTP response for the given bearer token validation result.
@@ -87,7 +86,6 @@ public class BearerTokenResponseFactory {
     public static Response createResponse(BearerTokenResult result) {
         return switch (result.getStatus()) {
             case FULLY_VERIFIED -> createSuccessResponse();
-            case COULD_NOT_ACCESS_REQUEST -> createServerErrorResponse();
             case NO_TOKEN_GIVEN -> createNoTokenResponse();
             case PARSING_ERROR -> createParsingErrorResponse();
             case CONSTRAINT_VIOLATION -> createConstraintViolationResponse(result);
@@ -103,18 +101,6 @@ public class BearerTokenResponseFactory {
                 .type(MediaType.APPLICATION_JSON)
                 .header(HEADER_CACHE_CONTROL, CACHE_CONTROL_VALUE)
                 .header(HEADER_PRAGMA, PRAGMA_VALUE)
-                .build();
-    }
-
-    /**
-     * Creates a server error response when request cannot be accessed.
-     */
-    private static Response createServerErrorResponse() {
-        return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                .type(MediaType.APPLICATION_JSON)
-                .header(HEADER_CACHE_CONTROL, CACHE_CONTROL_VALUE)
-                .header(HEADER_PRAGMA, PRAGMA_VALUE)
-                .entity(createErrorEntity(ERROR_MSG_SERVER_ERROR))
                 .build();
     }
 

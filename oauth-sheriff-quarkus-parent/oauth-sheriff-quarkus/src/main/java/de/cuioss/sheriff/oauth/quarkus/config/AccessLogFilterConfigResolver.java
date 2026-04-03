@@ -62,7 +62,7 @@ public class AccessLogFilterConfigResolver {
     public AccessLogFilterConfig resolveConfig() {
         LOGGER.info(INFO.RESOLVING_ACCESS_LOG_FILTER_CONFIG);
 
-        return AccessLogFilterConfig.builder()
+        var resolvedConfig = AccessLogFilterConfig.builder()
                 .minStatusCode(config.getOptionalValue(JwtPropertyKeys.ACCESSLOG.MIN_STATUS_CODE, Integer.class)
                         .orElse(400))
                 .maxStatusCode(config.getOptionalValue(JwtPropertyKeys.ACCESSLOG.MAX_STATUS_CODE, Integer.class)
@@ -75,6 +75,8 @@ public class AccessLogFilterConfigResolver {
                 .enabled(config.getOptionalValue(JwtPropertyKeys.ACCESSLOG.ENABLED, Boolean.class)
                         .orElse(false))
                 .build();
+        resolvedConfig.validate();
+        return resolvedConfig;
     }
 
     private List<Integer> resolveIntegerList(String key) {

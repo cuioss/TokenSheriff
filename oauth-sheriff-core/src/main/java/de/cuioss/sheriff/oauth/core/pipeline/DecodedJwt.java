@@ -73,6 +73,7 @@ String rawToken
      * If parts are provided, they must contain exactly 3 elements (header.payload.signature).
      */
     public DecodedJwt {
+        Objects.requireNonNull(header, "header must not be null");
         Objects.requireNonNull(body, "body must not be null");
         if (parts != null && parts.length != 3) {
             throw new TokenValidationException(
@@ -114,7 +115,7 @@ String rawToken
      * @return an Optional containing the kid if present
      */
     public Optional<String> getKid() {
-        return header != null ? header.getKid() : Optional.empty();
+        return header.getKid();
     }
 
     /**
@@ -123,7 +124,7 @@ String rawToken
      * @return an Optional containing the algorithm if present
      */
     public Optional<String> getAlg() {
-        return header != null ? Optional.ofNullable(header.alg()) : Optional.empty();
+        return Optional.ofNullable(header.alg());
     }
 
     /**

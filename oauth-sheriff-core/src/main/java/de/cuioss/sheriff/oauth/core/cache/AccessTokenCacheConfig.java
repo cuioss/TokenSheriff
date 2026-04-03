@@ -90,6 +90,18 @@ public class AccessTokenCacheConfig {
     private final ScheduledExecutorService scheduledExecutorService;
 
     /**
+     * Validates the configuration. Called by consumers after construction.
+     *
+     * @throws IllegalArgumentException if the configuration is invalid
+     */
+    public void validate() {
+        if (maxSize > 0 && evictionIntervalSeconds <= 0) {
+            throw new IllegalArgumentException(
+                    "evictionIntervalSeconds must be positive when maxSize > 0, but was " + evictionIntervalSeconds);
+        }
+    }
+
+    /**
      * Creates a default configuration with standard settings.
      *
      * @return a default AccessTokenCacheConfig with maxSize=1000 and evictionInterval=300s

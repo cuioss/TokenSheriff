@@ -307,6 +307,13 @@ class NonValidatingJwtParserTest {
     class BuilderTests {
 
         @Test
+        @DisplayName("Should throw NullPointerException when securityEventCounter is not set")
+        void shouldThrowWhenSecurityEventCounterNotSet() {
+            var builder = NonValidatingJwtParser.builder();
+            assertThrows(NullPointerException.class, builder::build);
+        }
+
+        @Test
         @DisplayName("Should create builder with defaults")
         void shouldCreateBuilderWithDefaults() {
             NonValidatingJwtParser defaultParser = NonValidatingJwtParser.builder().securityEventCounter(new SecurityEventCounter()).build();

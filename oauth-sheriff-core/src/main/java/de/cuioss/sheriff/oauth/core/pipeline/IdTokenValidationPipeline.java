@@ -137,18 +137,23 @@ public class IdTokenValidationPipeline {
 
         // 4. Validate header
         TokenHeaderValidator headerValidator = headerValidators.get(issuerConfig.getIssuerIdentifier());
+        if (headerValidator == null) {
+            throw new IllegalStateException("No header validator found for issuer: " + issuerConfig.getIssuerIdentifier());
+        }
         headerValidator.validate(decodedJwt, request);
 
         // 5. Validate signature
-        // Note: signatureValidator is guaranteed to exist because TokenValidator
-        // creates validators for all configured issuers during construction
         TokenSignatureValidator signatureValidator = signatureValidators.get(issuerConfig.getIssuerIdentifier());
+        if (signatureValidator == null) {
+            throw new IllegalStateException("No signature validator found for issuer: " + issuerConfig.getIssuerIdentifier());
+        }
         signatureValidator.validateSignature(decodedJwt);
 
         // 6. Build token
-        // Note: tokenBuilder is guaranteed to exist because TokenValidator
-        // creates builders for all configured issuers during construction
         TokenBuilder tokenBuilder = tokenBuilders.get(issuerConfig.getIssuerIdentifier());
+        if (tokenBuilder == null) {
+            throw new IllegalStateException("No token builder found for issuer: " + issuerConfig.getIssuerIdentifier());
+        }
         IdTokenContent token = tokenBuilder.createIdToken(decodedJwt)
                 .orElseThrow(() -> {
                     LOGGER.debug("ID token building failed");
@@ -161,12 +166,13 @@ public class IdTokenValidationPipeline {
         // 7. Validate claims
         // Create ValidationContext with cached current time to eliminate synchronous OffsetDateTime.now() calls
         // Use per-issuer clock skew and max token age from IssuerConfig
-        // Note: claimValidator is guaranteed to exist because TokenValidator
-        // creates validators for all configured issuers during construction
         ValidationContext context = new ValidationContext(
                 issuerConfig.getClockSkewSeconds(),
                 issuerConfig.getMaxTokenAgeSeconds());
         TokenClaimValidator claimValidator = claimValidators.get(issuerConfig.getIssuerIdentifier());
+        if (claimValidator == null) {
+            throw new IllegalStateException("No claim validator found for issuer: " + issuerConfig.getIssuerIdentifier());
+        }
         IdTokenContent validatedToken = (IdTokenContent) claimValidator.validate(token, context);
 
         LOGGER.debug("Successfully validated ID token");

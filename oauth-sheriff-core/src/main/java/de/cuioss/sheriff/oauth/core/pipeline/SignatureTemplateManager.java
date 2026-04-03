@@ -112,10 +112,12 @@ public final class SignatureTemplateManager {
      * @throws IllegalArgumentException if the algorithm is not recognized
      */
     public Signature getSignatureInstance(String algorithm) {
-        // Use cached template to create signature instance
+        // Use cached template — only pre-configured algorithms are allowed (defense-in-depth)
         SignatureTemplate template = signatureTemplateCache.get(algorithm);
         if (template == null) {
-            template = createSignatureTemplate(algorithm);
+            throw new IllegalArgumentException(
+                    "Algorithm '%s' is not in the pre-configured set. Supported: %s"
+                            .formatted(algorithm, signatureTemplateCache.keySet()));
         }
 
         return template.createSignature(algorithmProviders);

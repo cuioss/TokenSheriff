@@ -119,23 +119,6 @@ class BearerTokenResultTest {
             assertFalse(result.getErrorMessage().isPresent());
         }
 
-        @Test
-        @DisplayName("couldNotAccessRequest() should create COULD_NOT_ACCESS_REQUEST result")
-        void couldNotAccessRequestShouldCreateCouldNotAccessRequestResult() {
-            var requiredScopes = Set.of("read");
-            var requiredRoles = Set.of("user");
-            var requiredGroups = Set.of("group");
-
-            var result = BearerTokenResult.couldNotAccessRequest(requiredScopes, requiredRoles, requiredGroups);
-
-            assertEquals(BearerTokenStatus.COULD_NOT_ACCESS_REQUEST, result.getStatus());
-            assertFalse(result.getAccessTokenContent().isPresent());
-            assertEquals(requiredScopes, result.getMissingScopes());
-            assertEquals(requiredRoles, result.getMissingRoles());
-            assertEquals(requiredGroups, result.getMissingGroups());
-            assertFalse(result.getErrorEventType().isPresent());
-            assertFalse(result.getErrorMessage().isPresent());
-        }
     }
 
     @Nested
@@ -357,7 +340,6 @@ class BearerTokenResultTest {
             case PARSING_ERROR -> BearerTokenResult.parsingError(
                     new TokenValidationException(EventType.INVALID_JWT_FORMAT, "test"), Set.of(), Set.of(), Set.of());
             case CONSTRAINT_VIOLATION -> BearerTokenResult.constraintViolation(Set.of(), Set.of(), Set.of());
-            case COULD_NOT_ACCESS_REQUEST -> BearerTokenResult.couldNotAccessRequest(Set.of(), Set.of(), Set.of());
             case INVALID_REQUEST -> BearerTokenResult.invalidRequest("Invalid token format", Set.of(), Set.of(), Set.of());
         };
     }

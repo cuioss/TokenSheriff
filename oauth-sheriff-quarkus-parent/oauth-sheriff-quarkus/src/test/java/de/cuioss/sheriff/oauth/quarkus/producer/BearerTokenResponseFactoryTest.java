@@ -67,26 +67,6 @@ class BearerTokenResponseFactoryTest {
     }
 
     @Nested
-    @DisplayName("createResponse() with COULD_NOT_ACCESS_REQUEST status")
-    class CreateResponseWithCouldNotAccessRequestStatus {
-
-        @Test
-        @DisplayName("should return 500 Internal Server Error with error message")
-        void shouldReturn500WithErrorMessage() {
-            var result = BearerTokenResult.couldNotAccessRequest(
-                    Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
-
-            Response response = BearerTokenResponseFactory.createResponse(result);
-
-            assertEquals(500, response.getStatus());
-            assertEquals("no-store, no-cache, must-revalidate", response.getHeaderString("Cache-Control"));
-            assertEquals("no-cache", response.getHeaderString("Pragma"));
-            assertEquals("ErrorEntity[valid=false, message=Internal server error: Unable to access request context]", response.getEntity().toString());
-            assertNull(response.getHeaderString("WWW-Authenticate"));
-        }
-    }
-
-    @Nested
     @DisplayName("createResponse() with NO_TOKEN_GIVEN status")
     class CreateResponseWithNoTokenGivenStatus {
 
@@ -300,7 +280,6 @@ class BearerTokenResponseFactoryTest {
                             .status(BearerTokenStatus.FULLY_VERIFIED)
                             .accessTokenContent(createTestToken())
                             .build(),
-                    "couldNotAccess", BearerTokenResult.couldNotAccessRequest(Set.of(), Set.of(), Set.of()),
                     "noToken", BearerTokenResult.noTokenGiven(Set.of(), Set.of(), Set.of()),
                     "parsingError", BearerTokenResult.parsingError(new TokenValidationException(SecurityEventCounter.EventType.INVALID_JWT_FORMAT, "test"), Set.of(), Set.of(), Set.of()),
                     "constraintViolation", BearerTokenResult.constraintViolation(Set.of("read"), Set.of(), Set.of())

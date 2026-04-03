@@ -105,6 +105,7 @@ public class AccessTokenCache {
             SecurityEventCounter securityEventCounter,
             int clockSkewSeconds) {
 
+        config.validate();
         this.maxSize = config.getMaxSize();
         this.clockSkewSeconds = clockSkewSeconds;
         this.securityEventCounter = securityEventCounter;

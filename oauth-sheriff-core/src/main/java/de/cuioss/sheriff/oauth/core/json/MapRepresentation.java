@@ -54,6 +54,12 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
     @Serial
     private static final long serialVersionUID = 1L;
 
+    /**
+     * Compact constructor that guarantees data is never null.
+     */
+    public MapRepresentation {
+        data = data != null ? data : Map.of();
+    }
 
     /**
      * Factory method to create MapRepresentation from JSON string using DSL-JSON.
@@ -113,7 +119,7 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
      * @return true if the key exists, false otherwise
      */
     public boolean containsKey(String key) {
-        return data != null && data.containsKey(key);
+        return data.containsKey(key);
     }
 
     /**
@@ -123,7 +129,7 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
      * @return Optional containing the value, or empty if not found
      */
     public Optional<Object> getValue(String key) {
-        return data != null ? Optional.ofNullable(data.get(key)) : Optional.empty();
+        return Optional.ofNullable(data.get(key));
     }
 
     /**
@@ -133,7 +139,6 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
      * @return Optional containing the string value, or empty if not found or not a string
      */
     public Optional<String> getString(String key) {
-        if (data == null) return Optional.empty();
         Object value = data.get(key);
         if (value instanceof String string) {
             return Optional.of(string);
@@ -148,7 +153,6 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
      * @return Optional containing the number value, or empty if not found or not a number
      */
     public Optional<Number> getNumber(String key) {
-        if (data == null) return Optional.empty();
         Object value = data.get(key);
         if (value instanceof Number number) {
             return Optional.of(number);
@@ -164,7 +168,6 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
      */
     @SuppressWarnings("unchecked")
     public Optional<List<Object>> getList(String key) {
-        if (data == null) return Optional.empty();
         Object value = data.get(key);
         if (value instanceof List) {
             return Optional.of((List<Object>) value);
@@ -180,7 +183,6 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
      */
     @SuppressWarnings("unchecked")
     public Optional<Map<String, Object>> getMap(String key) {
-        if (data == null) return Optional.empty();
         Object value = data.get(key);
         if (value instanceof Map) {
             return Optional.of((Map<String, Object>) value);
@@ -219,7 +221,7 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
      * @return true if the map is empty, false otherwise
      */
     public boolean isEmpty() {
-        return data == null || data.isEmpty();
+        return data.isEmpty();
     }
 
     /**
@@ -228,7 +230,7 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
      * @return the number of key-value pairs
      */
     public int size() {
-        return data == null ? 0 : data.size();
+        return data.size();
     }
 
     /**
@@ -237,7 +239,7 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
      * @return the set of keys in the map
      */
     public Set<String> keySet() {
-        return data == null ? Set.of() : data.keySet();
+        return data.keySet();
     }
 
 }

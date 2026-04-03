@@ -52,6 +52,7 @@ import de.cuioss.sheriff.oauth.quarkus.mapper.keycloak.KeycloakGroupsMapperBean;
 import de.cuioss.sheriff.oauth.quarkus.mapper.keycloak.KeycloakRolesMapperBean;
 import de.cuioss.sheriff.oauth.quarkus.metrics.JwtMetricsCollector;
 import de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenProducer;
+import de.cuioss.sheriff.oauth.quarkus.producer.JsonWebTokenAdapter;
 import de.cuioss.sheriff.oauth.quarkus.producer.TokenValidatorProducer;
 import de.cuioss.sheriff.oauth.quarkus.runtime.OAuthSheriffDevUIRuntimeService;
 import de.cuioss.sheriff.oauth.quarkus.servlet.VertxServletObjectsResolver;
@@ -75,7 +76,6 @@ import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
 import io.quarkus.devui.spi.page.CardPageBuildItem;
 import io.quarkus.devui.spi.page.Page;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
-import de.cuioss.sheriff.oauth.quarkus.producer.JsonWebTokenAdapter;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.jandex.DotName;
 

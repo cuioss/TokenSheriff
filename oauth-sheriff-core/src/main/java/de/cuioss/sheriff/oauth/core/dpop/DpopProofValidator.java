@@ -75,6 +75,7 @@ public class DpopProofValidator {
     private static final int MAX_DPOP_PROOF_SIZE = 8192;
 
     private final DpopConfig config;
+    private final int clockSkewSeconds;
     private final SecurityEventCounter securityEventCounter;
     private final DpopReplayProtection replayProtection;
     private final SignatureAlgorithmPreferences algorithmPreferences;
@@ -102,6 +103,7 @@ public class DpopProofValidator {
             SecurityEventCounter securityEventCounter,
             DpopReplayProtection replayProtection) {
         this.config = issuerConfig.getDpopConfig();
+        this.clockSkewSeconds = issuerConfig.getClockSkewSeconds();
         this.securityEventCounter = securityEventCounter;
         this.replayProtection = replayProtection;
         this.algorithmPreferences = issuerConfig.getAlgorithmPreferences();
@@ -306,7 +308,7 @@ public class DpopProofValidator {
         long iatSeconds = iat.get().longValue();
         long nowSeconds = System.currentTimeMillis() / 1000;
         long age = nowSeconds - iatSeconds;
-        if (age < -60 || age > config.getProofMaxAgeSeconds()) {
+        if (age < -clockSkewSeconds || age > config.getProofMaxAgeSeconds()) {
             LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_PROOF_EXPIRED);
             securityEventCounter.increment(EventType.DPOP_PROOF_EXPIRED);
             throw new TokenValidationException(EventType.DPOP_PROOF_EXPIRED,

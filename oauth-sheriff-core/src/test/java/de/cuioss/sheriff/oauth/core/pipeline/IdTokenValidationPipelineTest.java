@@ -115,4 +115,5 @@ class IdTokenValidationPipelineTest {
                 "Should consistently throw TokenValidationException for missing issuer"
         );
     }
+
 }

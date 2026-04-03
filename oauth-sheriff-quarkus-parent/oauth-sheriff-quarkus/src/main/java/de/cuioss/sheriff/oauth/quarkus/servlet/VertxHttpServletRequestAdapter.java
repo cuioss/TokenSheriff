@@ -82,7 +82,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Oliver Wolff
  */
 @RequiredArgsConstructor
-public class VertxHttpServletRequestAdapter implements HttpServletRequest {
+class VertxHttpServletRequestAdapter implements HttpServletRequest {
 
 
     private final HttpServerRequest vertxRequest;

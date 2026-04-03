@@ -57,8 +57,8 @@ class SignatureTemplateManagerTest {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
                 () -> manager.getSignatureInstance("UNSUPPORTED"));
 
-        assertTrue(exception.getMessage().contains("Unsupported algorithm"),
-                "Exception message should mention unsupported algorithm");
+        assertTrue(exception.getMessage().contains("UNSUPPORTED"),
+                "Exception message should mention the rejected algorithm");
     }
 
     @Test

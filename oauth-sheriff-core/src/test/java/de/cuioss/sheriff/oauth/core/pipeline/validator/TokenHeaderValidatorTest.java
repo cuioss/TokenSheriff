@@ -179,7 +179,8 @@ class TokenHeaderValidatorTest {
             TokenHeaderValidator validator = createValidator(issuerConfig);
 
             // And a validation with a missing algorithm (manually created since generators always include alg)
-            DecodedJwt decodedJwt = new DecodedJwt(null, new MapRepresentation(Map.of()), null, new String[]{"", "", ""}, "");
+            var emptyHeader = new JwtHeader(null, null, null, null, null, null, null, null, null, null);
+            DecodedJwt decodedJwt = new DecodedJwt(emptyHeader, new MapRepresentation(Map.of()), null, new String[]{"", "", ""}, "");
 
             // When validating the validation, it should throw an exception
             var request = AccessTokenRequest.of("test");

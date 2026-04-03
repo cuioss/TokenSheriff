@@ -61,6 +61,7 @@ public class ConcurrencySweepRunner {
         List<RunResult> allResults = new ArrayList<>();
 
         for (int threads : THREAD_COUNTS) {
+            /*~~(TODO: INFO needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/
             /*~~(TODO: INFO needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/LOGGER.info("Running concurrency sweep: %s threads", threads);
 
             Options options = new OptionsBuilder()
@@ -86,6 +87,7 @@ public class ConcurrencySweepRunner {
             for (RunResult result : results) {
                 double score = result.getPrimaryResult().getScore();
                 String unit = result.getPrimaryResult().getScoreUnit();
+                /*~~(TODO: 2 placeholders, 3 params. Suppress: // cui-rewrite:disable CuiLoggerStandardsRecipe)~~>*//*~~(TODO: INFO needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/
                 /*~~(TODO: 2 placeholders, 3 params. Suppress: // cui-rewrite:disable CuiLoggerStandardsRecipe)~~>*//*~~(TODO: INFO needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/LOGGER.info("  %s threads: %.1f %s", threads, score, unit);
             }
         }
@@ -96,6 +98,7 @@ public class ConcurrencySweepRunner {
             ResultFormatFactory.getInstance(ResultFormatType.JSON, ps).writeOut(allResults);
         }
 
+        /*~~(TODO: INFO needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/
         /*~~(TODO: INFO needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/LOGGER.info("Concurrency sweep complete. Results in %s", OUTPUT_DIR);
     }
 }

@@ -70,16 +70,6 @@ public class OAuthSheriffDevUIRuntimeService {
     }
 
     /**
-     * Convenience constructor without ParserConfig (uses defaults).
-     *
-     * @param tokenValidator the token validator
-     * @param issuerConfigs  the issuer configurations
-     */
-    OAuthSheriffDevUIRuntimeService(TokenValidator tokenValidator, List<IssuerConfig> issuerConfigs) {
-        this(tokenValidator, issuerConfigs, ParserConfig.builder().build());
-    }
-
-    /**
      * Get runtime JWT validation status.
      *
      * @return A map containing runtime validation status information
@@ -203,11 +193,6 @@ public class OAuthSheriffDevUIRuntimeService {
 
         if (!isJwtEnabled()) {
             result.put(ERROR, JWT_VALIDATION_DISABLED);
-            return result;
-        }
-
-        if (tokenValidator == null) {
-            result.put(ERROR, "Token validator is not available");
             return result;
         }
 

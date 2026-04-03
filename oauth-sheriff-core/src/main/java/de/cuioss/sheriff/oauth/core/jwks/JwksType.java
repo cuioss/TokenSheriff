@@ -27,9 +27,7 @@ public enum JwksType {
     /** File-based JWKS */
     FILE("file", false),
     /** In-memory JWKS */
-    MEMORY("memory", false),
-    /** No JWKS configured */
-    NONE("none", false);
+    MEMORY("memory", false);
 
     private final String value;
     private final boolean providesIssuerIdentifier;

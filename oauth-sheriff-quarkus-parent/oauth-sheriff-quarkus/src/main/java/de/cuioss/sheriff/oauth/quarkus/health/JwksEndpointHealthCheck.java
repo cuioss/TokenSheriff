@@ -17,7 +17,6 @@ package de.cuioss.sheriff.oauth.quarkus.health;
 
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
 import de.cuioss.sheriff.oauth.core.jwks.JwksLoader;
-import de.cuioss.sheriff.oauth.core.jwks.JwksType;
 import de.cuioss.sheriff.oauth.core.util.LoaderStatus;
 import de.cuioss.sheriff.oauth.quarkus.config.JwtPropertyKeys;
 import de.cuioss.tools.logging.CuiLogger;
@@ -147,7 +146,7 @@ public class JwksEndpointHealthCheck implements HealthCheck {
                 if (jwksLoader == null) {
                     LoaderStatus status = LoaderStatus.UNDEFINED;
                     LOGGER.debug("JWKS loader status for issuer %s: %s (loader not initialized)", issuer, status);
-                    return new EndpointResult(issuer, JwksType.NONE.toString(), status);
+                    return new EndpointResult(issuer, "none", status);
                 }
 
                 LoaderStatus status = jwksLoader.getLoaderStatus();
@@ -156,7 +155,7 @@ public class JwksEndpointHealthCheck implements HealthCheck {
                 return new EndpointResult(issuer, jwksLoader.getJwksType().toString(), status);
             } catch (IllegalStateException | IllegalArgumentException e) {
                 LOGGER.warn(e, WARN.ERROR_CHECKING_JWKS_LOADER, issuer, e.getMessage());
-                return new EndpointResult(issuer, JwksType.NONE.toString(), LoaderStatus.ERROR);
+                return new EndpointResult(issuer, "none", LoaderStatus.ERROR);
             }
         }
 

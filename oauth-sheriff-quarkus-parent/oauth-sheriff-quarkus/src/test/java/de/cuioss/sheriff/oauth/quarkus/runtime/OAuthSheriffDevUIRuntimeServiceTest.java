@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.oauth.quarkus.runtime;
 
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
+import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.TokenValidator;
 import de.cuioss.sheriff.oauth.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.oauth.quarkus.config.JwtTestProfile;
@@ -250,7 +251,7 @@ class OAuthSheriffDevUIRuntimeServiceTest {
         @DisplayName("Should attempt access token validation when JWT is enabled")
         void shouldAttemptAccessTokenValidationWhenJwtIsEnabled() {
             // Create a service with enabled JWT configuration to test the validation logic
-            OAuthSheriffDevUIRuntimeService enabledService = new OAuthSheriffDevUIRuntimeService(tokenValidator, issuerConfigs);
+            OAuthSheriffDevUIRuntimeService enabledService = new OAuthSheriffDevUIRuntimeService(tokenValidator, issuerConfigs, ParserConfig.builder().build());
 
             // Test with an invalid access token to see the validation attempt behavior
             // This tests that validation is attempted (not just disabled)
@@ -333,7 +334,7 @@ class OAuthSheriffDevUIRuntimeServiceTest {
         @DisplayName("Should handle service with enabled issuer configuration")
         void shouldHandleServiceWithEnabledIssuerConfiguration() {
             // Create a service with enabled issuer configuration
-            OAuthSheriffDevUIRuntimeService testService = new OAuthSheriffDevUIRuntimeService(tokenValidator, issuerConfigs);
+            OAuthSheriffDevUIRuntimeService testService = new OAuthSheriffDevUIRuntimeService(tokenValidator, issuerConfigs, ParserConfig.builder().build());
 
             Map<String, Object> validationStatus = testService.getValidationStatus();
             Map<String, Object> configuration = testService.getConfiguration();
@@ -353,7 +354,7 @@ class OAuthSheriffDevUIRuntimeServiceTest {
             // Create a service with no enabled issuers - use empty list directly
             // since IssuerConfigResolver throws exception when no enabled issuers are found
             List<IssuerConfig> issuerConfigList = List.of(); // Empty list represents no enabled issuers
-            OAuthSheriffDevUIRuntimeService testService = new OAuthSheriffDevUIRuntimeService(tokenValidator, issuerConfigList);
+            OAuthSheriffDevUIRuntimeService testService = new OAuthSheriffDevUIRuntimeService(tokenValidator, issuerConfigList, ParserConfig.builder().build());
 
             Map<String, Object> validationStatus = testService.getValidationStatus();
             Map<String, Object> configuration = testService.getConfiguration();
@@ -375,7 +376,7 @@ class OAuthSheriffDevUIRuntimeServiceTest {
             List<IssuerConfig> issuerConfigsList = new ArrayList<>(issuerConfigs);
             // Duplicate, but we only test the size here
             issuerConfigsList.addAll(issuerConfigs);
-            OAuthSheriffDevUIRuntimeService testService = new OAuthSheriffDevUIRuntimeService(tokenValidator, issuerConfigsList);
+            OAuthSheriffDevUIRuntimeService testService = new OAuthSheriffDevUIRuntimeService(tokenValidator, issuerConfigsList, ParserConfig.builder().build());
 
             Map<String, Object> jwksStatus = testService.getJwksStatus();
 
@@ -390,7 +391,7 @@ class OAuthSheriffDevUIRuntimeServiceTest {
             // Create a service with no enabled issuers - use empty list directly
             // since IssuerConfigResolver throws exception when no enabled issuers are found
             List<IssuerConfig> issuerConfigList = List.of(); // Empty list represents no enabled issuers
-            OAuthSheriffDevUIRuntimeService testService = new OAuthSheriffDevUIRuntimeService(tokenValidator, issuerConfigList);
+            OAuthSheriffDevUIRuntimeService testService = new OAuthSheriffDevUIRuntimeService(tokenValidator, issuerConfigList, ParserConfig.builder().build());
 
             // Try to validate a token
             String token = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0.signature";
@@ -406,7 +407,7 @@ class OAuthSheriffDevUIRuntimeServiceTest {
         @DisplayName("Should determine health based on different configurations")
         void shouldDetermineHealthBasedOnDifferentConfigurations() {
             // Test with enabled configuration
-            OAuthSheriffDevUIRuntimeService enabledService = new OAuthSheriffDevUIRuntimeService(tokenValidator, issuerConfigs);
+            OAuthSheriffDevUIRuntimeService enabledService = new OAuthSheriffDevUIRuntimeService(tokenValidator, issuerConfigs, ParserConfig.builder().build());
 
             Map<String, Object> enabledHealth = enabledService.getHealthInfo();
             Boolean configurationValid = (Boolean) enabledHealth.get("configurationValid");
@@ -415,7 +416,7 @@ class OAuthSheriffDevUIRuntimeServiceTest {
             // Test with disabled configuration - use empty list directly
             // since IssuerConfigResolver throws exception when no enabled issuers are found
             List<IssuerConfig> disabledIssuerConfigs = List.of(); // Empty list represents no enabled issuers
-            OAuthSheriffDevUIRuntimeService disabledService = new OAuthSheriffDevUIRuntimeService(tokenValidator, disabledIssuerConfigs);
+            OAuthSheriffDevUIRuntimeService disabledService = new OAuthSheriffDevUIRuntimeService(tokenValidator, disabledIssuerConfigs, ParserConfig.builder().build());
 
             Map<String, Object> disabledHealth = disabledService.getHealthInfo();
             Boolean disabledConfigurationValid = (Boolean) disabledHealth.get("configurationValid");
@@ -432,7 +433,7 @@ class OAuthSheriffDevUIRuntimeServiceTest {
         @DisplayName("Should create service with minimal dependencies")
         void shouldCreateServiceWithMinimalDependencies() {
             // This tests the constructor's robustness with empty issuer configs
-            assertDoesNotThrow(() -> new OAuthSheriffDevUIRuntimeService(null, List.of()),
+            assertDoesNotThrow(() -> new OAuthSheriffDevUIRuntimeService(null, List.of(), ParserConfig.builder().build()),
                     "Constructor should not throw exception with null tokenValidator and empty issuerConfigs");
         }
 
@@ -440,7 +441,7 @@ class OAuthSheriffDevUIRuntimeServiceTest {
         @DisplayName("Should create service with valid dependencies")
         void shouldCreateServiceWithValidDependencies() {
             // Test constructor with actual dependencies
-            OAuthSheriffDevUIRuntimeService testService = new OAuthSheriffDevUIRuntimeService(tokenValidator, List.of());
+            OAuthSheriffDevUIRuntimeService testService = new OAuthSheriffDevUIRuntimeService(tokenValidator, List.of(), ParserConfig.builder().build());
             assertNotNull(testService, "Service should be created successfully with valid dependencies");
 
             // Verify the service can perform basic operations
@@ -454,16 +455,16 @@ class OAuthSheriffDevUIRuntimeServiceTest {
         @DisplayName("Should handle mixed null and valid dependencies")
         void shouldHandleMixedNullAndValidDependencies() {
             // Test with null tokenValidator but valid issuerConfigs
-            assertDoesNotThrow(() -> new OAuthSheriffDevUIRuntimeService(null, List.of()),
+            assertDoesNotThrow(() -> new OAuthSheriffDevUIRuntimeService(null, List.of(), ParserConfig.builder().build()),
                     "Constructor should handle null tokenValidator with empty issuerConfigs");
 
             // Test with valid tokenValidator and empty issuerConfigs
-            assertDoesNotThrow(() -> new OAuthSheriffDevUIRuntimeService(tokenValidator, List.of()),
+            assertDoesNotThrow(() -> new OAuthSheriffDevUIRuntimeService(tokenValidator, List.of(), ParserConfig.builder().build()),
                     "Constructor should handle valid tokenValidator with empty issuerConfigs");
 
             // Verify services can be created in both scenarios
-            OAuthSheriffDevUIRuntimeService service1 = new OAuthSheriffDevUIRuntimeService(null, List.of());
-            OAuthSheriffDevUIRuntimeService service2 = new OAuthSheriffDevUIRuntimeService(tokenValidator, List.of());
+            OAuthSheriffDevUIRuntimeService service1 = new OAuthSheriffDevUIRuntimeService(null, List.of(), ParserConfig.builder().build());
+            OAuthSheriffDevUIRuntimeService service2 = new OAuthSheriffDevUIRuntimeService(tokenValidator, List.of(), ParserConfig.builder().build());
 
             assertNotNull(service1, "Service should be created with null tokenValidator");
             assertNotNull(service2, "Service should be created with valid tokenValidator");

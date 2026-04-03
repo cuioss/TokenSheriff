@@ -13,9 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.oauth.quarkus.servlet.adapter;
+package de.cuioss.sheriff.oauth.quarkus.servlet;
 
-import de.cuioss.sheriff.oauth.quarkus.servlet.VertxHttpServletRequestAdapter;
 import io.vertx.core.MultiMap;
 import io.vertx.core.http.Cookie;
 import io.vertx.core.http.HttpMethod;
