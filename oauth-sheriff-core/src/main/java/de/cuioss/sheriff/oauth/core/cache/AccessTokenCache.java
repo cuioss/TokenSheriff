@@ -144,12 +144,14 @@ public class AccessTokenCache {
      *
      * @param tokenString the raw JWT token string to look up
      * @param performanceMonitor the monitor for recording CACHE_LOOKUP metrics
+     * @param now the current time to use for expiration checks (avoids per-call OffsetDateTime.now())
      * @return Optional containing the cached token if found and valid, empty otherwise
      * @throws TokenValidationException if the cached token is expired
      */
     public Optional<AccessTokenContent> get(
             String tokenString,
-            TokenValidatorMonitor performanceMonitor) {
+            TokenValidatorMonitor performanceMonitor,
+            OffsetDateTime now) {
 
         if (cache == null) {
             return Optional.empty();
@@ -166,7 +168,6 @@ public class AccessTokenCache {
         lookupTicker.stopAndRecord();
 
         if (existing != null) {
-            OffsetDateTime now = OffsetDateTime.now();
             if (existing.verifyToken(tokenString) && !existing.isExpired(now, clockSkewSeconds)) {
                 // True cache hit - valid cached token
                 securityEventCounter.increment(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT);

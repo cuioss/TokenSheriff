@@ -77,7 +77,7 @@ public class SignatureAlgorithmPreferences {
      *
      * @return the default list of preferred signature algorithms
      */
-    public static List<String> getDefaultPreferredAlgorithms() {
+    private static List<String> getDefaultPreferredAlgorithms() {
         LOGGER.debug("Getting default preferred signature algorithms");
 
         // Order algorithms by preference (most secure first)

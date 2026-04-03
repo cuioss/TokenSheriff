@@ -25,7 +25,6 @@ import de.cuioss.sheriff.oauth.core.jwe.JweDecryptionConfig;
 import de.cuioss.sheriff.oauth.core.jwe.JweDecryptor;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
-import de.cuioss.tools.string.MoreStrings;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import org.jspecify.annotations.Nullable;
@@ -203,7 +202,7 @@ public class NonValidatingJwtParser {
      * @throws TokenValidationException if the token is invalid or cannot be parsed
      */
     public DecodedJwt decode(String token) {
-        return decodeInternal(token, true, true);
+        return decodeInternal(token, DecodeMode.NORMAL);
     }
 
     /**
@@ -225,7 +224,7 @@ public class NonValidatingJwtParser {
      * @throws TokenValidationException if the token is invalid or cannot be parsed
      */
     public DecodedJwt decodeOpaqueToken(String token) {
-        return decodeInternal(token, false, false);
+        return decodeInternal(token, DecodeMode.OPAQUE);
     }
 
     /**
@@ -246,61 +245,59 @@ public class NonValidatingJwtParser {
      * @throws TokenValidationException if the token is invalid or cannot be parsed
      */
     DecodedJwt decodeQuietly(String token) {
-        return decodeInternal(token, false, true);
+        return decodeInternal(token, DecodeMode.QUIET);
+    }
+
+    /**
+     * Decode mode controlling logging and security event tracking behavior.
+     * <ul>
+     *   <li>{@code NORMAL} — log warnings and track security events (standard validation path)</li>
+     *   <li>{@code QUIET} — no logging, but track security events (re-parsing cached tokens)</li>
+     *   <li>{@code OPAQUE} — no logging, no tracking (opaque/refresh tokens where failures are expected)</li>
+     * </ul>
+     */
+    private enum DecodeMode {
+        NORMAL(true, true),
+        QUIET(false, true),
+        OPAQUE(false, false);
+
+        private final boolean logWarnings;
+        private final boolean trackSecurityEvents;
+
+        DecodeMode(boolean logWarnings, boolean trackSecurityEvents) {
+            this.logWarnings = logWarnings;
+            this.trackSecurityEvents = trackSecurityEvents;
+        }
     }
 
     /**
      * Internal method that handles token decoding with configurable logging and security tracking.
      *
      * @param token the JWT token string to parse
-     * @param logWarnings whether to log warnings when decoding fails
-     * @param trackSecurityEvents whether to track security events on failures
+     * @param mode the decode mode controlling logging and security event tracking
      * @return the DecodedJwt if parsing is successful
      * @throws TokenValidationException if the token is invalid or cannot be parsed
      */
     @SuppressWarnings("java:S3776") // owolff: Justified - complexity due to logging and security event tracking
-    private DecodedJwt decodeInternal(String token, boolean logWarnings, boolean trackSecurityEvents) {
-        // Check if token is empty
-        if (MoreStrings.isEmpty(token)) {
-            if (logWarnings) {
-                LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_IS_EMPTY);
-            }
-            if (trackSecurityEvents) {
-                securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_EMPTY);
-            }
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.TOKEN_EMPTY,
-                    "Token is empty or null"
-            );
-        }
-
-        // Check if token size exceeds maximum
-        if (token.getBytes(StandardCharsets.UTF_8).length > config.getMaxTokenSize()) {
-            if (logWarnings) {
-                LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_SIZE_EXCEEDED, config.getMaxTokenSize());
-            }
-            if (trackSecurityEvents) {
-                securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED);
-            }
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED,
-                    JWTValidationLogMessages.WARN.TOKEN_SIZE_EXCEEDED.format(config.getMaxTokenSize())
-            );
-        }
+    private DecodedJwt decodeInternal(String token, DecodeMode mode) {
+        // Precondition: TokenStringValidator has already validated null, blank, and size limits
+        assert token != null && !token.isEmpty() : "TokenStringValidator precondition: token must not be null/empty";
+        assert token.getBytes(StandardCharsets.UTF_8).length <= config.getMaxTokenSize()
+                : "TokenStringValidator precondition: token size within limits";
 
         // Split token and validate format
         String[] parts = token.split("\\.");
 
         if (parts.length == 5) {
             // JWE token (5 parts: header.encryptedKey.iv.ciphertext.authTag)
-            return handleJweToken(parts, token, logWarnings, trackSecurityEvents);
+            return handleJweToken(parts, token, mode.logWarnings, mode.trackSecurityEvents);
         }
 
         if (parts.length != 3) {
-            if (logWarnings) {
+            if (mode.logWarnings) {
                 LOGGER.warn(JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT, parts.length);
             }
-            if (trackSecurityEvents) {
+            if (mode.trackSecurityEvents) {
                 securityEventCounter.increment(SecurityEventCounter.EventType.INVALID_JWT_FORMAT);
             }
             throw new TokenValidationException(
@@ -311,12 +308,12 @@ public class NonValidatingJwtParser {
 
         try {
             // Decode token parts
-            return decodeTokenParts(parts, token, logWarnings, trackSecurityEvents);
+            return decodeTokenParts(parts, token, mode.logWarnings, mode.trackSecurityEvents);
         } catch (IllegalArgumentException e) {
-            if (logWarnings) {
+            if (mode.logWarnings) {
                 LOGGER.warn(e, JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT);
             }
-            if (trackSecurityEvents) {
+            if (mode.trackSecurityEvents) {
                 securityEventCounter.increment(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT);
             }
             throw new TokenValidationException(

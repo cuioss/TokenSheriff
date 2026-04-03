@@ -77,7 +77,7 @@ class AccessTokenCacheTest {
                 OffsetDateTime.now().plusHours(1));
 
         // When
-        Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor);
+        Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
         assertTrue(cached.isEmpty());
 
         validationCount.incrementAndGet();
@@ -103,14 +103,14 @@ class AccessTokenCacheTest {
                 OffsetDateTime.now().plusHours(1));
 
         // First access - cache miss
-        Optional<AccessTokenContent> cached1 = cache.get(token, performanceMonitor);
+        Optional<AccessTokenContent> cached1 = cache.get(token, performanceMonitor, OffsetDateTime.now());
         if (cached1.isEmpty()) {
             validationCount.incrementAndGet();
             cache.put(token, expectedContent, performanceMonitor);
         }
 
         // When - second access should be cache hit
-        Optional<AccessTokenContent> cached2 = cache.get(token, performanceMonitor);
+        Optional<AccessTokenContent> cached2 = cache.get(token, performanceMonitor, OffsetDateTime.now());
         AccessTokenContent result;
         if (cached2.isEmpty()) {
             validationCount.incrementAndGet();
@@ -145,7 +145,7 @@ class AccessTokenCacheTest {
                 testToken
         );
 
-        Optional<AccessTokenContent> cached1 = cache.get(testToken, performanceMonitor);
+        Optional<AccessTokenContent> cached1 = cache.get(testToken, performanceMonitor, OffsetDateTime.now());
         AccessTokenContent result1;
         if (cached1.isEmpty()) {
             validationCount.incrementAndGet();
@@ -171,7 +171,7 @@ class AccessTokenCacheTest {
         // When - second access should detect expiration and throw exception
         TokenValidationException exception =
                 assertThrows(TokenValidationException.class, () ->
-                        cache.get(testToken, performanceMonitor));
+                        cache.get(testToken, performanceMonitor, OffsetDateTime.now()));
 
         // Then
         assertEquals(SecurityEventCounter.EventType.TOKEN_EXPIRED, exception.getEventType());
@@ -196,7 +196,7 @@ class AccessTokenCacheTest {
             for (int i = 0; i < threadCount; i++) {
                 executor.submit(() -> {
                     try {
-                        Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor);
+                        Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
                         AccessTokenContent result;
                         if (cached.isEmpty()) {
                             validationCount.incrementAndGet();
@@ -228,7 +228,7 @@ class AccessTokenCacheTest {
         assertEquals(1, cache.size());
 
         // Verify subsequent access is a cache hit
-        Optional<AccessTokenContent> cachedResult = cache.get(token, performanceMonitor);
+        Optional<AccessTokenContent> cachedResult = cache.get(token, performanceMonitor, OffsetDateTime.now());
         assertTrue(cachedResult.isPresent(), "Token should be in cache");
         assertNotNull(cachedResult.get());
         assertEquals(content, cachedResult.get());
@@ -257,7 +257,7 @@ class AccessTokenCacheTest {
                         // Wait for all threads to be ready
                         startLatch.await();
 
-                        Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor);
+                        Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
                         AccessTokenContent result;
                         if (cached.isEmpty()) {
                             validationCount.incrementAndGet();
@@ -328,7 +328,7 @@ class AccessTokenCacheTest {
                         try {
                             startLatch.await();
 
-                            Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor);
+                            Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
                             AccessTokenContent result;
                             if (cached.isEmpty()) {
                                 totalValidationCount.incrementAndGet();
@@ -406,7 +406,7 @@ class AccessTokenCacheTest {
             String token = "token-" + i;
             AccessTokenContent content = createAccessToken("https://example.com",
                     OffsetDateTime.now().plusHours(1));
-            Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor);
+            Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
             AccessTokenContent result;
             if (cached.isEmpty()) {
                 result = content;
@@ -428,7 +428,7 @@ class AccessTokenCacheTest {
             String token = "token-" + i;
             AccessTokenContent content = createAccessToken("https://example.com",
                     OffsetDateTime.now().plusHours(1));
-            Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor);
+            Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
             if (cached.isEmpty()) {
                 cache.put(token, content, performanceMonitor);
             }
@@ -439,7 +439,7 @@ class AccessTokenCacheTest {
         String overflowToken = "token-10";
         AccessTokenContent overflowContent = createAccessToken("https://example.com",
                 OffsetDateTime.now().plusHours(1));
-        Optional<AccessTokenContent> cached = cache.get(overflowToken, performanceMonitor);
+        Optional<AccessTokenContent> cached = cache.get(overflowToken, performanceMonitor, OffsetDateTime.now());
         AccessTokenContent result;
         if (cached.isEmpty()) {
             result = overflowContent;
@@ -486,7 +486,7 @@ class AccessTokenCacheTest {
                             String token = "thread-" + threadId + "-token-" + j;
                             AccessTokenContent content = createAccessToken("https://example.com",
                                     OffsetDateTime.now().plusHours(1));
-                            Optional<AccessTokenContent> cached = cache.get(token, threadMonitor);
+                            Optional<AccessTokenContent> cached = cache.get(token, threadMonitor, OffsetDateTime.now());
                             AccessTokenContent result;
                             if (cached.isEmpty()) {
                                 result = content;
@@ -535,7 +535,7 @@ class AccessTokenCacheTest {
             String token = "token-" + i;
             AccessTokenContent content = createAccessToken("https://example.com",
                     OffsetDateTime.now().plusHours(1));
-            Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor);
+            Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
             if (cached.isEmpty()) {
                 cache.put(token, content, performanceMonitor);
             }
@@ -544,7 +544,7 @@ class AccessTokenCacheTest {
         assertEquals(100, cache.size());
 
         // When - add one more token to trigger batch eviction
-        Optional<AccessTokenContent> cached = cache.get("overflow-token", performanceMonitor);
+        Optional<AccessTokenContent> cached = cache.get("overflow-token", performanceMonitor, OffsetDateTime.now());
         if (cached.isEmpty()) {
             AccessTokenContent content = createAccessToken("https://example.com", OffsetDateTime.now().plusHours(1));
             cache.put("overflow-token", content, performanceMonitor);
@@ -567,7 +567,7 @@ class AccessTokenCacheTest {
         tokenHolder.getClaims().remove(ClaimName.EXPIRATION.getName());
         AccessTokenContent contentWithoutExp = tokenHolder.asAccessTokenContent();
 
-        Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor);
+        Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
         assertTrue(cached.isEmpty(), "Cache should be empty initially");
 
         // When/Then - should throw IllegalStateException from getExpirationTime()
@@ -595,7 +595,7 @@ class AccessTokenCacheTest {
             AccessTokenContent content = createAccessToken("https://example.com",
                     OffsetDateTime.now().plusHours(1));
 
-            Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor);
+            Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
             AccessTokenContent result;
             if (cached.isEmpty()) {
                 validationCount.incrementAndGet();
@@ -634,7 +634,7 @@ class AccessTokenCacheTest {
                     expirationTime,
                     rawToken
             );
-            Optional<AccessTokenContent> cached = cache.get(rawToken, performanceMonitor);
+            Optional<AccessTokenContent> cached = cache.get(rawToken, performanceMonitor, OffsetDateTime.now());
             if (cached.isEmpty()) {
                 cache.put(rawToken, content, performanceMonitor);
             }
@@ -654,7 +654,7 @@ class AccessTokenCacheTest {
         String newToken = "new-token-after-eviction";
         AccessTokenContent newContent = createAccessToken("https://example.com",
                 OffsetDateTime.now().plusHours(1));
-        Optional<AccessTokenContent> cached = cache.get(newToken, performanceMonitor);
+        Optional<AccessTokenContent> cached = cache.get(newToken, performanceMonitor, OffsetDateTime.now());
         AccessTokenContent result;
         if (cached.isEmpty()) {
             result = newContent;

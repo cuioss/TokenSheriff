@@ -112,7 +112,7 @@ class AccessTokenCacheConfigTest {
                 .measurementTypes(TokenValidatorMonitorConfig.ALL_MEASUREMENT_TYPES)
                 .build()
                 .createMonitor();
-        Optional<AccessTokenContent> cached = cache.get("token", performanceMonitor);
+        Optional<AccessTokenContent> cached = cache.get("token", performanceMonitor, OffsetDateTime.now());
         AccessTokenContent result;
         if (cached.isEmpty()) {
             result = expectedContent;

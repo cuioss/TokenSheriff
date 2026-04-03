@@ -83,7 +83,7 @@ public class BearerTokenResponseFactory {
      * @param result The bearer token validation result containing status and context information
      * @return Response object with appropriate HTTP status code, headers, and body
      */
-    public static Response createResponse(BearerTokenResult result) {
+    static Response createResponse(BearerTokenResult result) {
         return switch (result.getStatus()) {
             case FULLY_VERIFIED -> createSuccessResponse();
             case NO_TOKEN_GIVEN -> createNoTokenResponse();

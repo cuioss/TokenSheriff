@@ -103,8 +103,7 @@ public class TokenClaimValidator {
         }
 
         if (issuerConfig.getExpectedTokenType() == null) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_RECOMMENDED_ELEMENT,
-                    "expectedTokenType (typ header validation disabled, set expected-token-type for RFC 9068 IdPs)");
+            LOGGER.debug("No expectedTokenType configured — typ header validation disabled (optional, set expected-token-type for RFC 9068 IdPs)");
         }
     }
 

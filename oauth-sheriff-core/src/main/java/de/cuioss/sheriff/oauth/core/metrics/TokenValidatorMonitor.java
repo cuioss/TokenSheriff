@@ -171,7 +171,7 @@ public class TokenValidatorMonitor {
      * @param measurementType the type of measurement to check
      * @return the number of samples currently recorded (up to window size), or 0 if type is disabled
      */
-    public int getSampleCount(MeasurementType measurementType) {
+    int getSampleCount(MeasurementType measurementType) {
         StripedRingBuffer buffer = measurementBuffers[measurementType.ordinal()];
         return buffer != null ? buffer.getStatistics().sampleCount() : 0;
     }

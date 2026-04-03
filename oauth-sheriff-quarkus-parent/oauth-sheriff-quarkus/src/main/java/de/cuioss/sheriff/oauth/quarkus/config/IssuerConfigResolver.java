@@ -182,7 +182,7 @@ public class IssuerConfigResolver {
                 .enabled(true);
 
         // Configure core properties
-        configureIssuerIdentifier(builder, issuerName);
+        Optional<String> resolvedIssuerIdentifier = configureIssuerIdentifier(builder, issuerName);
         configureAudience(builder, issuerName);
         configureClientId(builder, issuerName);
         configureAlgorithmPreferences(builder, issuerName);
@@ -194,7 +194,7 @@ public class IssuerConfigResolver {
         configureDpop(builder, issuerName);
 
         // Configure JWKS source (mutually exclusive)
-        configureJwksSource(builder, issuerName);
+        configureJwksSource(builder, issuerName, resolvedIssuerIdentifier);
 
         // Configure discovered claim mappers (applied globally to all issuers)
         configureDiscoveredClaimMappers(builder);
@@ -210,7 +210,7 @@ public class IssuerConfigResolver {
      * The builder will validate this requirement.
      * </p>
      */
-    private void configureIssuerIdentifier(IssuerConfig.IssuerConfigBuilder builder, String issuerName) {
+    private Optional<String> configureIssuerIdentifier(IssuerConfig.IssuerConfigBuilder builder, String issuerName) {
         Optional<String> issuerIdentifier = config.getOptionalValue(
                 JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(issuerName),
                 String.class
@@ -220,6 +220,7 @@ public class IssuerConfigResolver {
             builder.issuerIdentifier(issuerIdentifier.get());
             LOGGER.debug("Set issuer identifier for %s: %s", issuerName, issuerIdentifier.get());
         }
+        return issuerIdentifier;
     }
 
     /**
@@ -406,7 +407,7 @@ public class IssuerConfigResolver {
      * The builder will validate mutual exclusivity constraints.
      * </p>
      */
-    private void configureJwksSource(IssuerConfig.IssuerConfigBuilder builder, String issuerName) {
+    private void configureJwksSource(IssuerConfig.IssuerConfigBuilder builder, String issuerName, Optional<String> resolvedIssuerIdentifier) {
         // HTTP JWKS URL
         Optional<String> jwksUrl = config.getOptionalValue(
                 JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(issuerName),
@@ -436,7 +437,8 @@ public class IssuerConfigResolver {
             HttpJwksLoaderConfig httpConfig = createHttpJwksLoaderConfig(
                     issuerName,
                     jwksUrl.orElse(null),
-                    wellKnownUrl.orElse(null)
+                    wellKnownUrl.orElse(null),
+                    resolvedIssuerIdentifier
             );
             builder.httpJwksLoaderConfig(httpConfig);
 
@@ -462,16 +464,13 @@ public class IssuerConfigResolver {
      * Uses builder defaults for optional values, letting the builder handle validation.
      * </p>
      */
-    private HttpJwksLoaderConfig createHttpJwksLoaderConfig(String issuerName, @Nullable String jwksUrl, @Nullable String wellKnownUrl) {
+    private HttpJwksLoaderConfig createHttpJwksLoaderConfig(String issuerName, @Nullable String jwksUrl,
+            @Nullable String wellKnownUrl, Optional<String> resolvedIssuerIdentifier) {
         HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder builder = HttpJwksLoaderConfig.builder();
 
-        // Set the issuer identifier (required for direct JWKS configuration)
-        Optional<String> issuerIdentifier = config.getOptionalValue(
-                JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(issuerName),
-                String.class
-        );
-        if (issuerIdentifier.isPresent()) {
-            builder.issuerIdentifier(issuerIdentifier.get());
+        // Use the already-resolved issuer identifier (required for direct JWKS configuration)
+        if (resolvedIssuerIdentifier.isPresent()) {
+            builder.issuerIdentifier(resolvedIssuerIdentifier.get());
         } else {
             throw new IllegalStateException(
                     "Issuer '%s' requires explicit 'issuer-identifier' when using direct JWKS URL. "

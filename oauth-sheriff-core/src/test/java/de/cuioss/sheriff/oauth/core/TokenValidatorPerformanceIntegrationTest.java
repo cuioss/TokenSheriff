@@ -36,11 +36,6 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Integration test to verify that performance monitoring is properly integrated
  * into the TokenValidator pipeline and recording measurements during token validation.
- * <p>
- * This test demonstrates the integration between TokenValidator and TokenValidatorMonitor,
- * ensuring that performance metrics are captured for each pipeline step.
- *
- * @author Oliver Wolff
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -49,21 +44,23 @@ class TokenValidatorPerformanceIntegrationTest {
 
     private static final CuiLogger LOGGER = new CuiLogger(TokenValidatorPerformanceIntegrationTest.class);
 
+    private static int sampleCount(TokenValidatorMonitor monitor, MeasurementType type) {
+        return monitor.getValidationMetrics(type).map(StripedRingBufferStatistics::sampleCount).orElse(0);
+    }
+
     @Test
     @DisplayName("Should record performance metrics during token validation attempts")
     void shouldRecordPerformanceMetricsDuringValidation() {
-        // Create a TokenValidator (will initialize with default performance monitor)
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         var issuerConfig = tokenHolder.getIssuerConfig();
         var tokenValidator = TokenValidator.builder().monitorConfig(TokenValidatorMonitorConfig.defaultEnabled()).issuerConfig(issuerConfig).build();
 
-        // Get the performance monitor
         TokenValidatorMonitor performanceMonitor = tokenValidator.getPerformanceMonitor();
 
         // Verify initial state - no measurements
         assertEquals(Duration.ZERO, performanceMonitor.getValidationMetrics(MeasurementType.COMPLETE_VALIDATION)
                 .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO));
-        assertEquals(0, performanceMonitor.getSampleCount(MeasurementType.COMPLETE_VALIDATION));
+        assertEquals(0, sampleCount(performanceMonitor, MeasurementType.COMPLETE_VALIDATION));
 
         // Try to validate an invalid token (empty string) - this should record metrics even for failures
         var emptyRequest = AccessTokenRequest.of("");
@@ -75,7 +72,7 @@ class TokenValidatorPerformanceIntegrationTest {
         }
 
         // Verify that complete validation time was recorded (even for failed validation)
-        assertTrue(performanceMonitor.getSampleCount(MeasurementType.COMPLETE_VALIDATION) > 0,
+        assertTrue(sampleCount(performanceMonitor, MeasurementType.COMPLETE_VALIDATION) > 0,
                 "Complete validation time should be recorded even for failed validations");
         assertTrue(performanceMonitor.getValidationMetrics(MeasurementType.COMPLETE_VALIDATION)
                 .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() > 0,
@@ -91,12 +88,11 @@ class TokenValidatorPerformanceIntegrationTest {
         }
 
         // Verify that more measurements were recorded
-        assertTrue(performanceMonitor.getSampleCount(MeasurementType.COMPLETE_VALIDATION) >= 2,
+        assertTrue(sampleCount(performanceMonitor, MeasurementType.COMPLETE_VALIDATION) >= 2,
                 "Should have at least 2 complete validation measurements");
 
         // Check if token parsing was attempted (depends on how far validation got)
-        // For malformed tokens, parsing might be attempted
-        var parsingCount = performanceMonitor.getSampleCount(MeasurementType.TOKEN_PARSING);
+        var parsingCount = sampleCount(performanceMonitor, MeasurementType.TOKEN_PARSING);
         var parsingAverage = performanceMonitor.getValidationMetrics(MeasurementType.TOKEN_PARSING)
                 .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO);
 
@@ -105,29 +101,31 @@ class TokenValidatorPerformanceIntegrationTest {
                     "Token parsing average should be positive when parsing was attempted");
         }
 
+        // cui-rewrite:disable CuiLogRecordPatternRecipe
+        // This is a test class that outputs diagnostic information for analysis
         LOGGER.info("Performance metrics after validation attempts:");
         LOGGER.info("- Complete validation: %s samples, avg %s μs",
-                performanceMonitor.getSampleCount(MeasurementType.COMPLETE_VALIDATION),
+                sampleCount(performanceMonitor, MeasurementType.COMPLETE_VALIDATION),
                 performanceMonitor.getValidationMetrics(MeasurementType.COMPLETE_VALIDATION)
                         .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() / 1000.0);
         LOGGER.info("- Token parsing: %s samples, avg %s μs",
-                performanceMonitor.getSampleCount(MeasurementType.TOKEN_PARSING),
+                sampleCount(performanceMonitor, MeasurementType.TOKEN_PARSING),
                 performanceMonitor.getValidationMetrics(MeasurementType.TOKEN_PARSING)
                         .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() / 1000.0);
         LOGGER.info("- Header validation: %s samples, avg %s μs",
-                performanceMonitor.getSampleCount(MeasurementType.HEADER_VALIDATION),
+                sampleCount(performanceMonitor, MeasurementType.HEADER_VALIDATION),
                 performanceMonitor.getValidationMetrics(MeasurementType.HEADER_VALIDATION)
                         .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() / 1000.0);
         LOGGER.info("- Signature validation: %s samples, avg %s μs",
-                performanceMonitor.getSampleCount(MeasurementType.SIGNATURE_VALIDATION),
+                sampleCount(performanceMonitor, MeasurementType.SIGNATURE_VALIDATION),
                 performanceMonitor.getValidationMetrics(MeasurementType.SIGNATURE_VALIDATION)
                         .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() / 1000.0);
         LOGGER.info("- Claims validation: %s samples, avg %s μs",
-                performanceMonitor.getSampleCount(MeasurementType.CLAIMS_VALIDATION),
+                sampleCount(performanceMonitor, MeasurementType.CLAIMS_VALIDATION),
                 performanceMonitor.getValidationMetrics(MeasurementType.CLAIMS_VALIDATION)
                         .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() / 1000.0);
         LOGGER.info("- JWKS operations: %s samples, avg %s μs",
-                performanceMonitor.getSampleCount(MeasurementType.JWKS_OPERATIONS),
+                sampleCount(performanceMonitor, MeasurementType.JWKS_OPERATIONS),
                 performanceMonitor.getValidationMetrics(MeasurementType.JWKS_OPERATIONS)
                         .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() / 1000.0);
     }
@@ -139,7 +137,6 @@ class TokenValidatorPerformanceIntegrationTest {
         var issuerConfig = tokenHolder.getIssuerConfig();
         var tokenValidator = TokenValidator.builder().issuerConfig(issuerConfig).build();
 
-        // Verify performance monitor is accessible
         TokenValidatorMonitor performanceMonitor = tokenValidator.getPerformanceMonitor();
         assertNotNull(performanceMonitor, "Performance monitor should be accessible");
 
@@ -148,7 +145,7 @@ class TokenValidatorPerformanceIntegrationTest {
             assertEquals(Duration.ZERO, performanceMonitor.getValidationMetrics(type)
                             .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO),
                     "Initial average should be zero for " + type);
-            assertEquals(0, performanceMonitor.getSampleCount(type),
+            assertEquals(0, sampleCount(performanceMonitor, type),
                     "Initial sample count should be zero for " + type);
         }
     }

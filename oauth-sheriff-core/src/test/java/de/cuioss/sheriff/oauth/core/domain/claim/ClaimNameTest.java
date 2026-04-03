@@ -65,7 +65,7 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
     @MethodSource("provideClaimNameMapTestData")
     @DisplayName("Map claims from JsonObject")
     void shouldMapClaimsFromJsonObject(ClaimName claimName, JsonObject jsonObject, ClaimValue expectedValue) {
-        ClaimValue result = claimName.map(convertJsonObjectToMapRepresentation(jsonObject));
+        ClaimValue result = claimName.getClaimMapper().map(convertJsonObjectToMapRepresentation(jsonObject), claimName.getName());
 
         if (expectedValue == null) {
             assertNull(result, "Result should be null for absent claims");

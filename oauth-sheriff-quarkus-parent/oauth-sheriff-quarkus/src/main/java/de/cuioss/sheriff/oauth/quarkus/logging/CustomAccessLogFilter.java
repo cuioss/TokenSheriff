@@ -29,7 +29,6 @@ import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.container.ContainerResponseContext;
 import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.ext.Provider;
-import org.jspecify.annotations.Nullable;
 
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
@@ -67,7 +66,6 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
 
 
     private final AccessLogFilterConfig config;
-    @Nullable
     private final Instance<HttpServerRequest> vertxRequest;
     private final List<PathMatcher> includePathMatchers;
     private final List<PathMatcher> excludePathMatchers;

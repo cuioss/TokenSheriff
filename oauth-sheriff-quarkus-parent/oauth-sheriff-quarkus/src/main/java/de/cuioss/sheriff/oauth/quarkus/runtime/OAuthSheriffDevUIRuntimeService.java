@@ -258,19 +258,7 @@ public class OAuthSheriffDevUIRuntimeService {
      * @return true if JWT validation is enabled, false otherwise
      */
     private boolean isJwtEnabled() {
-        return countEnabledIssuers() > 0;
-    }
-
-    /**
-     * Counts the number of enabled issuers using the resolved issuer configurations
-     * from TokenValidatorProducer. This leverages existing functionality and avoids
-     * duplication of configuration parsing logic.
-     *
-     * @return number of enabled issuers
-     */
-    private int countEnabledIssuers() {
-        // IssuerConfigResolver already filters to only enabled issuers
-        return issuerConfigs.size();
+        return !issuerConfigs.isEmpty();
     }
 
 }

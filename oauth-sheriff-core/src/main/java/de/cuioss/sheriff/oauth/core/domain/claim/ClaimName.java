@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.oauth.core.domain.claim;
 
 import de.cuioss.sheriff.oauth.core.domain.claim.mapper.*;
-import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import lombok.Getter;
 
 import java.util.Arrays;
@@ -187,15 +186,6 @@ public enum ClaimName {
     private static final Map<String, ClaimName> CLAIM_NAME_LOOKUP =
             Arrays.stream(values())
                     .collect(Collectors.toUnmodifiableMap(ClaimName::getName, c -> c));
-
-    /**
-     * Extract the claim value from the given JSON object using the appropriate mapper.
-     *
-     * @return the mapped ClaimValue
-     */
-    public ClaimValue map(MapRepresentation mapRepresentation) {
-        return claimMapper.map(mapRepresentation, getName());
-    }
 
     /**
      * Gets a ClaimName by its string name.

@@ -601,7 +601,7 @@ public class TestTokenHolder {
             switch (tokenType) {
                 case ACCESS_TOKEN:
                     // Add token type
-                    claimsMap.put(ClaimName.TYPE.getName(), ClaimValue.forPlainString(TokenType.ACCESS_TOKEN.getTypeClaimName()));
+                    claimsMap.put(ClaimName.TYPE.getName(), ClaimValue.forPlainString("Bearer"));
 
                     // Add scope (mandatory for ACCESS_TOKEN) unless it should be missing
                     if (!claimControl.isMissingScope()) {
@@ -627,7 +627,7 @@ public class TestTokenHolder {
 
                 case ID_TOKEN:
                     // Add token type
-                    claimsMap.put(ClaimName.TYPE.getName(), ClaimValue.forPlainString(TokenType.ID_TOKEN.getTypeClaimName()));
+                    claimsMap.put(ClaimName.TYPE.getName(), ClaimValue.forPlainString("ID"));
 
                     // Add audience (mandatory for ID_TOKEN) unless it should be missing
                     if (!claimControl.isMissingAudience()) {
@@ -650,7 +650,7 @@ public class TestTokenHolder {
 
                 case REFRESH_TOKEN:
                     // Add token type
-                    claimsMap.put(ClaimName.TYPE.getName(), ClaimValue.forPlainString(TokenType.REFRESH_TOKEN.getTypeClaimName()));
+                    claimsMap.put(ClaimName.TYPE.getName(), ClaimValue.forPlainString("Refresh"));
                     break;
 
                 default:

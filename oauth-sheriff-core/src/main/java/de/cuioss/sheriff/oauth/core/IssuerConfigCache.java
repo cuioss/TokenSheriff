@@ -25,6 +25,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.*;
 
 import static de.cuioss.sheriff.oauth.core.JWTValidationLogMessages.ERROR;
@@ -87,6 +88,8 @@ public class IssuerConfigCache {
      */
     IssuerConfigCache(Collection<IssuerConfig> issuerConfigs,
             SecurityEventCounter securityEventCounter) {
+        Objects.requireNonNull(issuerConfigs, "issuerConfigs must not be null");
+        Objects.requireNonNull(securityEventCounter, "securityEventCounter must not be null");
         this.securityEventCounter = securityEventCounter;
         this.mutableCache = new ConcurrentHashMap<>();
         this.loadingFutures = new ConcurrentHashMap<>();
