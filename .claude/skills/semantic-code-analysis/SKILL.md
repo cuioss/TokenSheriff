@@ -84,6 +84,19 @@ Classify each finding into one of:
 - **Medium**: Dead code, unnecessary API surface, missing input validation
 - **Low**: Minor cleanup, design inconsistencies, single-use abstractions
 
+### Phase 5: False-Positive Review
+
+After writing all findings to the output document, perform a dedicated verification pass. For **every** finding in the document:
+
+1. **Re-read the actual code** at the referenced location — do not rely on the earlier analysis pass.
+2. **Search for callers across ALL modules** (not just the module being analyzed). A method reported as "zero production callers" in `core` may be called from `quarkus` or another module.
+3. **Verify attack scenarios**: For security findings, confirm the described attack is actually possible. Check whether the value in question is inside a signed structure (JWT, etc.) that prevents tampering.
+4. **Verify naming claims**: If a finding says a name is "misleading," re-read the code path to confirm the name doesn't accurately describe the behavior.
+5. **Check RFC compliance**: For protocol-related findings, verify whether the current behavior matches the relevant RFC before recommending changes.
+6. **Remove confirmed false positives** from the document and update the summary counts.
+
+This phase exists because analysis agents explore one module at a time and can miss cross-module callers, mischaracterize RFC-compliant defaults as security issues, or flag lightweight patterns as wasteful.
+
 ## Output Format
 
 Generate an AsciiDoc file at the configured output path with this structure:
