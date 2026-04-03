@@ -943,9 +943,13 @@ public class IssuerConfig implements LoadingStatusProvider {
                 LOGGER.warn(JWTValidationLogMessages.WARN.CLAIM_SUB_OPTIONAL_WARNING, issuerIdentifier != null ? issuerIdentifier : "unknown");
             }
 
-            return new IssuerConfig(enabled, issuerIdentifier, expectedAudience, audienceValidationDisabled,
-                    expectedClientId, claimSubOptional, accessTokenAudienceOptional, expectedTokenType,
-                    dpopConfig, clockSkewSeconds, maxTokenAgeSeconds, algorithmPreferences, claimMappers, jwksLoader);
+            return new IssuerConfig(enabled, issuerIdentifier,
+                    expectedAudience != null ? expectedAudience : Set.of(),
+                    audienceValidationDisabled,
+                    expectedClientId != null ? expectedClientId : Set.of(),
+                    claimSubOptional, accessTokenAudienceOptional, expectedTokenType,
+                    dpopConfig, clockSkewSeconds, maxTokenAgeSeconds, algorithmPreferences,
+                    claimMappers != null ? claimMappers : Map.of(), jwksLoader);
         }
 
         private void validateConfiguration() {
@@ -992,25 +996,25 @@ public class IssuerConfig implements LoadingStatusProvider {
      * This is called only by the builder after validation.
      */
     @SuppressWarnings("java:S107") // ok for private constructor
-    private IssuerConfig(boolean enabled, @Nullable String issuerIdentifier, @Nullable Set<String> expectedAudience,
-            boolean audienceValidationDisabled, @Nullable Set<String> expectedClientId,
+    private IssuerConfig(boolean enabled, @Nullable String issuerIdentifier, Set<String> expectedAudience,
+            boolean audienceValidationDisabled, Set<String> expectedClientId,
             boolean claimSubOptional, boolean accessTokenAudienceOptional, @Nullable String expectedTokenType,
             @Nullable DpopConfig dpopConfig, int clockSkewSeconds, @Nullable Integer maxTokenAgeSeconds,
-            @Nullable SignatureAlgorithmPreferences algorithmPreferences,
-            @Nullable Map<String, ClaimMapper> claimMappers, @Nullable JwksLoader jwksLoader) {
+            SignatureAlgorithmPreferences algorithmPreferences,
+            Map<String, ClaimMapper> claimMappers, @Nullable JwksLoader jwksLoader) {
         this.enabled = enabled;
         this.issuerIdentifier = issuerIdentifier;
-        this.expectedAudience = expectedAudience != null ? expectedAudience : Set.of();
+        this.expectedAudience = Objects.requireNonNull(expectedAudience, "expectedAudience must not be null (use Set.of() for empty)");
         this.audienceValidationDisabled = audienceValidationDisabled;
-        this.expectedClientId = expectedClientId != null ? expectedClientId : Set.of();
+        this.expectedClientId = Objects.requireNonNull(expectedClientId, "expectedClientId must not be null (use Set.of() for empty)");
         this.claimSubOptional = claimSubOptional;
         this.accessTokenAudienceOptional = accessTokenAudienceOptional;
         this.expectedTokenType = expectedTokenType;
         this.dpopConfig = dpopConfig;
         this.clockSkewSeconds = clockSkewSeconds;
         this.maxTokenAgeSeconds = maxTokenAgeSeconds;
-        this.algorithmPreferences = algorithmPreferences != null ? algorithmPreferences : new SignatureAlgorithmPreferences();
-        this.claimMappers = claimMappers != null ? claimMappers : Map.of();
+        this.algorithmPreferences = Objects.requireNonNull(algorithmPreferences, "algorithmPreferences must not be null");
+        this.claimMappers = Objects.requireNonNull(claimMappers, "claimMappers must not be null (use Map.of() for empty)");
         this.jwksLoader = jwksLoader;
     }
 

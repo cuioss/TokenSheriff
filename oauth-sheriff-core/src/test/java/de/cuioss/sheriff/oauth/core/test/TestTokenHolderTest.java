@@ -211,7 +211,7 @@ class TestTokenHolderTest {
             var tokenHolder = new TestTokenHolder(TokenType.ACCESS_TOKEN, ClaimControlParameter.builder().build());
             var claims = tokenHolder.getClaims();
             assertEquals(TokenType.ACCESS_TOKEN, tokenHolder.getTokenType(), "Token type should be ACCESS_TOKEN");
-            assertEquals(TokenType.ACCESS_TOKEN.getTypeClaimName(),
+            assertEquals("Bearer",
                     claims.get(ClaimName.TYPE.getName()).getOriginalString(), "Type claim should match ACCESS_TOKEN");
             assertTrue(claims.containsKey(ClaimName.SCOPE.getName()), "Should contain scope claim");
             assertTrue(claims.containsKey("roles"), "Should contain roles claim");
@@ -224,7 +224,7 @@ class TestTokenHolderTest {
             var tokenHolder = new TestTokenHolder(TokenType.ID_TOKEN, ClaimControlParameter.builder().build());
             var claims = tokenHolder.getClaims();
             assertEquals(TokenType.ID_TOKEN, tokenHolder.getTokenType());
-            assertEquals(TokenType.ID_TOKEN.getTypeClaimName(),
+            assertEquals("ID",
                     claims.get(ClaimName.TYPE.getName()).getOriginalString());
             assertTrue(claims.containsKey(ClaimName.AUDIENCE.getName()));
             assertTrue(claims.containsKey(ClaimName.EMAIL.getName()));
@@ -239,7 +239,7 @@ class TestTokenHolderTest {
             var tokenHolder = new TestTokenHolder(TokenType.REFRESH_TOKEN, ClaimControlParameter.builder().build());
             var claims = tokenHolder.getClaims();
             assertEquals(TokenType.REFRESH_TOKEN, tokenHolder.getTokenType());
-            assertEquals(TokenType.REFRESH_TOKEN.getTypeClaimName(),
+            assertEquals("Refresh",
                     claims.get(ClaimName.TYPE.getName()).getOriginalString());
         }
     }

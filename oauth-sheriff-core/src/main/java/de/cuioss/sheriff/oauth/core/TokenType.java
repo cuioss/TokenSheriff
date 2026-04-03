@@ -16,8 +16,6 @@
 package de.cuioss.sheriff.oauth.core;
 
 import de.cuioss.sheriff.oauth.core.domain.claim.ClaimName;
-import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
-import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import lombok.Getter;
 
 import java.util.Collections;
@@ -29,14 +27,13 @@ import static de.cuioss.sheriff.oauth.core.domain.claim.ClaimName.*;
 
 /**
  * Defines the supported token types within the authentication system.
- * Each type represents a specific OAuth2/OpenID Connect token category with its corresponding type claim name.
+ * Each type represents a specific OAuth2/OpenID Connect token category with its mandatory claims.
  * <p>
  * The supported token types are:
  * <ul>
- *   <li>{@link #ACCESS_TOKEN}: Standard OAuth2 access token with "Bearer" type claim</li>
- *   <li>{@link #ID_TOKEN}: OpenID Connect ID-Token with "ID" type claim</li>
- *   <li>{@link #REFRESH_TOKEN}: OAuth2 Refresh-Token with "Refresh" type claim</li>
- *   <li>Unrecognized type claims result in a {@link de.cuioss.sheriff.oauth.core.exception.TokenValidationException} (fail-closed)</li>
+ *   <li>{@link #ACCESS_TOKEN}: Standard OAuth2 access token</li>
+ *   <li>{@link #ID_TOKEN}: OpenID Connect ID-Token</li>
+ *   <li>{@link #REFRESH_TOKEN}: OAuth2 Refresh-Token</li>
  * </ul>
  * <p>
  * Implements requirements:
@@ -52,46 +49,19 @@ import static de.cuioss.sheriff.oauth.core.domain.claim.ClaimName.*;
  */
 public enum TokenType {
 
-    ACCESS_TOKEN("Bearer", new TreeSet<>(List.of(ISSUER, EXPIRATION, ISSUED_AT, SUBJECT))),
-    ID_TOKEN("ID", new TreeSet<>(List.of(ISSUER, EXPIRATION, ISSUED_AT, SUBJECT, AUDIENCE))),
-    REFRESH_TOKEN("Refresh", Collections.emptySortedSet());
+    ACCESS_TOKEN(new TreeSet<>(List.of(ISSUER, EXPIRATION, ISSUED_AT, SUBJECT))),
+    ID_TOKEN(new TreeSet<>(List.of(ISSUER, EXPIRATION, ISSUED_AT, SUBJECT, AUDIENCE))),
+    REFRESH_TOKEN(Collections.emptySortedSet());
 
-    @Getter
-    private final String typeClaimName;
     @Getter
     private final SortedSet<ClaimName> mandatoryClaims;
 
     /**
      * Constructor for TokenType.
      *
-     * @param typeClaimName the type claim name
      * @param mandatoryClaims the mandatory claims
      */
-    TokenType(String typeClaimName, SortedSet<ClaimName> mandatoryClaims) {
-        this.typeClaimName = typeClaimName;
+    TokenType(SortedSet<ClaimName> mandatoryClaims) {
         this.mandatoryClaims = mandatoryClaims;
-    }
-
-
-    /**
-     * Resolves a TokenType from a type claim string value.
-     * <p>
-     * This method performs a case-insensitive comparison of the provided type claim name
-     * against the known token types. If no match is found, it throws a
-     * {@link TokenValidationException}.
-     *
-     * @param typeClaimName the string value of the type claim, must not be null
-     * @return the matching TokenType
-     * @throws TokenValidationException if the type claim does not match any known token type
-     */
-    public static TokenType fromTypeClaim(String typeClaimName) {
-        for (TokenType tokenType : TokenType.values()) {
-            if (tokenType.typeClaimName.equalsIgnoreCase(typeClaimName)) {
-                return tokenType;
-            }
-        }
-        throw new TokenValidationException(
-                SecurityEventCounter.EventType.TOKEN_TYPE_MISMATCH,
-                "Unrecognized token type: " + typeClaimName);
     }
 }

@@ -36,6 +36,7 @@ import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenValidationRule;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -157,8 +158,11 @@ public class AccessTokenValidationPipeline {
 
         // TokenStringValidator has already checked: null, blank, size
 
+        // Create current time once for cache and validation context consistency
+        OffsetDateTime now = OffsetDateTime.now();
+
         // 1. CHECK CACHE FIRST - before any expensive parsing
-        Optional<AccessTokenContent> cached = cache.get(tokenString, performanceMonitor);
+        Optional<AccessTokenContent> cached = cache.get(tokenString, performanceMonitor, now);
         if (cached.isPresent()) {
             LOGGER.debug("Access token retrieved from cache");
             // Still validate DPoP proof even for cached tokens (proofs must be fresh per request)

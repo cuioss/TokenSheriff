@@ -68,7 +68,7 @@ public class CollectionClaimHandler {
      * @return a List of string values from the claim
      * @throws IllegalStateException if the claim value is not of type STRING_LIST
      */
-    public List<String> getValues() {
+    private List<String> getValues() {
         if (claimValue.getType() != ClaimValueType.STRING_LIST) {
             throw new IllegalStateException("Claim value is not a collection type: " + claimValue.getType());
         }

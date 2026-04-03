@@ -37,24 +37,13 @@ class CollectionClaimHandlerTest {
     private static final CuiLogger LOGGER = new CuiLogger(CollectionClaimHandlerTest.class);
 
     @Test
-    @DisplayName("Get values from claim")
-    void shouldGetValues() {
+    @DisplayName("Provides values matching expected values")
+    void shouldProvideExpectedValues() {
         ClaimValue claimValue = ClaimValue.forList(TEST_STRING, TEST_VALUES);
         CollectionClaimHandler handler = new CollectionClaimHandler(claimValue);
 
-        List<String> values = handler.getValues();
-
-        assertEquals(TEST_VALUES, values, "Values should match expected test values");
-    }
-
-    @Test
-    @DisplayName("Throw exception when claim value is not a collection type")
-    void shouldThrowExceptionForNonCollectionType() {
-        ClaimValue claimValue = ClaimValue.forPlainString(TEST_STRING);
-        CollectionClaimHandler handler = new CollectionClaimHandler(claimValue);
-
-        assertThrows(IllegalStateException.class, handler::getValues,
-                "Should throw IllegalStateException when claim value is not a collection type");
+        assertTrue(handler.providesValues(TEST_VALUES), "Should provide all expected values");
+        assertTrue(handler.determineMissingValues(TEST_VALUES).isEmpty(), "No values should be missing");
     }
 
     @Test
@@ -134,7 +123,7 @@ class CollectionClaimHandlerTest {
         CollectionClaimHandler handler = new CollectionClaimHandler(claimValue);
 
         // When, Then
-        assertTrue(handler.getValues().isEmpty(), "Values should be empty");
+        assertTrue(handler.providesValues(Collections.emptyList()), "Should provide empty values");
         assertTrue(handler.providesValues(Collections.emptyList()),
                 "Should return true for empty expected values");
         assertFalse(handler.providesValues(List.of("value1")),

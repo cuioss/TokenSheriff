@@ -188,7 +188,7 @@ public class JwtMetricsCollector {
      * Note: This method only clears the underlying monitors. The Micrometer metrics
      * themselves will retain their values until the next scheduled update cycle.
      */
-    public void clear() {
+    void clear() {
         LOGGER.info(INFO.CLEARING_JWT_METRICS);
 
         // Clear security event counter

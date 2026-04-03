@@ -85,22 +85,6 @@ String rawToken
     }
 
     /**
-     * Creates a DecodedJwt from all its components.
-     *
-     * @param header the decoded header as a JwtHeader, must not be null
-     * @param body the decoded payload (body) as a MapRepresentation, must not be null
-     * @param signature the signature part as a String
-     * @param parts the original token parts (header.payload.signature)
-     * @param rawToken the original raw token string
-     * @return a new DecodedJwt instance
-     * @throws NullPointerException if header or body is null
-     */
-    public static DecodedJwt of(JwtHeader header, MapRepresentation body, String signature, String[] parts, String rawToken) {
-        Objects.requireNonNull(header, "header must not be null");
-        return new DecodedJwt(header, body, signature, parts, rawToken);
-    }
-
-    /**
      * Gets the issuer of the JWT token extracted from the body.
      *
      * @return an Optional containing the issuer if present

@@ -53,7 +53,9 @@ class SignatureAlgorithmPreferencesTest {
         @DisplayName("Initialize with default algorithms")
         void shouldInitializeWithDefaults() {
             var preferences = new SignatureAlgorithmPreferences();
-            assertEquals(SignatureAlgorithmPreferences.getDefaultPreferredAlgorithms(), preferences.getPreferredAlgorithms(),
+            var expectedDefaults = List.of(
+                    "ES512", "ES384", "ES256", "EdDSA", "PS512", "PS384", "PS256", "RS512", "RS384", "RS256");
+            assertEquals(expectedDefaults, preferences.getPreferredAlgorithms(),
                     "Default constructor should initialize with default preferred algorithms");
         }
 
@@ -77,13 +79,13 @@ class SignatureAlgorithmPreferencesTest {
     }
 
     @Nested
-    @DisplayName("getDefaultPreferredAlgorithms Tests")
+    @DisplayName("Default Preferred Algorithms Tests")
     class GetDefaultPreferredAlgorithmsTests {
 
         @Test
-        @DisplayName("Return expected defaults")
+        @DisplayName("Return expected defaults via no-arg constructor")
         void shouldReturnExpectedDefaults() {
-            var defaultAlgorithms = SignatureAlgorithmPreferences.getDefaultPreferredAlgorithms();
+            var defaultAlgorithms = new SignatureAlgorithmPreferences().getPreferredAlgorithms();
             assertNotNull(defaultAlgorithms, "Default algorithms should not be null");
             assertFalse(defaultAlgorithms.isEmpty(), "Default algorithms should not be empty");
             var expectedAlgorithms = List.of(

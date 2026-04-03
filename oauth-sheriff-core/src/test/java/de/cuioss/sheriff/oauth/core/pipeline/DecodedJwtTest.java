@@ -97,49 +97,6 @@ class DecodedJwtTest {
     }
 
     @Test
-    @DisplayName("Should create DecodedJwt using static factory")
-    void shouldCreateDecodedJwtUsingStaticFactory() {
-
-        JwtHeader header = createTestHeader();
-        MapRepresentation body = createTestBody();
-        DecodedJwt jwt = DecodedJwt.of(header, body, SIGNATURE, PARTS, RAW_TOKEN);
-
-        JwtHeader actualHeader = jwt.header();
-        assertNotNull(actualHeader);
-        assertEquals(ALG, actualHeader.alg());
-        assertEquals(KID, actualHeader.getKid().orElse(null));
-
-        MapRepresentation actualBody = jwt.body();
-        assertNotNull(actualBody);
-        assertEquals(ISSUER, actualBody.getString("iss").orElse(null));
-        assertEquals("test-subject", actualBody.getString("sub").orElse(null));
-
-        assertNotNull(jwt.signature());
-        assertEquals(SIGNATURE, jwt.signature());
-
-        assertTrue(jwt.getIssuer().isPresent());
-        assertEquals(ISSUER, jwt.getIssuer().get());
-
-        assertTrue(jwt.getKid().isPresent());
-        assertEquals(KID, jwt.getKid().get());
-
-        assertTrue(jwt.getAlg().isPresent());
-        assertEquals(ALG, jwt.getAlg().get());
-
-        assertEquals(PARTS, jwt.parts());
-        assertEquals(RAW_TOKEN, jwt.rawToken());
-    }
-
-    @Test
-    @DisplayName("Static factory should reject null header")
-    void staticFactoryShouldRejectNullHeader() {
-        var body = createTestBody();
-        assertThrows(NullPointerException.class,
-                () -> DecodedJwt.of(null, body, SIGNATURE, PARTS, RAW_TOKEN),
-                "Static factory should throw NullPointerException when header is null");
-    }
-
-    @Test
     @DisplayName("Should have proper equals and hashCode")
     void shouldHaveProperEqualsAndHashCode() {
 

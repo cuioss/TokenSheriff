@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.NullAndEmptySource;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -117,18 +116,7 @@ class NonValidatingJwtParserTest {
             );
         }
 
-        @ParameterizedTest
-        @NullAndEmptySource
-        @DisplayName("Should handle empty or null validation")
-        void shouldHandleEmptyOrNullToken(String token) {
-            // When decoding an empty or null token, it should throw a TokenValidationException
-            TokenValidationException exception = assertThrows(TokenValidationException.class, () -> parser.decode(token),
-                    "Should throw TokenValidationException for empty or null token");
-
-            // Verify the exception has the correct event type
-            assertEquals(EventType.TOKEN_EMPTY, exception.getEventType(),
-                    "Exception should have TOKEN_EMPTY event type");
-        }
+        // Note: Empty/null token validation is now handled by TokenStringValidator (precondition)
 
         @ParameterizedTest
         @MethodSource("invalidTokenProvider")
@@ -212,52 +200,8 @@ class NonValidatingJwtParserTest {
     @DisplayName("Token Size Tests")
     class TokenSizeTests {
 
-        @Test
-        @DisplayName("Should respect max validation size")
-        void shouldRespectMaxTokenSize() {
-            // Create a validation that exceeds the max size
-            String largeToken = "a".repeat(ParserConfig.DEFAULT_MAX_TOKEN_SIZE + 1);
-
-            // When decoding a token that exceeds the max size, it should throw a TokenValidationException
-            TokenValidationException exception = assertThrows(TokenValidationException.class, () -> parser.decode(largeToken),
-                    "Should throw TokenValidationException for token exceeding max size");
-
-            // Verify the exception has the correct event type
-            assertEquals(EventType.TOKEN_SIZE_EXCEEDED, exception.getEventType(),
-                    "Exception should have TOKEN_SIZE_EXCEEDED event type");
-
-            // Verify log message
-            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
-                    JWTValidationLogMessages.WARN.TOKEN_SIZE_EXCEEDED.resolveIdentifierString());
-        }
-
-        @Test
-        @DisplayName("Should respect custom max validation size")
-        void shouldRespectCustomMaxTokenSize() {
-            // Create a validation that exceeds the custom max size but is smaller than the default
-            int customMaxSize = 1024;
-            String largeToken = "a".repeat(customMaxSize + 1);
-
-            ParserConfig config = ParserConfig.builder()
-                    .maxTokenSize(customMaxSize)
-                    .build();
-
-            NonValidatingJwtParser customParser = NonValidatingJwtParser.builder().securityEventCounter(new SecurityEventCounter())
-                    .config(config)
-                    .build();
-
-            // When decoding a token that exceeds the custom max size, it should throw a TokenValidationException
-            TokenValidationException exception = assertThrows(TokenValidationException.class, () -> customParser.decode(largeToken),
-                    "Should throw TokenValidationException for token exceeding custom max size");
-
-            // Verify the exception has the correct event type
-            assertEquals(EventType.TOKEN_SIZE_EXCEEDED, exception.getEventType(),
-                    "Exception should have TOKEN_SIZE_EXCEEDED event type");
-
-            // Verify log message
-            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
-                    JWTValidationLogMessages.WARN.TOKEN_SIZE_EXCEEDED.resolveIdentifierString());
-        }
+        // Note: Token size validation is now handled by TokenStringValidator (precondition).
+        // Max token size tests have been moved to TokenStringValidatorTest.
 
         @Test
         @DisplayName("Should count DECODED_PART_SIZE_EXCEEDED event")
@@ -356,38 +300,7 @@ class NonValidatingJwtParserTest {
                     "Should count FAILED_TO_DECODE_JWT event");
         }
 
-        @Test
-        @DisplayName("Should count TOKEN_SIZE_EXCEEDED event")
-        void shouldCountTokenSizeExceededEvent() {
-            // Create a parser with a security event counter we can check
-            SecurityEventCounter counter = new SecurityEventCounter();
-            ParserConfig config = ParserConfig.builder()
-                    .maxTokenSize(100) // Use a small max validation size to ensure our test data exceeds it
-                    .build();
-            NonValidatingJwtParser testParser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .config(config)
-                    .build();
-
-            // When - try to decode a validation that exceeds the max size
-            String largeToken = "a".repeat(config.getMaxTokenSize() + 1);
-
-            // When decoding a token that exceeds the max size, it should throw a TokenValidationException
-            TokenValidationException exception = assertThrows(TokenValidationException.class, () -> testParser.decode(largeToken),
-                    "Should throw TokenValidationException for token exceeding max size");
-
-            // Verify the exception has the correct event type
-            assertEquals(EventType.TOKEN_SIZE_EXCEEDED, exception.getEventType(),
-                    "Exception should have TOKEN_SIZE_EXCEEDED event type");
-
-            // Verify log message
-            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
-                    JWTValidationLogMessages.WARN.TOKEN_SIZE_EXCEEDED.resolveIdentifierString());
-
-            // Verify the counter was incremented
-            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED),
-                    "Should count TOKEN_SIZE_EXCEEDED event");
-        }
+        // Note: TOKEN_SIZE_EXCEEDED is now handled by TokenStringValidator (precondition)
     }
 
     @Nested

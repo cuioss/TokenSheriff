@@ -65,7 +65,7 @@ public class JwkAlgorithmPreferences {
      *
      * @return the default list of supported JWK algorithms
      */
-    public static List<String> getDefaultSupportedAlgorithms() {
+    private static List<String> getDefaultSupportedAlgorithms() {
         LOGGER.debug("Getting default supported JWK algorithms");
 
         // Algorithms that can be parsed and loaded from JWK objects

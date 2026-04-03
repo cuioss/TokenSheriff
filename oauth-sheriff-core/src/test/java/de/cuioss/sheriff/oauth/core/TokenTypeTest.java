@@ -15,16 +15,14 @@
  */
 package de.cuioss.sheriff.oauth.core;
 
-import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.NullAndEmptySource;
-import org.junit.jupiter.params.provider.ValueSource;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @EnableGeneratorController
 @EnableTestLogger
@@ -33,26 +31,16 @@ class TokenTypeTest {
 
     @ParameterizedTest
     @EnumSource(TokenType.class)
-    @DisplayName("Should correctly parse valid type claims")
-    void shouldHandleValidTokenTypes(TokenType tokenType) {
-        assertNotNull(tokenType.getTypeClaimName(), "Type claim name should not be null");
+    @DisplayName("Should have mandatory claims defined for each token type")
+    void shouldHaveMandatoryClaimsDefined(TokenType tokenType) {
         assertNotNull(tokenType.getMandatoryClaims(), "Mandatory claims should not be null");
-        assertEquals(tokenType, TokenType.fromTypeClaim(tokenType.getTypeClaimName()), "Should parse back to same token type");
     }
 
     @ParameterizedTest
-    @NullAndEmptySource
-    @DisplayName("Should throw TokenValidationException for null or empty type claims")
-    void shouldDefaultToUnknownForNullOrEmpty(String invalidType) {
-        assertThrows(TokenValidationException.class, () -> TokenType.fromTypeClaim(invalidType),
-                "Null or empty type should throw TokenValidationException (fail-closed)");
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"invalid", "not_a_token_type", "custom_token"})
-    @DisplayName("Should throw TokenValidationException for invalid type claims")
-    void shouldDefaultToUnknownAndLogWarning(String invalidType) {
-        assertThrows(TokenValidationException.class, () -> TokenType.fromTypeClaim(invalidType),
-                "Invalid type should throw TokenValidationException (fail-closed)");
+    @EnumSource(value = TokenType.class, names = {"ACCESS_TOKEN", "ID_TOKEN"})
+    @DisplayName("Access and ID tokens should have non-empty mandatory claims")
+    void shouldHaveNonEmptyMandatoryClaims(TokenType tokenType) {
+        assertFalse(tokenType.getMandatoryClaims().isEmpty(),
+                "Mandatory claims should not be empty for " + tokenType);
     }
 }

@@ -56,7 +56,7 @@ class JwkAlgorithmPreferencesTest {
 
     @Test
     void getDefaultSupportedAlgorithms() {
-        List<String> defaultAlgorithms = JwkAlgorithmPreferences.getDefaultSupportedAlgorithms();
+        List<String> defaultAlgorithms = new JwkAlgorithmPreferences().getSupportedAlgorithms();
 
         assertNotNull(defaultAlgorithms);
         assertFalse(defaultAlgorithms.isEmpty());
