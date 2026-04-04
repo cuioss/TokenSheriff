@@ -15,7 +15,7 @@
  */
 package de.cuioss.sheriff.oauth.quarkus.metrics;
 
-import de.cuioss.sheriff.oauth.core.TokenValidator;
+
 import de.cuioss.sheriff.oauth.core.security.EventCategory;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.quarkus.config.JwtPropertyKeys;
@@ -74,9 +74,7 @@ public class JwtMetricsCollector {
     private static final String RESULT_SUCCESS = "success";
 
     private final MeterRegistry registry;
-    private final TokenValidator tokenValidator;
-
-    private SecurityEventCounter securityEventCounter;
+    private final SecurityEventCounter securityEventCounter;
 
     // Caching of counters to avoid lookups
     private final Map<String, Counter> counters = new ConcurrentHashMap<>();
@@ -85,16 +83,16 @@ public class JwtMetricsCollector {
     private final Map<SecurityEventCounter.EventType, Long> lastKnownCounts = new ConcurrentHashMap<>();
 
     /**
-     * Creates a new JwtMetricsCollector with the given MeterRegistry and TokenValidator.
+     * Creates a new JwtMetricsCollector with the given MeterRegistry and SecurityEventCounter.
      *
      * @param registry the Micrometer registry
-     * @param tokenValidator the token validator containing the security event counter
+     * @param securityEventCounter the security event counter for monitoring validation events
      */
     @Inject
     public JwtMetricsCollector(MeterRegistry registry,
-            TokenValidator tokenValidator) {
+            SecurityEventCounter securityEventCounter) {
         this.registry = registry;
-        this.tokenValidator = tokenValidator;
+        this.securityEventCounter = securityEventCounter;
     }
 
     /**
@@ -104,7 +102,6 @@ public class JwtMetricsCollector {
     @PostConstruct
     void initialize() {
         LOGGER.info(INFO.INITIALIZING_JWT_METRICS_COLLECTOR);
-        securityEventCounter = tokenValidator.getSecurityEventCounter();
 
         // Register counters for all event types
         registerEventCounters();

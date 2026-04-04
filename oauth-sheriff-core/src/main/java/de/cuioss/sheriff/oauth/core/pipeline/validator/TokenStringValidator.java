@@ -39,9 +39,6 @@ import java.nio.charset.StandardCharsets;
  * This validator ensures that token-type-specific pipelines can safely assume
  * a valid non-null, non-empty token string within size limits.
  * <p>
- * <strong>Future Enhancement</strong>: May add metrics instrumentation using
- * {@code MeasurementType.TOKEN_FORMAT_CHECK} to track pre-pipeline validation performance.
- * <p>
  * This class is thread-safe and stateless after construction.
  *
  * @apiNote This class is internal to OAuth Sheriff and not part of the public API.

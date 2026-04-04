@@ -96,7 +96,7 @@ class AudienceValidator {
                     "Missing required audience claim in ID token. Expected audience: " + expectedAudience + ", Available claims: " + token.getClaims().keySet()
             );
         } else if (accessTokenAudienceOptional) {
-            LOGGER.debug("Access token audience is optional and missing. Expected audience: %s", expectedAudience);
+            LOGGER.warn(JWTValidationLogMessages.WARN.ACCESS_TOKEN_AUDIENCE_OPTIONAL_SKIPPED, expectedAudience);
         } else {
             LOGGER.warn(JWTValidationLogMessages.WARN.ACCESS_TOKEN_AUDIENCE_MISSING, expectedAudience);
             securityEventCounter.increment(SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING);
@@ -112,7 +112,7 @@ class AudienceValidator {
         if (azpClaim.isPresent()) {
             String azp = azpClaim.get().getOriginalString();
             if (expectedAudience.contains(azp)) {
-                LOGGER.debug("Audience claim is missing but azp claim matches expected audience: %s", azp);
+                LOGGER.warn(JWTValidationLogMessages.WARN.AUDIENCE_AZP_FALLBACK, azp);
                 return true;
             }
         }

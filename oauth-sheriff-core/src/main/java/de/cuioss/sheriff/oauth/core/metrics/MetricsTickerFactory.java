@@ -42,7 +42,7 @@ public class MetricsTickerFactory {
      * @return a MetricsTicker instance appropriate for the monitor's configuration
      */
    
-    public static MetricsTicker createTicker(MeasurementType measurementType,
+    private static MetricsTicker createTicker(MeasurementType measurementType,
             TokenValidatorMonitor monitor) {
         if (!monitor.isEnabled(measurementType)) {
             return NoOpMetricsTicker.INSTANCE;

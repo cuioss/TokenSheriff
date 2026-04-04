@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class MetricsTickerFactoryTest {
 
     @Test
-    @DisplayName("Should create NoOpMetricsTicker when measurement type is disabled")
+    @DisplayName("Should create NoOp started ticker when measurement type is disabled")
     void shouldCreateNoOpTickerWhenDisabled() {
         TokenValidatorMonitor monitor = TokenValidatorMonitorConfig.builder()
                 .windowSize(100)
@@ -39,7 +39,7 @@ class MetricsTickerFactoryTest {
                 .build()
                 .createMonitor();
 
-        MetricsTicker ticker = MetricsTickerFactory.createTicker(MeasurementType.TOKEN_PARSING, monitor);
+        MetricsTicker ticker = MetricsTickerFactory.createStartedTicker(MeasurementType.TOKEN_PARSING, monitor);
         assertSame(NoOpMetricsTicker.INSTANCE, ticker, "Should return NoOp ticker for disabled type");
     }
 
@@ -52,7 +52,7 @@ class MetricsTickerFactoryTest {
                 .build()
                 .createMonitor();
 
-        MetricsTicker ticker = MetricsTickerFactory.createTicker(MeasurementType.SIGNATURE_VALIDATION, monitor);
+        MetricsTicker ticker = MetricsTickerFactory.createStartedTicker(MeasurementType.SIGNATURE_VALIDATION, monitor);
         assertInstanceOf(ActiveMetricsTicker.class, ticker, "Should return Active ticker for enabled type");
     }
 

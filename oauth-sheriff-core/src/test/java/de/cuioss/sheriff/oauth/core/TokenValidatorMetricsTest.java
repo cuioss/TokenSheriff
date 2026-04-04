@@ -106,8 +106,6 @@ class TokenValidatorMetricsTest {
                 "SIGNATURE_VALIDATION should be recorded");
 
         // These might be missing or have zero duration
-        LOGGER.info("TOKEN_FORMAT_CHECK duration: " + monitor.getValidationMetrics(MeasurementType.TOKEN_FORMAT_CHECK)
-                .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() + " ns");
         LOGGER.info("ISSUER_EXTRACTION duration: " + monitor.getValidationMetrics(MeasurementType.ISSUER_EXTRACTION)
                 .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() + " ns");
         LOGGER.info("JWKS_OPERATIONS duration: " + monitor.getValidationMetrics(MeasurementType.JWKS_OPERATIONS)
@@ -173,18 +171,12 @@ class TokenValidatorMetricsTest {
         tokenValidator.createAccessToken(AccessTokenRequest.of(tokenString));
 
         // Then - check for very fast operations
-        Duration tokenFormatCheck = monitor.getValidationMetrics(MeasurementType.TOKEN_FORMAT_CHECK)
-                .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO);
         Duration issuerExtraction = monitor.getValidationMetrics(MeasurementType.ISSUER_EXTRACTION)
                 .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO);
         Duration headerValidation = monitor.getValidationMetrics(MeasurementType.HEADER_VALIDATION)
                 .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO);
 
         LOGGER.info("\nFast operations analysis:");
-        LOGGER.info("TOKEN_FORMAT_CHECK: %s ns (%s ms) - %s%n",
-                tokenFormatCheck.toNanos(),
-                tokenFormatCheck.toNanos() / 1_000_000.0,
-                tokenFormatCheck.toNanos() == 0 ? "MISSING!" : "OK");
         LOGGER.info("ISSUER_EXTRACTION: %s ns (%s ms) - %s%n",
                 issuerExtraction.toNanos(),
                 issuerExtraction.toNanos() / 1_000_000.0,
@@ -195,7 +187,6 @@ class TokenValidatorMetricsTest {
                 headerValidation.toNanos() < 1000 ? "SUSPICIOUSLY FAST!" : "OK");
 
         // These operations should have some duration, even if very small
-        assertTrue(tokenFormatCheck.toNanos() >= 0, "TOKEN_FORMAT_CHECK should have a duration");
         assertTrue(issuerExtraction.toNanos() >= 0, "ISSUER_EXTRACTION should have a duration");
     }
 

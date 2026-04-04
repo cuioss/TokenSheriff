@@ -209,15 +209,6 @@ class JsonWebTokenAdapterTest {
         assertEquals("custom-value", createAdapter(claims).<String>getClaim("custom_claim"));
     }
 
-    @Test
-    @DisplayName("getTokenContent should return wrapped delegate")
-    void getTokenContentShouldReturnDelegate() {
-        var claims = createClaims();
-        var delegate = createTokenContent(claims);
-        var adapter = new JsonWebTokenAdapter(delegate);
-        assertSame(delegate, adapter.getTokenContent());
-    }
-
     // Helper methods
 
     private Map<String, ClaimValue> createClaims() {

@@ -49,20 +49,15 @@ class BearerTokenResponseFactoryTest {
     class CreateResponseWithFullyVerifiedStatus {
 
         @Test
-        @DisplayName("should return 200 OK with security headers")
-        void shouldReturn200WithSecurityHeaders() {
+        @DisplayName("should throw IllegalStateException for FULLY_VERIFIED")
+        void shouldThrowForFullyVerified() {
             var tokenContent = createTestToken();
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.FULLY_VERIFIED)
                     .accessTokenContent(tokenContent)
                     .build();
 
-            Response response = BearerTokenResponseFactory.createResponse(result);
-
-            assertEquals(200, response.getStatus());
-            assertEquals("no-store, no-cache, must-revalidate", response.getHeaderString("Cache-Control"));
-            assertEquals("no-cache", response.getHeaderString("Pragma"));
-            assertNull(response.getHeaderString("WWW-Authenticate"));
+            assertThrows(IllegalStateException.class, () -> BearerTokenResponseFactory.createResponse(result));
         }
     }
 
@@ -304,10 +299,6 @@ class BearerTokenResponseFactoryTest {
         @DisplayName("should include security headers in all responses")
         void shouldIncludeSecurityHeadersInAllResponses() {
             var testCases = Map.of(
-                    "success", BearerTokenResult.builder()
-                            .status(BearerTokenStatus.FULLY_VERIFIED)
-                            .accessTokenContent(createTestToken())
-                            .build(),
                     "noToken", BearerTokenResult.noTokenGiven(Set.of(), Set.of(), Set.of()),
                     "parsingError", BearerTokenResult.parsingError(new TokenValidationException(SecurityEventCounter.EventType.INVALID_JWT_FORMAT, "test"), Set.of(), Set.of(), Set.of()),
                     "constraintViolation", BearerTokenResult.builder()

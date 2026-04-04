@@ -118,6 +118,12 @@ For more details about security events related to these log messages, see the Se
 |OAuthSheriff-163 |Token Age |Token age exceeds maximum allowed age |Logged when a token's `iat` claim indicates it was issued longer ago than the configured `maxTokenAgeSeconds`
 
 |OAuthSheriff-164 |Custom Rule |Custom validation rule rejected token: %s |Logged when a custom `TokenValidationRule` rejects a token by throwing `TokenValidationException`
+
+|OAuthSheriff-170 |Audience |Audience claim missing but azp claim '%s' matches expected audience — using azp as fallback |Logged when the audience (aud) claim is absent but the azp claim matches the expected audience, falling back to azp for audience validation
+
+|OAuthSheriff-171 |Audience |Access token audience validation skipped (accessTokenAudienceOptional=true). Expected audience: %s |Logged when audience validation is skipped for an access token because accessTokenAudienceOptional is enabled
+
+|OAuthSheriff-172 |Authorized Party |azp claim missing, using client_id claim '%s' for authorized party validation (RFC 9068) |Logged when the azp claim is absent but the client_id claim (per RFC 9068) matches the expected client ID
 |===
 
 == ERROR Level (200-211)

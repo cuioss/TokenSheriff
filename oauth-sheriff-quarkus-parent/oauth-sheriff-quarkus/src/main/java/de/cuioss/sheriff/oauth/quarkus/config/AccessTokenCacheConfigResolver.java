@@ -54,25 +54,29 @@ public class AccessTokenCacheConfigResolver {
     public AccessTokenCacheConfig resolveCacheConfig() {
         LOGGER.info(INFO.RESOLVING_ACCESS_TOKEN_CACHE_CONFIG);
 
-        // Get max size with default value of 1000
-        int maxSize = config.getOptionalValue(CACHE.MAX_SIZE, Integer.class)
-                .orElse(1000);
-
-        // Get eviction interval with default value of 10 seconds
-        long evictionIntervalSeconds = config.getOptionalValue(CACHE.EVICTION_INTERVAL_SECONDS, Long.class)
-                .orElse(10L);
-
-        if (maxSize == 0) {
+        // Check for explicit cache disable (maxSize=0)
+        var explicitMaxSize = config.getOptionalValue(CACHE.MAX_SIZE, Integer.class);
+        if (explicitMaxSize.isPresent() && explicitMaxSize.get() == 0) {
             LOGGER.info(INFO.ACCESS_TOKEN_CACHE_DISABLED);
             return AccessTokenCacheConfig.disabled();
         }
 
-        AccessTokenCacheConfig cacheConfig = AccessTokenCacheConfig.builder()
-                .maxSize(maxSize)
-                .evictionIntervalSeconds(evictionIntervalSeconds)
-                .build();
+        // Use builder defaults — only override when explicitly configured
+        var builder = AccessTokenCacheConfig.builder();
 
-        LOGGER.info(INFO.ACCESS_TOKEN_CACHE_CONFIGURED, maxSize, evictionIntervalSeconds);
+        explicitMaxSize.ifPresent(value -> {
+            builder.maxSize(value);
+            LOGGER.debug("Set cache maxSize from configuration: %s", value);
+        });
+
+        config.getOptionalValue(CACHE.EVICTION_INTERVAL_SECONDS, Long.class)
+                .ifPresent(value -> {
+                    builder.evictionIntervalSeconds(value);
+                    LOGGER.debug("Set cache evictionIntervalSeconds from configuration: %s", value);
+                });
+
+        AccessTokenCacheConfig cacheConfig = builder.build();
+        LOGGER.info(INFO.ACCESS_TOKEN_CACHE_CONFIGURED, cacheConfig.getMaxSize(), cacheConfig.getEvictionIntervalSeconds());
 
         return cacheConfig;
     }
