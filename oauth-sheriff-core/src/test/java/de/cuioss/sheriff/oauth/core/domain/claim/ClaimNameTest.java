@@ -296,6 +296,12 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
 
         assertEquals("azp", ClaimName.AUTHORIZED_PARTY.getName());
         assertEquals(ClaimValueType.STRING, ClaimName.AUTHORIZED_PARTY.getValueType());
+
+        assertEquals("client_id", ClaimName.CLIENT_ID.getName());
+        assertEquals(ClaimValueType.STRING, ClaimName.CLIENT_ID.getValueType());
+
+        assertEquals("upn", ClaimName.UPN.getName());
+        assertEquals(ClaimValueType.STRING, ClaimName.UPN.getValueType());
     }
 
     @Test

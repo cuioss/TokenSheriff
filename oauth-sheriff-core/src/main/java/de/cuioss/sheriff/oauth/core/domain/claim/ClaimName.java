@@ -170,6 +170,10 @@ public enum ClaimName {
      */
     CLIENT_ID("client_id", ClaimValueType.STRING, "The \"client_id\" claim identifies the OAuth 2.0 client that requested the token. Defined by RFC 9068 Section 2.2 for JWT access tokens.", new IdentityMapper()),
 
+    // Design Decision: UPN is a MicroProfile JWT Auth invention, not an RFC or OIDC claim.
+    // It lives in core (not the Quarkus layer) because ClaimName is a framework-agnostic
+    // claim name registry. The only consumer of the MP-JWT fallback chain
+    // (upn -> preferred_username -> sub) is JsonWebTokenAdapter.getName() in the Quarkus layer.
     /**
      * The "upn" (user principal name) claim uniquely identifies the subject or user principal
      * of the token. Commonly used for principal name resolution with a fallback chain:
