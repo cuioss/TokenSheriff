@@ -18,6 +18,7 @@ package de.cuioss.sheriff.oauth.core.dpop;
 import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
 import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages;
+import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.json.JwkKey;
@@ -80,7 +81,9 @@ public class DpopProofValidator {
     private final DpopReplayProtection replayProtection;
     private final SignatureAlgorithmPreferences algorithmPreferences;
     private final SignatureTemplateManager signatureTemplateManager;
-    private final DslJson<Object> dslJson = new DslJson<>();
+    private final DslJson<Object> dslJson = new DslJson<>(new DslJson.Settings<>()
+            .limitStringBuffer(ParserConfig.DEFAULT_MAX_STRING_LENGTH)
+            .limitDigitsBuffer(16));
 
     /**
      * Holds the decoded parts of a DPoP proof JWT.

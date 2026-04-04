@@ -187,6 +187,7 @@ This section documents log messages specific to the Quarkus integration module (
 |ID |Component |Message |Description
 |OAuthSheriff_Q-100 |HEALTH |Error checking JWKS loader for issuer %s: %s |Indicates an error occurred while checking JWKS loader status in health check
 |OAuthSheriff_Q-128 |BEARER |Bearer token does not meet requirements. Missing scopes: %s, Missing roles: %s, Missing groups: %s |Details about which requirements are missing from a bearer token
+|OAuthSheriff_Q-129 |BEARER |Bearer token validation failed: %s (eventType=%s) |Token validation failed with a specific event type (e.g., expired, invalid signature)
 |OAuthSheriff_Q-131 |JWKS |Background JWKS loading failed for issuer %s: %s |Indicates that background JWKS loading failed for a specific issuer
 |OAuthSheriff_Q-133 |METRICS |No Micrometer counter found for event type %s, delta %s lost |Indicates that a metrics counter was not found and a delta value was lost
 |OAuthSheriff_Q-134 |JWKS |JWKS loading failed for issuer %s: %s - will retry via background refresh |Indicates that JWKS loading failed but will be retried

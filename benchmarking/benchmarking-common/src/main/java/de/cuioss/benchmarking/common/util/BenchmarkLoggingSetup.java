@@ -56,6 +56,8 @@ public final class BenchmarkLoggingSetup {
     // Keep reference to file output stream for proper cleanup
     private static FileOutputStream currentFileOut = null;
 
+    private static final System.Logger BOOTSTRAP_LOGGER = System.getLogger(BenchmarkLoggingSetup.class.getName());
+
     private BenchmarkLoggingSetup() {
         // Utility class
     }
@@ -66,16 +68,14 @@ public final class BenchmarkLoggingSetup {
      *
      * @param benchmarkResultsDir the directory where benchmark results are stored
      */
-    // cui-rewrite:disable CuiLoggerStandardsRecipe
-    // System.err is appropriate here as logging infrastructure is not yet set up
     public static void configureLogging(String benchmarkResultsDir) {
         // Prepare paths and directories
         Path resultsPath = Path.of(benchmarkResultsDir);
         try {
             Files.createDirectories(resultsPath);
         } catch (IOException e) {
-            System.err.println("Failed to create benchmark results directory: " + e.getMessage());
-            System.err.println("Continuing with console-only logging");
+            BOOTSTRAP_LOGGER.log(System.Logger.Level.WARNING, "Failed to create benchmark results directory: " + e.getMessage());
+            BOOTSTRAP_LOGGER.log(System.Logger.Level.WARNING, "Continuing with console-only logging");
             return;
         }
 
@@ -103,13 +103,13 @@ public final class BenchmarkLoggingSetup {
             // Configure java.util.logging
             configureJavaUtilLogging(resultsPath, timestamp);
 
-            // Log configuration success
-            System.out.println("Benchmark logging configured - writing to: " + logFile);
-            System.out.println("All console output (System.out/err and JMH) will be captured to both console and file");
+            // Log configuration success (after JUL is configured, System.Logger routes through it)
+            BOOTSTRAP_LOGGER.log(System.Logger.Level.INFO, "Benchmark logging configured - writing to: " + logFile);
+            BOOTSTRAP_LOGGER.log(System.Logger.Level.INFO, "All console output (System.out/err and JMH) will be captured to both console and file");
 
         } catch (IOException e) {
-            System.err.println("Failed to configure file logging: " + e.getMessage());
-            System.err.println("Continuing with console-only logging");
+            BOOTSTRAP_LOGGER.log(System.Logger.Level.WARNING, "Failed to configure file logging: " + e.getMessage());
+            BOOTSTRAP_LOGGER.log(System.Logger.Level.WARNING, "Continuing with console-only logging");
             closeCurrentFileOut();
         }
     }

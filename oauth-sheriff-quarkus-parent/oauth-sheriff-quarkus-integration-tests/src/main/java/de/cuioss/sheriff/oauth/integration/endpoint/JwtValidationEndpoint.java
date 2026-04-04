@@ -98,8 +98,8 @@ public class JwtValidationEndpoint {
             }
         } else {
             String detail = tokenResult.getErrorMessage().orElse("token not present");
-            /*~~(TODO: WARN needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/
-            /*~~(TODO: WARN needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/LOGGER.warn("BasicToken authorization failed: %s (status=%s)", detail, tokenResult.getStatus());
+            // cui-rewrite:disable CuiLogRecordPatternRecipe
+            LOGGER.warn("BasicToken authorization failed: %s (status=%s)", detail, tokenResult.getStatus());
         }
         String message = "Bearer token validation failed: "
                 + tokenResult.getErrorMessage().orElse("token not present")

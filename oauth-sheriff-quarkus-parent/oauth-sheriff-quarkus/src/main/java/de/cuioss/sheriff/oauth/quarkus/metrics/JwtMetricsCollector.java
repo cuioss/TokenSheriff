@@ -189,9 +189,7 @@ public class JwtMetricsCollector {
         LOGGER.info(INFO.CLEARING_JWT_METRICS);
 
         // Clear security event counter
-        if (securityEventCounter != null) {
-            securityEventCounter.reset();
-        }
+        securityEventCounter.reset();
 
         // Clear tracking maps to reset delta calculations
         lastKnownCounts.clear();

@@ -211,9 +211,7 @@ public class BearerTokenProducer {
                         .build();
             }
         } catch (TokenValidationException e) {
-            // cui-rewrite:disable CuiLogRecordPatternRecipe
-            // Quarkus module has its own LogMessages class; this is a cross-module boundary log
-            LOGGER.warn(e, "Bearer token validation failed: %s (eventType=%s)", e.getMessage(), e.getEventType());
+            LOGGER.warn(e, BEARER_TOKEN_VALIDATION_FAILED, e.getMessage(), e.getEventType());
             return BearerTokenResult.parsingError(e, requiredScopes, requiredRoles, requiredGroups);
         }
     }

@@ -44,6 +44,8 @@ import java.util.List;
  *
  * @author Oliver Wolff
  */
+// cui-rewrite:disable CuiLogRecordPatternRecipe
+// Diagnostic CLI tool — benchmark runners use direct logging for analysis output
 public class ConcurrencySweepRunner {
 
     private static final CuiLogger LOGGER = new CuiLogger(ConcurrencySweepRunner.class);
@@ -61,8 +63,7 @@ public class ConcurrencySweepRunner {
         List<RunResult> allResults = new ArrayList<>();
 
         for (int threads : THREAD_COUNTS) {
-            /*~~(TODO: INFO needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/
-            /*~~(TODO: INFO needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/LOGGER.info("Running concurrency sweep: %s threads", threads);
+            LOGGER.info("Running concurrency sweep: %s threads", threads);
 
             Options options = new OptionsBuilder()
                     .include(SimpleCoreValidationBenchmark.class.getSimpleName() + "\\.measureAverageTime")
@@ -87,8 +88,7 @@ public class ConcurrencySweepRunner {
             for (RunResult result : results) {
                 double score = result.getPrimaryResult().getScore();
                 String unit = result.getPrimaryResult().getScoreUnit();
-                /*~~(TODO: 2 placeholders, 3 params. Suppress: // cui-rewrite:disable CuiLoggerStandardsRecipe)~~>*//*~~(TODO: INFO needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/
-                /*~~(TODO: 2 placeholders, 3 params. Suppress: // cui-rewrite:disable CuiLoggerStandardsRecipe)~~>*//*~~(TODO: INFO needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/LOGGER.info("  %s threads: %.1f %s", threads, score, unit);
+                LOGGER.info("  %s threads: %s %s", threads, score, unit);
             }
         }
 
@@ -98,7 +98,6 @@ public class ConcurrencySweepRunner {
             ResultFormatFactory.getInstance(ResultFormatType.JSON, ps).writeOut(allResults);
         }
 
-        /*~~(TODO: INFO needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/
-        /*~~(TODO: INFO needs LogRecord. Suppress: // cui-rewrite:disable CuiLogRecordPatternRecipe)~~>*/LOGGER.info("Concurrency sweep complete. Results in %s", OUTPUT_DIR);
+        LOGGER.info("Concurrency sweep complete. Results in %s", OUTPUT_DIR);
     }
 }

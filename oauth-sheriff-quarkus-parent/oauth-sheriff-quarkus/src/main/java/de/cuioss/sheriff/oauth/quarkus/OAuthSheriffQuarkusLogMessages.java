@@ -236,6 +236,12 @@ public final class OAuthSheriffQuarkusLogMessages {
                 .identifier(128)
                 .build();
 
+        public static final LogRecord BEARER_TOKEN_VALIDATION_FAILED = LogRecordModel.builder()
+                .template("Bearer token validation failed: %s (eventType=%s)")
+                .prefix(PREFIX)
+                .identifier(129)
+                .build();
+
         // Metrics Warnings (133-140)
 
         public static final LogRecord NO_MICROMETER_COUNTER_FOUND = LogRecordModel.builder()

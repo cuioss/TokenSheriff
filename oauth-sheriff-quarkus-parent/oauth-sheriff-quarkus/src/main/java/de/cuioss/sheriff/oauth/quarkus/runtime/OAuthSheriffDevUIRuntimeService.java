@@ -55,12 +55,6 @@ public class OAuthSheriffDevUIRuntimeService {
     private final ParserConfig parserConfig;
 
     /**
-     * Default clock skew from IssuerConfig builder (seconds).
-     * Mirrors IssuerConfig.IssuerConfigBuilder.clockSkewSeconds default value.
-     */
-    private static final int ISSUER_CONFIG_DEFAULT_CLOCK_SKEW_SECONDS = 60;
-
-    /**
      * Constructor for dependency injection.
      *
      * @param tokenValidator the token validator
@@ -148,16 +142,15 @@ public class OAuthSheriffDevUIRuntimeService {
         // Clock skew is per-issuer; show first issuer's value or builder default
         // (IssuerConfig.IssuerConfigBuilder.clockSkewSeconds defaults to 60)
         int clockSkew = issuerConfigs.isEmpty()
-                ? ISSUER_CONFIG_DEFAULT_CLOCK_SKEW_SECONDS
+                ? IssuerConfig.DEFAULT_CLOCK_SKEW_SECONDS
                 : issuerConfigs.getFirst().getClockSkewSeconds();
         parser.put("clockSkewSeconds", clockSkew);
         configMap.put("parser", parser);
 
-        // HTTP JWKS loader configuration section — documented defaults
-        // (HttpJwksLoaderConfig is not accessible from this service)
+        // HTTP JWKS loader configuration section — approximate defaults from HttpHandler (external library)
         Map<String, Object> httpJwksLoader = new HashMap<>();
-        httpJwksLoader.put("connectTimeoutSeconds", "per-issuer (default: 10)");
-        httpJwksLoader.put("readTimeoutSeconds", "per-issuer (default: 10)");
+        httpJwksLoader.put("connectTimeoutSeconds", "per-issuer (default: ~10s, from HttpHandler)");
+        httpJwksLoader.put("readTimeoutSeconds", "per-issuer (default: ~10s, from HttpHandler)");
         httpJwksLoader.put("sizeLimit", parserConfig.getMaxTokenSize());
         configMap.put("httpJwksLoader", httpJwksLoader);
 
