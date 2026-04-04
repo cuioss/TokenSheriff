@@ -172,8 +172,8 @@ public enum ClaimName {
 
     // Design Decision: UPN is a MicroProfile JWT Auth invention, not an RFC or OIDC claim.
     // It lives in core (not the Quarkus layer) because ClaimName is a framework-agnostic
-    // claim name registry. The only consumer of the MP-JWT fallback chain
-    // (upn -> preferred_username -> sub) is JsonWebTokenAdapter.getName() in the Quarkus layer.
+    // claim name registry. The MP-JWT fallback chain (upn -> preferred_username -> sub)
+    // is typically handled by adapters providing MicroProfile JWT compatibility.
     /**
      * The "upn" (user principal name) claim uniquely identifies the subject or user principal
      * of the token. Commonly used for principal name resolution with a fallback chain:

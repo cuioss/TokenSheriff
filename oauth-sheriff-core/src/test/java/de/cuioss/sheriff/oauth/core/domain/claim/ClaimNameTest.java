@@ -203,6 +203,18 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
                 ),
 
                 Arguments.of(
+                        ClaimName.CLIENT_ID,
+                        createJsonObjectWithStringClaim("client_id", "my-client"),
+                        ClaimValue.forPlainString("my-client")
+                ),
+
+                Arguments.of(
+                        ClaimName.UPN,
+                        createJsonObjectWithStringClaim("upn", "user@example.com"),
+                        ClaimValue.forPlainString("user@example.com")
+                ),
+
+                Arguments.of(
                         ClaimName.ISSUER,
                         Json.createObjectBuilder().build(),
                         null
