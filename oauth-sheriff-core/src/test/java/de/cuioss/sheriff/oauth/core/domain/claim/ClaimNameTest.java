@@ -203,6 +203,18 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
                 ),
 
                 Arguments.of(
+                        ClaimName.CLIENT_ID,
+                        createJsonObjectWithStringClaim("client_id", "my-client"),
+                        ClaimValue.forPlainString("my-client")
+                ),
+
+                Arguments.of(
+                        ClaimName.UPN,
+                        createJsonObjectWithStringClaim("upn", "user@example.com"),
+                        ClaimValue.forPlainString("user@example.com")
+                ),
+
+                Arguments.of(
                         ClaimName.ISSUER,
                         Json.createObjectBuilder().build(),
                         null
@@ -296,6 +308,12 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
 
         assertEquals("azp", ClaimName.AUTHORIZED_PARTY.getName());
         assertEquals(ClaimValueType.STRING, ClaimName.AUTHORIZED_PARTY.getValueType());
+
+        assertEquals("client_id", ClaimName.CLIENT_ID.getName());
+        assertEquals(ClaimValueType.STRING, ClaimName.CLIENT_ID.getValueType());
+
+        assertEquals("upn", ClaimName.UPN.getName());
+        assertEquals(ClaimValueType.STRING, ClaimName.UPN.getValueType());
     }
 
     @Test

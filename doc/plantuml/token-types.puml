@@ -47,8 +47,8 @@ class "AccessTokenContent" as AccessTokenContent {
 }
 
 class "IdTokenContent" as IdTokenContent {
-  +getAudience(): List<String>
-  +getName(): Optional<String>
+  +getAudience(): Set<String>
+  +getDisplayName(): Optional<String>
   +getEmail(): Optional<String>
 }
 
