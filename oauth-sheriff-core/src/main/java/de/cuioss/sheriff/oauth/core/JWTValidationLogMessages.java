@@ -73,19 +73,19 @@ public final class JWTValidationLogMessages {
 
         public static final LogRecord JSON_PARSE_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(205)
+                .identifier(204)
                 .template("Failed to parse JSON from %s: %s")
                 .build();
 
         public static final LogRecord JWKS_INITIALIZATION_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(210)
+                .identifier(205)
                 .template("JWKS initialization failed: %s for issuer: %s")
                 .build();
 
         public static final LogRecord JWKS_LOAD_EXECUTION_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(211)
+                .identifier(206)
                 .template("JWKS load execution failed: %s for issuer: %s")
                 .build();
 
@@ -113,44 +113,44 @@ public final class JWTValidationLogMessages {
 
         public static final LogRecord JWKS_BACKGROUND_REFRESH_STARTED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(4)
+                .identifier(3)
                 .template("Background JWKS refresh started with interval: %s seconds")
                 .build();
 
         public static final LogRecord ISSUER_CONFIG_SKIPPED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(6)
+                .identifier(4)
                 .template("Skipping disabled issuer configuration %s")
                 .build();
 
         public static final LogRecord JWKS_URI_RESOLVED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(7)
+                .identifier(5)
                 .template("Successfully resolved JWKS URI from well-known endpoint: %s")
                 .build();
 
         // Retry operation info messages
         public static final LogRecord RETRY_OPERATION_COMPLETED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(8)
+                .identifier(6)
                 .template("Retry operation '%s' completed successfully after %s attempts in %sms")
                 .build();
 
         public static final LogRecord JWKS_LOADED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(9)
+                .identifier(7)
                 .template("JWKS loaded successfully for issuer: %s")
                 .build();
 
         public static final LogRecord ISSUER_CONFIG_LOADED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(10)
+                .identifier(8)
                 .template("Issuer configuration loaded successfully: %s")
                 .build();
 
         public static final LogRecord JWE_DECRYPTION_ENABLED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(11)
+                .identifier(9)
                 .template("JWE decryption enabled with %s decryption key(s)")
                 .build();
     }
@@ -266,311 +266,311 @@ public final class JWTValidationLogMessages {
 
         public static final LogRecord JWK_MISSING_KTY = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(119)
+                .identifier(117)
                 .template("JWK is missing required field 'kty'")
                 .build();
 
         public static final LogRecord JWK_UNSUPPORTED_KEY_TYPE = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(120)
+                .identifier(118)
                 .template("Unsupported key type: %s")
                 .build();
 
         public static final LogRecord JWK_KEY_ID_TOO_LONG = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(121)
+                .identifier(119)
                 .template("Key ID exceeds maximum length: %s")
                 .build();
 
         public static final LogRecord JWK_INVALID_ALGORITHM = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(122)
+                .identifier(120)
                 .template("Invalid or unsupported algorithm: %s")
                 .build();
 
         // New entries for direct logging conversions
         public static final LogRecord ISSUER_CONFIG_UNHEALTHY = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(123)
+                .identifier(121)
                 .template("Found unhealthy issuer config: %s")
                 .build();
 
         public static final LogRecord BACKGROUND_REFRESH_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(125)
+                .identifier(122)
                 .template("Background JWKS refresh failed: %s")
                 .build();
 
         public static final LogRecord JWKS_URI_RESOLUTION_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(126)
+                .identifier(123)
                 .template("Failed to resolve JWKS URI from well-known resolver")
                 .build();
 
         public static final LogRecord JWKS_OBJECT_NULL = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(127)
+                .identifier(124)
                 .template("JWKS object is null")
                 .build();
 
         public static final LogRecord JWKS_KEYS_ARRAY_TOO_LARGE = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(128)
+                .identifier(125)
                 .template("JWKS keys array exceeds maximum size: %s")
                 .build();
 
         public static final LogRecord JWKS_KEYS_ARRAY_EMPTY = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(129)
+                .identifier(126)
                 .template("JWKS keys array is empty")
                 .build();
 
         public static final LogRecord RSA_KEY_PARSE_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(130)
+                .identifier(127)
                 .template("Failed to parse RSA key with ID %s: %s")
                 .build();
 
         public static final LogRecord EC_KEY_PARSE_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(131)
+                .identifier(128)
                 .template("Failed to parse EC key with ID %s: %s")
                 .build();
 
         // Retry operation warning messages
         public static final LogRecord RETRY_OPERATION_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(132)
+                .identifier(129)
                 .template("Retry operation '%s' failed after %s attempts in %sms")
                 .build();
 
         public static final LogRecord JWKS_JSON_PARSE_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(133)
+                .identifier(130)
                 .template("Failed to parse JWKS JSON: %s")
                 .build();
 
         public static final LogRecord CLAIM_SUB_OPTIONAL_WARNING = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(134)
+                .identifier(131)
                 .template("IssuerConfig for issuer '%s' has claimSubOptional=true. This is not conform to RFC 7519 which requires the 'sub' claim for ACCESS_TOKEN and ID_TOKEN types. Use this setting only when necessary and ensure appropriate alternative validation mechanisms.")
                 .build();
 
         public static final LogRecord INVALID_BASE64_URL_ENCODING = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(135)
+                .identifier(132)
                 .template("Invalid Base64 URL encoding detected for JWK field: %s")
                 .build();
 
         public static final LogRecord BACKGROUND_REFRESH_NO_HANDLER = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(136)
+                .identifier(133)
                 .template("Background refresh skipped - no HTTP handler available")
                 .build();
 
         public static final LogRecord BACKGROUND_REFRESH_PARSE_ERROR = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(138)
+                .identifier(134)
                 .template("Background refresh parse error: %s for issuer: %s")
                 .build();
 
         public static final LogRecord ISSUER_CONFIG_LOAD_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(140)
+                .identifier(135)
                 .template("Failed to load issuer configuration for %s, status: %s")
                 .build();
 
         public static final LogRecord JWKS_LOAD_TIMEOUT = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(141)
+                .identifier(136)
                 .template("Timeout waiting for JWKS to load for issuer: %s")
                 .build();
 
         public static final LogRecord JWKS_LOAD_INTERRUPTED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(142)
+                .identifier(137)
                 .template("Interrupted while waiting for JWKS to load for issuer: %s")
                 .build();
 
         public static final LogRecord ISSUER_MISMATCH = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(143)
+                .identifier(138)
                 .template("Configured issuer '%s' does not match discovered issuer '%s' from well-known document")
                 .build();
 
         public static final LogRecord INSECURE_HTTP_JWKS = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(144)
+                .identifier(139)
                 .template("Using insecure HTTP protocol for JWKS endpoint: %s - HTTPS should be used in production")
                 .build();
 
         public static final LogRecord JWKS_PARSE_NULL_RESULT = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(145)
+                .identifier(140)
                 .template("DSL-JSON returned null for JWKS parsing")
                 .build();
 
         public static final LogRecord JWKS_PARSE_IO_ERROR = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(146)
+                .identifier(141)
                 .template("Failed to parse JWKS content: %s")
                 .build();
 
         public static final LogRecord OKP_KEY_PARSE_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(147)
+                .identifier(142)
                 .template("Failed to parse OKP key with ID %s: %s")
                 .build();
 
         public static final LogRecord TOKEN_TYPE_MISMATCH = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(148)
+                .identifier(143)
                 .template("Token type '%s' does not match expected type '%s'")
                 .build();
 
         // DPoP validation issues (RFC 9449)
         public static final LogRecord DPOP_PROOF_MISSING = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(149)
+                .identifier(144)
                 .template("DPoP proof is required but the DPoP HTTP header is missing")
                 .build();
 
         public static final LogRecord DPOP_PROOF_INVALID = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(150)
+                .identifier(145)
                 .template("DPoP proof has invalid format: %s")
                 .build();
 
         public static final LogRecord DPOP_PROOF_EXPIRED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(151)
+                .identifier(146)
                 .template("DPoP proof iat claim is outside acceptable freshness window")
                 .build();
 
         public static final LogRecord DPOP_THUMBPRINT_MISMATCH = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(152)
+                .identifier(147)
                 .template("DPoP proof JWK thumbprint '%s' does not match token cnf.jkt '%s'")
                 .build();
 
         public static final LogRecord DPOP_REPLAY_DETECTED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(153)
+                .identifier(148)
                 .template("DPoP proof replay detected for jti: %s")
                 .build();
 
         public static final LogRecord DPOP_PROOF_MISSING_CLAIM = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(154)
+                .identifier(149)
                 .template("DPoP proof is missing required claim: %s")
                 .build();
 
         public static final LogRecord DPOP_ATH_MISMATCH = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(155)
+                .identifier(150)
                 .template("DPoP proof ath claim does not match access token hash")
                 .build();
 
         public static final LogRecord DPOP_CNF_MISSING = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(156)
+                .identifier(151)
                 .template("DPoP is required but access token does not contain cnf.jkt claim")
                 .build();
 
         // JWE decryption issues (RFC 7516)
         public static final LogRecord JWE_DECRYPTION_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(157)
+                .identifier(152)
                 .template("Failed to decrypt JWE token: %s")
                 .build();
 
         public static final LogRecord JWE_UNSUPPORTED_ALGORITHM = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(158)
+                .identifier(153)
                 .template("Unsupported JWE algorithm: alg=%s, enc=%s")
                 .build();
 
         public static final LogRecord JWE_DECRYPTION_NOT_CONFIGURED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(159)
+                .identifier(154)
                 .template("Received JWE token but no decryption configuration is available")
                 .build();
 
         public static final LogRecord JWE_DECRYPTION_KEY_NOT_FOUND = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(160)
+                .identifier(155)
                 .template("No decryption key found for key ID: %s")
                 .build();
 
         public static final LogRecord JWE_COMPRESSION_NOT_SUPPORTED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(161)
+                .identifier(156)
                 .template("Unsupported JWE compression algorithm: %s")
                 .build();
 
         public static final LogRecord JWE_NESTED_NOT_ALLOWED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(162)
+                .identifier(157)
                 .template("Nested JWE tokens are not allowed")
                 .build();
 
         public static final LogRecord TOKEN_AGE_EXCEEDED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(163)
+                .identifier(158)
                 .template("Token age exceeds maximum allowed age")
                 .build();
 
         public static final LogRecord CUSTOM_RULE_REJECTED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(164)
+                .identifier(159)
                 .template("Custom validation rule rejected token: %s")
                 .build();
 
         public static final LogRecord JWK_MISSING_KID = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(165)
+                .identifier(160)
                 .template("JWK entry without 'kid' field skipped — kid is required for key identification")
                 .build();
 
         public static final LogRecord JWK_RSA_DEFAULTING_TO_RS256 = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(166)
+                .identifier(161)
                 .template("RSA JWK without 'alg' field — defaulting to RS256 for key ID: %s")
                 .build();
 
         public static final LogRecord ACCESS_TOKEN_AUDIENCE_MISSING = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(167)
+                .identifier(162)
                 .template("Access token is missing required audience claim. Expected audience: %s")
                 .build();
 
         public static final LogRecord DPOP_HTU_MISMATCH = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(168)
+                .identifier(163)
                 .template("DPoP proof htu claim '%s' does not match request URI '%s'")
                 .build();
 
         public static final LogRecord DPOP_HTM_MISMATCH = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(169)
+                .identifier(164)
                 .template("DPoP proof htm claim '%s' does not match request method '%s'")
                 .build();
 
         public static final LogRecord AUDIENCE_AZP_FALLBACK = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(170)
+                .identifier(165)
                 .template("Audience claim missing but azp claim '%s' matches expected audience — using azp as fallback")
                 .build();
 
         public static final LogRecord ACCESS_TOKEN_AUDIENCE_OPTIONAL_SKIPPED = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(171)
+                .identifier(166)
                 .template("Access token audience validation skipped (accessTokenAudienceOptional=true). Expected audience: %s")
                 .build();
 
         public static final LogRecord AZP_CLIENT_ID_FALLBACK = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(172)
+                .identifier(167)
                 .template("azp claim missing, using client_id claim '%s' for authorized party validation (RFC 9068)")
                 .build();
 

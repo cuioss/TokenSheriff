@@ -171,12 +171,6 @@ public class TokenHeaderValidator {
                 hasAny = true;
             }
 
-            var kidOpt = header.getKid();
-            if (kidOpt.isPresent()) {
-                headerInfo.append(hasAny ? "," : "").append(" kid=").append(kidOpt.orElse(""));
-                hasAny = true;
-            }
-
             var typOpt = header.getTyp();
             if (typOpt.isPresent()) {
                 headerInfo.append(hasAny ? "," : "").append(" typ=").append(typOpt.orElse(""));

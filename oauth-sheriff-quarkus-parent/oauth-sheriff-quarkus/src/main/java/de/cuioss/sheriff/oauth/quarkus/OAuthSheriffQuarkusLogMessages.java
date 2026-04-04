@@ -45,12 +45,10 @@ public final class OAuthSheriffQuarkusLogMessages {
     public static final String PREFIX = "OAuthSheriff_Q";
 
     /**
-     * INFO level log messages (001-099).
+     * INFO level log messages (001-024).
      */
     @UtilityClass
     public static final class INFO {
-
-        // Configuration Messages (001-010)
 
         public static final LogRecord RESOLVING_ISSUER_CONFIGURATIONS = LogRecordModel.builder()
                 .template("Resolving issuer configurations from properties")
@@ -76,151 +74,132 @@ public final class OAuthSheriffQuarkusLogMessages {
                 .identifier(4)
                 .build();
 
-        // Validation Messages (011-020)
-
         public static final LogRecord INITIALIZING_JWT_VALIDATION_COMPONENTS = LogRecordModel.builder()
                 .template("Initializing JWT validation components from configuration")
                 .prefix(PREFIX)
-                .identifier(11)
+                .identifier(5)
                 .build();
 
         public static final LogRecord JWT_VALIDATION_COMPONENTS_INITIALIZED = LogRecordModel.builder()
                 .template("JWT validation components initialized successfully with %s issuers")
                 .prefix(PREFIX)
-                .identifier(12)
+                .identifier(6)
                 .build();
 
         public static final LogRecord RESOLVING_ACCESS_LOG_FILTER_CONFIG = LogRecordModel.builder()
                 .template("Resolving access log filter configuration from properties")
                 .prefix(PREFIX)
-                .identifier(13)
+                .identifier(7)
                 .build();
-
-        // Claim Mapper Registry Messages (014-015)
 
         public static final LogRecord CLAIM_MAPPER_REGISTRY_INITIALIZED = LogRecordModel.builder()
                 .template("Claim mapper registry initialized with %s custom mapper(s): %s")
                 .prefix(PREFIX)
-                .identifier(14)
+                .identifier(8)
                 .build();
 
         public static final LogRecord NO_CUSTOM_CLAIM_MAPPERS_DISCOVERED = LogRecordModel.builder()
                 .template("No custom claim mappers discovered")
                 .prefix(PREFIX)
-                .identifier(15)
+                .identifier(9)
                 .build();
-
-        // Token Validation Rule Registry Messages (016-017)
 
         public static final LogRecord VALIDATION_RULE_REGISTRY_INITIALIZED = LogRecordModel.builder()
                 .template("Token validation rule registry initialized with %s custom rule(s)")
                 .prefix(PREFIX)
-                .identifier(16)
+                .identifier(10)
                 .build();
 
         public static final LogRecord NO_CUSTOM_VALIDATION_RULES_DISCOVERED = LogRecordModel.builder()
                 .template("No custom token validation rules discovered")
                 .prefix(PREFIX)
-                .identifier(17)
+                .identifier(11)
                 .build();
-
-        // Metrics Messages (021-030)
 
         public static final LogRecord INITIALIZING_JWT_METRICS_COLLECTOR = LogRecordModel.builder()
                 .template("Initializing JwtMetricsCollector")
                 .prefix(PREFIX)
-                .identifier(21)
+                .identifier(12)
                 .build();
 
         public static final LogRecord JWT_METRICS_COLLECTOR_INITIALIZED = LogRecordModel.builder()
                 .template("JwtMetricsCollector initialized with %s event types")
                 .prefix(PREFIX)
-                .identifier(22)
+                .identifier(13)
                 .build();
-
-
-        // Cache Messages (041-050)
 
         public static final LogRecord RESOLVING_ACCESS_TOKEN_CACHE_CONFIG = LogRecordModel.builder()
                 .template("Resolving access token cache configuration from properties")
                 .prefix(PREFIX)
-                .identifier(41)
+                .identifier(14)
                 .build();
 
         public static final LogRecord ACCESS_TOKEN_CACHE_DISABLED = LogRecordModel.builder()
                 .template("Access token cache disabled (maxSize=0)")
                 .prefix(PREFIX)
-                .identifier(42)
+                .identifier(15)
                 .build();
 
         public static final LogRecord ACCESS_TOKEN_CACHE_CONFIGURED = LogRecordModel.builder()
                 .template("Access token cache configured: maxSize=%s, evictionIntervalSeconds=%s")
                 .prefix(PREFIX)
-                .identifier(43)
+                .identifier(16)
                 .build();
-
-        // Metrics Clear Messages (051-060)
 
         public static final LogRecord CLEARING_JWT_METRICS = LogRecordModel.builder()
                 .template("Clearing all JWT metrics")
                 .prefix(PREFIX)
-                .identifier(51)
+                .identifier(17)
                 .build();
 
         public static final LogRecord JWT_METRICS_CLEARED = LogRecordModel.builder()
                 .template("JWT metrics cleared successfully")
                 .prefix(PREFIX)
-                .identifier(52)
+                .identifier(18)
                 .build();
-
-        // JWE Configuration Messages (031-040)
 
         public static final LogRecord JWE_DECRYPTION_CONFIG_RESOLVING = LogRecordModel.builder()
                 .template("Resolving JWE decryption configuration from properties")
                 .prefix(PREFIX)
-                .identifier(31)
+                .identifier(19)
                 .build();
 
         public static final LogRecord JWE_DECRYPTION_CONFIG_RESOLVED = LogRecordModel.builder()
                 .template("JWE decryption configuration resolved with %s key(s)")
                 .prefix(PREFIX)
-                .identifier(32)
+                .identifier(20)
                 .build();
 
         public static final LogRecord JWE_CONFIG_CHECK = LogRecordModel.builder()
                 .template("JWE config check: singleKeyPath=%s, keystorePath=%s, multiKeys=%s")
                 .prefix(PREFIX)
-                .identifier(33)
+                .identifier(21)
                 .build();
 
         public static final LogRecord JWE_DECRYPTION_NOT_CONFIGURED = LogRecordModel.builder()
                 .template("No JWE decryption configuration found - JWE support disabled")
                 .prefix(PREFIX)
-                .identifier(34)
+                .identifier(22)
                 .build();
-
-        // Access Log Filter Messages (065-070)
 
         public static final LogRecord CUSTOM_ACCESS_LOG_FILTER_INITIALIZED = LogRecordModel.builder()
                 .template("CustomAccessLogFilter initialized: %s")
                 .prefix(PREFIX)
-                .identifier(65)
+                .identifier(23)
                 .build();
 
         public static final LogRecord ACCESS_LOG_ENTRY = LogRecordModel.builder()
                 .template("%s")
                 .prefix(PREFIX)
-                .identifier(66)
+                .identifier(24)
                 .build();
     }
 
     /**
-     * WARN level log messages (100-199).
+     * WARN level log messages (100-104).
      */
     @UtilityClass
     public static final class WARN {
-
-        // Health Check Warnings (100-110)
 
         public static final LogRecord ERROR_CHECKING_JWKS_LOADER = LogRecordModel.builder()
                 .template("Error checking JWKS loader for issuer %s: %s")
@@ -228,44 +207,42 @@ public final class OAuthSheriffQuarkusLogMessages {
                 .identifier(100)
                 .build();
 
-        // Bearer Token Warnings (121-130)
-
         public static final LogRecord BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED = LogRecordModel.builder()
                 .template("Bearer token does not meet requirements. Missing scopes: %s, Missing roles: %s, Missing groups: %s")
                 .prefix(PREFIX)
-                .identifier(128)
+                .identifier(101)
                 .build();
 
-        // Metrics Warnings (133-140)
+        public static final LogRecord BEARER_TOKEN_VALIDATION_FAILED = LogRecordModel.builder()
+                .template("Bearer token validation failed: %s (eventType=%s)")
+                .prefix(PREFIX)
+                .identifier(102)
+                .build();
 
         public static final LogRecord NO_MICROMETER_COUNTER_FOUND = LogRecordModel.builder()
                 .template("No Micrometer counter found for event type %s, delta %s lost")
                 .prefix(PREFIX)
-                .identifier(133)
+                .identifier(103)
                 .build();
-
-        // JWE Warnings (141-145)
 
         public static final LogRecord JWE_KEYSTORE_MISSING_ALIAS = LogRecordModel.builder()
                 .template("JWE keystore configured at %s but no key-alias specified — skipping keystore key loading")
                 .prefix(PREFIX)
-                .identifier(141)
+                .identifier(104)
                 .build();
 
     }
 
     /**
-     * ERROR level log messages (200-299).
+     * ERROR level log messages (200).
      */
     @UtilityClass
     public static final class ERROR {
 
-        // Infrastructure Errors (200-210)
-
         public static final LogRecord VERTX_REQUEST_CONTEXT_UNAVAILABLE = LogRecordModel.builder()
                 .template("Vertx HttpServerRequest context is unavailable - no active request context found")
                 .prefix(PREFIX)
-                .identifier(201)
+                .identifier(200)
                 .build();
     }
 }

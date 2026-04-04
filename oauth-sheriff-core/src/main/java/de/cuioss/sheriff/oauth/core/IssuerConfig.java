@@ -79,12 +79,18 @@ import java.util.*;
  *
  * @since 1.0
  */
-@Getter
 @EqualsAndHashCode
 @ToString
 public class IssuerConfig implements LoadingStatusProvider {
 
     private static final CuiLogger LOGGER = new CuiLogger(IssuerConfig.class);
+
+    /**
+     * Default clock skew tolerance in seconds.
+     *
+     * @see #clockSkewSeconds
+     */
+    public static final int DEFAULT_CLOCK_SKEW_SECONDS = 60;
 
     /**
      * Whether this issuer configuration is enabled.
@@ -96,6 +102,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * <p>
      * Default value is {@code true}.
      */
+    @Getter
     boolean enabled;
 
     /**
@@ -109,6 +116,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * This identifier must match the "iss" claim in validated tokens.
      * </p>
      */
+    @Getter
     @Nullable
     String issuerIdentifier;
 
@@ -120,6 +128,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * Either this must be non-empty or {@link #audienceValidationDisabled} must be set to
      * {@code true}. An empty audience set with validation enabled will fail at build time.
      */
+    @Getter
     Set<String> expectedAudience;
 
     /**
@@ -130,6 +139,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * <p>
      * Default value is {@code false} (audience validation is required).
      */
+    @Getter
     boolean audienceValidationDisabled;
 
     /**
@@ -137,6 +147,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * These values are matched against the "azp" or "client_id" claim in the token.
      * If the token's client ID claim matches any of these values, it is considered valid.
      */
+    @Getter
     Set<String> expectedClientId;
 
     /**
@@ -161,6 +172,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * @see de.cuioss.sheriff.oauth.core.domain.claim.ClaimName#SUBJECT
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.2">RFC 7519 - 4.1.2. "sub" (Subject) Claim</a>
      */
+    @Getter
     boolean claimSubOptional;
 
     /**
@@ -190,6 +202,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * @see de.cuioss.sheriff.oauth.core.domain.claim.ClaimName#AUDIENCE
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-4">RFC 9068 - 4. JWT Access Token Claims</a>
      */
+    @Getter
     boolean accessTokenAudienceOptional;
 
     // Design Decision: expectedTokenType defaults to null (no token type validation).
@@ -227,6 +240,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      *
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-2.1">RFC 9068 - 2.1. Header</a>
      */
+    @Getter
     @Nullable
     String expectedTokenType;
 
@@ -244,6 +258,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      *
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc9449">RFC 9449</a>
      */
+    @Getter
     @Nullable
     DpopConfig dpopConfig;
 
@@ -260,6 +275,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * @see de.cuioss.sheriff.oauth.core.domain.context.ValidationContext
      * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.clock.skew</a>
      */
+    @Getter
     int clockSkewSeconds;
 
     /**
@@ -276,15 +292,18 @@ public class IssuerConfig implements LoadingStatusProvider {
      * @see de.cuioss.sheriff.oauth.core.domain.context.ValidationContext
      * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.token.age</a>
      */
+    @Getter
     @Nullable
     Integer maxTokenAgeSeconds;
 
+    @Getter
     SignatureAlgorithmPreferences algorithmPreferences;
 
     /**
      * Custom claim mappers that take precedence over the default ones.
      * The key is the claim name, and the value is the mapper to use for that claim.
      */
+    @Getter
     Map<String, ClaimMapper> claimMappers;
 
     /**
@@ -292,6 +311,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * This can be null initially and will be initialized
      * with the SecurityEventCounter by the TokenValidator.
      */
+    @Getter
     @Nullable
     JwksLoader jwksLoader;
 
@@ -398,7 +418,7 @@ public class IssuerConfig implements LoadingStatusProvider {
         private boolean accessTokenAudienceOptional = false;
         private @Nullable String expectedTokenType;
         private @Nullable DpopConfig dpopConfig;
-        private int clockSkewSeconds = 60;
+        private int clockSkewSeconds = DEFAULT_CLOCK_SKEW_SECONDS;
         private @Nullable Integer maxTokenAgeSeconds;
         private SignatureAlgorithmPreferences algorithmPreferences = new SignatureAlgorithmPreferences();
         private @Nullable Map<String, ClaimMapper> claimMappers;
