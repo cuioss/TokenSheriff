@@ -132,6 +132,7 @@ class BearerTokenResponseFactoryTest {
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
                     .requiredScopes(requiredScopes)
+                    .missingScopes(requiredScopes)
                     .requiredRoles(Collections.emptySet())
                     .requiredGroups(Collections.emptySet())
                     .build();
@@ -161,6 +162,7 @@ class BearerTokenResponseFactoryTest {
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
                     .requiredScopes(Collections.emptySet())
                     .requiredRoles(requiredRoles)
+                    .missingRoles(requiredRoles)
                     .requiredGroups(Collections.emptySet())
                     .build();
 
@@ -190,6 +192,7 @@ class BearerTokenResponseFactoryTest {
                     .requiredScopes(Collections.emptySet())
                     .requiredRoles(Collections.emptySet())
                     .requiredGroups(requiredGroups)
+                    .missingGroups(requiredGroups)
                     .build();
 
             Response response = BearerTokenResponseFactory.createResponse(result);
@@ -215,7 +218,9 @@ class BearerTokenResponseFactoryTest {
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
                     .requiredScopes(Collections.emptySet())
                     .requiredRoles(requiredRoles)
+                    .missingRoles(requiredRoles)
                     .requiredGroups(requiredGroups)
+                    .missingGroups(requiredGroups)
                     .build();
 
             Response response = BearerTokenResponseFactory.createResponse(result);
@@ -237,8 +242,11 @@ class BearerTokenResponseFactoryTest {
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
                     .requiredScopes(requiredScopes)
+                    .missingScopes(requiredScopes)
                     .requiredRoles(requiredRoles)
+                    .missingRoles(requiredRoles)
                     .requiredGroups(requiredGroups)
+                    .missingGroups(requiredGroups)
                     .build();
 
             Response response = BearerTokenResponseFactory.createResponse(result);
@@ -263,6 +271,7 @@ class BearerTokenResponseFactoryTest {
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
                     .requiredScopes(requiredScopes)
+                    .missingScopes(requiredScopes)
                     .requiredRoles(Collections.emptySet())
                     .requiredGroups(Collections.emptySet())
                     .build();
@@ -283,6 +292,7 @@ class BearerTokenResponseFactoryTest {
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
                     .requiredScopes(Collections.emptySet())
                     .requiredRoles(requiredRoles)
+                    .missingRoles(requiredRoles)
                     .requiredGroups(Collections.emptySet())
                     .build();
 
@@ -304,6 +314,7 @@ class BearerTokenResponseFactoryTest {
                     "constraintViolation", BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
                     .requiredScopes(Set.of("read"))
+                    .missingScopes(Set.of("read"))
                     .requiredRoles(Set.of())
                     .requiredGroups(Set.of())
                     .build()

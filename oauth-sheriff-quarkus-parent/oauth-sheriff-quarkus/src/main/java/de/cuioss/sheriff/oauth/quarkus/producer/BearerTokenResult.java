@@ -78,23 +78,44 @@ public class BearerTokenResult implements Serializable {
     BearerTokenStatus status;
 
     /**
-     * Gets the required scopes for authorization.
+     * The full set of scopes required by the {@link BearerToken} annotation.
+     * Always populated for non-FULLY_VERIFIED statuses.
      */
     @Builder.Default
     Set<String> requiredScopes = Set.of();
 
     /**
-     * Gets the required roles for authorization.
+     * The full set of roles required by the {@link BearerToken} annotation.
+     * Always populated for non-FULLY_VERIFIED statuses.
      */
     @Builder.Default
     Set<String> requiredRoles = Set.of();
 
     /**
-     * -- GETTER --
-     * Gets the required groups for authorization.
+     * The full set of groups required by the {@link BearerToken} annotation.
+     * Always populated for non-FULLY_VERIFIED statuses.
      */
     @Builder.Default
     Set<String> requiredGroups = Set.of();
+
+    /**
+     * The scopes that the token is missing. Only populated for {@link BearerTokenStatus#CONSTRAINT_VIOLATION}.
+     * Empty for all other statuses (where no validation occurred, so the missing set is unknown).
+     */
+    @Builder.Default
+    Set<String> missingScopes = Set.of();
+
+    /**
+     * The roles that the token is missing. Only populated for {@link BearerTokenStatus#CONSTRAINT_VIOLATION}.
+     */
+    @Builder.Default
+    Set<String> missingRoles = Set.of();
+
+    /**
+     * The groups that the token is missing. Only populated for {@link BearerTokenStatus#CONSTRAINT_VIOLATION}.
+     */
+    @Builder.Default
+    Set<String> missingGroups = Set.of();
 
     AccessTokenContent accessTokenContent;
 

@@ -152,11 +152,12 @@ public class BearerTokenResponseFactory {
      */
     private static Response createConstraintViolationResponse(BearerTokenResult result) {
         // Scope violation → 401 (actionable step-up per RFC 9470), role/group → 403 (terminal)
-        boolean hasScopeViolation = !result.getRequiredScopes().isEmpty();
+        // Use getMissingScopes() for the WWW-Authenticate header — RFC 6750 requires the missing scopes
+        boolean hasScopeViolation = !result.getMissingScopes().isEmpty();
 
         if (hasScopeViolation) {
             // OAuth Step-Up Authentication Challenge for insufficient scope (RFC 9470)
-            String wwwAuthenticate = buildInsufficientScopeHeader(result.getRequiredScopes());
+            String wwwAuthenticate = buildInsufficientScopeHeader(result.getMissingScopes());
             return Response.status(Response.Status.UNAUTHORIZED)
                     .type(MediaType.APPLICATION_JSON)
                     .header(HEADER_WWW_AUTHENTICATE, wwwAuthenticate)
@@ -166,7 +167,7 @@ public class BearerTokenResponseFactory {
                     .build();
         } else {
             // Role/group violation - 403 Forbidden with OAuth-style error structure
-            String wwwAuthenticate = buildInsufficientPrivilegesHeader(result.getRequiredRoles(), result.getRequiredGroups());
+            String wwwAuthenticate = buildInsufficientPrivilegesHeader(result.getMissingRoles(), result.getMissingGroups());
             return Response.status(Response.Status.FORBIDDEN)
                     .type(MediaType.APPLICATION_JSON)
                     .header(HEADER_WWW_AUTHENTICATE, wwwAuthenticate)

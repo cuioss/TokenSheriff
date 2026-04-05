@@ -238,6 +238,7 @@ class BearerTokenInterceptorTest {
                 .andReturn(BearerTokenResult.builder()
                         .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
                         .requiredScopes(Set.of("read"))
+                        .missingScopes(Set.of("read"))
                         .requiredRoles(Set.of())
                         .requiredGroups(Set.of())
                         .build());
@@ -260,6 +261,7 @@ class BearerTokenInterceptorTest {
                         .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
                         .requiredScopes(Set.of())
                         .requiredRoles(Set.of("user"))
+                        .missingRoles(Set.of("user"))
                         .requiredGroups(Set.of())
                         .build());
         replay(invocationContext, bearerTokenProducer);
