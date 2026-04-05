@@ -233,6 +233,7 @@ public class TokenValidator implements Closeable {
         // Initialize immutable map of TokenSignatureValidator instances for each issuer
         // This eliminates the performance bottleneck of creating new instances on every validation
         Map<String, TokenSignatureValidator> signatureValidatorsMap = new HashMap<>();
+        Map<String, SignatureTemplateManager> signatureTemplateManagers = new HashMap<>();
         Map<String, TokenBuilder> tokenBuildersMap = new HashMap<>();
         Map<String, TokenClaimValidator> claimValidatorsMap = new HashMap<>();
         Map<String, TokenHeaderValidator> headerValidatorsMap = new HashMap<>();
@@ -240,11 +241,15 @@ public class TokenValidator implements Closeable {
         for (IssuerConfig issuerConfig : issuerConfigs) {
             String issuerIdentifier = issuerConfig.getIssuerIdentifier();
 
+            // Create one shared SignatureTemplateManager per issuer (reused by signature + DPoP validators)
+            SignatureTemplateManager signatureTemplateManager = new SignatureTemplateManager(issuerConfig.getAlgorithmPreferences());
+            signatureTemplateManagers.put(issuerIdentifier, signatureTemplateManager);
+
             // Initialize signature validator
             TokenSignatureValidator signatureValidator = new TokenSignatureValidator(
                     issuerConfig.getJwksLoader(),
                     this.securityEventCounter,
-                    issuerConfig.getAlgorithmPreferences()
+                    signatureTemplateManager
             );
             signatureValidatorsMap.put(issuerIdentifier, signatureValidator);
             LOGGER.debug("Pre-created TokenSignatureValidator for issuer: %s", issuerIdentifier);
@@ -288,7 +293,9 @@ public class TokenValidator implements Closeable {
         for (IssuerConfig issuerConfig : issuerConfigs) {
             if (issuerConfig.getDpopConfig() != null) {
                 DpopProofValidator dpopValidator = new DpopProofValidator(
-                        issuerConfig, this.securityEventCounter, this.dpopReplayProtection);
+                        issuerConfig, this.securityEventCounter, this.dpopReplayProtection,
+                        signatureTemplateManagers.get(issuerConfig.getIssuerIdentifier()),
+                        parserConfig.getDslJson());
                 dpopValidatorsMap.put(issuerConfig.getIssuerIdentifier(), dpopValidator);
                 LOGGER.debug("Pre-created DpopProofValidator for issuer: %s", issuerConfig.getIssuerIdentifier());
             }

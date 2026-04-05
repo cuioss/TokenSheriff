@@ -75,7 +75,7 @@ public class KeycloakTokenRepository implements TokenProvider {
         this.tokenPool = new ArrayList<>(config.getTokenPoolSize());
         this.tokenIndex = new AtomicInteger(0);
 
-        this.httpClient = HttpClientFactory.getInsecureClient();
+        this.httpClient = HttpClientFactory.getClient(config.isVerifySsl());
 
         // Initialize token pool
         initializeTokenPool();

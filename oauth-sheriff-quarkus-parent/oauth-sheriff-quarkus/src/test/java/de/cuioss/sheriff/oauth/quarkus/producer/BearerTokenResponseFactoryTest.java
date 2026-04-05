@@ -128,12 +128,13 @@ class BearerTokenResponseFactoryTest {
         @Test
         @DisplayName("should return 401 Unauthorized for scope violation with insufficient_scope error")
         void shouldReturn401ForScopeViolation() {
-            var missingScopes = Set.of("read", "write");
+            var requiredScopes = Set.of("read", "write");
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(missingScopes)
-                    .missingRoles(Collections.emptySet())
-                    .missingGroups(Collections.emptySet())
+                    .requiredScopes(requiredScopes)
+                    .missingScopes(requiredScopes)
+                    .requiredRoles(Collections.emptySet())
+                    .requiredGroups(Collections.emptySet())
                     .build();
 
             Response response = BearerTokenResponseFactory.createResponse(result);
@@ -156,12 +157,13 @@ class BearerTokenResponseFactoryTest {
         @Test
         @DisplayName("should return 403 Forbidden for role violation with insufficient_privileges error")
         void shouldReturn403ForRoleViolation() {
-            var missingRoles = Set.of("admin", "manager");
+            var requiredRoles = Set.of("admin", "manager");
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Collections.emptySet())
-                    .missingRoles(missingRoles)
-                    .missingGroups(Collections.emptySet())
+                    .requiredScopes(Collections.emptySet())
+                    .requiredRoles(requiredRoles)
+                    .missingRoles(requiredRoles)
+                    .requiredGroups(Collections.emptySet())
                     .build();
 
             Response response = BearerTokenResponseFactory.createResponse(result);
@@ -184,12 +186,13 @@ class BearerTokenResponseFactoryTest {
         @Test
         @DisplayName("should return 403 Forbidden for group violation with insufficient_privileges error")
         void shouldReturn403ForGroupViolation() {
-            var missingGroups = Set.of("developers", "testers");
+            var requiredGroups = Set.of("developers", "testers");
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Collections.emptySet())
-                    .missingRoles(Collections.emptySet())
-                    .missingGroups(missingGroups)
+                    .requiredScopes(Collections.emptySet())
+                    .requiredRoles(Collections.emptySet())
+                    .requiredGroups(requiredGroups)
+                    .missingGroups(requiredGroups)
                     .build();
 
             Response response = BearerTokenResponseFactory.createResponse(result);
@@ -209,13 +212,15 @@ class BearerTokenResponseFactoryTest {
         @Test
         @DisplayName("should return 403 Forbidden for combined role and group violation")
         void shouldReturn403ForCombinedRoleGroupViolation() {
-            var missingRoles = Set.of("admin");
-            var missingGroups = Set.of("developers");
+            var requiredRoles = Set.of("admin");
+            var requiredGroups = Set.of("developers");
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Collections.emptySet())
-                    .missingRoles(missingRoles)
-                    .missingGroups(missingGroups)
+                    .requiredScopes(Collections.emptySet())
+                    .requiredRoles(requiredRoles)
+                    .missingRoles(requiredRoles)
+                    .requiredGroups(requiredGroups)
+                    .missingGroups(requiredGroups)
                     .build();
 
             Response response = BearerTokenResponseFactory.createResponse(result);
@@ -231,14 +236,17 @@ class BearerTokenResponseFactoryTest {
         @Test
         @DisplayName("should prioritize scope violation over role/group violation")
         void shouldPrioritizeScopeViolation() {
-            var missingScopes = Set.of("read");
-            var missingRoles = Set.of("admin");
-            var missingGroups = Set.of("developers");
+            var requiredScopes = Set.of("read");
+            var requiredRoles = Set.of("admin");
+            var requiredGroups = Set.of("developers");
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(missingScopes)
-                    .missingRoles(missingRoles)
-                    .missingGroups(missingGroups)
+                    .requiredScopes(requiredScopes)
+                    .missingScopes(requiredScopes)
+                    .requiredRoles(requiredRoles)
+                    .missingRoles(requiredRoles)
+                    .requiredGroups(requiredGroups)
+                    .missingGroups(requiredGroups)
                     .build();
 
             Response response = BearerTokenResponseFactory.createResponse(result);
@@ -259,12 +267,13 @@ class BearerTokenResponseFactoryTest {
         @Test
         @DisplayName("should escape quotes in scope names")
         void shouldEscapeQuotesInScopeNames() {
-            var missingScopes = Set.of("read:\"special\"", "write");
+            var requiredScopes = Set.of("read:\"special\"", "write");
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(missingScopes)
-                    .missingRoles(Collections.emptySet())
-                    .missingGroups(Collections.emptySet())
+                    .requiredScopes(requiredScopes)
+                    .missingScopes(requiredScopes)
+                    .requiredRoles(Collections.emptySet())
+                    .requiredGroups(Collections.emptySet())
                     .build();
 
             String wwwAuthenticate = BearerTokenResponseFactory.createResponse(result).getHeaderString("WWW-Authenticate");
@@ -278,12 +287,13 @@ class BearerTokenResponseFactoryTest {
         @Test
         @DisplayName("should escape quotes in role names")
         void shouldEscapeQuotesInRoleNames() {
-            var missingRoles = Set.of("admin:\"special\"");
+            var requiredRoles = Set.of("admin:\"special\"");
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Collections.emptySet())
-                    .missingRoles(missingRoles)
-                    .missingGroups(Collections.emptySet())
+                    .requiredScopes(Collections.emptySet())
+                    .requiredRoles(requiredRoles)
+                    .missingRoles(requiredRoles)
+                    .requiredGroups(Collections.emptySet())
                     .build();
 
             String wwwAuthenticate = BearerTokenResponseFactory.createResponse(result).getHeaderString("WWW-Authenticate");
@@ -303,9 +313,10 @@ class BearerTokenResponseFactoryTest {
                     "parsingError", BearerTokenResult.parsingError(new TokenValidationException(SecurityEventCounter.EventType.INVALID_JWT_FORMAT, "test"), Set.of(), Set.of(), Set.of()),
                     "constraintViolation", BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .requiredScopes(Set.of("read"))
                     .missingScopes(Set.of("read"))
-                    .missingRoles(Set.of())
-                    .missingGroups(Set.of())
+                    .requiredRoles(Set.of())
+                    .requiredGroups(Set.of())
                     .build()
             );
 

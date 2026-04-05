@@ -136,24 +136,15 @@ public class IdTokenValidationPipeline {
         IssuerConfig issuerConfig = issuerConfigCache.resolveConfig(issuerString);
 
         // 4. Validate header
-        TokenHeaderValidator headerValidator = headerValidators.get(issuerConfig.getIssuerIdentifier());
-        if (headerValidator == null) {
-            throw new IllegalStateException("No header validator found for issuer: " + issuerConfig.getIssuerIdentifier());
-        }
-        headerValidator.validate(decodedJwt, request);
+        ValidatorLookup.getOrThrow(headerValidators, issuerConfig.getIssuerIdentifier(), "header validator")
+                .validate(decodedJwt, request);
 
         // 5. Validate signature
-        TokenSignatureValidator signatureValidator = signatureValidators.get(issuerConfig.getIssuerIdentifier());
-        if (signatureValidator == null) {
-            throw new IllegalStateException("No signature validator found for issuer: " + issuerConfig.getIssuerIdentifier());
-        }
-        signatureValidator.validateSignature(decodedJwt);
+        ValidatorLookup.getOrThrow(signatureValidators, issuerConfig.getIssuerIdentifier(), "signature validator")
+                .validateSignature(decodedJwt);
 
         // 6. Build token
-        TokenBuilder tokenBuilder = tokenBuilders.get(issuerConfig.getIssuerIdentifier());
-        if (tokenBuilder == null) {
-            throw new IllegalStateException("No token builder found for issuer: " + issuerConfig.getIssuerIdentifier());
-        }
+        TokenBuilder tokenBuilder = ValidatorLookup.getOrThrow(tokenBuilders, issuerConfig.getIssuerIdentifier(), "token builder");
         IdTokenContent token = tokenBuilder.createIdToken(decodedJwt)
                 .orElseThrow(() -> {
                     LOGGER.debug("ID token building failed");
@@ -169,11 +160,8 @@ public class IdTokenValidationPipeline {
         ValidationContext context = new ValidationContext(
                 issuerConfig.getClockSkewSeconds(),
                 issuerConfig.getMaxTokenAgeSeconds());
-        TokenClaimValidator claimValidator = claimValidators.get(issuerConfig.getIssuerIdentifier());
-        if (claimValidator == null) {
-            throw new IllegalStateException("No claim validator found for issuer: " + issuerConfig.getIssuerIdentifier());
-        }
-        IdTokenContent validatedToken = (IdTokenContent) claimValidator.validate(token, context);
+        IdTokenContent validatedToken = (IdTokenContent) ValidatorLookup.getOrThrow(claimValidators, issuerConfig.getIssuerIdentifier(), "claim validator")
+                .validate(token, context);
 
         LOGGER.debug("Successfully validated ID token");
 

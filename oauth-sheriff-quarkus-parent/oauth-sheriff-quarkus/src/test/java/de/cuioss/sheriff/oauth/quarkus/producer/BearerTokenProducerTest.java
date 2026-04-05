@@ -126,6 +126,7 @@ class BearerTokenProducerTest {
 
         assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
         assertFalse(result.getAccessTokenContent().isPresent());
+        assertEquals(requiredScopes, result.getRequiredScopes());
         assertEquals(Set.of("admin"), result.getMissingScopes());
         assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
                 WARN.BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED.resolveIdentifierString());
@@ -151,6 +152,7 @@ class BearerTokenProducerTest {
 
         assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
         assertFalse(result.getAccessTokenContent().isPresent());
+        assertEquals(requiredRoles, result.getRequiredRoles());
         assertEquals(Set.of("admin"), result.getMissingRoles());
         assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
                 WARN.BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED.resolveIdentifierString());
@@ -176,6 +178,7 @@ class BearerTokenProducerTest {
 
         assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
         assertFalse(result.getAccessTokenContent().isPresent());
+        assertEquals(requiredGroups, result.getRequiredGroups());
         assertEquals(Set.of("managers"), result.getMissingGroups());
         assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
                 WARN.BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED.resolveIdentifierString());

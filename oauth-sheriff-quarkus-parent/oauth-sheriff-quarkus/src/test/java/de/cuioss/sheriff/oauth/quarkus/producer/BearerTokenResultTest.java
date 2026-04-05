@@ -55,9 +55,9 @@ class BearerTokenResultTest {
             assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus());
             assertTrue(result.getAccessTokenContent().isPresent());
             assertEquals(tokenContent, result.getAccessTokenContent().get());
-            assertTrue(result.getMissingScopes().isEmpty());
-            assertTrue(result.getMissingRoles().isEmpty());
-            assertTrue(result.getMissingGroups().isEmpty());
+            assertTrue(result.getRequiredScopes().isEmpty());
+            assertTrue(result.getRequiredRoles().isEmpty());
+            assertTrue(result.getRequiredGroups().isEmpty());
             assertFalse(result.getErrorEventType().isPresent());
             assertFalse(result.getErrorMessage().isPresent());
         }
@@ -74,9 +74,9 @@ class BearerTokenResultTest {
 
             assertEquals(BearerTokenStatus.PARSING_ERROR, result.getStatus());
             assertFalse(result.getAccessTokenContent().isPresent());
-            assertEquals(requiredScopes, result.getMissingScopes());
-            assertEquals(requiredRoles, result.getMissingRoles());
-            assertEquals(requiredGroups, result.getMissingGroups());
+            assertEquals(requiredScopes, result.getRequiredScopes());
+            assertEquals(requiredRoles, result.getRequiredRoles());
+            assertEquals(requiredGroups, result.getRequiredGroups());
             assertTrue(result.getErrorEventType().isPresent());
             assertEquals(EventType.INVALID_JWT_FORMAT, result.getErrorEventType().get());
             assertTrue(result.getErrorMessage().isPresent());
@@ -86,22 +86,22 @@ class BearerTokenResultTest {
         @Test
         @DisplayName("builder should create CONSTRAINT_VIOLATION result with missing attributes")
         void constraintViolationShouldCreateConstraintViolationResult() {
-            var missingScopes = Set.of("write");
-            var missingRoles = Set.of("admin");
-            var missingGroups = Set.of("managers");
+            var requiredScopes = Set.of("write");
+            var requiredRoles = Set.of("admin");
+            var requiredGroups = Set.of("managers");
 
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(missingScopes)
-                    .missingRoles(missingRoles)
-                    .missingGroups(missingGroups)
+                    .requiredScopes(requiredScopes)
+                    .requiredRoles(requiredRoles)
+                    .requiredGroups(requiredGroups)
                     .build();
 
             assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
             assertFalse(result.getAccessTokenContent().isPresent());
-            assertEquals(missingScopes, result.getMissingScopes());
-            assertEquals(missingRoles, result.getMissingRoles());
-            assertEquals(missingGroups, result.getMissingGroups());
+            assertEquals(requiredScopes, result.getRequiredScopes());
+            assertEquals(requiredRoles, result.getRequiredRoles());
+            assertEquals(requiredGroups, result.getRequiredGroups());
             assertFalse(result.getErrorEventType().isPresent());
             assertFalse(result.getErrorMessage().isPresent());
         }
@@ -117,9 +117,9 @@ class BearerTokenResultTest {
 
             assertEquals(BearerTokenStatus.NO_TOKEN_GIVEN, result.getStatus());
             assertFalse(result.getAccessTokenContent().isPresent());
-            assertEquals(requiredScopes, result.getMissingScopes());
-            assertEquals(requiredRoles, result.getMissingRoles());
-            assertEquals(requiredGroups, result.getMissingGroups());
+            assertEquals(requiredScopes, result.getRequiredScopes());
+            assertEquals(requiredRoles, result.getRequiredRoles());
+            assertEquals(requiredGroups, result.getRequiredGroups());
             assertFalse(result.getErrorEventType().isPresent());
             assertFalse(result.getErrorMessage().isPresent());
         }
@@ -161,9 +161,9 @@ class BearerTokenResultTest {
 
             var failureResult = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Set.of("scope"))
-                    .missingRoles(Set.of())
-                    .missingGroups(Set.of())
+                    .requiredScopes(Set.of("scope"))
+                    .requiredRoles(Set.of())
+                    .requiredGroups(Set.of())
                     .build();
             assertFalse(failureResult.isSuccessfullyAuthorized());
         }
@@ -179,9 +179,9 @@ class BearerTokenResultTest {
 
             var failureResult = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Set.of("scope"))
-                    .missingRoles(Set.of())
-                    .missingGroups(Set.of())
+                    .requiredScopes(Set.of("scope"))
+                    .requiredRoles(Set.of())
+                    .requiredGroups(Set.of())
                     .build();
             assertTrue(failureResult.isNotSuccessfullyAuthorized());
         }
@@ -205,24 +205,24 @@ class BearerTokenResultTest {
         @DisplayName("builder() should allow direct construction")
         void builderShouldAllowDirectConstruction() {
             var tokenContent = createTestToken();
-            var missingScopes = Set.of("write");
-            var missingRoles = Set.of("admin");
-            var missingGroups = Set.of("managers");
+            var requiredScopes = Set.of("write");
+            var requiredRoles = Set.of("admin");
+            var requiredGroups = Set.of("managers");
 
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
                     .accessTokenContent(tokenContent)
-                    .missingScopes(missingScopes)
-                    .missingRoles(missingRoles)
-                    .missingGroups(missingGroups)
+                    .requiredScopes(requiredScopes)
+                    .requiredRoles(requiredRoles)
+                    .requiredGroups(requiredGroups)
                     .build();
 
             assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
             assertTrue(result.getAccessTokenContent().isPresent());
             assertEquals(tokenContent, result.getAccessTokenContent().get());
-            assertEquals(missingScopes, result.getMissingScopes());
-            assertEquals(missingRoles, result.getMissingRoles());
-            assertEquals(missingGroups, result.getMissingGroups());
+            assertEquals(requiredScopes, result.getRequiredScopes());
+            assertEquals(requiredRoles, result.getRequiredRoles());
+            assertEquals(requiredGroups, result.getRequiredGroups());
         }
 
         @Test
@@ -233,9 +233,9 @@ class BearerTokenResultTest {
                     .build();
 
             assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus());
-            assertTrue(result.getMissingScopes().isEmpty());
-            assertTrue(result.getMissingRoles().isEmpty());
-            assertTrue(result.getMissingGroups().isEmpty());
+            assertTrue(result.getRequiredScopes().isEmpty());
+            assertTrue(result.getRequiredRoles().isEmpty());
+            assertTrue(result.getRequiredGroups().isEmpty());
         }
 
         @Test
@@ -265,15 +265,15 @@ class BearerTokenResultTest {
             var emptySet = Collections.<String>emptySet();
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(emptySet)
-                    .missingRoles(emptySet)
-                    .missingGroups(emptySet)
+                    .requiredScopes(emptySet)
+                    .requiredRoles(emptySet)
+                    .requiredGroups(emptySet)
                     .build();
 
             assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
-            assertTrue(result.getMissingScopes().isEmpty());
-            assertTrue(result.getMissingRoles().isEmpty());
-            assertTrue(result.getMissingGroups().isEmpty());
+            assertTrue(result.getRequiredScopes().isEmpty());
+            assertTrue(result.getRequiredRoles().isEmpty());
+            assertTrue(result.getRequiredGroups().isEmpty());
         }
     }
 
@@ -286,15 +286,15 @@ class BearerTokenResultTest {
         void resultsWithSameDataShouldBeEqual() {
             var result1 = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Set.of("scope"))
-                    .missingRoles(Set.of("role"))
-                    .missingGroups(Set.of("group"))
+                    .requiredScopes(Set.of("scope"))
+                    .requiredRoles(Set.of("role"))
+                    .requiredGroups(Set.of("group"))
                     .build();
             var result2 = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Set.of("scope"))
-                    .missingRoles(Set.of("role"))
-                    .missingGroups(Set.of("group"))
+                    .requiredScopes(Set.of("scope"))
+                    .requiredRoles(Set.of("role"))
+                    .requiredGroups(Set.of("group"))
                     .build();
 
             assertEquals(result1, result2);
@@ -306,15 +306,15 @@ class BearerTokenResultTest {
         void resultsWithDifferentDataShouldNotBeEqual() {
             var result1 = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Set.of("scope1"))
-                    .missingRoles(Set.of())
-                    .missingGroups(Set.of())
+                    .requiredScopes(Set.of("scope1"))
+                    .requiredRoles(Set.of())
+                    .requiredGroups(Set.of())
                     .build();
             var result2 = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Set.of("scope2"))
-                    .missingRoles(Set.of())
-                    .missingGroups(Set.of())
+                    .requiredScopes(Set.of("scope2"))
+                    .requiredRoles(Set.of())
+                    .requiredGroups(Set.of())
                     .build();
 
             assertNotEquals(result1, result2);
@@ -325,9 +325,9 @@ class BearerTokenResultTest {
         void toStringShouldProvideMeaningfulOutput() {
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Set.of("scope"))
-                    .missingRoles(Set.of("role"))
-                    .missingGroups(Set.of("group"))
+                    .requiredScopes(Set.of("scope"))
+                    .requiredRoles(Set.of("role"))
+                    .requiredGroups(Set.of("group"))
                     .build();
             var toString = result.toString();
 
@@ -362,9 +362,9 @@ class BearerTokenResultTest {
         void shouldDelegateToResponseFactoryForFailedAuthorization() {
             var result = BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Set.of("read"))
-                    .missingRoles(Set.of())
-                    .missingGroups(Set.of())
+                    .requiredScopes(Set.of("read"))
+                    .requiredRoles(Set.of())
+                    .requiredGroups(Set.of())
                     .build();
 
             var response = result.createErrorResponse();
@@ -391,9 +391,9 @@ class BearerTokenResultTest {
                     new TokenValidationException(EventType.INVALID_JWT_FORMAT, "test"), Set.of(), Set.of(), Set.of());
             case CONSTRAINT_VIOLATION -> BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                    .missingScopes(Set.of())
-                    .missingRoles(Set.of())
-                    .missingGroups(Set.of())
+                    .requiredScopes(Set.of())
+                    .requiredRoles(Set.of())
+                    .requiredGroups(Set.of())
                     .build();
             case INVALID_REQUEST -> BearerTokenResult.invalidRequest("Invalid token format", Set.of(), Set.of(), Set.of());
         };

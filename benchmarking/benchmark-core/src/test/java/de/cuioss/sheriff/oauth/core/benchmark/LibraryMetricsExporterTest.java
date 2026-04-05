@@ -68,7 +68,7 @@ class LibraryMetricsExporterTest {
         monitor.recordMeasurement(MeasurementType.HEADER_VALIDATION, headerDuration);
 
         // When
-        LibraryMetricsExporter.exportMetrics(monitor);
+        LibraryMetricsExporter.exportMetrics("test-benchmark", monitor);
 
         // Then - metrics are exported to hardcoded target/benchmark-results
         Path resultsDir = Path.of("target/benchmark-results");
@@ -124,7 +124,7 @@ class LibraryMetricsExporterTest {
         monitor.recordMeasurement(MeasurementType.SIGNATURE_VALIDATION, 13000); // 13 microseconds
 
         // When
-        LibraryMetricsExporter.exportMetrics(monitor);
+        LibraryMetricsExporter.exportMetrics("test-benchmark", monitor);
 
         // Then - metrics are exported to hardcoded target/benchmark-results
         Path jsonFile = Path.of("target/benchmark-results/jwt-validation-metrics.json");

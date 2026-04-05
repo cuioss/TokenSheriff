@@ -23,6 +23,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Collection;
 
+import static de.cuioss.sheriff.oauth.integration.TestConstants.AUTHORIZATION;
+import static de.cuioss.sheriff.oauth.integration.TestConstants.BEARER_PREFIX;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.*;
@@ -37,8 +39,6 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class BearerAuthSpecIT extends BaseIntegrationTest {
 
-    private static final String AUTHORIZATION = "Authorization";
-    private static final String BEARER_PREFIX = "Bearer ";
 
     // === Bearer Token Producer Tests ===
 

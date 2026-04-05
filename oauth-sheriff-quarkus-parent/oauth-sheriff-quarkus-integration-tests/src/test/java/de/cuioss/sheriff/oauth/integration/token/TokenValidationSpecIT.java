@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
+import static de.cuioss.sheriff.oauth.integration.TestConstants.*;
 import static io.restassured.RestAssured.given;
 import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.equalTo;
@@ -46,14 +47,9 @@ class TokenValidationSpecIT extends BaseIntegrationTest {
 
     private static final CuiLogger LOGGER = new CuiLogger(TokenValidationSpecIT.class);
 
-    static final String AUTHORIZATION = "Authorization";
-    static final String CONTENT_TYPE_JSON = "application/json";
-    static final String BEARER_PREFIX = "Bearer ";
-    static final String JWT_VALIDATE_PATH = "/jwt/validate";
     static final String JWT_VALIDATE_ID_TOKEN_PATH = "/jwt/validate/id-token";
     static final String JWT_VALIDATE_REFRESH_TOKEN_PATH = "/jwt/validate/refresh-token";
     static final String ACCESS_TOKEN_VALID_MESSAGE = "Access token is valid";
-    static final String TOKEN_FIELD_NAME = "token";
 
     @ParameterizedTest(name = "[{0}]")
     @MethodSource("de.cuioss.sheriff.oauth.integration.TestProviders#jwtAccessTokenProviders")
@@ -101,10 +97,8 @@ class TokenValidationSpecIT extends BaseIntegrationTest {
     void validateRefreshToken(TestRealm realm) {
         var tokenResponse = realm.obtainValidToken();
 
-        if (tokenResponse.refreshToken() == null) {
-            // Provider doesn't issue refresh tokens without offline_access — not a failure
-            return;
-        }
+        Assumptions.assumeTrue(tokenResponse.refreshToken() != null,
+                realm + " did not issue a refresh token");
 
         given()
                 .contentType(CONTENT_TYPE_JSON)

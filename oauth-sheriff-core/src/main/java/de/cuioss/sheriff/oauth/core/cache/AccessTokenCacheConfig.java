@@ -104,7 +104,7 @@ public class AccessTokenCacheConfig {
     /**
      * Creates a default configuration with standard settings.
      *
-     * @return a default AccessTokenCacheConfig with maxSize=1000 and evictionInterval=300s
+     * @return a default AccessTokenCacheConfig with maxSize=1000 and evictionInterval=10s
      */
     public static AccessTokenCacheConfig defaultConfig() {
         return AccessTokenCacheConfig.builder().build();

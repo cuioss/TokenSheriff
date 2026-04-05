@@ -32,6 +32,10 @@ import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.INFO.*;
 /**
  * Factory for creating Java HttpClient instances for benchmarking.
  * Uses singleton pattern for efficient resource usage.
+ * <p>
+ * <strong>Warning:</strong> The insecure client disables SSL certificate verification
+ * and must only be used in benchmarking or testing contexts, never in production code.
+ * </p>
  */
 public class HttpClientFactory {
 
@@ -54,6 +58,23 @@ public class HttpClientFactory {
     private static final HttpClient CLIENT = createClient();
 
     public static HttpClient getInsecureClient() {
+        return CLIENT;
+    }
+
+    /**
+     * Returns an {@link HttpClient} based on the given SSL verification flag.
+     *
+     * @param verifySsl when {@code true} a standard client with default SSL verification is
+     *                  returned; when {@code false} the shared insecure client is returned
+     * @return the appropriate {@link HttpClient} instance
+     */
+    public static HttpClient getClient(boolean verifySsl) {
+        if (verifySsl) {
+            return HttpClient.newBuilder()
+                    .version(getHttpVersion())
+                    .connectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT_SECONDS))
+                    .build();
+        }
         return CLIENT;
     }
 

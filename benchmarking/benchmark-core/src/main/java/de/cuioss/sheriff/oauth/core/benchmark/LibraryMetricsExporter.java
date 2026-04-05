@@ -42,10 +42,6 @@ public class LibraryMetricsExporter {
 
     private static final CuiLogger LOGGER = new CuiLogger(LibraryMetricsExporter.class);
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT;
-    public static final String MEASURE = "measure";
-    public static final String VALIDATE = "validate";
-    public static final String BENCHMARK = "benchmark";
-
     private static final String DEFAULT_OUTPUT_DIR = "target/benchmark-results";
     private static final String METRICS_FILE = "jwt-validation-metrics.json";
 
@@ -116,81 +112,12 @@ public class LibraryMetricsExporter {
     /**
      * Exports metrics from the provided monitor.
      *
-     * @param monitor The monitor containing the metrics
+     * @param benchmarkName the name identifying the benchmark that produced these metrics
+     * @param monitor       the monitor containing the metrics
      * @throws IOException if writing fails
      */
-    public static synchronized void exportMetrics(TokenValidatorMonitor monitor) throws IOException {
-        // Get current benchmark name from thread or stack trace
-        String benchmarkName = getCurrentBenchmarkName();
-
+    public static synchronized void exportMetrics(String benchmarkName, TokenValidatorMonitor monitor) throws IOException {
         getInstance().exportMetrics(benchmarkName, Instant.now(), monitor);
-    }
-
-    /**
-     * Get current benchmark name using system property first, then fallback to runtime detection.
-     * This approach is more robust and maintainable than parsing thread names and stack traces.
-     */
-    private static String getCurrentBenchmarkName() {
-        // Use hardcoded benchmark context - no system property override
-
-        // Fallback 1: Try to find benchmark class name from stack trace
-        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-        for (StackTraceElement element : stackTrace) {
-            String className = element.getClassName();
-            String methodName = element.getMethodName();
-
-            // Look for benchmark class names (more reliable than method names)
-            if (className.contains("Benchmark") && !className.equals(LibraryMetricsExporter.class.getName())) {
-                String simpleName = className.substring(className.lastIndexOf('.') + 1);
-                // Remove "Benchmark" suffix if present for cleaner names
-                if (simpleName.endsWith("Benchmark")) {
-                    return simpleName.substring(0, simpleName.length() - 9).toLowerCase();
-                }
-                return simpleName.toLowerCase();
-            }
-
-            // Look for benchmark method patterns
-            if (methodName.startsWith(MEASURE) || methodName.startsWith(VALIDATE) || methodName.startsWith(BENCHMARK)) {
-                return methodName;
-            }
-        }
-
-        // Fallback 2: Parse thread name with more generic patterns
-        String threadName = Thread.currentThread().getName();
-        // JMH typically includes benchmark information in thread name
-        if (threadName.contains(MEASURE)) {
-            return extractBenchmarkFromThread(threadName, MEASURE);
-        }
-        if (threadName.contains(VALIDATE)) {
-            return extractBenchmarkFromThread(threadName, VALIDATE);
-        }
-        if (threadName.contains(BENCHMARK)) {
-            return extractBenchmarkFromThread(threadName, BENCHMARK);
-        }
-
-        return "unknown_benchmark";
-    }
-
-    /**
-     * Extract benchmark name from thread name using pattern matching
-     */
-    private static String extractBenchmarkFromThread(String threadName, String pattern) {
-        int index = threadName.indexOf(pattern);
-        if (index >= 0) {
-            // Extract the method name part
-            String remaining = threadName.substring(index);
-            // Find word boundary or common separators
-            int endIndex = remaining.length();
-            for (int i = pattern.length(); i < remaining.length(); i++) {
-                char c = remaining.charAt(i);
-                if (!Character.isLetterOrDigit(c) && c != '_') {
-                    endIndex = i;
-                    break;
-                }
-            }
-            return remaining.substring(0, endIndex);
-        }
-        return pattern;
     }
 
     /**

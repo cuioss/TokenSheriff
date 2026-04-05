@@ -20,6 +20,7 @@ import org.junit.jupiter.api.*;
 
 import java.util.Map;
 
+import static de.cuioss.sheriff.oauth.integration.TestConstants.*;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
@@ -32,14 +33,6 @@ import static org.hamcrest.Matchers.equalTo;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ApiValidationSpecIT extends BaseIntegrationTest {
 
-    private static final String CONTENT_TYPE_JSON = "application/json";
-    private static final String TOKEN_FIELD_NAME = "token";
-    private static final String VALID = "valid";
-    private static final String MESSAGE = "message";
-    private static final String AUTHORIZATION = "Authorization";
-    private static final String BEARER_PREFIX = "Bearer ";
-
-    private static final String JWT_VALIDATE_PATH = "/jwt/validate";
     private static final String JWT_VALIDATE_EXPLICIT_PATH = "/jwt/validate-explicit";
     private static final String JWT_VALIDATE_ID_TOKEN_PATH = "/jwt/validate/id-token";
     private static final String JWT_VALIDATE_REFRESH_TOKEN_PATH = "/jwt/validate/refresh-token";

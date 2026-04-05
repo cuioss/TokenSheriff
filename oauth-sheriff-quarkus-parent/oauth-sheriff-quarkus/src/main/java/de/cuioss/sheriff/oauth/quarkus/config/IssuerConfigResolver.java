@@ -275,8 +275,9 @@ public class IssuerConfigResolver {
         );
 
         if (algorithmsString.isPresent()) {
-            List<String> algorithms = Arrays.asList(algorithmsString.get().split(","));
-            algorithms.replaceAll(String::trim);
+            List<String> algorithms = Arrays.stream(algorithmsString.get().split(","))
+                    .map(String::trim)
+                    .collect(Collectors.toList());
 
             SignatureAlgorithmPreferences preferences = new SignatureAlgorithmPreferences(algorithms);
 

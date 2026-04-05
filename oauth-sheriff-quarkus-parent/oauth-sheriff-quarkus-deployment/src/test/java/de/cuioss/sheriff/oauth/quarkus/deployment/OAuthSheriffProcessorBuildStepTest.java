@@ -166,7 +166,7 @@ class OAuthSheriffProcessorBuildStepTest {
         // Act
         processor.registerUnremovableBeans(producer);
 
-        // Assert - We have 3 core unremovable beans: TokenValidator, JwtMetricsCollector, MeterRegistry
+        // Assert - We produce 1 UnremovableBeanBuildItem containing 5 bean types
         assertEquals(1, unremovableBeans.size());
     }
 }

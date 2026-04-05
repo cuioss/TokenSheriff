@@ -24,6 +24,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static de.cuioss.sheriff.oauth.integration.TestConstants.*;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,10 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class JweDecryptionSpecIT extends BaseIntegrationTest {
 
-    private static final String BEARER_PREFIX = "Bearer ";
-    private static final String JWT_VALIDATE_PATH = "/jwt/validate";
     private static final String ID_TOKEN_VALIDATE_PATH = "/jwt/validate/id-token";
-    private static final String AUTHORIZATION = "Authorization";
 
     static Stream<TestRealm> jweProviders() {
         // Add future JWE-capable providers here

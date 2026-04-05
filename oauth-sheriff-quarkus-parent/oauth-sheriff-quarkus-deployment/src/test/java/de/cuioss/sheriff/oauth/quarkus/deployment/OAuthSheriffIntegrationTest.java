@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * </ul>
  */
 @EnableTestLogger
-class CuiJwtIntegrationTest {
+class OAuthSheriffIntegrationTest {
 
     /**
      * The Quarkus test framework.

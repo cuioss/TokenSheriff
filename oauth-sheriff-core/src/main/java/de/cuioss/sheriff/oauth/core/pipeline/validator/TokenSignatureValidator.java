@@ -20,14 +20,15 @@ import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.jwks.JwksLoader;
 import de.cuioss.sheriff.oauth.core.pipeline.DecodedJwt;
 import de.cuioss.sheriff.oauth.core.pipeline.SignatureTemplateManager;
+import de.cuioss.sheriff.oauth.core.pipeline.SignatureVerificationUtil;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
-import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
-import de.cuioss.sheriff.oauth.core.util.EcdsaSignatureFormatConverter;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.Getter;
 
 import java.nio.charset.StandardCharsets;
-import java.security.*;
+import java.security.InvalidKeyException;
+import java.security.PublicKey;
+import java.security.SignatureException;
 
 /**
  * Validator for JWT Token signatures.
@@ -72,18 +73,19 @@ public class TokenSignatureValidator {
     private final SignatureTemplateManager signatureTemplateManager;
 
     /**
-     * Constructs a TokenSignatureValidator with the specified JwksLoader, SecurityEventCounter, and SignatureAlgorithmPreferences.
+     * Constructs a TokenSignatureValidator with the specified JwksLoader, SecurityEventCounter,
+     * and shared SignatureTemplateManager.
      *
-     * @param jwksLoader             the JWKS loader to use for key retrieval
-     * @param securityEventCounter   the counter for security events
-     * @param algorithmPreferences   the signature algorithm preferences for provider optimization
+     * @param jwksLoader               the JWKS loader to use for key retrieval
+     * @param securityEventCounter     the counter for security events
+     * @param signatureTemplateManager shared signature template manager (reused across validators for the same issuer)
      */
     public TokenSignatureValidator(JwksLoader jwksLoader,
             SecurityEventCounter securityEventCounter,
-            SignatureAlgorithmPreferences algorithmPreferences) {
+            SignatureTemplateManager signatureTemplateManager) {
         this.jwksLoader = jwksLoader;
         this.securityEventCounter = securityEventCounter;
-        this.signatureTemplateManager = new SignatureTemplateManager(algorithmPreferences);
+        this.signatureTemplateManager = signatureTemplateManager;
     }
 
     /**
@@ -186,21 +188,10 @@ public class TokenSignatureValidator {
 
         byte[] dataBytes = dataToVerify.getBytes(StandardCharsets.UTF_8);
 
-        // Initialize the signature verifier with the appropriate algorithm
+        // Verify signature using shared utility (handles ECDSA format conversion)
         try {
-            Signature verifier = signatureTemplateManager.getSignatureInstance(algorithm);
-            verifier.initVerify(publicKey);
-            verifier.update(dataBytes);
-
-            // Convert ECDSA signatures from IEEE P1363 to ASN.1/DER format if needed
-            byte[] verificationSignature = signatureBytes;
-            if (isEcdsaAlgorithm(algorithm)) {
-                LOGGER.debug("Converting ECDSA signature from IEEE P1363 to ASN.1/DER format for algorithm: %s", algorithm);
-                verificationSignature = EcdsaSignatureFormatConverter.toJCACompatibleSignature(signatureBytes, algorithm);
-            }
-
-            // Verify the signature
-            boolean isValid = verifier.verify(verificationSignature);
+            boolean isValid = SignatureVerificationUtil.verifySignature(
+                    signatureTemplateManager, publicKey, algorithm, dataBytes, signatureBytes);
             if (isValid) {
                 LOGGER.debug("Signature is valid");
             } else {
@@ -228,16 +219,6 @@ public class TokenSignatureValidator {
                     e
             );
         }
-    }
-
-    /**
-     * Checks if the algorithm is an ECDSA algorithm that requires signature format conversion.
-     *
-     * @param algorithm the signature algorithm to check
-     * @return true if the algorithm is ECDSA (ES256, ES384, ES512), false otherwise
-     */
-    private boolean isEcdsaAlgorithm(String algorithm) {
-        return "ES256".equals(algorithm) || "ES384".equals(algorithm) || "ES512".equals(algorithm);
     }
 
     /**

@@ -24,6 +24,7 @@ import de.cuioss.sheriff.oauth.core.jwks.JwksType;
 import de.cuioss.sheriff.oauth.core.jwks.key.KeyInfo;
 import de.cuioss.sheriff.oauth.core.pipeline.DecodedJwt;
 import de.cuioss.sheriff.oauth.core.pipeline.NonValidatingJwtParser;
+import de.cuioss.sheriff.oauth.core.pipeline.SignatureTemplateManager;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.core.test.InMemoryJWKSFactory;
@@ -93,7 +94,7 @@ class TokenSignatureValidatorTest {
         jwksLoader.initJWKSLoader(securityEventCounter);
 
         // Create the validator with the in-memory JwksLoader and security event counter
-        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureAlgorithmPreferences());
+        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
 
         // Validate the signature - should not throw an exception
         assertDoesNotThrow(() -> validator.validateSignature(decodedJwt));
@@ -131,7 +132,7 @@ class TokenSignatureValidatorTest {
         jwksLoader.initJWKSLoader(securityEventCounter);
 
         // Create the validator with the in-memory JwksLoader and security event counter
-        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureAlgorithmPreferences());
+        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
 
         // Validate the signature - should throw an exception
         TokenValidationException exception = assertThrows(TokenValidationException.class,
@@ -167,7 +168,7 @@ class TokenSignatureValidatorTest {
         jwksLoader.initJWKSLoader(securityEventCounter);
 
         // Create the validator with the in-memory JwksLoader and security event counter
-        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureAlgorithmPreferences());
+        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
 
         // Validate the signature - should throw an exception
         TokenValidationException exception = assertThrows(TokenValidationException.class,
@@ -200,7 +201,7 @@ class TokenSignatureValidatorTest {
         jwksLoader.initJWKSLoader(securityEventCounter);
 
         // Create the validator with the in-memory JwksLoader and security event counter
-        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureAlgorithmPreferences());
+        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
 
         // Kid validation is now a precondition - should be validated by TokenHeaderValidator first
         IllegalStateException exception = assertThrows(IllegalStateException.class,
@@ -230,7 +231,7 @@ class TokenSignatureValidatorTest {
         jwksLoader.initJWKSLoader(securityEventCounter);
 
         // Create the validator with the in-memory JwksLoader and security event counter
-        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureAlgorithmPreferences());
+        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
 
         // Validate the signature - should throw an exception
         TokenValidationException exception = assertThrows(TokenValidationException.class,
@@ -294,7 +295,7 @@ class TokenSignatureValidatorTest {
         };
 
         // Create the validator with the custom JwksLoader and security event counter
-        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureAlgorithmPreferences());
+        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
 
         // Validate the signature - should throw an exception
         TokenValidationException exception = assertThrows(TokenValidationException.class,
