@@ -1,0 +1,204 @@
+= Semantic Code Analysis Findings
+:toc: left
+:toclevels: 3
+:sectnums:
+
+== Overview
+
+Semantic analysis of production and test code — identifying security issues, design problems, dead code, unnecessary complexity, and semantic duplication that automated tools miss.
+
+Maturity: pre-1.0 — breaking changes are free, no deprecation needed
+Dimensions: all (security, api, dead-code, duplication, cleanup) + test duplication
+Date: 2026-04-05
+Scope: all modules (oauth-sheriff-core, oauth-sheriff-quarkus, oauth-sheriff-quarkus-deployment, oauth-sheriff-quarkus-integration-tests, benchmarking)
+
+== Critical
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|C-1
+|`TokenValidationSpecIT.java:120-141`
+|`@TestFactory` method `validateRefreshTokenWithOfflineAccess()` has `void` return type. `@TestFactory` methods must return `Stream<DynamicTest>` or `Collection<DynamicTest>`. The dynamic tests are constructed via `.map()` but never returned — JUnit silently skips them. **Offline-access refresh token validation is not being tested.**
+|Change return type to `Stream<DynamicTest>` and add `return` statement: `return TestProviders.offlineAccessProviders().map(realm -> DynamicTest.dynamicTest(...));`
+
+|C-2
+|`JfrBenchmarkRunner.java:63`
+|The JMH include pattern is `de\.cuioss\.jwt\.validation\.benchmark\.jfr\.benchmarks\..*` but the actual benchmark classes are in package `de.cuioss.sheriff.oauth.core.benchmark.jfr.benchmarks`. This is a leftover from the cui-jwt→OAuthSheriff rename. `JfrBenchmarkRunner.main()` finds zero benchmarks and throws.
+|Change pattern to `"de\\.cuioss\\.sheriff\\.oauth\\.core\\.benchmark\\.jfr\\.benchmarks\\..*"`.
+
+|===
+
+== High (API / Design)
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|H-1
+|`BearerTokenResponseFactory.java:144-168`
+|When `CONSTRAINT_VIOLATION` occurs with _both_ missing scopes and missing roles/groups, the scope violation takes priority (401 `insufficient_scope`). The role/group violations are not surfaced in that response. This is **RFC-conformant**: RFC 9470 Step-Up Authentication gives the client an actionable remedy (re-authenticate with higher scope/ACR). Role/group failures are terminal (403) and cannot be fixed by re-authentication. The `WWW-Authenticate` header schema only accommodates scope/ACR info. However, the response _body_ could optionally include role/group info as supplementary detail (e.g., via RFC 9457 Problem Details) so the client is aware of all outstanding requirements.
+|Consider including role/group violation details in the JSON response body alongside the 401 `insufficient_scope` challenge, so clients can display all outstanding authorization requirements. The HTTP status and `WWW-Authenticate` header are correct as-is per RFC 9470/6750. **Reclassify as Low (enhancement, not a bug).**
+
+|H-2
+|`AccessTokenValidationPipeline.java:162,255-257`
+|`OffsetDateTime.now()` is called at line 162 for the cache check. A second `OffsetDateTime.now()` call happens inside `new ValidationContext(clockSkewSeconds, maxTokenAgeSeconds)` at line 255 (constructor at `ValidationContext.java:81`). The cache check and claim validation use different timestamps. Under load, the time gap includes full token parsing/signature verification. A 3-arg constructor accepting `currentTime` already exists (line 93) but is unused in production.
+|Pass the `now` value from line 162 into `new ValidationContext(now, clockSkewSeconds, maxTokenAgeSeconds)` to ensure a single consistent timestamp.
+
+|H-3
+|`BearerTokenResult.java:83-97`
+|Fields are named `missingScopes`, `missingRoles`, `missingGroups` but factory methods `parsingError()`, `noTokenGiven()`, and `invalidRequest()` populate them with the _required_ sets (the token was never validated, so the actual "missing" set is unknown). Consumers reading `getMissingScopes()` on a `PARSING_ERROR` result get semantically incorrect data.
+|Rename fields to `requiredScopes`/`requiredRoles`/`requiredGroups`. For `CONSTRAINT_VIOLATION` status, the required set equals the missing set (only actually missing items are passed). For all other statuses, the name "required" is correct. This is a pre-1.0 breaking rename — update all callers (`BearerTokenResponseFactory`, `BearerTokenProducer`, tests).
+
+|H-4
+|`HttpClientFactory.java:61-98` + `TokenRepositoryConfig.java:116-117`
+|`HttpClientFactory` creates a singleton `HttpClient` that trusts all certificates (trust-all `X509TrustManager`). The `TokenRepositoryConfig.verifySsl` field (defaults to `false`) is read from properties but _never consumed_ by any code. The field creates false confidence that SSL verification is configurable.
+|Either wire `verifySsl` into `HttpClientFactory` to conditionally create a secure client, or remove the field. Add a class-level Javadoc warning that this factory must never be used outside benchmarking.
+
+|===
+
+== Medium (Dead Code / Duplication)
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|M-1
+|`AccessTokenValidationPipeline.java:155-284` + `IdTokenValidationPipeline.java:116-181`
+|Both pipelines follow the same orchestration: decode → extract issuer → resolve config → validate header → validate signature → build token → validate claims. `IdTokenValidationPipeline` is the access token pipeline minus caching, metrics, and DPoP. Four identical `if (validator == null) throw IllegalStateException` patterns appear in both classes. ~60 lines of duplicated logic.
+|Extract a shared `AbstractValidationPipeline` or `ValidationStepExecutor` encapsulating the common flow. `AccessTokenValidationPipeline` adds caching/metrics as decorating concerns.
+
+|M-2
+|`TokenSignatureValidator.java:168-231` + `DpopProofValidator.java:440-464`
+|Both methods implement the same signature verification algorithm: get Signature instance → initVerify → update → ECDSA convert → verify → handle failure. `DpopProofValidator` is a simplified copy with less error handling. A bug fix (e.g., timing attack mitigation) applied to one will be missed in the other.
+|Extract a shared `SignatureVerificationUtil` method that both validators call.
+
+|M-3
+|`TokenSignatureValidator.java:239-241` + `DpopProofValidator.java:452`
+|ECDSA detection duplicated with different strategies: `"ES256".equals(a) \|\| "ES384".equals(a) \|\| "ES512".equals(a)` vs `algorithm.startsWith("ES")`. If a new ECDSA variant is added, only one will be updated.
+|Extract a shared `isEcdsaAlgorithm()` utility and use it in both places.
+
+|M-4
+|`DpopProofValidator.java:84-86`
+|`DpopProofValidator` creates `new DslJson<>(...)` with hardcoded settings instead of reusing the `ParserConfig`-configured `DslJson` instance. DPoP proof parsing ignores user-configured parser settings.
+|Accept `ParserConfig` or its `DslJson` instance in the constructor.
+
+|M-5
+|`DpopProofValidator.java:113` + `TokenSignatureValidator.java:86`
+|Both validators create their own `SignatureTemplateManager` from the same `SignatureAlgorithmPreferences`. For multi-issuer DPoP setups, this doubles the Security.getProviders() scanning at construction time.
+|Create one `SignatureTemplateManager` per issuer in `TokenValidator` and share it.
+
+|M-6
+|`UnifiedJfrBenchmark.java:1-277`
+|`UnifiedJfrBenchmark` was explicitly split into `CoreJfrBenchmark`, `ErrorJfrBenchmark`, and `MixedJfrBenchmark` (each class's Javadoc says "Split from UnifiedJfrBenchmark"). No runner references the unified class. It duplicates all three split benchmarks combined.
+|Delete `UnifiedJfrBenchmark.java`.
+
+|M-7
+|`MockTokenRepository.java:298-325`
+|`refreshTokens()` clears `tokenMetadata` (a plain `HashMap`), regenerates tokens, then copies into `tokenPool` — all without synchronization. `getNextToken()` and `getTokenIssuer()` read these fields from benchmark threads concurrently. This is a data race.
+|Document that `refreshTokens()` must only be called from `@Setup(Level.Trial)` (single-threaded), or switch to `ConcurrentHashMap`.
+
+|M-8
+|`TokenValidatorProducer.java:145`
+|`if (validationRuleRegistry != null)` — constructor-injected CDI bean, but unit tests construct the producer outside CDI with null registries. **Dismissed as false positive** — the null check is necessary for testability.
+|No change needed.
+
+|M-9
+|`OAuthSheriffIntegrationTest.java:42`, `OAuthSheriffDevUIIntegrationTest.java:35`, `OAuthSheriffExtensionTest.java:33`
+|File names use `OAuthSheriff*` but class names inside still use the old `CuiJwt*` prefix (package-private, so Java compiles them, but the naming inconsistency is confusing and a leftover from the rename).
+|Rename classes to match file names.
+
+|M-10
+|`ApiValidationSpecIT.java:34-41` + `TokenRequestSpecIT.java:34-37` + `TokenValidationSpecIT.java:48-56` + `DpopSpecIT.java:41-43` + `JweDecryptionSpecIT.java:41-44` + `BearerAuthSpecIT.java:40-41`
+|Constants `AUTHORIZATION`, `BEARER_PREFIX`, `CONTENT_TYPE_JSON`, `JWT_VALIDATE_PATH`, `TOKEN_FIELD_NAME` defined independently in 3-5 test classes each. If an endpoint path changes, 3-5 files must be updated.
+|Extract shared HTTP/path constants into a `TestConstants` utility class.
+
+|M-11
+|`JfrEventTest.java:1-162`
+|Manual test harness (only a `main` method) in `src/main/java`. Its `Test` suffix could conflict with test-discovery patterns, and it ships in the production JAR.
+|Move to `src/test/java` and convert to JUnit, or rename to `JfrEventVerifier`.
+
+|===
+
+== Low (Cleanup)
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|L-1
+|`AccessTokenCacheConfig.java:107`
+|Javadoc says `evictionInterval=300s` but actual `DEFAULT_EVICTION_INTERVAL_SECONDS` is `10` (line 68).
+|Fix Javadoc to say `evictionInterval=10s`.
+
+|L-2
+|`MandatoryClaimsValidatorTest.java:293`
+|Test name "Should not affect ID token validation when claimSubOptional is true" contradicts the assertion which proves `claimSubOptional=true` _does_ skip `sub` for ID tokens. The behavior is intentional (design decision) but the test name is misleading.
+|Rename test to "Should skip subject claim validation for ID tokens when claimSubOptional is true" to match actual behavior.
+
+|L-3
+|`IssuerConfigResolver.java:278-279`
+|Uses `Arrays.asList(s.split(","))` then `replaceAll(String::trim)` (mutating in-place). Every other CSV-splitting location in the same class and `JweDecryptionConfigResolver` uses the streaming pattern `Arrays.stream().map(String::trim).collect(...)`.
+|Align to the streaming pattern for consistency.
+
+|L-4
+|`TokenValidationSpecIT.java:100-117`
+|`validateRefreshToken()` uses early `return` when refresh token is null (silently passes). `validateIdToken()` (line 80-95) correctly uses `Assumptions.assumeTrue()` which reports as "skipped". Inconsistent skip pattern could hide failures.
+|Change to `Assumptions.assumeTrue(tokenResponse.refreshToken() != null, ...)`.
+
+|L-5
+|`OAuthSheriffProcessorBuildStepTest.java:169`
+|Comment says "We have 3 core unremovable beans" but the assertion checks `assertEquals(1, ...)` (one `UnremovableBeanBuildItem` containing 5 types). Comment is misleading.
+|Update comment: "We produce 1 UnremovableBeanBuildItem containing 5 bean types."
+
+|L-6
+|`MetricIdentifier.java:38` + `JwtPropertyKeys.java:40`
+|Both define `PREFIX = "sheriff.oauth"` independently. Values are identical and could diverge.
+|Have `MetricIdentifier.PREFIX` reference `JwtPropertyKeys.PREFIX`, or accept as intentional (different semantic domains).
+
+|L-7
+|`application-test.properties:2-3` + `application-integration.properties:2-3` (deployment module)
+|Log category `quarkus.log.category."de.cuioss.jwt".level=DEBUG` references the old package name `de.cuioss.jwt`. All classes are under `de.cuioss.sheriff.oauth.*`. This log category has no effect.
+|Change to `de.cuioss.sheriff.oauth` or remove.
+
+|L-8
+|`LibraryMetricsExporter.java:133-194`
+|`getCurrentBenchmarkName()` walks the call stack and parses thread names to guess the benchmark name. Fragile — breaks if naming conventions or JMH thread naming changes.
+|Accept the benchmark name as a parameter in `exportMetrics()` instead of guessing.
+
+|===
+
+== Summary
+
+[cols="1,1,1"]
+|===
+|Severity |Count |Key Theme
+
+|Critical
+|2
+|Broken test factory (tests silently not running), broken JMH include pattern
+
+|High
+|4
+|API response semantics (H-1 reclassified to Low/enhancement), timestamp inconsistency, field naming, trust-all SSL
+
+|Medium
+|11
+|Pipeline duplication, signature verification duplication, dead code, test constant duplication
+
+|Low
+|8
+|Javadoc errors, inconsistent patterns, stale log categories, misleading test names
+|===
+
+Total: 25 findings across all modules.
+
+=== Dismissed False Positives
+
+. **H-1 draft (claimSubOptional leaks to ID tokens)**: `MandatoryClaimsValidator.shouldSkipClaimValidation()` does not check token type, so `claimSubOptional=true` skips `sub` for ID tokens too. However, `MandatoryClaimsValidatorTest:293-314` explicitly tests and asserts this behavior. This is a documented design decision, not a bug. Downgraded to L-2 (misleading test name).
+. **M-2 draft (DpopProofValidator silently returns)**: When DPoP is not required and `cnf.jkt` is empty, returning early is correct per RFC 9449 Section 4.3. The `cnf.jkt` is inside the signed JWT and cannot be tampered with.
+. **Q-CLEAN-9 draft (DevUI coupling to IssuerConfig constant)**: Direct reference to `IssuerConfig.DEFAULT_CLOCK_SKEW_SECONDS` is acceptable for same-project modules and correctly tracks changes.
+. **D-TEST-01 draft (build-breaking class/file mismatch)**: Classes are package-private, not `public`, so Java compiles them despite the name mismatch. Reclassified as M-9 (naming inconsistency).
+. **H-4 draft (BearerTokenResult Serializable)**: `AccessTokenContent` IS guaranteed `Serializable` via `MinimalTokenContent extends Serializable`. The `@SuppressWarnings("java:S1948")` comment is accurate.
+. **Q-TEST-11 draft (TestConfig reimplements SmallRye)**: Intentional design to avoid CDI container in unit tests. Well-structured test utility.

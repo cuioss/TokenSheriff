@@ -18,7 +18,6 @@ package de.cuioss.sheriff.oauth.core.dpop;
 import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
 import de.cuioss.sheriff.oauth.core.JWTValidationLogMessages;
-import de.cuioss.sheriff.oauth.core.ParserConfig;
 import de.cuioss.sheriff.oauth.core.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.json.JwkKey;
@@ -26,10 +25,10 @@ import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.sheriff.oauth.core.jwks.key.JwkKeyHandler;
 import de.cuioss.sheriff.oauth.core.pipeline.DecodedJwt;
 import de.cuioss.sheriff.oauth.core.pipeline.SignatureTemplateManager;
+import de.cuioss.sheriff.oauth.core.pipeline.SignatureVerificationUtil;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
-import de.cuioss.sheriff.oauth.core.util.EcdsaSignatureFormatConverter;
 import de.cuioss.sheriff.oauth.core.util.JwkThumbprintUtil;
 import de.cuioss.tools.logging.CuiLogger;
 import de.cuioss.tools.logging.LogRecord;
@@ -81,9 +80,7 @@ public class DpopProofValidator {
     private final DpopReplayProtection replayProtection;
     private final SignatureAlgorithmPreferences algorithmPreferences;
     private final SignatureTemplateManager signatureTemplateManager;
-    private final DslJson<Object> dslJson = new DslJson<>(new DslJson.Settings<>()
-            .limitStringBuffer(ParserConfig.DEFAULT_MAX_STRING_LENGTH)
-            .limitDigitsBuffer(16));
+    private final DslJson<Object> dslJson;
 
     /**
      * Holds the decoded parts of a DPoP proof JWT.
@@ -98,19 +95,24 @@ public class DpopProofValidator {
     /**
      * Creates a new DpopProofValidator.
      *
-     * @param issuerConfig         the issuer configuration (must have non-null dpopConfig)
-     * @param securityEventCounter the security event counter
-     * @param replayProtection     shared replay protection instance
+     * @param issuerConfig            the issuer configuration (must have non-null dpopConfig)
+     * @param securityEventCounter    the security event counter
+     * @param replayProtection        shared replay protection instance
+     * @param signatureTemplateManager shared signature template manager (reused across validators)
+     * @param dslJson                 shared DslJson instance from ParserConfig
      */
     public DpopProofValidator(IssuerConfig issuerConfig,
             SecurityEventCounter securityEventCounter,
-            DpopReplayProtection replayProtection) {
+            DpopReplayProtection replayProtection,
+            SignatureTemplateManager signatureTemplateManager,
+            DslJson<Object> dslJson) {
         this.config = issuerConfig.getDpopConfig();
         this.clockSkewSeconds = issuerConfig.getClockSkewSeconds();
         this.securityEventCounter = securityEventCounter;
         this.replayProtection = replayProtection;
         this.algorithmPreferences = issuerConfig.getAlgorithmPreferences();
-        this.signatureTemplateManager = new SignatureTemplateManager(algorithmPreferences);
+        this.signatureTemplateManager = signatureTemplateManager;
+        this.dslJson = dslJson;
     }
 
     /**
@@ -439,21 +441,12 @@ public class DpopProofValidator {
 
     private void verifyDpopSignature(String[] parts, PublicKey publicKey, String algorithm) {
         try {
-            Signature verifier = signatureTemplateManager.getSignatureInstance(algorithm);
-            verifier.initVerify(publicKey);
-
             String dataToVerify = parts[0] + "." + parts[1];
-            verifier.update(dataToVerify.getBytes(StandardCharsets.UTF_8));
-
+            byte[] dataBytes = dataToVerify.getBytes(StandardCharsets.UTF_8);
             byte[] signatureBytes = Base64.getUrlDecoder().decode(parts[2]);
 
-            // Convert ECDSA signatures from IEEE P1363 to ASN.1/DER format if needed
-            byte[] verificationSignature = signatureBytes;
-            if (algorithm.startsWith("ES")) {
-                verificationSignature = EcdsaSignatureFormatConverter.toJCACompatibleSignature(signatureBytes, algorithm);
-            }
-
-            if (!verifier.verify(verificationSignature)) {
+            if (!SignatureVerificationUtil.verifySignature(
+                    signatureTemplateManager, publicKey, algorithm, dataBytes, signatureBytes)) {
                 rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
                         "DPoP proof signature verification failed");
             }

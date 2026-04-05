@@ -237,9 +237,9 @@ class BearerTokenInterceptorTest {
         expect(bearerTokenProducer.getBearerTokenResult(Set.of("read"), Set.of(), Set.of()))
                 .andReturn(BearerTokenResult.builder()
                         .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                        .missingScopes(Set.of("read"))
-                        .missingRoles(Set.of())
-                        .missingGroups(Set.of())
+                        .requiredScopes(Set.of("read"))
+                        .requiredRoles(Set.of())
+                        .requiredGroups(Set.of())
                         .build());
         replay(invocationContext, bearerTokenProducer);
 
@@ -258,9 +258,9 @@ class BearerTokenInterceptorTest {
         expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of("user", "admin"), Set.of()))
                 .andReturn(BearerTokenResult.builder()
                         .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                        .missingScopes(Set.of())
-                        .missingRoles(Set.of("user"))
-                        .missingGroups(Set.of())
+                        .requiredScopes(Set.of())
+                        .requiredRoles(Set.of("user"))
+                        .requiredGroups(Set.of())
                         .build());
         replay(invocationContext, bearerTokenProducer);
 

@@ -25,6 +25,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static de.cuioss.sheriff.oauth.integration.TestConstants.*;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -38,9 +39,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DpopSpecIT extends BaseIntegrationTest {
 
-    private static final String BEARER_PREFIX = "Bearer ";
-    private static final String JWT_VALIDATE_PATH = "/jwt/validate";
-    private static final String AUTHORIZATION = "Authorization";
 
     private static String resourceUri() {
         return RestAssured.baseURI + ":" + RestAssured.port + JWT_VALIDATE_PATH;

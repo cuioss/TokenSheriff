@@ -18,6 +18,7 @@ package de.cuioss.sheriff.oauth.core;
 import de.cuioss.sheriff.oauth.core.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.oauth.core.pipeline.IdTokenValidationPipeline;
 import de.cuioss.sheriff.oauth.core.pipeline.NonValidatingJwtParser;
+import de.cuioss.sheriff.oauth.core.pipeline.SignatureTemplateManager;
 import de.cuioss.sheriff.oauth.core.pipeline.TokenBuilder;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenHeaderValidator;
 import de.cuioss.sheriff.oauth.core.pipeline.validator.TokenSignatureValidator;
@@ -138,7 +139,7 @@ class IdTokenValidationPipelineNullCheckTest {
                 issuerConfigCache,
                 Map.of(issuerId, new TokenSignatureValidator(
                         issuerConfig.getJwksLoader(), securityEventCounter,
-                        issuerConfig.getAlgorithmPreferences())),
+                        new SignatureTemplateManager(issuerConfig.getAlgorithmPreferences()))),
                 Map.of(),
                 Map.of(),
                 Map.of(issuerId, new TokenHeaderValidator(issuerConfig, securityEventCounter)),
@@ -167,7 +168,7 @@ class IdTokenValidationPipelineNullCheckTest {
                 issuerConfigCache,
                 Map.of(issuerId, new TokenSignatureValidator(
                         issuerConfig.getJwksLoader(), securityEventCounter,
-                        issuerConfig.getAlgorithmPreferences())),
+                        new SignatureTemplateManager(issuerConfig.getAlgorithmPreferences()))),
                 Map.of(issuerId, new TokenBuilder(issuerConfig)),
                 Map.of(),
                 Map.of(issuerId, new TokenHeaderValidator(issuerConfig, securityEventCounter)),

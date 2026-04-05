@@ -21,6 +21,7 @@ import de.cuioss.sheriff.oauth.core.jwks.JwksLoader;
 import de.cuioss.sheriff.oauth.core.jwks.JwksLoaderFactory;
 import de.cuioss.sheriff.oauth.core.pipeline.DecodedJwt;
 import de.cuioss.sheriff.oauth.core.pipeline.NonValidatingJwtParser;
+import de.cuioss.sheriff.oauth.core.pipeline.SignatureTemplateManager;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.core.test.InMemoryJWKSFactory;
@@ -61,7 +62,7 @@ class TokenSignatureValidatorEdgeCasesTest {
         JwksLoader jwksLoader = JwksLoaderFactory.createInMemoryLoader(jwksContent);
         jwksLoader.initJWKSLoader(securityEventCounter);
 
-        validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureAlgorithmPreferences());
+        validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
     }
 
     @Test

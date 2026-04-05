@@ -29,6 +29,7 @@ import de.cuioss.sheriff.oauth.core.jwks.key.JWKSKeyLoader;
 import de.cuioss.sheriff.oauth.core.jwks.key.KeyInfo;
 import de.cuioss.sheriff.oauth.core.pipeline.DecodedJwt;
 import de.cuioss.sheriff.oauth.core.pipeline.NonValidatingJwtParser;
+import de.cuioss.sheriff.oauth.core.pipeline.SignatureTemplateManager;
 import de.cuioss.sheriff.oauth.core.security.JwkAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
@@ -198,7 +199,7 @@ class TokenClaimValidatorEdgeCaseTest {
             // by using a JwksKeyLoader that throws an exception
 
             // Create a TokenSignatureValidator with a custom JwksLoader that simulates network failure
-            var signatureValidator = new TokenSignatureValidator(new FailingJwksKeyLoader(), securityEventCounter, new SignatureAlgorithmPreferences());
+            var signatureValidator = new TokenSignatureValidator(new FailingJwksKeyLoader(), securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
 
             // Create a valid validation
             TokenContent validToken = createValidToken();

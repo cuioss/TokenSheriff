@@ -34,14 +34,14 @@ import java.util.Set;
  * <p>
  * This class provides detailed information about the outcome of bearer token processing,
  * including the validation status, the validated token content (if successful),
- * missing scopes/roles/groups (if constraint violations occurred), and
+ * required scopes/roles/groups (if constraint violations occurred), and
  * error details (if validation failed).
  * <p>
  * The result includes:
  * <ul>
  *   <li>The validation status indicating what happened during processing</li>
  *   <li>The validated AccessTokenContent if successful</li>
- *   <li>Missing scopes, roles, and groups that caused constraint violations</li>
+ *   <li>Required scopes, roles, and groups that caused constraint violations</li>
  *   <li>Error details from TokenValidationException if parsing failed</li>
  * </ul>
  * <p>
@@ -78,23 +78,23 @@ public class BearerTokenResult implements Serializable {
     BearerTokenStatus status;
 
     /**
-     * Gets the scopes that are missing from the token.
+     * Gets the required scopes for authorization.
      */
     @Builder.Default
-    Set<String> missingScopes = Set.of();
+    Set<String> requiredScopes = Set.of();
 
     /**
-     * Gets the roles that are missing from the token.
+     * Gets the required roles for authorization.
      */
     @Builder.Default
-    Set<String> missingRoles = Set.of();
+    Set<String> requiredRoles = Set.of();
 
     /**
      * -- GETTER --
-     * Gets the groups that are missing from the token.
+     * Gets the required groups for authorization.
      */
     @Builder.Default
-    Set<String> missingGroups = Set.of();
+    Set<String> requiredGroups = Set.of();
 
     AccessTokenContent accessTokenContent;
 
@@ -119,9 +119,9 @@ public class BearerTokenResult implements Serializable {
                 .status(BearerTokenStatus.PARSING_ERROR)
                 .errorEventType(exception.getEventType())
                 .errorMessage(exception.getMessage())
-                .missingScopes(requiredScopes)
-                .missingRoles(requiredRoles)
-                .missingGroups(requiredGroups)
+                .requiredScopes(requiredScopes)
+                .requiredRoles(requiredRoles)
+                .requiredGroups(requiredGroups)
                 .build();
     }
 
@@ -139,9 +139,9 @@ public class BearerTokenResult implements Serializable {
             Set<String> requiredRoles, Set<String> requiredGroups) {
         return builder()
                 .status(BearerTokenStatus.NO_TOKEN_GIVEN)
-                .missingScopes(requiredScopes)
-                .missingRoles(requiredRoles)
-                .missingGroups(requiredGroups)
+                .requiredScopes(requiredScopes)
+                .requiredRoles(requiredRoles)
+                .requiredGroups(requiredGroups)
                 .build();
     }
 
@@ -164,9 +164,9 @@ public class BearerTokenResult implements Serializable {
         return builder()
                 .status(BearerTokenStatus.INVALID_REQUEST)
                 .errorMessage(errorMessage)
-                .missingScopes(requiredScopes)
-                .missingRoles(requiredRoles)
-                .missingGroups(requiredGroups)
+                .requiredScopes(requiredScopes)
+                .requiredRoles(requiredRoles)
+                .requiredGroups(requiredGroups)
                 .build();
     }
 

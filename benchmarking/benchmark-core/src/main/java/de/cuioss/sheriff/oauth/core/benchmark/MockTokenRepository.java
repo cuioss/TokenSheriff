@@ -294,6 +294,10 @@ public class MockTokenRepository implements TokenProvider {
      * Regenerates the entire token pool with new tokens.
      * This is useful for long-running benchmarks where tokens may expire.
      * </p>
+     * <p>
+     * Must only be called from {@code @Setup(Level.Trial)} (single-threaded).
+     * This method is not thread-safe.
+     * </p>
      */
     @Override
     public void refreshTokens() {

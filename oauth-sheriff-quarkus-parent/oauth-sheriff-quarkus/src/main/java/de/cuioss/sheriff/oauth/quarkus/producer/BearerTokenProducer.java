@@ -205,9 +205,9 @@ public class BearerTokenProducer {
                 LOGGER.warn(BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED, missingScopes, missingRoles, missingGroups);
                 return BearerTokenResult.builder()
                         .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                        .missingScopes(missingScopes)
-                        .missingRoles(missingRoles)
-                        .missingGroups(missingGroups)
+                        .requiredScopes(missingScopes)
+                        .requiredRoles(missingRoles)
+                        .requiredGroups(missingGroups)
                         .build();
             }
         } catch (TokenValidationException e) {

@@ -290,7 +290,7 @@ class MandatoryClaimsValidatorTest {
     }
 
     @Test
-    @DisplayName("Should not affect ID token validation when claimSubOptional is true")
+    @DisplayName("Should skip subject claim validation for ID tokens when claimSubOptional is true")
     void shouldNotAffectIdTokenValidationWhenClaimSubOptionalIsTrue() {
         // Create IssuerConfig with claimSubOptional=true
         IssuerConfig issuerConfigWithOptionalSub = IssuerConfig.builder()

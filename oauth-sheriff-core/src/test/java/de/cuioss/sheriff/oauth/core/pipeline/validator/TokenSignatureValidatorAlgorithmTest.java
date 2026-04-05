@@ -20,6 +20,7 @@ import de.cuioss.sheriff.oauth.core.jwks.JwksLoader;
 import de.cuioss.sheriff.oauth.core.jwks.JwksLoaderFactory;
 import de.cuioss.sheriff.oauth.core.pipeline.DecodedJwt;
 import de.cuioss.sheriff.oauth.core.pipeline.NonValidatingJwtParser;
+import de.cuioss.sheriff.oauth.core.pipeline.SignatureTemplateManager;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.core.test.InMemoryJWKSFactory;
@@ -67,7 +68,7 @@ class TokenSignatureValidatorAlgorithmTest {
         jwksLoader.initJWKSLoader(securityEventCounter);
 
         // Create the validator with the in-memory JwksLoader and security event counter
-        validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureAlgorithmPreferences());
+        validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
     }
 
     /**

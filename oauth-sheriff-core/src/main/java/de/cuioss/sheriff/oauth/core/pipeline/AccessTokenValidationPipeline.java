@@ -207,11 +207,8 @@ public class AccessTokenValidationPipeline {
         // 5. Validate header (with HEADER_VALIDATION metrics)
         MetricsTicker headerTicker = MetricsTickerFactory.createStartedTicker(MeasurementType.HEADER_VALIDATION, performanceMonitor);
         try {
-            TokenHeaderValidator headerValidator = headerValidators.get(issuerConfig.getIssuerIdentifier());
-            if (headerValidator == null) {
-                throw new IllegalStateException("No header validator found for issuer: " + issuerConfig.getIssuerIdentifier());
-            }
-            headerValidator.validate(decodedJwt, request);
+            ValidatorLookup.getOrThrow(headerValidators, issuerConfig.getIssuerIdentifier(), "header validator")
+                    .validate(decodedJwt, request);
         } finally {
             headerTicker.stopAndRecord();
         }
@@ -219,11 +216,8 @@ public class AccessTokenValidationPipeline {
         // 6. Validate signature (with SIGNATURE_VALIDATION metrics) ← MOST expensive operation
         MetricsTicker signatureTicker = MetricsTickerFactory.createStartedTicker(MeasurementType.SIGNATURE_VALIDATION, performanceMonitor);
         try {
-            TokenSignatureValidator signatureValidator = signatureValidators.get(issuerConfig.getIssuerIdentifier());
-            if (signatureValidator == null) {
-                throw new IllegalStateException("No signature validator found for issuer: " + issuerConfig.getIssuerIdentifier());
-            }
-            signatureValidator.validateSignature(decodedJwt);
+            ValidatorLookup.getOrThrow(signatureValidators, issuerConfig.getIssuerIdentifier(), "signature validator")
+                    .validateSignature(decodedJwt);
         } finally {
             signatureTicker.stopAndRecord();
         }
@@ -232,10 +226,7 @@ public class AccessTokenValidationPipeline {
         MetricsTicker buildingTicker = MetricsTickerFactory.createStartedTicker(MeasurementType.TOKEN_BUILDING, performanceMonitor);
         AccessTokenContent accessToken;
         try {
-            TokenBuilder tokenBuilder = tokenBuilders.get(issuerConfig.getIssuerIdentifier());
-            if (tokenBuilder == null) {
-                throw new IllegalStateException("No token builder found for issuer: " + issuerConfig.getIssuerIdentifier());
-            }
+            TokenBuilder tokenBuilder = ValidatorLookup.getOrThrow(tokenBuilders, issuerConfig.getIssuerIdentifier(), "token builder");
             Optional<AccessTokenContent> tokenOpt = tokenBuilder.createAccessToken(decodedJwt);
             if (tokenOpt.isEmpty()) {
                 LOGGER.debug("Access token building failed");
@@ -250,19 +241,16 @@ public class AccessTokenValidationPipeline {
         }
 
         // 8. Validate claims (with CLAIMS_VALIDATION metrics)
-        // Create ValidationContext with cached current time to eliminate synchronous OffsetDateTime.now() calls
+        // Reuse the 'now' timestamp from line 162 for consistency across cache check and claims validation
         // Use per-issuer clock skew and max token age from IssuerConfig
-        ValidationContext context = new ValidationContext(
+        ValidationContext context = new ValidationContext(now,
                 issuerConfig.getClockSkewSeconds(),
                 issuerConfig.getMaxTokenAgeSeconds());
         MetricsTicker claimsTicker = MetricsTickerFactory.createStartedTicker(MeasurementType.CLAIMS_VALIDATION, performanceMonitor);
         AccessTokenContent validatedToken;
         try {
-            TokenClaimValidator claimValidator = claimValidators.get(issuerConfig.getIssuerIdentifier());
-            if (claimValidator == null) {
-                throw new IllegalStateException("No claim validator found for issuer: " + issuerConfig.getIssuerIdentifier());
-            }
-            validatedToken = (AccessTokenContent) claimValidator.validate(accessToken, context);
+            validatedToken = (AccessTokenContent) ValidatorLookup.getOrThrow(claimValidators, issuerConfig.getIssuerIdentifier(), "claim validator")
+                    .validate(accessToken, context);
         } finally {
             claimsTicker.stopAndRecord();
         }

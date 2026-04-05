@@ -15,12 +15,14 @@
  */
 package de.cuioss.sheriff.oauth.core.dpop;
 
+import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.oauth.core.IssuerConfig;
 import de.cuioss.sheriff.oauth.core.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.oauth.core.exception.TokenValidationException;
 import de.cuioss.sheriff.oauth.core.json.JwtHeader;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.sheriff.oauth.core.pipeline.DecodedJwt;
+import de.cuioss.sheriff.oauth.core.pipeline.SignatureTemplateManager;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.oauth.core.test.InMemoryKeyMaterialHandler;
@@ -69,7 +71,7 @@ class DpopProofValidatorTest {
                 .audienceValidationDisabled(true)
                 .build();
 
-        validator = new DpopProofValidator(issuerConfig, securityEventCounter, replayProtection);
+        validator = new DpopProofValidator(issuerConfig, securityEventCounter, replayProtection, new SignatureTemplateManager(issuerConfig.getAlgorithmPreferences()), new DslJson<>(new DslJson.Settings<>()));
     }
 
     @AfterEach
@@ -117,7 +119,7 @@ class DpopProofValidatorTest {
                 .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
                 .audienceValidationDisabled(true)
                 .build();
-        var requiredValidator = new DpopProofValidator(requiredConfig, securityEventCounter, replayProtection);
+        var requiredValidator = new DpopProofValidator(requiredConfig, securityEventCounter, replayProtection, new SignatureTemplateManager(requiredConfig.getAlgorithmPreferences()), new DslJson<>(new DslJson.Settings<>()));
 
         DecodedJwt accessToken = createAccessTokenJwt(null); // no cnf.jkt
         AccessTokenRequest request = AccessTokenRequest.of("dummy-token");
@@ -328,7 +330,7 @@ class DpopProofValidatorTest {
                 .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
                 .audienceValidationDisabled(true)
                 .build();
-        var requiredValidator = new DpopProofValidator(requiredConfig, securityEventCounter, replayProtection);
+        var requiredValidator = new DpopProofValidator(requiredConfig, securityEventCounter, replayProtection, new SignatureTemplateManager(requiredConfig.getAlgorithmPreferences()), new DslJson<>(new DslJson.Settings<>()));
 
         // Required mode, access token has cnf.jkt but no DPoP header
         DecodedJwt accessToken = createAccessTokenJwt("some-thumbprint");

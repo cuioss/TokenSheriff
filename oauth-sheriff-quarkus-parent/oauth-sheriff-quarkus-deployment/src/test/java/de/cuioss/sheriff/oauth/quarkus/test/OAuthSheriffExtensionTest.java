@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 @EnableTestLogger
 @DisplayName("OAuth Sheriff Extension Registration Test")
-class CuiJwtExtensionTest {
+class OAuthSheriffExtensionTest {
 
     @RegisterExtension
     static final QuarkusUnitTest unitTest = new QuarkusUnitTest()

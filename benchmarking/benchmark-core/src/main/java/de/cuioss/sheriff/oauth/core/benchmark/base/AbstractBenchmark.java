@@ -77,7 +77,7 @@ public abstract class AbstractBenchmark {
     public void exportBenchmarkMetrics() {
         if (tokenValidator != null) {
             try {
-                LibraryMetricsExporter.exportMetrics(tokenValidator.getPerformanceMonitor());
+                LibraryMetricsExporter.exportMetrics(getClass().getSimpleName(), tokenValidator.getPerformanceMonitor());
             } catch (IOException e) {
                 LOGGER.error(e, ERROR.EXPORT_FAILED);
             }

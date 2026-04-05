@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
  *   <li>FULLY_VERIFIED: 200 (OK) - Should not be called for successful validation</li>
  *   <li>NO_TOKEN_GIVEN: 401 (Unauthorized) - Missing Bearer token</li>
  *   <li>PARSING_ERROR: 401 (Unauthorized) - Invalid or expired token</li>
- *   <li>CONSTRAINT_VIOLATION: 401 (Unauthorized) for missing scopes, 403 (Forbidden) for missing roles/groups</li>
+ *   <li>CONSTRAINT_VIOLATION: 401 (Unauthorized) for required scopes, 403 (Forbidden) for required roles/groups</li>
  * </ul>
  *
  * @since 1.0
@@ -140,14 +140,23 @@ public class BearerTokenResponseFactory {
 
     /**
      * Creates a response for constraint violations (missing scopes, roles, or groups).
+     * <p>
+     * Design Decision: Scope violations (401) take priority over role/group violations (403).
+     * Per RFC 9470 (Step-Up Authentication) and RFC 6750 Section 3.1, an {@code insufficient_scope}
+     * 401 is an actionable challenge — the client can re-authenticate with higher scope/ACR.
+     * Role/group violations are terminal (no re-authentication will fix them) and result in 403.
+     * When both are present, returning 401 first gives the client a chance to step up; if the
+     * subsequent request satisfies scopes but still lacks roles/groups, the server then returns 403.
+     * The {@code WWW-Authenticate} header schema only accommodates scope/ACR info per the RFCs.
+     * </p>
      */
     private static Response createConstraintViolationResponse(BearerTokenResult result) {
-        // Check if it's a scope violation (401) or role/group violation (403)
-        boolean hasScopeViolation = !result.getMissingScopes().isEmpty();
+        // Scope violation → 401 (actionable step-up per RFC 9470), role/group → 403 (terminal)
+        boolean hasScopeViolation = !result.getRequiredScopes().isEmpty();
 
         if (hasScopeViolation) {
-            // OAuth Step-Up Authentication Challenge for insufficient scope
-            String wwwAuthenticate = buildInsufficientScopeHeader(result.getMissingScopes());
+            // OAuth Step-Up Authentication Challenge for insufficient scope (RFC 9470)
+            String wwwAuthenticate = buildInsufficientScopeHeader(result.getRequiredScopes());
             return Response.status(Response.Status.UNAUTHORIZED)
                     .type(MediaType.APPLICATION_JSON)
                     .header(HEADER_WWW_AUTHENTICATE, wwwAuthenticate)
@@ -157,7 +166,7 @@ public class BearerTokenResponseFactory {
                     .build();
         } else {
             // Role/group violation - 403 Forbidden with OAuth-style error structure
-            String wwwAuthenticate = buildInsufficientPrivilegesHeader(result.getMissingRoles(), result.getMissingGroups());
+            String wwwAuthenticate = buildInsufficientPrivilegesHeader(result.getRequiredRoles(), result.getRequiredGroups());
             return Response.status(Response.Status.FORBIDDEN)
                     .type(MediaType.APPLICATION_JSON)
                     .header(HEADER_WWW_AUTHENTICATE, wwwAuthenticate)
@@ -196,14 +205,14 @@ public class BearerTokenResponseFactory {
      * Builds a WWW-Authenticate header for insufficient scope errors.
      * Follows OAuth Step-Up Authentication Challenge specification.
      *
-     * @param missingScopes The collection of missing scopes
+     * @param requiredScopes The collection of required scopes
      * @return Formatted WWW-Authenticate header value for insufficient scope
      */
-    private static String buildInsufficientScopeHeader(Collection<String> missingScopes) {
+    private static String buildInsufficientScopeHeader(Collection<String> requiredScopes) {
         StringBuilder sb = buildBaseAuthenticateHeader(ERROR_INSUFFICIENT_SCOPE);
 
-        if (!missingScopes.isEmpty()) {
-            String scopeValue = joinAndEscape(missingScopes);
+        if (!requiredScopes.isEmpty()) {
+            String scopeValue = joinAndEscape(requiredScopes);
             sb.append(", ").append(PARAM_SCOPE).append("=\"").append(scopeValue).append("\"");
         }
 
@@ -214,21 +223,21 @@ public class BearerTokenResponseFactory {
      * Builds a WWW-Authenticate header for insufficient privileges errors.
      * Uses OAuth-style error structure adapted for role/group privileges.
      *
-     * @param missingRoles The collection of missing roles
-     * @param missingGroups The collection of missing groups
+     * @param requiredRoles The collection of required roles
+     * @param requiredGroups The collection of required groups
      * @return Formatted WWW-Authenticate header value for insufficient privileges
      */
-    private static String buildInsufficientPrivilegesHeader(Collection<String> missingRoles, Collection<String> missingGroups) {
+    private static String buildInsufficientPrivilegesHeader(Collection<String> requiredRoles, Collection<String> requiredGroups) {
         StringBuilder sb = buildBaseAuthenticateHeader(ERROR_INSUFFICIENT_PRIVILEGES);
 
         // Add missing roles and groups as custom parameters
-        if (!missingRoles.isEmpty()) {
-            String rolesValue = joinAndEscape(missingRoles);
+        if (!requiredRoles.isEmpty()) {
+            String rolesValue = joinAndEscape(requiredRoles);
             sb.append(", ").append(PARAM_REQUIRED_ROLES).append("=\"").append(rolesValue).append("\"");
         }
 
-        if (!missingGroups.isEmpty()) {
-            String groupsValue = joinAndEscape(missingGroups);
+        if (!requiredGroups.isEmpty()) {
+            String groupsValue = joinAndEscape(requiredGroups);
             sb.append(", ").append(PARAM_REQUIRED_GROUPS).append("=\"").append(groupsValue).append("\"");
         }
 

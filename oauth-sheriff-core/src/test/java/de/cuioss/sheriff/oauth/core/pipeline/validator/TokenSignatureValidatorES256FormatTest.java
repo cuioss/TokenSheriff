@@ -20,6 +20,7 @@ import de.cuioss.sheriff.oauth.core.TokenType;
 import de.cuioss.sheriff.oauth.core.json.JwtHeader;
 import de.cuioss.sheriff.oauth.core.json.MapRepresentation;
 import de.cuioss.sheriff.oauth.core.pipeline.DecodedJwt;
+import de.cuioss.sheriff.oauth.core.pipeline.SignatureTemplateManager;
 import de.cuioss.sheriff.oauth.core.security.SecurityEventCounter;
 import de.cuioss.sheriff.oauth.core.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.oauth.core.test.InMemoryKeyMaterialHandler;
@@ -61,7 +62,7 @@ class TokenSignatureValidatorES256FormatTest {
                 InMemoryKeyMaterialHandler.DEFAULT_KEY_ID,
                 securityEventCounter
         );
-        validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureAlgorithmPreferences());
+        validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
     }
 
     @Test

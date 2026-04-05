@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * This test verifies that DevUI build items are properly registered
  * when the extension is enabled in development mode.
  */
-class CuiJwtDevUIIntegrationTest {
+class OAuthSheriffDevUIIntegrationTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()

@@ -52,7 +52,7 @@ List<String> roles = accessToken.getRoles();
 List<String> groups = accessToken.getGroups();
 boolean hasRoles = accessToken.providesRoles(List.of("admin", "user"));
 boolean hasGroups = accessToken.providesGroups(List.of("group1", "group2"));
-Set<String> missingRoles = accessToken.determineMissingRoles(requiredRoles);
+Set<String> requiredRoles = accessToken.determineMissingRoles(requiredRoles);
 ----
 
 == Custom Mapping for Roles and Groups
