@@ -157,7 +157,8 @@ public class BearerTokenResponseFactory {
 
         if (hasScopeViolation) {
             // OAuth Step-Up Authentication Challenge for insufficient scope (RFC 9470)
-            String wwwAuthenticate = buildInsufficientScopeHeader(result.getMissingScopes());
+            // RFC 6750 Section 3.1: scope parameter contains the full scope necessary for access
+            String wwwAuthenticate = buildInsufficientScopeHeader(result.getRequiredScopes());
             return Response.status(Response.Status.UNAUTHORIZED)
                     .type(MediaType.APPLICATION_JSON)
                     .header(HEADER_WWW_AUTHENTICATE, wwwAuthenticate)

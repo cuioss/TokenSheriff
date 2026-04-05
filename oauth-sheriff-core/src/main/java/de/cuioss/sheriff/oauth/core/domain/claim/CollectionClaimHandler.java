@@ -45,7 +45,7 @@ import java.util.*;
  *     boolean hasAllScopes = handler.providesValues(requiredScopes);
  *
  *     // Get missing scopes
- *     Set&lt;String&gt; requiredScopes = handler.determineMissingValues(requiredScopes);
+ *     Set&lt;String&gt; missingScopes = handler.determineMissingValues(requiredScopes);
  * }
  * </pre>
  *
