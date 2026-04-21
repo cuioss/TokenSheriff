@@ -41,7 +41,7 @@ jobs:
           cache: maven
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@38ec876110f9fbf8b950c79f534430740c3ac009 # beta
+        uses: anthropics/claude-code-action@5d5c10a4f389689f992ea10bb14dcb6fcc83146d # beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
