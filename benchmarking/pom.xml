@@ -24,7 +24,7 @@
         <!-- JMH version for benchmarking -->
         <version.jmh>1.37</version.jmh>
         <!-- External dependency versions -->
-        <version.gson>2.13.2</version.gson>
+        <version.gson>2.14.0</version.gson>
         <version.hdrhistogram>2.2.2</version.hdrhistogram>
         <version.commons-io>2.21.0</version.commons-io>
         <!-- Skip benchmarks by default -->
