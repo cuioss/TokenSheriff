@@ -41,7 +41,7 @@
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
-        <version.quarkus>3.34.5</version.quarkus>
+        <version.quarkus>3.35.0</version.quarkus>
         <frontend.node.version>v22.22.0</frontend.node.version>
         <frontend.npm.version>10.9.2</frontend.npm.version>
     </properties>
