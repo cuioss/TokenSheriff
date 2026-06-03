@@ -45,7 +45,7 @@ jobs:
           owner: cuioss
 
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0  # Fetch all history for proper versioning
           persist-credentials: false  # Prevent token from overriding app token during deploy
@@ -71,7 +71,7 @@ jobs:
           ./mvnw --no-transfer-progress clean install -DskipTests
 
       - name: Fetch Previous History
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: cuioss/cuioss.github.io
           ref: main
@@ -127,7 +127,7 @@ jobs:
           retention-days: 90  # Keep results for 90 days
 
       - name: Checkout cuioss.github.io for deployment
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: cuioss/cuioss.github.io
           path: _pages-deploy
