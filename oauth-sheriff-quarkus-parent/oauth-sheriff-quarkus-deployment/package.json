@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.6",
-    "@babel/preset-env": "^7.29.3",
+    "@babel/preset-env": "^8.0.1",
     "@eslint/js": "^10.0.1",
     "@testing-library/jest-dom": "^6.9.1",
     "babel-jest": "^30.4.0",
