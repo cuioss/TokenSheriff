@@ -33,7 +33,7 @@
     "clean": "del-cli target/classes/META-INF/resources target/dist"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.6",
+    "@babel/core": "^8.0.1",
     "@babel/preset-env": "^7.29.3",
     "@eslint/js": "^10.0.1",
     "@testing-library/jest-dom": "^6.9.1",
