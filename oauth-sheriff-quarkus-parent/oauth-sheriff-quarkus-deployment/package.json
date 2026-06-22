@@ -50,7 +50,7 @@
     "license-checker": "^25.0.1",
     "lit": "^3.3.3",
     "postcss-lit": "^1.4.1",
-    "prettier": "^3.8.3",
+    "prettier": "^3.8.4",
     "stylelint": "^17.13.0",
     "stylelint-config-standard": "^40.0.0",
     "stylelint-order": "^8.1.1"
