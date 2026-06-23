@@ -11,7 +11,7 @@ This document outlines the functional and non-functional requirements for the JW
 
 === Document Navigation
 
-* xref:../README.adoc[README] - Project overview and introduction
+* link:../README.md[README] - Project overview and introduction
 * xref:../oauth-sheriff-core/doc/usage-guide.adoc[Usage Guide] - How to use the library with code examples
 * xref:architecture.adoc[Architecture] - Architecture reference
 * xref:LogMessages.adoc[Log Messages] - Reference for all log messages

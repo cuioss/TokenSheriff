@@ -1,0 +1,191 @@
+# OAuth-Sheriff
+
+<img align="right" width="300" src="doc/resources/Sheriff.png" alt="OAuth Sheriff">
+
+### Status
+
+**Build & Quality**
+
+[![Java CI with Maven](https://github.com/cuioss/OAuthSheriff/actions/workflows/maven.yml/badge.svg?branch=main)](https://github.com/cuioss/OAuthSheriff/actions/workflows/maven.yml)
+[![Integration Tests](https://github.com/cuioss/OAuthSheriff/actions/workflows/integration-tests.yml/badge.svg?branch=main)](https://github.com/cuioss/OAuthSheriff/actions/workflows/integration-tests.yml)
+
+[![Last Build](https://img.shields.io/github/last-commit/cuioss/OAuthSheriff/main)](https://github.com/cuioss/OAuthSheriff/commits/main)
+[![License](https://img.shields.io/:license-apache-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
+[![Maven Central](https://img.shields.io/maven-central/v/de.cuioss.sheriff.oauth/oauth-sheriff-parent.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/de.cuioss.sheriff.oauth/oauth-sheriff-parent)
+
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cuioss_OAuth-Sheriff&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cuioss_OAuth-Sheriff)
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=cuioss_OAuth-Sheriff&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=cuioss_OAuth-Sheriff)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=cuioss_OAuth-Sheriff&metric=coverage)](https://sonarcloud.io/summary/new_code?id=cuioss_OAuth-Sheriff)
+
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11849/badge)](https://www.bestpractices.dev/projects/11849)
+[![CodeQL](https://github.com/cuioss/OAuthSheriff/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/cuioss/OAuthSheriff/security/code-scanning)
+
+**Performance Benchmarks**
+
+[![JMH Benchmarks](https://github.com/cuioss/OAuthSheriff/actions/workflows/benchmark.yml/badge.svg)](https://github.com/cuioss/OAuthSheriff/actions/workflows/benchmark.yml)
+[![Last Benchmark Run](https://img.shields.io/endpoint?url=https://cuioss.github.io/OAuth-Sheriff/benchmarks/badges/last-run-badge.json)](https://cuioss.github.io/OAuth-Sheriff/benchmarks/)
+
+*Micro Benchmarks*
+
+[![JWT Performance Score](https://img.shields.io/endpoint?url=https://cuioss.github.io/OAuth-Sheriff/benchmarks/badges/performance-badge.json)](https://cuioss.github.io/OAuth-Sheriff/benchmarks/micro/)
+[![Performance Trend](https://img.shields.io/endpoint?url=https://cuioss.github.io/OAuth-Sheriff/benchmarks/badges/trend-badge.json)](https://cuioss.github.io/OAuth-Sheriff/benchmarks/micro/trends.html)
+
+*Integration Benchmarks*
+
+[![Integration Performance](https://img.shields.io/endpoint?url=https://cuioss.github.io/OAuth-Sheriff/benchmarks/badges/integration-performance-badge.json)](https://cuioss.github.io/OAuth-Sheriff/benchmarks/integration/)
+[![Integration Trend](https://img.shields.io/endpoint?url=https://cuioss.github.io/OAuth-Sheriff/benchmarks/badges/integration-trend-badge.json)](https://cuioss.github.io/OAuth-Sheriff/benchmarks/integration/trends.html)
+
+[Understanding Performance Metrics](benchmarking/doc/performance-scoring.adoc)
+
+### What is it?
+
+A comprehensive library for validating JWT tokens in multi-issuer environments with a focus on offline validation.
+
+## Motivation
+
+### Why another JWT-Library?
+
+This project started as an instrumentation of [SmallRye JWT](https://github.com/smallrye/smallrye-jwt), then shifted to [JJWT](https://github.com/jwtk/jjwt) with the goal to implement robust multi-issuer handling. With a strong focus on security (see [Requirements](doc/Requirements.adoc)), the project evolved through several iterations until it became an entirely new library with its own validation and parsing implementation (JJWT remains only as a test dependency for token generation). The main differentiator is the comprehensive approach to security in multi-issuer environments.
+
+### The Challenge
+
+Modern microservice architectures often need to validate JWT tokens from multiple identity providers without making synchronous calls to authorization servers. This library addresses several key challenges:
+
+### Why Offline Validation?
+
+- **Performance**: No network round-trips for token validation, enabling sub-millisecond validation times
+- **Resilience**: Service remains functional even when identity providers are temporarily unavailable
+- **Scalability**: Validation scales with your application, not limited by identity provider capacity
+- **Cost**: Reduces load on identity providers, avoiding rate limiting and additional infrastructure costs
+
+### Key Problems Solved
+
+- **Multi-Issuer Complexity**: Seamlessly handle tokens from Keycloak, Auth0, Azure AD, and other providers in a single application
+- **Key Rotation**: Automatic JWKS key fetching and caching with configurable refresh strategies
+- **Security**: Protection against common JWT vulnerabilities through comprehensive validation pipeline
+- **Configuration Overhead**: OpenID Connect Discovery for automatic configuration from well-known endpoints
+
+> [!NOTE]
+> This library focuses on JWT validation and is not meant as a replacement for full OAuth2 or OpenID Connect libraries. It will never create tokens, only validate them.
+
+## Quick Start
+
+### Quarkus Integration (Recommended)
+
+For Quarkus applications, use our dedicated extension for seamless integration:
+
+```xml
+<dependency>
+    <groupId>de.cuioss.sheriff.oauth</groupId>
+    <artifactId>oauth-sheriff-quarkus</artifactId>
+</dependency>
+```
+
+The [Quarkus Extension](oauth-sheriff-quarkus-parent/README.adoc) provides:
+
+- Minimal configuration with zero-configuration for sensible best-practice security settings
+- CDI injection of validated tokens
+- Automatic metrics and health checks
+- Native image support for GraalVM
+- Dev UI integration for testing
+
+**Minimal Configuration Example (using OpenID Connect Discovery)**
+
+```properties
+# application.properties
+sheriff.oauth.issuers.keycloak.jwks.http.well-known-url=https://keycloak.example.com/realms/master/.well-known/openid-configuration
+```
+
+```java
+@GET
+@Path("/data")
+@BearerAuth(requiredScopes = {"read"}, requiredRoles = {"user"})
+public Response getData() {
+    // Only business logic - security handled automatically by interceptor
+    // If validation fails, error response is returned automatically
+    return Response.ok(data).build();
+}
+```
+
+The extension also supports standard [MicroProfile JWT Auth 2.1](https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html) injection — every validated token is a `JsonWebToken` and `Principal`:
+
+```java
+@Inject
+JsonWebToken callerPrincipal;  // MP-JWT standard
+
+@GET
+@BearerAuth(requiredScopes = {"read"})
+public Response getData() {
+    String userName = callerPrincipal.getName();  // UPN fallback: upn → preferred_username → sub
+    Set<String> groups = callerPrincipal.getGroups();
+    return Response.ok("Hello " + userName).build();
+}
+```
+
+For details, see the [MicroProfile JWT Compatibility](doc/specification/microprofile-jwt-compatibility.adoc) specification and the [Quarkus Extension documentation](oauth-sheriff-quarkus-parent/README.adoc).
+
+For a complete working example, see the [integration tests module](oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/README.adoc).
+
+### Standalone Library
+
+For non-Quarkus applications, use the core validation library:
+
+```xml
+<dependency>
+    <groupId>de.cuioss.sheriff.oauth</groupId>
+    <artifactId>oauth-sheriff-core</artifactId>
+</dependency>
+```
+
+```java
+// Create validator with OIDC Discovery
+TokenValidator validator = TokenValidator.builder()
+    .issuerConfig(IssuerConfig.builder()
+        .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
+            .wellKnownUrl("https://your-issuer.com/.well-known/openid-configuration")
+            .build())
+        .expectedAudience("your-client-id") // Add expected audience
+        .build())
+    .build();
+
+// Validate token
+AccessTokenContent accessToken = validator.createAccessToken(AccessTokenRequest.of(tokenString));
+```
+
+## Core Features
+
+- **Multi-issuer support** for handling tokens from different identity providers
+- **Automatic JWKS key management** with rotation support
+- **OpenID Connect Discovery** for automatic configuration
+- **Type-safe token parsing** with strongly typed Access, ID, and Refresh tokens
+- **Comprehensive security** with configurable validation pipeline
+- **High performance** with sub-millisecond validation and built-in caching
+- **Production ready** with extensive testing against Keycloak
+
+## Architecture
+
+For detailed architectural information, see:
+
+- [Architecture Reference](doc/architecture.adoc) - Validation pipeline, components, and design
+- [Component Diagram](doc/plantuml/component-overview.png) - Visual architecture overview
+
+## Documentation
+
+- [Documentation Hub](doc/README.adoc) - Complete guide to all documentation
+- [Usage Guide](oauth-sheriff-core/README.adoc) - Detailed usage examples
+- [Requirements](doc/Requirements.adoc) - Functional and non-functional requirements
+- [Threat Model](doc/security/threat-model.adoc) - Security analysis
+- [MicroProfile JWT Compatibility](doc/specification/microprofile-jwt-compatibility.adoc) - MP-JWT 2.1 integration and rationale
+- [Multi-IDP Testing](doc/specification/multi-idp-testing.adoc) - Testing with multiple OIDC providers
+
+For configuration details including runtime dependencies and test support, see the [OAuth Sheriff Core documentation](oauth-sheriff-core/README.adoc).
+
+## Performance
+
+The library is continuously benchmarked with results published to GitHub Pages:
+
+- [Micro-benchmarks](benchmarking/benchmark-core/README.adoc) - In-memory performance testing
+- [WRK Load Testing](benchmarking/benchmark-integration-wrk/README.adoc) - HTTP-based load testing with WRK
+- [Performance Metrics](benchmarking/doc/performance-scoring.adoc) - Understanding the scoring system
+- [Integration Benchmark Analysis (March 2026)](benchmarking/doc/Analysis-03.2026-Integration.adoc) - WRK HTTP load testing analysis
+- [Micro-Benchmark Analysis (March 2026)](benchmarking/doc/Analysis-03.2026-Micro.adoc) - JMH library performance analysis
