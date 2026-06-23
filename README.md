@@ -2,7 +2,7 @@
 
 <img align="right" width="300" src="doc/resources/Sheriff.png" alt="OAuth Sheriff">
 
-### Status
+## Status
 
 **Build & Quality**
 
@@ -10,7 +10,7 @@
 [![Integration Tests](https://github.com/cuioss/OAuthSheriff/actions/workflows/integration-tests.yml/badge.svg?branch=main)](https://github.com/cuioss/OAuthSheriff/actions/workflows/integration-tests.yml)
 
 [![Last Build](https://img.shields.io/github/last-commit/cuioss/OAuthSheriff/main)](https://github.com/cuioss/OAuthSheriff/commits/main)
-[![License](https://img.shields.io/:license-apache-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
+[![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 [![Maven Central](https://img.shields.io/maven-central/v/de.cuioss.sheriff.oauth/oauth-sheriff-parent.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/de.cuioss.sheriff.oauth/oauth-sheriff-parent)
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cuioss_OAuth-Sheriff&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cuioss_OAuth-Sheriff)
@@ -37,7 +37,7 @@
 
 [Understanding Performance Metrics](benchmarking/doc/performance-scoring.adoc)
 
-### What is it?
+## What is it?
 
 A comprehensive library for validating JWT tokens in multi-issuer environments with a focus on offline validation.
 
