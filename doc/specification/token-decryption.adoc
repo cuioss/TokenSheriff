@@ -12,7 +12,7 @@ _See Requirement xref:../Requirements.adoc#OAUTH-SHERIFF-1.4[OAUTH-SHERIFF-1.4: 
 
 === Document Navigation
 
-* xref:../../README.adoc[README] - Project overview and introduction
+* link:../../README.md[README] - Project overview and introduction
 * xref:../../oauth-sheriff-core/README.adoc[Usage Guide] - How to use the library with code examples
 * xref:../Requirements.adoc[Requirements] - Functional and non-functional requirements
 * xref:../architecture.adoc[Architecture] - Architecture reference and implementation details
