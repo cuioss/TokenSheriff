@@ -1,0 +1,106 @@
+= Migration Guide: nifi-extensions → Token-Sheriff
+:toc: macro
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+[cols="1,3"]
+|===
+| Status   | Planned
+| Date     | 2026-06-24
+| Audience | Maintainers of `cuioss/nifi-extensions` (the one known consumer)
+| Context  | xref:plan-token-sheriff-rebrand.adoc[Token-Sheriff rebrand plan]
+|===
+
+toc::[]
+
+== What changed
+
+OAuth-Sheriff was renamed to *Token-Sheriff*. Four consumer-visible surfaces change:
+
+[cols="2,3,3"]
+|===
+| Surface | Old | New
+
+| Maven groupId   | `de.cuioss.sheriff.oauth`   | `de.cuioss.sheriff.token`
+| Artifact IDs    | `oauth-sheriff-core`, `oauth-sheriff-quarkus*` | `token-sheriff-core`, `token-sheriff-quarkus*`
+| Java packages   | `de.cuioss.sheriff.oauth.*`  | `de.cuioss.sheriff.token.*`
+| Config + metric keys | `sheriff.oauth.*`       | `sheriff.token.*`
+|===
+
+Estimated impact in `nifi-extensions`: ~119 groupId/import references, ~109 config-key references, plus the dependency declarations.
+
+[NOTE]
+====
+Thanks to Maven *relocation*, an unchanged build keeps working temporarily: it resolves the new artifact and prints a `has been relocated` warning. That warning is your grace window — but Java imports and config keys do **not** auto-migrate, so plan to do the steps below in one pass.
+====
+
+== Step 1 — Bump the dependency coordinates
+
+In every POM that declares the dependency (`pom.xml`, `nifi-cuioss-api/pom.xml`, `nifi-cuioss-common/pom.xml`, …):
+
+[source,xml]
+----
+<!-- before -->
+<groupId>de.cuioss.sheriff.oauth</groupId>
+<artifactId>oauth-sheriff-core</artifactId>
+
+<!-- after -->
+<groupId>de.cuioss.sheriff.token</groupId>
+<artifactId>token-sheriff-core</artifactId>
+----
+
+Set the version to the first Token-Sheriff release (target `1.0.0`). Apply the same to any `*-quarkus` / test artifacts in use.
+
+== Step 2 — Rewrite Java imports
+
+All imports move from `de.cuioss.sheriff.oauth.` to `de.cuioss.sheriff.token.` (the sub-paths — `core.domain.token`, `core.exception`, `core.security`, `core.jwks.http`, `core.test.*`, etc. — are unchanged).
+
+[source,bash]
+----
+# from the nifi-extensions repo root; review the diff before committing
+grep -rl 'de\.cuioss\.sheriff\.oauth' --include='*.java' . \
+  | xargs sed -i '' 's/de\.cuioss\.sheriff\.oauth\./de.cuioss.sheriff.token./g'   # macOS (BSD sed)
+# Linux: sed -i 's/de\.cuioss\.sheriff\.oauth\./de.cuioss.sheriff.token./g'
+----
+
+This also fixes Javadoc `{@link de.cuioss.sheriff.oauth...}` references.
+
+== Step 3 — Update configuration keys
+
+Every `sheriff.oauth.*` property becomes `sheriff.token.*` — issuer config, JWKS URLs, bearer settings, etc. These live in NiFi processor properties, `*.properties`, and test fixtures.
+
+[source,bash]
+----
+grep -rl 'sheriff\.oauth\.' --include='*.properties' --include='*.xml' \
+     --include='*.json' --include='*.java' --include='*.adoc' . \
+  | xargs sed -i '' 's/sheriff\.oauth\./sheriff.token./g'   # macOS; drop the '' on Linux
+----
+
+[WARNING]
+====
+This is a breaking runtime change. Any *deployed* NiFi flow / `nifi.properties` referencing `sheriff.oauth.*` keys must be updated in the environment too — code changes alone won't migrate live configuration.
+====
+
+== Step 4 — Update metrics references (if any)
+
+If dashboards, alerts, or Prometheus queries reference `sheriff.oauth.*` metric names, rename them to `sheriff.token.*`.
+
+== Step 5 — Verify
+
+[source,bash]
+----
+# expect zero remaining old references
+grep -rI 'de\.cuioss\.sheriff\.oauth\|sheriff\.oauth\.\|oauth-sheriff' \
+     --exclude-dir=target --exclude-dir=node_modules . | wc -l    # -> 0
+
+./mvnw clean verify     # build + tests green
+----
+
+Confirm no `has been relocated` warnings remain in the build log (they disappear once the coordinates are updated).
+
+== Coordination
+
+* The rename ships in the first Token-Sheriff release; until `nifi-extensions` bumps, relocation keeps its build working (with warnings).
+* Recommended order: Token-Sheriff `1.0.0` published (incl. relocation stubs) → this migration applied in a `nifi-extensions` branch → verify → merge.
+* No functional/API behaviour changes — names only. If a build breaks for non-naming reasons, it is unrelated to this migration.

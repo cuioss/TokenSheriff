@@ -10,9 +10,17 @@ later be turned into its own implementation plan.
 * xref:decision-oidc-module.adoc[OIDC Relying-Party as an Additional Module] -
   house the active OIDC/RP functionality as a new module in this repository
   (not a separate project), depending on `oauth-sheriff-core`.
-* xref:decision-naming-strategy.adoc[Naming & Identity Strategy (Strategy A)] -
-  keep the repository name as a brand and fix the description/topics now;
-  defer any full coordinate rebrand to a deliberate 1.0 decision.
+* xref:decision-naming-strategy.adoc[Naming & Identity Strategy] -
+  *Decided:* full rebrand to *Token-Sheriff* (supersedes the earlier
+  keep-the-name "Strategy A").
+
+== Plans
+
+* xref:../rebrand/plan-token-sheriff-rebrand.adoc[Token-Sheriff Rebrand Plan] -
+  rename repo, Maven coordinates, packages, config/metrics keys, requirement
+  IDs, and docs; Maven Central relocation; phased execution.
+* xref:../rebrand/migration-nifi-extensions.adoc[nifi-extensions Migration Guide] -
+  consumer steps for the one known client.
 
 == Status
 
