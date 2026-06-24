@@ -102,7 +102,7 @@ doc/client/
 
 == Requirement-ID & sourcing discipline
 
-* client requirements use `TOKEN-SHERIFF-CLIENT-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow / Fetch).
+* Client requirements use `TOKEN-SHERIFF-CLIENT-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow / Fetch).
 * *Every* normative requirement and *every* threat entry cites a source with section anchor (RFC / OIDC spec / OWASP / FAPI). MUST/SHOULD/MAY trace back to the cited source.
 * Requirements are *security-driven* — each traces to a threat it mitigates or is the secure way to perform a needed operation. Exclusions are sourced too.
 * `references.adoc` is the single bibliography; all docs cite into it.

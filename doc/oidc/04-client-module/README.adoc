@@ -26,7 +26,7 @@ Why: the replacement target `portal-authentication-oauth` is *CDI / RESTEasy / p
 
 . *Quarkus — a new extension that depends on the existing one.* `token-sheriff-client-quarkus` (runtime + deployment), depending on the existing `token-sheriff-validation-quarkus` extension *and* the engine. A separate extension (not folded in) preserves opt-in and reuses the existing validation CDI wiring. Verified by the build assembly.
 
-. *Integration tests live in the real consumer — `portal-authentication-oauth`.* the client is verified end-to-end where it actually replaces the legacy OAuth implementation, reusing that module's existing OIDC test infrastructure. The new client integration tests go in *their own package*, separated from the existing OAuth tests. (Own package, not own module.)
+. *Integration tests live in the real consumer — `portal-authentication-oauth`.* The client is verified end-to-end where it actually replaces the legacy OAuth implementation, reusing that module's existing OIDC test infrastructure. The new client integration tests go in *their own package*, separated from the existing OAuth tests. (Own package, not own module.)
 
 The portal adapter (preserving `Oauth2Service` / `AuthenticatedUserInfo`) and these ITs both live in `cui-portal-core`; the engine + extension live here.
 
@@ -92,7 +92,7 @@ modules/authentication/portal-authentication-oauth/
 * `token-sheriff-quarkus-parent/pom.xml` — add `<module>token-sheriff-client-quarkus</module>` and `…-deployment`.
 * `bom/pom.xml` — add `token-sheriff-client` and `token-sheriff-client-quarkus`.
 * New POMs — engine modelled on `token-sheriff-validation`; client extension pair modelled on `token-sheriff-validation-quarkus`(`-deployment`), adding the dependency on the existing extension + engine.
-* client extension descriptor — `quarkus-extension.yaml` (name "Token-Sheriff Client"); deployment `*Processor` registering the `token-sheriff-client` feature.
+* Client extension descriptor — `quarkus-extension.yaml` (name "Token-Sheriff Client"); deployment `*Processor` registering the `token-sheriff-client` feature.
 * Source skeletons — `package-info.java` per new package; engine `doc/` stub per xref:../02-doc-structure/README.adoc[Plan 02].
 * CI/quality — reactor builds the new modules; confirm `.github/project.yml` (Sonar) scans them and empty modules don't fail the gate; `.github/dependabot.yml` covers them. List the new module + extension in the root README and `doc/README.adoc`.
 

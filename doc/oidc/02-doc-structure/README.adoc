@@ -35,7 +35,7 @@ Reshape the conceptual layer into peer capabilities — `validation` and `client
 
 Why not extend:
 
-* `Requirements.adoc` (622) and `threat-model.adoc` (373) would balloon and *mix two very different surfaces*. the client's threats (redirect/callback CSRF, `state`/`nonce`, authorization-code interception, token leakage, session fixation) are unlike validation's — and a security library must keep a clean, per-capability threat model.
+* `Requirements.adoc` (622) and `threat-model.adoc` (373) would balloon and *mix two very different surfaces*. The client's threats (redirect/callback CSRF, `state`/`nonce`, authorization-code interception, token leakage, session fixation) are unlike validation's — and a security library must keep a clean, per-capability threat model.
 * It mirrors the code boundary (validation module vs client module), keeping doc↔code traceability clean.
 * It is consistent with the modularity already present (folders, per-module docs) — an increment, not a new paradigm.
 
@@ -77,7 +77,7 @@ The `doc/oidc/` planning area (this folder) is transient — it holds the plans,
 == Requirement-ID namespacing
 
 * Validation keeps `TOKEN-SHERIFF-N` (after Plan 01's `OAUTH-SHERIFF-N → TOKEN-SHERIFF-N`).
-* client requirements use `TOKEN-SHERIFF-CLIENT-N` — same project prefix, explicit capability segment, unambiguous and greppable (`TOKEN-SHERIFF-CLIENT-[0-9]`).
+* Client requirements use `TOKEN-SHERIFF-CLIENT-N` — same project prefix, explicit capability segment, unambiguous and greppable (`TOKEN-SHERIFF-CLIENT-[0-9]`).
 
 == Execution
 
@@ -89,12 +89,12 @@ The `doc/oidc/` planning area (this folder) is transient — it holds the plans,
 
 === Phase 2 — Scaffold the client capability (when client work starts)
 . Create `doc/client/` with stub `architecture.adoc`, `requirements.adoc` (`TOKEN-SHERIFF-CLIENT-N`), `threat-model.adoc`, `specification/`.
-. Add the client module `doc/` dir for usage/config/dev. client log records are added to the global `doc/LogMessages.adoc` — no separate client registry.
+. Add the client module `doc/` dir for usage/config/dev. Client log records are added to the global `doc/LogMessages.adoc` — no separate client registry.
 . Wire both capabilities into the hub.
 
 === Conventions for future client docs
 * Capability-conceptual content → `doc/client/`; module usage/config/dev → the client module's `doc/`.
-* client requirement IDs → `TOKEN-SHERIFF-CLIENT-N`; client threats live only in the client threat model.
+* Client requirement IDs → `TOKEN-SHERIFF-CLIENT-N`; client threats live only in the client threat model.
 * No client content in validation docs, and vice versa.
 
 == Risks & mitigations
