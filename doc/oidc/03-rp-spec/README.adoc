@@ -8,7 +8,7 @@
 |===
 | Status     | Ready to execute (after xref:../02-doc-structure/README.adoc[Plan 02] establishes `doc/relying-party/`)
 | Depends on | Plan 02 (doc structure); produces the spec that the future RP module is built against (spec-first)
-| Scope      | A full RP document set — requirements + specification + security (threat model + best practices) — modular by aspect, every normative item source-referenced
+| Scope      | A *most-secure current subset* RP document set — requirements + specification + security (threat model + best practices) — modular by aspect, security-led, every normative item source-referenced
 |===
 
 toc::[]
@@ -16,6 +16,29 @@ toc::[]
 == Goal
 
 Produce, _before_ any RP code, the document set that mirrors the existing validation docs (`Requirements.adoc`, `specification/`, `security/threat-model.adoc`) but for the OIDC relying-party capability. Security is the centre of gravity: a sourced threat model and a sourced best-practices catalog, both drawn from the standards and current security research below.
+
+== Guiding principle: a most-secure current subset
+
+Security is the *leading* topic, not one section among many. This document set specifies the *smallest, most secure subset* of current OAuth 2.0 / OpenID Connect that an RP needs — it is *not* a full, spec-complete implementation.
+
+* *Current only.* Adopt the latest recommended constructs (authorization code + PKCE, `iss`, PAR, DPoP/mTLS, the BCP RFC 9700, the OAuth 2.1 direction, FAPI 2.0 where it raises the bar).
+* *Legacy/discouraged is out of scope by design.* Mechanisms the standards deprecate or discourage are deliberately *not* supported — and that exclusion is itself documented and sourced (below), so it reads as a decision, not an omission.
+* *Security-driven requirements.* Requirements derive from the threat model: a feature is in scope only if it is required for secure operation, or is the secure way to do something. "The spec allows it" is not, by itself, a reason to include it.
+
+== Deliberately excluded (legacy / discouraged)
+
+Documented, sourced non-goals. The RP MUST NOT require or implement these; each exclusion is restated in the relevant aspect doc with its source.
+
+* *Implicit grant* (`response_type=token` / `id_token token`) — RFC 9700 §2.1.2 (SHOULD NOT); removed in OAuth 2.1. Use code + PKCE.
+* *Resource Owner Password Credentials grant* — RFC 9700 §2.4 (MUST NOT); removed in OAuth 2.1.
+* *Hybrid flows* (`code id_token`, `code token`, …) — unnecessary for a secure RP and re-introduce front-channel token exposure. Use plain `code`.
+* *PKCE `plain` method* — `S256` only (RFC 7636, RFC 9700).
+* *`alg=none` / unsigned or weak-algorithm ID tokens* — RFC 8725 (JWT BCP). Require asymmetric signature verification.
+* *Tokens in URL query/fragment* — RFC 9700 §4.3; use `form_post` and code exchange at the token endpoint.
+* *Bare bearer tokens where sender-constraining is feasible* — prefer DPoP/mTLS (RFC 9449, FAPI 2.0); bearer only as a documented fallback.
+* *Non-rotating long-lived refresh tokens for public clients* — RFC 9700 §4.14.
+* *Front-channel logout / Session-Management iframe as the primary mechanism* — known reliability/security weaknesses; prefer back-channel logout (OIDC Back-Channel Logout 1.0). Front-channel is optional/secondary at most.
+* *Unvalidated dynamic registration of `jwks_uri`/`*_uri`* — SSRF vector (CVE-2026-1180); excluded unless strictly validated.
 
 == Organizing principle: separate the three aspects
 
@@ -57,6 +80,7 @@ doc/relying-party/
 
 * RP requirements use `TOKEN-SHERIFF-RP-N` (per Plan 02), *grouped by aspect* within the doc (Token / Process / Fetch sections).
 * *Every* normative requirement and *every* threat entry cites a source with section anchor (RFC / OIDC spec / OWASP / FAPI). RFC 2119 keywords (MUST/SHOULD/MAY) trace back to the cited BCP.
+* Requirements are *security-driven* — each traces to a threat it mitigates or is the secure way to perform a needed operation. Exclusions (the legacy/discouraged list) are sourced too.
 * `references.adoc` holds the single bibliography; all docs cite into it.
 
 == Execution
@@ -73,6 +97,8 @@ doc/relying-party/
 * [ ] Every requirement and threat entry cites a normative source with section anchor
 * [ ] Aspects cleanly separated — no fetch content in the process doc, no process content in the fetch doc, token doc references (not duplicates) the validation core
 * [ ] Threat model covers, at minimum, every RFC 9700 §4.x attack plus SSRF and logout (catalog below)
+* [ ] No legacy/discouraged mechanism is required or specified; each exclusion (Implicit, ROPC, Hybrid, `plain` PKCE, `alg=none`, tokens-in-URL, …) is documented and sourced
+* [ ] Every requirement traces to a threat or a needed secure operation (security-driven, not feature-driven)
 * [ ] `TOKEN-SHERIFF-RP-N` IDs grouped by aspect; traceability matrix requirements ↔ threats ↔ spec complete
 * [ ] `references.adoc` is the single bibliography and resolves
 
