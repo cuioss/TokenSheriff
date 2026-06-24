@@ -1,4 +1,4 @@
-= Plan 03 — Relying-Party Requirements, Specification & Security
+= Plan 03 — Token Retrieval, OIDC Fetching & BFF Groundwork: Requirements, Specification & Security
 :toc: macro
 :toclevels: 3
 :sectnums:
@@ -7,58 +7,82 @@
 [cols="1,3"]
 |===
 | Status     | Ready to execute (after xref:../02-doc-structure/README.adoc[Plan 02] establishes `doc/relying-party/`)
-| Depends on | Plan 02 (doc structure); produces the spec that the future RP module is built against (spec-first)
-| Scope      | A *most-secure current subset* RP document set — requirements + specification + security (threat model + best practices) — modular by aspect, security-led, every normative item source-referenced
+| Depends on | Plan 02 (doc structure); produces the spec the future RP module is built against (spec-first)
+| Focus      | Server-side *token retrieval* (token-endpoint grants incl. confidential authorization-code + PKCE), *OIDC fetching* (discovery, JWKS, userinfo), and the *token lifecycle* — the engine a *Backend-For-Frontend (BFF)* is built on. A *most-secure current subset*, security-led, every normative item source-referenced.
 |===
 
 toc::[]
 
 == Goal
 
-Produce, _before_ any RP code, the document set that mirrors the existing validation docs (`Requirements.adoc`, `specification/`, `security/threat-model.adoc`) but for the OIDC relying-party capability. Security is the centre of gravity: a sourced threat model and a sourced best-practices catalog, both drawn from the standards and current security research below.
+Produce, _before_ any RP code, the document set (requirements + specification + security) for what this server-side library needs: *retrieving tokens* as a confidential client, *holding and refreshing them server-side*, and *fetching OIDC artifacts* (metadata, keys, userinfo) — designed so a BFF can be built on top. Security is the centre of gravity: a sourced threat model and a sourced best-practices catalog drawn from the standards below.
+
+== Target architecture: Backend-For-Frontend (BFF)
+
+The IETF https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps] draft makes the BFF the recommended pattern for browser apps: a *server-side confidential client* runs the authorization-code flow, *stores tokens server-side*, and issues the browser only a session cookie — so no tokens are ever exposed to the browser. This library is the *engine* for that BFF (and for the lighter Token-Mediating Backend): it performs the confidential-client token retrieval, the server-side token lifecycle, validation, and fetching.
+
+What the library lays groundwork for vs. what the BFF *application* owns:
+
+.In scope (the engine / groundwork)
+* Confidential-client *authorization-code + PKCE* flow, server-side (no tokens in the browser).
+* Token-endpoint grants — `authorization_code`, `refresh_token`, `client_credentials`; token exchange (RFC 8693) candidate.
+* Token-endpoint *client authentication* — `client_secret_basic`/`post`, `private_key_jwt` (RFC 7523), mTLS (RFC 8705).
+* *Sender-constraining* of retrieved tokens — DPoP (RFC 9449) / mTLS (RFC 8705).
+* *Server-side token lifecycle* — storage, refresh, revocation.
+* OIDC *fetching* — discovery (`.well-known`) and JWKS (both already in the validation core), plus userinfo.
+* Validating retrieved tokens (reuse the validation core) and the security of all the above (flow integrity, TLS, SSRF, credential protection).
+
+.BFF/TMB application layer (enabled, not built here)
+The library must *not preclude* these, but does not own them:
+
+* The browser↔backend *session cookie*, CSRF on the BFF's own API, request proxying (BFF) or handing the access token to the SPA (TMB).
+* Login/consent UX.
+* Front-/back-channel logout *receivers* and the Session-Management iframe (browser-session concerns). RP-initiated logout *triggering* and token revocation are in-scope building blocks.
+
+Public-client / in-browser OAuth (tokens in the SPA) is explicitly *not* a goal — the BFF exists precisely to avoid it.
 
 == Guiding principle: a most-secure current subset
 
-Security is the *leading* topic, not one section among many. This document set specifies the *smallest, most secure subset* of current OAuth 2.0 / OpenID Connect that an RP needs — it is *not* a full, spec-complete implementation.
+Security is the *leading* topic. Specify the *smallest, most secure subset* of current OAuth 2.0 / OpenID Connect for confidential-client token retrieval, lifecycle and fetching — not a spec-complete implementation.
 
-* *Current only.* Adopt the latest recommended constructs (authorization code + PKCE, `iss`, PAR, DPoP/mTLS, the BCP RFC 9700, the OAuth 2.1 direction, FAPI 2.0 where it raises the bar).
-* *Legacy/discouraged is out of scope by design.* Mechanisms the standards deprecate or discourage are deliberately *not* supported — and that exclusion is itself documented and sourced (below), so it reads as a decision, not an omission.
-* *Security-driven requirements.* Requirements derive from the threat model: a feature is in scope only if it is required for secure operation, or is the secure way to do something. "The spec allows it" is not, by itself, a reason to include it.
+* *Current only.* The BCP (RFC 9700), the OAuth 2.1 direction, the Browser-Based Apps BFF guidance, FAPI 2.0 where it raises the bar, sender-constrained tokens, strong client authentication.
+* *Security-driven requirements.* A capability is in scope only if required for secure operation or it is the secure way to do something. "The spec allows it" is not, by itself, a reason to include it.
+* *Legacy/discouraged is refused* — see below, sourced.
 
-== Deliberately excluded (legacy / discouraged)
+== Security exclusions (legacy / discouraged, refused)
 
-Documented, sourced non-goals. The RP MUST NOT require or implement these; each exclusion is restated in the relevant aspect doc with its source.
+Sourced non-goals. The library MUST NOT require or implement these:
 
-* *Implicit grant* (`response_type=token` / `id_token token`) — RFC 9700 §2.1.2 (SHOULD NOT); removed in OAuth 2.1. Use code + PKCE.
+* *Implicit grant* (`response_type=token`) — RFC 9700 §2.1.2 (SHOULD NOT); removed in OAuth 2.1.
 * *Resource Owner Password Credentials grant* — RFC 9700 §2.4 (MUST NOT); removed in OAuth 2.1.
-* *Hybrid flows* (`code id_token`, `code token`, …) — unnecessary for a secure RP and re-introduce front-channel token exposure. Use plain `code`.
-* *PKCE `plain` method* — `S256` only (RFC 7636, RFC 9700).
-* *`alg=none` / unsigned or weak-algorithm ID tokens* — RFC 8725 (JWT BCP). Require asymmetric signature verification.
-* *Tokens in URL query/fragment* — RFC 9700 §4.3; use `form_post` and code exchange at the token endpoint.
-* *Bare bearer tokens where sender-constraining is feasible* — prefer DPoP/mTLS (RFC 9449, FAPI 2.0); bearer only as a documented fallback.
-* *Non-rotating long-lived refresh tokens for public clients* — RFC 9700 §4.14.
-* *Front-channel logout / Session-Management iframe as the primary mechanism* — known reliability/security weaknesses; prefer back-channel logout (OIDC Back-Channel Logout 1.0). Front-channel is optional/secondary at most.
-* *Unvalidated dynamic registration of `jwks_uri`/`*_uri`* — SSRF vector (CVE-2026-1180); excluded unless strictly validated.
+* *Hybrid flows* — unnecessary for a confidential BFF; re-introduce front-channel token exposure. Use plain `code`.
+* *In-browser token storage* (public-client OAuth) — the BFF holds tokens server-side; Browser-Based Apps draft.
+* *PKCE `plain`* — `S256` only (RFC 7636, RFC 9700).
+* *Tokens in URL query/fragment* — RFC 9700 §4.3; `form_post` and code exchange at the token endpoint.
+* *`alg=none` / unsigned or weak-algorithm tokens* — RFC 8725 (JWT BCP). Require asymmetric signature verification.
+* *Bare bearer tokens where sender-constraining is feasible* — prefer DPoP/mTLS (RFC 9449, RFC 8705, FAPI 2.0).
+* *Weak client auth where `private_key_jwt`/mTLS is available; secrets over non-TLS* — RFC 9700, RFC 7523, RFC 8705.
+* *Unvalidated `jwks_uri` / metadata URLs* (SSRF) — CVE-2026-1180.
 
-== Organizing principle: separate the three aspects
+== Organizing principle: separate the aspects
 
-The RP surface splits into three distinct concern areas. Keep them in separate documents and requirement groups — do not blend them.
+Keep these in separate documents and requirement groups — do not blend them.
 
 [cols="1,3"]
 |===
 | Aspect | What it covers
 
-| *Token* (largely "as of now")
-| Token handling/validation. Mostly *inherited from the validation core* — the RP docs *reference* the existing validation requirements/threat model and add only the RP-specific delta: ID-token validation (`iss`/`aud`/`exp`/`nonce`/`azp`/`at_hash`/`c_hash`/signature), token storage, refresh-token rotation, sender-constrained tokens.
+| *Token* (partly inherited)
+| Handling/validation and *server-side lifecycle* of retrieved tokens. *References the validation core* (no duplication) and adds the delta: storage, refresh, revocation, sender-constraining, and validation of ID token / userinfo responses.
 
-| *Process* (net-new)
-| Protocol/flow orchestration: authorization-code + PKCE, `state`/CSRF, `nonce` binding, exact redirect-URI matching, mix-up defence, code injection, PAR, response mode, logout (RP-initiated / front- / back-channel), session management, clickjacking.
+| *Retrieval & flow* (net-new)
+| The confidential-client *authorization-code + PKCE* flow (server-side) and the token endpoint: grants, client authentication, `state`/`nonce`/exact redirect-URI, mix-up defence (`iss`), code-injection defence, PAR, DPoP/mTLS, TLS, response validation.
 
 | *Fetch* (partly inherited)
-| Server-side retrieval/HTTP. *Already in the validation core* (reference, do not duplicate): discovery (`.well-known`, `core.wellknown`), JWKS fetch/cache/rotation (`core.jwks`), TLS and the HTTP client. *Net-new for the RP*: token-endpoint exchange and userinfo fetch. *SSRF/TLS/resilience* analysis applies to *both* — including the existing discovery/JWKS paths.
+| Server-side retrieval/HTTP. *Already in the core* (reference, do not duplicate): discovery (`.well-known`, `core.wellknown`), JWKS fetch/cache/rotation (`core.jwks`), TLS, the HTTP client. *Net-new*: userinfo fetch. *SSRF/TLS/resilience* applies to *both* — including the existing discovery/JWKS paths.
 |===
 
-The *token* and *fetch* aspects must not duplicate what the validation core already does — they link to it and state only the RP delta (token: ID-token validation, refresh handling, sender-constraining; fetch: token-endpoint + userinfo retrieval). *Process* is the only fully net-new aspect. Most of the new threat surface sits in process and the net-new fetch retrievals — but the SSRF and TLS analysis also re-examines the *existing* discovery/JWKS fetching, which may yield hardening requirements on current code.
+*Retrieval & flow* is the only fully net-new aspect. *Token* and *fetch* reference the validation core and state only the delta. The SSRF/TLS analysis also re-examines the *existing* `core.wellknown`/`core.jwks` fetch code, which may yield hardening requirements on current code.
 
 == Target document set (under `doc/relying-party/`)
 
@@ -66,67 +90,65 @@ The *token* and *fetch* aspects must not duplicate what the validation core alre
 ----
 doc/relying-party/
   requirements.adoc            # TOKEN-SHERIFF-RP-N, grouped by aspect
-  architecture.adoc            # RP component & sequence overview
+  architecture.adoc            # RP/BFF component & sequence overview
   threat-model.adoc            # attack catalog per aspect, each entry sourced
-  best-practices.adoc          # normative BCP checklist, each item sourced
+  best-practices.adoc          # normative checklist, each item sourced
   references.adoc              # the source catalog / bibliography
   specification/
-    process-flow.adoc          # auth-code+PKCE, state/nonce, mix-up, PAR, logout
-    fetch-discovery-jwks.adoc  # discovery, JWKS, token/userinfo fetch, SSRF, TLS
-    token-handling.adoc        # RP-side token delta (references the validation core)
+    retrieval-flow.adoc        # auth-code+PKCE, grants, client auth, state/nonce, mix-up, PAR
+    fetch-discovery-jwks.adoc  # discovery, JWKS, userinfo fetch, SSRF, TLS
+    token-handling.adoc        # token lifecycle delta (references the validation core)
 ----
 
 == Requirement-ID & sourcing discipline
 
-* RP requirements use `TOKEN-SHERIFF-RP-N` (per Plan 02), *grouped by aspect* within the doc (Token / Process / Fetch sections).
-* *Every* normative requirement and *every* threat entry cites a source with section anchor (RFC / OIDC spec / OWASP / FAPI). RFC 2119 keywords (MUST/SHOULD/MAY) trace back to the cited BCP.
-* Requirements are *security-driven* — each traces to a threat it mitigates or is the secure way to perform a needed operation. Exclusions (the legacy/discouraged list) are sourced too.
-* `references.adoc` holds the single bibliography; all docs cite into it.
+* RP requirements use `TOKEN-SHERIFF-RP-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow / Fetch).
+* *Every* normative requirement and *every* threat entry cites a source with section anchor (RFC / OIDC spec / OWASP / FAPI). MUST/SHOULD/MAY trace back to the cited source.
+* Requirements are *security-driven* — each traces to a threat it mitigates or is the secure way to perform a needed operation. Exclusions are sourced too.
+* `references.adoc` is the single bibliography; all docs cite into it.
 
 == Execution
 
-. *Scaffold + bibliography* — create the doc set skeleton and `references.adoc` from the source catalog below.
-. *Requirements* (`requirements.adoc`) — author `TOKEN-SHERIFF-RP-N`, grouped by aspect, each sourced.
-. *Threat model* (`threat-model.adoc`) — STRIDE/attack-catalog per aspect, each entry → source + mitigation + the requirement that covers it.
-. *Best practices* (`best-practices.adoc`) — the sourced checklist below, normative.
-. *Specifications* — `process-flow.adoc`, `fetch-discovery-jwks.adoc`, `token-handling.adoc`.
-. *Traceability + verify* — cross-link requirements ↔ threats ↔ best practices ↔ spec; confirm aspect separation and full sourcing.
+. *Scaffold + bibliography* — doc-set skeleton and `references.adoc` from the source catalog below.
+. *Requirements* — `TOKEN-SHERIFF-RP-N`, grouped by aspect, each sourced.
+. *Threat model* — attack catalog per aspect; each entry → source + mitigation + covering requirement.
+. *Best practices* — the sourced checklist below, normative.
+. *Specifications* — `retrieval-flow.adoc`, `fetch-discovery-jwks.adoc`, `token-handling.adoc`.
+. *Traceability + verify* — cross-link requirements ↔ threats ↔ best practices ↔ spec; confirm aspect separation, BFF-groundwork coverage, and full sourcing.
 
 == Verification
 
 * [ ] Every requirement and threat entry cites a normative source with section anchor
-* [ ] Aspects cleanly separated — no fetch content in the process doc, no process content in the fetch doc, token doc references (not duplicates) the validation core
-* [ ] Threat model covers, at minimum, every RFC 9700 §4.x attack plus SSRF and logout (catalog below)
-* [ ] No legacy/discouraged mechanism is required or specified; each exclusion (Implicit, ROPC, Hybrid, `plain` PKCE, `alg=none`, tokens-in-URL, …) is documented and sourced
-* [ ] Every requirement traces to a threat or a needed secure operation (security-driven, not feature-driven)
-* [ ] `TOKEN-SHERIFF-RP-N` IDs grouped by aspect; traceability matrix requirements ↔ threats ↔ spec complete
-* [ ] `references.adoc` is the single bibliography and resolves
+* [ ] Aspects cleanly separated; token & fetch reference (not duplicate) the validation core
+* [ ] Retrieval & flow covers confidential auth-code+PKCE, client auth, `state`/`nonce`/redirect-URI, mix-up (`iss`), and sender-constraining
+* [ ] BFF groundwork is sufficient (server-side token lifecycle) without owning the browser session/cookie layer
+* [ ] Each security exclusion is documented and sourced; every requirement is threat-driven
+* [ ] `TOKEN-SHERIFF-RP-N` IDs grouped by aspect; traceability matrix complete; `references.adoc` resolves
 
 // ---------------------------------------------------------------------------
 
 == Seed: source catalog (research 2026-06-24)
 
-Input for the spec authors — the authoritative, citable sources. Not the final bibliography.
+Input for the spec authors — authoritative, citable sources.
 
 .Standards (normative)
 * https://www.rfc-editor.org/rfc/rfc9700[RFC 9700] — Best Current Practice for OAuth 2.0 Security *(primary BCP)*
+* https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps] — BFF / Token-Mediating Backend patterns
 * https://www.rfc-editor.org/rfc/rfc6749[RFC 6749] — OAuth 2.0 Authorization Framework
 * https://www.rfc-editor.org/rfc/rfc6819[RFC 6819] — OAuth 2.0 Threat Model and Security Considerations
 * https://www.rfc-editor.org/rfc/rfc7636[RFC 7636] — PKCE
-* https://www.rfc-editor.org/rfc/rfc8252[RFC 8252] — OAuth 2.0 for Native Apps
 * https://www.rfc-editor.org/rfc/rfc8414[RFC 8414] — OAuth 2.0 Authorization Server Metadata (discovery)
+* https://www.rfc-editor.org/rfc/rfc8693[RFC 8693] — OAuth 2.0 Token Exchange
+* https://www.rfc-editor.org/rfc/rfc7523[RFC 7523] — JWT Profile for OAuth 2.0 Client Authentication (`private_key_jwt`)
+* https://www.rfc-editor.org/rfc/rfc8705[RFC 8705] — OAuth 2.0 Mutual-TLS Client Auth & Certificate-Bound Access Tokens
+* https://www.rfc-editor.org/rfc/rfc9449[RFC 9449] — DPoP (Demonstrating Proof-of-Possession)
 * https://www.rfc-editor.org/rfc/rfc8725[RFC 8725] — JSON Web Token Best Current Practices
 * https://www.rfc-editor.org/rfc/rfc9068[RFC 9068] — JWT Profile for OAuth 2.0 Access Tokens
 * https://www.rfc-editor.org/rfc/rfc9126[RFC 9126] — Pushed Authorization Requests (PAR)
 * https://www.rfc-editor.org/rfc/rfc9207[RFC 9207] — Authorization Server Issuer Identification (`iss`, mix-up defence)
-* https://www.rfc-editor.org/rfc/rfc9449[RFC 9449] — DPoP (Demonstrating Proof-of-Possession)
 * https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1] — consolidated draft
-* https://openid.net/specs/openid-connect-core-1_0.html[OpenID Connect Core 1.0]
+* https://openid.net/specs/openid-connect-core-1_0.html[OpenID Connect Core 1.0] — userinfo, ID-token validation
 * https://openid.net/specs/openid-connect-discovery-1_0.html[OpenID Connect Discovery 1.0]
-* https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OIDC RP-Initiated Logout 1.0]
-* https://openid.net/specs/openid-connect-frontchannel-1_0.html[OIDC Front-Channel Logout 1.0]
-* https://openid.net/specs/openid-connect-backchannel-1_0.html[OIDC Back-Channel Logout 1.0]
-* https://openid.net/specs/openid-connect-session-1_0.html[OIDC Session Management 1.0]
 * https://openid.net/specs/fapi-security-profile-2_0-final.html[FAPI 2.0 Security Profile]
 
 .Guidance & real-world
@@ -138,36 +160,32 @@ Input for the spec authors — the authoritative, citable sources. Not the final
 
 Minimum coverage for `threat-model.adoc`. Each → mitigation + covering requirement during authoring.
 
-.Process aspect
-* Insufficient redirect-URI validation — RFC 9700 §4.1 → exact string match
-* Mix-up attacks (multiple AS) — RFC 9700 §4.4, RFC 9207 → `iss` validation or distinct redirect URIs per issuer
-* Authorization-code injection — RFC 9700 §4.5 → PKCE (public clients MUST) and/or `nonce`
+.Retrieval & flow aspect
+* Authorization-code injection — RFC 9700 §4.5 → PKCE (`S256`) and/or `nonce`
 * PKCE downgrade — RFC 9700 §4.8 → verify AS PKCE support
-* CSRF — RFC 9700 §4.7 → session-bound `state`, or PKCE, or `nonce`
-* Open redirection — RFC 9700 §4.11 → no open redirectors
-* Clickjacking — RFC 6819 §4.4.1.9 → CSP `frame-ancestors` / framebusting
-* Logout/session integrity & session fixation — OIDC Front-/Back-Channel Logout, Session Management 1.0
+* Mix-up attacks (multiple AS) — RFC 9700 §4.4, RFC 9207 → `iss` validation / distinct redirect URIs
+* Insufficient redirect-URI validation — RFC 9700 §4.1 → exact string match
+* CSRF on the callback — RFC 9700 §4.7 → session-bound `state` or PKCE or `nonce`
+* Weak/leaked client credentials — RFC 9700, RFC 7523, RFC 8705 → `private_key_jwt`/mTLS; protect secrets; TLS only
+* Token replay / lack of sender-constraining — RFC 9700 §4.10, RFC 9449, RFC 8705, FAPI 2.0 → DPoP or mTLS-bound tokens
+* Token-endpoint TLS downgrade / MITM — RFC 9700, RFC 6749 §10 → enforce TLS, validate certificates
 
 .Token aspect
-* Access-token leakage via Referer — RFC 9700 §4.2 → `Referrer-Policy`, code at token endpoint
-* Token exposure in browser history — RFC 9700 §4.3 → no tokens in query; `form_post`
-* Access-token injection — RFC 9700 §4.6 → `at_hash`; no implicit grant
-* Implicit-grant token leakage — RFC 9700 §2.1.2 → code+PKCE only
-* Refresh-token theft — RFC 9700 §4.14 → rotation (public clients) or sender-constraining
-* Token replay / lack of sender-constraining — RFC 9700 §4.10, RFC 9449, FAPI 2.0 → DPoP or mTLS
-* ID-token validation — OpenID Connect Core §3.1.3.7 → `iss`/`aud`/`exp`/`iat`/`nonce`/signature/`azp`
+* Refresh-token theft (server-side) — RFC 9700 §4.14 → rotation, revoke on misuse, sender-constraining; protect at-rest storage
+* Token replay / audience confusion — RFC 9068, OIDC Core §3.1.3.7 → validate `iss`/`aud`/`exp`/`iat`/signature (reuse core)
+* ID-token / userinfo integrity — OIDC Core §3.1.3.7, §5.3 → signature + claim validation; bind userinfo `sub`
+* Sender-constraint loss in storage/forwarding — RFC 9449, RFC 8705 → keep tokens bound; minimal storage
 
 .Fetch aspect
-* SSRF via `jwks_uri` / discovery URLs — OWASP, CVE-2026-1180 → host allow-listing, egress restriction, block internal/link-local ranges. *Applies to the existing `core.wellknown` / `core.jwks` fetch code — audit it for hardening, not only new endpoints.*
-* Malicious IdP endpoints advertised via discovery — RFC 8414 / OIDC Discovery → validate `issuer`, pin/validate metadata
+* SSRF via `jwks_uri` / discovery / userinfo URLs — OWASP, CVE-2026-1180 → host allow-listing, egress restriction, block internal/link-local ranges. *Audit the existing `core.wellknown`/`core.jwks` code, not only new endpoints.*
+* Malicious endpoints advertised via discovery — RFC 8414 / OIDC Discovery → validate `issuer`, pin/validate metadata
 * TLS downgrade / MITM on fetches — RFC 9700, RFC 8414 → enforce TLS, validate certificates
-* DoS via large/slow metadata or JWKS responses → timeouts, size limits
-* JWKS rotation/caching correctness (already handled in the validation core) → reference the core's strategy
+* DoS via large/slow metadata, JWKS or userinfo responses → timeouts, size limits
 
 == Seed: best-practices checklist by aspect (sourced)
 
 Normative basis for `best-practices.adoc`.
 
-* *Process:* authorization-code + PKCE for all client types; never the implicit grant (RFC 9700 §2.1.2, FAPI 2.0). Exact redirect-URI match (§4.1). CSRF via session-bound `state` / PKCE / `nonce` (§4.7). Mix-up defence via `iss` (RFC 9207, §4.4). Prefer PAR for request integrity (RFC 9126, FAPI 2.0). `form_post` response mode; no tokens in query (§4.3).
-* *Token:* validate the ID token fully — `iss`/`aud`/`exp`/`iat`/`nonce`/signature/`azp`/`at_hash` (OIDC Core §3.1.3.7). Sender-constrain access tokens with DPoP or mTLS (RFC 9449, §4.10, FAPI 2.0). Rotate refresh tokens for public clients (§4.14). Short-lived access tokens; minimal token storage.
-* *Fetch:* enforce TLS on all server-side fetches. Defend against SSRF on `jwks_uri`/discovery — allow-list hosts, restrict egress, block internal ranges (OWASP, CVE-2026-1180). Apply timeouts and response size limits. Reuse the validation core's JWKS cache/rotation.
+* *Retrieval & flow:* confidential-client authorization-code + PKCE (`S256`); never implicit/hybrid (RFC 9700 §2.1.2, Browser-Based Apps draft). Exact redirect-URI match (§4.1). CSRF via session-bound `state` / PKCE / `nonce` (§4.7). Mix-up defence via `iss` (RFC 9207, §4.4). Prefer PAR (RFC 9126, FAPI 2.0). Strongest available client auth — `private_key_jwt` (RFC 7523) or mTLS (RFC 8705) over `client_secret`. Sender-constrain tokens with DPoP/mTLS (RFC 9449, RFC 8705, FAPI 2.0). TLS on the token endpoint; validate `iss`/`aud` of the response.
+* *Token:* validate every retrieved token via the core pipeline — `iss`/`aud`/`exp`/`iat`/signature (RFC 9068, OIDC Core §3.1.3.7); for userinfo, verify signature and bind `sub`. Hold tokens server-side; rotate refresh tokens and revoke on misuse (§4.14); protect at-rest; keep sender-constraint intact; short-lived access tokens.
+* *Fetch:* enforce TLS on all fetches. Defend against SSRF on `jwks_uri`/discovery/userinfo — allow-list hosts, restrict egress, block internal ranges (OWASP, CVE-2026-1180). Timeouts and response size limits. Reuse the core's JWKS cache/rotation.
