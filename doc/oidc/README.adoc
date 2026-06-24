@@ -14,6 +14,10 @@ implementation plans plus the standing design decisions behind them.
 * xref:02-doc-structure/README.adoc[02 — Documentation Structure] -
   modularize `doc/` into peer capabilities (validation, relying-party) so the
   coming RP docs have a clean home; runs after Plan 01.
+* xref:03-rp-spec/README.adoc[03 — RP Requirements, Specification & Security] -
+  produce the full relying-party document set (requirements, specification,
+  threat model, best practices) — modular by aspect (token / process / fetch),
+  every normative item source-referenced; spec-first, before RP code.
 
 == Design decisions
 
