@@ -1,0 +1,111 @@
+= Plan 02 — Documentation Structure for the Relying-Party Capability
+:toc: macro
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+[cols="1,3"]
+|===
+| Status     | Ready to execute (after xref:../01-restructure/README.adoc[Plan 01])
+| Depends on | Plan 01 — Restructure (rename); run after it to pay link churn once
+| Scope      | Reshape `doc/` so token validation and the coming OIDC relying-party (RP) are peer capabilities
+|===
+
+toc::[]
+
+== Goal
+
+Decide how the documentation absorbs the second capability (the xref:../decision-oidc-module.adoc[OIDC relying-party module]) and lay out the target structure so RP docs have a clean home before RP work starts.
+
+== Analysis: current structure
+
+The docs are already *two-tier*:
+
+* *Top-level `doc/`* — project-wide conceptual docs: `architecture.adoc`, `Requirements.adoc` (622 lines), `security/threat-model.adoc` (373 lines), `security-reference.adoc`, `specification/` (a folder of 3 specs), `LogMessages.adoc`, `faq/`.
+* *Module `doc/` dirs* — module-specific usage/config/dev: `oauth-sheriff-core/doc/`, `oauth-sheriff-quarkus-parent/doc/`, `benchmarking/doc/`.
+
+Two facts decide the approach:
+
+. *The top-level conceptual docs are generically named but 100% validation* — "Token Validation Pipeline", "JWT Token Handling Requirements", "JWT Token Handling – Threat Model". They are "top-level" only because validation has been the whole project.
+. *The structure is already partially modular* — `specification/` is a folder, docs are per-module, and `LogMessages` already exists per-module (`benchmarking/` has its own). The only monoliths are the big single-file conceptual docs.
+
+== Decision: modularize by capability
+
+Reshape the conceptual layer into peer capabilities — `validation` and `relying-party` — rather than extending the existing validation docs with RP content.
+
+Why not extend:
+
+* `Requirements.adoc` (622) and `threat-model.adoc` (373) would balloon and *mix two very different surfaces*. RP's threats (redirect/callback CSRF, `state`/`nonce`, authorization-code interception, token leakage, session fixation) are unlike validation's — and a security library must keep a clean, per-capability threat model.
+* It mirrors the code boundary (validation core vs RP module), keeping doc↔code traceability clean.
+* It is consistent with the modularity already present (folders, per-module docs/log registries) — an increment, not a new paradigm.
+
+The already-modular parts stay as they are: module `doc/` dirs continue per-module (the RP module gets its own), and `specification/` stays a folder (now per-capability).
+
+== Target structure
+
+[source]
+----
+doc/
+  README.adoc                       # hub — grouped by capability + shared
+  validation/                       # existing capability (relocated)
+    architecture.adoc
+    requirements.adoc               # IDs: TOKEN-SHERIFF-N  (per Plan 01)
+    threat-model.adoc
+    security-reference.adoc
+    LogMessages.adoc                # core/validation log registry
+    specification/
+      microprofile-jwt-compatibility.adoc
+      multi-idp-testing.adoc
+      token-decryption.adoc
+    faq/keycloak.adoc
+  relying-party/                    # NEW capability (added when RP work starts)
+    architecture.adoc
+    requirements.adoc               # IDs: TOKEN-SHERIFF-RP-N
+    threat-model.adoc
+    specification/
+  shared/                           # cross-cutting only, if/when needed
+    glossary.adoc
+----
+
+Module-level docs are unchanged in pattern: the RP module (`token-sheriff-oidc-rp`) gets its own `doc/` for usage/config/dev and its own `LogMessages.adoc`, exactly like the existing modules.
+
+[NOTE]
+====
+The `doc/oidc/` planning area (this folder) is transient — it holds the plans, not the capability docs. The RP *capability* docs live under `doc/relying-party/`. Once these plans execute, the planning area can be retired.
+====
+
+== Requirement-ID namespacing
+
+* Validation keeps `TOKEN-SHERIFF-N` (after Plan 01's `OAUTH-SHERIFF-N → TOKEN-SHERIFF-N`).
+* RP requirements use `TOKEN-SHERIFF-RP-N` — same project prefix, explicit capability segment, unambiguous and greppable (`TOKEN-SHERIFF-RP-[0-9]`).
+
+== Execution
+
+=== Phase 1 — Establish the capability split (validation)
+. Create `doc/validation/` and move the conceptual docs into it: `architecture.adoc`, `Requirements.adoc → requirements.adoc`, `security/* → threat-model.adoc` + `security-reference.adoc`, `specification/`, `LogMessages.adoc`, `faq/`.
+. Rescope titles to the capability ("Token Validation Architecture", "… Requirements", "… Threat Model").
+. Fix all references with the same text-surface tooling as Plan 01 (`text.FindAndReplace` over `xref:`/`link:` targets) — inbound links come from the root `README.md`, module `doc/` dirs, and cross-doc xrefs.
+. Update the hub `doc/README.adoc` to present capabilities as groups ("Token Validation", later "Relying-Party").
+
+=== Phase 2 — Scaffold the RP capability (when RP work starts)
+. Create `doc/relying-party/` with stub `architecture.adoc`, `requirements.adoc` (`TOKEN-SHERIFF-RP-N`), `threat-model.adoc`, `specification/`.
+. Add the RP module `doc/` dir + its own `LogMessages.adoc` per the per-module pattern.
+. Wire both capabilities into the hub.
+
+=== Conventions for future RP docs
+* Capability-conceptual content → `doc/relying-party/`; module usage/config/dev → the RP module's `doc/`.
+* RP requirement IDs → `TOKEN-SHERIFF-RP-N`; RP threats live only in the RP threat model.
+* No RP content in validation docs, and vice versa.
+
+== Risks & mitigations
+
+* *Link churn from moving validation docs* — many inbound `xref:`/`link:` targets (root `README.md`, module docs). → Sequence *after* Plan 01 so doc links are rewritten once; reuse the same `text.FindAndReplace` pass; verify with a link-resolution sweep.
+* *Over-building ahead of RP* — `doc/relying-party/` should be scaffolded when RP work begins (Phase 2), not pre-filled now. Phase 1 (the validation split) is the only part to do alongside/after Plan 01.
+
+== Verification
+
+* [ ] `doc/validation/` holds the relocated conceptual docs; titles rescoped to the capability
+* [ ] Every `xref:`/`link:` to the moved docs resolves (root `README.md`, module docs, cross-doc) — zero broken links
+* [ ] `doc/README.adoc` hub presents capabilities as peer groups
+* [ ] Requirement IDs unchanged in count after the move; RP namespace `TOKEN-SHERIFF-RP-N` reserved
+* [ ] Phase 2 deferred until RP work starts (no empty RP scaffolding merged early)

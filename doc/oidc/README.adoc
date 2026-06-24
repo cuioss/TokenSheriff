@@ -11,6 +11,9 @@ implementation plans plus the standing design decisions behind them.
   requirement IDs, and documentation; Maven Central relocation; consumer
   migration. Includes the
   xref:01-restructure/migration-nifi-extensions.adoc[nifi-extensions migration guide].
+* xref:02-doc-structure/README.adoc[02 — Documentation Structure] -
+  modularize `doc/` into peer capabilities (validation, relying-party) so the
+  coming RP docs have a clean home; runs after Plan 01.
 
 == Design decisions
 
