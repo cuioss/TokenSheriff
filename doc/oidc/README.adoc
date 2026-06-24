@@ -1,34 +1,29 @@
 = OIDC Planning
 :sectnums:
 
-Working area for designing and planning the OpenID Connect (relying-party)
-extension to OAuth-Sheriff. Each document below is self-contained so it can
-later be turned into its own implementation plan.
-
-== Decisions
-
-* xref:decision-oidc-module.adoc[OIDC Relying-Party as an Additional Module] -
-  house the active OIDC/RP functionality as a new module in this repository
-  (not a separate project), depending on `oauth-sheriff-core`.
-* xref:decision-naming-strategy.adoc[Naming & Identity Strategy] -
-  *Decided:* full rebrand to *Token-Sheriff* (supersedes the earlier
-  keep-the-name "Strategy A").
+Working area for the Token-Sheriff direction: numbered, self-contained
+implementation plans plus the standing design decisions behind them.
 
 == Plans
 
-* xref:../rebrand/plan-token-sheriff-rebrand.adoc[Token-Sheriff Rebrand Plan] -
-  rename repo, Maven coordinates, packages, config/metrics keys, requirement
-  IDs, and docs; Maven Central relocation; phased execution.
-* xref:../rebrand/migration-nifi-extensions.adoc[nifi-extensions Migration Guide] -
-  consumer steps for the one known client.
+* xref:01-restructure/README.adoc[01 — Restructure: Rebrand to Token-Sheriff] -
+  rename the repository, Maven coordinates, packages, config + metric keys,
+  requirement IDs, and documentation; Maven Central relocation; consumer
+  migration. Includes the
+  xref:01-restructure/migration-nifi-extensions.adoc[nifi-extensions migration guide].
+
+== Design decisions
+
+* xref:decision-oidc-module.adoc[OIDC Relying-Party as an Additional Module] -
+  house the active OIDC/RP functionality as a new module in this repository,
+  depending on the validation core. Basis for a later plan.
 
 == Status
 
-Planning only. No implementation has started; no module has been created.
+Planning only — no implementation has started.
 
 [NOTE]
 ====
 This area is intentionally not yet wired into the top-level
-xref:../README.adoc[Documentation Hub] — it will be linked in once the
-direction is confirmed.
+xref:../README.adoc[Documentation Hub]; it will be linked in once execution begins.
 ====

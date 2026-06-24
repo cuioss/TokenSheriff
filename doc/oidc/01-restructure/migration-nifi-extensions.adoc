@@ -6,33 +6,31 @@
 
 [cols="1,3"]
 |===
-| Status   | Planned
-| Date     | 2026-06-24
 | Audience | Maintainers of `cuioss/nifi-extensions` (the one known consumer)
-| Context  | xref:plan-token-sheriff-rebrand.adoc[Token-Sheriff rebrand plan]
+| Context  | xref:README.adoc[Plan 01 — Restructure]
 |===
 
 toc::[]
 
-== What changed
+== What changes
 
-OAuth-Sheriff was renamed to *Token-Sheriff*. Four consumer-visible surfaces change:
+Four consumer-visible surfaces change:
 
 [cols="2,3,3"]
 |===
-| Surface | Old | New
+| Surface | From | To
 
-| Maven groupId   | `de.cuioss.sheriff.oauth`   | `de.cuioss.sheriff.token`
-| Artifact IDs    | `oauth-sheriff-core`, `oauth-sheriff-quarkus*` | `token-sheriff-core`, `token-sheriff-quarkus*`
-| Java packages   | `de.cuioss.sheriff.oauth.*`  | `de.cuioss.sheriff.token.*`
-| Config + metric keys | `sheriff.oauth.*`       | `sheriff.token.*`
+| Maven groupId        | `de.cuioss.sheriff.oauth`   | `de.cuioss.sheriff.token`
+| Artifact IDs         | `oauth-sheriff-*`           | `token-sheriff-*`
+| Java packages        | `de.cuioss.sheriff.oauth.*`  | `de.cuioss.sheriff.token.*`
+| Config + metric keys | `sheriff.oauth.*`           | `sheriff.token.*`
 |===
 
-Estimated impact in `nifi-extensions`: ~119 groupId/import references, ~109 config-key references, plus the dependency declarations.
+Estimated impact in `nifi-extensions`: ~119 groupId/import references, ~109 config-key references, plus the dependency declarations. No functional/API behaviour changes — names only.
 
 [NOTE]
 ====
-Thanks to Maven *relocation*, an unchanged build keeps working temporarily: it resolves the new artifact and prints a `has been relocated` warning. That warning is your grace window — but Java imports and config keys do **not** auto-migrate, so plan to do the migration in one pass.
+Maven *relocation* keeps an unchanged build working temporarily (it resolves the new artifact and prints a `has been relocated` warning). That warning is the grace window — but Java imports and config keys do **not** auto-migrate, so do the migration in one pass.
 ====
 
 == Recommended: run the published OpenRewrite recipe
@@ -46,7 +44,7 @@ mvn -U org.openrewrite.maven:rewrite-maven-plugin:run \
   -Drewrite.activeRecipes=de.cuioss.sheriff.token.MigrateFromOAuthSheriff
 ----
 
-Review the diff, then go to <<step-5-verify,Verify>>. The manual steps below are an equivalent fallback if you prefer not to run the recipe (e.g. for deployed-config edits the recipe cannot reach).
+Review the diff, then go to <<verify,Verify>>. The manual steps below are an equivalent fallback (and cover deployed configuration the recipe cannot reach).
 
 == Manual fallback
 
@@ -101,7 +99,7 @@ This is a breaking runtime change. Any *deployed* NiFi flow / `nifi.properties` 
 
 If dashboards, alerts, or Prometheus queries reference `sheriff.oauth.*` metric names, rename them to `sheriff.token.*`. (External dashboards are out of reach for the recipe — always a manual step.)
 
-[#step-5-verify]
+[#verify]
 == Verify
 
 [source,bash]
@@ -118,5 +116,4 @@ Confirm no `has been relocated` warnings remain in the build log (they disappear
 == Coordination
 
 * The rename ships in the first Token-Sheriff release; until `nifi-extensions` bumps, relocation keeps its build working (with warnings).
-* Recommended order: Token-Sheriff `1.0.0` published (incl. relocation stubs) → this migration applied in a `nifi-extensions` branch → verify → merge.
-* No functional/API behaviour changes — names only. If a build breaks for non-naming reasons, it is unrelated to this migration.
+* Order: Token-Sheriff `1.0.0` published (incl. relocation stubs) → this migration applied in a `nifi-extensions` branch → verify → merge.
