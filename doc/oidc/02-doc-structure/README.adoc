@@ -27,7 +27,7 @@ The docs are already *two-tier*:
 Two facts decide the approach:
 
 . *The top-level conceptual docs are generically named but 100% validation* — "Token Validation Pipeline", "JWT Token Handling Requirements", "JWT Token Handling – Threat Model". They are "top-level" only because validation has been the whole project.
-. *The structure is already partially modular* — `specification/` is a folder, docs are per-module, and `LogMessages` already exists per-module (`benchmarking/` has its own). The only monoliths are the big single-file conceptual docs.
+. *The structure is already partially modular* — `specification/` is a folder and docs are per-module. The only monoliths are the big single-file conceptual docs. (`LogMessages.adoc` stays a single *global* registry — benchmarking's separate one is an exception to ignore, not a pattern to follow.)
 
 == Decision: modularize by capability
 
@@ -37,9 +37,9 @@ Why not extend:
 
 * `Requirements.adoc` (622) and `threat-model.adoc` (373) would balloon and *mix two very different surfaces*. RP's threats (redirect/callback CSRF, `state`/`nonce`, authorization-code interception, token leakage, session fixation) are unlike validation's — and a security library must keep a clean, per-capability threat model.
 * It mirrors the code boundary (validation core vs RP module), keeping doc↔code traceability clean.
-* It is consistent with the modularity already present (folders, per-module docs/log registries) — an increment, not a new paradigm.
+* It is consistent with the modularity already present (folders, per-module docs) — an increment, not a new paradigm.
 
-The already-modular parts stay as they are: module `doc/` dirs continue per-module (the RP module gets its own), and `specification/` stays a folder (now per-capability).
+The already-modular parts stay as they are: module `doc/` dirs continue per-module (the RP module gets its own), and `specification/` stays a folder (now per-capability). `LogMessages.adoc` stays a single *global* registry covering all capabilities — it is not split or duplicated per capability.
 
 == Target structure
 
@@ -47,12 +47,12 @@ The already-modular parts stay as they are: module `doc/` dirs continue per-modu
 ----
 doc/
   README.adoc                       # hub — grouped by capability + shared
+  LogMessages.adoc                  # GLOBAL log registry — all capabilities, stays at root
   validation/                       # existing capability (relocated)
     architecture.adoc
     requirements.adoc               # IDs: TOKEN-SHERIFF-N  (per Plan 01)
     threat-model.adoc
     security-reference.adoc
-    LogMessages.adoc                # core/validation log registry
     specification/
       microprofile-jwt-compatibility.adoc
       multi-idp-testing.adoc
@@ -67,7 +67,7 @@ doc/
     glossary.adoc
 ----
 
-Module-level docs are unchanged in pattern: the RP module (`token-sheriff-oidc-rp`) gets its own `doc/` for usage/config/dev and its own `LogMessages.adoc`, exactly like the existing modules.
+Module-level docs are unchanged in pattern: the RP module (`token-sheriff-oidc-rp`) gets its own `doc/` for usage/config/dev. Log records stay in the single global `doc/LogMessages.adoc` — not per module or per capability.
 
 [NOTE]
 ====
@@ -82,14 +82,14 @@ The `doc/oidc/` planning area (this folder) is transient — it holds the plans,
 == Execution
 
 === Phase 1 — Establish the capability split (validation)
-. Create `doc/validation/` and move the conceptual docs into it: `architecture.adoc`, `Requirements.adoc → requirements.adoc`, `security/* → threat-model.adoc` + `security-reference.adoc`, `specification/`, `LogMessages.adoc`, `faq/`.
+. Create `doc/validation/` and move the conceptual docs into it: `architecture.adoc`, `Requirements.adoc → requirements.adoc`, `security/* → threat-model.adoc` + `security-reference.adoc`, `specification/`, `faq/`. `LogMessages.adoc` stays at `doc/` root (global).
 . Rescope titles to the capability ("Token Validation Architecture", "… Requirements", "… Threat Model").
 . Fix all references with the same text-surface tooling as Plan 01 (`text.FindAndReplace` over `xref:`/`link:` targets) — inbound links come from the root `README.md`, module `doc/` dirs, and cross-doc xrefs.
 . Update the hub `doc/README.adoc` to present capabilities as groups ("Token Validation", later "Relying-Party").
 
 === Phase 2 — Scaffold the RP capability (when RP work starts)
 . Create `doc/relying-party/` with stub `architecture.adoc`, `requirements.adoc` (`TOKEN-SHERIFF-RP-N`), `threat-model.adoc`, `specification/`.
-. Add the RP module `doc/` dir + its own `LogMessages.adoc` per the per-module pattern.
+. Add the RP module `doc/` dir for usage/config/dev. RP log records are added to the global `doc/LogMessages.adoc` — no separate RP registry.
 . Wire both capabilities into the hub.
 
 === Conventions for future RP docs
@@ -124,9 +124,9 @@ Input for the planning phase — not the final step list. Counts are from the pr
 | `doc/Requirements.adoc`              | `doc/validation/requirements.adoc`
 | `doc/security/threat-model.adoc`     | `doc/validation/threat-model.adoc`
 | `doc/security/security-reference.adoc` | `doc/validation/security-reference.adoc`
-| `doc/LogMessages.adoc`               | `doc/validation/LogMessages.adoc`
 | `doc/specification/*.adoc` (3 files) | `doc/validation/specification/`
 | `doc/faq/keycloak.adoc`              | `doc/validation/faq/keycloak.adoc`
+| `doc/LogMessages.adoc`               | *stays* `doc/LogMessages.adoc` (global — not moved)
 |===
 
 === Inbound-link edit set
@@ -139,7 +139,7 @@ External referencers (outside the moving set):
 * `oauth-sheriff-quarkus-parent/README.adoc` + `doc/README.adoc` + `oauth-sheriff-quarkus/README.adoc` + `oauth-sheriff-quarkus-deployment/README.adoc` + `oauth-sheriff-quarkus-integration-tests/README.adoc`
 * `doc/oidc/01-restructure/README.adoc` (this planning area references Requirements)
 
-Intra-set (the moving docs cross-reference each other): `architecture.adoc`, `Requirements.adoc`, `security/*`, `specification/*`, `LogMessages.adoc`, `faq/keycloak.adoc`, and the hub `doc/README.adoc`.
+Intra-set (the moving docs cross-reference each other): `architecture.adoc`, `Requirements.adoc`, `security/*`, `specification/*`, `faq/keycloak.adoc`, and the hub `doc/README.adoc`. (`LogMessages.adoc` is *not* moving — exclude it.)
 
 === Relative-path forms per target (count) — the rewrite surface
 
@@ -148,7 +148,6 @@ Requirements.adoc      xref:Requirements.adoc x10  ../Requirements.adoc x18  ../
 architecture.adoc      xref:architecture.adoc x39  ../architecture.adoc x8   ../../doc/… x3                                   + README.md x1
 threat-model.adoc      xref:security/threat-model.adoc x4   ../security/threat-model.adoc x1                                 + README.md x1
 security-reference     xref:security/security-reference.adoc x16  + 3 other forms x1 each
-LogMessages.adoc       xref:LogMessages.adoc x2   ../LogMessages.adoc x2   ../../doc/… x1
 spec/microprofile…     ../doc/specification/… x1   + README.md x2
 spec/multi-idp-testing xref:specification/… x2   multi-idp-testing.adoc x1   link:../../doc/… x1   + README.md x1
 spec/token-decryption  xref:specification/… x4   token-decryption.adoc x1
