@@ -1,0 +1,49 @@
+= OIDC Planning
+:sectnums:
+
+Working area for the Token-Sheriff direction: numbered, self-contained
+implementation plans plus the standing design decisions behind them.
+
+== Plans
+
+* xref:01-restructure/README.adoc[01 — Restructure: Rebrand to Token-Sheriff] -
+  rename the repository, Maven coordinates, packages, config + metric keys,
+  requirement IDs, and documentation; Maven Central relocation; consumer
+  migration. Includes the
+  xref:01-restructure/migration-nifi-extensions.adoc[nifi-extensions migration guide].
+* xref:02-doc-structure/README.adoc[02 — Documentation Structure] -
+  modularize `doc/` into peer capabilities (validation, client) so the
+  coming client docs have a clean home; runs after Plan 01.
+* xref:03-client-spec/README.adoc[03 — Client Requirements, Specification & Security] -
+  produce the full client document set (requirements, specification,
+  threat model, best practices) — modular by aspect (token / retrieval / fetch),
+  every normative item source-referenced; spec-first, before client code. Engine
+  for a Backend-For-Frontend; replacement target `portal-authentication-oauth`.
+* xref:04-client-module/README.adoc[04 — Add the Client Module, Extension, Assembly & IT (wired, empty)] -
+  stand up the full skeleton: standalone validation-like engine `token-sheriff-client`
+  (pure Java, `cui-http`), a dedicated `token-sheriff-client-quarkus` extension
+  depending on the existing one, and BOM/reactor assembly — plus the client
+  integration-test home (own package) in `cui-portal-core`
+  `portal-authentication-oauth`, the real consumer. Cross-repo; no content.
+  Runs after Plan 01.
+* xref:05-implement/README.adoc[05 — Implement the Client (protocol by protocol)] -
+  implement the `TOKEN-SHERIFF-CLIENT-N` requirements as vertical
+  protocol-by-protocol increments. Each ships unit tests (MockWebServer, incl.
+  adversarial) *and* integration tests against a real Keycloak, ending in the
+  portal E2E replacement. After Plans 03 + 04.
+
+== Design decisions
+
+* xref:decision-oidc-module.adoc[OIDC Client as an Additional Module] -
+  house the active OIDC client functionality as a new module in this repository,
+  depending on the validation module. Basis for a later plan.
+
+== Status
+
+Planning only — no implementation has started.
+
+[NOTE]
+====
+This area is intentionally not yet wired into the top-level
+xref:../README.adoc[Documentation Hub]; it will be linked in once execution begins.
+====

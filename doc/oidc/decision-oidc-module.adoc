@@ -1,0 +1,89 @@
+= Design Decision: OIDC Client as an Additional Module
+:toc: macro
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+[cols="1,3"]
+|===
+| Status    | Accepted
+| Date      | 2026-06-24
+| Decides   | Where the planned OIDC client (relying-party) functionality lives
+| Supersedes| —
+| Related   | xref:01-restructure/README.adoc[Plan 01 — Restructure], xref:04-client-module/README.adoc[Plan 04 — Add the Client Module], xref:../../README.md[Project README]
+|===
+
+toc::[]
+
+== Context
+
+The library is, today, a *passive multi-issuer JWT validation library*. It deliberately stops at "validate, never acquire" — the README states it "will never create tokens, only validate them."
+
+A survey of the validation module confirms it already covers the *validation-side* of OpenID Connect:
+
+* OIDC Discovery — a dedicated `wellknown` package (`HttpWellKnownResolver`, `WellKnownConfig`, `WellKnownConfigurationConverter`)
+* ID token validation — `IdTokenValidationPipeline`, `IdTokenContent`, `IdTokenRequest`
+* No userinfo endpoint, authorization-code/PKCE flow, token-endpoint exchange, session, or logout (0 references in the validation module)
+
+The goal is to add the *active* OIDC capabilities — the client (relying-party) side: authorization-code / PKCE flows, token-endpoint exchange, the userinfo endpoint, and `nonce`/`state` handling. (The exact secure subset — and what stays out, e.g. browser sessions and front-/back-channel logout receivers — is scoped in xref:03-client-spec/README.adoc[Plan 03].)
+
+The question is **where** that code lives: a separate Git project (the original "OIDC-Sheriff" idea) or a new module inside this repository.
+
+== Decision
+
+Add a **`token-sheriff-client` Maven module to this multi-module repository**, publishing its own artifact and depending on `token-sheriff-validation`. Do **not** create a separate Git project at this time.
+
+The seam between the two is *not* "OAuth vs OIDC" (the validation module already does OIDC discovery and ID tokens). The real seam is:
+
+* **Passive validation + issuer discovery → stays in the validation module** (`token-sheriff-validation`)
+* **Active client / token acquisition → the new module**
+
+== Rationale
+
+The stated goal of separation — "users choose the dependency that matches their requirements" — is satisfied by a separate *artifact*. It does **not** require a separate *repository*. A second repo only buys a repo boundary; it costs a version-compatibility matrix, two release trains, duplicated CI/SonarCloud/release/BOM infrastructure, and cross-repo pull requests every time the seam shifts.
+
+The dependency direction (`token-sheriff-client` → `token-sheriff-validation`) is the natural, clean layering: the client builds on validation, never the reverse.
+
+The validation module's public API is still pre-1.0 (Maven Central `v0.8.x`) and actively evolving (a recent 1.0 cleanup renamed `well_known → wellknown`, etc.). The client layer will exercise validation-module APIs in ways that are hard to predict; that co-evolution is *trivial in one repo* and *painful across two*.
+
+The asymmetry is decisive: **extracting a module into its own repo later is cheap** (move the directory, redirect the dependency); **merging two repos back after a premature split is expensive.** Start coupled; split on evidence.
+
+== Consequences
+
+=== Positive
+
+* A separate, opt-in artifact — the user-facing separation of concerns is fully delivered.
+* Shared CI, SonarCloud, BOM, release automation, and benchmarking — no duplication.
+* Atomic cross-cutting changes across the validation/client seam (no version matrix).
+* The client layer can co-evolve with the still-moving validation-module API during the pre-1.0 window.
+
+=== Negative / trade-offs
+
+* One repository grows larger (mitigated: it is already multi-module).
+* *Scope/identity shift.* The validation module promises "validate, never acquire." Housing token-acquiring client code under a *distinct artifact and name* preserves that promise; it must not leak into `token-sheriff-validation`.
+
+== When to promote `token-sheriff-client` to its own repository
+
+Revisit this decision — and split — when **any** of the following becomes true:
+
+* An **independent release cadence** is genuinely blocked by shared versioning.
+* The client layer drags in a **heavier or higher-risk dependency tree** that should not touch the validation module's supply-chain surface.
+* **Different audience, governance, or license** (e.g., the client moves under a different commercial tier).
+* A **different maintainer set** with a separate review/security process.
+
+Until one of these bites, the module is strictly better.
+
+== Resolved by later plans
+
+* *Module/artifact name* — `token-sheriff-client` (engine), `token-sheriff-client-quarkus` (extension). See xref:04-client-module/README.adoc[Plan 04].
+* *Quarkus integration* — a dedicated `token-sheriff-client-quarkus` extension depending on the existing one (not folded in). See xref:04-client-module/README.adoc[Plan 04].
+* *API surface / first flows* — secure-subset scope and the protocol-by-protocol order (`client_credentials` first, then auth-code + PKCE) are in xref:03-client-spec/README.adoc[Plan 03] and xref:05-implement/README.adoc[Plan 05].
+
+== Still open
+
+* Session/state storage abstraction and its dependency footprint (addressed in the Plan 05 token-lifecycle increment).
+
+== Alternatives considered
+
+* **Separate Git project (original "OIDC-Sheriff").** Rejected for now: same user-facing benefit as a module, but with cross-repo maintenance overhead and a version-compatibility matrix during the formative pre-1.0 period. Kept as a documented future option above.
+* **Fold the client into `token-sheriff-validation`.** Rejected: breaks the validation module's "validate, never acquire" promise and bloats the most security-critical, most-reused artifact.

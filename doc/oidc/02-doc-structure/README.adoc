@@ -1,0 +1,162 @@
+= Plan 02 — Documentation Structure for the Client Capability
+:toc: macro
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+[cols="1,3"]
+|===
+| Status     | Ready to execute (after xref:../01-restructure/README.adoc[Plan 01])
+| Depends on | Plan 01 — Restructure (rename); run after it to pay link churn once
+| Scope      | Reshape `doc/` so token validation and the coming OIDC client (RP) are peer capabilities
+|===
+
+toc::[]
+
+== Goal
+
+Decide how the documentation absorbs the second capability (the xref:../decision-oidc-module.adoc[OIDC client module]) and lay out the target structure so client docs have a clean home before client work starts.
+
+== Analysis: current structure
+
+The docs are already *two-tier*:
+
+* *Top-level `doc/`* — project-wide conceptual docs: `architecture.adoc`, `Requirements.adoc` (622 lines), `security/threat-model.adoc` (373 lines), `security-reference.adoc`, `specification/` (a folder of 3 specs), `LogMessages.adoc`, `faq/`.
+* *Module `doc/` dirs* — module-specific usage/config/dev: `token-sheriff-validation/doc/`, `token-sheriff-quarkus-parent/doc/`, `benchmarking/doc/` (names post-Plan 01).
+
+Two facts decide the approach:
+
+. *The top-level conceptual docs are generically named but 100% validation* — "Token Validation Pipeline", "JWT Token Handling Requirements", "JWT Token Handling – Threat Model". They are "top-level" only because validation has been the whole project.
+. *The structure is already partially modular* — `specification/` is a folder and docs are per-module. The only monoliths are the big single-file conceptual docs. (`LogMessages.adoc` stays a single *global* registry — benchmarking's separate one is an exception to ignore, not a pattern to follow.)
+
+== Decision: modularize by capability
+
+Reshape the conceptual layer into peer capabilities — `validation` and `client` — rather than extending the existing validation docs with client content.
+
+Why not extend:
+
+* `Requirements.adoc` (622) and `threat-model.adoc` (373) would balloon and *mix two very different surfaces*. The client's threats (redirect/callback CSRF, `state`/`nonce`, authorization-code interception, token leakage, session fixation) are unlike validation's — and a security library must keep a clean, per-capability threat model.
+* It mirrors the code boundary (validation module vs client module), keeping doc↔code traceability clean.
+* It is consistent with the modularity already present (folders, per-module docs) — an increment, not a new paradigm.
+
+The already-modular parts stay as they are: module `doc/` dirs continue per-module (the client module gets its own), and `specification/` stays a folder (now per-capability). `LogMessages.adoc` stays a single *global* registry covering all capabilities — it is not split or duplicated per capability.
+
+== Target structure
+
+[source]
+----
+doc/
+  README.adoc                       # hub — grouped by capability + shared
+  LogMessages.adoc                  # GLOBAL log registry — all capabilities, stays at root
+  validation/                       # existing capability (relocated)
+    architecture.adoc
+    requirements.adoc               # IDs: TOKEN-SHERIFF-N  (per Plan 01)
+    threat-model.adoc
+    security-reference.adoc
+    specification/
+      microprofile-jwt-compatibility.adoc
+      multi-idp-testing.adoc
+      token-decryption.adoc
+    faq/keycloak.adoc
+  client/                    # NEW capability (added when client work starts)
+    architecture.adoc
+    requirements.adoc               # IDs: TOKEN-SHERIFF-CLIENT-N
+    threat-model.adoc
+    specification/
+  shared/                           # cross-cutting only, if/when needed
+    glossary.adoc
+----
+
+Module-level docs are unchanged in pattern: the client module (`token-sheriff-client`) gets its own `doc/` for usage/config/dev. Log records stay in the single global `doc/LogMessages.adoc` — not per module or per capability.
+
+[NOTE]
+====
+The `doc/oidc/` planning area (this folder) is transient — it holds the plans, not the capability docs. The client *capability* docs live under `doc/client/`. Once these plans execute, the planning area can be retired.
+====
+
+== Requirement-ID namespacing
+
+* Validation keeps `TOKEN-SHERIFF-N` (after Plan 01's `OAUTH-SHERIFF-N → TOKEN-SHERIFF-N`).
+* Client requirements use `TOKEN-SHERIFF-CLIENT-N` — same project prefix, explicit capability segment, unambiguous and greppable (`TOKEN-SHERIFF-CLIENT-[0-9]`).
+
+== Execution
+
+=== Phase 1 — Establish the capability split (validation)
+. Create `doc/validation/` and move the conceptual docs into it: `architecture.adoc`, `Requirements.adoc → requirements.adoc`, `security/* → threat-model.adoc` + `security-reference.adoc`, `specification/`, `faq/`. `LogMessages.adoc` stays at `doc/` root (global).
+. Rescope titles to the capability ("Token Validation Architecture", "… Requirements", "… Threat Model").
+. Fix all references with the same text-surface tooling as Plan 01 (`text.FindAndReplace` over `xref:`/`link:` targets) — inbound links come from the root `README.md`, module `doc/` dirs, and cross-doc xrefs.
+. Update the hub `doc/README.adoc` to present capabilities as groups ("Token Validation", later "Client").
+
+=== Phase 2 — Scaffold the client capability (when client work starts)
+. Create `doc/client/` with stub `architecture.adoc`, `requirements.adoc` (`TOKEN-SHERIFF-CLIENT-N`), `threat-model.adoc`, `specification/`.
+. Add the client module `doc/` dir for usage/config/dev. Client log records are added to the global `doc/LogMessages.adoc` — no separate client registry.
+. Wire both capabilities into the hub.
+
+=== Conventions for future client docs
+* Capability-conceptual content → `doc/client/`; module usage/config/dev → the client module's `doc/`.
+* Client requirement IDs → `TOKEN-SHERIFF-CLIENT-N`; client threats live only in the client threat model.
+* No client content in validation docs, and vice versa.
+
+== Risks & mitigations
+
+* *Link churn from moving validation docs* — many inbound `xref:`/`link:` targets (root `README.md`, module docs). → Sequence *after* Plan 01 so doc links are rewritten once; reuse the same `text.FindAndReplace` pass; verify with a link-resolution sweep.
+* *Over-building ahead of the client* — `doc/client/` should be scaffolded when client work begins (Phase 2), not pre-filled now. Phase 1 (the validation split) is the only part to do alongside/after Plan 01.
+
+== Verification
+
+* [ ] `doc/validation/` holds the relocated conceptual docs; titles rescoped to the capability
+* [ ] Every `xref:`/`link:` to the moved docs resolves (root `README.md`, module docs, cross-doc) — zero broken links
+* [ ] `doc/README.adoc` hub presents capabilities as peer groups
+* [ ] Requirement IDs unchanged in count after the move; client namespace `TOKEN-SHERIFF-CLIENT-N` reserved
+* [ ] Phase 2 deferred until client work starts (no empty client scaffolding merged early)
+
+== Seed data for planning (discovery 2026-06-24)
+
+Input for the planning phase — not the final step list. Counts are from the pre-rename tree; re-run after Plan 01.
+
+=== Source → destination move map (Phase 1)
+
+[cols="2,2"]
+|===
+| From | To
+
+| `doc/architecture.adoc`              | `doc/validation/architecture.adoc`
+| `doc/Requirements.adoc`              | `doc/validation/requirements.adoc`
+| `doc/security/threat-model.adoc`     | `doc/validation/threat-model.adoc`
+| `doc/security/security-reference.adoc` | `doc/validation/security-reference.adoc`
+| `doc/specification/*.adoc` (3 files) | `doc/validation/specification/`
+| `doc/faq/keycloak.adoc`              | `doc/validation/faq/keycloak.adoc`
+| `doc/LogMessages.adoc`               | *stays* `doc/LogMessages.adoc` (global — not moved)
+|===
+
+=== Inbound-link edit set
+
+External referencers (outside the moving set):
+
+* `README.md` (root) — *Markdown* links `](doc/…)` at lines 48, 125, 169, 174, 176, 177, 178, 179
+* `benchmarking/README.adoc`, `benchmarking/doc/workflow.adoc`
+* `oauth-sheriff-core/doc/developing.adoc`
+* `oauth-sheriff-quarkus-parent/README.adoc` + `doc/README.adoc` + `oauth-sheriff-quarkus/README.adoc` + `oauth-sheriff-quarkus-deployment/README.adoc` + `oauth-sheriff-quarkus-integration-tests/README.adoc`
+* `doc/oidc/01-restructure/README.adoc` (this planning area references Requirements)
+
+Intra-set (the moving docs cross-reference each other): `architecture.adoc`, `Requirements.adoc`, `security/*`, `specification/*`, `faq/keycloak.adoc`, and the hub `doc/README.adoc`. (`LogMessages.adoc` is *not* moving — exclude it.)
+
+=== Relative-path forms per target (count) — the rewrite surface
+
+----
+Requirements.adoc      xref:Requirements.adoc x10  ../Requirements.adoc x18  ../doc/… x1  ../../Requirements.adoc x1  ../../doc/… x1   + README.md ](doc/Requirements.adoc) x2
+architecture.adoc      xref:architecture.adoc x39  ../architecture.adoc x8   ../../doc/… x3                                   + README.md x1
+threat-model.adoc      xref:security/threat-model.adoc x4   ../security/threat-model.adoc x1                                 + README.md x1
+security-reference     xref:security/security-reference.adoc x16  + 3 other forms x1 each
+spec/microprofile…     ../doc/specification/… x1   + README.md x2
+spec/multi-idp-testing xref:specification/… x2   multi-idp-testing.adoc x1   link:../../doc/… x1   + README.md x1
+spec/token-decryption  xref:specification/… x4   token-decryption.adoc x1
+faq/keycloak.adoc      xref:faq/keycloak.adoc x1
+----
+
+=== Rewrite considerations (for the planner, not resolved here)
+
+* *Two link syntaxes:* AsciiDoc `xref:`/`link:` in `.adoc`, Markdown `](path)` in `README.md` — both need rewriting.
+* *Up to 5 relative forms per target* → each is depth-dependent; a flat find/replace will break links.
+* *Moving the set together preserves most intra-set short forms* (e.g. `xref:architecture.adoc` inside `requirements.adoc` still resolves if both land in `validation/`). The open sub-decision is whether to keep a `validation/security/` subdir or flatten it — it changes the `security/…` intra-set refs.
+* Sequence after Plan 01 so these links are rewritten once.

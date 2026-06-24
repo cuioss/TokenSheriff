@@ -1,0 +1,200 @@
+= Plan 01 — Restructure: Rebrand to Token-Sheriff
+:toc: macro
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+[cols="1,3"]
+|===
+| Status | Ready to execute
+| Scope  | Rename the project to *Token-Sheriff* across every surface: repository, Maven coordinates, Java packages, configuration + metric keys, requirement IDs, and documentation
+| Output | First Token-Sheriff release `0.9.0` + Maven Central relocation + consumer migration
+| Version | This rename/refactor ships as *0.9.0*. `1.0.0` is reserved for when the OIDC client module is implemented and tested.
+|===
+
+toc::[]
+
+== Goal
+
+Rename *OAuth-Sheriff* to *Token-Sheriff*. The name reflects the enduring scope — multi-issuer JWT validation, with headroom for the planned xref:../decision-oidc-module.adoc[OIDC client module]. "Token-Sheriff" is unused on Maven Central, GitHub, and npm.
+
+== Target naming scheme
+
+The `de.cuioss.sheriff.*` / `sheriff.*` roots stay stable; only the `oauth → token` leaf changes, minimising consumer churn.
+
+[cols="2,3,3"]
+|===
+| Surface | From | To
+
+| GitHub repo            | `cuioss/OAuthSheriff`            | `cuioss/TokenSheriff`
+| Display / brand        | OAuth-Sheriff                   | Token-Sheriff
+| Maven groupId          | `de.cuioss.sheriff.oauth`       | `de.cuioss.sheriff.token`
+| Artifacts              | `oauth-sheriff-*`               | `token-sheriff-*`
+| Java packages          | `de.cuioss.sheriff.oauth.*`     | `de.cuioss.sheriff.token.*`
+| Config property prefix | `sheriff.oauth.*`               | `sheriff.token.*`
+| Metrics prefix         | `sheriff.oauth.*`               | `sheriff.token.*`
+| Requirement IDs        | `OAUTH-SHERIFF-N`               | `TOKEN-SHERIFF-N`
+| Quarkus feature / class | feature `oauth-sheriff`, `OAuthSheriffProcessor` | feature `token-sheriff`, `TokenSheriffProcessor`
+| SonarCloud project key | `cuioss_OAuth-Sheriff`          | `cuioss_TokenSheriff`
+| GitHub Pages base      | `cuioss.github.io/OAuth-Sheriff` | `cuioss.github.io/TokenSheriff`
+|===
+
+The mascot (`doc/resources/Sheriff.png`) and the "Sheriff" brand are unchanged — only the qualifier changes. There are no `module-info.java` files, so no JPMS module names to migrate.
+
+Modules are renamed with *capability* names (not `-core`): `oauth-sheriff-core → token-sheriff-validation` (package `…token.validation`), `oauth-sheriff-quarkus → token-sheriff-validation-quarkus` (and `-deployment`). Aggregator/test modules keep the neutral form: `oauth-sheriff-quarkus-parent → token-sheriff-quarkus-parent`, `…-integration-tests → token-sheriff-quarkus-integration-tests`. (The client modules are added later by xref:../04-client-module/README.adoc[Plan 04].)
+
+== Scope (regression baseline)
+
+Occurrence counts to drive to ~0 after the rename (excluding build output and relocation stubs):
+
+[cols="3,1"]
+|===
+| Token | Occurrences
+
+| `de.cuioss.sheriff.oauth` (groupId + packages) | ~1955
+| `sheriff.oauth.` (config + metric keys)        | ~2131
+| `oauth-sheriff` (artifacts/modules/paths)      | ~313
+| `OAuthSheriff` / `OAuth Sheriff` / `OAuth-Sheriff` (prose, badges) | ~460
+| `OAUTH-SHERIFF-N` (requirement IDs)            | ~203 (51 distinct IDs)
+|===
+
+== Tooling
+
+The Java type/package and Maven-coordinate refactoring is done with *OpenRewrite*, not text substitution: it is AST-aware, relocates source files to the new package directories, scopes to real package references (not the substring "oauth" in prose or jar names), is idempotent, and yields a reviewable diff. This repository already runs OpenRewrite (`cui-rewrite`). Text-only surfaces use targeted find/replace.
+
+[cols="2,3"]
+|===
+| Surface | Recipe / tool
+
+| Java packages, imports, FQNs, Javadoc `@link`, file relocation | `org.openrewrite.java.ChangePackage`
+| Renamed types (`OAuthSheriffProcessor` → `TokenSheriffProcessor`, log-constant holders) | `org.openrewrite.java.ChangeType`
+| Maven dependency + managed-dependency coordinates | `org.openrewrite.maven.ChangeDependencyGroupIdAndArtifactId`, `ChangeManagedDependencyGroupIdAndArtifactId`
+| Parent POM coordinates | `org.openrewrite.maven.ChangeParentPom`
+| Config / metric key literals + `.properties` keys (`sheriff.oauth` → `sheriff.token`) | `org.openrewrite.properties.ChangePropertyKey` + `org.openrewrite.text.FindAndReplace`
+| Requirement IDs `OAUTH-SHERIFF-N`, docs, badges, workflows, README `alt` | `org.openrewrite.text.FindAndReplace` / scripts
+|===
+
+A module's *own* `<groupId>`/`<artifactId>` has no first-class recipe; those ~6 poms (`token-sheriff-parent`, `-validation`, `-validation-quarkus`, `bom`) are changed via IDE or a scoped `text.FindAndReplace`. Compose the recipes into one `rewrite.yml` and run `./mvnw rewrite:run`. Publish the same composite as a named recipe (`de.cuioss.sheriff.token.MigrateFromOAuthSheriff`) so consumers migrate with one command.
+
+== Execution
+
+=== Phase 0 — Prerequisites
+* Cut the rebrand as version `0.9.0` (the rename/refactor release; `1.0.0` is reserved for the implemented-and-tested client module).
+* Snapshot current published coordinates/versions (needed for relocation stubs).
+* Author the `rewrite.yml` composite and the published consumer migration recipe (`token-sheriff-rewrite`).
+
+=== Phase 1 — In-repo rename (single atomic branch)
+
+*1a — Structural, via OpenRewrite* (`./mvnw rewrite:run`):
+
+* `ChangePackage` `de.cuioss.sheriff.oauth` → `de.cuioss.sheriff.token` (relocates files, fixes imports/FQNs/Javadoc).
+* `ChangeType` for renamed classes (`OAuthSheriffProcessor` → `TokenSheriffProcessor`, log-constant holders).
+* `ChangeParentPom` + `ChangeManagedDependencyGroupIdAndArtifactId` + `ChangeDependencyGroupIdAndArtifactId` for inter-module coordinates and the BOM.
+
+*1b — Module own-coordinates & metadata* (IDE / scoped text):
+
+* Each module's own `<groupId>` → `de.cuioss.sheriff.token`, `<artifactId>` `oauth-sheriff-* → token-sheriff-*`, plus `<name>`/`<url>`.
+* Rename module directories `oauth-sheriff-* → token-sheriff-*`.
+* `quarkus-extension.yaml`, Quarkus feature string, log constants.
+
+*1c — Text surfaces* (`text.FindAndReplace` / `properties.ChangePropertyKey`):
+
+* Config + metric prefixes `sheriff.oauth` → `sheriff.token` (`JwtPropertyKeys.PREFIX`, `MetricIdentifier.PREFIX`, `application*.properties`, tests, docs).
+* Requirement IDs `OAUTH-SHERIFF-N → TOKEN-SHERIFF-N` (xref:../../Requirements.adoc[Requirements] anchors + all references).
+* Docs, badges, README image `alt`, GitHub workflows, `.github/project.yml` Sonar key, `cuioss.github.io/OAuth-Sheriff` URLs.
+
+*1d — Gate:* `./mvnw -Ppre-commit clean verify` then `./mvnw clean install` green.
+
+=== Phase 2 — Maven Central relocation
+Publish a final relocation release for every old artifact so existing builds auto-redirect (see below).
+
+=== Phase 3 — GitHub repo + external services
+* Rename the GitHub repo `OAuthSheriff → TokenSheriff` (old URL/clone paths keep redirecting).
+* Update SonarCloud (new key `cuioss_TokenSheriff`), GitHub Pages base URL (reconcile the current hyphenated `OAuth-Sheriff` Pages path against the repo name during the move), and the OpenSSF Best Practices entry.
+* Verify every badge resolves.
+
+=== Phase 4 — Consumer migration
+Run xref:migration-nifi-extensions.adoc[the nifi-extensions migration] against the first Token-Sheriff release.
+
+=== Phase 5 — Verification
+Run the checklist below.
+
+== PR strategy (150-file review guideline)
+
+The ~150-files-per-PR review limit is a *general guideline*, applied where sensible — not a hard gate for this change. Measured reality: this is one mechanical, tool-driven rename touching ~500 files (381 `.java` relocations + poms + ~425 `sheriff.oauth.` config-key files + docs).
+
+* *PR 1 — build-safe textual rename (honors the guideline).* Documentation/prose, requirement IDs `OAUTH-SHERIFF-N → TOKEN-SHERIFF-N`, badges, Sonar key, Pages URLs. No compile impact, genuinely reviewable; ~86 files (split into two if it exceeds 150).
+* *PR 2 — atomic mechanical rename (guideline waived).* The OpenRewrite package/type/coordinate transform plus the `sheriff.oauth → sheriff.token` config/metric constants and their test expectations. This is *atomic* — packages, coordinates and config keys must flip together to keep `main` building. Slicing it into ≤150-file pieces would either break build-green-per-PR or leave coexisting `…oauth.*`/`…token.*` roots, adding risk with no review value.
+
+*Why the waiver is the safe choice:* the guideline's intent is reviewable PRs. A 500-file *mechanical, idempotent, build-verified* diff is reviewed by inspecting the OpenRewrite recipe and the verification sweep — not by reading ~500 identical edits. Forcing a split here reduces safety rather than increasing it. (If the reviewer hard-caps file count, land PR 2 with review on the recipe + green CI, or split the package move by sub-package across stacked PRs accepting temporary mixed roots — only if mandated.)
+
+== Maven Central relocation
+
+Publish a final POM under each OLD coordinate whose `distributionManagement/relocation` points to the new coordinate. Resolvers auto-redirect to the new artifact and print a warning telling consumers to update.
+
+[source,xml]
+----
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>de.cuioss.sheriff.oauth</groupId>
+  <artifactId>oauth-sheriff-core</artifactId>
+  <version>0.9.0</version>
+  <packaging>pom</packaging>
+  <distributionManagement>
+    <relocation>
+      <groupId>de.cuioss.sheriff.token</groupId>
+      <artifactId>token-sheriff-validation</artifactId>
+      <message>Renamed to Token-Sheriff. See migration guide.</message>
+    </relocation>
+  </distributionManagement>
+</project>
+----
+
+Publish a stub for *every* old artifact (`-core`, `-quarkus`, `-quarkus-deployment`, `-parent`, `bom`). Relocation redirects coordinates only — Java packages and config keys still require the consumer changes in xref:migration-nifi-extensions.adoc[the migration guide]. Reference: https://maven.apache.org/guides/mini/guide-relocation.html[Apache Maven — Guide to relocation].
+
+== Risks & mitigations
+
+* *Atomicity* — packages, config keys, and requirement IDs must flip together; a partial rename is worse than none. → One branch, OpenRewrite + scripted transforms, full build gate before merge.
+* *Hidden string refs* — config/metric keys live in `.properties`, `.adoc`, and test literals, not only Java. → The scope counts above are the regression baseline; re-run expecting ~0.
+* *External-service lag* — Sonar/Pages/OpenSSF update out of band. → Phase 3 checklist; verify each badge.
+* *Consumer breakage* — `nifi-extensions` breaks when it bumps coordinates. → Relocation grace window + the migration guide.
+
+== Verification checklist
+
+* [ ] `grep -rI "de.cuioss.sheriff.oauth"` → 0 (excluding relocation stubs)
+* [ ] `grep -rI "sheriff.oauth."` → 0
+* [ ] `grep -rI "oauth-sheriff"` → 0
+* [ ] `grep -rIo "OAUTH-SHERIFF-[0-9]"` → 0; `TOKEN-SHERIFF-N` count matches the 51 prior IDs
+* [ ] `./mvnw -Ppre-commit clean verify` and `./mvnw clean install` green
+* [ ] Relocation stubs published for every old artifact; an old-coordinate build prints the relocation warning and resolves
+* [ ] Repo renamed; old GitHub URL redirects; badges, Sonar, Pages, OpenSSF green
+* [ ] `nifi-extensions` builds and tests green against the first Token-Sheriff release
+
+== Seed data for planning (discovery 2026-06-24)
+
+Input for the planning phase — not the final step list. Re-verify counts before execution.
+
+=== Critical non-obvious locations
+
+* *Project coordinates:* `pom.xml:10-11` — `<groupId>de.cuioss.sheriff.oauth`, `<artifactId>oauth-sheriff-parent`.
+* *Config-key prefix:* `oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus/src/main/java/de/cuioss/sheriff/oauth/quarkus/config/JwtPropertyKeys.java` — `PREFIX = "sheriff.oauth"`.
+* *Metric prefix:* `…/quarkus/metrics/MetricIdentifier.java` — `PREFIX = "sheriff.oauth"`.
+* *Benchmark prefix reference:* `benchmarking/benchmarking-common/src/main/java/de/cuioss/benchmarking/common/constants/BenchmarkConstants.java`.
+* *Quarkus extension metadata:* `oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus/src/main/resources/META-INF/quarkus-extension.yaml`.
+* *Sonar key:* `.github/project.yml:18` — `project-key: cuioss_OAuth-Sheriff`.
+* *GitHub Pages URL refs:* `README.md`, `doc/oidc/01-restructure/README.adoc` (plus benchmark badges).
+* *Module directories to rename:* `oauth-sheriff-core`, `oauth-sheriff-quarkus-parent`, `…/oauth-sheriff-quarkus`, `…/oauth-sheriff-quarkus-deployment`, `…/oauth-sheriff-quarkus-integration-tests`.
+
+=== `OAuthSheriff*` class family (`ChangeType` targets)
+
+Renaming is not just one processor — 9 types:
+`OAuthSheriffProcessor`, `OAuthSheriffProcessorTest`, `OAuthSheriffProcessorBuildStepTest`, `OAuthSheriffExtensionTest`, `OAuthSheriffIntegrationTest`, `OAuthSheriffDevUIIntegrationTest`, `OAuthSheriffDevUIRuntimeService`, `OAuthSheriffDevUIRuntimeServiceTest`, `OAuthSheriffQuarkusLogMessages`.
+
+=== Consumer (`nifi-extensions`) touch points
+
+* POMs declaring the dependency: `pom.xml`, `nifi-cuioss-api/pom.xml`, `nifi-cuioss-common/pom.xml`.
+* ~119 `de.cuioss.sheriff.oauth` import/coordinate refs, ~109 `sheriff.oauth.*` config-key refs.
+
+=== Link syntaxes to update
+
+AsciiDoc `xref:`/`link:` in `.adoc`; Markdown `](…)` in `README.md`; badge/Pages URLs in `README.md`.
