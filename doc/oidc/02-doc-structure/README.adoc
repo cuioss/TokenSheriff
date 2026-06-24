@@ -109,3 +109,55 @@ The `doc/oidc/` planning area (this folder) is transient — it holds the plans,
 * [ ] `doc/README.adoc` hub presents capabilities as peer groups
 * [ ] Requirement IDs unchanged in count after the move; RP namespace `TOKEN-SHERIFF-RP-N` reserved
 * [ ] Phase 2 deferred until RP work starts (no empty RP scaffolding merged early)
+
+== Seed data for planning (discovery 2026-06-24)
+
+Input for the planning phase — not the final step list. Counts are from the pre-rename tree; re-run after Plan 01.
+
+=== Source → destination move map (Phase 1)
+
+[cols="2,2"]
+|===
+| From | To
+
+| `doc/architecture.adoc`              | `doc/validation/architecture.adoc`
+| `doc/Requirements.adoc`              | `doc/validation/requirements.adoc`
+| `doc/security/threat-model.adoc`     | `doc/validation/threat-model.adoc`
+| `doc/security/security-reference.adoc` | `doc/validation/security-reference.adoc`
+| `doc/LogMessages.adoc`               | `doc/validation/LogMessages.adoc`
+| `doc/specification/*.adoc` (3 files) | `doc/validation/specification/`
+| `doc/faq/keycloak.adoc`              | `doc/validation/faq/keycloak.adoc`
+|===
+
+=== Inbound-link edit set
+
+External referencers (outside the moving set):
+
+* `README.md` (root) — *Markdown* links `](doc/…)` at lines 48, 125, 169, 174, 176, 177, 178, 179
+* `benchmarking/README.adoc`, `benchmarking/doc/workflow.adoc`
+* `oauth-sheriff-core/doc/developing.adoc`
+* `oauth-sheriff-quarkus-parent/README.adoc` + `doc/README.adoc` + `oauth-sheriff-quarkus/README.adoc` + `oauth-sheriff-quarkus-deployment/README.adoc` + `oauth-sheriff-quarkus-integration-tests/README.adoc`
+* `doc/oidc/01-restructure/README.adoc` (this planning area references Requirements)
+
+Intra-set (the moving docs cross-reference each other): `architecture.adoc`, `Requirements.adoc`, `security/*`, `specification/*`, `LogMessages.adoc`, `faq/keycloak.adoc`, and the hub `doc/README.adoc`.
+
+=== Relative-path forms per target (count) — the rewrite surface
+
+----
+Requirements.adoc      xref:Requirements.adoc x10  ../Requirements.adoc x18  ../doc/… x1  ../../Requirements.adoc x1  ../../doc/… x1   + README.md ](doc/Requirements.adoc) x2
+architecture.adoc      xref:architecture.adoc x39  ../architecture.adoc x8   ../../doc/… x3                                   + README.md x1
+threat-model.adoc      xref:security/threat-model.adoc x4   ../security/threat-model.adoc x1                                 + README.md x1
+security-reference     xref:security/security-reference.adoc x16  + 3 other forms x1 each
+LogMessages.adoc       xref:LogMessages.adoc x2   ../LogMessages.adoc x2   ../../doc/… x1
+spec/microprofile…     ../doc/specification/… x1   + README.md x2
+spec/multi-idp-testing xref:specification/… x2   multi-idp-testing.adoc x1   link:../../doc/… x1   + README.md x1
+spec/token-decryption  xref:specification/… x4   token-decryption.adoc x1
+faq/keycloak.adoc      xref:faq/keycloak.adoc x1
+----
+
+=== Rewrite considerations (for the planner, not resolved here)
+
+* *Two link syntaxes:* AsciiDoc `xref:`/`link:` in `.adoc`, Markdown `](path)` in `README.md` — both need rewriting.
+* *Up to 5 relative forms per target* → each is depth-dependent; a flat find/replace will break links.
+* *Moving the set together preserves most intra-set short forms* (e.g. `xref:architecture.adoc` inside `requirements.adoc` still resolves if both land in `validation/`). The open sub-decision is whether to keep a `validation/security/` subdir or flatten it — it changes the `security/…` intra-set refs.
+* Sequence after Plan 01 so these links are rewritten once.

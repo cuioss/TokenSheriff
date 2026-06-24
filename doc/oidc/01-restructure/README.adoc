@@ -157,3 +157,32 @@ Publish a stub for *every* old artifact (`-core`, `-quarkus`, `-quarkus-deployme
 * [ ] Relocation stubs published for every old artifact; an old-coordinate build prints the relocation warning and resolves
 * [ ] Repo renamed; old GitHub URL redirects; badges, Sonar, Pages, OpenSSF green
 * [ ] `nifi-extensions` builds and tests green against the first Token-Sheriff release
+
+== Seed data for planning (discovery 2026-06-24)
+
+Input for the planning phase — not the final step list. Re-verify counts before execution.
+
+=== Critical non-obvious locations
+
+* *Project coordinates:* `pom.xml:10-11` — `<groupId>de.cuioss.sheriff.oauth`, `<artifactId>oauth-sheriff-parent`.
+* *Config-key prefix:* `oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus/src/main/java/de/cuioss/sheriff/oauth/quarkus/config/JwtPropertyKeys.java` — `PREFIX = "sheriff.oauth"`.
+* *Metric prefix:* `…/quarkus/metrics/MetricIdentifier.java` — `PREFIX = "sheriff.oauth"`.
+* *Benchmark prefix reference:* `benchmarking/benchmarking-common/src/main/java/de/cuioss/benchmarking/common/constants/BenchmarkConstants.java`.
+* *Quarkus extension metadata:* `oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus/src/main/resources/META-INF/quarkus-extension.yaml`.
+* *Sonar key:* `.github/project.yml:18` — `project-key: cuioss_OAuth-Sheriff`.
+* *GitHub Pages URL refs:* `README.md`, `doc/oidc/01-restructure/README.adoc` (plus benchmark badges).
+* *Module directories to rename:* `oauth-sheriff-core`, `oauth-sheriff-quarkus-parent`, `…/oauth-sheriff-quarkus`, `…/oauth-sheriff-quarkus-deployment`, `…/oauth-sheriff-quarkus-integration-tests`.
+
+=== `OAuthSheriff*` class family (`ChangeType` targets)
+
+Renaming is not just one processor — 9 types:
+`OAuthSheriffProcessor`, `OAuthSheriffProcessorTest`, `OAuthSheriffProcessorBuildStepTest`, `OAuthSheriffExtensionTest`, `OAuthSheriffIntegrationTest`, `OAuthSheriffDevUIIntegrationTest`, `OAuthSheriffDevUIRuntimeService`, `OAuthSheriffDevUIRuntimeServiceTest`, `OAuthSheriffQuarkusLogMessages`.
+
+=== Consumer (`nifi-extensions`) touch points
+
+* POMs declaring the dependency: `pom.xml`, `nifi-cuioss-api/pom.xml`, `nifi-cuioss-common/pom.xml`.
+* ~119 `de.cuioss.sheriff.oauth` import/coordinate refs, ~109 `sheriff.oauth.*` config-key refs.
+
+=== Link syntaxes to update
+
+AsciiDoc `xref:`/`link:` in `.adoc`; Markdown `](…)` in `README.md`; badge/Pages URLs in `README.md`.
