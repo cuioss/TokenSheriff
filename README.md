@@ -1,8 +1,8 @@
 # OAuth-Sheriff
 
-<img align="right" width="300" src="doc/resources/Sheriff.png" alt="OAuth Sheriff">
-
 ## Status
+
+<img align="right" width="300" src="doc/resources/Sheriff.png" alt="OAuth Sheriff">
 
 **Build & Quality**
 
