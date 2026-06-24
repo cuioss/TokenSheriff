@@ -54,11 +54,11 @@ The RP surface splits into three distinct concern areas. Keep them in separate d
 | *Process* (net-new)
 | Protocol/flow orchestration: authorization-code + PKCE, `state`/CSRF, `nonce` binding, exact redirect-URI matching, mix-up defence, code injection, PAR, response mode, logout (RP-initiated / front- / back-channel), session management, clickjacking.
 
-| *Fetch* (net-new)
-| Server-side retrieval/HTTP: discovery (`.well-known`), JWKS fetch/cache/rotation, token-endpoint exchange, userinfo, TLS, *SSRF* on attacker-influenced URLs (`jwks_uri`, discovery), timeouts/resilience, response validation.
+| *Fetch* (partly inherited)
+| Server-side retrieval/HTTP. *Already in the validation core* (reference, do not duplicate): discovery (`.well-known`, `core.wellknown`), JWKS fetch/cache/rotation (`core.jwks`), TLS and the HTTP client. *Net-new for the RP*: token-endpoint exchange and userinfo fetch. *SSRF/TLS/resilience* analysis applies to *both* — including the existing discovery/JWKS paths.
 |===
 
-The *token* aspect must not duplicate the validation docs — it links to them and states only what is new for an RP. *Process* and *fetch* are genuinely new and carry most of the new threat surface.
+The *token* and *fetch* aspects must not duplicate what the validation core already does — they link to it and state only the RP delta (token: ID-token validation, refresh handling, sender-constraining; fetch: token-endpoint + userinfo retrieval). *Process* is the only fully net-new aspect. Most of the new threat surface sits in process and the net-new fetch retrievals — but the SSRF and TLS analysis also re-examines the *existing* discovery/JWKS fetching, which may yield hardening requirements on current code.
 
 == Target document set (under `doc/relying-party/`)
 
@@ -158,7 +158,7 @@ Minimum coverage for `threat-model.adoc`. Each → mitigation + covering require
 * ID-token validation — OpenID Connect Core §3.1.3.7 → `iss`/`aud`/`exp`/`iat`/`nonce`/signature/`azp`
 
 .Fetch aspect
-* SSRF via `jwks_uri` / discovery URLs — OWASP, CVE-2026-1180 → host allow-listing, egress restriction, block internal/link-local ranges
+* SSRF via `jwks_uri` / discovery URLs — OWASP, CVE-2026-1180 → host allow-listing, egress restriction, block internal/link-local ranges. *Applies to the existing `core.wellknown` / `core.jwks` fetch code — audit it for hardening, not only new endpoints.*
 * Malicious IdP endpoints advertised via discovery — RFC 8414 / OIDC Discovery → validate `issuer`, pin/validate metadata
 * TLS downgrade / MITM on fetches — RFC 9700, RFC 8414 → enforce TLS, validate certificates
 * DoS via large/slow metadata or JWKS responses → timeouts, size limits
