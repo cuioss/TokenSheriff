@@ -127,6 +127,31 @@ doc/relying-party/
 
 // ---------------------------------------------------------------------------
 
+== Reference & replacement target: portal-authentication-oauth
+
+`cui-portal-core/modules/authentication/portal-authentication-oauth` is an existing confidential server-side OIDC relying party (CDI + MicroProfile Config + RESTEasy/JAX-RS). It is both a *validation reference* for this spec — a real BFF-style RP that already implements most of the in-scope flow — and a *replacement target*: the Token-Sheriff RP engine should supersede it, with a thin portal adapter preserving the portal contract.
+
+=== What it already does (confirms this plan's scope)
+* Authorization-code + PKCE (*S256* confirmed), `state` CSRF, light `nonce`
+* `client_credentials` (`retrieveClientToken`), refresh (`refreshToken`)
+* OIDC discovery (`.well-known`), userinfo, RP-initiated logout (`id_token_hint`)
+* Confidential client via `client_secret`; HTTP via RESTEasy/JAX-RS + Jackson; tokens held server-side (portal session) — i.e. effectively a BFF
+
+=== Contract a replacement/adapter must preserve
+* API: `Oauth2Service` (`createAuthenticatedUserInfo(code, state, scopes, codeVerifier)`, `retrieveClientToken`, `refreshToken`, userinfo retrieval), `Oauth2AuthenticationFacade`, `OauthRedirector`, `OidcRpInitiatedLogoutParams`; result type `de.cuioss.portal.authentication.AuthenticatedUserInfo`.
+* Config namespace `authentication.oidc.*` — `client.id`, `client.password`, `client.default_scopes`, `client.role_mapper_claim`, `server.url`, `server.discovery_path`, `server.token_endpoint_url`, `server.userinfo_endpoint_url`, `logout.*`. Migration maps these onto Token-Sheriff RP config.
+
+=== Modernization deltas ("eventually modernized") — each sourced above
+* *Validate the ID token cryptographically via the validation core* (signature/JWKS, `iss`/`aud`/`exp`/`nonce`/`at_hash`). Today identity is taken from the *userinfo* endpoint with *no id_token signature validation* (0 hits) — the biggest security win and the core synergy.
+* Add *`iss` mix-up defence* (RFC 9207) — absent today.
+* Offer *`private_key_jwt` / mTLS* client authentication (RFC 7523 / 8705) beyond `client_secret`.
+* Add *PAR* (RFC 9126) and *DPoP/mTLS sender-constraining* (RFC 9449 / 8705).
+* Strengthen *`nonce`* binding (currently light).
+* Replace bespoke RESTEasy fetching with the core's hardened HTTP + *SSRF* defences (fetch aspect).
+
+=== Relationship to the other consumer
+`nifi-extensions` consumes the *validation core*; `portal-authentication-oauth` is an *RP* that the Token-Sheriff RP module *replaces* (engine swap + portal adapter). It is the concrete reference implementation for this plan's BFF-engine scope.
+
 == Seed: source catalog (research 2026-06-24)
 
 Input for the spec authors — authoritative, citable sources.

@@ -17,7 +17,8 @@ implementation plans plus the standing design decisions behind them.
 * xref:03-rp-spec/README.adoc[03 — RP Requirements, Specification & Security] -
   produce the full relying-party document set (requirements, specification,
   threat model, best practices) — modular by aspect (token / process / fetch),
-  every normative item source-referenced; spec-first, before RP code.
+  every normative item source-referenced; spec-first, before RP code. Engine
+  for a Backend-For-Frontend; replacement target `portal-authentication-oauth`.
 
 == Design decisions
 
