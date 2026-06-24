@@ -63,7 +63,7 @@ In every POM that declares the dependency (`pom.xml`, `nifi-cuioss-api/pom.xml`,
 <artifactId>token-sheriff-core</artifactId>
 ----
 
-Set the version to the first Token-Sheriff release (target `1.0.0`). Apply the same to any `*-quarkus` / test artifacts in use.
+Set the version to the first Token-Sheriff release (`0.9.0`). Apply the same to any `*-quarkus` / test artifacts in use.
 
 === Step 2 — Rewrite Java imports
 
@@ -116,4 +116,4 @@ Confirm no `has been relocated` warnings remain in the build log (they disappear
 == Coordination
 
 * The rename ships in the first Token-Sheriff release; until `nifi-extensions` bumps, relocation keeps its build working (with warnings).
-* Order: Token-Sheriff `1.0.0` published (incl. relocation stubs) → this migration applied in a `nifi-extensions` branch → verify → merge.
+* Order: Token-Sheriff `0.9.0` published (incl. relocation stubs) → this migration applied in a `nifi-extensions` branch → verify → merge.
