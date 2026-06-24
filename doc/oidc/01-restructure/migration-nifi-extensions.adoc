@@ -40,7 +40,7 @@ Token-Sheriff ships a migration recipe that performs the structural changes (dep
 [source,bash]
 ----
 mvn -U org.openrewrite.maven:rewrite-maven-plugin:run \
-  -Drewrite.recipeArtifactCoordinates=de.cuioss.sheriff.token:token-sheriff-rewrite:LATEST \
+  -Drewrite.recipeArtifactCoordinates=de.cuioss.sheriff.token:token-sheriff-rewrite:0.9.0 \
   -Drewrite.activeRecipes=de.cuioss.sheriff.token.MigrateFromOAuthSheriff
 ----
 
@@ -83,13 +83,13 @@ This also fixes Javadoc `{@link de.cuioss.sheriff.oauth.core...}` references. (T
 
 === Step 3 — Update configuration keys
 
-Every `sheriff.oauth.*` property becomes `sheriff.token.*` — issuer config, JWKS URLs, bearer settings, etc. These live in NiFi processor properties, `*.properties`, and test fixtures.
+Every `sheriff.oauth.*` property becomes `sheriff.token.*` — issuer config, JWKS URLs, bearer settings, etc. These live in NiFi processor properties, `*.properties`, and test fixtures. Match the *bare* `sheriff.oauth` (no trailing dot) too, so any prefix constants are caught:
 
 [source,bash]
 ----
-grep -rl 'sheriff\.oauth\.' --include='*.properties' --include='*.xml' \
+grep -rl 'sheriff\.oauth' --include='*.properties' --include='*.xml' \
      --include='*.json' --include='*.java' --include='*.adoc' . \
-  | xargs sed -i '' 's/sheriff\.oauth\./sheriff.token./g'   # macOS; drop the '' on Linux
+  | xargs sed -i '' 's/sheriff\.oauth/sheriff.token/g'   # macOS; drop the '' on Linux
 ----
 
 [WARNING]
@@ -107,7 +107,7 @@ If dashboards, alerts, or Prometheus queries reference `sheriff.oauth.*` metric 
 [source,bash]
 ----
 # expect zero remaining old references
-grep -rI 'de\.cuioss\.sheriff\.oauth\|sheriff\.oauth\.\|oauth-sheriff' \
+grep -rI 'de\.cuioss\.sheriff\.oauth\|sheriff\.oauth\|oauth-sheriff' \
      --exclude-dir=target --exclude-dir=node_modules . | wc -l    # -> 0
 
 ./mvnw clean verify     # build + tests green

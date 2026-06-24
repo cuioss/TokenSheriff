@@ -139,6 +139,7 @@ Publish a final POM under each OLD coordinate whose `distributionManagement/relo
   <groupId>de.cuioss.sheriff.oauth</groupId>
   <artifactId>oauth-sheriff-core</artifactId>
   <version>0.9.0</version>
+  <packaging>pom</packaging>
   <distributionManagement>
     <relocation>
       <groupId>de.cuioss.sheriff.token</groupId>
