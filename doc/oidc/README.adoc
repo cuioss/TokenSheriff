@@ -19,6 +19,10 @@ implementation plans plus the standing design decisions behind them.
   threat model, best practices) — modular by aspect (token / process / fetch),
   every normative item source-referenced; spec-first, before RP code. Engine
   for a Backend-For-Frontend; replacement target `portal-authentication-oauth`.
+* xref:04-rp-module/README.adoc[04 — Add the RP Module (wired, empty)] -
+  create `token-sheriff-rp` as a standalone, core-like module (pure Java,
+  `cui-http`), fully wired into reactor/BOM/CI/docs, no content yet; Quarkus
+  stays a thin config wrapper. Runs after Plan 01.
 
 == Design decisions
 

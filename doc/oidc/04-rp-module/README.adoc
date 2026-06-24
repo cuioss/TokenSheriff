@@ -1,0 +1,80 @@
+= Plan 04 — Add the RP Module (wired, empty)
+:toc: macro
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+[cols="1,3"]
+|===
+| Status     | Ready to execute (after xref:../01-restructure/README.adoc[Plan 01])
+| Depends on | Plan 01 (rename → `token-sheriff-*` naming). Independent of Plan 03 (this is structure, not content).
+| Outcome    | A new, fully-wired `token-sheriff-rp` module — builds in the reactor, in the BOM and CI — with *no functional content yet*.
+|===
+
+toc::[]
+
+== Goal
+
+Create the home for the relying-party / token-retrieval engine: a new module, wired everywhere it needs to be, that compiles and passes the build empty. Content arrives later (per xref:../03-rp-spec/README.adoc[Plan 03]).
+
+== Decision: standalone, core-like engine; Quarkus is a thin wrapper
+
+The RP engine is a *standalone module modelled on `token-sheriff-core`* — pure Java, HTTP via `cui-http`, depending on `token-sheriff-core`. It is **not** part of the Quarkus module. The Quarkus side is just a *wrapper/configuration* layer (see below).
+
+*Why standalone, not "inside the Quarkus extension":*
+
+* The primary replacement target — `cui-portal-core` `portal-authentication-oauth` — is *CDI / RESTEasy / portal, not Quarkus*. An engine living inside the Quarkus extension is unusable there. The engine must be framework-agnostic (xref:../03-rp-spec/README.adoc[Plan 03] reference).
+* It mirrors the proven split: `core` (pure Java) + `quarkus` (integration). The core is *already* pure Java and *already* uses `cui-http` — the exact HTTP foundation the RP retrieval/fetch needs.
+* Opt-in (Plan 02 principle): validation-only users must not pull RP code. A separate artifact keeps that clean and preserves the core's "validate, never acquire" identity.
+
+*Quarkus = wrapper/configuration.* Quarkus support for the RP is thin config that depends on the engine. Recommended: add RP configuration to the *existing* `token-sheriff-quarkus` extension (it is "just a wrapper", per the existing pattern) once there is content. Trade-off to note: that couples the RP engine into the validation extension's dependency tree; if strict opt-in is later required for Quarkus users, split a separate `token-sheriff-rp-quarkus` extension. *Out of scope for Plan 04* — no Quarkus content is created here.
+
+*Portal & other consumers.* The portal adapter (preserving the `Oauth2Service` / `AuthenticatedUserInfo` contract) lives in `cui-portal-core`, not here. `nifi-extensions` and portal both consume the engine directly.
+
+== Module identity
+
+[cols="1,2"]
+|===
+| Maven coordinates | `de.cuioss.sheriff.token:token-sheriff-rp` (post Plan 01)
+| Parent            | `token-sheriff-parent`
+| Java package      | `de.cuioss.sheriff.token.rp`
+| Depends on        | `token-sheriff-core` (compile), `cui-http` (HTTP), the standard test stack
+| Shape             | Mirror `token-sheriff-core`'s POM/plugin/quality setup
+|===
+
+== Wiring checklist ("link it everywhere")
+
+* `pom.xml` (root) — add `<module>token-sheriff-rp</module>` to `<modules>` (currently: bom, core, quarkus-parent, benchmarking).
+* `bom/pom.xml` — add the `token-sheriff-rp` artifact to dependency management (the BOM enumerates each published artifact: parent, bom, core, quarkus).
+* New `token-sheriff-rp/pom.xml` — parent + `token-sheriff-core` + `cui-http` deps; copy the quality/plugin config from `token-sheriff-core`.
+* Source skeleton — `src/main/java/de/cuioss/sheriff/token/rp/package-info.java` (so the module is non-empty and licensed); empty `src/test/java`.
+* Module docs — a `token-sheriff-rp/doc/` stub per xref:../02-doc-structure/README.adoc[Plan 02] conventions (content later).
+* CI — the Maven reactor builds the new module automatically; verify the `.github` surface still holds:
+  ** `.github/project.yml` (SonarCloud) — reactor-wide; confirm the module is scanned and its (empty) coverage does not fail the gate.
+  ** `.github/dependabot.yml` — Maven ecosystem at root covers it; confirm.
+* Docs/README — add `token-sheriff-rp` to the module list in the root README and the `doc/README.adoc` documentation hub.
+
+== "Builds empty" concern
+
+An empty module can fail quality gates (JaCoCo coverage on zero classes, PMD/checkstyle, Sonar new-code coverage). Resolve as part of wiring:
+
+* Keep only `package-info.java` (licensed) so checkstyle/license checks pass.
+* Ensure coverage gates treat a no-executable-code module as N/A (or scope the module out of the coverage ratio until it has content).
+* Run `./mvnw -Ppre-commit clean verify` and `./mvnw clean install` — both green — before considering the module wired.
+
+== Execution
+
+. Create `token-sheriff-rp/pom.xml` modelled on `token-sheriff-core` (parent, `token-sheriff-core` + `cui-http` deps, quality plugins).
+. Add `package-info.java` under `de.cuioss.sheriff.token.rp`; create the `doc/` stub.
+. Wire: root `<modules>`, `bom`, README + doc hub module lists.
+. Verify CI/quality surface (Sonar gate, coverage N/A, dependabot).
+. Build gate green: `./mvnw -Ppre-commit clean verify` then `./mvnw clean install`.
+
+== Verification
+
+* [ ] `token-sheriff-rp` appears in the reactor build and in the BOM
+* [ ] Module compiles and the full build is green (pre-commit + install), empty content notwithstanding
+* [ ] SonarCloud scans it; the empty module does not fail the quality gate
+* [ ] Root README and `doc/README.adoc` list the new module
+* [ ] No RP content and no Quarkus changes were introduced (structure only)
+* [ ] `token-sheriff-rp` depends on `token-sheriff-core` and `cui-http`; no Quarkus dependency
