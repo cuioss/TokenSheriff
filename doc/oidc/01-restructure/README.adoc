@@ -117,6 +117,15 @@ Run xref:migration-nifi-extensions.adoc[the nifi-extensions migration] against t
 === Phase 5 — Verification
 Run the checklist below.
 
+== PR strategy (150-file review guideline)
+
+The ~150-files-per-PR review limit is a *general guideline*, applied where sensible — not a hard gate for this change. Measured reality: this is one mechanical, tool-driven rename touching ~500 files (381 `.java` relocations + poms + ~425 `sheriff.oauth.` config-key files + docs).
+
+* *PR 1 — build-safe textual rename (honors the guideline).* Documentation/prose, requirement IDs `OAUTH-SHERIFF-N → TOKEN-SHERIFF-N`, badges, Sonar key, Pages URLs. No compile impact, genuinely reviewable; ~86 files (split into two if it exceeds 150).
+* *PR 2 — atomic mechanical rename (guideline waived).* The OpenRewrite package/type/coordinate transform plus the `sheriff.oauth → sheriff.token` config/metric constants and their test expectations. This is *atomic* — packages, coordinates and config keys must flip together to keep `main` building. Slicing it into ≤150-file pieces would either break build-green-per-PR or leave coexisting `…oauth.*`/`…token.*` roots, adding risk with no review value.
+
+*Why the waiver is the safe choice:* the guideline's intent is reviewable PRs. A 500-file *mechanical, idempotent, build-verified* diff is reviewed by inspecting the OpenRewrite recipe and the verification sweep — not by reading ~500 identical edits. Forcing a split here reduces safety rather than increasing it. (If the reviewer hard-caps file count, land PR 2 with review on the recipe + green CI, or split the package move by sub-package across stacked PRs accepting temporary mixed roots — only if mandated.)
+
 == Maven Central relocation
 
 Publish a final POM under each OLD coordinate whose `distributionManagement/relocation` points to the new coordinate. Resolvers auto-redirect to the new artifact and print a warning telling consumers to update.
