@@ -117,24 +117,73 @@ In `nifi-extensions` (the consumer): ~119 groupId/import refs, ~109 config-key r
 * *Mascot* `doc/resources/Sheriff.png` and the "Sheriff" brand → unchanged (the brand survives; only the qualifier changes).
 * *No `module-info.java`* present → no JPMS module names to migrate.
 
+== Tooling: OpenRewrite for the structural layer
+
+The Java type/package and Maven-coordinate refactoring **must** be done with OpenRewrite, not text substitution. `de.cuioss.sheriff.oauth` is a substring of unrelated things (the word "oauth", jar names, prose); `sed` cannot tell a package reference from a string literal or an identifier, and it leaves source files in their old directories. OpenRewrite is AST-aware, relocates the files to match the new package, is idempotent, and produces a reviewable diff. This repository already runs OpenRewrite (`cui-rewrite`), so it fits the existing toolchain.
+
+Split by what is structural (AST) vs textual:
+
+[cols="2,3"]
+|===
+| Surface | Tool
+
+| Java packages, imports, FQNs, static imports, Javadoc `@link`, file relocation
+| `org.openrewrite.java.ChangePackage` (`de.cuioss.sheriff.oauth` → `de.cuioss.sheriff.token`, recursive)
+
+| Specific renamed types (`OAuthSheriffProcessor` → `TokenSheriffProcessor`, log-constant holders)
+| `org.openrewrite.java.ChangeType`
+
+| Maven dependency + managed-dependency coordinates (in this repo and consumers)
+| `org.openrewrite.maven.ChangeDependencyGroupIdAndArtifactId`, `ChangeManagedDependencyGroupIdAndArtifactId`
+
+| Parent POM coordinates
+| `org.openrewrite.maven.ChangeParentPom`
+
+| Config / metric key *string literals* and `.properties` keys (`sheriff.oauth` → `sheriff.token`)
+| `org.openrewrite.properties.ChangePropertyKey` + `org.openrewrite.text.FindAndReplace` (Java literals, regex-scoped)
+
+| Requirement IDs `OAUTH-SHERIFF-N`, docs, badges, workflows, README `alt`
+| `org.openrewrite.text.FindAndReplace` (or scripts) — not an AST concern
+|===
+
+[NOTE]
+====
+No first-class recipe changes a module's *own* `<groupId>`/`<artifactId>`. Those ~6 poms (`token-sheriff-parent`, `-core`, `-quarkus*`, `bom`) are changed manually / via IDE or a scoped `text.FindAndReplace` — small and low-risk. The bulk (the ~1955 package references and all consumer dependency coordinates) is the part OpenRewrite makes safe.
+====
+
+Compose the recipes into a single `rewrite.yml` and run `./mvnw rewrite:run` (or the configured `-Ppre-commit` recipe pass), so the structural rename is one reviewable, idempotent step.
+
+*Ship a consumer migration recipe.* Publish the same composite as a named recipe (e.g. `de.cuioss.sheriff.token.MigrateFromOAuthSheriff`) so consumers — starting with `nifi-extensions` — run `mvn rewrite:run` to auto-migrate coordinates, imports, and config keys instead of hand-editing. See the xref:migration-nifi-extensions.adoc[migration guide].
+
 == Execution plan
 
 === Phase 0 — Decisions & prerequisites
 * Ratify the groupId/config scheme (see decision box above).
 * Confirm the cut release: do the rebrand as part of the first post-rename version (proposed `1.0.0`).
 * Snapshot the current published coordinates/versions (needed for relocation stubs).
+* Author the `rewrite.yml` composite (package, type, dependency, parent, property-key recipes) and the published consumer migration recipe.
 
 === Phase 1 — In-repo rename (single atomic branch)
-Order matters; do it as scripted, reviewable transforms:
 
-. Rename module directories `oauth-sheriff-* → token-sheriff-*`.
-. Move Java packages `de.cuioss.sheriff.oauth → de.cuioss.sheriff.token` (source tree move + package declarations + imports).
-. Update all POMs: `groupId`, `artifactId`, parent refs, BOM, `<name>`/`<url>`.
-. Flip prefix constants `JwtPropertyKeys.PREFIX` and `MetricIdentifier.PREFIX` to `sheriff.token`; update every `sheriff.oauth.*` literal in `application*.properties`, tests, and docs.
-. Rename requirement IDs `OAUTH-SHERIFF-N → TOKEN-SHERIFF-N` (Requirements.adoc + all references).
-. Rename classes/features (`OAuthSheriffProcessor`, Quarkus feature, log constants).
-. Update all docs, badges, README image `alt`, `quarkus-extension.yaml`, GitHub workflows, `.github/project.yml` Sonar key, and `cuioss.github.io/OAuth-Sheriff` URLs.
-. Build green: `./mvnw -Ppre-commit clean verify` then `./mvnw clean install`.
+*1a — Structural, via OpenRewrite* (`./mvnw rewrite:run`):
+
+* `ChangePackage` `de.cuioss.sheriff.oauth` → `de.cuioss.sheriff.token` (relocates files, fixes imports/FQNs/Javadoc).
+* `ChangeType` for renamed classes (`OAuthSheriffProcessor` → `TokenSheriffProcessor`, etc.).
+* `ChangeParentPom` + `ChangeManagedDependencyGroupIdAndArtifactId` + `ChangeDependencyGroupIdAndArtifactId` for inter-module coordinates and the BOM.
+
+*1b — Module own-coordinates & metadata* (manual / IDE / scoped text):
+
+* Each module's own `<groupId>` → `de.cuioss.sheriff.token`, `<artifactId>` `oauth-sheriff-* → token-sheriff-*`, `<name>`/`<url>`.
+* Rename module directories `oauth-sheriff-* → token-sheriff-*`.
+* `quarkus-extension.yaml`, Quarkus feature string, log constants.
+
+*1c — Text surfaces* (`text.FindAndReplace` / `properties.ChangePropertyKey` / scripts):
+
+* Config + metric prefixes `sheriff.oauth` → `sheriff.token` (constants `JwtPropertyKeys.PREFIX`, `MetricIdentifier.PREFIX`, `application*.properties`, tests, docs).
+* Requirement IDs `OAUTH-SHERIFF-N → TOKEN-SHERIFF-N` (Requirements.adoc anchors + all references).
+* Docs, badges, README image `alt`, GitHub workflows, `.github/project.yml` Sonar key, `cuioss.github.io/OAuth-Sheriff` URLs.
+
+*1d — Gate:* `./mvnw -Ppre-commit clean verify` then `./mvnw clean install` green.
 
 === Phase 2 — Maven Central relocation
 Publish a final *relocation release* under the old coordinates so existing builds auto-redirect (details below).
