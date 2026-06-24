@@ -7,7 +7,7 @@
 [cols="1,3"]
 |===
 | Status     | Ready to execute (after xref:../02-doc-structure/README.adoc[Plan 02] establishes `doc/client/`)
-| Depends on | Plan 02 (doc structure); produces the spec the future RP module is built against (spec-first)
+| Depends on | Plan 02 (doc structure); produces the spec the future client module is built against (spec-first)
 | Focus      | Server-side *token retrieval* (token-endpoint grants incl. confidential authorization-code + PKCE), *OIDC fetching* (discovery, JWKS, userinfo), and the *token lifecycle* — the engine a *Backend-For-Frontend (BFF)* is built on. A *most-secure current subset*, security-led, every normative item source-referenced.
 |===
 
@@ -15,7 +15,7 @@ toc::[]
 
 == Goal
 
-Produce, _before_ any RP code, the document set (requirements + specification + security) for what this server-side library needs: *retrieving tokens* as a confidential client, *holding and refreshing them server-side*, and *fetching OIDC artifacts* (metadata, keys, userinfo) — designed so a BFF can be built on top. Security is the centre of gravity: a sourced threat model and a sourced best-practices catalog drawn from the standards below.
+Produce, _before_ any client code, the document set (requirements + specification + security) for what this server-side library needs: *retrieving tokens* as a confidential client, *holding and refreshing them server-side*, and *fetching OIDC artifacts* (metadata, keys, userinfo) — designed so a BFF can be built on top. Security is the centre of gravity: a sourced threat model and a sourced best-practices catalog drawn from the standards below.
 
 == Target architecture: Backend-For-Frontend (BFF)
 
@@ -90,7 +90,7 @@ Keep these in separate documents and requirement groups — do not blend them.
 ----
 doc/client/
   requirements.adoc            # TOKEN-SHERIFF-CLIENT-N, grouped by aspect
-  architecture.adoc            # RP/BFF component & sequence overview
+  architecture.adoc            # Client/BFF component & sequence overview
   threat-model.adoc            # attack catalog per aspect, each entry sourced
   best-practices.adoc          # normative checklist, each item sourced
   references.adoc              # the source catalog / bibliography
@@ -102,7 +102,7 @@ doc/client/
 
 == Requirement-ID & sourcing discipline
 
-* RP requirements use `TOKEN-SHERIFF-CLIENT-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow / Fetch).
+* client requirements use `TOKEN-SHERIFF-CLIENT-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow / Fetch).
 * *Every* normative requirement and *every* threat entry cites a source with section anchor (RFC / OIDC spec / OWASP / FAPI). MUST/SHOULD/MAY trace back to the cited source.
 * Requirements are *security-driven* — each traces to a threat it mitigates or is the secure way to perform a needed operation. Exclusions are sourced too.
 * `references.adoc` is the single bibliography; all docs cite into it.
@@ -129,7 +129,7 @@ doc/client/
 
 == Reference & replacement target: portal-authentication-oauth
 
-`cui-portal-core/modules/authentication/portal-authentication-oauth` is an existing confidential server-side OIDC client (CDI + MicroProfile Config + RESTEasy/JAX-RS). It is both a *validation reference* for this spec — a real BFF-style RP that already implements most of the in-scope flow — and a *replacement target*: the Token-Sheriff RP engine should supersede it, with a thin portal adapter preserving the portal contract.
+`cui-portal-core/modules/authentication/portal-authentication-oauth` is an existing confidential server-side OIDC client (CDI + MicroProfile Config + RESTEasy/JAX-RS). It is both a *validation reference* for this spec — a real BFF-style RP that already implements most of the in-scope flow — and a *replacement target*: the Token-Sheriff client engine should supersede it, with a thin portal adapter preserving the portal contract.
 
 === What it already does (confirms this plan's scope)
 * Authorization-code + PKCE (*S256* confirmed), `state` CSRF, light `nonce`
@@ -139,7 +139,7 @@ doc/client/
 
 === Contract a replacement/adapter must preserve
 * API: `Oauth2Service` (`createAuthenticatedUserInfo(code, state, scopes, codeVerifier)`, `retrieveClientToken`, `refreshToken`, userinfo retrieval), `Oauth2AuthenticationFacade`, `OauthRedirector`, `OidcRpInitiatedLogoutParams`; result type `de.cuioss.portal.authentication.AuthenticatedUserInfo`.
-* Config namespace `authentication.oidc.*` — `client.id`, `client.password`, `client.default_scopes`, `client.role_mapper_claim`, `server.url`, `server.discovery_path`, `server.token_endpoint_url`, `server.userinfo_endpoint_url`, `logout.*`. Migration maps these onto Token-Sheriff RP config.
+* Config namespace `authentication.oidc.*` — `client.id`, `client.password`, `client.default_scopes`, `client.role_mapper_claim`, `server.url`, `server.discovery_path`, `server.token_endpoint_url`, `server.userinfo_endpoint_url`, `logout.*`. Migration maps these onto Token-Sheriff client config.
 
 === Modernization deltas ("eventually modernized") — each sourced above
 * *Validate the ID token cryptographically via the validation module* (signature/JWKS, `iss`/`aud`/`exp`/`nonce`/`at_hash`). Today identity is taken from the *userinfo* endpoint with *no id_token signature validation* (0 hits) — the biggest security win and the validation synergy.
@@ -150,7 +150,7 @@ doc/client/
 * Replace bespoke RESTEasy fetching with the validation module's hardened HTTP + *SSRF* defences (fetch aspect).
 
 === Relationship to the other consumer
-`nifi-extensions` consumes the *validation module*; `portal-authentication-oauth` is an *RP* that the Token-Sheriff RP module *replaces* (engine swap + portal adapter). It is the concrete reference implementation for this plan's BFF-engine scope.
+`nifi-extensions` consumes the *validation module*; `portal-authentication-oauth` is an *RP* that the Token-Sheriff client module *replaces* (engine swap + portal adapter). It is the concrete reference implementation for this plan's BFF-engine scope.
 
 == Seed: source catalog (research 2026-06-24)
 

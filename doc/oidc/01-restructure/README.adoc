@@ -41,7 +41,7 @@ The `de.cuioss.sheriff.*` / `sheriff.*` roots stay stable; only the `oauth → t
 
 The mascot (`doc/resources/Sheriff.png`) and the "Sheriff" brand are unchanged — only the qualifier changes. There are no `module-info.java` files, so no JPMS module names to migrate.
 
-Modules are renamed with *capability* names (not `-core`): `oauth-sheriff-core → token-sheriff-validation` (package `…token.validation`), `oauth-sheriff-quarkus → token-sheriff-validation-quarkus` (and `-deployment`). Aggregator/test modules keep the neutral form: `oauth-sheriff-quarkus-parent → token-sheriff-quarkus-parent`, `…-integration-tests → token-sheriff-quarkus-integration-tests`. (The client modules are added later by xref:../04-rp-module/README.adoc[Plan 04].)
+Modules are renamed with *capability* names (not `-core`): `oauth-sheriff-core → token-sheriff-validation` (package `…token.validation`), `oauth-sheriff-quarkus → token-sheriff-validation-quarkus` (and `-deployment`). Aggregator/test modules keep the neutral form: `oauth-sheriff-quarkus-parent → token-sheriff-quarkus-parent`, `…-integration-tests → token-sheriff-quarkus-integration-tests`. (The client modules are added later by xref:../04-client-module/README.adoc[Plan 04].)
 
 == Scope (regression baseline)
 
@@ -79,7 +79,7 @@ A module's *own* `<groupId>`/`<artifactId>` has no first-class recipe; those ~6 
 == Execution
 
 === Phase 0 — Prerequisites
-* Cut the rebrand as version `0.9.0` (the rename/refactor release; `1.0.0` is reserved for the implemented-and-tested RP module).
+* Cut the rebrand as version `0.9.0` (the rename/refactor release; `1.0.0` is reserved for the implemented-and-tested client module).
 * Snapshot current published coordinates/versions (needed for relocation stubs).
 * Author the `rewrite.yml` composite and the published consumer migration recipe (`token-sheriff-rewrite`).
 

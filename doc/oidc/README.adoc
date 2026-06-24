@@ -14,12 +14,12 @@ implementation plans plus the standing design decisions behind them.
 * xref:02-doc-structure/README.adoc[02 — Documentation Structure] -
   modularize `doc/` into peer capabilities (validation, client) so the
   coming client docs have a clean home; runs after Plan 01.
-* xref:03-rp-spec/README.adoc[03 — Client Requirements, Specification & Security] -
+* xref:03-client-spec/README.adoc[03 — Client Requirements, Specification & Security] -
   produce the full client document set (requirements, specification,
   threat model, best practices) — modular by aspect (token / retrieval / fetch),
   every normative item source-referenced; spec-first, before client code. Engine
   for a Backend-For-Frontend; replacement target `portal-authentication-oauth`.
-* xref:04-rp-module/README.adoc[04 — Add the Client Module, Extension, Assembly & IT (wired, empty)] -
+* xref:04-client-module/README.adoc[04 — Add the Client Module, Extension, Assembly & IT (wired, empty)] -
   stand up the full skeleton: standalone validation-like engine `token-sheriff-client`
   (pure Java, `cui-http`), a dedicated `token-sheriff-client-quarkus` extension
   depending on the existing one, and BOM/reactor assembly — plus the client

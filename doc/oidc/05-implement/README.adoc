@@ -6,7 +6,7 @@
 
 [cols="1,3"]
 |===
-| Status     | Ready after xref:../03-rp-spec/README.adoc[Plan 03] (spec) + xref:../04-rp-module/README.adoc[Plan 04] (skeleton)
+| Status     | Ready after xref:../03-client-spec/README.adoc[Plan 03] (spec) + xref:../04-client-module/README.adoc[Plan 04] (skeleton)
 | Depends on | Plan 03 (`TOKEN-SHERIFF-CLIENT-N` requirements + threat model), Plan 04 (`token-sheriff-client` module/extension/IT home)
 | Approach   | Vertical *protocol-by-protocol* increments, dependency-ordered. Each ships unit tests (MockWebServer) *and* integration tests against a *real Keycloak*. Security-driven.
 |===
@@ -45,7 +45,7 @@ The user-facing rule: *MockWebServer proves the mechanics and the attacks; Keycl
 |===
 | # | Protocol / capability | Unit (MockWebServer — incl. adversarial) | Integration (real Keycloak)
 
-| 1 | *Client config + discovery* — config (issuer, client id, auth method, scopes), resolve endpoints via core discovery; TLS + SSRF guard
+| 1 | *Client config + discovery* — config (issuer, client id, auth method, scopes), resolve endpoints via the validation module's discovery; TLS + SSRF guard
 | Altered metadata; SSRF to internal/link-local; non-TLS rejected
 | Discovery against Keycloak's `.well-known`
 

@@ -15,14 +15,14 @@ toc::[]
 
 == Goal
 
-Decide how the documentation absorbs the second capability (the xref:../decision-oidc-module.adoc[OIDC client module]) and lay out the target structure so RP docs have a clean home before RP work starts.
+Decide how the documentation absorbs the second capability (the xref:../decision-oidc-module.adoc[OIDC client module]) and lay out the target structure so client docs have a clean home before client work starts.
 
 == Analysis: current structure
 
 The docs are already *two-tier*:
 
 * *Top-level `doc/`* — project-wide conceptual docs: `architecture.adoc`, `Requirements.adoc` (622 lines), `security/threat-model.adoc` (373 lines), `security-reference.adoc`, `specification/` (a folder of 3 specs), `LogMessages.adoc`, `faq/`.
-* *Module `doc/` dirs* — module-specific usage/config/dev: `oauth-sheriff-core/doc/`, `oauth-sheriff-quarkus-parent/doc/`, `benchmarking/doc/`.
+* *Module `doc/` dirs* — module-specific usage/config/dev: `token-sheriff-validation/doc/`, `token-sheriff-quarkus-parent/doc/`, `benchmarking/doc/` (names post-Plan 01).
 
 Two facts decide the approach:
 
@@ -31,15 +31,15 @@ Two facts decide the approach:
 
 == Decision: modularize by capability
 
-Reshape the conceptual layer into peer capabilities — `validation` and `client` — rather than extending the existing validation docs with RP content.
+Reshape the conceptual layer into peer capabilities — `validation` and `client` — rather than extending the existing validation docs with client content.
 
 Why not extend:
 
-* `Requirements.adoc` (622) and `threat-model.adoc` (373) would balloon and *mix two very different surfaces*. RP's threats (redirect/callback CSRF, `state`/`nonce`, authorization-code interception, token leakage, session fixation) are unlike validation's — and a security library must keep a clean, per-capability threat model.
-* It mirrors the code boundary (validation module vs RP module), keeping doc↔code traceability clean.
+* `Requirements.adoc` (622) and `threat-model.adoc` (373) would balloon and *mix two very different surfaces*. the client's threats (redirect/callback CSRF, `state`/`nonce`, authorization-code interception, token leakage, session fixation) are unlike validation's — and a security library must keep a clean, per-capability threat model.
+* It mirrors the code boundary (validation module vs client module), keeping doc↔code traceability clean.
 * It is consistent with the modularity already present (folders, per-module docs) — an increment, not a new paradigm.
 
-The already-modular parts stay as they are: module `doc/` dirs continue per-module (the RP module gets its own), and `specification/` stays a folder (now per-capability). `LogMessages.adoc` stays a single *global* registry covering all capabilities — it is not split or duplicated per capability.
+The already-modular parts stay as they are: module `doc/` dirs continue per-module (the client module gets its own), and `specification/` stays a folder (now per-capability). `LogMessages.adoc` stays a single *global* registry covering all capabilities — it is not split or duplicated per capability.
 
 == Target structure
 
@@ -58,7 +58,7 @@ doc/
       multi-idp-testing.adoc
       token-decryption.adoc
     faq/keycloak.adoc
-  client/                    # NEW capability (added when RP work starts)
+  client/                    # NEW capability (added when client work starts)
     architecture.adoc
     requirements.adoc               # IDs: TOKEN-SHERIFF-CLIENT-N
     threat-model.adoc
@@ -67,17 +67,17 @@ doc/
     glossary.adoc
 ----
 
-Module-level docs are unchanged in pattern: the RP module (`token-sheriff-client`) gets its own `doc/` for usage/config/dev. Log records stay in the single global `doc/LogMessages.adoc` — not per module or per capability.
+Module-level docs are unchanged in pattern: the client module (`token-sheriff-client`) gets its own `doc/` for usage/config/dev. Log records stay in the single global `doc/LogMessages.adoc` — not per module or per capability.
 
 [NOTE]
 ====
-The `doc/oidc/` planning area (this folder) is transient — it holds the plans, not the capability docs. The RP *capability* docs live under `doc/client/`. Once these plans execute, the planning area can be retired.
+The `doc/oidc/` planning area (this folder) is transient — it holds the plans, not the capability docs. The client *capability* docs live under `doc/client/`. Once these plans execute, the planning area can be retired.
 ====
 
 == Requirement-ID namespacing
 
 * Validation keeps `TOKEN-SHERIFF-N` (after Plan 01's `OAUTH-SHERIFF-N → TOKEN-SHERIFF-N`).
-* RP requirements use `TOKEN-SHERIFF-CLIENT-N` — same project prefix, explicit capability segment, unambiguous and greppable (`TOKEN-SHERIFF-CLIENT-[0-9]`).
+* client requirements use `TOKEN-SHERIFF-CLIENT-N` — same project prefix, explicit capability segment, unambiguous and greppable (`TOKEN-SHERIFF-CLIENT-[0-9]`).
 
 == Execution
 
@@ -87,28 +87,28 @@ The `doc/oidc/` planning area (this folder) is transient — it holds the plans,
 . Fix all references with the same text-surface tooling as Plan 01 (`text.FindAndReplace` over `xref:`/`link:` targets) — inbound links come from the root `README.md`, module `doc/` dirs, and cross-doc xrefs.
 . Update the hub `doc/README.adoc` to present capabilities as groups ("Token Validation", later "Client").
 
-=== Phase 2 — Scaffold the RP capability (when RP work starts)
+=== Phase 2 — Scaffold the client capability (when client work starts)
 . Create `doc/client/` with stub `architecture.adoc`, `requirements.adoc` (`TOKEN-SHERIFF-CLIENT-N`), `threat-model.adoc`, `specification/`.
-. Add the RP module `doc/` dir for usage/config/dev. RP log records are added to the global `doc/LogMessages.adoc` — no separate RP registry.
+. Add the client module `doc/` dir for usage/config/dev. client log records are added to the global `doc/LogMessages.adoc` — no separate client registry.
 . Wire both capabilities into the hub.
 
-=== Conventions for future RP docs
-* Capability-conceptual content → `doc/client/`; module usage/config/dev → the RP module's `doc/`.
-* RP requirement IDs → `TOKEN-SHERIFF-CLIENT-N`; RP threats live only in the RP threat model.
-* No RP content in validation docs, and vice versa.
+=== Conventions for future client docs
+* Capability-conceptual content → `doc/client/`; module usage/config/dev → the client module's `doc/`.
+* client requirement IDs → `TOKEN-SHERIFF-CLIENT-N`; client threats live only in the client threat model.
+* No client content in validation docs, and vice versa.
 
 == Risks & mitigations
 
 * *Link churn from moving validation docs* — many inbound `xref:`/`link:` targets (root `README.md`, module docs). → Sequence *after* Plan 01 so doc links are rewritten once; reuse the same `text.FindAndReplace` pass; verify with a link-resolution sweep.
-* *Over-building ahead of RP* — `doc/client/` should be scaffolded when RP work begins (Phase 2), not pre-filled now. Phase 1 (the validation split) is the only part to do alongside/after Plan 01.
+* *Over-building ahead of the client* — `doc/client/` should be scaffolded when client work begins (Phase 2), not pre-filled now. Phase 1 (the validation split) is the only part to do alongside/after Plan 01.
 
 == Verification
 
 * [ ] `doc/validation/` holds the relocated conceptual docs; titles rescoped to the capability
 * [ ] Every `xref:`/`link:` to the moved docs resolves (root `README.md`, module docs, cross-doc) — zero broken links
 * [ ] `doc/README.adoc` hub presents capabilities as peer groups
-* [ ] Requirement IDs unchanged in count after the move; RP namespace `TOKEN-SHERIFF-CLIENT-N` reserved
-* [ ] Phase 2 deferred until RP work starts (no empty RP scaffolding merged early)
+* [ ] Requirement IDs unchanged in count after the move; client namespace `TOKEN-SHERIFF-CLIENT-N` reserved
+* [ ] Phase 2 deferred until client work starts (no empty client scaffolding merged early)
 
 == Seed data for planning (discovery 2026-06-24)
 

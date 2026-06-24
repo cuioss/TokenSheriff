@@ -67,17 +67,19 @@ Set the version to the first Token-Sheriff release (`0.9.0`). Apply the same to 
 
 === Step 2 — Rewrite Java imports
 
-All imports move from `de.cuioss.sheriff.oauth.` to `de.cuioss.sheriff.token.` (the sub-paths — `core.domain.token`, `core.exception`, `core.security`, `validation.jwks.http`, `core.test.*`, etc. — are unchanged).
+The package root is renamed `oauth → token`, *and* the core module is renamed `core → validation`. Since `nifi-extensions` imports only the validation (former `core`) module, every import moves `de.cuioss.sheriff.oauth.core.` → `de.cuioss.sheriff.token.validation.` (the sub-paths below — `domain.token`, `exception`, `security`, `jwks.http`, `test.*`, etc. — are unchanged). Apply the `oauth → token` root rename first for any non-core import, then the `core → validation` segment:
 
 [source,bash]
 ----
 # from the nifi-extensions repo root; review the diff before committing
 grep -rl 'de\.cuioss\.sheriff\.oauth' --include='*.java' . \
-  | xargs sed -i '' 's/de\.cuioss\.sheriff\.oauth\./de.cuioss.sheriff.token./g'   # macOS (BSD sed)
-# Linux: sed -i 's/de\.cuioss\.sheriff\.oauth\./de.cuioss.sheriff.token./g'
+  | xargs sed -i '' \
+      -e 's/de\.cuioss\.sheriff\.oauth\.core\./de.cuioss.sheriff.token.validation./g' \
+      -e 's/de\.cuioss\.sheriff\.oauth\./de.cuioss.sheriff.token./g'   # macOS (BSD sed)
+# Linux: drop the '' after -i
 ----
 
-This also fixes Javadoc `{@link de.cuioss.sheriff.oauth...}` references.
+This also fixes Javadoc `{@link de.cuioss.sheriff.oauth.core...}` references. (The published OpenRewrite recipe does the same `ChangePackage` mapping automatically.)
 
 === Step 3 — Update configuration keys
 
