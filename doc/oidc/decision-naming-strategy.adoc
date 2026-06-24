@@ -1,0 +1,88 @@
+= Strategy Decision: Naming & Identity (Strategy A)
+:toc: macro
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+[cols="1,3"]
+|===
+| Status    | Proposed
+| Date      | 2026-06-24
+| Decides   | How to resolve the "OAuth" misnomer in the project's public identity
+| Related   | xref:decision-oidc-module.adoc[OIDC Module Decision], xref:../../README.md[Project README]
+|===
+
+toc::[]
+
+== Context
+
+The name "OAuth" mislabels what this project is. It is a *multi-issuer JWT validation* library that already performs OpenID Connect Discovery and validates ID tokens — and the planned xref:decision-oidc-module.adoc[OIDC relying-party module] will widen scope further.
+
+Critically, "oauth" is not only in the repository name. It is baked into three layers with very different change costs, and the project is still **pre-1.0 (Maven Central `v0.8.x`)**:
+
+[cols="2,2,1"]
+|===
+| Layer | Cost to change | Breaks users?
+
+| GitHub description + topics
+| Trivial
+| No
+
+| GitHub repo name (`OAuthSheriff`)
+| Cheap (GitHub redirects) — but ripples into badges, GitHub Pages URL, SonarCloud project key, OpenSSF entry, and all doc links
+| No
+
+| Maven `groupId` `de.cuioss.sheriff.oauth` + `oauth-sheriff-*` artifactIds + Java packages `de.cuioss.sheriff.oauth.*`
+| Real migration
+| **Yes**
+|===
+
+The choice is effectively binary, because the *half-measure* — renaming the repo while the coordinates still say `…sheriff.oauth.*` — is **more** confusing than either pure state.
+
+== Decision: Strategy A — keep the name as a brand, fix the description now
+
+* **Keep** the GitHub repository name `OAuthSheriff` and the published Maven coordinates / package names **unchanged**. Treat "Sheriff" as the brand and "OAuth" as a historical brand token (cf. Keycloak, Dex, Ory Hydra — none literal).
+* **Fix the description and topics now** — the genuinely misleading, zero-breakage surface where users search and judge.
+* **Defer** any full rebrand (coordinates + packages) to a *deliberate 1.0 decision* (see "Option B" below), not as a side effect of the OIDC discussion.
+
+=== Concrete changes (zero breakage)
+
+* *Description:* `Comprehensive multi-issuer JWT validation for Java — offline OAuth2 / OpenID Connect token validation with OIDC Discovery.`
+* *Topics:* add `oidc`, `openid-connect`, `jwt-validation`, `multi-issuer`, `quarkus`; keep `java`, `jwt`, `offline-validation`. `oauth2` stays — the library *does* validate OAuth2 JWTs.
+
+== Rationale
+
+The expensive, genuinely-misleading surface is the *topics and description*, which are free to fix. The mascot, the muscle memory, and the published coordinates all stay intact — zero breakage right before 1.0. This delivers a separate-repo-grade benefit (an accurate public identity) at description-grade cost.
+
+== Rejected alternatives
+
+* **Half-rename (repo only).** Rejected: leaves `de.cuioss.sheriff.oauth.*` coordinates and packages saying "oauth" — inconsistency tax, worse than either pure state.
+* **Keep everything as-is.** Rejected: the `oauth` / `oauth2` topics and the name actively misinform about scope.
+* **Full rebrand right now, ad hoc.** Rejected as a drive-by: a breaking coordinate/package migration should be a planned milestone, not a side effect.
+
+== Future Option B — full rebrand at 1.0 (deferred, not chosen)
+
+If and when 1.0 is cut and a clean slate is wanted, do a *coherent* rebrand across **all three layers at once**. Pre-1.0 is the one cheap window to touch `groupId`/packages; after 1.0 it is a breaking migration users will resent.
+
+Candidate names (reflect the enduring core — multi-issuer JWT validation — not a subset/overstatement):
+
+* **JWT-Sheriff** — most accurate to what it is and will remain. Preferred.
+* **Token-Sheriff** — alternative with umbrella headroom for the future RP module.
+* Rejected: `Auth-Sheriff` (vague: authn vs authz), `OIDC-Sheriff` (reserve for the RP; overstates today), keeping `OAuth-*` (the actual inaccuracy).
+
+=== Blast radius of Option B (checklist for the future plan)
+
+* GitHub repo name + redirects
+* Maven `groupId`, all `*-sheriff-*` artifactIds, the BOM
+* Java packages `de.cuioss.sheriff.oauth.*` + module-info / package-info
+* Quarkus config prefix `sheriff.oauth.*` (user-facing, breaking)
+* Badges, README, all `doc/` xrefs and links
+* SonarCloud project key (`cuioss_OAuth-Sheriff`)
+* GitHub Pages URL (`cuioss.github.io/OAuth-Sheriff`)
+* OpenSSF Best Practices project entry
+* Migration guide + deprecation/redirect strategy for existing consumers
+
+== Next steps
+
+* Apply the Strategy A description + topics change (small, standalone task).
+* Leave Option B documented here as the explicit 1.0 fork in the road.

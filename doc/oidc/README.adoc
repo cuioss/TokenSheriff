@@ -1,0 +1,26 @@
+= OIDC Planning
+:sectnums:
+
+Working area for designing and planning the OpenID Connect (relying-party)
+extension to OAuth-Sheriff. Each document below is self-contained so it can
+later be turned into its own implementation plan.
+
+== Decisions
+
+* xref:decision-oidc-module.adoc[OIDC Relying-Party as an Additional Module] -
+  house the active OIDC/RP functionality as a new module in this repository
+  (not a separate project), depending on `oauth-sheriff-core`.
+* xref:decision-naming-strategy.adoc[Naming & Identity Strategy (Strategy A)] -
+  keep the repository name as a brand and fix the description/topics now;
+  defer any full coordinate rebrand to a deliberate 1.0 decision.
+
+== Status
+
+Planning only. No implementation has started; no module has been created.
+
+[NOTE]
+====
+This area is intentionally not yet wired into the top-level
+xref:../README.adoc[Documentation Hub] — it will be linked in once the
+direction is confirmed.
+====
