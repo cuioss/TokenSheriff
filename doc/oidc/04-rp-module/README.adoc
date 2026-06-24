@@ -1,4 +1,4 @@
-= Plan 04 — Add the RP Module, Extension, Assembly & IT (wired, empty)
+= Plan 04 — Add the Client Module, Extension, Assembly & IT (wired, empty)
 :toc: macro
 :toclevels: 3
 :sectnums:
@@ -20,11 +20,11 @@ Stand up the complete skeleton the RP work will fill: the engine module, a Quark
 
 == Decision: standalone engine, dedicated Quarkus extension, ITs in the consumer
 
-. *Engine — standalone, modelled on `token-sheriff-core`.* Pure Java, HTTP via `cui-http`, depends on `token-sheriff-core`. *Not* inside the Quarkus extension.
+. *Engine — standalone, modelled on `token-sheriff-validation`.* Pure Java, HTTP via `cui-http`, depends on `token-sheriff-validation`. *Not* inside the Quarkus extension.
 +
-Why: the replacement target `portal-authentication-oauth` is *CDI / RESTEasy / portal, not Quarkus* — the engine must be framework-agnostic. It mirrors the proven `core` + `quarkus` split; the core is already pure Java + `cui-http` (the RP's HTTP foundation). Opt-in stays clean.
+Why: the replacement target `portal-authentication-oauth` is *CDI / RESTEasy / portal, not Quarkus* — the engine must be framework-agnostic. It mirrors the proven `validation` + `quarkus` split; the validation module is already pure Java + `cui-http` (the client's HTTP foundation). Opt-in stays clean.
 
-. *Quarkus — a new extension that depends on the existing one.* `token-sheriff-rp-quarkus` (runtime + deployment), depending on the existing `token-sheriff-quarkus` extension *and* the engine. A separate extension (not folded in) preserves opt-in and reuses the existing validation CDI wiring. Verified by the build assembly.
+. *Quarkus — a new extension that depends on the existing one.* `token-sheriff-client-quarkus` (runtime + deployment), depending on the existing `token-sheriff-validation-quarkus` extension *and* the engine. A separate extension (not folded in) preserves opt-in and reuses the existing validation CDI wiring. Verified by the build assembly.
 
 . *Integration tests live in the real consumer — `portal-authentication-oauth`.* RP is verified end-to-end where it actually replaces the legacy OAuth implementation, reusing that module's existing OIDC test infrastructure. The new RP-based integration tests go in *their own package*, separated from the existing OAuth tests. (Own package, not own module.)
 
@@ -38,19 +38,19 @@ The portal adapter (preserving `Oauth2Service` / `AuthenticatedUserInfo`) and th
 
 | *module*
 | OAuthSheriff
-| `token-sheriff-rp` — top-level, core-like. `package-info.java` in `de.cuioss.sheriff.token.rp`; deps `token-sheriff-core` + `cui-http`.
+| `token-sheriff-client` — top-level, validation-like. `package-info.java` in `de.cuioss.sheriff.token.client`; deps `token-sheriff-validation` + `cui-http`.
 
 | *extension*
 | OAuthSheriff
-| `token-sheriff-rp-quarkus` (runtime) + `…-deployment`, under `token-sheriff-quarkus-parent`. Minimal extension registering a `token-sheriff-rp` feature. Deps: existing `token-sheriff-quarkus`(`-deployment`) + `token-sheriff-rp`.
+| `token-sheriff-client-quarkus` (runtime) + `…-deployment`, under `token-sheriff-quarkus-parent`. Minimal extension registering a `token-sheriff-client` feature. Deps: existing `token-sheriff-validation-quarkus`(`-deployment`) + `token-sheriff-client`.
 
 | *assembly*
 | OAuthSheriff
-| Build wiring assembling the set: root `<modules>`, `token-sheriff-quarkus-parent` `<modules>`, BOM entries for `token-sheriff-rp` + `token-sheriff-rp-quarkus`. Build green proves the extension assembles.
+| Build wiring assembling the set: root `<modules>`, `token-sheriff-quarkus-parent` `<modules>`, BOM entries for `token-sheriff-client` + `token-sheriff-client-quarkus`. Build green proves the extension assembles.
 
 | *it*
 | cui-portal-core
-| In `portal-authentication-oauth`: a *test dependency* on `token-sheriff-rp` and an *own-package* RP integration-test scaffold (separated from the existing OAuth tests), reusing the module's OIDC test setup. Scaffold only — real tests arrive with the replacement.
+| In `portal-authentication-oauth`: a *test dependency* on `token-sheriff-client` and an *own-package* RP integration-test scaffold (separated from the existing OAuth tests), reusing the module's OIDC test setup. Scaffold only — real tests arrive with the replacement.
 |===
 
 == Target module tree (post Plan 04)
@@ -58,29 +58,29 @@ The portal adapter (preserving `Oauth2Service` / `AuthenticatedUserInfo`) and th
 [source]
 ----
 # OAuthSheriff (→ Token-Sheriff)
-token-sheriff-rp/                          # NEW engine (top-level, core-like, cui-http)
+token-sheriff-client/                          # NEW engine (top-level, validation-like, cui-http)
 token-sheriff-quarkus-parent/
-  token-sheriff-quarkus/                   # existing runtime
-  token-sheriff-quarkus-deployment/        # existing deployment
-  token-sheriff-rp-quarkus/                # NEW rp runtime  -> deps: token-sheriff-quarkus + token-sheriff-rp
-  token-sheriff-rp-quarkus-deployment/     # NEW rp deployment
+  token-sheriff-validation-quarkus/                   # existing runtime
+  token-sheriff-validation-quarkus-deployment/        # existing deployment
+  token-sheriff-client-quarkus/                # NEW client runtime  -> deps: token-sheriff-validation-quarkus + token-sheriff-client
+  token-sheriff-client-quarkus-deployment/     # NEW client deployment
   token-sheriff-quarkus-integration-tests/ # existing (unchanged)
   e-2-e-playwright/
-bom/                                       # + token-sheriff-rp, token-sheriff-rp-quarkus
+bom/                                       # + token-sheriff-client, token-sheriff-client-quarkus
 
 # cui-portal-core
 modules/authentication/portal-authentication-oauth/
-  src/test/java/.../rp/                     # NEW own-package RP IT scaffold (test dep: token-sheriff-rp)
+  src/test/java/.../rp/                     # NEW own-package RP IT scaffold (test dep: token-sheriff-client)
 ----
 
 == Module identity
 
 [cols="1,2"]
 |===
-| Engine         | `de.cuioss.sheriff.token:token-sheriff-rp`, package `de.cuioss.sheriff.token.rp`, deps `token-sheriff-core` + `cui-http`
-| RP runtime     | `de.cuioss.sheriff.token:token-sheriff-rp-quarkus`, package `…token.rp.quarkus`, deps `token-sheriff-quarkus` + `token-sheriff-rp`
-| RP deployment  | `de.cuioss.sheriff.token:token-sheriff-rp-quarkus-deployment`, deps `token-sheriff-quarkus-deployment` + the RP runtime
-| Quarkus feature| `token-sheriff-rp`
+| Engine         | `de.cuioss.sheriff.token:token-sheriff-client`, package `de.cuioss.sheriff.token.client`, deps `token-sheriff-validation` + `cui-http`
+| Client runtime     | `de.cuioss.sheriff.token:token-sheriff-client-quarkus`, package `…token.client.quarkus`, deps `token-sheriff-validation-quarkus` + `token-sheriff-client`
+| Client deployment  | `de.cuioss.sheriff.token:token-sheriff-client-quarkus-deployment`, deps `token-sheriff-validation-quarkus-deployment` + the Client runtime
+| Quarkus feature| `token-sheriff-client`
 | Parents        | engine → `token-sheriff-parent`; RP extension → `token-sheriff-quarkus-parent`
 |===
 
@@ -88,17 +88,17 @@ modules/authentication/portal-authentication-oauth/
 
 *OAuthSheriff (module + extension + assembly):*
 
-* `pom.xml` (root) — add `<module>token-sheriff-rp</module>`.
-* `token-sheriff-quarkus-parent/pom.xml` — add `<module>token-sheriff-rp-quarkus</module>` and `…-deployment`.
-* `bom/pom.xml` — add `token-sheriff-rp` and `token-sheriff-rp-quarkus`.
-* New POMs — engine modelled on `token-sheriff-core`; RP extension pair modelled on `token-sheriff-quarkus`(`-deployment`), adding the dependency on the existing extension + engine.
-* RP extension descriptor — `quarkus-extension.yaml` (name "Token-Sheriff RP"); deployment `*Processor` registering the `token-sheriff-rp` feature.
+* `pom.xml` (root) — add `<module>token-sheriff-client</module>`.
+* `token-sheriff-quarkus-parent/pom.xml` — add `<module>token-sheriff-client-quarkus</module>` and `…-deployment`.
+* `bom/pom.xml` — add `token-sheriff-client` and `token-sheriff-client-quarkus`.
+* New POMs — engine modelled on `token-sheriff-validation`; RP extension pair modelled on `token-sheriff-validation-quarkus`(`-deployment`), adding the dependency on the existing extension + engine.
+* RP extension descriptor — `quarkus-extension.yaml` (name "Token-Sheriff RP"); deployment `*Processor` registering the `token-sheriff-client` feature.
 * Source skeletons — `package-info.java` per new package; engine `doc/` stub per xref:../02-doc-structure/README.adoc[Plan 02].
 * CI/quality — reactor builds the new modules; confirm `.github/project.yml` (Sonar) scans them and empty modules don't fail the gate; `.github/dependabot.yml` covers them. List the new module + extension in the root README and `doc/README.adoc`.
 
 *cui-portal-core (it):*
 
-* `portal-authentication-oauth/pom.xml` — add a *test* dependency on `token-sheriff-rp` (later also the validation core / config).
+* `portal-authentication-oauth/pom.xml` — add a *test* dependency on `token-sheriff-client` (later also the validation module / config).
 * Create the own-package RP IT scaffold under `src/test/java/.../oauth/rp/` (or similar), separated from the existing OAuth tests; no test bodies yet.
 
 == "Builds empty" concern
@@ -111,8 +111,8 @@ Empty modules can fail quality gates (JaCoCo on zero classes, PMD, Sonar new-cod
 
 == Verification
 
-* [ ] `token-sheriff-rp`, `token-sheriff-rp-quarkus`, `…-deployment` appear in the reactor; engine + runtime in the BOM; full build green
-* [ ] RP extension registers the `token-sheriff-rp` feature and depends on the existing extension + engine; engine has *no* Quarkus dependency
-* [ ] `portal-authentication-oauth` has the `token-sheriff-rp` test dependency and an own-package RP IT scaffold, separated from the existing OAuth tests; its build is green
+* [ ] `token-sheriff-client`, `token-sheriff-client-quarkus`, `…-deployment` appear in the reactor; engine + runtime in the BOM; full build green
+* [ ] RP extension registers the `token-sheriff-client` feature and depends on the existing extension + engine; engine has *no* Quarkus dependency
+* [ ] `portal-authentication-oauth` has the `token-sheriff-client` test dependency and an own-package RP IT scaffold, separated from the existing OAuth tests; its build is green
 * [ ] No RP functional content and no real test bodies introduced (structure only)
 * [ ] Root README and `doc/README.adoc` list the new module + extension

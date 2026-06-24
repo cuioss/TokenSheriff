@@ -12,26 +12,26 @@ implementation plans plus the standing design decisions behind them.
   migration. Includes the
   xref:01-restructure/migration-nifi-extensions.adoc[nifi-extensions migration guide].
 * xref:02-doc-structure/README.adoc[02 — Documentation Structure] -
-  modularize `doc/` into peer capabilities (validation, relying-party) so the
-  coming RP docs have a clean home; runs after Plan 01.
-* xref:03-rp-spec/README.adoc[03 — RP Requirements, Specification & Security] -
-  produce the full relying-party document set (requirements, specification,
-  threat model, best practices) — modular by aspect (token / process / fetch),
-  every normative item source-referenced; spec-first, before RP code. Engine
+  modularize `doc/` into peer capabilities (validation, client) so the
+  coming client docs have a clean home; runs after Plan 01.
+* xref:03-rp-spec/README.adoc[03 — Client Requirements, Specification & Security] -
+  produce the full client document set (requirements, specification,
+  threat model, best practices) — modular by aspect (token / retrieval / fetch),
+  every normative item source-referenced; spec-first, before client code. Engine
   for a Backend-For-Frontend; replacement target `portal-authentication-oauth`.
-* xref:04-rp-module/README.adoc[04 — Add the RP Module, Extension, Assembly & IT (wired, empty)] -
-  stand up the full skeleton: standalone core-like engine `token-sheriff-rp`
-  (pure Java, `cui-http`), a dedicated `token-sheriff-rp-quarkus` extension
-  depending on the existing one, and BOM/reactor assembly — plus the RP
+* xref:04-rp-module/README.adoc[04 — Add the Client Module, Extension, Assembly & IT (wired, empty)] -
+  stand up the full skeleton: standalone validation-like engine `token-sheriff-client`
+  (pure Java, `cui-http`), a dedicated `token-sheriff-client-quarkus` extension
+  depending on the existing one, and BOM/reactor assembly — plus the client
   integration-test home (own package) in `cui-portal-core`
   `portal-authentication-oauth`, the real consumer. Cross-repo; no content.
   Runs after Plan 01.
 
 == Design decisions
 
-* xref:decision-oidc-module.adoc[OIDC Relying-Party as an Additional Module] -
-  house the active OIDC/RP functionality as a new module in this repository,
-  depending on the validation core. Basis for a later plan.
+* xref:decision-oidc-module.adoc[OIDC Client as an Additional Module] -
+  house the active OIDC client functionality as a new module in this repository,
+  depending on the validation module. Basis for a later plan.
 
 == Status
 

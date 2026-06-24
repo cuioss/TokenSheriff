@@ -6,7 +6,7 @@
 
 [cols="1,3"]
 |===
-| Status     | Ready to execute (after xref:../02-doc-structure/README.adoc[Plan 02] establishes `doc/relying-party/`)
+| Status     | Ready to execute (after xref:../02-doc-structure/README.adoc[Plan 02] establishes `doc/client/`)
 | Depends on | Plan 02 (doc structure); produces the spec the future RP module is built against (spec-first)
 | Focus      | Server-side *token retrieval* (token-endpoint grants incl. confidential authorization-code + PKCE), *OIDC fetching* (discovery, JWKS, userinfo), and the *token lifecycle* — the engine a *Backend-For-Frontend (BFF)* is built on. A *most-secure current subset*, security-led, every normative item source-referenced.
 |===
@@ -29,8 +29,8 @@ What the library lays groundwork for vs. what the BFF *application* owns:
 * Token-endpoint *client authentication* — `client_secret_basic`/`post`, `private_key_jwt` (RFC 7523), mTLS (RFC 8705).
 * *Sender-constraining* of retrieved tokens — DPoP (RFC 9449) / mTLS (RFC 8705).
 * *Server-side token lifecycle* — storage, refresh, revocation.
-* OIDC *fetching* — discovery (`.well-known`) and JWKS (both already in the validation core), plus userinfo.
-* Validating retrieved tokens (reuse the validation core) and the security of all the above (flow integrity, TLS, SSRF, credential protection).
+* OIDC *fetching* — discovery (`.well-known`) and JWKS (both already in the validation module), plus userinfo.
+* Validating retrieved tokens (reuse the validation module) and the security of all the above (flow integrity, TLS, SSRF, credential protection).
 
 .BFF/TMB application layer (enabled, not built here)
 The library must *not preclude* these, but does not own them:
@@ -73,23 +73,23 @@ Keep these in separate documents and requirement groups — do not blend them.
 | Aspect | What it covers
 
 | *Token* (partly inherited)
-| Handling/validation and *server-side lifecycle* of retrieved tokens. *References the validation core* (no duplication) and adds the delta: storage, refresh, revocation, sender-constraining, and validation of ID token / userinfo responses.
+| Handling/validation and *server-side lifecycle* of retrieved tokens. *References the validation module* (no duplication) and adds the delta: storage, refresh, revocation, sender-constraining, and validation of ID token / userinfo responses.
 
 | *Retrieval & flow* (net-new)
 | The confidential-client *authorization-code + PKCE* flow (server-side) and the token endpoint: grants, client authentication, `state`/`nonce`/exact redirect-URI, mix-up defence (`iss`), code-injection defence, PAR, DPoP/mTLS, TLS, response validation.
 
 | *Fetch* (partly inherited)
-| Server-side retrieval/HTTP. *Already in the core* (reference, do not duplicate): discovery (`.well-known`, `core.wellknown`), JWKS fetch/cache/rotation (`core.jwks`), TLS, the HTTP client. *Net-new*: userinfo fetch. *SSRF/TLS/resilience* applies to *both* — including the existing discovery/JWKS paths.
+| Server-side retrieval/HTTP. *Already in the validation module* (reference, do not duplicate): discovery (`.well-known`, `validation.wellknown`), JWKS fetch/cache/rotation (`validation.jwks`), TLS, the HTTP client. *Net-new*: userinfo fetch. *SSRF/TLS/resilience* applies to *both* — including the existing discovery/JWKS paths.
 |===
 
-*Retrieval & flow* is the only fully net-new aspect. *Token* and *fetch* reference the validation core and state only the delta. The SSRF/TLS analysis also re-examines the *existing* `core.wellknown`/`core.jwks` fetch code, which may yield hardening requirements on current code.
+*Retrieval & flow* is the only fully net-new aspect. *Token* and *fetch* reference the validation module and state only the delta. The SSRF/TLS analysis also re-examines the *existing* `validation.wellknown`/`validation.jwks` fetch code, which may yield hardening requirements on current code.
 
-== Target document set (under `doc/relying-party/`)
+== Target document set (under `doc/client/`)
 
 [source]
 ----
-doc/relying-party/
-  requirements.adoc            # TOKEN-SHERIFF-RP-N, grouped by aspect
+doc/client/
+  requirements.adoc            # TOKEN-SHERIFF-CLIENT-N, grouped by aspect
   architecture.adoc            # RP/BFF component & sequence overview
   threat-model.adoc            # attack catalog per aspect, each entry sourced
   best-practices.adoc          # normative checklist, each item sourced
@@ -97,12 +97,12 @@ doc/relying-party/
   specification/
     retrieval-flow.adoc        # auth-code+PKCE, grants, client auth, state/nonce, mix-up, PAR
     fetch-discovery-jwks.adoc  # discovery, JWKS, userinfo fetch, SSRF, TLS
-    token-handling.adoc        # token lifecycle delta (references the validation core)
+    token-handling.adoc        # token lifecycle delta (references the validation module)
 ----
 
 == Requirement-ID & sourcing discipline
 
-* RP requirements use `TOKEN-SHERIFF-RP-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow / Fetch).
+* RP requirements use `TOKEN-SHERIFF-CLIENT-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow / Fetch).
 * *Every* normative requirement and *every* threat entry cites a source with section anchor (RFC / OIDC spec / OWASP / FAPI). MUST/SHOULD/MAY trace back to the cited source.
 * Requirements are *security-driven* — each traces to a threat it mitigates or is the secure way to perform a needed operation. Exclusions are sourced too.
 * `references.adoc` is the single bibliography; all docs cite into it.
@@ -110,7 +110,7 @@ doc/relying-party/
 == Execution
 
 . *Scaffold + bibliography* — doc-set skeleton and `references.adoc` from the source catalog below.
-. *Requirements* — `TOKEN-SHERIFF-RP-N`, grouped by aspect, each sourced.
+. *Requirements* — `TOKEN-SHERIFF-CLIENT-N`, grouped by aspect, each sourced.
 . *Threat model* — attack catalog per aspect; each entry → source + mitigation + covering requirement.
 . *Best practices* — the sourced checklist below, normative.
 . *Specifications* — `retrieval-flow.adoc`, `fetch-discovery-jwks.adoc`, `token-handling.adoc`.
@@ -119,17 +119,17 @@ doc/relying-party/
 == Verification
 
 * [ ] Every requirement and threat entry cites a normative source with section anchor
-* [ ] Aspects cleanly separated; token & fetch reference (not duplicate) the validation core
+* [ ] Aspects cleanly separated; token & fetch reference (not duplicate) the validation module
 * [ ] Retrieval & flow covers confidential auth-code+PKCE, client auth, `state`/`nonce`/redirect-URI, mix-up (`iss`), and sender-constraining
 * [ ] BFF groundwork is sufficient (server-side token lifecycle) without owning the browser session/cookie layer
 * [ ] Each security exclusion is documented and sourced; every requirement is threat-driven
-* [ ] `TOKEN-SHERIFF-RP-N` IDs grouped by aspect; traceability matrix complete; `references.adoc` resolves
+* [ ] `TOKEN-SHERIFF-CLIENT-N` IDs grouped by aspect; traceability matrix complete; `references.adoc` resolves
 
 // ---------------------------------------------------------------------------
 
 == Reference & replacement target: portal-authentication-oauth
 
-`cui-portal-core/modules/authentication/portal-authentication-oauth` is an existing confidential server-side OIDC relying party (CDI + MicroProfile Config + RESTEasy/JAX-RS). It is both a *validation reference* for this spec — a real BFF-style RP that already implements most of the in-scope flow — and a *replacement target*: the Token-Sheriff RP engine should supersede it, with a thin portal adapter preserving the portal contract.
+`cui-portal-core/modules/authentication/portal-authentication-oauth` is an existing confidential server-side OIDC client (CDI + MicroProfile Config + RESTEasy/JAX-RS). It is both a *validation reference* for this spec — a real BFF-style RP that already implements most of the in-scope flow — and a *replacement target*: the Token-Sheriff RP engine should supersede it, with a thin portal adapter preserving the portal contract.
 
 === What it already does (confirms this plan's scope)
 * Authorization-code + PKCE (*S256* confirmed), `state` CSRF, light `nonce`
@@ -142,15 +142,15 @@ doc/relying-party/
 * Config namespace `authentication.oidc.*` — `client.id`, `client.password`, `client.default_scopes`, `client.role_mapper_claim`, `server.url`, `server.discovery_path`, `server.token_endpoint_url`, `server.userinfo_endpoint_url`, `logout.*`. Migration maps these onto Token-Sheriff RP config.
 
 === Modernization deltas ("eventually modernized") — each sourced above
-* *Validate the ID token cryptographically via the validation core* (signature/JWKS, `iss`/`aud`/`exp`/`nonce`/`at_hash`). Today identity is taken from the *userinfo* endpoint with *no id_token signature validation* (0 hits) — the biggest security win and the core synergy.
+* *Validate the ID token cryptographically via the validation module* (signature/JWKS, `iss`/`aud`/`exp`/`nonce`/`at_hash`). Today identity is taken from the *userinfo* endpoint with *no id_token signature validation* (0 hits) — the biggest security win and the validation synergy.
 * Add *`iss` mix-up defence* (RFC 9207) — absent today.
 * Offer *`private_key_jwt` / mTLS* client authentication (RFC 7523 / 8705) beyond `client_secret`.
 * Add *PAR* (RFC 9126) and *DPoP/mTLS sender-constraining* (RFC 9449 / 8705).
 * Strengthen *`nonce`* binding (currently light).
-* Replace bespoke RESTEasy fetching with the core's hardened HTTP + *SSRF* defences (fetch aspect).
+* Replace bespoke RESTEasy fetching with the validation module's hardened HTTP + *SSRF* defences (fetch aspect).
 
 === Relationship to the other consumer
-`nifi-extensions` consumes the *validation core*; `portal-authentication-oauth` is an *RP* that the Token-Sheriff RP module *replaces* (engine swap + portal adapter). It is the concrete reference implementation for this plan's BFF-engine scope.
+`nifi-extensions` consumes the *validation module*; `portal-authentication-oauth` is an *RP* that the Token-Sheriff RP module *replaces* (engine swap + portal adapter). It is the concrete reference implementation for this plan's BFF-engine scope.
 
 == Seed: source catalog (research 2026-06-24)
 
@@ -197,12 +197,12 @@ Minimum coverage for `threat-model.adoc`. Each → mitigation + covering require
 
 .Token aspect
 * Refresh-token theft (server-side) — RFC 9700 §4.14 → rotation, revoke on misuse, sender-constraining; protect at-rest storage
-* Token replay / audience confusion — RFC 9068, OIDC Core §3.1.3.7 → validate `iss`/`aud`/`exp`/`iat`/signature (reuse core)
+* Token replay / audience confusion — RFC 9068, OIDC Core §3.1.3.7 → validate `iss`/`aud`/`exp`/`iat`/signature (reuse the validation module)
 * ID-token / userinfo integrity — OIDC Core §3.1.3.7, §5.3 → signature + claim validation; bind userinfo `sub`
 * Sender-constraint loss in storage/forwarding — RFC 9449, RFC 8705 → keep tokens bound; minimal storage
 
 .Fetch aspect
-* SSRF via `jwks_uri` / discovery / userinfo URLs — OWASP, CVE-2026-1180 → host allow-listing, egress restriction, block internal/link-local ranges. *Audit the existing `core.wellknown`/`core.jwks` code, not only new endpoints.*
+* SSRF via `jwks_uri` / discovery / userinfo URLs — OWASP, CVE-2026-1180 → host allow-listing, egress restriction, block internal/link-local ranges. *Audit the existing `validation.wellknown`/`validation.jwks` code, not only new endpoints.*
 * Malicious endpoints advertised via discovery — RFC 8414 / OIDC Discovery → validate `issuer`, pin/validate metadata
 * TLS downgrade / MITM on fetches — RFC 9700, RFC 8414 → enforce TLS, validate certificates
 * DoS via large/slow metadata, JWKS or userinfo responses → timeouts, size limits
@@ -212,5 +212,5 @@ Minimum coverage for `threat-model.adoc`. Each → mitigation + covering require
 Normative basis for `best-practices.adoc`.
 
 * *Retrieval & flow:* confidential-client authorization-code + PKCE (`S256`); never implicit/hybrid (RFC 9700 §2.1.2, Browser-Based Apps draft). Exact redirect-URI match (§4.1). CSRF via session-bound `state` / PKCE / `nonce` (§4.7). Mix-up defence via `iss` (RFC 9207, §4.4). Prefer PAR (RFC 9126, FAPI 2.0). Strongest available client auth — `private_key_jwt` (RFC 7523) or mTLS (RFC 8705) over `client_secret`. Sender-constrain tokens with DPoP/mTLS (RFC 9449, RFC 8705, FAPI 2.0). TLS on the token endpoint; validate `iss`/`aud` of the response.
-* *Token:* validate every retrieved token via the core pipeline — `iss`/`aud`/`exp`/`iat`/signature (RFC 9068, OIDC Core §3.1.3.7); for userinfo, verify signature and bind `sub`. Hold tokens server-side; rotate refresh tokens and revoke on misuse (§4.14); protect at-rest; keep sender-constraint intact; short-lived access tokens.
-* *Fetch:* enforce TLS on all fetches. Defend against SSRF on `jwks_uri`/discovery/userinfo — allow-list hosts, restrict egress, block internal ranges (OWASP, CVE-2026-1180). Timeouts and response size limits. Reuse the core's JWKS cache/rotation.
+* *Token:* validate every retrieved token via the validation pipeline — `iss`/`aud`/`exp`/`iat`/signature (RFC 9068, OIDC Core §3.1.3.7); for userinfo, verify signature and bind `sub`. Hold tokens server-side; rotate refresh tokens and revoke on misuse (§4.14); protect at-rest; keep sender-constraint intact; short-lived access tokens.
+* *Fetch:* enforce TLS on all fetches. Defend against SSRF on `jwks_uri`/discovery/userinfo — allow-list hosts, restrict egress, block internal ranges (OWASP, CVE-2026-1180). Timeouts and response size limits. Reuse the validation module's JWKS cache/rotation.

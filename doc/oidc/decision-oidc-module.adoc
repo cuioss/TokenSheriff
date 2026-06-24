@@ -1,4 +1,4 @@
-= Design Decision: OIDC Relying-Party as an Additional Module
+= Design Decision: OIDC Client as an Additional Module
 :toc: macro
 :toclevels: 3
 :sectnums:
@@ -8,7 +8,7 @@
 |===
 | Status    | Proposed
 | Date      | 2026-06-24
-| Decides   | Where the planned OIDC relying-party (RP) functionality lives
+| Decides   | Where the planned OIDC client (RP) functionality lives
 | Supersedes| —
 | Related   | xref:decision-naming-strategy.adoc[Naming & Identity Strategy], xref:../../README.md[Project README]
 |===
@@ -19,32 +19,32 @@ toc::[]
 
 OAuth-Sheriff is, today, a *passive multi-issuer JWT validation library*. It deliberately stops at "validate, never acquire" — the README states it "will never create tokens, only validate them."
 
-A survey of the core confirms it already covers the *validation-side* of OpenID Connect:
+A survey of the validation module confirms it already covers the *validation-side* of OpenID Connect:
 
 * OIDC Discovery — a dedicated `wellknown` package (`HttpWellKnownResolver`, `WellKnownConfig`, `WellKnownConfigurationConverter`)
 * ID token validation — `IdTokenValidationPipeline`, `IdTokenContent`, `IdTokenRequest`
-* No userinfo endpoint, authorization-code/PKCE flow, token-endpoint exchange, session, or logout (0 references in core)
+* No userinfo endpoint, authorization-code/PKCE flow, token-endpoint exchange, session, or logout (0 references in the validation module)
 
-The goal is to add the *active* OIDC capabilities — the relying-party (RP) side: authorization-code / PKCE flows, token-endpoint exchange, the userinfo endpoint, nonce/state handling, sessions, and RP-initiated / front-/back-channel logout.
+The goal is to add the *active* OIDC capabilities — the client (RP) side: authorization-code / PKCE flows, token-endpoint exchange, the userinfo endpoint, nonce/state handling, sessions, and RP-initiated / front-/back-channel logout.
 
 The question is **where** that code lives: a separate Git project (the original "OIDC-Sheriff" idea) or a new module inside this repository.
 
 == Decision
 
-Add an **`oidc-sheriff` Maven module to this multi-module repository**, publishing its own artifact and depending on `oauth-sheriff-core`. Do **not** create a separate Git project at this time.
+Add an **`token-sheriff-client` Maven module to this multi-module repository**, publishing its own artifact and depending on `token-sheriff-validation`. Do **not** create a separate Git project at this time.
 
-The seam between the two is *not* "OAuth vs OIDC" (the core already does OIDC discovery and ID tokens). The real seam is:
+The seam between the two is *not* "OAuth vs OIDC" (the validation module already does OIDC discovery and ID tokens). The real seam is:
 
-* **Passive validation + issuer discovery → stays in the core** (`oauth-sheriff-core`)
-* **Active relying-party / token acquisition → the new module**
+* **Passive validation + issuer discovery → stays in the validation module** (`token-sheriff-validation`)
+* **Active client / token acquisition → the new module**
 
 == Rationale
 
 The stated goal of separation — "users choose the dependency that matches their requirements" — is satisfied by a separate *artifact*. It does **not** require a separate *repository*. A second repo only buys a repo boundary; it costs a version-compatibility matrix, two release trains, duplicated CI/SonarCloud/release/BOM infrastructure, and cross-repo pull requests every time the seam shifts.
 
-The dependency direction (`oidc-sheriff` → `oauth-sheriff-core`) is the natural, clean layering: the RP builds on validation, never the reverse.
+The dependency direction (`token-sheriff-client` → `token-sheriff-validation`) is the natural, clean layering: the RP builds on validation, never the reverse.
 
-The core's public API is still pre-1.0 (Maven Central `v0.8.x`) and actively evolving (a recent 1.0 cleanup renamed `well_known → wellknown`, etc.). The RP layer will exercise core APIs in ways that are hard to predict; that co-evolution is *trivial in one repo* and *painful across two*.
+The validation module's public API is still pre-1.0 (Maven Central `v0.8.x`) and actively evolving (a recent 1.0 cleanup renamed `well_known → wellknown`, etc.). The RP layer will exercise validation-module APIs in ways that are hard to predict; that co-evolution is *trivial in one repo* and *painful across two*.
 
 The asymmetry is decisive: **extracting a module into its own repo later is cheap** (move the directory, redirect the dependency); **merging two repos back after a premature split is expensive.** Start coupled; split on evidence.
 
@@ -55,19 +55,19 @@ The asymmetry is decisive: **extracting a module into its own repo later is chea
 * A separate, opt-in artifact — the user-facing separation of concerns is fully delivered.
 * Shared CI, SonarCloud, BOM, release automation, and benchmarking — no duplication.
 * Atomic cross-cutting changes across the validation/RP seam (no version matrix).
-* The RP layer can co-evolve with the still-moving core API during the pre-1.0 window.
+* The RP layer can co-evolve with the still-moving validation-module API during the pre-1.0 window.
 
 === Negative / trade-offs
 
 * One repository grows larger (mitigated: it is already multi-module).
-* *Scope/identity shift.* The core promises "validate, never acquire." Housing token-acquiring RP code under a *distinct artifact and name* preserves that promise; it must not leak into `oauth-sheriff-core`.
+* *Scope/identity shift.* The validation module promises "validate, never acquire." Housing token-acquiring RP code under a *distinct artifact and name* preserves that promise; it must not leak into `token-sheriff-validation`.
 
-== When to promote `oidc-sheriff` to its own repository
+== When to promote `token-sheriff-client` to its own repository
 
 Revisit this decision — and split — when **any** of the following becomes true:
 
 * An **independent release cadence** is genuinely blocked by shared versioning.
-* The RP layer drags in a **heavier or higher-risk dependency tree** that should not touch the core's supply-chain surface.
+* The RP layer drags in a **heavier or higher-risk dependency tree** that should not touch the validation module's supply-chain surface.
 * **Different audience, governance, or license** (e.g., the RP client moves under a different commercial tier).
 * A **different maintainer set** with a separate review/security process.
 
@@ -75,7 +75,7 @@ Until one of these bites, the module is strictly better.
 
 == Open questions (to resolve when this becomes an implementation plan)
 
-* *Module/artifact name.* Under Strategy A the existing convention is `oauth-sheriff-*`, which re-embeds "oauth". Candidates: `oauth-sheriff-oidc`, `oauth-sheriff-rp`, or a brand-neutral `oidc-sheriff`. Tied to xref:decision-naming-strategy.adoc[Naming & Identity Strategy].
+* *Module/artifact name.* Under Strategy A the existing convention is `oauth-sheriff-*`, which re-embeds "oauth". Candidates: `oauth-sheriff-oidc`, `oauth-sheriff-rp`, or a brand-neutral `token-sheriff-client`. Tied to xref:decision-naming-strategy.adoc[Naming & Identity Strategy].
 * Quarkus integration: a parallel `oauth-sheriff-quarkus`-style extension for the RP, or RP support folded into the existing extension?
 * Exact API surface of the RP (which flows ship first — authorization-code + PKCE as the MVP?).
 * Session/state storage abstraction and its dependency footprint.
@@ -83,4 +83,4 @@ Until one of these bites, the module is strictly better.
 == Alternatives considered
 
 * **Separate Git project (original "OIDC-Sheriff").** Rejected for now: same user-facing benefit as a module, but with cross-repo maintenance overhead and a version-compatibility matrix during the formative pre-1.0 period. Kept as a documented future option above.
-* **Fold RP into `oauth-sheriff-core`.** Rejected: breaks the core's "validate, never acquire" promise and bloats the most security-critical, most-reused artifact.
+* **Fold RP into `token-sheriff-validation`.** Rejected: breaks the validation module's "validate, never acquire" promise and bloats the most security-critical, most-reused artifact.

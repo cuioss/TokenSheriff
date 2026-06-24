@@ -9,14 +9,14 @@
 | Status | Ready to execute
 | Scope  | Rename the project to *Token-Sheriff* across every surface: repository, Maven coordinates, Java packages, configuration + metric keys, requirement IDs, and documentation
 | Output | First Token-Sheriff release `0.9.0` + Maven Central relocation + consumer migration
-| Version | This rename/refactor ships as *0.9.0*. `1.0.0` is reserved for when the OIDC relying-party module is implemented and tested.
+| Version | This rename/refactor ships as *0.9.0*. `1.0.0` is reserved for when the OIDC client module is implemented and tested.
 |===
 
 toc::[]
 
 == Goal
 
-Rename *OAuth-Sheriff* to *Token-Sheriff*. The name reflects the enduring scope — multi-issuer JWT validation, with headroom for the planned xref:../decision-oidc-module.adoc[OIDC relying-party module]. "Token-Sheriff" is unused on Maven Central, GitHub, and npm.
+Rename *OAuth-Sheriff* to *Token-Sheriff*. The name reflects the enduring scope — multi-issuer JWT validation, with headroom for the planned xref:../decision-oidc-module.adoc[OIDC client module]. "Token-Sheriff" is unused on Maven Central, GitHub, and npm.
 
 == Target naming scheme
 
@@ -40,6 +40,8 @@ The `de.cuioss.sheriff.*` / `sheriff.*` roots stay stable; only the `oauth → t
 |===
 
 The mascot (`doc/resources/Sheriff.png`) and the "Sheriff" brand are unchanged — only the qualifier changes. There are no `module-info.java` files, so no JPMS module names to migrate.
+
+Modules are renamed with *capability* names (not `-core`): `oauth-sheriff-core → token-sheriff-validation` (package `…token.validation`), `oauth-sheriff-quarkus → token-sheriff-validation-quarkus` (and `-deployment`). Aggregator/test modules keep the neutral form: `oauth-sheriff-quarkus-parent → token-sheriff-quarkus-parent`, `…-integration-tests → token-sheriff-quarkus-integration-tests`. (The client modules are added later by xref:../04-rp-module/README.adoc[Plan 04].)
 
 == Scope (regression baseline)
 
@@ -72,7 +74,7 @@ The Java type/package and Maven-coordinate refactoring is done with *OpenRewrite
 | Requirement IDs `OAUTH-SHERIFF-N`, docs, badges, workflows, README `alt` | `org.openrewrite.text.FindAndReplace` / scripts
 |===
 
-A module's *own* `<groupId>`/`<artifactId>` has no first-class recipe; those ~6 poms (`token-sheriff-parent`, `-core`, `-quarkus*`, `bom`) are changed via IDE or a scoped `text.FindAndReplace`. Compose the recipes into one `rewrite.yml` and run `./mvnw rewrite:run`. Publish the same composite as a named recipe (`de.cuioss.sheriff.token.MigrateFromOAuthSheriff`) so consumers migrate with one command.
+A module's *own* `<groupId>`/`<artifactId>` has no first-class recipe; those ~6 poms (`token-sheriff-parent`, `-validation`, `-validation-quarkus`, `bom`) are changed via IDE or a scoped `text.FindAndReplace`. Compose the recipes into one `rewrite.yml` and run `./mvnw rewrite:run`. Publish the same composite as a named recipe (`de.cuioss.sheriff.token.MigrateFromOAuthSheriff`) so consumers migrate with one command.
 
 == Execution
 
@@ -140,7 +142,7 @@ Publish a final POM under each OLD coordinate whose `distributionManagement/relo
   <distributionManagement>
     <relocation>
       <groupId>de.cuioss.sheriff.token</groupId>
-      <artifactId>token-sheriff-core</artifactId>
+      <artifactId>token-sheriff-validation</artifactId>
       <message>Renamed to Token-Sheriff. See migration guide.</message>
     </relocation>
   </distributionManagement>
