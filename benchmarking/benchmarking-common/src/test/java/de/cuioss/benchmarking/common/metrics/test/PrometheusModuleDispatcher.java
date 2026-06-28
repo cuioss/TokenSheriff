@@ -146,7 +146,7 @@ public class PrometheusModuleDispatcher implements ModuleDispatcherElement {
                       {
                         "metric": {
                           "__name__": "process_cpu_usage",
-                          "instance": "oauth-sheriff-integration-tests:8443",
+                          "instance": "token-sheriff-integration-tests:8443",
                           "job": "quarkus-benchmark"
                         },
                         "values": [

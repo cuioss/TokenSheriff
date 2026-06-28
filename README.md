@@ -11,7 +11,7 @@
 
 [![Last Build](https://img.shields.io/github/last-commit/cuioss/OAuthSheriff/main)](https://github.com/cuioss/OAuthSheriff/commits/main)
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
-[![Maven Central](https://img.shields.io/maven-central/v/de.cuioss.sheriff.oauth/oauth-sheriff-parent.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/de.cuioss.sheriff.oauth/oauth-sheriff-parent)
+[![Maven Central](https://img.shields.io/maven-central/v/de.cuioss.sheriff.token/token-sheriff-parent.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/de.cuioss.sheriff.token/token-sheriff-parent)
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cuioss_OAuth-Sheriff&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cuioss_OAuth-Sheriff)
 [![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=cuioss_OAuth-Sheriff&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=cuioss_OAuth-Sheriff)
@@ -76,12 +76,12 @@ For Quarkus applications, use our dedicated extension for seamless integration:
 
 ```xml
 <dependency>
-    <groupId>de.cuioss.sheriff.oauth</groupId>
-    <artifactId>oauth-sheriff-quarkus</artifactId>
+    <groupId>de.cuioss.sheriff.token</groupId>
+    <artifactId>token-sheriff-validation-quarkus</artifactId>
 </dependency>
 ```
 
-The [Quarkus Extension](oauth-sheriff-quarkus-parent/README.adoc) provides:
+The [Quarkus Extension](token-sheriff-quarkus-parent/README.adoc) provides:
 
 - Minimal configuration with zero-configuration for sensible best-practice security settings
 - CDI injection of validated tokens
@@ -93,7 +93,7 @@ The [Quarkus Extension](oauth-sheriff-quarkus-parent/README.adoc) provides:
 
 ```properties
 # application.properties
-sheriff.oauth.issuers.keycloak.jwks.http.well-known-url=https://keycloak.example.com/realms/master/.well-known/openid-configuration
+sheriff.token.issuers.keycloak.jwks.http.well-known-url=https://keycloak.example.com/realms/master/.well-known/openid-configuration
 ```
 
 ```java
@@ -122,9 +122,9 @@ public Response getData() {
 }
 ```
 
-For details, see the [MicroProfile JWT Compatibility](doc/specification/microprofile-jwt-compatibility.adoc) specification and the [Quarkus Extension documentation](oauth-sheriff-quarkus-parent/README.adoc).
+For details, see the [MicroProfile JWT Compatibility](doc/specification/microprofile-jwt-compatibility.adoc) specification and the [Quarkus Extension documentation](token-sheriff-quarkus-parent/README.adoc).
 
-For a complete working example, see the [integration tests module](oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/README.adoc).
+For a complete working example, see the [integration tests module](token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/README.adoc).
 
 ### Standalone Library
 
@@ -132,8 +132,8 @@ For non-Quarkus applications, use the core validation library:
 
 ```xml
 <dependency>
-    <groupId>de.cuioss.sheriff.oauth</groupId>
-    <artifactId>oauth-sheriff-core</artifactId>
+    <groupId>de.cuioss.sheriff.token</groupId>
+    <artifactId>token-sheriff-validation</artifactId>
 </dependency>
 ```
 
@@ -172,13 +172,13 @@ For detailed architectural information, see:
 ## Documentation
 
 - [Documentation Hub](doc/README.adoc) - Complete guide to all documentation
-- [Usage Guide](oauth-sheriff-core/README.adoc) - Detailed usage examples
+- [Usage Guide](token-sheriff-validation/README.adoc) - Detailed usage examples
 - [Requirements](doc/Requirements.adoc) - Functional and non-functional requirements
 - [Threat Model](doc/security/threat-model.adoc) - Security analysis
 - [MicroProfile JWT Compatibility](doc/specification/microprofile-jwt-compatibility.adoc) - MP-JWT 2.1 integration and rationale
 - [Multi-IDP Testing](doc/specification/multi-idp-testing.adoc) - Testing with multiple OIDC providers
 
-For configuration details including runtime dependencies and test support, see the [Token-Sheriff Core documentation](oauth-sheriff-core/README.adoc).
+For configuration details including runtime dependencies and test support, see the [Token-Sheriff Core documentation](token-sheriff-validation/README.adoc).
 
 ## Performance
 

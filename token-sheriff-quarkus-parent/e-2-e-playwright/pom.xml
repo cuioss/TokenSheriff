@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>de.cuioss.sheriff.token</groupId>
+        <artifactId>token-sheriff-quarkus-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>e-2-e-playwright</artifactId>
+    <packaging>pom</packaging>
+    <name>Token-Sheriff - E2E Playwright Tests</name>
+    <description>End-to-End Playwright tests for Token-Sheriff Dev-UI components</description>
+
+    <properties>
+        <!-- Skip deployment and installation - test-only module -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
+        <!-- Skip all Java-centric plugins inherited from parent -->
+        <maven.compiler.skip>true</maven.compiler.skip>
+        <skipTests>true</skipTests>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <checkstyle.skip>true</checkstyle.skip>
+        <spotbugs.skip>true</spotbugs.skip>
+        <pmd.skip>true</pmd.skip>
+        <cpd.skip>true</cpd.skip>
+        <enforcer.skip>true</enforcer.skip>
+        <jacoco.skip>true</jacoco.skip>
+        <license.skip>true</license.skip>
+        <dependency-check.skip>true</dependency-check.skip>
+        <skip.openrewrite>true</skip.openrewrite>
+
+        <!-- Node/npm versions -->
+        <node.version>v22.22.0</node.version>
+        <npm.version>10.9.2</npm.version>
+
+        <!-- Frontend Maven Plugin version -->
+        <frontend-maven-plugin.version>2.0.1</frontend-maven-plugin.version>
+        <maven.exec.plugin.version>3.6.3</maven.exec.plugin.version>
+
+        <!-- Playwright test skip control -->
+        <skipPlaywrightTests>true</skipPlaywrightTests>
+
+        <!-- URLs -->
+        <devui.base.url>https://localhost:8443</devui.base.url>
+        <keycloak.url>https://localhost:1443</keycloak.url>
+
+        <!-- Script directory -->
+        <script.dir>${project.basedir}</script.dir>
+    </properties>
+
+    <!-- No Java dependencies needed - this is a pure Node.js test module -->
+    <dependencies />
+
+    <build>
+        <plugins>
+            <!-- Frontend Maven Plugin: Node.js and npm management -->
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>${frontend-maven-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>install-node-and-npm</id>
+                        <goals>
+                            <goal>install-node-and-npm</goal>
+                        </goals>
+                        <phase>initialize</phase>
+                        <configuration>
+                            <nodeVersion>${node.version}</nodeVersion>
+                            <npmVersion>${npm.version}</npmVersion>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm-install</id>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <phase>initialize</phase>
+                        <configuration>
+                            <arguments>install</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm-lint</id>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <phase>verify</phase>
+                        <configuration>
+                            <arguments>run lint:strict</arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>e2e-tests</id>
+            <properties>
+                <skipPlaywrightTests>false</skipPlaywrightTests>
+            </properties>
+            <build>
+                <plugins>
+                    <!-- Exec Maven Plugin for environment management and test execution -->
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>${maven.exec.plugin.version}</version>
+                        <executions>
+                            <!-- Safety-net: stop any leftover containers -->
+                            <execution>
+                                <id>stop-dev-environment-pre</id>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <phase>pre-clean</phase>
+                                <configuration>
+                                    <executable>bash</executable>
+                                    <workingDirectory>${script.dir}</workingDirectory>
+                                    <arguments>
+                                        <argument>./scripts/stop-dev-environment.sh</argument>
+                                    </arguments>
+                                    <successCodes>
+                                        <successCode>0</successCode>
+                                        <successCode>1</successCode>
+                                    </successCodes>
+                                    <skip>${skipPlaywrightTests}</skip>
+                                </configuration>
+                            </execution>
+                            <!-- Start Keycloak + Quarkus dev mode -->
+                            <execution>
+                                <id>start-dev-environment</id>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <phase>pre-integration-test</phase>
+                                <configuration>
+                                    <executable>bash</executable>
+                                    <workingDirectory>${script.dir}</workingDirectory>
+                                    <arguments>
+                                        <argument>./scripts/start-dev-environment.sh</argument>
+                                    </arguments>
+                                    <skip>${skipPlaywrightTests}</skip>
+                                </configuration>
+                            </execution>
+                            <!-- Run all Playwright tests (projects handle categorization) -->
+                            <execution>
+                                <id>run-playwright-tests</id>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <phase>integration-test</phase>
+                                <configuration>
+                                    <workingDirectory>${project.basedir}</workingDirectory>
+                                    <executable>npx</executable>
+                                    <arguments>
+                                        <argument>--yes</argument>
+                                        <argument>playwright</argument>
+                                        <argument>test</argument>
+                                    </arguments>
+                                    <environmentVariables>
+                                        <PLAYWRIGHT_BASE_URL>${devui.base.url}</PLAYWRIGHT_BASE_URL>
+                                        <PW_TEST_HTML_REPORT_OPEN>never</PW_TEST_HTML_REPORT_OPEN>
+                                    </environmentVariables>
+                                    <skip>${skipPlaywrightTests}</skip>
+                                </configuration>
+                            </execution>
+                            <!-- Cleanup -->
+                            <execution>
+                                <id>stop-dev-environment-post</id>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <phase>post-integration-test</phase>
+                                <configuration>
+                                    <executable>bash</executable>
+                                    <workingDirectory>${script.dir}</workingDirectory>
+                                    <arguments>
+                                        <argument>./scripts/stop-dev-environment.sh</argument>
+                                    </arguments>
+                                    <successCodes>
+                                        <successCode>0</successCode>
+                                        <successCode>1</successCode>
+                                    </successCodes>
+                                    <skip>${skipPlaywrightTests}</skip>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

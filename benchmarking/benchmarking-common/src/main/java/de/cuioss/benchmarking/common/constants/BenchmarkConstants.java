@@ -35,7 +35,7 @@ public final class BenchmarkConstants {
         /**
          * The common prefix for all JWT metrics.
          */
-        public static final String PREFIX = "sheriff.oauth";
+        public static final String PREFIX = "sheriff.token";
 
         /**
          * Metrics related to bearer token operations.

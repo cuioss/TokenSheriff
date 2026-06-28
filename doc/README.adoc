@@ -21,13 +21,13 @@ This is the central navigation for TokenSheriff documentation.
 
 == Module Documentation
 
-* xref:../oauth-sheriff-core/README.adoc[oauth-sheriff-core] - Core library usage and API
-** xref:../oauth-sheriff-core/doc/usage-guide.adoc[Usage Guide]
-** xref:../oauth-sheriff-core/doc/api-reference.adoc[API Reference]
-** xref:../oauth-sheriff-core/doc/developing.adoc[Developing]
-** xref:../oauth-sheriff-core/doc/UnitTesting.adoc[Unit Testing]
-* xref:../oauth-sheriff-quarkus-parent/README.adoc[oauth-sheriff-quarkus-parent] - Quarkus extension
-** xref:../oauth-sheriff-quarkus-parent/doc/README.adoc[Module Documentation]
+* xref:../token-sheriff-validation/README.adoc[token-sheriff-validation] - Core library usage and API
+** xref:../token-sheriff-validation/doc/usage-guide.adoc[Usage Guide]
+** xref:../token-sheriff-validation/doc/api-reference.adoc[API Reference]
+** xref:../token-sheriff-validation/doc/developing.adoc[Developing]
+** xref:../token-sheriff-validation/doc/UnitTesting.adoc[Unit Testing]
+* xref:../token-sheriff-quarkus-parent/README.adoc[token-sheriff-quarkus-parent] - Quarkus extension
+** xref:../token-sheriff-quarkus-parent/doc/README.adoc[Module Documentation]
 
 == Benchmarking
 
@@ -38,7 +38,7 @@ This is the central navigation for TokenSheriff documentation.
 
 == Configuration
 
-* xref:../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus/src/main/resources/META-INF/quarkus-config-doc.adoc[Configuration Reference] - All `sheriff.oauth.*` properties
+* xref:../token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/resources/META-INF/quarkus-config-doc.adoc[Configuration Reference] - All `sheriff.token.*` properties
 
 == FAQ
 

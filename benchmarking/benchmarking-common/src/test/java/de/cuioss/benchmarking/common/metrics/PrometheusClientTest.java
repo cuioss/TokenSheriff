@@ -73,7 +73,7 @@ class PrometheusClientTest {
         // Verify labels
         Map<String, String> labels = timeSeries.labels();
         assertEquals("process_cpu_usage", labels.get("__name__"));
-        assertEquals("oauth-sheriff-integration-tests:8443", labels.get("instance"));
+        assertEquals("token-sheriff-integration-tests:8443", labels.get("instance"));
         assertEquals("quarkus-benchmark", labels.get("job"));
 
         // Verify data points
@@ -268,7 +268,7 @@ class PrometheusClientTest {
                       {
                         "metric": {
                           "__name__": "sheriff_oauth_validation_success_operations_total",
-                          "instance": "oauth-sheriff-integration-tests:8443",
+                          "instance": "token-sheriff-integration-tests:8443",
                           "job": "quarkus-benchmark",
                           "event_type": "ACCESS_TOKEN_CREATED",
                           "result": "success"

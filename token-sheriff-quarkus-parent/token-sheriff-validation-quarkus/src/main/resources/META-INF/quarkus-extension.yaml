@@ -1,0 +1,12 @@
+name: Token-Sheriff
+description: Provides JWT token validation with support for multiple issuers, token decryption, and security event integration
+metadata:
+  keywords:
+    - jwt
+    - token
+    - validation
+    - security
+  guide: https://github.com/cuioss/OAuthSheriff/tree/main/token-sheriff-quarkus-parent
+  categories:
+    - "security"
+  status: "preview"

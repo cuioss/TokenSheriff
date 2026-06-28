@@ -56,13 +56,13 @@ The metrics system captures real-time CPU, memory, and application metrics from 
 
 Configuration files:
 
-* **prometheus.yml**: `oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/prometheus.yml`
-* **docker-compose.yml**: `oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/docker-compose.yml`
+* **prometheus.yml**: `token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/prometheus.yml`
+* **docker-compose.yml**: `token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/docker-compose.yml`
 
 Key settings:
 
 * Scrape interval: 2 seconds
-* Target: `oauth-sheriff-integration-tests:8443/q/metrics` (internal service name)
+* Target: `token-sheriff-integration-tests:8443/q/metrics` (internal service name)
 * HTTPS with self-signed certificates (`insecure_skip_verify: true`)
 * Data retention: 1 hour (sufficient for benchmarking)
 

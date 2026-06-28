@@ -1,7 +1,7 @@
 #!/bin/bash
 # Collect accurate Docker container CPU metrics during benchmark
 
-CONTAINER_NAME=${1:-"oauth-sheriff-integration-tests"}
+CONTAINER_NAME=${1:-"token-sheriff-integration-tests"}
 DURATION=${2:-90}
 OUTPUT_FILE=${3:-"docker-cpu-metrics.json"}
 

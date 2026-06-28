@@ -26,7 +26,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 /**
- * Abstract base class for all benchmarks in the OAuth Sheriff project.
+ * Abstract base class for all benchmarks in the Token-Sheriff project.
  * Provides common functionality and fields to reduce code duplication
  * across different benchmark implementations.
  *

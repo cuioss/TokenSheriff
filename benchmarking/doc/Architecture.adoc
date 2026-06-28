@@ -57,7 +57,7 @@ The Token-Sheriff benchmarking infrastructure consists of three specialized modu
       │                      │
       ▼                      ▼
 ┌──────────────┐  ┌─────────────────────────┐
-│oauth-sheriff-      │  │Docker Containers:       │
+│token-sheriff-      │  │Docker Containers:       │
 │core          │  │ • Quarkus App           │
 │              │  │ • Keycloak              │
 │              │  │ • Prometheus            │
@@ -179,7 +179,7 @@ Performs HTTP-based load testing using WRK tool via shell scripts. Minimal Java 
 
 Maven pom.xml references scripts from two locations:
 
-* `../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/scripts/` - Container lifecycle and monitoring
+* `../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/scripts/` - Container lifecycle and monitoring
 * `src/main/resources/wrk-scripts/` - WRK benchmark execution
 
 Key scripts:

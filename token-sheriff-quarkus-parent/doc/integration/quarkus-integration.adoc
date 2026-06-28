@@ -1,0 +1,110 @@
+= Quarkus Integration
+:toc: left
+:toclevels: 3
+:source-highlighter: highlight.js
+:toc-title: Table of Contents
+:sectnums:
+
+== Overview
+
+The token-sheriff-validation-quarkus extension integrates the JWT validation library with Quarkus, providing automatic configuration, health checks, metrics, and DevUI integration.
+
+== Architecture
+
+The extension follows standard Quarkus extension architecture with separate deployment and runtime modules:
+
+* **Deployment Module**: Build-time processing, reflection registration, DevUI setup
+* **Runtime Module**: Configuration classes, health checks, metrics integration
+
+=== TokenSheriffProcessor
+
+Handles build-time processing:
+
+* Registers the `token-sheriff` feature
+* Sets up reflection for `TokenValidator`, `IssuerConfig`, etc.
+* Registers `HttpJwksLoader` for runtime initialization (native image support)
+* Configures DevUI components for development mode
+
+=== Health Checks
+
+* `JwksEndpointHealthCheck` (`@Readiness`): Monitors JWKS endpoint connectivity
+* `TokenValidatorHealthCheck` (`@Liveness`): Checks whether issuer configurations are present
+
+Automatically discovered by Quarkus -- no explicit registration needed. See xref:health-checks.adoc[Health Checks] for details.
+
+=== Metrics Integration
+
+Automatically exposes JWT validation error counters, security event monitoring, and performance metrics when Micrometer is present. See xref:metrics-integration.adoc[Metrics Integration] for details.
+
+== Configuration
+
+Uses MicroProfile Config API with the `sheriff.token` prefix:
+
+[source,properties]
+----
+sheriff.token.parser.max-token-size=8192
+sheriff.token.issuers.keycloak.issuer-identifier=https://keycloak.example.com/auth/realms/master
+sheriff.token.issuers.keycloak.jwks.http.url=https://keycloak.example.com/auth/realms/master/protocol/openid-connect/certs
+----
+
+== DevUI Integration
+
+In development mode (`@BuildStep(onlyIf = IsDevelopment.class)`):
+
+* `TokenSheriffProcessor.createJwtDevUICard()`: Creates DevUI card pages
+* `TokenSheriffProcessor.createJwtDevUIJsonRPCService()`: Registers JSON-RPC service
+* `TokenSheriffDevUIRuntimeService`: Provides runtime data access
+
+== CDI Extension Points
+
+The extension provides two CDI-discoverable interfaces for customization:
+
+=== Custom Claim Mappers
+
+Implement `DiscoverableClaimMapper` as an `@ApplicationScoped` bean to add custom claim type mapping. Mappers are collected by `ClaimMapperRegistry` and applied globally to all issuers.
+
+=== Custom Validation Rules
+
+Implement `DiscoverableTokenValidationRule` as an `@ApplicationScoped` bean to add domain-specific post-validation logic. Rules execute after all built-in validation (signature, claims, DPoP) and before cache storage.
+
+[source,java]
+----
+@ApplicationScoped
+public class TenantIdRule implements DiscoverableTokenValidationRule {
+
+    @Override
+    public TokenValidationRule getRule() {
+        return (token, context) -> {
+            if (token.getClaimOption(ClaimName.of("tenant_id")).isEmpty()) {
+                throw new TokenValidationException(
+                    SecurityEventCounter.EventType.CUSTOM_RULE_REJECTED,
+                    "Missing required tenant_id claim");
+            }
+        };
+    }
+
+    @Override
+    public int getPriority() {
+        return 500; // lower = earlier execution, default is 1000
+    }
+}
+----
+
+Rules are collected by `TokenValidationRuleRegistry`, sorted by priority, and wired into the pipeline automatically. Disable a rule conditionally by overriding `isEnabled()`.
+
+== Native Image Support
+
+* Reflection configuration for JWT validation classes
+* Runtime initialization for network-dependent components
+* Proper resource inclusion
+
+See xref:../configuration/native-image-configuration.adoc[Native Image Configuration] for details.
+
+== Testing
+
+* Unit tests for all components
+* Integration tests with Quarkus test framework
+* Health check validation
+* Metrics collection verification
+
+See xref:../development/quarkus-test-setup.adoc[Quarkus Test Setup] for testing information.

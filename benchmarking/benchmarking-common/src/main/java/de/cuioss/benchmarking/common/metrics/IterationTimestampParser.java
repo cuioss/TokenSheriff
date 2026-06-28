@@ -25,7 +25,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.INFO.ITERATION_WINDOWS_PARSED;
@@ -69,7 +68,7 @@ public class IterationTimestampParser {
     public static List<IterationWindow> parseJsonlFile(Path timestampFile) throws IOException {
         if (!Files.exists(timestampFile)) {
             LOGGER.warn(TIMESTAMP_FILE_NOT_EXIST, timestampFile);
-            return Collections.emptyList();
+            return List.of();
         }
 
         List<IterationWindow> windows = new ArrayList<>();

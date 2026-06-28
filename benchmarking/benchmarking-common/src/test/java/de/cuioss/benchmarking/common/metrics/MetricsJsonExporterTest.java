@@ -250,9 +250,9 @@ class MetricsJsonExporterTest {
     @Test
     void shouldExtractTimedMetricsCorrectly() throws Exception {
         Map<String, Double> metricsData = new HashMap<>();
-        metricsData.put("sheriff_oauth_bearer_token_validation_seconds_count{class=\"de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 1000.0);
-        metricsData.put("sheriff_oauth_bearer_token_validation_seconds_sum{class=\"de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 2.5);
-        metricsData.put("sheriff_oauth_bearer_token_validation_seconds_max{class=\"de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 0.010);
+        metricsData.put("sheriff_oauth_bearer_token_validation_seconds_count{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 1000.0);
+        metricsData.put("sheriff_oauth_bearer_token_validation_seconds_sum{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 2.5);
+        metricsData.put("sheriff_oauth_bearer_token_validation_seconds_max{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 0.010);
 
         Instant timestamp = Instant.now();
         exporter.exportJwtValidationMetrics("JwtValidationBenchmark.test", timestamp, metricsData);
@@ -498,9 +498,9 @@ class MetricsJsonExporterTest {
 
     private Map<String, Double> createJwtValidationMetrics() {
         Map<String, Double> metrics = new HashMap<>();
-        metrics.put("sheriff_oauth_bearer_token_validation_seconds_count{class=\"de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 5000.0);
-        metrics.put("sheriff_oauth_bearer_token_validation_seconds_sum{class=\"de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 1.5);
-        metrics.put("sheriff_oauth_bearer_token_validation_seconds_max{class=\"de.cuioss.sheriff.oauth.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 0.005);
+        metrics.put("sheriff_oauth_bearer_token_validation_seconds_count{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 5000.0);
+        metrics.put("sheriff_oauth_bearer_token_validation_seconds_sum{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 1.5);
+        metrics.put("sheriff_oauth_bearer_token_validation_seconds_max{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 0.005);
         metrics.put("sheriff_oauth_validation_errors_total{category=\"INVALID_STRUCTURE\",event_type=\"TOKEN_EMPTY\",result=\"failure\"}", 0.0);
         metrics.put("sheriff_oauth_validation_success_operations_total{event_type=\"ACCESS_TOKEN_CREATED\",result=\"success\"}", 5000.0);
         return metrics;

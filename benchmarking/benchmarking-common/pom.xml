@@ -2,18 +2,18 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>de.cuioss.sheriff.oauth</groupId>
+        <groupId>de.cuioss.sheriff.token</groupId>
         <artifactId>benchmarking</artifactId>
         <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>benchmarking-common</artifactId>
-    <name>OAuth Sheriff Benchmarking Common Infrastructure</name>
+    <name>Token-Sheriff Benchmarking Common Infrastructure</name>
     <description>Common benchmarking infrastructure with JMH integration for artifact generation during benchmark execution</description>
 
     <properties>
-        <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.oauth.benchmarking.common</maven.jar.plugin.automatic.module.name>
+        <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.token.benchmarking.common</maven.jar.plugin.automatic.module.name>
     </properties>
 
     <dependencies>

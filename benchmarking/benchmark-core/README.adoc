@@ -156,7 +156,7 @@ For custom benchmarking:
 [source,xml]
 ----
 <dependency>
-    <groupId>de.cuioss.sheriff.oauth</groupId>
+    <groupId>de.cuioss.sheriff.token</groupId>
     <artifactId>benchmark-core</artifactId>
     <scope>test</scope>
 </dependency>

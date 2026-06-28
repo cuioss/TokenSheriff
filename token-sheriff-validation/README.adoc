@@ -1,0 +1,94 @@
+= Token-Sheriff Core
+:toc: left
+:toclevels: 2
+:source-highlighter: highlight.js
+:toc-title: Table of Contents
+:sectnums:
+
+
+Comprehensive JWT token validation library for multi-issuer environments with type-safe parsing and flexible configuration.
+
+== Quick Start
+
+=== Maven Coordinates
+
+[source,xml]
+----
+<dependency>
+    <groupId>de.cuioss.sheriff.token</groupId>
+    <artifactId>token-sheriff-validation</artifactId>
+</dependency>
+----
+
+=== Basic Usage
+
+[source,java]
+----
+// Create TokenValidator
+TokenValidator tokenValidator = TokenValidator.builder()
+    .issuerConfig(IssuerConfig.builder()
+        .issuerIdentifier("https://example.com")
+        .jwksContent(jwksJson)
+        .build())
+    .build();
+
+// Validate and create token (throws TokenValidationException if invalid)
+try {
+    AccessTokenContent token = tokenValidator.createAccessToken(AccessTokenRequest.of(jwtString));
+    Optional<String> subject = token.getSubject();
+    List<String> roles = token.getRoles();
+} catch (TokenValidationException e) {
+    // Handle validation failure
+    LOGGER.error(e, "Token validation failed: %s", e.getMessage());
+}
+----
+
+== Key Features
+
+* **Multi-Issuer Support**: Validate tokens from multiple identity providers
+* **Type-Safe Tokens**: Strongly typed Access, ID, and Refresh tokens
+* **Security Pipeline**: Structure, signature, and semantic validation
+* **Flexible Key Management**: Static keys, JWKS endpoints, OpenID Connect
+* **Built-in Caching**: Performance-optimized token validation
+* **Custom Claim Mapping**: Extensible claim processing
+
+== Documentation
+
+* xref:doc/usage-guide.adoc[Usage Guide] - Examples and patterns
+* xref:doc/api-reference.adoc[API Reference] - Complete API documentation
+* xref:doc/UnitTesting.adoc[Unit Testing] - Testing utilities and generators
+* xref:doc/developing.adoc[Development Guide] - Contributing and building
+
+== Configuration Topics
+
+* xref:doc/configuration/roles-groups-mapping.adoc[Roles and Groups Mapping]
+* xref:doc/configuration/security-settings.adoc[Security Configuration]
+* xref:doc/configuration/multi-issuer-setup.adoc[Multi-Issuer Setup]
+* xref:doc/configuration/openid-discovery.adoc[OpenID Connect Discovery]
+
+== JSON Processing
+
+This library uses DSL-JSON for secure, high-performance JSON parsing with configurable security limits.
+DSL-JSON provides compile-time code generation and actual enforcement of security constraints, 
+unlike reflection-based parsers that often ignore configured limits.
+
+== Test Support
+
+[[test-artifact]]
+The module provides test utilities via a classifier artifact:
+
+[source,xml]
+----
+<dependency>
+    <groupId>de.cuioss.sheriff.token</groupId>
+    <artifactId>token-sheriff-validation</artifactId>
+    <classifier>generators</classifier>
+    <scope>test</scope>
+</dependency>
+----
+
+See xref:doc/UnitTesting.adoc[Unit Testing Guide] for details on using test generators and utilities.
+
+== Support
+
+For issues and contributions, see the project repository.

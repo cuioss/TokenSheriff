@@ -65,7 +65,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-npm-
 
-      - name: Build oauth-sheriff-core
+      - name: Build token-sheriff-validation
         run: |
           # Build core module first to ensure test artifact is available for benchmarking
           ./mvnw --no-transfer-progress clean install -DskipTests

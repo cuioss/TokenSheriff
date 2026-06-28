@@ -1,0 +1,174 @@
+= Developer Guide for token-sheriff-validation
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+:toc-title: Table of Contents
+
+
+== Performance Metrics Infrastructure
+
+The `de.cuioss.sheriff.token.validation.metrics` package provides lightweight, thread-safe performance monitoring for JWT validation.
+
+=== TokenValidatorMonitor and MetricsTicker
+
+[source,java]
+----
+// Create monitor via TokenValidatorMonitorConfig
+TokenValidatorMonitorConfig monitorConfig = TokenValidatorMonitorConfig.builder()
+    .windowSize(100)
+    .measurementType(MeasurementType.SIGNATURE_VALIDATION)
+    .build();
+TokenValidatorMonitor monitor = monitorConfig.createMonitor();
+
+MetricsTicker ticker = MetricsTickerFactory.createTicker(MeasurementType.SIGNATURE_VALIDATION, monitor);
+
+ticker.startRecording();
+// ... perform signature validation ...
+ticker.stopAndRecord();
+
+// getValidationMetrics returns Optional<StripedRingBufferStatistics>
+Optional<StripedRingBufferStatistics> metrics = monitor.getValidationMetrics(MeasurementType.SIGNATURE_VALIDATION);
+metrics.ifPresent(stats -> {
+    Duration p50 = stats.p50();
+    Duration p99 = stats.p99();
+});
+----
+
+=== MeasurementType
+
+Pipeline steps (in execution order):
+
+* `COMPLETE_VALIDATION` - End-to-end validation time
+* `TOKEN_FORMAT_CHECK` - Pre-pipeline string validation (empty/blank/size checks)
+* `TOKEN_PARSING` - Base64URL decoding and JSON structure parsing
+* `ISSUER_EXTRACTION` - Extract and validate issuer (iss) claim
+* `CACHE_LOOKUP` - Check cache before expensive operations (access tokens only)
+* `ISSUER_CONFIG_RESOLUTION` - Resolve issuer configuration
+* `HEADER_VALIDATION` - Header claims and algorithm validation
+* `SIGNATURE_VALIDATION` - Cryptographic verification (typically most expensive)
+* `TOKEN_BUILDING` - Build typed token object from validated JWT
+* `CLAIMS_VALIDATION` - Token claims validation (exp, nbf, aud, iss)
+* `CACHE_STORE` - Store validated token in cache (access tokens only)
+
+Cross-cutting concerns:
+
+* `JWKS_OPERATIONS` - Key loading and caching operations (within signature validation)
+* `JWE_DECRYPTION` - JWE token decryption (within token parsing for 5-part JWE tokens)
+* `RETRY_ATTEMPT` - Individual HTTP retry attempt timing
+* `RETRY_COMPLETE` - Complete retry cycle with all attempts and delays
+* `RETRY_DELAY` - Exponential backoff delay timing between retries
+
+=== Design Principles
+
+* **Lock-free operations** - Atomic operations for minimal overhead
+* **Rolling window sampling** - Configurable number of recent measurements
+* **Microsecond precision** - High-resolution timing
+* **Framework-agnostic** - No external dependencies, integrates with Micrometer/Prometheus
+
+== Security Event Monitoring
+
+[source,java]
+----
+SecurityEventCounter counter = tokenValidator.getSecurityEventCounter();
+long invalidTokens = counter.getCount(EventType.INVALID_JWT_FORMAT);
+Map<EventType, Long> allCounts = counter.getCounters();
+counter.reset();
+----
+
+Event categories: `INVALID_STRUCTURE` (malformed tokens, size violations), `INVALID_SIGNATURE` (verification failures), `SEMANTIC_ISSUES` (expired tokens, audience mismatches).
+
+== Custom Claim Mapping
+
+[source,java]
+----
+ClaimMapper roleMapper = new JsonCollectionMapper();
+IssuerConfig issuerConfig = IssuerConfig.builder()
+    .issuerIdentifier("https://issuer.com")
+    .jwksContent(jwksContent)
+    .claimMapper("role", roleMapper)
+    .build();
+----
+
+Built-in mappers: `JsonCollectionMapper` (JSON arrays/strings), `StringSplitterMapper` (delimited strings), `IdentityMapper` (unchanged values).
+
+== Integration Points
+
+=== Pipeline Customization
+
+The access token validation pipeline consists of:
+
+. `TokenStringValidator` - Pre-pipeline format check (null, blank, size limits)
+. `NonValidatingJwtParser` - Base64URL decoding and JSON parsing
+. Issuer extraction - Extract issuer (iss) claim from decoded JWT
+. Cache lookup - Check access token cache (before expensive operations)
+. `IssuerConfigCache` - Resolve issuer configuration
+. `TokenHeaderValidator` - Header and algorithm validation
+. `TokenSignatureValidator` - Cryptographic signature verification (most expensive)
+. `TokenBuilder` - Build typed `AccessTokenContent` object
+. `TokenClaimValidator` - Claims validation (exp, nbf, aud, iss)
+. `DpopProofValidator` - DPoP proof validation (if configured, RFC 9449)
+. Custom `TokenValidationRule` instances - User-provided post-validation checks
+. Cache store - Store validated token for future lookups
+
+Each validator throws `TokenValidationException` with specific `EventType` on failure.
+
+=== Custom Validation Rules
+
+Custom rules run after all built-in validation and before cache storage. They receive the fully validated `AccessTokenContent` and `ValidationContext`:
+
+[source,java]
+----
+TokenValidationRule tenantRule = (token, context) -> {
+    var tenantId = token.getClaimOption(ClaimName.of("tenant_id"));
+    if (tenantId.isEmpty()) {
+        throw new TokenValidationException(
+            SecurityEventCounter.EventType.CUSTOM_RULE_REJECTED,
+            "Missing required tenant_id claim"
+        );
+    }
+};
+
+TokenValidator validator = TokenValidator.builder()
+    .issuerConfig(issuerConfig)
+    .tokenValidationRule(tenantRule)
+    .build();
+----
+
+Rules are immutable after startup. Multiple rules execute in insertion order; the first failure rejects the token.
+
+In Quarkus, implement `DiscoverableTokenValidationRule` as an `@ApplicationScoped` CDI bean for automatic discovery with priority-based ordering.
+
+== Testing Support
+
+See xref:UnitTesting.adoc[Unit Testing Guide] for test utilities via the `generators` artifact.
+
+== Thread Safety
+
+* `TokenValidator` is thread-safe after construction
+* `SecurityEventCounter` uses atomic operations
+* `TokenValidatorMonitor` uses lock-free ring buffers
+* JWKS loaders handle concurrent key refresh
+
+== Performance Considerations
+
+* Signature validation typically consumes 90%+ of validation time
+* Use `TokenValidatorMonitor` to identify bottlenecks
+* Configure appropriate JWKS refresh intervals (300-3600 seconds)
+* Consider using the built-in access token cache
+
+Some operations (`TOKEN_FORMAT_CHECK`, `ISSUER_EXTRACTION`, `JWKS_OPERATIONS` with cached keys) execute in sub-microsecond time and may appear as zero when exported to milliseconds. This is expected behavior.
+
+== Memory Management
+
+Configure limits in `ParserConfig` to prevent attacks:
+
+* `maxTokenSize` - Limits entire JWT token (default 8KB)
+* `maxPayloadSize` - Limits decoded JWT parts (default 8KB)
+* `maxStringLength` - Limits JSON string buffer size (default 4KB)
+
+== Related Documentation
+
+* xref:../README.adoc[README] - Usage examples and configuration
+* xref:../../doc/architecture.adoc[Technical Components] - Architecture details
+* xref:UnitTesting.adoc[Unit Testing Guide] - Test utilities documentation

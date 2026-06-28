@@ -236,7 +236,7 @@ public final class TestDataFactory {
     private static JsonObject createBenchmarkObject(String benchmark, String mode, double score, String unit) {
         JsonObject result = new JsonObject();
         result.addProperty("jmhVersion", "1.37");
-        result.addProperty("benchmark", "de.cuioss.sheriff.oauth.core.benchmark." + benchmark);
+        result.addProperty("benchmark", "de.cuioss.sheriff.token.validation.benchmark." + benchmark);
         result.addProperty("mode", mode);
 
         JsonObject primaryMetric = new JsonObject();

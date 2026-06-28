@@ -26,7 +26,7 @@ updates:
       semver-patch-days: 1
 
   - package-ecosystem: docker
-    directory: "/oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests"
+    directory: "/token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests"
     schedule:
       interval: "weekly"
     # Note: This tracks Dockerfiles only. For docker-compose.yml images,
@@ -41,7 +41,7 @@ updates:
       semver-patch-days: 1
 
   - package-ecosystem: npm
-    directory: "/oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-deployment"
+    directory: "/token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment"
     schedule:
       interval: "weekly"
     cooldown:
