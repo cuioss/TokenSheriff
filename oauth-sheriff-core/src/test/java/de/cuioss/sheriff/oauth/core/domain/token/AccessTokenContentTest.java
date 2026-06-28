@@ -41,11 +41,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * Verifies requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1.1">OAUTH-SHERIFF-1.1: Token Structure</a></li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1.2">OAUTH-SHERIFF-1.2: Token Types</a></li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-2.1">OAUTH-SHERIFF-2.1: Base Token Functionality</a></li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-2.2">OAUTH-SHERIFF-2.2: Access Token Functionality</a></li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-8.4">OAUTH-SHERIFF-8.4: Claims Validation</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.1">VALIDATION-1.1: Token Structure</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.2">VALIDATION-1.2: Token Types</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-2.1">VALIDATION-2.1: Base Token Functionality</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-2.2">VALIDATION-2.2: Access Token Functionality</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.4">VALIDATION-8.4: Claims Validation</a></li>
  * </ul>
  *
  * @author Oliver Wolff

@@ -53,10 +53,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests for Issue #110: Key rotation grace period functionality.
  * Tests configuration validation and grace period behavior with real HTTP endpoints.
  * <p>
- * Verifies Requirement <a href="../../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-4.5">OAUTH-SHERIFF-4.5: Key Rotation Grace Period</a>
+ * Verifies Requirement <a href="../../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4.5">VALIDATION-4.5: Key Rotation Grace Period</a>
  *
  * @author Oliver Wolff
- * @see <a href="../../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-4.5">OAUTH-SHERIFF-4.5: Key Rotation Grace Period</a>
+ * @see <a href="../../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4.5">VALIDATION-4.5: Key Rotation Grace Period</a>
  * @see <a href="https://github.com/cuioss/OAuthSheriff/issues/110">Issue #110: Key rotation grace period</a>
  */
 @EnableTestLogger

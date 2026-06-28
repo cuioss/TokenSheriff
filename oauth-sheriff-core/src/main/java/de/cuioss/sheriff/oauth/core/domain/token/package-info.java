@@ -38,9 +38,9 @@
  * <p>
  * This package implements the following requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1.1">OAUTH-SHERIFF-1.1: Token Structure</a></li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1.2">OAUTH-SHERIFF-1.2: Token Types</a></li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-2.3">OAUTH-SHERIFF-2.3: ID Token Functionality</a> (OpenID Connect support)</li>
+ *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.1">VALIDATION-1.1: Token Structure</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.2">VALIDATION-1.2: Token Types</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-2.3">VALIDATION-2.3: ID Token Functionality</a> (OpenID Connect support)</li>
  * </ul>
  * <p>
  * For more details on token structure and usage, see the

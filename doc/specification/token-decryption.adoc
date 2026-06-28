@@ -8,7 +8,7 @@
 xref:../architecture.adoc[Back to Architecture Reference]
 
 == Overview
-_See Requirement xref:../Requirements.adoc#OAUTH-SHERIFF-1.4[OAUTH-SHERIFF-1.4: Token Decryption]_
+_See Requirement xref:../Requirements.adoc#VALIDATION-1.4[VALIDATION-1.4: Token Decryption]_
 
 === Document Navigation
 

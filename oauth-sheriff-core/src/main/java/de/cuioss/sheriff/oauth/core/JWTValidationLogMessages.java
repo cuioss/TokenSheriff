@@ -25,9 +25,9 @@ import lombok.experimental.UtilityClass;
  * <p>
  * Implements requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-7">OAUTH-SHERIFF-7: Logging</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-7.1">OAUTH-SHERIFF-7.1: Log Levels</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-7.2">OAUTH-SHERIFF-7.2: Log Content</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-7">VALIDATION-7: Logging</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-7.1">VALIDATION-7.1: Log Levels</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-7.2">VALIDATION-7.2: Log Content</a></li>
  * </ul>
  * <p>
  * For more detailed information about log messages, see the

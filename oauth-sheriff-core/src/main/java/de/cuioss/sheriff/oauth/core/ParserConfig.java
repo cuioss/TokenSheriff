@@ -60,8 +60,8 @@ import lombok.ToString;
  * <p>
  * Implements requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-8.1">OAUTH-SHERIFF-8.1: Token Size Limits</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-8.2">OAUTH-SHERIFF-8.2: Safe Parsing</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.1">VALIDATION-8.1: Token Size Limits</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.2">VALIDATION-8.2: Safe Parsing</a></li>
  * </ul>
  * <p>
  * For more detailed specifications, see the

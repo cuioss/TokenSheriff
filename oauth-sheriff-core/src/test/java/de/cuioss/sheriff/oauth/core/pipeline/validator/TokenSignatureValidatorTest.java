@@ -53,9 +53,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * Verifies requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1.1">OAUTH-SHERIFF-1.1: Token Structure</a></li>
- *   <li><a href="../../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1.3">OAUTH-SHERIFF-1.3: Signature Validation</a> (includes algorithm selection and confusion protection)</li>
- *   <li><a href="../../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-4">OAUTH-SHERIFF-4: Key Management</a> (key material handling)</li>
+ *   <li><a href="../../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.1">VALIDATION-1.1: Token Structure</a></li>
+ *   <li><a href="../../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.3">VALIDATION-1.3: Signature Validation</a> (includes algorithm selection and confusion protection)</li>
+ *   <li><a href="../../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4">VALIDATION-4: Key Management</a> (key material handling)</li>
  * </ul>
  *
  * @author Oliver Wolff

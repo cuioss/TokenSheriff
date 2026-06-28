@@ -45,9 +45,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * Verifies requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1">OAUTH-SHERIFF-1: Token Parsing and Validation</a> (RFC 7519 compliance)</li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1.1">OAUTH-SHERIFF-1.1: Token Structure</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-2.1">OAUTH-SHERIFF-2.1: Base Token Functionality</a> (Standard JWT Claims)</li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-1">VALIDATION-1: Token Parsing and Validation</a> (RFC 7519 compliance)</li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.1">VALIDATION-1.1: Token Structure</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-2.1">VALIDATION-2.1: Base Token Functionality</a> (Standard JWT Claims)</li>
  * </ul>
  *
  * @author Oliver Wolff

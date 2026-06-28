@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for {@link IssuerConfig} verifying value object contracts.
  * <p>
- * Supports requirement <a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-3">OAUTH-SHERIFF-3: Multi-Issuer Support</a>.
+ * Supports requirement <a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-3">VALIDATION-3: Multi-Issuer Support</a>.
  *
  * @author Oliver Wolff
  * @see <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#multi-issuer">Multi-Issuer Specification</a>

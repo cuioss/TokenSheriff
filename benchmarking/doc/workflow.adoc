@@ -119,7 +119,7 @@ The generated artifacts include JSON API endpoints:
 
 == Performance Requirements
 
-See xref:../../doc/Requirements.adoc#OAUTH-SHERIFF-9[Performance Requirements] for specific targets and thresholds.
+See xref:../../doc/Requirements.adoc#VALIDATION-9[Performance Requirements] for specific targets and thresholds.
 
 == Troubleshooting
 

@@ -48,9 +48,9 @@
  * <p>
  * Implements requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1">OAUTH-SHERIFF-1: Token Parsing and Validation</a></li>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1.3">OAUTH-SHERIFF-1.3: Signature Validation</a></li>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-8.4">OAUTH-SHERIFF-8.4: Claims Validation</a></li>
+ *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-1">VALIDATION-1: Token Parsing and Validation</a></li>
+ *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.3">VALIDATION-1.3: Signature Validation</a></li>
+ *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.4">VALIDATION-8.4: Claims Validation</a></li>
  * </ul>
  * <p>
  * For more detailed specifications, see the

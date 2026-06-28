@@ -38,7 +38,7 @@ import static de.cuioss.sheriff.oauth.core.domain.claim.ClaimName.*;
  * <p>
  * Implements requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1.2">OAUTH-SHERIFF-1.2: Token Types</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.2">VALIDATION-1.2: Token Types</a></li>
  * </ul>
  * <p>
  * For more detailed specifications, see the
