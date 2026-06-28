@@ -83,7 +83,7 @@ Sourced non-goals *specific to the client capability*. The library MUST NOT requ
 * *Weak client auth where `private_key_jwt`/mTLS is available; secrets over non-TLS* — RFC 9700, RFC 7523, RFC 8705.
 * *Unvalidated `jwks_uri` / metadata URLs* (SSRF) — CVE-2026-1180.
 
-NOTE: *Token-signature exclusions are not restated here* — rejecting `alg=none`, HMAC, and weak/short-key algorithms, and requiring asymmetric signature verification, is already mandated by the validation requirements (`VAL-1.3`, RFC 8725) and *inherited* by every token this client retrieves. The client spec covers only the *acquisition/flow* exclusions above; it must not duplicate the validation algorithm policy. Sender-constraining is likewise an inherited capability (validation already validates DPoP-bound tokens, `VAL-8.7`); the client delta is *requesting* such tokens (DPoP/mTLS at the token endpoint), covered under Retrieval & flow — not an exclusion.
+NOTE: *Token-signature exclusions are not restated here* — rejecting `alg=none`, HMAC, and weak/short-key algorithms, and requiring asymmetric signature verification, is already mandated by the validation requirements (`VALIDATION-1.3`, RFC 8725) and *inherited* by every token this client retrieves. The client spec covers only the *acquisition/flow* exclusions above; it must not duplicate the validation algorithm policy. Sender-constraining is likewise an inherited capability (validation already validates DPoP-bound tokens, `VALIDATION-8.7`); the client delta is *requesting* such tokens (DPoP/mTLS at the token endpoint), covered under Retrieval & flow — not an exclusion.
 
 == Organizing principle: separate the aspects
 
@@ -100,7 +100,7 @@ Keep these in separate documents and requirement groups — do not blend them.
 | The confidential-client *authorization-code + PKCE* flow (server-side) and the use of the token endpoint: grants, client authentication, `state`/`nonce`/exact redirect-URI, mix-up defence (`iss`), code-injection defence, PAR, DPoP/mTLS, step-up (RFC 9470), RP-initiated logout, response validation.
 |===
 
-*Transport is not an aspect here.* All outbound IdP HTTP — discovery, JWKS, token, userinfo, end-session, PAR — plus its TLS / SSRF / resilience hardening lives in xref:../03-commons/README.adoc[commons] (Plan 03). The client *uses* it and references its `CMN-N` requirements; it does not respecify fetching or restate SSRF/TLS. *Token* references the validation module for the delta only; *Retrieval & flow* is the genuinely net-new aspect this plan owns.
+*Transport is not an aspect here.* All outbound IdP HTTP — discovery, JWKS, token, userinfo, end-session, PAR — plus its TLS / SSRF / resilience hardening lives in xref:../03-commons/README.adoc[commons] (Plan 03). The client *uses* it and references its `COMMONS-N` requirements; it does not respecify fetching or restate SSRF/TLS. *Token* references the validation module for the delta only; *Retrieval & flow* is the genuinely net-new aspect this plan owns.
 
 == Target document set (under `doc/client/`)
 
@@ -122,7 +122,7 @@ doc/client/
 
 == Requirement-ID & sourcing discipline
 
-* Client requirements use `CLIENT-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow). Transport requirements are `CMN-N` (Plan 03) and are cited, not duplicated.
+* Client requirements use `CLIENT-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow). Transport requirements are `COMMONS-N` (Plan 03) and are cited, not duplicated.
 * *Every* normative requirement and *every* threat entry cites a source with section anchor (RFC / OIDC spec / OWASP / FAPI). MUST/SHOULD/MAY trace back to the cited source.
 * Requirements are *security-driven* — each traces to a threat it mitigates or is the secure way to perform a needed operation. Exclusions are sourced too.
 * `references.adoc` is the single bibliography; all docs cite into it.
@@ -139,10 +139,10 @@ doc/client/
 == Verification
 
 * [ ] Every requirement and threat entry cites a normative source with section anchor
-* [ ] Aspects cleanly separated; token references the validation module and transport references `commons` (`CMN-N`) — neither duplicated
+* [ ] Aspects cleanly separated; token references the validation module and transport references `commons` (`COMMONS-N`) — neither duplicated
 * [ ] Retrieval & flow covers confidential auth-code+PKCE, client auth, `state`/`nonce`/redirect-URI, mix-up (`iss`), sender-constraining, step-up (RFC 9470) and RP-initiated logout
 * [ ] BFF groundwork is sufficient (server-side token lifecycle) without owning the browser session/cookie layer
-* [ ] HTTP-surfaced client errors conform to the commons RFC 9457 error model (Plan 03) — the client engine throws typed exceptions; `client-quarkus` / the portal adapter emit problem+json
+* [ ] HTTP-surfaced client errors conform to the commons RFC 9457 error model (Plan 03) — the client engine throws typed exceptions; `client-quarkus` (and any future RESTEasy edge) emits problem+json
 * [ ] Each security exclusion is documented and sourced; every requirement is threat-driven
 * [ ] `CLIENT-N` IDs grouped by aspect; traceability matrix complete; `references.adoc` resolves
 
@@ -150,7 +150,12 @@ doc/client/
 
 == Reference & replacement target: portal-authentication-oauth
 
-`cui-portal-core/modules/authentication/portal-authentication-oauth` is an existing confidential server-side OIDC client (CDI + MicroProfile Config + RESTEasy/JAX-RS). It is both a *validation reference* for this spec — a real BFF-style RP that already implements most of the in-scope flow — and a *replacement target*: the Token-Sheriff client engine should supersede it, with a thin portal adapter preserving the portal contract.
+[NOTE]
+====
+This section is a *design reference only*. The actual replacement of `portal-authentication-oauth` — the portal adapter and its integration tests — is *future work beyond Plans 01–06*; no current plan delivers it. It informs the client spec (a real-world RP that exercises the in-scope flow) and motivates the framework-agnostic engine.
+====
+
+`cui-portal-core/modules/authentication/portal-authentication-oauth` is an existing confidential server-side OIDC client (CDI + MicroProfile Config + RESTEasy/JAX-RS). For this spec it serves only as a *real-world reference* — a BFF-style RP that already implements most of the in-scope flow. It is also the eventual *replacement target*: the Token-Sheriff client engine would, in *future work beyond Plans 01–06*, supersede it via a thin portal adapter preserving the portal contract. Nothing in the current plans touches it.
 
 === What it already does (confirms this plan's scope)
 * Authorization-code + PKCE (*S256* confirmed), `state` CSRF, light `nonce`
@@ -171,7 +176,7 @@ doc/client/
 * Replace bespoke RESTEasy fetching with xref:../03-commons/README.adoc[commons]'s hardened HTTP + *SSRF* defences.
 
 === Relationship to the other consumer
-`nifi-extensions` consumes the *validation module*; `portal-authentication-oauth` is an *RP* that the Token-Sheriff client module *replaces* (engine swap + portal adapter). It is the concrete reference implementation for this plan's BFF-engine scope.
+`nifi-extensions` consumes the *validation module*; `portal-authentication-oauth` is an *RP* that the Token-Sheriff client module *would eventually replace* (engine swap + portal adapter — future work). It is the concrete reference implementation that grounds this plan's BFF-engine scope.
 
 == Seed: source catalog (research 2026-06-24)
 
@@ -221,7 +226,7 @@ Minimum coverage for `threat-model.adoc`. Each → mitigation + covering require
 * ID-token / userinfo integrity — OIDC Core §3.1.3.7, §5.3 → signature + claim validation; bind userinfo `sub`
 * Sender-constraint loss in storage/forwarding — RFC 9449, RFC 8705 → keep tokens bound; minimal storage
 
-NOTE: *Transport threats — SSRF, TLS downgrade, response DoS on discovery/JWKS/token/userinfo — live in xref:../03-commons/README.adoc[commons]'s threat model (`CMN-N`), not here.* The flow inherits them; it does not restate them.
+NOTE: *Transport threats — SSRF, TLS downgrade, response DoS on discovery/JWKS/token/userinfo — live in xref:../03-commons/README.adoc[commons]'s threat model (`COMMONS-N`), not here.* The flow inherits them; it does not restate them.
 
 == Seed: best-practices checklist by aspect (sourced)
 
