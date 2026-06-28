@@ -19,22 +19,29 @@ Produce, _before_ any client code, the document set (requirements + specificatio
 
 == Target architecture: Backend-For-Frontend (BFF)
 
-The IETF https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps] draft makes the *server-side confidential client* the recommended pattern for browser apps: the backend runs the authorization-code flow and *holds tokens server-side*, so no tokens ever sit in the browser. The draft describes two variants of how the backend exposes that session to the browser — this library is the *engine* under *both*:
+The IETF https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps] draft makes the *server-side confidential client* the recommended pattern for browser apps: a backend runs the authorization-code flow and *owns the tokens*, so the browser never gets usable access to them.
+
+[IMPORTANT]
+====
+*We do not build a BFF here.* The BFF is a separate application — a different project — layered on top of this library. This plan's job is narrower: specify the *client engine* (token retrieval, server-side lifecycle, fetching, validation) so that *building a BFF on top stays feasible and is not made unnecessarily complicated*. The BFF deployment shapes below are documented only as the *consumers our design must keep viable* — not as features delivered here.
+====
+
+A BFF can bind the acquired tokens to the browser session two ways; *in both, the token stays inaccessible to the browser*, and the engine must support either:
 
 [cols="1,3"]
 |===
-| Variant | How the browser is served
+| BFF deployment | How the token is bound to the browser session
 
-| *Backend-For-Frontend (BFF)*
-| The browser holds only a *session cookie*; the backend keeps the tokens and *proxies* all resource-server calls. Tokens never reach the browser. Highest isolation — the primary target.
+| *Stateful BFF — server-side token store*
+| The browser holds an opaque *session-id cookie*; the tokens live in a *server-side store* and the backend *proxies* every resource-server call.
 
-| *Token-Mediating Backend (TMB)*
-| The backend still runs the flow and holds the refresh token server-side, but *hands the short-lived access token to the SPA*, which calls the resource server directly. Lighter; a weaker isolation trade-off the draft also defines.
+| *Stateless BFF — encrypted token cookie*
+| The access token is returned to the browser only inside an *HttpOnly cookie encrypted with a server-side symmetric key*. The browser stores and replays the cookie but *never sees the plaintext token*; on each request the backend *decrypts* the cookie to recover and use the token. No server-side store.
 |===
 
-The seam is identical for both: confidential-client token retrieval, the server-side token lifecycle, validation, and fetching. What differs (cookie+proxy vs. mediated access token) lives in the application layer below — the engine *enables* either without owning the choice.
+The engine seam is identical for both: confidential-client token retrieval, the server-side token lifecycle, validation, and fetching. What differs — a server-side token store vs. an encrypted token cookie — is the BFF's own concern; the engine must *enable either without forcing the choice*. That non-preclusion is the BFF groundwork this plan owns.
 
-What the library lays groundwork for vs. what the BFF *application* owns:
+What the library lays groundwork for vs. what the BFF *application* (the separate project) owns:
 
 .In scope (the engine / groundwork)
 * Confidential-client *authorization-code + PKCE* flow, server-side (no tokens in the browser).
@@ -45,10 +52,10 @@ What the library lays groundwork for vs. what the BFF *application* owns:
 * OIDC *fetching* — discovery (`.well-known`) and JWKS (both already in the validation module), plus userinfo.
 * Validating retrieved tokens (reuse the validation module) and the security of all the above (flow integrity, TLS, SSRF, credential protection).
 
-.BFF/TMB application layer (enabled, not built here)
+.BFF application layer (a separate project — enabled, not built here)
 The library must *not preclude* these, but does not own them:
 
-* The browser↔backend *session cookie*, CSRF on the BFF's own API, request proxying (BFF) or handing the access token to the SPA (TMB).
+* The browser↔backend *session cookie* (an opaque session-id, or the encrypted token cookie and its symmetric-key management), CSRF on the backend's own API, and request proxying.
 * Login/consent UX.
 * Front-/back-channel logout *receivers* and the Session-Management iframe (browser-session concerns). RP-initiated logout *triggering* and token revocation are in-scope building blocks.
 
@@ -171,7 +178,7 @@ Input for the spec authors — authoritative, citable sources. To avoid duplicat
 
 .Standards new to the client capability (normative)
 * https://www.rfc-editor.org/rfc/rfc9700[RFC 9700] — Best Current Practice for OAuth 2.0 Security *(primary BCP)*
-* https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps] — BFF / Token-Mediating Backend patterns
+* https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps] — server-side confidential client / BFF (stateful & stateless) guidance
 * https://www.rfc-editor.org/rfc/rfc6819[RFC 6819] — OAuth 2.0 Threat Model and Security Considerations
 * https://www.rfc-editor.org/rfc/rfc7636[RFC 7636] — PKCE
 * https://www.rfc-editor.org/rfc/rfc8414[RFC 8414] — OAuth 2.0 Authorization Server Metadata (discovery)
