@@ -48,22 +48,22 @@ OAuthSheriff already satisfies the OAuth 2.1 resource server requirements:
 * **Algorithm security** - Whitelisted RS/ES/PS/EdDSA families only; HMAC and "none" rejected per https://datatracker.ietf.org/doc/html/rfc8725[RFC 8725]
 * **Issuer validation** - `iss` mandatory, matched against configured issuers
 * **Signature verification** - Full cryptographic validation pipeline
-* **RFC 9068 token type validation** - Optional per-issuer `typ: at+jwt` header validation (see xref:#OAUTH-SHERIFF-8.6[OAUTH-SHERIFF-8.6])
-* **RFC 9449 DPoP sender-constrained tokens** - Optional per-issuer DPoP proof validation binding access tokens to client public keys (see xref:#OAUTH-SHERIFF-8.7[OAUTH-SHERIFF-8.7])
+* **RFC 9068 token type validation** - Optional per-issuer `typ: at+jwt` header validation (see xref:#VALIDATION-8.6[VALIDATION-8.6])
+* **RFC 9449 DPoP sender-constrained tokens** - Optional per-issuer DPoP proof validation binding access tokens to client public keys (see xref:#VALIDATION-8.7[VALIDATION-8.7])
 
 NOTE: Requirement IDs are stable identifiers referenced across documentation and are not sequential. Functional requirements use IDs 1-8 and 12; non-functional requirements use IDs 9-10.
 
 == Functional Requirements
 
-[#OAUTH-SHERIFF-1]
-=== OAUTH-SHERIFF-1: Token Parsing and Validation
+[#VALIDATION-1]
+=== VALIDATION-1: Token Parsing and Validation
 
 The library must provide robust token parsing and validation capabilities in accordance with https://datatracker.ietf.org/doc/html/rfc7519[RFC 7519 - JSON Web Token (JWT)] (May 2015).
 
 _See specifications: xref:architecture.adoc[Architecture] and xref:security/security-reference.adoc[Security Reference]_
 
-[#OAUTH-SHERIFF-1.1]
-==== OAUTH-SHERIFF-1.1: Token Structure
+[#VALIDATION-1.1]
+==== VALIDATION-1.1: Token Structure
 
 The library must support standard JWT token structure with header, payload, and signature as defined in RFC 7519 (May 2015).
 
@@ -71,8 +71,8 @@ _See specification: xref:architecture.adoc#token-types[Token Architecture and Ty
 
 image::plantuml/token-structure.png[JWT Token Structure]
 
-[#OAUTH-SHERIFF-1.2]
-==== OAUTH-SHERIFF-1.2: Token Types
+[#VALIDATION-1.2]
+==== VALIDATION-1.2: Token Types
 
 The library must support different token types as defined in https://datatracker.ietf.org/doc/html/rfc6749[RFC 6749 - OAuth 2.0] (October 2012) and https://openid.net/specs/openid-connect-core-1_0.html[OpenID Connect Core 1.0] (November 2014):
 
@@ -83,8 +83,8 @@ The library must support different token types as defined in https://datatracker
 _See specification: xref:architecture.adoc#token-types[Token Architecture and Types]_
 
 
-[#OAUTH-SHERIFF-1.3]
-==== OAUTH-SHERIFF-1.3: Signature Validation
+[#VALIDATION-1.3]
+==== VALIDATION-1.3: Signature Validation
 
 The library must validate token signatures using cryptographic algorithms as specified in https://datatracker.ietf.org/doc/html/rfc7518[RFC 7518 - JSON Web Algorithms (JWA)].
 
@@ -117,8 +117,8 @@ Additional security considerations:
 
 _See specifications: xref:architecture.adoc#token-validation-pipeline[Token Validation Pipeline] and xref:security/security-reference.adoc#signature-validation[Signature Validation]_
 
-[#OAUTH-SHERIFF-1.4]
-==== OAUTH-SHERIFF-1.4: Token Decryption
+[#VALIDATION-1.4]
+==== VALIDATION-1.4: Token Decryption
 
 The library supports decryption of encrypted JWT tokens (JWE) as defined in https://datatracker.ietf.org/doc/html/rfc7516[RFC 7516 - JSON Web Encryption (JWE)] (May 2015). JWE decryption is transparent — the pipeline detects 5-part JWE tokens, decrypts them using locally-configured private keys, and validates the inner JWS through the existing pipeline unchanged.
 
@@ -126,15 +126,15 @@ Supported key management algorithms: RSA-OAEP, RSA-OAEP-256, ECDH-ES. Supported 
 
 _See specification: xref:specification/token-decryption.adoc[Token Decryption]_
 
-[#OAUTH-SHERIFF-2]
-=== OAUTH-SHERIFF-2: Token Representation
+[#VALIDATION-2]
+=== VALIDATION-2: Token Representation
 
 The library must provide type-safe token representations.
 
 _See specification: xref:architecture.adoc#token-types[Token Architecture and Types]_
 
-[#OAUTH-SHERIFF-2.1]
-==== OAUTH-SHERIFF-2.1: Base Token Functionality
+[#VALIDATION-2.1]
+==== VALIDATION-2.1: Base Token Functionality
 
 A base token representation must provide common token functionality:
 
@@ -148,8 +148,8 @@ A base token representation must provide common token functionality:
 
 _See specification: xref:architecture.adoc#token-types[Token Architecture and Types]_
 
-[#OAUTH-SHERIFF-2.2]
-==== OAUTH-SHERIFF-2.2: Access Token Functionality
+[#VALIDATION-2.2]
+==== VALIDATION-2.2: Access Token Functionality
 
 The access token representation must provide:
 
@@ -159,8 +159,8 @@ The access token representation must provide:
 
 _See specification: xref:architecture.adoc#token-types[Token Architecture and Types]_
 
-[#OAUTH-SHERIFF-2.3]
-==== OAUTH-SHERIFF-2.3: ID Token Functionality
+[#VALIDATION-2.3]
+==== VALIDATION-2.3: ID Token Functionality
 
 The ID token representation must provide user identity information as defined in OpenID Connect Core 1.0, including:
 
@@ -169,8 +169,8 @@ The ID token representation must provide user identity information as defined in
 
 _See specification: xref:architecture.adoc#token-types[Token Architecture and Types]_
 
-[#OAUTH-SHERIFF-2.4]
-==== OAUTH-SHERIFF-2.4: Refresh Token Functionality
+[#VALIDATION-2.4]
+==== VALIDATION-2.4: Refresh Token Functionality
 
 The refresh token representation must provide:
 
@@ -179,73 +179,73 @@ The refresh token representation must provide:
 
 _See specification: xref:architecture.adoc#token-types[Token Architecture and Types]_
 
-[#OAUTH-SHERIFF-3]
-=== OAUTH-SHERIFF-3: Multi-Issuer Support
+[#VALIDATION-3]
+=== VALIDATION-3: Multi-Issuer Support
 
 The library must support tokens from multiple issuers.
 
 _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
 
 
-[#OAUTH-SHERIFF-3.1]
-==== OAUTH-SHERIFF-3.1: Issuer Configuration
+[#VALIDATION-3.1]
+==== VALIDATION-3.1: Issuer Configuration
 
 Support configuration of multiple token issuers with different validation parameters.
 
 _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
 
-[#OAUTH-SHERIFF-3.2]
-==== OAUTH-SHERIFF-3.2: Issuer Selection
+[#VALIDATION-3.2]
+==== VALIDATION-3.2: Issuer Selection
 
 Automatically select the appropriate issuer configuration based on the token.
 
 _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
 
-[#OAUTH-SHERIFF-3.3]
-==== OAUTH-SHERIFF-3.3: Issuer Validation
+[#VALIDATION-3.3]
+==== VALIDATION-3.3: Issuer Validation
 
 Validate that tokens come from trusted issuers.
 
 _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
 
-[#OAUTH-SHERIFF-4]
-=== OAUTH-SHERIFF-4: Key Management
+[#VALIDATION-4]
+=== VALIDATION-4: Key Management
 
 The library must support public key management for token validation in accordance with https://datatracker.ietf.org/doc/html/rfc7517[RFC 7517 - JSON Web Key (JWK)] (May 2015).
 
 _See specifications: xref:architecture.adoc#jwks-integration[Key Management] and xref:security/security-reference.adoc#security-controls[Security Reference]_
 
 
-[#OAUTH-SHERIFF-4.1]
-==== OAUTH-SHERIFF-4.1: JWKS Endpoint Support
+[#VALIDATION-4.1]
+==== VALIDATION-4.1: JWKS Endpoint Support
 
 Support fetching public keys from JWKS endpoints as defined in https://datatracker.ietf.org/doc/html/rfc7517#section-5[RFC 7517 Section 5 - JWK Set Format] (May 2015).
 
 _See specifications: xref:architecture.adoc#jwks-integration[JwksLoader]_
 
-[#OAUTH-SHERIFF-4.2]
-==== OAUTH-SHERIFF-4.2: Key Caching
+[#VALIDATION-4.2]
+==== VALIDATION-4.2: Key Caching
 
 Cache keys to improve performance with configurable cache expiration.
 
 _See specification: xref:architecture.adoc#jwks-integration[JwksLoader]_
 
-[#OAUTH-SHERIFF-4.3]
-==== OAUTH-SHERIFF-4.3: Key Rotation
+[#VALIDATION-4.3]
+==== VALIDATION-4.3: Key Rotation
 
 Support automatic key rotation based on configurable refresh intervals.
 
 _See specification: xref:architecture.adoc#jwks-integration[JwksLoader]_
 
-[#OAUTH-SHERIFF-4.4]
-==== OAUTH-SHERIFF-4.4: Local Key Support
+[#VALIDATION-4.4]
+==== VALIDATION-4.4: Local Key Support
 
 Support local key configuration for testing or offline scenarios.
 
 _See specification: xref:architecture.adoc#jwks-integration[JwksLoader]_
 
-[#OAUTH-SHERIFF-4.5]
-==== OAUTH-SHERIFF-4.5: Key Rotation Grace Period
+[#VALIDATION-4.5]
+==== VALIDATION-4.5: Key Rotation Grace Period
 
 The library must support a configurable grace period for retired keys during key rotation to ensure uninterrupted service during the transition period, as recommended by general key management best practices.
 
@@ -261,15 +261,15 @@ This ensures that tokens signed with recently rotated keys remain valid during t
 
 _See specification: xref:architecture.adoc#jwks-integration[JwksLoader]_
 
-[#OAUTH-SHERIFF-5]
-=== OAUTH-SHERIFF-5: Token Parsing
+[#VALIDATION-5]
+=== VALIDATION-5: Token Parsing
 
 Provide a mechanism for parsing token strings into structured representations.
 
 _See specification: xref:architecture.adoc#token-validation-pipeline[TokenValidator]_
 
-[#OAUTH-SHERIFF-5.1]
-==== OAUTH-SHERIFF-5.1: Token Parsing Methods
+[#VALIDATION-5.1]
+==== VALIDATION-5.1: Token Parsing Methods
 
 The library must provide methods for parsing different token types:
 
@@ -279,29 +279,29 @@ The library must provide methods for parsing different token types:
 
 _See specification: xref:architecture.adoc#token-validation-pipeline[TokenValidator]_
 
-[#OAUTH-SHERIFF-6]
-=== OAUTH-SHERIFF-6: Configuration
+[#VALIDATION-6]
+=== VALIDATION-6: Configuration
 
 Provide a flexible configuration mechanism for token validation.
 
 _See specification: xref:architecture.adoc#multi-issuer[Configuration]_
 
-[#OAUTH-SHERIFF-6.1]
-==== OAUTH-SHERIFF-6.1: Configuration Flexibility
+[#VALIDATION-6.1]
+==== VALIDATION-6.1: Configuration Flexibility
 
 The configuration mechanism must support different validation settings for different token types and issuers.
 
 _See specification: xref:architecture.adoc#multi-issuer[Configuration]_
 
-[#OAUTH-SHERIFF-7]
-=== OAUTH-SHERIFF-7: Logging
+[#VALIDATION-7]
+=== VALIDATION-7: Logging
 
 Implement comprehensive logging for troubleshooting and auditing, following the https://owasp.org/www-project-proactive-controls/v4/en/c9-security-logging-and-monitoring[OWASP Proactive Controls C9: Implement Security Logging and Monitoring] guidelines.
 
 _See specifications: xref:architecture.adoc#securityeventcounter[SecurityEventCounter] and xref:security/security-reference.adoc#security-events-monitoring[Security Events]_
 
-[#OAUTH-SHERIFF-7.1]
-==== OAUTH-SHERIFF-7.1: Log Levels
+[#VALIDATION-7.1]
+==== VALIDATION-7.1: Log Levels
 
 Support different log levels for different types of events:
 
@@ -313,8 +313,8 @@ Support different log levels for different types of events:
 
 _See specification: xref:architecture.adoc[Architecture]_
 
-[#OAUTH-SHERIFF-7.2]
-==== OAUTH-SHERIFF-7.2: Log Content
+[#VALIDATION-7.2]
+==== VALIDATION-7.2: Log Content
 
 Log messages must include relevant information for troubleshooting without exposing sensitive data, as recommended by https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html[OWASP Logging Cheat Sheet].
 
@@ -323,8 +323,8 @@ Log messages must include relevant information for troubleshooting without expos
 
 _See specification: xref:architecture.adoc[Architecture]_
 
-[#OAUTH-SHERIFF-7.3]
-==== OAUTH-SHERIFF-7.3: Security Events
+[#VALIDATION-7.3]
+==== VALIDATION-7.3: Security Events
 
 Log security-relevant events as recommended by https://datatracker.ietf.org/doc/html/rfc8417[RFC 8417 - Security Event Token (SET)] (July 2018):
 
@@ -335,22 +335,22 @@ Log security-relevant events as recommended by https://datatracker.ietf.org/doc/
 
 _See specifications: xref:architecture.adoc#securityeventcounter[SecurityEventCounter] and xref:security/security-reference.adoc#security-events-monitoring[Security Events]_
 
-[#OAUTH-SHERIFF-8]
-=== OAUTH-SHERIFF-8: Security
+[#VALIDATION-8]
+=== VALIDATION-8: Security
 
 The library must implement security best practices as defined in the https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html[OWASP JWT Security Cheat Sheet for Java].
 
 _See specifications: xref:security/security-reference.adoc[Security Reference] and xref:security/threat-model.adoc[Threat Model]_
 
-[#OAUTH-SHERIFF-8.1]
-==== OAUTH-SHERIFF-8.1: Token Size Limits
+[#VALIDATION-8.1]
+==== VALIDATION-8.1: Token Size Limits
 
 Implement token size limits to prevent denial of service attacks. Maximum token size should be 8KB as recommended by general industry practice and common HTTP server defaults.
 
 _See specifications: xref:architecture.adoc[Architecture (Size Limits)]_
 
-[#OAUTH-SHERIFF-8.2]
-==== OAUTH-SHERIFF-8.2: Safe Parsing
+[#VALIDATION-8.2]
+==== VALIDATION-8.2: Safe Parsing
 
 Implement safe parsing practices to prevent security vulnerabilities such as:
 
@@ -363,15 +363,15 @@ Refer to https://owasp.org/www-project-top-ten/[OWASP Top 10] (2021) for common 
 
 _See specification: xref:security/security-reference.adoc#safe-parsing[Safe Parsing]_
 
-[#OAUTH-SHERIFF-8.3]
-==== OAUTH-SHERIFF-8.3: Secure Communication
+[#VALIDATION-8.3]
+==== VALIDATION-8.3: Secure Communication
 
 Support secure communication for key retrieval using TLS 1.2 or higher as recommended by https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-52r2.pdf[NIST SP 800-52 Rev. 2] (2019).
 
 _See specification: xref:security/security-reference.adoc#secure-communication[Secure Communication]_
 
-[#OAUTH-SHERIFF-8.4]
-==== OAUTH-SHERIFF-8.4: Claims Validation
+[#VALIDATION-8.4]
+==== VALIDATION-8.4: Claims Validation
 
 Validate token claims according to RFC 7519 (May 2015) and OpenID Connect Core 1.0 (November 2014), including:
 
@@ -382,15 +382,15 @@ Validate token claims according to RFC 7519 (May 2015) and OpenID Connect Core 1
 
 _See specification: xref:security/security-reference.adoc#claims-validation[Claims Validation]_
 
-[#OAUTH-SHERIFF-8.5]
-==== OAUTH-SHERIFF-8.5: Cryptographic Agility
+[#VALIDATION-8.5]
+==== VALIDATION-8.5: Cryptographic Agility
 
 The library must support cryptographic agility as recommended by https://datatracker.ietf.org/doc/html/rfc8725#section-3.2[RFC 8725 Section 3.2 - Use Appropriate Algorithms], allowing for algorithm upgrades without breaking changes.
 
 _See specification: xref:security/security-reference.adoc#cryptographic-agility[Cryptographic Agility]_
 
-[#OAUTH-SHERIFF-8.6]
-==== OAUTH-SHERIFF-8.6: Token Type Header Validation (RFC 9068)
+[#VALIDATION-8.6]
+==== VALIDATION-8.6: Token Type Header Validation (RFC 9068)
 
 The library must support optional per-issuer validation of the JWT `typ` header parameter as defined in https://datatracker.ietf.org/doc/html/rfc9068[RFC 9068 - JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens] (October 2021).
 
@@ -401,8 +401,8 @@ The library must support optional per-issuer validation of the JWT `typ` header 
 
 _See specification: xref:architecture.adoc#token-validation-pipeline[Token Validation Pipeline]_
 
-[#OAUTH-SHERIFF-8.7]
-==== OAUTH-SHERIFF-8.7: DPoP Sender-Constrained Tokens (RFC 9449)
+[#VALIDATION-8.7]
+==== VALIDATION-8.7: DPoP Sender-Constrained Tokens (RFC 9449)
 
 The library must support optional per-issuer validation of DPoP (Demonstrating Proof of Possession) sender-constrained tokens as defined in https://datatracker.ietf.org/doc/html/rfc9449[RFC 9449 - OAuth 2.0 Demonstrating Proof of Possession (DPoP)] (September 2023).
 
@@ -414,13 +414,13 @@ The library must support optional per-issuer validation of DPoP (Demonstrating P
 
 _See specification: xref:architecture.adoc#token-validation-pipeline[Token Validation Pipeline]_
 
-[#OAUTH-SHERIFF-12]
-=== OAUTH-SHERIFF-12: Testing and Quality Assurance
+[#VALIDATION-12]
+=== VALIDATION-12: Testing and Quality Assurance
 
 _See specification: xref:security/security-reference.adoc[Security Reference]_
 
-[#OAUTH-SHERIFF-12.1]
-==== OAUTH-SHERIFF-12.1: Security Testing
+[#VALIDATION-12.1]
+==== VALIDATION-12.1: Security Testing
 
 The library must undergo comprehensive security testing according to https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html[OWASP JWT Security Cheat Sheet for Java] (2023).
 
@@ -434,8 +434,8 @@ Key security tests must include:
 
 _See specifications: xref:security/security-reference.adoc[Security Reference]_
 
-[#OAUTH-SHERIFF-12.2]
-==== OAUTH-SHERIFF-12.2: Unit Testing
+[#VALIDATION-12.2]
+==== VALIDATION-12.2: Unit Testing
 
 The library must have comprehensive unit tests with at least 80% code coverage, including:
 
@@ -446,8 +446,8 @@ The library must have comprehensive unit tests with at least 80% code coverage, 
 
 _See specification: xref:architecture.adoc[Architecture]_
 
-[#OAUTH-SHERIFF-12.3]
-==== OAUTH-SHERIFF-12.3: Integration Testing
+[#VALIDATION-12.3]
+==== VALIDATION-12.3: Integration Testing
 
 Integration tests must verify compatibility with multiple OIDC identity providers:
 
@@ -473,8 +473,8 @@ Integration tests must verify compatibility with multiple OIDC identity provider
 _See specifications: xref:architecture.adoc[Architecture] and xref:specification/multi-idp-testing.adoc[Multi-IDP Testing]_
 
 
-[#OAUTH-SHERIFF-12.4]
-==== OAUTH-SHERIFF-12.4: Vulnerability Scanning
+[#VALIDATION-12.4]
+==== VALIDATION-12.4: Vulnerability Scanning
 
 The library must be regularly scanned for vulnerabilities using:
 
@@ -484,8 +484,8 @@ The library must be regularly scanned for vulnerabilities using:
 
 _See specification: xref:security/security-reference.adoc[Security Reference]_
 
-[#OAUTH-SHERIFF-12.5]
-==== OAUTH-SHERIFF-12.5: Compliance Testing
+[#VALIDATION-12.5]
+==== VALIDATION-12.5: Compliance Testing
 
 Tests must verify compliance with:
 
@@ -497,8 +497,8 @@ _See specification: xref:security/security-reference.adoc[Security Reference]_
 
 == Non-Functional Requirements
 
-[#OAUTH-SHERIFF-9]
-=== OAUTH-SHERIFF-9: Performance
+[#VALIDATION-9]
+=== VALIDATION-9: Performance
 
 Performance requirements are verified through comprehensive benchmarking:
 
@@ -507,8 +507,8 @@ Performance requirements are verified through comprehensive benchmarking:
 
 _See analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis] and xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis]_
 
-[#OAUTH-SHERIFF-9.1]
-==== OAUTH-SHERIFF-9.1: Library Performance (Micro-Benchmarks)
+[#VALIDATION-9.1]
+==== VALIDATION-9.1: Library Performance (Micro-Benchmarks)
 
 **Requirements:**
 
@@ -528,8 +528,8 @@ _See analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchm
 
 _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis (March 2026)]_
 
-[#OAUTH-SHERIFF-9.2]
-==== OAUTH-SHERIFF-9.2: Error Handling Performance
+[#VALIDATION-9.2]
+==== VALIDATION-9.2: Error Handling Performance
 
 **Requirements:**
 
@@ -544,8 +544,8 @@ _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Mic
 
 _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc#_throughput_results[Throughput Results]_
 
-[#OAUTH-SHERIFF-9.3]
-==== OAUTH-SHERIFF-9.3: Integration Performance (HTTP/REST)
+[#VALIDATION-9.3]
+==== VALIDATION-9.3: Integration Performance (HTTP/REST)
 
 **Requirements:**
 
@@ -565,8 +565,8 @@ _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc#_th
 
 _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis (March 2026)]_
 
-[#OAUTH-SHERIFF-9.4]
-==== OAUTH-SHERIFF-9.4: Cache Performance
+[#VALIDATION-9.4]
+==== VALIDATION-9.4: Cache Performance
 
 **Requirements:**
 
@@ -584,8 +584,8 @@ _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.ad
 
 _See analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Performance Analysis]_
 
-[#OAUTH-SHERIFF-9.5]
-==== OAUTH-SHERIFF-9.5: Scalability and Concurrency
+[#VALIDATION-9.5]
+==== VALIDATION-9.5: Scalability and Concurrency
 
 **Requirements:**
 
@@ -602,20 +602,20 @@ _See analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integr
 
 _See analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc#_connection_sweep_50_300_connections[Connection Scaling Analysis]_
 
-[#OAUTH-SHERIFF-10]
-=== OAUTH-SHERIFF-10: Reliability
+[#VALIDATION-10]
+=== VALIDATION-10: Reliability
 
 _See specification: xref:architecture.adoc#token-validation-pipeline[Token Validation Pipeline]_
 
-[#OAUTH-SHERIFF-10.1]
-==== OAUTH-SHERIFF-10.1: Thread Safety
+[#VALIDATION-10.1]
+==== VALIDATION-10.1: Thread Safety
 
 The implementation must be thread-safe.
 
 _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
 
-[#OAUTH-SHERIFF-10.2]
-==== OAUTH-SHERIFF-10.2: Error Handling
+[#VALIDATION-10.2]
+==== VALIDATION-10.2: Error Handling
 
 The implementation must handle errors gracefully and provide meaningful error messages.
 

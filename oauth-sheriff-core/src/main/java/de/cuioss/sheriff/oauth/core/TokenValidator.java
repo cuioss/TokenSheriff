@@ -125,9 +125,9 @@ import java.util.Map;
  * <p>
  * Implements requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1">OAUTH-SHERIFF-1: Token Parsing and Validation</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-2">OAUTH-SHERIFF-2: Token Representation</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-3">OAUTH-SHERIFF-3: Multi-Issuer Support</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-1">VALIDATION-1: Token Parsing and Validation</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-2">VALIDATION-2: Token Representation</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-3">VALIDATION-3: Multi-Issuer Support</a></li>
  * </ul>
  * <p>
  * For more detailed specifications, see the

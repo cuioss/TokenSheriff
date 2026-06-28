@@ -295,7 +295,7 @@ Credentials are written to `target/zitadel-credentials.properties`, consumed by 
 == References
 
 * xref:../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/README.adoc[Integration Tests README]
-* xref:../Requirements.adoc#OAUTH-SHERIFF-12.3[OAUTH-SHERIFF-12.3: Integration Testing]
+* xref:../Requirements.adoc#VALIDATION-12.3[VALIDATION-12.3: Integration Testing]
 * https://dexidp.io/docs/[Dex Documentation]
 * https://zitadel.com/docs[Zitadel Documentation]
 * https://openid.net/certification/[OpenID Certification]

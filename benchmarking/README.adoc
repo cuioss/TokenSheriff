@@ -159,7 +159,7 @@ See link:doc/workflow.adoc[Benchmark Workflow] for the complete process.
 * link:doc/performance-scoring.adoc[Performance Scoring] - Weighted metrics methodology
 * link:doc/benchmark-metrics.adoc[Benchmark Metrics System] - CPU, memory, and application metrics collection
 * link:doc/JFR-Instrumentation.adoc[JFR Instrumentation] - Variance analysis guide
-* xref:../doc/Requirements.adoc#OAUTH-SHERIFF-9[Performance Requirements] - Specific performance targets and verification criteria
+* xref:../doc/Requirements.adoc#VALIDATION-9[Performance Requirements] - Specific performance targets and verification criteria
 
 === Performance Analysis
 

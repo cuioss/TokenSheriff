@@ -38,9 +38,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * Verifies requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-4.1">OAUTH-SHERIFF-4.1: JWKS Endpoint Support</a> (HTTP loading)</li>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-4.4">OAUTH-SHERIFF-4.4: Local Key Support</a> (file and in-memory loading)</li>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-7.3">OAUTH-SHERIFF-7.3: Security Events</a> (JWKS operation tracking)</li>
+ *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4.1">VALIDATION-4.1: JWKS Endpoint Support</a> (HTTP loading)</li>
+ *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4.4">VALIDATION-4.4: Local Key Support</a> (file and in-memory loading)</li>
+ *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-7.3">VALIDATION-7.3: Security Events</a> (JWKS operation tracking)</li>
  * </ul>
  *
  * @author Oliver Wolff

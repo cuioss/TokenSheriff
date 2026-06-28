@@ -40,8 +40,8 @@
  * <p>
  * Implements requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-4">OAUTH-SHERIFF-4: Key Management</a></li>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-8.5">OAUTH-SHERIFF-8.5: Cryptographic Agility</a></li>
+ *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4">VALIDATION-4: Key Management</a></li>
+ *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.5">VALIDATION-8.5: Cryptographic Agility</a></li>
  * </ul>
  * <p>
  * For more detailed specifications, see the

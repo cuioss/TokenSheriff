@@ -106,9 +106,9 @@
  * 
  * <p>Implements requirements:</p>
  * <ul>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-4.1">OAUTH-SHERIFF-4.1: JWKS Endpoint Support</a></li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-8.3">OAUTH-SHERIFF-8.3: Secure Communication</a></li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-8.5">OAUTH-SHERIFF-8.5: Cryptographic Agility</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4.1">VALIDATION-4.1: JWKS Endpoint Support</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.3">VALIDATION-8.3: Secure Communication</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.5">VALIDATION-8.5: Cryptographic Agility</a></li>
  * </ul>
  * <p>
  * For more detailed specifications, see the

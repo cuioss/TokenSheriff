@@ -46,18 +46,18 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * Verifies requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1.1">OAUTH-SHERIFF-1.1: Token Structure</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1.2">OAUTH-SHERIFF-1.2: Token Types</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-1.3">OAUTH-SHERIFF-1.3: Signature Validation</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-3.1">OAUTH-SHERIFF-3.1: Issuer Configuration</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-3.2">OAUTH-SHERIFF-3.2: Issuer Selection</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-3.3">OAUTH-SHERIFF-3.3: Issuer Validation</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-5.1">OAUTH-SHERIFF-5.1: Token Parsing Methods</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-6.1">OAUTH-SHERIFF-6.1: Configuration Flexibility</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-7.1">OAUTH-SHERIFF-7.1: Log Levels</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-7.2">OAUTH-SHERIFF-7.2: Log Content</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-8.1">OAUTH-SHERIFF-8.1: Token Size Limits</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#OAUTH-SHERIFF-8.2">OAUTH-SHERIFF-8.2: Safe Parsing</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.1">VALIDATION-1.1: Token Structure</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.2">VALIDATION-1.2: Token Types</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.3">VALIDATION-1.3: Signature Validation</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-3.1">VALIDATION-3.1: Issuer Configuration</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-3.2">VALIDATION-3.2: Issuer Selection</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-3.3">VALIDATION-3.3: Issuer Validation</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-5.1">VALIDATION-5.1: Token Parsing Methods</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-6.1">VALIDATION-6.1: Configuration Flexibility</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-7.1">VALIDATION-7.1: Log Levels</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-7.2">VALIDATION-7.2: Log Content</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.1">VALIDATION-8.1: Token Size Limits</a></li>
+ *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.2">VALIDATION-8.2: Safe Parsing</a></li>
  * </ul>
  *
  * @author Oliver Wolff
