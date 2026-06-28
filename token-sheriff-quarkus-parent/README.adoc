@@ -229,7 +229,7 @@ Example Prometheus query to check for signature verification failures:
 
 [source]
 ----
-sum(sheriff_oauth_validation_errors_total{event_type="SIGNATURE_VALIDATION_FAILED"})
+sum(sheriff_token_validation_errors_total{event_type="SIGNATURE_VALIDATION_FAILED"})
 ----
 
 === Using Metrics in Your Application

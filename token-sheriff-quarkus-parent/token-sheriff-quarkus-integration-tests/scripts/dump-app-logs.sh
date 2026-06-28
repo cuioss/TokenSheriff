@@ -45,7 +45,7 @@ if docker compose logs "$APP_SERVICE_NAME" > "$APP_LOG_FILE_PATH" 2>&1; then
     grep -i "WARN\|ERROR\|WARNING\|SEVERE" "$APP_LOG_FILE_PATH" | grep -v "Node.js\|deprecated" || echo "  (none)"
     echo ""
     echo "=== Token-Sheriff lines from app container ==="
-    grep -i "OAuthSheriff\|issuer\|JWKS\|Bearer\|token.*valid" "$APP_LOG_FILE_PATH" | head -30 || echo "  (none)"
+    grep -i "TokenSheriff\|issuer\|JWKS\|Bearer\|token.*valid" "$APP_LOG_FILE_PATH" | head -30 || echo "  (none)"
     echo ""
 else
     echo "Warning: Could not dump app logs (container may not be running)"

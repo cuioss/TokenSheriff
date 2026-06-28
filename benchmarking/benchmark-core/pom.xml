@@ -20,7 +20,7 @@
         <benchmark.runner>de.cuioss.sheriff.token.validation.benchmark.CoreBenchmarkRunner</benchmark.runner>
 
         <!-- JMH Configuration Properties - Optimized for fast execution (<10 minutes) -->
-        <jmh.include>de\.cuioss\.sheriff\.oauth\.core\.benchmark\.standard\..*</jmh.include>
+        <jmh.include>de\.cuioss\.sheriff\.token\.validation\.benchmark\.standard\..*</jmh.include>
         <jmh.result.format>JSON</jmh.result.format>
         <jmh.result.filePrefix>target/benchmark-results/micro-result</jmh.result.filePrefix>
         <jmh.iterations>5</jmh.iterations>

@@ -101,7 +101,7 @@ public class TokenSheriffProcessor {
     /**
      * LogRecord for feature registration.
      */
-    private static final LogRecord OAUTH_SHERIFF_FEATURE_REGISTERED = LogRecordModel.builder()
+    private static final LogRecord TOKEN_SHERIFF_FEATURE_REGISTERED = LogRecordModel.builder()
             .template("Token-Sheriff feature registered")
             .prefix("TokenSheriff_Q_D")
             .identifier(1)
@@ -114,7 +114,7 @@ public class TokenSheriffProcessor {
      */
     @BuildStep
     public FeatureBuildItem feature() {
-        LOGGER.info(OAUTH_SHERIFF_FEATURE_REGISTERED);
+        LOGGER.info(TOKEN_SHERIFF_FEATURE_REGISTERED);
         return new FeatureBuildItem(FEATURE);
     }
 

@@ -197,7 +197,7 @@ public class BenchmarkMetricsTransformer {
         Map<String, Object> jwtValidations = new LinkedHashMap<>();
 
         // JWT validation metrics
-        PrometheusClient.TimeSeries jwtSuccess = data.get("sheriff_oauth_validation_success_operations_total");
+        PrometheusClient.TimeSeries jwtSuccess = data.get("sheriff_token_validation_success_operations_total");
         double totalSuccess = 0;
         double cacheHits = 0;
 
@@ -210,7 +210,7 @@ public class BenchmarkMetricsTransformer {
             }
         }
 
-        PrometheusClient.TimeSeries jwtErrors = data.get("sheriff_oauth_validation_errors_total");
+        PrometheusClient.TimeSeries jwtErrors = data.get("sheriff_token_validation_errors_total");
         double totalErrors = jwtErrors != null ? getDeltaValue(jwtErrors) : 0;
 
         double total = totalSuccess + totalErrors;
@@ -221,8 +221,8 @@ public class BenchmarkMetricsTransformer {
         jwtValidations.put("cache_hit_rate_percent", total > 0 ? round(cacheHits / total * 100, 1) : 0.0);
 
         // JWT validation timing
-        PrometheusClient.TimeSeries jwtDurationSum = data.get("sheriff_oauth_bearer_token_validation_seconds_sum");
-        PrometheusClient.TimeSeries jwtDurationCount = data.get("sheriff_oauth_bearer_token_validation_seconds_count");
+        PrometheusClient.TimeSeries jwtDurationSum = data.get("sheriff_token_bearer_token_validation_seconds_sum");
+        PrometheusClient.TimeSeries jwtDurationCount = data.get("sheriff_token_bearer_token_validation_seconds_count");
         if (jwtDurationSum != null && jwtDurationCount != null) {
             double sum = getDeltaValue(jwtDurationSum);
             double count = getDeltaValue(jwtDurationCount);

@@ -115,19 +115,19 @@ NOTE: External port mapping is `10443→8443`. Prometheus uses internal service 
 |===
 |Metric |Description |Type
 
-|`sheriff_oauth_validation_success_operations_total`
+|`sheriff_token_validation_success_operations_total`
 |Successful JWT validations by event type
 |Counter
 
-|`sheriff_oauth_validation_errors_total`
+|`sheriff_token_validation_errors_total`
 |JWT validation errors by category
 |Counter
 
-|`sheriff_oauth_bearer_token_validation_seconds_count`
+|`sheriff_token_bearer_token_validation_seconds_count`
 |JWT validation count
 |Counter (histogram-derived)
 
-|`sheriff_oauth_bearer_token_validation_seconds_sum`
+|`sheriff_token_bearer_token_validation_seconds_sum`
 |Total JWT validation time in seconds
 |Counter (histogram-derived)
 |===

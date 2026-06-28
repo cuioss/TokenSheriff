@@ -354,7 +354,7 @@ curl -k https://localhost:10443/q/health/live
 curl -k https://localhost:10443/q/health/ready
 
 # Metrics
-curl -k https://localhost:10443/q/metrics | grep sheriff_oauth
+curl -k https://localhost:10443/q/metrics | grep sheriff_token
 ----
 
 == Docker Integration

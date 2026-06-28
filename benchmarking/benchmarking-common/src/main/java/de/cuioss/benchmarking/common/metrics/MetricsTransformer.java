@@ -45,8 +45,8 @@ public class MetricsTransformer {
         // Transform and add the four main sections
         runtimeMetrics.put("system", createSystemMetrics(allMetrics));
         runtimeMetrics.put("http_server_requests", createHttpServerRequestsMetrics(allMetrics));
-        runtimeMetrics.put("sheriff_oauth_validation_success_operations_total", createJwtValidationSuccessMetrics(allMetrics));
-        runtimeMetrics.put("sheriff_oauth_validation_errors", createJwtValidationErrorsMetrics(allMetrics));
+        runtimeMetrics.put("sheriff_token_validation_success_operations_total", createJwtValidationSuccessMetrics(allMetrics));
+        runtimeMetrics.put("sheriff_token_validation_errors", createJwtValidationErrorsMetrics(allMetrics));
 
         return runtimeMetrics;
     }
@@ -176,7 +176,7 @@ public class MetricsTransformer {
             String metricName = entry.getKey();
             Double value = entry.getValue();
 
-            if (metricName.startsWith("sheriff_oauth_validation_success_operations_total")) {
+            if (metricName.startsWith("sheriff_token_validation_success_operations_total")) {
                 String eventType = extractEventType(metricName);
                 if (eventType != null && value > 0) {
                     successMetrics.put(eventType, value.longValue());
@@ -194,7 +194,7 @@ public class MetricsTransformer {
             String metricName = entry.getKey();
             Double value = entry.getValue();
 
-            if (metricName.startsWith("sheriff_oauth_validation_errors_total")) {
+            if (metricName.startsWith("sheriff_token_validation_errors_total")) {
                 String category = extractCategory(metricName);
                 String eventType = extractEventType(metricName);
 

@@ -216,7 +216,7 @@ class TokenValidationSpecIT extends BaseIntegrationTest {
                             .extract()
                             .body()
                             .asString();
-                    return response.contains("sheriff_oauth_validation");
+                    return response.contains("sheriff_token_validation");
                 });
 
         String metricsResponse = given()
@@ -228,29 +228,29 @@ class TokenValidationSpecIT extends BaseIntegrationTest {
                 .body()
                 .asString();
 
-        assertTrue(metricsResponse.contains("sheriff_oauth_validation_errors_total"),
+        assertTrue(metricsResponse.contains("sheriff_token_validation_errors_total"),
                 "Should contain error metrics");
 
-        boolean hasSuccessMetrics = metricsResponse.contains("sheriff_oauth_validation_success_total");
+        boolean hasSuccessMetrics = metricsResponse.contains("sheriff_token_validation_success_total");
 
         Map<String, Double> parsedMetrics = parseMetricsResponse(metricsResponse);
 
         if (hasSuccessMetrics) {
             double accessTokensCreated = getMetricValue(parsedMetrics,
-                    "sheriff_oauth_validation_success_total", "ACCESS_TOKEN_CREATED");
+                    "sheriff_token_validation_success_total", "ACCESS_TOKEN_CREATED");
             assertTrue(accessTokensCreated >= 10,
                     "Should have created at least 10 access tokens, got: " + accessTokensCreated);
             assertTrue(accessTokensCreated <= 10000,
                     "Access token creation count seems unreasonably high: " + accessTokensCreated);
 
             double accessTokenCacheHits = getMetricValue(parsedMetrics,
-                    "sheriff_oauth_validation_success_total", "ACCESS_TOKEN_CACHE_HIT");
+                    "sheriff_token_validation_success_total", "ACCESS_TOKEN_CACHE_HIT");
             assertTrue(accessTokenCacheHits >= 0,
                     "Cache hits should be non-negative: " + accessTokenCacheHits);
 
             double totalSuccess = accessTokensCreated + accessTokenCacheHits
-                    + getMetricValue(parsedMetrics, "sheriff_oauth_validation_success_total", "ID_TOKEN_CREATED")
-                    + getMetricValue(parsedMetrics, "sheriff_oauth_validation_success_total", "REFRESH_TOKEN_CREATED");
+                    + getMetricValue(parsedMetrics, "sheriff_token_validation_success_total", "ID_TOKEN_CREATED")
+                    + getMetricValue(parsedMetrics, "sheriff_token_validation_success_total", "REFRESH_TOKEN_CREATED");
             assertTrue(totalSuccess >= 10,
                     "Total successful operations should be at least 10: " + totalSuccess);
         } else {

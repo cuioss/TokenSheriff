@@ -63,19 +63,19 @@ Metrics available at `/q/metrics`.
 [source,promql]
 ----
 # Total JWT validation errors
-sum(sheriff_oauth_validation_errors_total)
+sum(sheriff_token_validation_errors_total)
 
 # Error rate by category
-sum(rate(sheriff_oauth_validation_errors_total[5m])) by (category)
+sum(rate(sheriff_token_validation_errors_total[5m])) by (category)
 
 # Signature verification failures
-sum(sheriff_oauth_validation_errors_total{event_type="SIGNATURE_VALIDATION_FAILED"})
+sum(sheriff_token_validation_errors_total{event_type="SIGNATURE_VALIDATION_FAILED"})
 
 # Successful token creations
-sum(sheriff_oauth_validation_success_total)
+sum(sheriff_token_validation_success_total)
 
 # Success rate by type
-sum(rate(sheriff_oauth_validation_success_total[5m])) by (event_type)
+sum(rate(sheriff_token_validation_success_total[5m])) by (event_type)
 ----
 
 === Alerting Examples
@@ -83,7 +83,7 @@ sum(rate(sheriff_oauth_validation_success_total[5m])) by (event_type)
 [source,yaml]
 ----
 - alert: JwtSignatureVerificationFailures
-  expr: rate(sheriff_oauth_validation_errors_total{event_type="SIGNATURE_VALIDATION_FAILED"}[5m]) > 0.1
+  expr: rate(sheriff_token_validation_errors_total{event_type="SIGNATURE_VALIDATION_FAILED"}[5m]) > 0.1
   for: 5m
   labels:
     severity: critical
@@ -91,7 +91,7 @@ sum(rate(sheriff_oauth_validation_success_total[5m])) by (event_type)
     summary: "JWT signature verification failures detected"
 
 - alert: JwtHighErrorRate
-  expr: rate(sheriff_oauth_validation_errors_total[5m]) / (rate(sheriff_oauth_validation_errors_total[5m]) + rate(sheriff_oauth_validation_success_total[5m])) > 0.5
+  expr: rate(sheriff_token_validation_errors_total[5m]) / (rate(sheriff_token_validation_errors_total[5m]) + rate(sheriff_token_validation_success_total[5m])) > 0.5
   for: 5m
   labels:
     severity: warning

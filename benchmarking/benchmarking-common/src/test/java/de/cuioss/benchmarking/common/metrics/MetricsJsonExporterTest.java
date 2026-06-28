@@ -250,9 +250,9 @@ class MetricsJsonExporterTest {
     @Test
     void shouldExtractTimedMetricsCorrectly() throws Exception {
         Map<String, Double> metricsData = new HashMap<>();
-        metricsData.put("sheriff_oauth_bearer_token_validation_seconds_count{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 1000.0);
-        metricsData.put("sheriff_oauth_bearer_token_validation_seconds_sum{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 2.5);
-        metricsData.put("sheriff_oauth_bearer_token_validation_seconds_max{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 0.010);
+        metricsData.put("sheriff_token_bearer_token_validation_seconds_count{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 1000.0);
+        metricsData.put("sheriff_token_bearer_token_validation_seconds_sum{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 2.5);
+        metricsData.put("sheriff_token_bearer_token_validation_seconds_max{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 0.010);
 
         Instant timestamp = Instant.now();
         exporter.exportJwtValidationMetrics("JwtValidationBenchmark.test", timestamp, metricsData);
@@ -276,9 +276,9 @@ class MetricsJsonExporterTest {
     @Test
     void shouldExtractSecurityEventMetricsCorrectly() throws Exception {
         Map<String, Double> metricsData = new HashMap<>();
-        metricsData.put("sheriff_oauth_validation_errors_total{category=\"INVALID_STRUCTURE\",event_type=\"TOKEN_EMPTY\",result=\"failure\"}", 5.0);
-        metricsData.put("sheriff_oauth_validation_errors_total{category=\"SEMANTIC_ISSUES\",event_type=\"TOKEN_EXPIRED\",result=\"failure\"}", 10.0);
-        metricsData.put("sheriff_oauth_validation_success_operations_total{event_type=\"ACCESS_TOKEN_CREATED\",result=\"success\"}", 1000.0);
+        metricsData.put("sheriff_token_validation_errors_total{category=\"INVALID_STRUCTURE\",event_type=\"TOKEN_EMPTY\",result=\"failure\"}", 5.0);
+        metricsData.put("sheriff_token_validation_errors_total{category=\"SEMANTIC_ISSUES\",event_type=\"TOKEN_EXPIRED\",result=\"failure\"}", 10.0);
+        metricsData.put("sheriff_token_validation_success_operations_total{event_type=\"ACCESS_TOKEN_CREATED\",result=\"success\"}", 1000.0);
 
         Instant timestamp = Instant.now();
         exporter.exportJwtValidationMetrics("JwtValidationBenchmark.test", timestamp, metricsData);
@@ -453,8 +453,8 @@ class MetricsJsonExporterTest {
 
         // Should contain three main nodes
         assertTrue(runtimeData.containsKey("system"), "Should contain system node");
-        assertTrue(runtimeData.containsKey("sheriff_oauth_validation_success_operations_total"), "Should contain JWT success operations");
-        assertTrue(runtimeData.containsKey("sheriff_oauth_validation_errors"), "Should contain JWT validation errors");
+        assertTrue(runtimeData.containsKey("sheriff_token_validation_success_operations_total"), "Should contain JWT success operations");
+        assertTrue(runtimeData.containsKey("sheriff_token_validation_errors"), "Should contain JWT validation errors");
 
         // Verify system node structure with new naming conventions
         @SuppressWarnings("unchecked") Map<String, Object> systemMetrics = (Map<String, Object>) runtimeData.get("system");
@@ -475,7 +475,7 @@ class MetricsJsonExporterTest {
         assertEquals(4, cores.intValue(), "Should have 4 CPU cores from real metrics");
 
         // Verify JWT success operations structure with real values
-        @SuppressWarnings("unchecked") Map<String, Object> successOps = (Map<String, Object>) runtimeData.get("sheriff_oauth_validation_success_operations_total");
+        @SuppressWarnings("unchecked") Map<String, Object> successOps = (Map<String, Object>) runtimeData.get("sheriff_token_validation_success_operations_total");
         assertTrue(successOps.containsKey("ACCESS_TOKEN_CREATED"), "Should contain ACCESS_TOKEN_CREATED");
         // Verify the value is positive (not hardcoded since we're using real data that can vary)
         Number tokenCount = (Number) successOps.get("ACCESS_TOKEN_CREATED");
@@ -483,7 +483,7 @@ class MetricsJsonExporterTest {
         assertTrue(tokenCount.longValue() > 0, "Should have created at least one token");
 
         // Verify JWT validation errors structure
-        @SuppressWarnings("unchecked") List<Map<String, Object>> errors = (List<Map<String, Object>>) runtimeData.get("sheriff_oauth_validation_errors");
+        @SuppressWarnings("unchecked") List<Map<String, Object>> errors = (List<Map<String, Object>>) runtimeData.get("sheriff_token_validation_errors");
         assertFalse(errors.isEmpty(), "Should contain error entries");
 
         // Verify errors are sorted by category and event_type
@@ -498,11 +498,11 @@ class MetricsJsonExporterTest {
 
     private Map<String, Double> createJwtValidationMetrics() {
         Map<String, Double> metrics = new HashMap<>();
-        metrics.put("sheriff_oauth_bearer_token_validation_seconds_count{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 5000.0);
-        metrics.put("sheriff_oauth_bearer_token_validation_seconds_sum{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 1.5);
-        metrics.put("sheriff_oauth_bearer_token_validation_seconds_max{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 0.005);
-        metrics.put("sheriff_oauth_validation_errors_total{category=\"INVALID_STRUCTURE\",event_type=\"TOKEN_EMPTY\",result=\"failure\"}", 0.0);
-        metrics.put("sheriff_oauth_validation_success_operations_total{event_type=\"ACCESS_TOKEN_CREATED\",result=\"success\"}", 5000.0);
+        metrics.put("sheriff_token_bearer_token_validation_seconds_count{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 5000.0);
+        metrics.put("sheriff_token_bearer_token_validation_seconds_sum{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 1.5);
+        metrics.put("sheriff_token_bearer_token_validation_seconds_max{class=\"de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer\",exception=\"none\",method=\"getBearerTokenResult\"}", 0.005);
+        metrics.put("sheriff_token_validation_errors_total{category=\"INVALID_STRUCTURE\",event_type=\"TOKEN_EMPTY\",result=\"failure\"}", 0.0);
+        metrics.put("sheriff_token_validation_success_operations_total{event_type=\"ACCESS_TOKEN_CREATED\",result=\"success\"}", 5000.0);
         return metrics;
     }
 
@@ -585,19 +585,19 @@ class MetricsJsonExporterTest {
         // JWT validation success operations - extract from real data
         Map<String, Object> successOps = new HashMap<>();
         realMetrics.entrySet().stream()
-                .filter(e -> e.getKey().startsWith("sheriff_oauth_validation_success_operations_total"))
+                .filter(e -> e.getKey().startsWith("sheriff_token_validation_success_operations_total"))
                 .forEach(e -> {
                     String eventType = extractEventType(e.getKey());
                     if (eventType != null) {
                         successOps.put(eventType, e.getValue());
                     }
                 });
-        data.put("sheriff_oauth_validation_success_operations_total", successOps);
+        data.put("sheriff_token_validation_success_operations_total", successOps);
 
         // JWT validation errors - extract from real data and structure as array
         List<Map<String, Object>> errors = new ArrayList<>();
         realMetrics.entrySet().stream()
-                .filter(e -> e.getKey().startsWith("sheriff_oauth_validation_errors_total"))
+                .filter(e -> e.getKey().startsWith("sheriff_token_validation_errors_total"))
                 .sorted(Map.Entry.comparingByKey()) // Sort by metric name for consistent ordering
                 .forEach(e -> {
                     String category = extractCategory(e.getKey());
@@ -614,7 +614,7 @@ class MetricsJsonExporterTest {
             return ((String) e1.get("event_type")).compareTo((String) e2.get("event_type"));
         });
 
-        data.put("sheriff_oauth_validation_errors", errors);
+        data.put("sheriff_token_validation_errors", errors);
         return data;
     }
 

@@ -123,7 +123,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(sheriff_oauth_validation_errors_total[5m])) by (category)",
+          "expr": "sum(rate(sheriff_token_validation_errors_total[5m])) by (category)",
           "legendFormat": "{{category}}",
           "range": true,
           "refId": "A"
@@ -190,7 +190,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(sheriff_oauth_validation_errors_total) by (event_type)",
+          "expr": "sum(sheriff_token_validation_errors_total) by (event_type)",
           "legendFormat": "{{event_type}}",
           "range": true,
           "refId": "A"
@@ -272,7 +272,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(sheriff_oauth_validation_errors_total{event_type=\"SIGNATURE_VALIDATION_FAILED\"}[5m])",
+          "expr": "rate(sheriff_token_validation_errors_total{event_type=\"SIGNATURE_VALIDATION_FAILED\"}[5m])",
           "legendFormat": "Signature Failures",
           "range": true,
           "refId": "A"
@@ -364,7 +364,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(increase(sheriff_oauth_validation_errors_total{category=\"INVALID_SIGNATURE\"}[1h]))",
+          "expr": "sum(increase(sheriff_token_validation_errors_total{category=\"INVALID_SIGNATURE\"}[1h]))",
           "legendFormat": "Signature Errors",
           "range": true,
           "refId": "A"
@@ -472,7 +472,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "increase(sheriff_oauth_validation_errors_total{event_type=~\"TOKEN_.*\"}[1h])",
+          "expr": "increase(sheriff_token_validation_errors_total{event_type=~\"TOKEN_.*\"}[1h])",
           "legendFormat": "{{event_type}}",
           "range": true,
           "refId": "A"
@@ -566,7 +566,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "increase(sheriff_oauth_validation_errors_total{event_type=~\".*MISMATCH\"}[1h])",
+          "expr": "increase(sheriff_token_validation_errors_total{event_type=~\".*MISMATCH\"}[1h])",
           "legendFormat": "{{event_type}}",
           "range": true,
           "refId": "A"
@@ -632,7 +632,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(sheriff_oauth_validation_errors_total) by (event_type)",
+          "expr": "sum(sheriff_token_validation_errors_total) by (event_type)",
           "legendFormat": "{{event_type}}",
           "range": true,
           "refId": "A"
@@ -742,7 +742,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(sheriff_oauth_validation_duration_seconds_sum[5m]) / rate(sheriff_oauth_validation_duration_seconds_count[5m])",
+          "expr": "rate(sheriff_token_validation_duration_seconds_sum[5m]) / rate(sheriff_token_validation_duration_seconds_count[5m])",
           "legendFormat": "{{step}}",
           "range": true,
           "refId": "A"
@@ -811,7 +811,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, rate(sheriff_oauth_validation_duration_seconds_bucket{step=\"signature_validation\"}[5m]))",
+          "expr": "histogram_quantile(0.95, rate(sheriff_token_validation_duration_seconds_bucket{step=\"signature_validation\"}[5m]))",
           "legendFormat": "P95 Signature Duration",
           "range": true,
           "refId": "A"
@@ -905,7 +905,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, rate(sheriff_oauth_validation_duration_seconds_bucket{step=\"complete_validation\"}[5m]))",
+          "expr": "histogram_quantile(0.50, rate(sheriff_token_validation_duration_seconds_bucket{step=\"complete_validation\"}[5m]))",
           "legendFormat": "P50",
           "range": true,
           "refId": "A"
@@ -916,7 +916,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, rate(sheriff_oauth_validation_duration_seconds_bucket{step=\"complete_validation\"}[5m]))",
+          "expr": "histogram_quantile(0.95, rate(sheriff_token_validation_duration_seconds_bucket{step=\"complete_validation\"}[5m]))",
           "legendFormat": "P95",
           "range": true,
           "refId": "B"
@@ -927,7 +927,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, rate(sheriff_oauth_validation_duration_seconds_bucket{step=\"complete_validation\"}[5m]))",
+          "expr": "histogram_quantile(0.99, rate(sheriff_token_validation_duration_seconds_bucket{step=\"complete_validation\"}[5m]))",
           "legendFormat": "P99",
           "range": true,
           "refId": "C"
@@ -1024,7 +1024,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(sheriff_oauth_validation_duration_seconds_sum{step=\"jwks_operations\"}[5m]) / rate(sheriff_oauth_validation_duration_seconds_count{step=\"jwks_operations\"}[5m])",
+          "expr": "rate(sheriff_token_validation_duration_seconds_sum{step=\"jwks_operations\"}[5m]) / rate(sheriff_token_validation_duration_seconds_count{step=\"jwks_operations\"}[5m])",
           "legendFormat": "JWKS Operations",
           "range": true,
           "refId": "A"

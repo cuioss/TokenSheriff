@@ -40,13 +40,13 @@ The token-sheriff-validation-quarkus extension provides automatic metrics collec
 
 ```promql
 # Total validation errors
-sum(sheriff_oauth_validation_errors_total)
+sum(sheriff_token_validation_errors_total)
 
 # Error rate by category
-rate(sheriff_oauth_validation_errors_total[5m]) by (category)
+rate(sheriff_token_validation_errors_total[5m]) by (category)
 
 # Signature verification failures
-sheriff_oauth_validation_errors_total{event_type="SIGNATURE_VALIDATION_FAILED"}
+sheriff_token_validation_errors_total{event_type="SIGNATURE_VALIDATION_FAILED"}
 ```
 
 ## Documentation
@@ -133,7 +133,7 @@ Example Grafana dashboard JSON:
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(sheriff_oauth_validation_errors_total[5m])) by (category)",
+          "expr": "sum(rate(sheriff_token_validation_errors_total[5m])) by (category)",
           "interval": "",
           "legendFormat": "",
           "refId": "A"

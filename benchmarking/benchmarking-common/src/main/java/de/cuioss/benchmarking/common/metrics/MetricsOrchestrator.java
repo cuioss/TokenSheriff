@@ -87,10 +87,10 @@ public class MetricsOrchestrator {
                 "jvm_gc_overhead",
 
                 // JWT specific metrics
-                "sheriff_oauth_validation_success_operations_total",
-                "sheriff_oauth_validation_errors_total",
-                "sheriff_oauth_bearer_token_validation_seconds_count",
-                "sheriff_oauth_bearer_token_validation_seconds_sum"
+                "sheriff_token_validation_success_operations_total",
+                "sheriff_token_validation_errors_total",
+                "sheriff_token_bearer_token_validation_seconds_count",
+                "sheriff_token_bearer_token_validation_seconds_sum"
         );
 
         try {
