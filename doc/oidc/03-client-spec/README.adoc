@@ -19,9 +19,29 @@ Produce, _before_ any client code, the document set (requirements + specificatio
 
 == Target architecture: Backend-For-Frontend (BFF)
 
-The IETF https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps] draft makes the BFF the recommended pattern for browser apps: a *server-side confidential client* runs the authorization-code flow, *stores tokens server-side*, and issues the browser only a session cookie — so no tokens are ever exposed to the browser. This library is the *engine* for that BFF (and for the lighter Token-Mediating Backend): it performs the confidential-client token retrieval, the server-side token lifecycle, validation, and fetching.
+The IETF https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps] draft makes the *server-side confidential client* the recommended pattern for browser apps: a backend runs the authorization-code flow and *owns the tokens*, so the browser never gets usable access to them.
 
-What the library lays groundwork for vs. what the BFF *application* owns:
+[IMPORTANT]
+====
+*We do not build a BFF here.* The BFF is a separate application — a different project — layered on top of this library. This plan's job is narrower: specify the *client engine* (token retrieval, server-side lifecycle, fetching, validation) so that *building a BFF on top stays feasible and is not made unnecessarily complicated*. The BFF deployment shapes below are documented only as the *consumers our design must keep viable* — not as features delivered here.
+====
+
+A BFF can bind the acquired tokens to the browser session two ways; *in both, the token stays inaccessible to the browser*, and the engine must support either:
+
+[cols="1,3"]
+|===
+| BFF deployment | How the token is bound to the browser session
+
+| *Stateful BFF — server-side token store*
+| The browser holds an opaque *session-id cookie*; the tokens live in a *server-side store* and the backend *proxies* every resource-server call.
+
+| *Stateless BFF — encrypted token cookie*
+| The access token is returned to the browser only inside an *HttpOnly cookie encrypted with a server-side symmetric key*. The browser stores and replays the cookie but *never sees the plaintext token*; on each request the backend *decrypts* the cookie to recover and use the token. No server-side store.
+|===
+
+The engine seam is identical for both: confidential-client token retrieval, the server-side token lifecycle, validation, and fetching. What differs — a server-side token store vs. an encrypted token cookie — is the BFF's own concern; the engine must *enable either without forcing the choice*. That non-preclusion is the BFF groundwork this plan owns.
+
+What the library lays groundwork for vs. what the BFF *application* (the separate project) owns:
 
 .In scope (the engine / groundwork)
 * Confidential-client *authorization-code + PKCE* flow, server-side (no tokens in the browser).
@@ -32,10 +52,10 @@ What the library lays groundwork for vs. what the BFF *application* owns:
 * OIDC *fetching* — discovery (`.well-known`) and JWKS (both already in the validation module), plus userinfo.
 * Validating retrieved tokens (reuse the validation module) and the security of all the above (flow integrity, TLS, SSRF, credential protection).
 
-.BFF/TMB application layer (enabled, not built here)
+.BFF application layer (a separate project — enabled, not built here)
 The library must *not preclude* these, but does not own them:
 
-* The browser↔backend *session cookie*, CSRF on the BFF's own API, request proxying (BFF) or handing the access token to the SPA (TMB).
+* The browser↔backend *session cookie* (an opaque session-id, or the encrypted token cookie and its symmetric-key management), CSRF on the backend's own API, and request proxying.
 * Login/consent UX.
 * Front-/back-channel logout *receivers* and the Session-Management iframe (browser-session concerns). RP-initiated logout *triggering* and token revocation are in-scope building blocks.
 
@@ -51,7 +71,7 @@ Security is the *leading* topic. Specify the *smallest, most secure subset* of c
 
 == Security exclusions (legacy / discouraged, refused)
 
-Sourced non-goals. The library MUST NOT require or implement these:
+Sourced non-goals *specific to the client capability*. The library MUST NOT require or implement these:
 
 * *Implicit grant* (`response_type=token`) — RFC 9700 §2.1.2 (SHOULD NOT); removed in OAuth 2.1.
 * *Resource Owner Password Credentials grant* — RFC 9700 §2.4 (MUST NOT); removed in OAuth 2.1.
@@ -59,10 +79,10 @@ Sourced non-goals. The library MUST NOT require or implement these:
 * *In-browser token storage* (public-client OAuth) — the BFF holds tokens server-side; Browser-Based Apps draft.
 * *PKCE `plain`* — `S256` only (RFC 7636, RFC 9700).
 * *Tokens in URL query/fragment* — RFC 9700 §4.3; `form_post` and code exchange at the token endpoint.
-* *`alg=none` / unsigned or weak-algorithm tokens* — RFC 8725 (JWT BCP). Require asymmetric signature verification.
-* *Bare bearer tokens where sender-constraining is feasible* — prefer DPoP/mTLS (RFC 9449, RFC 8705, FAPI 2.0).
 * *Weak client auth where `private_key_jwt`/mTLS is available; secrets over non-TLS* — RFC 9700, RFC 7523, RFC 8705.
 * *Unvalidated `jwks_uri` / metadata URLs* (SSRF) — CVE-2026-1180.
+
+NOTE: *Token-signature exclusions are not restated here* — rejecting `alg=none`, HMAC, and weak/short-key algorithms, and requiring asymmetric signature verification, is already mandated by the validation requirements (`VAL-1.3`, RFC 8725) and *inherited* by every token this client retrieves. The client spec covers only the *acquisition/flow* exclusions above; it must not duplicate the validation algorithm policy. Sender-constraining is likewise an inherited capability (validation already validates DPoP-bound tokens, `VAL-8.7`); the client delta is *requesting* such tokens (DPoP/mTLS at the token endpoint), covered under Retrieval & flow — not an exclusion.
 
 == Organizing principle: separate the aspects
 
@@ -89,7 +109,7 @@ Keep these in separate documents and requirement groups — do not blend them.
 [source]
 ----
 doc/client/
-  requirements.adoc            # TOKEN-SHERIFF-CLIENT-N, grouped by aspect
+  requirements.adoc            # CLIENT-N, grouped by aspect
   architecture.adoc            # Client/BFF component & sequence overview
   threat-model.adoc            # attack catalog per aspect, each entry sourced
   best-practices.adoc          # normative checklist, each item sourced
@@ -102,7 +122,7 @@ doc/client/
 
 == Requirement-ID & sourcing discipline
 
-* Client requirements use `TOKEN-SHERIFF-CLIENT-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow / Fetch).
+* Client requirements use `CLIENT-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow / Fetch).
 * *Every* normative requirement and *every* threat entry cites a source with section anchor (RFC / OIDC spec / OWASP / FAPI). MUST/SHOULD/MAY trace back to the cited source.
 * Requirements are *security-driven* — each traces to a threat it mitigates or is the secure way to perform a needed operation. Exclusions are sourced too.
 * `references.adoc` is the single bibliography; all docs cite into it.
@@ -110,7 +130,7 @@ doc/client/
 == Execution
 
 . *Scaffold + bibliography* — doc-set skeleton and `references.adoc` from the source catalog below.
-. *Requirements* — `TOKEN-SHERIFF-CLIENT-N`, grouped by aspect, each sourced.
+. *Requirements* — `CLIENT-N`, grouped by aspect, each sourced.
 . *Threat model* — attack catalog per aspect; each entry → source + mitigation + covering requirement.
 . *Best practices* — the sourced checklist below, normative.
 . *Specifications* — `retrieval-flow.adoc`, `fetch-discovery-jwks.adoc`, `token-handling.adoc`.
@@ -123,7 +143,7 @@ doc/client/
 * [ ] Retrieval & flow covers confidential auth-code+PKCE, client auth, `state`/`nonce`/redirect-URI, mix-up (`iss`), and sender-constraining
 * [ ] BFF groundwork is sufficient (server-side token lifecycle) without owning the browser session/cookie layer
 * [ ] Each security exclusion is documented and sourced; every requirement is threat-driven
-* [ ] `TOKEN-SHERIFF-CLIENT-N` IDs grouped by aspect; traceability matrix complete; `references.adoc` resolves
+* [ ] `CLIENT-N` IDs grouped by aspect; traceability matrix complete; `references.adoc` resolves
 
 // ---------------------------------------------------------------------------
 
@@ -154,29 +174,28 @@ doc/client/
 
 == Seed: source catalog (research 2026-06-24)
 
-Input for the spec authors — authoritative, citable sources.
+Input for the spec authors — authoritative, citable sources. To avoid duplication, this lists *only the sources new to the client capability*; standards already cited by the validation requirements are reused, not restated (see the reuse note below).
 
-.Standards (normative)
+.Standards new to the client capability (normative)
 * https://www.rfc-editor.org/rfc/rfc9700[RFC 9700] — Best Current Practice for OAuth 2.0 Security *(primary BCP)*
-* https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps] — BFF / Token-Mediating Backend patterns
-* https://www.rfc-editor.org/rfc/rfc6749[RFC 6749] — OAuth 2.0 Authorization Framework
+* https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps] — server-side confidential client / BFF (stateful & stateless) guidance
 * https://www.rfc-editor.org/rfc/rfc6819[RFC 6819] — OAuth 2.0 Threat Model and Security Considerations
 * https://www.rfc-editor.org/rfc/rfc7636[RFC 7636] — PKCE
 * https://www.rfc-editor.org/rfc/rfc8414[RFC 8414] — OAuth 2.0 Authorization Server Metadata (discovery)
 * https://www.rfc-editor.org/rfc/rfc8693[RFC 8693] — OAuth 2.0 Token Exchange
 * https://www.rfc-editor.org/rfc/rfc7523[RFC 7523] — JWT Profile for OAuth 2.0 Client Authentication (`private_key_jwt`)
 * https://www.rfc-editor.org/rfc/rfc8705[RFC 8705] — OAuth 2.0 Mutual-TLS Client Auth & Certificate-Bound Access Tokens
-* https://www.rfc-editor.org/rfc/rfc9449[RFC 9449] — DPoP (Demonstrating Proof-of-Possession)
-* https://www.rfc-editor.org/rfc/rfc8725[RFC 8725] — JSON Web Token Best Current Practices
-* https://www.rfc-editor.org/rfc/rfc9068[RFC 9068] — JWT Profile for OAuth 2.0 Access Tokens
 * https://www.rfc-editor.org/rfc/rfc9126[RFC 9126] — Pushed Authorization Requests (PAR)
 * https://www.rfc-editor.org/rfc/rfc9207[RFC 9207] — Authorization Server Issuer Identification (`iss`, mix-up defence)
-* https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1] — consolidated draft
-* https://openid.net/specs/openid-connect-core-1_0.html[OpenID Connect Core 1.0] — userinfo, ID-token validation
 * https://openid.net/specs/openid-connect-discovery-1_0.html[OpenID Connect Discovery 1.0]
-* https://openid.net/specs/fapi-security-profile-2_0-final.html[FAPI 2.0 Security Profile]
 
-.Guidance & real-world
+[NOTE]
+====
+*Reused from the validation bibliography — cite, don't restate.* These are already referenced by the validation xref:../../Requirements.adoc[Requirements] and apply unchanged on the client side; `references.adoc` links the existing entries rather than re-listing them:
+https://www.rfc-editor.org/rfc/rfc6749[RFC 6749 (OAuth 2.0)], https://openid.net/specs/openid-connect-core-1_0.html[OIDC Core 1.0] (userinfo, ID-token validation), https://www.rfc-editor.org/rfc/rfc8725[RFC 8725 (JWT BCP)], https://www.rfc-editor.org/rfc/rfc9068[RFC 9068 (JWT access tokens)], https://www.rfc-editor.org/rfc/rfc9449[RFC 9449 (DPoP)], https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1], and the https://openid.net/specs/fapi-security-profile-2_0-final.html[FAPI 2.0 Security Profile].
+====
+
+.Guidance & real-world (new)
 * https://cheatsheetseries.owasp.org/cheatsheets/OAuth2_Cheat_Sheet.html[OWASP OAuth2 Cheat Sheet]
 * https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/05-Authorization_Testing/05-Testing_for_OAuth_Weaknesses[OWASP WSTG — Testing for OAuth Weaknesses]
 * https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180] — Keycloak `jwks_uri` SSRF (fetch-aspect case study)
