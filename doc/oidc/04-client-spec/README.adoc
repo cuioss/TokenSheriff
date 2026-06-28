@@ -1,4 +1,4 @@
-= Plan 03 — Token Retrieval, OIDC Fetching & BFF Groundwork: Requirements, Specification & Security
+= Plan 04 — Token Retrieval, Flows & BFF Groundwork: Requirements, Specification & Security
 :toc: macro
 :toclevels: 3
 :sectnums:
@@ -7,15 +7,15 @@
 [cols="1,3"]
 |===
 | Status     | Ready to execute (after xref:../02-doc-structure/README.adoc[Plan 02] establishes `doc/client/`)
-| Depends on | Plan 02 (doc structure); produces the spec the future client module is built against (spec-first)
-| Focus      | Server-side *token retrieval* (token-endpoint grants incl. confidential authorization-code + PKCE), *OIDC fetching* (discovery, JWKS, userinfo), and the *token lifecycle* — the engine a *Backend-For-Frontend (BFF)* is built on. A *most-secure current subset*, security-led, every normative item source-referenced.
+| Depends on | Plan 02 (doc structure) and xref:../03-commons/README.adoc[Plan 03] (the Commons transport this builds on); produces the spec the future client module is built against (spec-first)
+| Focus      | Server-side *token retrieval* (token-endpoint grants incl. confidential authorization-code + PKCE), the *flow integrity* around it (`state`/`nonce`/PKCE, mix-up defence, step-up, RP-initiated logout), and the *token lifecycle* — the engine a *Backend-For-Frontend (BFF)* is built on. The *outbound IdP HTTP* it uses (discovery, JWKS, token, userinfo, …) belongs to xref:../03-commons/README.adoc[commons] and is referenced, not respecified. A *most-secure current subset*, security-led, every normative item source-referenced.
 |===
 
 toc::[]
 
 == Goal
 
-Produce, _before_ any client code, the document set (requirements + specification + security) for what this server-side library needs: *retrieving tokens* as a confidential client, *holding and refreshing them server-side*, and *fetching OIDC artifacts* (metadata, keys, userinfo) — designed so a BFF can be built on top. Security is the centre of gravity: a sourced threat model and a sourced best-practices catalog drawn from the standards below.
+Produce, _before_ any client code, the document set (requirements + specification + security) for what this server-side library needs: *retrieving tokens* as a confidential client, *holding and refreshing them server-side*, and driving the *flows* on top of the xref:../03-commons/README.adoc[commons] transport — designed so a BFF can be built on top. Security is the centre of gravity: a sourced threat model and a sourced best-practices catalog drawn from the standards below.
 
 == Target architecture: Backend-For-Frontend (BFF)
 
@@ -39,7 +39,7 @@ A BFF can bind the acquired tokens to the browser session two ways; *in both, th
 | The access token is returned to the browser only inside an *HttpOnly cookie encrypted with a server-side symmetric key*. The browser stores and replays the cookie but *never sees the plaintext token*; on each request the backend *decrypts* the cookie to recover and use the token. No server-side store.
 |===
 
-The engine seam is identical for both: confidential-client token retrieval, the server-side token lifecycle, validation, and fetching. What differs — a server-side token store vs. an encrypted token cookie — is the BFF's own concern; the engine must *enable either without forcing the choice*. That non-preclusion is the BFF groundwork this plan owns.
+The engine seam is identical for both: confidential-client token retrieval, the server-side token lifecycle, and validation, all over the xref:../03-commons/README.adoc[commons] transport. What differs — a server-side token store vs. an encrypted token cookie — is the BFF's own concern; the engine must *enable either without forcing the choice*. That non-preclusion is the BFF groundwork this plan owns.
 
 What the library lays groundwork for vs. what the BFF *application* (the separate project) owns:
 
@@ -48,16 +48,17 @@ What the library lays groundwork for vs. what the BFF *application* (the separat
 * Token-endpoint grants — `authorization_code`, `refresh_token`, `client_credentials`; token exchange (RFC 8693) candidate.
 * Token-endpoint *client authentication* — `client_secret_basic`/`post`, `private_key_jwt` (RFC 7523), mTLS (RFC 8705).
 * *Sender-constraining* of retrieved tokens — DPoP (RFC 9449) / mTLS (RFC 8705).
+* *Step-up authentication* — request `acr_values`/`max_age` and handle the `insufficient_user_authentication` challenge (RFC 9470).
+* *RP-initiated logout* — trigger the IdP `end_session_endpoint` with `id_token_hint`/`post_logout_redirect_uri`/`state` (OIDC RP-Initiated Logout) and revoke held tokens.
 * *Server-side token lifecycle* — storage, refresh, revocation.
-* OIDC *fetching* — discovery (`.well-known`) and JWKS (both already in the validation module), plus userinfo.
-* Validating retrieved tokens (reuse the validation module) and the security of all the above (flow integrity, TLS, SSRF, credential protection).
+* Validating retrieved tokens (reuse the validation module) and the flow security of all the above (flow integrity, credential protection). *All outbound IdP HTTP* (discovery, JWKS, token, userinfo, end-session, …) is performed by xref:../03-commons/README.adoc[commons] — referenced, not respecified here.
 
 .BFF application layer (a separate project — enabled, not built here)
 The library must *not preclude* these, but does not own them:
 
 * The browser↔backend *session cookie* (an opaque session-id, or the encrypted token cookie and its symmetric-key management), CSRF on the backend's own API, and request proxying.
 * Login/consent UX.
-* Front-/back-channel logout *receivers* and the Session-Management iframe (browser-session concerns). RP-initiated logout *triggering* and token revocation are in-scope building blocks.
+* Front-/back-channel logout *receivers* and the Session-Management iframe (browser-session concerns). RP-initiated logout *triggering* (above) and token revocation are the in-scope building blocks.
 
 Public-client / in-browser OAuth (tokens in the SPA) is explicitly *not* a goal — the BFF exists precisely to avoid it.
 
@@ -95,34 +96,33 @@ Keep these in separate documents and requirement groups — do not blend them.
 | *Token* (partly inherited)
 | Handling/validation and *server-side lifecycle* of retrieved tokens. *References the validation module* (no duplication) and adds the delta: storage, refresh, revocation, sender-constraining, and validation of ID token / userinfo responses.
 
-| *Retrieval & flow* (net-new)
-| The confidential-client *authorization-code + PKCE* flow (server-side) and the token endpoint: grants, client authentication, `state`/`nonce`/exact redirect-URI, mix-up defence (`iss`), code-injection defence, PAR, DPoP/mTLS, TLS, response validation.
-
-| *Fetch* (partly inherited)
-| Server-side retrieval/HTTP. *Already in the validation module* (reference, do not duplicate): discovery (`.well-known`, `validation.wellknown`), JWKS fetch/cache/rotation (`validation.jwks`), TLS, the HTTP client. *Net-new*: userinfo fetch. *SSRF/TLS/resilience* applies to *both* — including the existing discovery/JWKS paths.
+| *Retrieval & flow* (net-new — the focus of this plan)
+| The confidential-client *authorization-code + PKCE* flow (server-side) and the use of the token endpoint: grants, client authentication, `state`/`nonce`/exact redirect-URI, mix-up defence (`iss`), code-injection defence, PAR, DPoP/mTLS, step-up (RFC 9470), RP-initiated logout, response validation.
 |===
 
-*Retrieval & flow* is the only fully net-new aspect. *Token* and *fetch* reference the validation module and state only the delta. The SSRF/TLS analysis also re-examines the *existing* `validation.wellknown`/`validation.jwks` fetch code, which may yield hardening requirements on current code.
+*Transport is not an aspect here.* All outbound IdP HTTP — discovery, JWKS, token, userinfo, end-session, PAR — plus its TLS / SSRF / resilience hardening lives in xref:../03-commons/README.adoc[commons] (Plan 03). The client *uses* it and references its `CMN-N` requirements; it does not respecify fetching or restate SSRF/TLS. *Token* references the validation module for the delta only; *Retrieval & flow* is the genuinely net-new aspect this plan owns.
 
 == Target document set (under `doc/client/`)
 
 [source]
 ----
 doc/client/
-  requirements.adoc            # CLIENT-N, grouped by aspect
+  requirements.adoc            # CLIENT-N, grouped by aspect (Token / Retrieval & flow)
   architecture.adoc            # Client/BFF component & sequence overview
   threat-model.adoc            # attack catalog per aspect, each entry sourced
   best-practices.adoc          # normative checklist, each item sourced
   references.adoc              # the source catalog / bibliography
   specification/
     retrieval-flow.adoc        # auth-code+PKCE, grants, client auth, state/nonce, mix-up, PAR
-    fetch-discovery-jwks.adoc  # discovery, JWKS, userinfo fetch, SSRF, TLS
+    step-up-and-logout.adoc    # RFC 9470 step-up; RP-initiated logout
     token-handling.adoc        # token lifecycle delta (references the validation module)
 ----
 
+(Discovery/JWKS/userinfo transport specs live under `doc/commons/`, not here.)
+
 == Requirement-ID & sourcing discipline
 
-* Client requirements use `CLIENT-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow / Fetch).
+* Client requirements use `CLIENT-N` (per Plan 02), *grouped by aspect* (Token / Retrieval & flow). Transport requirements are `CMN-N` (Plan 03) and are cited, not duplicated.
 * *Every* normative requirement and *every* threat entry cites a source with section anchor (RFC / OIDC spec / OWASP / FAPI). MUST/SHOULD/MAY trace back to the cited source.
 * Requirements are *security-driven* — each traces to a threat it mitigates or is the secure way to perform a needed operation. Exclusions are sourced too.
 * `references.adoc` is the single bibliography; all docs cite into it.
@@ -133,15 +133,16 @@ doc/client/
 . *Requirements* — `CLIENT-N`, grouped by aspect, each sourced.
 . *Threat model* — attack catalog per aspect; each entry → source + mitigation + covering requirement.
 . *Best practices* — the sourced checklist below, normative.
-. *Specifications* — `retrieval-flow.adoc`, `fetch-discovery-jwks.adoc`, `token-handling.adoc`.
+. *Specifications* — `retrieval-flow.adoc`, `step-up-and-logout.adoc`, `token-handling.adoc`.
 . *Traceability + verify* — cross-link requirements ↔ threats ↔ best practices ↔ spec; confirm aspect separation, BFF-groundwork coverage, and full sourcing.
 
 == Verification
 
 * [ ] Every requirement and threat entry cites a normative source with section anchor
-* [ ] Aspects cleanly separated; token & fetch reference (not duplicate) the validation module
-* [ ] Retrieval & flow covers confidential auth-code+PKCE, client auth, `state`/`nonce`/redirect-URI, mix-up (`iss`), and sender-constraining
+* [ ] Aspects cleanly separated; token references the validation module and transport references `commons` (`CMN-N`) — neither duplicated
+* [ ] Retrieval & flow covers confidential auth-code+PKCE, client auth, `state`/`nonce`/redirect-URI, mix-up (`iss`), sender-constraining, step-up (RFC 9470) and RP-initiated logout
 * [ ] BFF groundwork is sufficient (server-side token lifecycle) without owning the browser session/cookie layer
+* [ ] HTTP-surfaced client errors conform to the commons RFC 9457 error model (Plan 03) — the client engine throws typed exceptions; `client-quarkus` / the portal adapter emit problem+json
 * [ ] Each security exclusion is documented and sourced; every requirement is threat-driven
 * [ ] `CLIENT-N` IDs grouped by aspect; traceability matrix complete; `references.adoc` resolves
 
@@ -167,7 +168,7 @@ doc/client/
 * Offer *`private_key_jwt` / mTLS* client authentication (RFC 7523 / 8705) beyond `client_secret`.
 * Add *PAR* (RFC 9126) and *DPoP/mTLS sender-constraining* (RFC 9449 / 8705).
 * Strengthen *`nonce`* binding (currently light).
-* Replace bespoke RESTEasy fetching with the validation module's hardened HTTP + *SSRF* defences (fetch aspect).
+* Replace bespoke RESTEasy fetching with xref:../03-commons/README.adoc[commons]'s hardened HTTP + *SSRF* defences.
 
 === Relationship to the other consumer
 `nifi-extensions` consumes the *validation module*; `portal-authentication-oauth` is an *RP* that the Token-Sheriff client module *replaces* (engine swap + portal adapter). It is the concrete reference implementation for this plan's BFF-engine scope.
@@ -181,24 +182,22 @@ Input for the spec authors — authoritative, citable sources. To avoid duplicat
 * https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps] — server-side confidential client / BFF (stateful & stateless) guidance
 * https://www.rfc-editor.org/rfc/rfc6819[RFC 6819] — OAuth 2.0 Threat Model and Security Considerations
 * https://www.rfc-editor.org/rfc/rfc7636[RFC 7636] — PKCE
-* https://www.rfc-editor.org/rfc/rfc8414[RFC 8414] — OAuth 2.0 Authorization Server Metadata (discovery)
 * https://www.rfc-editor.org/rfc/rfc8693[RFC 8693] — OAuth 2.0 Token Exchange
 * https://www.rfc-editor.org/rfc/rfc7523[RFC 7523] — JWT Profile for OAuth 2.0 Client Authentication (`private_key_jwt`)
 * https://www.rfc-editor.org/rfc/rfc8705[RFC 8705] — OAuth 2.0 Mutual-TLS Client Auth & Certificate-Bound Access Tokens
 * https://www.rfc-editor.org/rfc/rfc9126[RFC 9126] — Pushed Authorization Requests (PAR)
 * https://www.rfc-editor.org/rfc/rfc9207[RFC 9207] — Authorization Server Issuer Identification (`iss`, mix-up defence)
-* https://openid.net/specs/openid-connect-discovery-1_0.html[OpenID Connect Discovery 1.0]
+* https://www.rfc-editor.org/rfc/rfc9470[RFC 9470] — OAuth 2.0 Step-Up Authentication Challenge Protocol
+* https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OpenID Connect RP-Initiated Logout 1.0]
 
 [NOTE]
 ====
-*Reused from the validation bibliography — cite, don't restate.* These are already referenced by the validation xref:../../Requirements.adoc[Requirements] and apply unchanged on the client side; `references.adoc` links the existing entries rather than re-listing them:
-https://www.rfc-editor.org/rfc/rfc6749[RFC 6749 (OAuth 2.0)], https://openid.net/specs/openid-connect-core-1_0.html[OIDC Core 1.0] (userinfo, ID-token validation), https://www.rfc-editor.org/rfc/rfc8725[RFC 8725 (JWT BCP)], https://www.rfc-editor.org/rfc/rfc9068[RFC 9068 (JWT access tokens)], https://www.rfc-editor.org/rfc/rfc9449[RFC 9449 (DPoP)], https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1], and the https://openid.net/specs/fapi-security-profile-2_0-final.html[FAPI 2.0 Security Profile].
+*Reused — cite, don't restate.* Already referenced by the validation xref:../../Requirements.adoc[Requirements] (and apply unchanged here): https://www.rfc-editor.org/rfc/rfc6749[RFC 6749 (OAuth 2.0)], https://openid.net/specs/openid-connect-core-1_0.html[OIDC Core 1.0] (userinfo, ID-token validation), https://www.rfc-editor.org/rfc/rfc8725[RFC 8725 (JWT BCP)], https://www.rfc-editor.org/rfc/rfc9068[RFC 9068 (JWT access tokens)], https://www.rfc-editor.org/rfc/rfc9449[RFC 9449 (DPoP)], https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1], https://openid.net/specs/fapi-security-profile-2_0-final.html[FAPI 2.0]. Owned by `commons` (xref:../03-commons/README.adoc[Plan 03]): the *outbound transport* standards (RFC 8414 discovery, OIDC Discovery, RFC 7009/7662, SSRF case study CVE-2026-1180) *and* the *RFC 9457 error model* — the client engine throws typed exceptions; its Quarkus/RESTEasy edges emit problem+json.
 ====
 
 .Guidance & real-world (new)
 * https://cheatsheetseries.owasp.org/cheatsheets/OAuth2_Cheat_Sheet.html[OWASP OAuth2 Cheat Sheet]
 * https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/05-Authorization_Testing/05-Testing_for_OAuth_Weaknesses[OWASP WSTG — Testing for OAuth Weaknesses]
-* https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180] — Keycloak `jwks_uri` SSRF (fetch-aspect case study)
 
 == Seed: threat catalog by aspect (with source anchors)
 
@@ -212,7 +211,9 @@ Minimum coverage for `threat-model.adoc`. Each → mitigation + covering require
 * CSRF on the callback — RFC 9700 §4.7 → session-bound `state` or PKCE or `nonce`
 * Weak/leaked client credentials — RFC 9700, RFC 7523, RFC 8705 → `private_key_jwt`/mTLS; protect secrets; TLS only
 * Token replay / lack of sender-constraining — RFC 9700 §4.10, RFC 9449, RFC 8705, FAPI 2.0 → DPoP or mTLS-bound tokens
-* Token-endpoint TLS downgrade / MITM — RFC 9700, RFC 6749 §10 → enforce TLS, validate certificates
+* Insufficient authentication assurance for a sensitive operation — RFC 9470 → honour `insufficient_user_authentication`, re-drive with `acr_values`/`max_age`, verify resulting `acr`/`auth_time`
+* Logout that leaves tokens live / open-redirect on `post_logout_redirect_uri` — OIDC RP-Initiated Logout → send `id_token_hint`, exact-match the registered `post_logout_redirect_uri`, bind `state`, revoke held tokens
+* Token-endpoint TLS downgrade / MITM — *covered by* xref:../03-commons/README.adoc[commons] (transport TLS); the flow relies on it
 
 .Token aspect
 * Refresh-token theft (server-side) — RFC 9700 §4.14 → rotation, revoke on misuse, sender-constraining; protect at-rest storage
@@ -220,16 +221,12 @@ Minimum coverage for `threat-model.adoc`. Each → mitigation + covering require
 * ID-token / userinfo integrity — OIDC Core §3.1.3.7, §5.3 → signature + claim validation; bind userinfo `sub`
 * Sender-constraint loss in storage/forwarding — RFC 9449, RFC 8705 → keep tokens bound; minimal storage
 
-.Fetch aspect
-* SSRF via `jwks_uri` / discovery / userinfo URLs — OWASP, CVE-2026-1180 → host allow-listing, egress restriction, block internal/link-local ranges. *Audit the existing `validation.wellknown`/`validation.jwks` code, not only new endpoints.*
-* Malicious endpoints advertised via discovery — RFC 8414 / OIDC Discovery → validate `issuer`, pin/validate metadata
-* TLS downgrade / MITM on fetches — RFC 9700, RFC 8414 → enforce TLS, validate certificates
-* DoS via large/slow metadata, JWKS or userinfo responses → timeouts, size limits
+NOTE: *Transport threats — SSRF, TLS downgrade, response DoS on discovery/JWKS/token/userinfo — live in xref:../03-commons/README.adoc[commons]'s threat model (`CMN-N`), not here.* The flow inherits them; it does not restate them.
 
 == Seed: best-practices checklist by aspect (sourced)
 
 Normative basis for `best-practices.adoc`.
 
-* *Retrieval & flow:* confidential-client authorization-code + PKCE (`S256`); never implicit/hybrid (RFC 9700 §2.1.2, Browser-Based Apps draft). Exact redirect-URI match (§4.1). CSRF via session-bound `state` / PKCE / `nonce` (§4.7). Mix-up defence via `iss` (RFC 9207, §4.4). Prefer PAR (RFC 9126, FAPI 2.0). Strongest available client auth — `private_key_jwt` (RFC 7523) or mTLS (RFC 8705) over `client_secret`. Sender-constrain tokens with DPoP/mTLS (RFC 9449, RFC 8705, FAPI 2.0). TLS on the token endpoint; validate `iss`/`aud` of the response.
+* *Retrieval & flow:* confidential-client authorization-code + PKCE (`S256`); never implicit/hybrid (RFC 9700 §2.1.2, Browser-Based Apps draft). Exact redirect-URI match (§4.1). CSRF via session-bound `state` / PKCE / `nonce` (§4.7). Mix-up defence via `iss` (RFC 9207, §4.4). Prefer PAR (RFC 9126, FAPI 2.0). Strongest available client auth — `private_key_jwt` (RFC 7523) or mTLS (RFC 8705) over `client_secret`. Sender-constrain tokens with DPoP/mTLS (RFC 9449, RFC 8705, FAPI 2.0). Step-up via `acr_values`/`max_age` and honour the `insufficient_user_authentication` challenge (RFC 9470). RP-initiated logout with `id_token_hint`, exact-matched `post_logout_redirect_uri`, bound `state`, plus token revocation (OIDC RP-Initiated Logout). Validate `iss`/`aud` of the token response.
 * *Token:* validate every retrieved token via the validation pipeline — `iss`/`aud`/`exp`/`iat`/signature (RFC 9068, OIDC Core §3.1.3.7); for userinfo, verify signature and bind `sub`. Hold tokens server-side; rotate refresh tokens and revoke on misuse (§4.14); protect at-rest; keep sender-constraint intact; short-lived access tokens.
-* *Fetch:* enforce TLS on all fetches. Defend against SSRF on `jwks_uri`/discovery/userinfo — allow-list hosts, restrict egress, block internal ranges (OWASP, CVE-2026-1180). Timeouts and response size limits. Reuse the validation module's JWKS cache/rotation.
+* *Transport:* enforced TLS, SSRF defence, timeouts/size-limits, JWKS cache/rotation — *owned by xref:../03-commons/README.adoc[commons]*; the client uses it and adds none of its own HTTP.
