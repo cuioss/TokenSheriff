@@ -21,7 +21,7 @@ Common issues and solutions when integrating the Token-Sheriff library with Keyc
 
 === Problem: Missing 'sub' Claim
 
-*Warning:* `TokenSheriff-109: Token is missing required claim: sub`
+*Warning:* `OAuthSheriff-109: Token is missing required claim: sub`
 
 *Cause:* Some Keycloak configurations or custom client scopes may exclude the `sub` claim from access tokens. While Keycloak includes `sub` by default, certain service account configurations or custom protocol mappers can remove it. The `sub` claim is mandatory for ACCESS_TOKEN and ID_TOKEN types per RFC 7519.
 
@@ -42,7 +42,7 @@ sheriff.oauth.issuers.keycloak.claim-sub-optional=true
 - Maintains RFC compliance warnings for awareness
 - Per-issuer configuration allows mixed environments
 
-*Warning:* This relaxes RFC 7519 compliance. The library will log a warning (`TokenSheriff-134`) when this setting is enabled.
+*Warning:* This relaxes RFC 7519 compliance. The library will log a warning (`OAuthSheriff-134`) when this setting is enabled.
 
 === Solution 2: Add Subject Protocol Mapper
 

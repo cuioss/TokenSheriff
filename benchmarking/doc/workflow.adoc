@@ -43,7 +43,7 @@ The benchmark processing is automatically triggered in GitHub Actions:
 
 5. **Deployment**
    - Deploy combined results to cuioss.github.io
-   - Results available at `TokenSheriff/benchmarks`
+   - Results available at `OAuthSheriff/benchmarks`
 
 == Local Development
 

@@ -164,7 +164,7 @@ public class InstanceEndpoint {
     public Response getData(@BearerToken BearerTokenResult tokenResult) {
         AccessTokenContent token = tokenResult.getAccessTokenContent()
                 .orElseThrow(() -> new IllegalStateException("Token content missing after successful authorization"));
-        // TokenSheriff-specific API with richer types
+        // Token-Sheriff-specific API with richer types
         String userId = token.getSubject().orElse("unknown");
         OffsetDateTime expiry = token.getExpirationDateTime();
         List<String> scopes = token.getScopes();
