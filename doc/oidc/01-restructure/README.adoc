@@ -33,7 +33,7 @@ The `de.cuioss.sheriff.*` / `sheriff.*` roots stay stable; only the `oauth → t
 | Java packages          | `de.cuioss.sheriff.oauth.*`     | `de.cuioss.sheriff.token.*`
 | Config property prefix | `sheriff.oauth.*`               | `sheriff.token.*`
 | Metrics prefix         | `sheriff.oauth.*`               | `sheriff.token.*`
-| Requirement IDs        | `OAUTH-SHERIFF-N`               | `TOKEN-SHERIFF-N`
+| Requirement IDs        | `OAUTH-SHERIFF-N`               | `VAL-N` (shortened; client capability adds `CLIENT-N` later, see xref:../02-doc-structure/README.adoc[Plan 02])
 | Quarkus feature / class | feature `oauth-sheriff`, `OAuthSheriffProcessor` | feature `token-sheriff`, `TokenSheriffProcessor`
 | SonarCloud project key | `cuioss_OAuth-Sheriff`          | `cuioss_TokenSheriff`
 | GitHub Pages base      | `cuioss.github.io/OAuth-Sheriff` | `cuioss.github.io/TokenSheriff`
@@ -100,7 +100,7 @@ A module's *own* `<groupId>`/`<artifactId>` has no first-class recipe; those ~6 
 *1c — Text surfaces* (`text.FindAndReplace` / `properties.ChangePropertyKey`):
 
 * Config + metric prefixes `sheriff.oauth` → `sheriff.token` (`JwtPropertyKeys.PREFIX`, `MetricIdentifier.PREFIX`, `application*.properties`, tests, docs).
-* Requirement IDs `OAUTH-SHERIFF-N → TOKEN-SHERIFF-N` (xref:../../Requirements.adoc[Requirements] anchors + all references).
+* Requirement IDs `OAUTH-SHERIFF-N → VAL-N` (xref:../../Requirements.adoc[Requirements] anchors + all references).
 * Docs, badges, README image `alt`, GitHub workflows, `.github/project.yml` Sonar key, `cuioss.github.io/OAuth-Sheriff` URLs.
 
 *1d — Gate:* `./mvnw -Ppre-commit clean verify` then `./mvnw clean install` green.
@@ -123,7 +123,7 @@ Run the checklist below.
 
 The ~150-files-per-PR review limit is a *general guideline*, applied where sensible — not a hard gate for this change. Measured reality: this is one mechanical, tool-driven rename touching ~500 files (381 `.java` relocations + poms + ~425 `sheriff.oauth.` config-key files + docs).
 
-* *PR 1 — build-safe textual rename (honors the guideline).* Documentation/prose, requirement IDs `OAUTH-SHERIFF-N → TOKEN-SHERIFF-N`, badges, Sonar key, Pages URLs. No compile impact, genuinely reviewable; ~86 files (split into two if it exceeds 150).
+* *PR 1 — build-safe textual rename (honors the guideline).* Documentation/prose, requirement IDs `OAUTH-SHERIFF-N → VAL-N`, badges, Sonar key, Pages URLs. No compile impact, genuinely reviewable; ~86 files (split into two if it exceeds 150).
 * *PR 2 — atomic mechanical rename (guideline waived).* The OpenRewrite package/type/coordinate transform plus the `sheriff.oauth → sheriff.token` config/metric constants and their test expectations. This is *atomic* — packages, coordinates and config keys must flip together to keep `main` building. Slicing it into ≤150-file pieces would either break build-green-per-PR or leave coexisting `…oauth.*`/`…token.*` roots, adding risk with no review value.
 
 *Why the waiver is the safe choice:* the guideline's intent is reviewable PRs. A 500-file *mechanical, idempotent, build-verified* diff is reviewed by inspecting the OpenRewrite recipe and the verification sweep — not by reading ~500 identical edits. Forcing a split here reduces safety rather than increasing it. (If the reviewer hard-caps file count, land PR 2 with review on the recipe + green CI, or split the package move by sub-package across stacked PRs accepting temporary mixed roots — only if mandated.)
@@ -164,7 +164,7 @@ Publish a stub for *every* old artifact (`-core`, `-quarkus`, `-quarkus-deployme
 * [ ] `grep -rI "de.cuioss.sheriff.oauth"` → 0 (excluding relocation stubs)
 * [ ] `grep -rI "sheriff.oauth."` → 0
 * [ ] `grep -rI "oauth-sheriff"` → 0
-* [ ] `grep -rIo "OAUTH-SHERIFF-[0-9]"` → 0; `TOKEN-SHERIFF-N` count matches the 51 prior IDs
+* [ ] `grep -rIo "OAUTH-SHERIFF-[0-9]"` → 0; `VAL-N` count matches the 51 prior IDs
 * [ ] `./mvnw -Ppre-commit clean verify` and `./mvnw clean install` green
 * [ ] Relocation stubs published for every old artifact; an old-coordinate build prints the relocation warning and resolves
 * [ ] Repo renamed; old GitHub URL redirects; badges, Sonar, Pages, OpenSSF green

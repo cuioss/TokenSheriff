@@ -27,7 +27,7 @@ implementation plans plus the standing design decisions behind them.
   `portal-authentication-oauth`, the real consumer. Cross-repo; no content.
   Runs after Plan 01.
 * xref:05-implement/README.adoc[05 — Implement the Client (protocol by protocol)] -
-  implement the `TOKEN-SHERIFF-CLIENT-N` requirements as vertical
+  implement the `CLIENT-N` requirements as vertical
   protocol-by-protocol increments. Each ships unit tests (MockWebServer, incl.
   adversarial) *and* integration tests against a real Keycloak, ending in the
   portal E2E replacement. After Plans 03 + 04.

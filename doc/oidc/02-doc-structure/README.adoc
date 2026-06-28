@@ -50,7 +50,7 @@ doc/
   LogMessages.adoc                  # GLOBAL log registry — all capabilities, stays at root
   validation/                       # existing capability (relocated)
     architecture.adoc
-    requirements.adoc               # IDs: TOKEN-SHERIFF-N  (per Plan 01)
+    requirements.adoc               # IDs: VAL-N  (per Plan 01)
     threat-model.adoc
     security-reference.adoc
     specification/
@@ -60,7 +60,7 @@ doc/
     faq/keycloak.adoc
   client/                    # NEW capability (added when client work starts)
     architecture.adoc
-    requirements.adoc               # IDs: TOKEN-SHERIFF-CLIENT-N
+    requirements.adoc               # IDs: CLIENT-N
     threat-model.adoc
     specification/
   shared/                           # cross-cutting only, if/when needed
@@ -76,8 +76,10 @@ The `doc/oidc/` planning area (this folder) is transient — it holds the plans,
 
 == Requirement-ID namespacing
 
-* Validation keeps `TOKEN-SHERIFF-N` (after Plan 01's `OAUTH-SHERIFF-N → TOKEN-SHERIFF-N`).
-* Client requirements use `TOKEN-SHERIFF-CLIENT-N` — same project prefix, explicit capability segment, unambiguous and greppable (`TOKEN-SHERIFF-CLIENT-[0-9]`).
+The IDs are short, capability-scoped, and greppable — no shared brand prefix to repeat on every reference.
+
+* Validation uses `VAL-N` (Plan 01 shortens the existing `OAUTH-SHERIFF-N → VAL-N`).
+* Client requirements use `CLIENT-N` — distinct capability namespace, unambiguous and greppable (`VAL-[0-9]` vs `CLIENT-[0-9]`).
 
 == Execution
 
@@ -88,13 +90,13 @@ The `doc/oidc/` planning area (this folder) is transient — it holds the plans,
 . Update the hub `doc/README.adoc` to present capabilities as groups ("Token Validation", later "Client").
 
 === Phase 2 — Scaffold the client capability (when client work starts)
-. Create `doc/client/` with stub `architecture.adoc`, `requirements.adoc` (`TOKEN-SHERIFF-CLIENT-N`), `threat-model.adoc`, `specification/`.
+. Create `doc/client/` with stub `architecture.adoc`, `requirements.adoc` (`CLIENT-N`), `threat-model.adoc`, `specification/`.
 . Add the client module `doc/` dir for usage/config/dev. Client log records are added to the global `doc/LogMessages.adoc` — no separate client registry.
 . Wire both capabilities into the hub.
 
 === Conventions for future client docs
 * Capability-conceptual content → `doc/client/`; module usage/config/dev → the client module's `doc/`.
-* Client requirement IDs → `TOKEN-SHERIFF-CLIENT-N`; client threats live only in the client threat model.
+* Client requirement IDs → `CLIENT-N`; client threats live only in the client threat model.
 * No client content in validation docs, and vice versa.
 
 == Risks & mitigations
@@ -107,7 +109,7 @@ The `doc/oidc/` planning area (this folder) is transient — it holds the plans,
 * [ ] `doc/validation/` holds the relocated conceptual docs; titles rescoped to the capability
 * [ ] Every `xref:`/`link:` to the moved docs resolves (root `README.md`, module docs, cross-doc) — zero broken links
 * [ ] `doc/README.adoc` hub presents capabilities as peer groups
-* [ ] Requirement IDs unchanged in count after the move; client namespace `TOKEN-SHERIFF-CLIENT-N` reserved
+* [ ] Requirement IDs unchanged in count after the move; client namespace `CLIENT-N` reserved
 * [ ] Phase 2 deferred until client work starts (no empty client scaffolding merged early)
 
 == Seed data for planning (discovery 2026-06-24)
