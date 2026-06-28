@@ -155,7 +155,7 @@ doc/client/
 This section is a *design reference only*. The actual replacement of `portal-authentication-oauth` — the portal adapter and its integration tests — is *future work beyond Plans 01–06*; no current plan delivers it. It informs the client spec (a real-world RP that exercises the in-scope flow) and motivates the framework-agnostic engine.
 ====
 
-`cui-portal-core/modules/authentication/portal-authentication-oauth` is an existing confidential server-side OIDC client (CDI + MicroProfile Config + RESTEasy/JAX-RS). It is both a *validation reference* for this spec — a real BFF-style RP that already implements most of the in-scope flow — and a *replacement target*: the Token-Sheriff client engine should supersede it, with a thin portal adapter preserving the portal contract.
+`cui-portal-core/modules/authentication/portal-authentication-oauth` is an existing confidential server-side OIDC client (CDI + MicroProfile Config + RESTEasy/JAX-RS). For this spec it serves only as a *real-world reference* — a BFF-style RP that already implements most of the in-scope flow. It is also the eventual *replacement target*: the Token-Sheriff client engine would, in *future work beyond Plans 01–06*, supersede it via a thin portal adapter preserving the portal contract. Nothing in the current plans touches it.
 
 === What it already does (confirms this plan's scope)
 * Authorization-code + PKCE (*S256* confirmed), `state` CSRF, light `nonce`
@@ -176,7 +176,7 @@ This section is a *design reference only*. The actual replacement of `portal-aut
 * Replace bespoke RESTEasy fetching with xref:../03-commons/README.adoc[commons]'s hardened HTTP + *SSRF* defences.
 
 === Relationship to the other consumer
-`nifi-extensions` consumes the *validation module*; `portal-authentication-oauth` is an *RP* that the Token-Sheriff client module *replaces* (engine swap + portal adapter). It is the concrete reference implementation for this plan's BFF-engine scope.
+`nifi-extensions` consumes the *validation module*; `portal-authentication-oauth` is an *RP* that the Token-Sheriff client module *would eventually replace* (engine swap + portal adapter — future work). It is the concrete reference implementation that grounds this plan's BFF-engine scope.
 
 == Seed: source catalog (research 2026-06-24)
 

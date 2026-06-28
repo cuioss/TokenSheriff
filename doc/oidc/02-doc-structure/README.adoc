@@ -89,7 +89,7 @@ The IDs are capability-scoped, self-documenting, and greppable — no shared bra
 
 * Validation uses `VALIDATION-N` (Plan 01 renames the existing `OAUTH-SHERIFF-N → VALIDATION-N`).
 * Commons uses `COMMONS-N`, grouped by concern — transport / error / events / metrics (xref:../03-commons/README.adoc[Plan 03]).
-* Client requirements use `CLIENT-N` — distinct capability namespace, unambiguous and greppable (`VALIDATION-[0-9]` vs `COMMONS-[0-9]` vs `CLIENT-[0-9]`).
+* Client requirements use `CLIENT-N` — distinct capability namespace, unambiguous and greppable (`VALIDATION-[0-9.]+` vs `COMMONS-[0-9.]+` vs `CLIENT-[0-9.]+`, matching dotted IDs like `VALIDATION-1.3`).
 
 == Cross-cutting realization: the RFC 9457 error model
 
