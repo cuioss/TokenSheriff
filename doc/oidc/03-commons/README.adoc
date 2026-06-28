@@ -99,7 +99,7 @@ Since `commons` adds the *other* IdP endpoints, *extend this same artifact* with
 
 * `TokenDispatcher` — token endpoint: grants, error responses (RFC 6749 §5.2), malformed/oversized bodies.
 * `UserInfoDispatcher` — userinfo: valid, tampered, `sub` mismatch.
-* `RevocationDispatcher` / `IntrospectionDispatcher` — RFC 7009 / 7662.
+* `RevocationDispatcher` / `IntrospectionDispatcher` — token revocation / introspection endpoints (RFC 7009 / 7662).
 * `EndSessionDispatcher` — RP-initiated logout endpoint.
 * `ParDispatcher` — pushed authorization requests (RFC 9126).
 
