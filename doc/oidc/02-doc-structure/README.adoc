@@ -52,6 +52,7 @@ doc/
     architecture.adoc
     requirements.adoc               # IDs: CMN-N (transport / error / events / metrics)
     threat-model.adoc               # SSRF / TLS / response-DoS / error-detail-leakage
+    references.adoc                 # bibliography / shared standards
     specification/
       transport.adoc                # discovery, JWKS, token/userinfo/…; TLS, SSRF
       error-model.adoc              # typed exceptions -> RFC 9457 at every HTTP edge

@@ -63,7 +63,7 @@ The user-facing rule: *MockWebServer proves the mechanics and the attacks; Keycl
 
 | 5 | *`authorization_code` + PKCE (S256)* — BFF flow: `state`/`nonce`/exact redirect-URI, code exchange, ID-token validation; *step-up* (`acr_values`/`max_age` + `insufficient_user_authentication` challenge, RFC 9470)
 | Code injection; PKCE downgrade; `state`/`nonce` mismatch; wrong `iss`; step-up challenge ignored/forged
-| Full login + code exchange via Keycloak; step-up re-auth
+| Full login + code exchange via Keycloak; assert `insufficient_user_authentication`, retry with `acr_values` / `max_age`, and verify resulting `acr` / `auth_time`
 
 | 6 | *Mix-up defence (`iss`, RFC 9207) + PAR (RFC 9126)*
 | `iss` mismatch rejected
@@ -78,10 +78,10 @@ The user-facing rule: *MockWebServer proves the mechanics and the attacks; Keycl
 | DPoP-bound token against Keycloak
 
 | 9 | *Token lifecycle + RP-initiated logout* — server-side storage, refresh scheduling, revocation; `end_session_endpoint` trigger (`id_token_hint`/`post_logout_redirect_uri`/`state`)
-| Lifecycle transitions; storage isolation; logout open-redirect / stale-token
-| Revocation + RP-initiated logout against Keycloak
+| Lifecycle transitions; storage isolation; logout open-redirect via unmatched `post_logout_redirect_uri`, missing `id_token_hint`/`state`, stale token after logout (must be revoked)
+| Revocation + RP-initiated logout against Keycloak (`id_token_hint`, exact-matched `post_logout_redirect_uri`, `state`)
 
-| 10 | *Hardening sweep* — audit the `commons` transport (incl. the relocated `wellknown`/`jwks`) for SSRF/TLS; close `CMN-N` + `CLIENT-N` threat-model gaps
+| 10 | *Hardening sweep* — verify the `commons` transport (incl. the relocated `wellknown`/`jwks`) is in use; close remaining `CLIENT-N` threat-model gaps (transport hardening itself is owned by `CMN-N`, Plan 03)
 | Full attack-database across all fetch/retrieval paths
 | —
 
