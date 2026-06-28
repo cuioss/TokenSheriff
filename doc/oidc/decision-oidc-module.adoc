@@ -40,14 +40,14 @@ Keep everything in **this multi-module repository** (no separate Git project) an
 [source]
 ----
 token-sheriff-validation                 (one artifact, two enforced layers)
-  de.cuioss.sheriff.token.commons.*     base: transport / error / events / metrics   (deps: cui-http only)
+  de.cuioss.sheriff.token.commons.*     base: transport / error / events / metrics   (deps: cui-http, cui-tooling)
         ▲   ArchUnit: commons must NOT depend on …validation..
   de.cuioss.sheriff.token.validation.*  token validation (signatures, claims, pipeline)
         ▲   Maven
 token-sheriff-client                      flows / token acquisition / lifecycle        (deps: validation)
 ----
 
-* **`commons` — a package layer inside `token-sheriff-validation`** (`de.cuioss.sheriff.token.commons.*`): the shared base — *transport* (discovery, JWKS, token, userinfo, revocation, introspection, end-session, PAR; TLS, SSRF defence, resilience, IdP-error normalization), the *error model* (typed exceptions the HTTP edges map to RFC 9457), *security events*, and *metrics*. Depends on `cui-http` only; ArchUnit forbids it depending "up" on `…validation..`.
+* **`commons` — a package layer inside `token-sheriff-validation`** (`de.cuioss.sheriff.token.commons.*`): the shared base — *transport* (discovery, JWKS, token, userinfo, revocation, introspection, end-session, PAR; TLS, SSRF defence, resilience, IdP-error normalization), the *error model* (typed exceptions the HTTP edges map to RFC 9457), *security events*, and *metrics*. Depends on `cui-http` and `cui-tooling` only; ArchUnit forbids it depending "up" on `…validation..`.
 * **`token-sheriff-validation`** — the artifact; ships the `commons` base packages + the validation packages. Today's `wellknown`/`jwks.http`/`SecurityEventCounter`/metric identifiers are re-packaged into the `commons` layer (xref:03-commons/README.adoc[Plan 03]).
 * **`token-sheriff-client`** — a *separate* module/artifact: flows / token acquisition / lifecycle. Depends on `validation` (which transitively provides the `commons` base).
 

@@ -32,15 +32,15 @@ Gathering these into one *enforced layer* gives a single place to specify and ha
 [source]
 ----
 token-sheriff-validation                  (one artifact)
-  de.cuioss.sheriff.token.commons.        base layer — deps: cui-http only
+  de.cuioss.sheriff.token.commons.        base layer — deps: cui-http, cui-tooling
     transport/  error/  events/  metrics/
-        ▲   ArchUnit: commons must NOT depend on …validation.. / …client..
+        ▲   ArchUnit: commons must NOT depend on …validation..
   de.cuioss.sheriff.token.validation.     token validation (signatures, claims, pipeline)
         ▲   Maven
 token-sheriff-client                       separate module → deps: token-sheriff-validation
 ----
 
-* `commons` is the package root `de.cuioss.sheriff.token.commons` (sub-packages `transport`/`error`/`events`/`metrics`), shipped in the `token-sheriff-validation` artifact, depending on `cui-http` only.
+* `commons` is the package root `de.cuioss.sheriff.token.commons` (sub-packages `transport`/`error`/`events`/`metrics`), shipped in the `token-sheriff-validation` artifact, depending on `cui-http` and `cui-tooling` only.
 * `token-sheriff-validation` may depend on `commons`; `token-sheriff-client` (a separate module) depends on `token-sheriff-validation`.
 * The layering is enforced by *ArchUnit* (within the validation module) and by *Maven* (the client boundary) — see <<archunit>>.
 
@@ -84,7 +84,7 @@ This plan moves existing code *within* `token-sheriff-validation` — no new mod
 
 Layer rules live in `token-sheriff-validation`'s test sources:
 
-* `…commons..` may depend on: the JDK, `cui-http`, `cui-tooling` — and *not* on `…validation..` or `…client..`.
+* `…commons..` may depend on: the JDK, `cui-http`, `cui-tooling` — and *not* on `…validation..`. (No `…client..` rule is needed: `client` is a separate module that depends on `validation`, so Maven already prevents validation/commons code from referencing it.)
 * `…validation..` may depend on `…commons..`.
 * No package cycles across the `commons`/`validation` boundary.
 * The client boundary (`client → validation`, never the reverse) is enforced by *Maven* once the client module exists (xref:../05-client-module/README.adoc[Plan 05]).
@@ -145,8 +145,8 @@ Requirement IDs use `CMN-N` (per xref:../02-doc-structure/README.adoc[Plan 02]),
 
 == Verification
 
-* [ ] `de.cuioss.sheriff.token.commons.*` packages exist in `token-sheriff-validation`, depend only on `cui-http`; *no new artifact*
-* [ ] ArchUnit rules pass: `commons` never depends on `…validation..`/`…client..`; no cross-boundary cycles
+* [ ] `de.cuioss.sheriff.token.commons.*` packages exist in `token-sheriff-validation`, depend only on `cui-http` + `cui-tooling`; *no new artifact*
+* [ ] ArchUnit rules pass: `commons` never depends on `…validation..`; no cross-boundary cycles
 * [ ] `wellknown` + `jwks.http` + `SecurityEventCounter` + metric identifiers re-packaged into `commons`; no functional change for `nifi-extensions` (or the break is in the migration guide)
 * [ ] Libraries throw typed exceptions only; **every HTTP edge — validation-quarkus, client-quarkus, the portal RESTEasy adapter — emits `application/problem+json` (RFC 9457)**, existing validation errors included
 * [ ] Every `CMN-N` requirement and threat entry cites a source; SSRF/TLS/DoS covered for all relocated + new endpoints
