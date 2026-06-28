@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>de.cuioss.sheriff.oauth</groupId>
+        <groupId>de.cuioss.sheriff.token</groupId>
         <artifactId>benchmarking</artifactId>
         <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
@@ -10,17 +10,17 @@
 
     <artifactId>benchmark-core</artifactId>
     <packaging>jar</packaging>
-    <name>OAuth Sheriff Benchmark Core</name>
+    <name>Token-Sheriff Benchmark Core</name>
     <description>Benchmarking module for OAuth/JWT token validation</description>
 
     <properties>
-        <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.oauth.benchmark.core</maven.jar.plugin.automatic.module.name>
+        <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.token.benchmark.core</maven.jar.plugin.automatic.module.name>
 
         <!-- Default benchmark runner -->
-        <benchmark.runner>de.cuioss.sheriff.oauth.core.benchmark.CoreBenchmarkRunner</benchmark.runner>
+        <benchmark.runner>de.cuioss.sheriff.token.validation.benchmark.CoreBenchmarkRunner</benchmark.runner>
 
         <!-- JMH Configuration Properties - Optimized for fast execution (<10 minutes) -->
-        <jmh.include>de\.cuioss\.sheriff\.oauth\.core\.benchmark\.standard\..*</jmh.include>
+        <jmh.include>de\.cuioss\.sheriff\.token\.validation\.benchmark\.standard\..*</jmh.include>
         <jmh.result.format>JSON</jmh.result.format>
         <jmh.result.filePrefix>target/benchmark-results/micro-result</jmh.result.filePrefix>
         <jmh.iterations>5</jmh.iterations>
@@ -37,15 +37,15 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>de.cuioss.sheriff.oauth</groupId>
-                <artifactId>oauth-sheriff-bom</artifactId>
+                <groupId>de.cuioss.sheriff.token</groupId>
+                <artifactId>token-sheriff-bom</artifactId>
                 <version>${project.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
             <dependency>
-                <groupId>de.cuioss.sheriff.oauth</groupId>
-                <artifactId>oauth-sheriff-core</artifactId>
+                <groupId>de.cuioss.sheriff.token</groupId>
+                <artifactId>token-sheriff-validation</artifactId>
                 <version>${project.version}</version>
                 <classifier>generators</classifier>
             </dependency>
@@ -55,19 +55,19 @@
     <dependencies>
         <!-- Internal module dependencies -->
         <dependency>
-            <groupId>de.cuioss.sheriff.oauth</groupId>
-            <artifactId>oauth-sheriff-core</artifactId>
+            <groupId>de.cuioss.sheriff.token</groupId>
+            <artifactId>token-sheriff-validation</artifactId>
         </dependency>
         <dependency>
-            <groupId>de.cuioss.sheriff.oauth</groupId>
+            <groupId>de.cuioss.sheriff.token</groupId>
             <artifactId>benchmarking-common</artifactId>
             <version>${project.version}</version>
         </dependency>
 
         <!-- Test dependencies from validation module -->
         <dependency>
-            <groupId>de.cuioss.sheriff.oauth</groupId>
-            <artifactId>oauth-sheriff-core</artifactId>
+            <groupId>de.cuioss.sheriff.token</groupId>
+            <artifactId>token-sheriff-validation</artifactId>
             <version>${project.version}</version>
             <classifier>generators</classifier>
             <scope>compile</scope>
@@ -259,7 +259,7 @@
             <id>benchmark-jfr</id>
             <properties>
                 <skip.benchmark>false</skip.benchmark>
-                <benchmark.runner>de.cuioss.sheriff.oauth.core.benchmark.JfrBenchmarkRunner</benchmark.runner>
+                <benchmark.runner>de.cuioss.sheriff.token.validation.benchmark.JfrBenchmarkRunner</benchmark.runner>
             </properties>
         </profile>
 
@@ -298,7 +298,7 @@
             <id>benchmark-concurrency-sweep</id>
             <properties>
                 <skip.benchmark>false</skip.benchmark>
-                <benchmark.runner>de.cuioss.sheriff.oauth.core.benchmark.ConcurrencySweepRunner</benchmark.runner>
+                <benchmark.runner>de.cuioss.sheriff.token.validation.benchmark.ConcurrencySweepRunner</benchmark.runner>
             </properties>
         </profile>
 

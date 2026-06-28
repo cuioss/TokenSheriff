@@ -188,7 +188,7 @@ Runs JFR-instrumented benchmarks with flight recording enabled.
 **Configuration:**
 
 * Activates benchmarks (`skip.benchmark=false`)
-* Sets benchmark runner to `de.cuioss.sheriff.oauth.core.benchmark.JfrBenchmarkRunner`
+* Sets benchmark runner to `de.cuioss.sheriff.token.validation.benchmark.JfrBenchmarkRunner`
 * Adds JVM arguments for JFR recording
 
 **Default JFR settings** (from JfrBenchmarkRunner):

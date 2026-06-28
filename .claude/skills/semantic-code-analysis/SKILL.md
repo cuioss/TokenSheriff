@@ -12,7 +12,7 @@ This goes beyond what automated tools (SpotBugs, PMD, CPD, SonarQube) catch. Tho
 
 ## Parameters
 
-- `scope`: What to analyze. One of `all` (default), a module path (e.g., `oauth-sheriff-core`), or a package path.
+- `scope`: What to analyze. One of `all` (default), a module path (e.g., `token-sheriff-validation`), or a package path.
 - `maturity`: Project maturity context. One of `pre-1.0` (default, breaking changes are free), `stable` (breaking changes need deprecation), `frozen` (API locked, document only).
 - `output`: Output file path (default: `doc/code-findings.adoc`).
 - `include-tests`: Whether to analyze test code for duplication. One of `true`, `false` (default).

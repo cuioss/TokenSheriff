@@ -17,15 +17,15 @@ jobs:
     with:
       report-name: e-2-e-playwright
       maven-args-input: |
-        install -DskipTests -T 1C -pl bom,oauth-sheriff-core,oauth-sheriff-quarkus-parent,oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus,oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-deployment,oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests
-        verify -Pe2e-tests -pl oauth-sheriff-quarkus-parent/e-2-e-playwright
+        install -DskipTests -T 1C -am -pl bom,token-sheriff-validation,token-sheriff-quarkus-parent,token-sheriff-quarkus-parent/token-sheriff-validation-quarkus,token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment,token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
+        verify -Pe2e-tests -pl token-sheriff-quarkus-parent/e-2-e-playwright
       install-playwright: true
       npm-cache: true
       timeout-minutes: 30
       reports-folder: |
-        oauth-sheriff-quarkus-parent/e-2-e-playwright/target/test-results
+        token-sheriff-quarkus-parent/e-2-e-playwright/target/test-results
       report-logs: |
-        oauth-sheriff-quarkus-parent/e-2-e-playwright/target/quarkus-dev.log
+        token-sheriff-quarkus-parent/e-2-e-playwright/target/quarkus-dev.log
     secrets:
       RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
       RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}

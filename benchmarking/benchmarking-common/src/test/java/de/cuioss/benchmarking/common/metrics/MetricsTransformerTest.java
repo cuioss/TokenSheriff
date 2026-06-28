@@ -41,13 +41,13 @@ class MetricsTransformerTest {
         assertNotNull(result);
         assertTrue(result.containsKey("timestamp"));
         assertTrue(result.containsKey("system"));
-        assertTrue(result.containsKey("sheriff_oauth_validation_success_operations_total"));
-        assertTrue(result.containsKey("sheriff_oauth_validation_errors"));
+        assertTrue(result.containsKey("sheriff_token_validation_success_operations_total"));
+        assertTrue(result.containsKey("sheriff_token_validation_errors"));
 
         // All sections should exist but be empty
         assertTrue(((Map<?, ?>) result.get("system")).isEmpty());
-        assertTrue(((Map<?, ?>) result.get("sheriff_oauth_validation_success_operations_total")).isEmpty());
-        assertTrue(((Map<?, ?>) result.get("sheriff_oauth_validation_errors")).isEmpty());
+        assertTrue(((Map<?, ?>) result.get("sheriff_token_validation_success_operations_total")).isEmpty());
+        assertTrue(((Map<?, ?>) result.get("sheriff_token_validation_errors")).isEmpty());
     }
 
     @Test
@@ -74,11 +74,11 @@ class MetricsTransformerTest {
 
     @Test
     void shouldTransformJwtSuccessMetrics() {
-        testMetrics.put("sheriff_oauth_validation_success_operations_total{event_type=\"ACCESS_TOKEN_CREATED\"}", 500.0);
-        testMetrics.put("sheriff_oauth_validation_success_operations_total{event_type=\"ID_TOKEN_CREATED\"}", 300.0);
+        testMetrics.put("sheriff_token_validation_success_operations_total{event_type=\"ACCESS_TOKEN_CREATED\"}", 500.0);
+        testMetrics.put("sheriff_token_validation_success_operations_total{event_type=\"ID_TOKEN_CREATED\"}", 300.0);
 
         Map<String, Object> result = transformer.transformToQuarkusRuntimeMetrics(testMetrics);
-        Map<String, Object> successOps = (Map<String, Object>) result.get("sheriff_oauth_validation_success_operations_total");
+        Map<String, Object> successOps = (Map<String, Object>) result.get("sheriff_token_validation_success_operations_total");
 
         assertEquals(500L, successOps.get("ACCESS_TOKEN_CREATED"));
         assertEquals(300L, successOps.get("ID_TOKEN_CREATED"));
@@ -86,11 +86,11 @@ class MetricsTransformerTest {
 
     @Test
     void shouldTransformJwtErrorMetrics() {
-        testMetrics.put("sheriff_oauth_validation_errors_total{category=\"INVALID_SIGNATURE\",event_type=\"KEY_NOT_FOUND\"}", 10.0);
-        testMetrics.put("sheriff_oauth_validation_errors_total{category=\"SEMANTIC_ISSUES\",event_type=\"TOKEN_EXPIRED\"}", 5.0);
+        testMetrics.put("sheriff_token_validation_errors_total{category=\"INVALID_SIGNATURE\",event_type=\"KEY_NOT_FOUND\"}", 10.0);
+        testMetrics.put("sheriff_token_validation_errors_total{category=\"SEMANTIC_ISSUES\",event_type=\"TOKEN_EXPIRED\"}", 5.0);
 
         Map<String, Object> result = transformer.transformToQuarkusRuntimeMetrics(testMetrics);
-        Map<String, Object> errors = (Map<String, Object>) result.get("sheriff_oauth_validation_errors");
+        Map<String, Object> errors = (Map<String, Object>) result.get("sheriff_token_validation_errors");
 
         Map<String, Object> sigError = (Map<String, Object>) errors.get("INVALID_SIGNATURE_KEY_NOT_FOUND");
         assertNotNull(sigError);
@@ -107,12 +107,12 @@ class MetricsTransformerTest {
 
     @Test
     void shouldIgnoreZeroValues() {
-        testMetrics.put("sheriff_oauth_validation_success_operations_total{event_type=\"ACCESS_TOKEN_CREATED\"}", 0.0);
+        testMetrics.put("sheriff_token_validation_success_operations_total{event_type=\"ACCESS_TOKEN_CREATED\"}", 0.0);
         testMetrics.put("jvm_memory_used_bytes{area=\"heap\"}", 0.0);
 
         Map<String, Object> result = transformer.transformToQuarkusRuntimeMetrics(testMetrics);
 
-        Map<String, Object> successOps = (Map<String, Object>) result.get("sheriff_oauth_validation_success_operations_total");
+        Map<String, Object> successOps = (Map<String, Object>) result.get("sheriff_token_validation_success_operations_total");
         assertFalse(successOps.containsKey("ACCESS_TOKEN_CREATED"), "Should not include zero-value success operations");
 
         Map<String, Object> system = (Map<String, Object>) result.get("system");
@@ -128,8 +128,8 @@ class MetricsTransformerTest {
         testMetrics.put("jdk_threads_peak_threads", 86.0);
         testMetrics.put("jvm_memory_used_bytes{area=\"heap\",id=\"G1 Eden Space\"}", 30_000_000.0);
         testMetrics.put("jvm_memory_used_bytes{area=\"heap\",id=\"G1 Old Gen\"}", 20_000_000.0);
-        testMetrics.put("sheriff_oauth_validation_success_operations_total{event_type=\"ACCESS_TOKEN_CREATED\",result=\"success\"}", 3584040.0);
-        testMetrics.put("sheriff_oauth_validation_errors_total{category=\"INVALID_SIGNATURE\",event_type=\"KEY_NOT_FOUND\"}", 279132.0);
+        testMetrics.put("sheriff_token_validation_success_operations_total{event_type=\"ACCESS_TOKEN_CREATED\",result=\"success\"}", 3584040.0);
+        testMetrics.put("sheriff_token_validation_errors_total{category=\"INVALID_SIGNATURE\",event_type=\"KEY_NOT_FOUND\"}", 279132.0);
 
         Map<String, Object> result = transformer.transformToQuarkusRuntimeMetrics(testMetrics);
 
@@ -145,11 +145,11 @@ class MetricsTransformerTest {
         assertEquals(47L, system.get("memory_heap_used_mb"));  // ~47MB total heap
 
         // Verify JWT success metrics
-        Map<String, Object> successOps = (Map<String, Object>) result.get("sheriff_oauth_validation_success_operations_total");
+        Map<String, Object> successOps = (Map<String, Object>) result.get("sheriff_token_validation_success_operations_total");
         assertEquals(3584040L, successOps.get("ACCESS_TOKEN_CREATED"));
 
         // Verify JWT error metrics
-        Map<String, Object> errors = (Map<String, Object>) result.get("sheriff_oauth_validation_errors");
+        Map<String, Object> errors = (Map<String, Object>) result.get("sheriff_token_validation_errors");
         Map<String, Object> keyNotFoundError = (Map<String, Object>) errors.get("INVALID_SIGNATURE_KEY_NOT_FOUND");
         assertEquals(279132L, keyNotFoundError.get("count"));
     }

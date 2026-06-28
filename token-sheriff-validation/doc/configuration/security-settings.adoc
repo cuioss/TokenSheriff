@@ -1,0 +1,121 @@
+= Security Configuration
+:toc: left
+:toclevels: 3
+:source-highlighter: highlight.js
+:toc-title: Table of Contents
+:sectnums:
+
+
+The `ParserConfig` class provides security settings for token processing, implementing defense-in-depth against various attack vectors.
+
+== Configuration Example
+
+[source,java]
+----
+ParserConfig config = ParserConfig.builder()
+        .maxTokenSize(4 * 1024)        // 4KB (default 8KB)
+        .maxPayloadSize(4 * 1024)      // 4KB (default 8KB)
+        .maxStringLength(2 * 1024)     // 2KB (default 4KB)
+        .build();
+
+TokenValidator validator = TokenValidator.builder()
+        .parserConfig(config)
+        .issuerConfig(issuerConfig)
+        .build();
+----
+
+== Security Layers
+
+[cols="1,3,1,3"]
+|===
+|Setting |Purpose |Default |Applied When
+
+|`maxTokenSize`
+|Limits entire JWT token string
+|8KB
+|Before any processing
+
+|`maxPayloadSize`
+|Limits each decoded JWT part
+|8KB
+|After Base64 decoding
+
+|`maxStringLength`
+|DSL-JSON enforced limit on maximum string buffer size
+|4KB
+|During JSON parsing
+
+|===
+
+Base64 encoding increases size by ~33%: an 8KB token yields ~6KB decoded content. The 8KB per-part limit accommodates header + payload; the 4KB string limit prevents individual field attacks.
+
+== Recommended Settings
+
+=== High Security Environment
+
+[source,java]
+----
+ParserConfig highSecurity = ParserConfig.builder()
+        .maxTokenSize(2 * 1024)      // 2KB tokens
+        .maxPayloadSize(2 * 1024)    // 2KB payloads
+        .maxStringLength(1 * 1024)   // 1KB strings
+        .build();
+----
+
+=== Standard Environment
+
+[source,java]
+----
+ParserConfig standard = ParserConfig.builder()
+        // Use defaults: 8KB token, 8KB payload, 4KB strings
+        .build();
+----
+
+== Token Type Validation (RFC 9068)
+
+By default, no token type (`typ` header) validation is performed. This is a deliberate design decision:
+
+* RFC 9068 Section 2.1 requires `typ: at+jwt` for JWT access tokens
+* Validating this prevents **token type confusion attacks** (e.g., substituting an ID token for an access token)
+* However, most major IdPs do **not** set `typ: at+jwt`:
+** **Keycloak** sets `typ: JWT`
+** **Zitadel** sets `typ: JWT` or omits it
+** **Dex** omits the `typ` header entirely
+** **Azure AD B2C** uses proprietary `typ` values
+
+Defaulting to `"at+jwt"` would break nearly every real-world deployment. Defaulting to `"JWT"` would accept any JWT type, providing no security benefit against type confusion.
+
+=== Enabling Token Type Validation
+
+If your IdP issues RFC 9068-compliant tokens, enable validation per-issuer:
+
+[source,java]
+----
+IssuerConfig.builder()
+    .issuerIdentifier("https://rfc9068-compliant.example.com")
+    .expectedTokenType("at+jwt")  // Reject tokens without typ: at+jwt
+    // ...
+    .build();
+----
+
+Quarkus configuration:
+
+[source,properties]
+----
+sheriff.token.issuers.myissuer.expected-token-type=at+jwt
+----
+
+=== Recommendation
+
+Verify your IdP's actual token `typ` header value before enabling. Decode a token from your IdP and inspect the header:
+
+[source,bash]
+----
+echo '<jwt-header-part>' | base64 -d | jq .typ
+----
+
+If it returns `"at+jwt"`, you can safely enable validation.
+
+== Monitoring and Tuning
+
+When tokens are rejected due to size limits, the library logs detailed error messages indicating which limit was exceeded. Start with defaults, monitor for size-related validation errors, then adjust based on actual token characteristics.

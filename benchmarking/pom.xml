@@ -2,15 +2,15 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>de.cuioss.sheriff.oauth</groupId>
-        <artifactId>oauth-sheriff-parent</artifactId>
+        <groupId>de.cuioss.sheriff.token</groupId>
+        <artifactId>token-sheriff-parent</artifactId>
         <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>benchmarking</artifactId>
     <packaging>pom</packaging>
-    <name>OAuth Sheriff Benchmarking Parent</name>
+    <name>Token-Sheriff Benchmarking Parent</name>
     <description>Parent module for all benchmarking related modules including library and integration benchmarks</description>
 
     <modules>
@@ -20,7 +20,7 @@
     </modules>
 
     <properties>
-        <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.oauth.benchmarking</maven.jar.plugin.automatic.module.name>
+        <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.token.benchmarking</maven.jar.plugin.automatic.module.name>
         <!-- JMH version for benchmarking -->
         <version.jmh>1.37</version.jmh>
         <!-- External dependency versions -->
@@ -64,8 +64,8 @@
                 <version>${version.commons-io}</version>
             </dependency>
                 <dependency>
-                    <groupId>de.cuioss.sheriff.oauth</groupId>
-                    <artifactId>oauth-sheriff-bom</artifactId>
+                    <groupId>de.cuioss.sheriff.token</groupId>
+                    <artifactId>token-sheriff-bom</artifactId>
                     <version>${project.version}</version>
                     <type>pom</type>
                     <scope>import</scope>

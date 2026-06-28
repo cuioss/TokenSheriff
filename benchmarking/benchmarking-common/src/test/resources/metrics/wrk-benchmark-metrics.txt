@@ -40,45 +40,45 @@ jvm_threads_peak_threads 86.0
 # HELP jdk_threads_peak_threads JDK peak threads
 # TYPE jdk_threads_peak_threads gauge
 jdk_threads_peak_threads 86.0
-# HELP sheriff_oauth_validation_success_operations_total JWT validation success
-# TYPE sheriff_oauth_validation_success_operations_total counter
-sheriff_oauth_validation_success_operations_total{event_type="ACCESS_TOKEN_CREATED",result="success"} 10960018.0
-sheriff_oauth_validation_success_operations_total{event_type="ID_TOKEN_CREATED",result="success"} 5480009.0
-sheriff_oauth_validation_success_operations_total{event_type="REFRESH_TOKEN_CREATED",result="success"} 2740004.0
-sheriff_oauth_validation_success_operations_total{event_type="ACCESS_TOKEN_VALIDATED",result="success"} 10960018.0
-sheriff_oauth_validation_success_operations_total{event_type="ID_TOKEN_VALIDATED",result="success"} 5480009.0
-sheriff_oauth_validation_success_operations_total{event_type="TOKEN_CACHED",result="success"} 1000000.0
-sheriff_oauth_validation_success_operations_total{event_type="TOKEN_REFRESHED",result="success"} 500000.0
-sheriff_oauth_validation_success_operations_total{event_type="TOKEN_INTROSPECTED",result="success"} 250000.0
-# HELP sheriff_oauth_validation_errors_total JWT validation errors
-# TYPE sheriff_oauth_validation_errors_total counter
-sheriff_oauth_validation_errors_total{category="INVALID_STRUCTURE",event_type="FAILED_TO_DECODE_HEADER",result="failure"} 0.0
-sheriff_oauth_validation_errors_total{category="INVALID_SIGNATURE",event_type="KEY_NOT_FOUND",result="failure"} 10.0
-sheriff_oauth_validation_errors_total{category="INVALID_SIGNATURE",event_type="SIGNATURE_MISMATCH",result="failure"} 5.0
-sheriff_oauth_validation_errors_total{category="SEMANTIC_ISSUES",event_type="TOKEN_EXPIRED",result="failure"} 100.0
-sheriff_oauth_validation_errors_total{category="SEMANTIC_ISSUES",event_type="TOKEN_NOT_YET_VALID",result="failure"} 2.0
-sheriff_oauth_validation_errors_total{category="SEMANTIC_ISSUES",event_type="INVALID_ISSUER",result="failure"} 3.0
-sheriff_oauth_validation_errors_total{category="SEMANTIC_ISSUES",event_type="INVALID_AUDIENCE",result="failure"} 1.0
-sheriff_oauth_validation_errors_total{category="INVALID_STRUCTURE",event_type="MALFORMED_JWT",result="failure"} 20.0
-sheriff_oauth_validation_errors_total{category="INVALID_STRUCTURE",event_type="MISSING_CLAIMS",result="failure"} 15.0
-# HELP sheriff_oauth_bearer_token_validation_seconds_count JWT bearer token validation count
-# TYPE sheriff_oauth_bearer_token_validation_seconds_count counter
-sheriff_oauth_bearer_token_validation_seconds_count{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="none",method="getBearerTokenResult"} 10960018.0
-sheriff_oauth_bearer_token_validation_seconds_count{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="ExpiredJwtException",method="getBearerTokenResult"} 100.0
-sheriff_oauth_bearer_token_validation_seconds_count{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="SignatureException",method="getBearerTokenResult"} 15.0
-sheriff_oauth_bearer_token_validation_seconds_count{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="MalformedJwtException",method="getBearerTokenResult"} 20.0
-# HELP sheriff_oauth_bearer_token_validation_seconds_sum JWT bearer token validation sum
-# TYPE sheriff_oauth_bearer_token_validation_seconds_sum counter
-sheriff_oauth_bearer_token_validation_seconds_sum{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="none",method="getBearerTokenResult"} 50.5
-sheriff_oauth_bearer_token_validation_seconds_sum{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="ExpiredJwtException",method="getBearerTokenResult"} 0.5
-sheriff_oauth_bearer_token_validation_seconds_sum{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="SignatureException",method="getBearerTokenResult"} 0.08
-sheriff_oauth_bearer_token_validation_seconds_sum{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="MalformedJwtException",method="getBearerTokenResult"} 0.1
-# HELP sheriff_oauth_bearer_token_validation_seconds_max JWT bearer token validation max
-# TYPE sheriff_oauth_bearer_token_validation_seconds_max gauge
-sheriff_oauth_bearer_token_validation_seconds_max{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="none",method="getBearerTokenResult"} 0.05
-sheriff_oauth_bearer_token_validation_seconds_max{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="ExpiredJwtException",method="getBearerTokenResult"} 0.01
-sheriff_oauth_bearer_token_validation_seconds_max{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="SignatureException",method="getBearerTokenResult"} 0.008
-sheriff_oauth_bearer_token_validation_seconds_max{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="MalformedJwtException",method="getBearerTokenResult"} 0.01
+# HELP sheriff_token_validation_success_operations_total JWT validation success
+# TYPE sheriff_token_validation_success_operations_total counter
+sheriff_token_validation_success_operations_total{event_type="ACCESS_TOKEN_CREATED",result="success"} 10960018.0
+sheriff_token_validation_success_operations_total{event_type="ID_TOKEN_CREATED",result="success"} 5480009.0
+sheriff_token_validation_success_operations_total{event_type="REFRESH_TOKEN_CREATED",result="success"} 2740004.0
+sheriff_token_validation_success_operations_total{event_type="ACCESS_TOKEN_VALIDATED",result="success"} 10960018.0
+sheriff_token_validation_success_operations_total{event_type="ID_TOKEN_VALIDATED",result="success"} 5480009.0
+sheriff_token_validation_success_operations_total{event_type="TOKEN_CACHED",result="success"} 1000000.0
+sheriff_token_validation_success_operations_total{event_type="TOKEN_REFRESHED",result="success"} 500000.0
+sheriff_token_validation_success_operations_total{event_type="TOKEN_INTROSPECTED",result="success"} 250000.0
+# HELP sheriff_token_validation_errors_total JWT validation errors
+# TYPE sheriff_token_validation_errors_total counter
+sheriff_token_validation_errors_total{category="INVALID_STRUCTURE",event_type="FAILED_TO_DECODE_HEADER",result="failure"} 0.0
+sheriff_token_validation_errors_total{category="INVALID_SIGNATURE",event_type="KEY_NOT_FOUND",result="failure"} 10.0
+sheriff_token_validation_errors_total{category="INVALID_SIGNATURE",event_type="SIGNATURE_MISMATCH",result="failure"} 5.0
+sheriff_token_validation_errors_total{category="SEMANTIC_ISSUES",event_type="TOKEN_EXPIRED",result="failure"} 100.0
+sheriff_token_validation_errors_total{category="SEMANTIC_ISSUES",event_type="TOKEN_NOT_YET_VALID",result="failure"} 2.0
+sheriff_token_validation_errors_total{category="SEMANTIC_ISSUES",event_type="INVALID_ISSUER",result="failure"} 3.0
+sheriff_token_validation_errors_total{category="SEMANTIC_ISSUES",event_type="INVALID_AUDIENCE",result="failure"} 1.0
+sheriff_token_validation_errors_total{category="INVALID_STRUCTURE",event_type="MALFORMED_JWT",result="failure"} 20.0
+sheriff_token_validation_errors_total{category="INVALID_STRUCTURE",event_type="MISSING_CLAIMS",result="failure"} 15.0
+# HELP sheriff_token_bearer_token_validation_seconds_count JWT bearer token validation count
+# TYPE sheriff_token_bearer_token_validation_seconds_count counter
+sheriff_token_bearer_token_validation_seconds_count{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="none",method="getBearerTokenResult"} 10960018.0
+sheriff_token_bearer_token_validation_seconds_count{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="ExpiredJwtException",method="getBearerTokenResult"} 100.0
+sheriff_token_bearer_token_validation_seconds_count{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="SignatureException",method="getBearerTokenResult"} 15.0
+sheriff_token_bearer_token_validation_seconds_count{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="MalformedJwtException",method="getBearerTokenResult"} 20.0
+# HELP sheriff_token_bearer_token_validation_seconds_sum JWT bearer token validation sum
+# TYPE sheriff_token_bearer_token_validation_seconds_sum counter
+sheriff_token_bearer_token_validation_seconds_sum{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="none",method="getBearerTokenResult"} 50.5
+sheriff_token_bearer_token_validation_seconds_sum{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="ExpiredJwtException",method="getBearerTokenResult"} 0.5
+sheriff_token_bearer_token_validation_seconds_sum{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="SignatureException",method="getBearerTokenResult"} 0.08
+sheriff_token_bearer_token_validation_seconds_sum{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="MalformedJwtException",method="getBearerTokenResult"} 0.1
+# HELP sheriff_token_bearer_token_validation_seconds_max JWT bearer token validation max
+# TYPE sheriff_token_bearer_token_validation_seconds_max gauge
+sheriff_token_bearer_token_validation_seconds_max{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="none",method="getBearerTokenResult"} 0.05
+sheriff_token_bearer_token_validation_seconds_max{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="ExpiredJwtException",method="getBearerTokenResult"} 0.01
+sheriff_token_bearer_token_validation_seconds_max{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="SignatureException",method="getBearerTokenResult"} 0.008
+sheriff_token_bearer_token_validation_seconds_max{class="de.cuioss.jwt.quarkus.producer.BearerTokenProducer",exception="MalformedJwtException",method="getBearerTokenResult"} 0.01
 # HELP system_cpu_count System CPU count
 # TYPE system_cpu_count gauge
 system_cpu_count 4.0

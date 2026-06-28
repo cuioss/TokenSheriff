@@ -7,11 +7,11 @@
         <version>1.4.5</version>
         <relativePath />
     </parent>
-    <groupId>de.cuioss.sheriff.oauth</groupId>
-    <artifactId>oauth-sheriff-parent</artifactId>
+    <groupId>de.cuioss.sheriff.token</groupId>
+    <artifactId>token-sheriff-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>OAuth Sheriff Parent</name>
+    <name>Token-Sheriff Parent</name>
     <description>A comprehensive framework for validating OAuth/JWT tokens in multi-issuer environments.
         The module provides robust token parsing, validation, and management capabilities
         with a focus on security and ease of use, leveraging standard JDK cryptographic providers.
@@ -20,8 +20,8 @@
     <url>https://github.com/cuioss/OAuthSheriff/</url>
     <modules>
         <module>bom</module>
-        <module>oauth-sheriff-core</module>
-        <module>oauth-sheriff-quarkus-parent</module>
+        <module>token-sheriff-validation</module>
+        <module>token-sheriff-quarkus-parent</module>
         <module>benchmarking</module>
     </modules>
     <scm>

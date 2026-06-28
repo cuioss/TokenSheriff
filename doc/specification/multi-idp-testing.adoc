@@ -98,7 +98,7 @@ No change to existing workflow:
 [source,bash]
 ----
 ./mvnw clean verify -Pintegration-tests \
-    -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
+    -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
 ----
 
 Dex is not in the provider list — only Keycloak tests run.
@@ -108,7 +108,7 @@ Dex is not in the provider list — only Keycloak tests run.
 [source,bash]
 ----
 ./mvnw clean verify -Pmulti-idp-tests \
-    -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
+    -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
 ----
 
 This starts Keycloak, Dex, and Zitadel (with PostgreSQL), sets `QUARKUS_PROFILE=multi-idp` on the app container and `-Ddex.enabled=true -Dzitadel.enabled=true` in the test JVM. All providers are included in the provider list and run through applicable specs based on their capabilities.
@@ -294,7 +294,7 @@ Credentials are written to `target/zitadel-credentials.properties`, consumed by 
 
 == References
 
-* xref:../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/README.adoc[Integration Tests README]
+* xref:../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/README.adoc[Integration Tests README]
 * xref:../Requirements.adoc#VALIDATION-12.3[VALIDATION-12.3: Integration Testing]
 * https://dexidp.io/docs/[Dex Documentation]
 * https://zitadel.com/docs[Zitadel Documentation]

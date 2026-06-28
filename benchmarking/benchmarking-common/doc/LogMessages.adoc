@@ -74,7 +74,7 @@ All messages follow the format: `Benchmarking-[identifier]: [message]`
 | 049 | JFR_BENCHMARKS_STARTING | JFR-instrumented benchmarks starting - Key cache initialized
 | 050 | JFR_RECORDING_PATH | JFR recording will be saved to: %s
 | 051 | JFR_BENCHMARK_COMPLETED | JFR benchmark completed. To analyze variance:
-| 052 | JFR_VARIANCE_COMMAND | java -cp "target/classes:target/dependency/*" de.cuioss.sheriff.oauth.core.benchmark.jfr.JfrVarianceAnalyzer %s
+| 052 | JFR_VARIANCE_COMMAND | java -cp "target/classes:target/dependency/*" de.cuioss.sheriff.token.validation.benchmark.jfr.JfrVarianceAnalyzer %s
 | 053 | ITERATION_WINDOWS_PARSED | Parsed %s iteration windows from %s
 | 054 | USING_PRECISE_TIMESTAMPS | Using precise timestamps for benchmark '%s': %s to %s
 | 055 | BENCHMARK_RUNNER_STARTING_WITH_DETAILS | Starting CUI benchmark runner - Type: %s, Output: %s

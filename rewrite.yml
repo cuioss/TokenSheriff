@@ -1,0 +1,60 @@
+#
+# OpenRewrite composite recipe for Plan 01 — rename OAuth-Sheriff → Token-Sheriff.
+# Java package + type migration only (AST-safe). Pom coordinates, module directory
+# renames, config/metric keys and Quarkus metadata are handled by scoped text edits.
+#
+# Run ONLY this recipe (override the parent's formatting/logging activeRecipes):
+#   ./mvnw rewrite:run -Drewrite.activeRecipes=de.cuioss.sheriff.token.MigrateFromOAuthSheriff
+#
+# Also published for consumers (e.g. nifi-extensions) as the same recipe name.
+#
+type: specs.openrewrite.org/v1beta/recipe
+name: de.cuioss.sheriff.token.MigrateFromOAuthSheriff
+displayName: Migrate de.cuioss.sheriff.oauth → de.cuioss.sheriff.token (Token-Sheriff)
+description: >-
+  Renames the OAuth-Sheriff Java packages and the OAuthSheriff* type family to the
+  Token-Sheriff scheme. The core module's package root moves to '.token.validation';
+  all other packages move '.oauth' → '.token'.
+recipeList:
+  # 1) Rename the 9 OAuthSheriff* types in place (within their current oauth.* packages).
+  #    ChangeType relocates the source file to match the new simple name.
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.OAuthSheriffQuarkusLogMessages
+      newFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.TokenSheriffQuarkusLogMessages
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.deployment.OAuthSheriffProcessor
+      newFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.deployment.TokenSheriffProcessor
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.deployment.OAuthSheriffProcessorTest
+      newFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.deployment.TokenSheriffProcessorTest
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.deployment.OAuthSheriffProcessorBuildStepTest
+      newFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.deployment.TokenSheriffProcessorBuildStepTest
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.deployment.OAuthSheriffIntegrationTest
+      newFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.deployment.TokenSheriffIntegrationTest
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.deployment.OAuthSheriffDevUIIntegrationTest
+      newFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.deployment.TokenSheriffDevUIIntegrationTest
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.test.OAuthSheriffExtensionTest
+      newFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.test.TokenSheriffExtensionTest
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.runtime.OAuthSheriffDevUIRuntimeService
+      newFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.runtime.TokenSheriffDevUIRuntimeService
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.runtime.OAuthSheriffDevUIRuntimeServiceTest
+      newFullyQualifiedTypeName: de.cuioss.sheriff.oauth.quarkus.runtime.TokenSheriffDevUIRuntimeServiceTest
+  # 2) Move packages — MOST SPECIFIC FIRST so core→validation wins before the catch-all.
+  - org.openrewrite.java.ChangePackage:
+      oldPackageName: de.cuioss.sheriff.oauth.core
+      newPackageName: de.cuioss.sheriff.token.validation
+      recursive: true
+  - org.openrewrite.java.ChangePackage:
+      oldPackageName: de.cuioss.sheriff.oauth.quarkus
+      newPackageName: de.cuioss.sheriff.token.quarkus
+      recursive: true
+  - org.openrewrite.java.ChangePackage:
+      oldPackageName: de.cuioss.sheriff.oauth
+      newPackageName: de.cuioss.sheriff.token
+      recursive: true

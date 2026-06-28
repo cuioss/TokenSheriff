@@ -1,0 +1,453 @@
+= Token-Sheriff Quarkus Integration Tests
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+:toc-title: Table of Contents
+
+
+== Overview
+
+Integration tests for the Token-Sheriff Quarkus extension with native container testing, HTTPS support, health checks, and metrics validation.
+
+== Port Configuration
+
+* **Application Internal**: `8443` (HTTPS inside container)
+* **External Test**: `10443` (Docker mapped port)
+* **Keycloak External**: `1443` (Docker mapped HTTPS port)
+
+== Features
+
+* Native container testing with production-like behavior
+* HTTPS with self-signed certificates
+* Keycloak integration with two test realms
+* Multi-IDP testing with Dex (via Docker Compose profile)
+* Health check and metrics validation
+* Automated build and test scripts
+
+== Quick Start
+
+=== Prerequisites
+
+* Java 21+ or Java 25+ (recommended for native image compilation), Maven 3.9+ (via `./mvnw`), Docker
+
+=== Test Execution
+
+[source,bash]
+----
+# Native integration tests - Keycloak only (requires Docker)
+./mvnw clean verify -Pintegration-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
+
+# Multi-IDP integration tests - Keycloak + Dex (requires Docker)
+./mvnw clean verify -Pmulti-idp-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
+
+# JVM unit tests only (no Docker required)
+./mvnw clean test -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
+
+# Manual container testing
+./scripts/start-integration-container.sh
+curl -k https://localhost:10443/q/health
+./scripts/stop-integration-container.sh
+----
+
+== Image Variants
+
+The integration tests support two optimized container variants for different use cases:
+
+=== Distroless (Production)
+
+* **Dockerfile**: `Dockerfile.native.distroless`
+* **Base Image**: Quarkus Distroless (security-hardened)
+* **Size**: 104MB
+* **Use Case**: Production deployments, CI/CD pipelines
+* **Features**: Minimal attack surface, fast startup, optimized security
+
+[source,bash]
+----
+# Build distroless variant
+DOCKERFILE=Dockerfile.native.distroless DOCKER_IMAGE_TAG=distroless docker compose build token-sheriff-integration-tests
+
+# Run integration tests with distroless
+./mvnw clean verify -Pintegration-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
+----
+
+=== JFR-Enabled (Profiling) - Local Development Only
+
+* **Dockerfile**: `Dockerfile.native.jfr`
+* **Base Image**: UBI 9 Micro with debugging tools
+* **Size**: 96MB
+* **Use Case**: Performance analysis, profiling, debugging (local development only)
+* **Features**: Full JFR profiling, debugging tools, monitoring capabilities
+* **Note**: JFR profile is disabled in CI/CD due to container startup issues in GitHub Actions
+
+[source,bash]
+----
+# Build JFR variant
+DOCKERFILE=Dockerfile.native.jfr DOCKER_IMAGE_TAG=jfr docker compose build token-sheriff-integration-tests
+
+# Run JFR profiling tests
+./mvnw clean verify -Pjfr -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
+
+# Extract JFR recordings (automatic via Maven)
+ls -la token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/target/jfr-results/
+----
+
+=== Image Comparison
+
+|===
+|Feature |Distroless |JFR-Enabled
+
+|Size |104MB |96MB
+|Base Image |Distroless |UBI 9 Micro
+|Security |Minimal attack surface |Standard
+|Startup Time |~0.2s |~0.2s
+|JFR Profiling |❌ |✅
+|Debugging Tools |❌ |✅
+|Production Ready |✅ |⚠️ (Local Development Only)
+|CI/CD Support |✅ |❌ (Disabled in GitHub Actions)
+|===
+
+== Multi-IDP Testing
+
+The integration tests support multiple OIDC providers to verify broad compatibility. Additional providers are managed via Docker Compose profiles.
+
+=== Dex (Phase 1)
+
+https://dexidp.io/[Dex] is a lightweight, OpenID Certified OIDC provider (~30MB, 2s startup) used for multi-IDP testing.
+
+* **Port**: `2556` (external HTTPS)
+* **Issuer**: `https://dex:5556/dex`
+* **Client**: `dex-client` / `dex-secret`
+* **User**: `dex-user@example.com` / `dex-password`
+
+[source,bash]
+----
+# Start with Dex
+COMPOSE_PROFILES=multi-idp docker compose up -d
+
+# Verify Dex
+curl -k https://localhost:2556/dex/.well-known/openid-configuration
+----
+
+Tests are parameterized via `TestProviders` — Dex is automatically included in the provider list when `-Ddex.enabled=true` is set by the multi-idp-tests Maven profile. Providers missing required capabilities are skipped with an INFO log.
+
+See link:../../doc/specification/multi-idp-testing.adoc[Multi-IDP Testing Specification] for the full architecture and provider roadmap.
+
+== Native Compilation
+
+=== Java 25 Builder Image
+
+The module uses the `jdk-25` Mandrel builder image for native compilation to leverage modern JVM improvements:
+
+[source,properties]
+----
+quarkus.native.builder-image=quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25
+----
+
+**Key Benefits:**
+
+* **JEP 491 Support**: "Synchronize Virtual Threads without Pinning" - eliminates carrier thread pinning when virtual threads execute synchronized blocks
+* **Virtual Thread Performance**: Improved concurrency handling for JWT validation operations under high connection loads
+* **Modern Optimizations**: Enhanced native image compilation with latest GraalVM/Mandrel improvements
+
+The builder image handles native compilation in a Docker container, so the local JDK version (Java 21+) is used only for regular Maven compilation. Native builds automatically use Java 25 via the specified builder image.
+
+== Module Structure
+
+[source]
+----
+token-sheriff-quarkus-integration-tests/
+├── src/main/
+│   ├── java/de/cuioss/sheriff/token/integration/
+│   │   ├── TestApplication.java
+│   │   └── endpoint/
+│   │       ├── JwtValidationEndpoint.java
+│   │       └── MockJwtValidationEndpoint.java
+│   ├── resources/application.properties
+│   └── docker/
+│       ├── Dockerfile.native.distroless
+│       ├── Dockerfile.native.jfr
+│       ├── certificates/
+│       │   ├── generate-certificates.sh
+│       │   └── generate-truststore.sh
+│       ├── health-check.sh
+│       └── keycloak/
+│           ├── benchmark-realm.json
+│           └── integration-realm.json
+├── src/test/java/de/cuioss/sheriff/token/integration/
+│   ├── BaseIntegrationTest.java
+│   ├── TestRealm.java
+│   ├── TestProviders.java
+│   ├── token/TokenValidationSpecIT.java
+│   ├── bearer/BearerAuthSpecIT.java
+│   ├── security/{DpopSpecIT,JweDecryptionSpecIT,DpopProofHelper}.java
+│   ├── health/{HealthCheckIntegrationIT,HealthCheckResponsivenessIT}.java
+│   └── api/{ApiValidationSpecIT,TokenRequestSpecIT}.java
+└── scripts/
+    ├── start-integration-container.sh
+    ├── stop-integration-container.sh
+    ├── build-native-if-needed.sh
+    └── verify-environment.sh
+----
+
+=== Maven Clean Integration
+
+The module integrates Docker cleanup with Maven's clean phase to prevent file lock issues during native builds:
+
+[source,bash]
+----
+# Standard clean command now stops Docker containers first
+./mvnw clean -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
+
+# What happens:
+# 1. Executes stop-integration-container.sh --clean (pre-clean phase)
+# 2. Stops and removes all Docker containers
+# 3. Cleans Docker images and volumes
+# 4. Deletes target directory (standard clean)
+----
+
+This ensures reliable cleanup of native executables and build artifacts without "file in use" errors.
+
+== Test Specs
+
+Tests use `@ParameterizedTest` with `@MethodSource` to run against multiple OIDC providers. Each spec declares required capabilities — providers are filtered by `TestProviders`.
+
+* **token/TokenValidationSpecIT**: Access/ID/refresh token validation (parameterized over all providers with matching capabilities)
+* **bearer/BearerAuthSpecIT**: Bearer token producers and interceptors (Keycloak-only — requires ROLES, GROUPS, CUSTOM_SCOPES)
+* **security/DpopSpecIT**: DPoP RFC 9449 validation (parameterized over DPoP-capable providers)
+* **security/JweDecryptionSpecIT**: JWE RFC 7516 decryption (parameterized over JWE-capable providers)
+* **health/HealthCheckIntegrationIT**: Health endpoint validation
+* **health/HealthCheckResponsivenessIT**: Health endpoint responsiveness testing
+* **api/ApiValidationSpecIT**: API input validation (provider-independent)
+* **api/TokenRequestSpecIT**: Token request deserialization (provider-independent)
+
+=== Key infrastructure classes
+
+* **TestRealm**: Provider configuration + token acquisition + capability declaration
+* **TestProviders**: Provider registry with capability-based filtering and INFO logging
+
+== Configuration
+
+=== Keycloak Realms
+
+The integration tests use **two Keycloak realms** to validate different JWT configuration patterns:
+
+==== Benchmark Realm (Well-Known Discovery)
+
+* **Realm**: `benchmark`
+* **Client**: `benchmark-client` / `benchmark-secret` (confidential client)
+* **User**: `benchmark-user` / `benchmark-password`
+* **Configuration**: Uses well-known discovery endpoint
+* **Purpose**: Tests automatic JWKS resolution via `/.well-known/openid-configuration`
+
+[source,properties]
+----
+sheriff.token.issuers.keycloak.issuer-identifier=https://keycloak:8443/realms/benchmark
+sheriff.token.issuers.keycloak.jwks.http.well-known-url=https://keycloak:8443/realms/benchmark/.well-known/openid-configuration
+----
+
+==== Integration Realm (Direct JWKS)
+
+* **Realm**: `integration`
+* **Client**: `integration-client` / `integration-secret` (confidential client)
+* **User**: `integration-user` / `integration-password`
+* **Configuration**: Uses direct JWKS URL
+* **Purpose**: Tests explicit JWKS endpoint configuration
+
+[source,properties]
+----
+sheriff.token.issuers.integration.issuer-identifier=https://keycloak:8443/realms/integration
+sheriff.token.issuers.integration.jwks.http.url=https://keycloak:8443/realms/integration/protocol/openid-connect/certs
+----
+
+Both realms are automatically imported into Keycloak during container startup via the `docker-compose.yml` configuration.
+
+=== URL Adaptation for Docker Networking
+
+==== Docker Networking Configuration
+
+The integration tests use HTTPS throughout with proper certificate validation:
+
+* **External access**: Tests access Keycloak via `localhost:1443` (Docker HTTPS port mapping)
+* **Internal access**: Application container accesses Keycloak via `keycloak:8443` (Docker network HTTPS hostname)
+* **Certificate validation**: Self-signed certificates are used with proper truststore configuration
+
+==== Current Configuration
+
+Both realms use consistent HTTPS configuration:
+
+[source,properties]
+----
+# Benchmark realm with well-known discovery
+sheriff.token.issuers.keycloak.issuer-identifier=https://keycloak:8443/realms/benchmark
+sheriff.token.issuers.keycloak.jwks.http.well-known-url=https://keycloak:8443/realms/benchmark/.well-known/openid-configuration
+
+# Integration realm with direct JWKS URL
+sheriff.token.issuers.integration.issuer-identifier=https://keycloak:8443/realms/integration
+sheriff.token.issuers.integration.jwks.http.url=https://keycloak:8443/realms/integration/protocol/openid-connect/certs
+----
+
+==== Key Points
+
+1. **HTTPS enforcement**: All communication uses HTTPS with certificate validation
+2. **Consistent internal URLs**: All issuer identifiers and JWKS URLs use internal Docker hostname
+3. **Certificate trust**: Application trusts Keycloak certificates via configured truststore
+4. **Token validation**: JWT issuer claims match the configured issuer identifiers
+
+=== HTTPS Setup
+
+Self-signed certificates via `generate-certificates.sh`:
+
+* Truststore: `localhost-truststore.p12` (password: `localhost-trust`)
+* Subject: `CN=localhost`
+* SAN: `dns:localhost,dns:keycloak,dns:dex,ip:127.0.0.1,ip:0.0.0.0`
+
+=== Key Properties
+
+[source,properties]
+----
+# JWT - Default test issuer (disabled for Keycloak testing)
+sheriff.token.issuers.default.issuer-identifier=https://test-auth.example.com
+sheriff.token.issuers.default.enabled=false
+sheriff.token.issuers.default.jwks.file-path=classpath:test-jwks.json
+
+# JWT - Keycloak issuers (both realms)
+sheriff.token.issuers.keycloak.enabled=true
+sheriff.token.issuers.integration.enabled=true
+
+# Health checks
+
+# HTTPS configuration
+quarkus.http.ssl-port=8443
+quarkus.http.insecure-requests=redirect
+----
+
+== Script Usage
+
+[source,bash]
+----
+# Environment verification
+./scripts/verify-environment.sh
+
+# Application container management
+./scripts/start-integration-container.sh
+./scripts/stop-integration-container.sh
+
+# Native build helper
+./scripts/build-native-if-needed.sh
+
+# Testing
+../../mvnw clean verify -Pintegration-tests
+../../mvnw clean verify -Pjfr
+----
+
+== Manual Testing
+
+[source,bash]
+----
+# JWT validation
+TOKEN=$(curl -k -s https://localhost:10443/validate/test-token | jq -r '.token')
+curl -k -H "Authorization: Bearer $TOKEN" https://localhost:10443/validate
+
+# Health checks
+curl -k https://localhost:10443/q/health/live
+curl -k https://localhost:10443/q/health/ready
+
+# Metrics
+curl -k https://localhost:10443/q/metrics | grep sheriff_token
+----
+
+== Docker Integration
+
+=== Docker Image Variants
+
+Build different image variants using environment variables:
+
+[source,bash]
+----
+# Production build (distroless image, 104MB)
+DOCKERFILE=Dockerfile.native.distroless DOCKER_IMAGE_TAG=distroless docker compose build
+
+# JFR profiling build (UBI 9 micro image, 96MB)
+DOCKERFILE=Dockerfile.native.jfr DOCKER_IMAGE_TAG=jfr docker compose build
+----
+
+**Image Characteristics**:
+
+* **Distroless**: Minimal production native image with ultra-fast startup (~0.2s)
+* **JFR-enabled**: Native image with JFR profiling support and debugging tools (~0.2s startup)
+
+== Troubleshooting
+
+=== Container Logs and Diagnostics
+
+[source,bash]
+----
+# Dump Keycloak container logs (Quarkus logs are written to target/quarkus.log)
+./scripts/dump-keycloak-logs.sh target
+
+# Manual log inspection
+docker logs token-sheriff-quarkus-integration-tests-token-sheriff-integration-tests-1
+docker logs token-sheriff-quarkus-integration-tests-keycloak-1
+
+# Check container status
+docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+----
+
+**Keycloak Access Logging**: The Keycloak container includes HTTP access logging to diagnose JWKS endpoint issues:
+
+* **JWKS endpoint requests**: `/.well-known/openid-configuration`, `/protocol/openid-connect/certs`
+* **Container-to-container communication**: Network connectivity between JWT app and Keycloak
+* **SSL/TLS handshake diagnostics**: Certificate validation success/failure
+* **Request timing**: Latency and timeout analysis for JWKS loading
+
+=== Common Issues
+
+[source,bash]
+----
+# Certificate issues
+cd src/main/docker/certificates && ./generate-certificates.sh
+keytool -list -keystore localhost-truststore.p12 -storetype PKCS12
+
+# Build issues
+../../mvnw clean && ./scripts/verify-environment.sh
+docker --version
+
+# Runtime issues
+lsof -i :10443
+curl -k https://localhost:10443/q/health
+
+# JWKS connectivity test
+curl -k https://localhost:1443/realms/integration/protocol/openid-connect/certs
+curl -k https://localhost:1443/realms/benchmark/.well-known/openid-configuration
+----
+
+== Performance Metrics
+
+* **Native compilation**: 4-5 minutes
+* **Memory usage**: ~50MB RSS
+* **Startup time**: ~0.2s (both variants)
+* **Image size**: 96-104MB (native)
+
+== Security Notes
+
+* Self-signed certificates for testing only
+* Keycloak realms with test users
+* HTTPS enforced throughout the stack
+
+== Standards Compliance
+
+Follows link:https://github.com/cuioss/cui-llm-rules/tree/main/standards/cdi-quarkus/[CDI Quarkus Standards]
+
+== Related Modules
+
+=== Performance Benchmarking
+
+Performance benchmarking is available in the `benchmarking/benchmark-integration-wrk` module. It builds upon this module's infrastructure patterns:
+
+* Docker Compose and container configuration
+* Keycloak realm setup and integration patterns
+* HTTPS certificate management
+* Application deployment scripts
+
+This module provides functional validation while the benchmarking module measures performance using similar environment patterns.

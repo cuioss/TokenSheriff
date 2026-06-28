@@ -73,7 +73,7 @@ class PrometheusClientTest {
         // Verify labels
         Map<String, String> labels = timeSeries.labels();
         assertEquals("process_cpu_usage", labels.get("__name__"));
-        assertEquals("oauth-sheriff-integration-tests:8443", labels.get("instance"));
+        assertEquals("token-sheriff-integration-tests:8443", labels.get("instance"));
         assertEquals("quarkus-benchmark", labels.get("job"));
 
         // Verify data points
@@ -267,8 +267,8 @@ class PrometheusClientTest {
                     "result": [
                       {
                         "metric": {
-                          "__name__": "sheriff_oauth_validation_success_operations_total",
-                          "instance": "oauth-sheriff-integration-tests:8443",
+                          "__name__": "sheriff_token_validation_success_operations_total",
+                          "instance": "token-sheriff-integration-tests:8443",
                           "job": "quarkus-benchmark",
                           "event_type": "ACCESS_TOKEN_CREATED",
                           "result": "success"
@@ -284,14 +284,14 @@ class PrometheusClientTest {
                 }
                 """;
         moduleDispatcher.setCustomResponse(complexResponse);
-        List<String> metricNames = List.of("sheriff_oauth_validation_success_operations_total");
+        List<String> metricNames = List.of("sheriff_token_validation_success_operations_total");
 
         // When
         Map<String, PrometheusClient.TimeSeries> result = prometheusClient.queryRange(
                 metricNames, START_TIME, END_TIME, STEP);
 
         // Then
-        PrometheusClient.TimeSeries timeSeries = result.get("sheriff_oauth_validation_success_operations_total");
+        PrometheusClient.TimeSeries timeSeries = result.get("sheriff_token_validation_success_operations_total");
         Map<String, String> labels = timeSeries.labels();
 
         assertEquals("ACCESS_TOKEN_CREATED", labels.get("event_type"));

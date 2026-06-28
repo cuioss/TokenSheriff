@@ -95,7 +95,7 @@ public class WrkBenchmarkConverter implements BenchmarkConverter {
     private BenchmarkData convertFile(Path file) throws IOException {
         BenchmarkData.Benchmark benchmark = parseWrkFile(file);
         List<BenchmarkData.Benchmark> benchmarks = benchmark != null ?
-                List.of(benchmark) : Collections.emptyList();
+                List.of(benchmark) : List.of();
 
         return BenchmarkData.builder()
                 .metadata(createMetadata())

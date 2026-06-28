@@ -1,0 +1,104 @@
+= JWT Validation Metrics
+:toc: left
+:toclevels: 3
+:source-highlighter: highlight.js
+:toc-title: Table of Contents
+:sectnums:
+
+== Overview
+
+The token-sheriff-validation-quarkus extension automatically exposes metrics when the Quarkus Micrometer extension is present. The `JwtMetricsCollector` registers Micrometer counters, using scheduled polling to update from `SecurityEventCounter`. The polling interval defaults to 10 seconds and is configurable via `sheriff.token.metrics.collection.interval` (e.g., `2s` for integration testing).
+
+== Available Metrics
+
+[cols="2,1,3,2"]
+|===
+|Metric Name |Type |Description |Tags
+
+|`sheriff.token.validation.errors` |Counter |JWT validation errors by type |event_type, result, category
+|`sheriff.token.validation.success` |Counter |Successful JWT operations by type |event_type, result
+|===
+
+=== Error Metric Tags
+
+* **`event_type`**: e.g., `TOKEN_EXPIRED`, `SIGNATURE_VALIDATION_FAILED`
+* **`result`**: Always `failure`
+* **`category`**: `INVALID_STRUCTURE`, `INVALID_SIGNATURE`, or `SEMANTIC_ISSUES`
+
+=== Success Metric Tags
+
+* **`event_type`**: e.g., `ACCESS_TOKEN_CREATED`, `ID_TOKEN_CREATED`
+* **`result`**: Always `success`
+
+=== Supported Event Types
+
+* **INVALID_STRUCTURE**: `TOKEN_EMPTY`, `TOKEN_SIZE_EXCEEDED`, `FAILED_TO_DECODE_JWT`, `INVALID_JWT_FORMAT`, `DECODED_PART_SIZE_EXCEEDED`, `DPOP_PROOF_INVALID`, `JWE_DECRYPTION_FAILED`, `JWE_UNSUPPORTED_ALGORITHM`, `JWE_DECRYPTION_NOT_CONFIGURED`, `JWE_DECRYPTION_KEY_NOT_FOUND`
+* **SEMANTIC_ISSUES**: `MISSING_CLAIM`, `MISSING_RECOMMENDED_ELEMENT`, `TOKEN_EXPIRED`, `TOKEN_NBF_FUTURE`, `AUDIENCE_MISMATCH`, `AZP_MISMATCH`, `NO_ISSUER_CONFIG`, `ISSUER_MISMATCH`, `TOKEN_TYPE_MISMATCH`, `DPOP_PROOF_MISSING`, `DPOP_PROOF_EXPIRED`, `DPOP_REPLAY_DETECTED`, `DPOP_ATH_MISMATCH`, `DPOP_CNF_MISSING`
+* **INVALID_SIGNATURE**: `SIGNATURE_VALIDATION_FAILED`, `KEY_NOT_FOUND`, `UNSUPPORTED_ALGORITHM`, `JWKS_JSON_PARSE_FAILED`, `DPOP_THUMBPRINT_MISMATCH`
+* **Success (no category)**: `ACCESS_TOKEN_CREATED`, `ID_TOKEN_CREATED`, `REFRESH_TOKEN_CREATED`, `ACCESS_TOKEN_CACHE_HIT`
+
+== Configuration
+
+Enabled automatically when `quarkus-micrometer` is present. Add to your project:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-micrometer</artifactId>
+</dependency>
+<!-- Optional: Prometheus registry -->
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-micrometer-registry-prometheus</artifactId>
+</dependency>
+----
+
+Metrics available at `/q/metrics`.
+
+== Monitoring Examples
+
+=== Prometheus Queries
+
+[source,promql]
+----
+# Total JWT validation errors
+sum(sheriff_token_validation_errors_total)
+
+# Error rate by category
+sum(rate(sheriff_token_validation_errors_total[5m])) by (category)
+
+# Signature verification failures
+sum(sheriff_token_validation_errors_total{event_type="SIGNATURE_VALIDATION_FAILED"})
+
+# Successful token creations
+sum(sheriff_token_validation_success_total)
+
+# Success rate by type
+sum(rate(sheriff_token_validation_success_total[5m])) by (event_type)
+----
+
+=== Alerting Examples
+
+[source,yaml]
+----
+- alert: JwtSignatureVerificationFailures
+  expr: rate(sheriff_token_validation_errors_total{event_type="SIGNATURE_VALIDATION_FAILED"}[5m]) > 0.1
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: "JWT signature verification failures detected"
+
+- alert: JwtHighErrorRate
+  expr: rate(sheriff_token_validation_errors_total[5m]) / (rate(sheriff_token_validation_errors_total[5m]) + rate(sheriff_token_validation_success_total[5m])) > 0.5
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "JWT validation error rate above 50%"
+----
+
+== Grafana Dashboard
+
+A pre-configured dashboard is available at link:../jwt-metrics-grafana-dashboard.json[jwt-metrics-grafana-dashboard.json] covering error rates, event distribution, and security event monitoring.

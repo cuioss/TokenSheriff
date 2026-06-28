@@ -1,0 +1,33 @@
+# Simple Dockerfile for copying pre-built native executable
+# This approach is much faster as it avoids rebuilding the native image in Docker
+FROM quay.io/quarkus/quarkus-distroless-image:2.0@sha256:e4d9d9e93603827d965e3aa2735ab251aa5b79da262af7fb7ef061bc39f327ff
+
+LABEL org.opencontainers.image.title="Token-Sheriff Integration Tests - Distroless"
+LABEL org.opencontainers.image.description="Security-hardened Quarkus native application"
+LABEL org.opencontainers.image.vendor="CUI"
+LABEL org.opencontainers.image.version="1.0.0-SNAPSHOT"
+LABEL security.scan.required="true"
+LABEL security.distroless="true"
+LABEL performance.jfr.enabled="false"
+
+WORKDIR /app
+
+# Copy pre-built native executable from Maven target directory
+COPY --chmod=0755 token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/target/*-runner /app/application
+
+# Copy certificates
+COPY --chmod=0644 token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/src/main/docker/certificates/localhost.crt /app/certificates/localhost.crt
+COPY --chown=nonroot:nonroot --chmod=0600 token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/src/main/docker/certificates/localhost.key /app/certificates/localhost.key
+COPY --chmod=0644 token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/src/main/docker/certificates/localhost-truststore.p12 /app/certificates/localhost-truststore.p12
+COPY --chown=nonroot:nonroot --chmod=0600 token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/src/main/docker/certificates/jwe-test-decryption-key.pem /app/certificates/jwe-test-decryption-key.pem
+
+EXPOSE 8443
+USER nonroot
+
+# Optimized entrypoint for production
+ENTRYPOINT ["/app/application", \
+  "-Djavax.net.ssl.trustStore=/app/certificates/localhost-truststore.p12", \
+  "-Djavax.net.ssl.trustStorePassword=localhost-trust", \
+  "-Djavax.net.ssl.trustStoreType=PKCS12", \
+  "-Djdk.tls.rejectClientInitiatedRenegotiation=true", \
+  "-Djavax.net.ssl.sessionCacheSize=20480"]

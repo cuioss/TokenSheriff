@@ -11,8 +11,8 @@ Token-Sheriff is a high-performance OAuth 2.0 and OpenID Connect token validatio
 
 ### Project Structure
 Multi-module Maven project:
-- `oauth-sheriff-core/` - The core Token-Sheriff validation library
-- `oauth-sheriff-quarkus-parent/` - Quarkus framework integration
+- `token-sheriff-validation/` - The core Token-Sheriff validation library
+- `token-sheriff-quarkus-parent/` - Quarkus framework integration
 - `benchmarking/` - Performance benchmarking modules
 - `bom/` - Bill of Materials for dependency management
 
@@ -74,7 +74,7 @@ Mandatory for 3+ similar test variants. Common annotations:
 ./mvnw test
 
 # Run integration tests
-./mvnw clean verify -Pintegration-tests -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
+./mvnw clean verify -Pintegration-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
 
 # Run micro-benchmarks
 ./mvnw clean verify -pl benchmarking/benchmark-core -Pbenchmark
@@ -103,7 +103,7 @@ Mandatory for 3+ similar test variants. Common annotations:
 
 3. **Integration tests**:
    ```bash
-   ./mvnw clean verify -Pintegration-tests -pl oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests -am
+   ./mvnw clean verify -Pintegration-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
    ```
 
 Tasks are complete ONLY after all three steps succeed.
@@ -158,7 +158,7 @@ This project includes custom commands for common workflows:
 ### verifyCuiLoggingGuidelines
 Comprehensive logging standards audit:
 1. Analyze CUI logging standards from `/Users/oliver/git/cui-llm-rules/standards/logging`
-2. Scan for logging violations in oauth-sheriff-core module
+2. Scan for logging violations in token-sheriff-validation module
 3. Check LogRecord compliance
 4. Validate documentation in `doc/LogMessages.adoc`
 5. Run logging-related tests

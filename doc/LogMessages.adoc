@@ -12,14 +12,14 @@ This document provides a reference for all log messages used in the JWT Token Va
 === Document Navigation
 
 * link:../README.md[README] - Project overview and introduction
-* xref:../oauth-sheriff-core/doc/usage-guide.adoc[Usage Guide] - How to use the library with code examples
+* xref:../token-sheriff-validation/doc/usage-guide.adoc[Usage Guide] - How to use the library with code examples
 * xref:Requirements.adoc[Requirements] - Functional and non-functional requirements
 * xref:architecture.adoc[Architecture] - Architecture reference
 * xref:security/threat-model.adoc[Threat Model] - Security analysis and mitigations
 
 === Log Message Format
 
-All messages follow the format: OAuthSheriff-[identifier]: [message]
+All messages follow the format: TokenSheriff-[identifier]: [message]
 
 The log message levels follow these identifier ranges:
 
@@ -40,15 +40,15 @@ For more details about security events related to these log messages, see the Se
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
-|OAuthSheriff-001 |TOKEN |TokenValidator initialized with %s |Logged when TokenValidator is initialized with issuer configurations
-|OAuthSheriff-002 |JWKS |Keys updated due to data change - load state: %s |Logged when JWKS keys are updated due to data changes from the endpoint
-|OAuthSheriff-003 |JWKS |Background JWKS refresh started with interval: %s seconds |Logged when background JWKS refresh is started with specified interval
-|OAuthSheriff-004 |TOKEN |Skipping disabled issuer configuration %s |Logged when an issuer configuration is skipped because it's disabled
-|OAuthSheriff-005 |JWKS |Successfully resolved JWKS URI from well-known endpoint: %s |Logged when JWKS URI is successfully resolved via well-known discovery
-|OAuthSheriff-006 |RETRY |Retry operation '%s' completed successfully after %s attempts in %sms |Logged when a retry operation completes successfully with timing information
-|OAuthSheriff-007 |JWKS |JWKS loaded successfully for issuer: %s |Logged when JWKS is successfully loaded for a specific issuer
-|OAuthSheriff-008 |ISSUER |Issuer configuration loaded successfully: %s |Logged when an issuer configuration is successfully loaded
-|OAuthSheriff-009 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
+|TokenSheriff-001 |TOKEN |TokenValidator initialized with %s |Logged when TokenValidator is initialized with issuer configurations
+|TokenSheriff-002 |JWKS |Keys updated due to data change - load state: %s |Logged when JWKS keys are updated due to data changes from the endpoint
+|TokenSheriff-003 |JWKS |Background JWKS refresh started with interval: %s seconds |Logged when background JWKS refresh is started with specified interval
+|TokenSheriff-004 |TOKEN |Skipping disabled issuer configuration %s |Logged when an issuer configuration is skipped because it's disabled
+|TokenSheriff-005 |JWKS |Successfully resolved JWKS URI from well-known endpoint: %s |Logged when JWKS URI is successfully resolved via well-known discovery
+|TokenSheriff-006 |RETRY |Retry operation '%s' completed successfully after %s attempts in %sms |Logged when a retry operation completes successfully with timing information
+|TokenSheriff-007 |JWKS |JWKS loaded successfully for issuer: %s |Logged when JWKS is successfully loaded for a specific issuer
+|TokenSheriff-008 |ISSUER |Issuer configuration loaded successfully: %s |Logged when an issuer configuration is successfully loaded
+|TokenSheriff-009 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
 |===
 
 == WARN Level (100-167)
@@ -56,74 +56,74 @@ For more details about security events related to these log messages, see the Se
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
-|OAuthSheriff-100 |TOKEN |Token exceeds maximum size limit of %s bytes, validation will be rejected |Logged when a token is rejected due to size constraints
-|OAuthSheriff-101 |TOKEN |The given validation was empty, request will be rejected |Logged when an empty or null token is provided
-|OAuthSheriff-102 |TOKEN |No key found with ID: %s |Logged when a key with the specified ID cannot be found in the JWKS
-|OAuthSheriff-103 |TOKEN |Failed to decode JWT Token |Logged when the JWT token cannot be decoded
-|OAuthSheriff-104 |TOKEN |Invalid JWT Token format: expected 3 parts (JWS) or 5 parts (JWE) but got %s |Logged when the JWT token format is invalid
-|OAuthSheriff-105 |TOKEN |Decoded part exceeds maximum size limit of %s bytes |Logged when a decoded part of the token exceeds the maximum size limit
-|OAuthSheriff-106 |TOKEN |Unsupported algorithm: %s |Logged when an unsupported algorithm is encountered
-|OAuthSheriff-107 |TOKEN |Token has a 'not before' claim that is more than 60 seconds in the future |Logged when a token has a 'not before' claim that is too far in the future
-|OAuthSheriff-108 |TOKEN |Unknown token type: %s |Logged when an unknown token type is encountered
-|OAuthSheriff-109 |TOKEN |Token is missing required claim: %s |Logged when a token is missing a required claim
-|OAuthSheriff-110 |TOKEN |Token has expired |Logged when a token has expired
-|OAuthSheriff-111 |TOKEN |Token authorized party '%s' does not match expected client ID '%s' |Logged when the azp claim in the token does not match the expected client ID
-|OAuthSheriff-112 |TOKEN |Missing recommended element: %s |Logged when a recommended element is missing from the token
-|OAuthSheriff-113 |TOKEN |Token audience %s does not match any of the expected audiences %s |Logged when the audience in the token does not match any of the expected audiences
-|OAuthSheriff-114 |TOKEN |No configuration found for issuer: %s |Logged when no configuration is found for the issuer
-|OAuthSheriff-115 |TOKEN |Algorithm %s is explicitly rejected for security reasons |Logged when an algorithm is explicitly rejected for security reasons
-|OAuthSheriff-116 |JWKS |Creating HttpJwksLoaderConfig with invalid JWKS URI. The loader will return empty results. |Logged when an invalid JWKS URI is provided to HttpJwksLoaderConfig
-|OAuthSheriff-117 |JWKS |JWK is missing required field 'kty' |Logged when a JWK key is missing the required 'kty' parameter
-|OAuthSheriff-118 |JWKS |Unsupported key type: %s |Logged when an unsupported JWK key type is encountered
-|OAuthSheriff-119 |JWKS |Key ID exceeds maximum length: %s |Logged when a JWK key ID exceeds the maximum allowed length
-|OAuthSheriff-120 |JWKS |Invalid or unsupported algorithm: %s |Logged when an invalid or unsupported algorithm is encountered in a JWK
-|OAuthSheriff-121 |TOKEN |Found unhealthy issuer config: %s |Logged when an issuer configuration is found to be unhealthy during health checks
-|OAuthSheriff-122 |JWKS |Background JWKS refresh failed: %s |Logged when background JWKS refresh operation fails
-|OAuthSheriff-123 |JWKS |Failed to resolve JWKS URI from well-known resolver |Logged when JWKS URI resolution fails from well-known discovery
-|OAuthSheriff-124 |JWKS |JWKS object is null |Logged when JWKS object validation fails due to null object
-|OAuthSheriff-125 |JWKS |JWKS keys array exceeds maximum size: %s |Logged when JWKS keys array exceeds the maximum allowed size
-|OAuthSheriff-126 |JWKS |JWKS keys array is empty |Logged when JWKS keys array is empty
-|OAuthSheriff-127 |JWKS |Failed to parse RSA key with ID %s: %s |Logged when RSA key parsing fails for a specific key ID
-|OAuthSheriff-128 |JWKS |Failed to parse EC key with ID %s: %s |Logged when EC key parsing fails for a specific key ID
-|OAuthSheriff-129 |RETRY |Retry operation '%s' failed after %s attempts in %sms |Logged when a retry operation fails after exhausting all attempts
-|OAuthSheriff-130 |JSON |Failed to parse JWKS JSON: %s |Logged when JSON parsing fails for JWKS content and an empty result is returned as fallback
-|OAuthSheriff-131 |ISSUER |IssuerConfig for issuer '%s' has claimSubOptional=true. This is not conform to RFC 7519 which requires the 'sub' claim for ACCESS_TOKEN and ID_TOKEN types. Use this setting only when necessary and ensure appropriate alternative validation mechanisms. |Logged when an issuer configuration has the subject claim marked as optional, which violates RFC 7519 requirements
-|OAuthSheriff-132 |JWKS |Invalid Base64 URL encoding detected for JWK field: %s |Logged when Base64 URL encoding validation fails for a JWK field
-|OAuthSheriff-133 |JWKS |Background refresh skipped - no HTTP handler available |Logged when background JWKS refresh is skipped because no HTTP handler is available
-|OAuthSheriff-134 |JWKS |Background refresh parse error: %s for issuer: %s |Logged when a JSON parsing error occurs during background JWKS refresh for a specific issuer
-|OAuthSheriff-135 |ISSUER |Failed to load issuer configuration for %s, status: %s |Logged when issuer configuration loading fails with a specific status
-|OAuthSheriff-136 |JWKS |Timeout waiting for JWKS to load for issuer: %s |Logged when JWKS loading times out for a specific issuer
-|OAuthSheriff-137 |JWKS |Interrupted while waiting for JWKS to load for issuer: %s |Logged when the thread is interrupted while waiting for JWKS to load
-|OAuthSheriff-138 |JWKS |Configured issuer '%s' does not match discovered issuer '%s' from well-known document |Logged when there is a mismatch between configured and discovered issuer from well-known endpoint
-|OAuthSheriff-139 |JWKS |Using insecure HTTP protocol for JWKS endpoint: %s - HTTPS should be used in production |Logged when an insecure HTTP protocol is used for JWKS endpoint instead of HTTPS
-|OAuthSheriff-140 |JWKS |DSL-JSON returned null for JWKS parsing |Logged when DSL-JSON parser returns null while parsing JWKS content
-|OAuthSheriff-141 |JWKS |Failed to parse JWKS content: %s |Logged when JWKS content parsing fails due to IO error or invalid JSON structure
-|OAuthSheriff-142 |JWKS |Failed to parse OKP key with ID %s: %s |Logged when OKP (EdDSA) key parsing fails for a specific key ID
-|OAuthSheriff-143 |TOKEN |Token type '%s' does not match expected type '%s' |Logged when the JWT typ header does not match the expected token type configured for the issuer (RFC 9068 validation)
-|OAuthSheriff-144 |DPOP |DPoP proof is required but the DPoP HTTP header is missing |Logged when a DPoP proof is expected (cnf.jkt present or dpop.required=true) but the DPoP HTTP header is absent
-|OAuthSheriff-145 |DPOP |DPoP proof has invalid format: %s |Logged when the DPoP proof JWT cannot be decoded or has structural issues (wrong typ, unsupported algorithm, missing jwk, invalid signature)
-|OAuthSheriff-146 |DPOP |DPoP proof iat claim is outside acceptable freshness window |Logged when the DPoP proof iat claim is too old or too far in the future
-|OAuthSheriff-147 |DPOP |DPoP proof JWK thumbprint '%s' does not match token cnf.jkt '%s' |Logged when the computed JWK Thumbprint (RFC 7638) of the DPoP proof's public key does not match the cnf.jkt claim in the access token
-|OAuthSheriff-148 |DPOP |DPoP proof replay detected for jti: %s |Logged when a DPoP proof with a previously seen jti value is detected (replay attack)
-|OAuthSheriff-149 |DPOP |DPoP proof is missing required claim: %s |Logged when the DPoP proof JWT body is missing a required claim (jti, iat, or ath)
-|OAuthSheriff-150 |DPOP |DPoP proof ath claim does not match access token hash |Logged when the DPoP proof ath claim (SHA-256 hash of the access token) does not match the actual access token
-|OAuthSheriff-151 |DPOP |DPoP is required but access token does not contain cnf.jkt claim |Logged when DPoP validation is required or a DPoP proof is provided but the access token lacks the cnf.jkt claim
-|OAuthSheriff-152 |JWE |Failed to decrypt JWE token: %s |Logged when JWE decryption fails due to cryptographic errors (wrong key, tampered content, etc.)
-|OAuthSheriff-153 |JWE |Unsupported JWE algorithm: alg=%s, enc=%s |Logged when a JWE token uses an unsupported or rejected algorithm combination
-|OAuthSheriff-154 |JWE |Received JWE token but no decryption configuration is available |Logged when a 5-part JWE token is received but no JweDecryptionConfig was configured on TokenValidator
-|OAuthSheriff-155 |JWE |No decryption key found for key ID: %s |Logged when the JWE header references a kid that has no matching decryption key and no default key is configured
-|OAuthSheriff-156 |JWE |Unsupported JWE compression algorithm: %s |Logged when a JWE token uses an unsupported compression algorithm (only DEF/DEFLATE is supported)
-|OAuthSheriff-157 |JWE |Nested JWE tokens are not allowed |Logged when decrypting a JWE token reveals another JWE (5-part) token instead of the expected inner JWS
-|OAuthSheriff-158 |Token Age |Token age exceeds maximum allowed age |Logged when a token's `iat` claim indicates it was issued longer ago than the configured `maxTokenAgeSeconds`
-|OAuthSheriff-159 |Custom Rule |Custom validation rule rejected token: %s |Logged when a custom `TokenValidationRule` rejects a token by throwing `TokenValidationException`
-|OAuthSheriff-160 |JWKS |JWK entry without 'kid' field skipped — kid is required for key identification |Logged when a JWK entry is skipped because it lacks a key ID
-|OAuthSheriff-161 |JWKS |RSA JWK without 'alg' field — defaulting to RS256 for key ID: %s |Logged when an RSA JWK lacks an algorithm field and defaults to RS256
-|OAuthSheriff-162 |Audience |Access token is missing required audience claim. Expected audience: %s |Logged when an access token is missing the required audience claim
-|OAuthSheriff-163 |DPOP |DPoP proof htu claim '%s' does not match request URI '%s' |Logged when the DPoP htu claim doesn't match the actual request URI
-|OAuthSheriff-164 |DPOP |DPoP proof htm claim '%s' does not match request method '%s' |Logged when the DPoP htm claim doesn't match the actual request method
-|OAuthSheriff-165 |Audience |Audience claim missing but azp claim '%s' matches expected audience — using azp as fallback |Logged when the audience (aud) claim is absent but the azp claim matches the expected audience, falling back to azp for audience validation
-|OAuthSheriff-166 |Audience |Access token audience validation skipped (accessTokenAudienceOptional=true). Expected audience: %s |Logged when audience validation is skipped for an access token because accessTokenAudienceOptional is enabled
-|OAuthSheriff-167 |Authorized Party |azp claim missing, using client_id claim '%s' for authorized party validation (RFC 9068) |Logged when the azp claim is absent but the client_id claim (per RFC 9068) matches the expected client ID
+|TokenSheriff-100 |TOKEN |Token exceeds maximum size limit of %s bytes, validation will be rejected |Logged when a token is rejected due to size constraints
+|TokenSheriff-101 |TOKEN |The given validation was empty, request will be rejected |Logged when an empty or null token is provided
+|TokenSheriff-102 |TOKEN |No key found with ID: %s |Logged when a key with the specified ID cannot be found in the JWKS
+|TokenSheriff-103 |TOKEN |Failed to decode JWT Token |Logged when the JWT token cannot be decoded
+|TokenSheriff-104 |TOKEN |Invalid JWT Token format: expected 3 parts (JWS) or 5 parts (JWE) but got %s |Logged when the JWT token format is invalid
+|TokenSheriff-105 |TOKEN |Decoded part exceeds maximum size limit of %s bytes |Logged when a decoded part of the token exceeds the maximum size limit
+|TokenSheriff-106 |TOKEN |Unsupported algorithm: %s |Logged when an unsupported algorithm is encountered
+|TokenSheriff-107 |TOKEN |Token has a 'not before' claim that is more than 60 seconds in the future |Logged when a token has a 'not before' claim that is too far in the future
+|TokenSheriff-108 |TOKEN |Unknown token type: %s |Logged when an unknown token type is encountered
+|TokenSheriff-109 |TOKEN |Token is missing required claim: %s |Logged when a token is missing a required claim
+|TokenSheriff-110 |TOKEN |Token has expired |Logged when a token has expired
+|TokenSheriff-111 |TOKEN |Token authorized party '%s' does not match expected client ID '%s' |Logged when the azp claim in the token does not match the expected client ID
+|TokenSheriff-112 |TOKEN |Missing recommended element: %s |Logged when a recommended element is missing from the token
+|TokenSheriff-113 |TOKEN |Token audience %s does not match any of the expected audiences %s |Logged when the audience in the token does not match any of the expected audiences
+|TokenSheriff-114 |TOKEN |No configuration found for issuer: %s |Logged when no configuration is found for the issuer
+|TokenSheriff-115 |TOKEN |Algorithm %s is explicitly rejected for security reasons |Logged when an algorithm is explicitly rejected for security reasons
+|TokenSheriff-116 |JWKS |Creating HttpJwksLoaderConfig with invalid JWKS URI. The loader will return empty results. |Logged when an invalid JWKS URI is provided to HttpJwksLoaderConfig
+|TokenSheriff-117 |JWKS |JWK is missing required field 'kty' |Logged when a JWK key is missing the required 'kty' parameter
+|TokenSheriff-118 |JWKS |Unsupported key type: %s |Logged when an unsupported JWK key type is encountered
+|TokenSheriff-119 |JWKS |Key ID exceeds maximum length: %s |Logged when a JWK key ID exceeds the maximum allowed length
+|TokenSheriff-120 |JWKS |Invalid or unsupported algorithm: %s |Logged when an invalid or unsupported algorithm is encountered in a JWK
+|TokenSheriff-121 |TOKEN |Found unhealthy issuer config: %s |Logged when an issuer configuration is found to be unhealthy during health checks
+|TokenSheriff-122 |JWKS |Background JWKS refresh failed: %s |Logged when background JWKS refresh operation fails
+|TokenSheriff-123 |JWKS |Failed to resolve JWKS URI from well-known resolver |Logged when JWKS URI resolution fails from well-known discovery
+|TokenSheriff-124 |JWKS |JWKS object is null |Logged when JWKS object validation fails due to null object
+|TokenSheriff-125 |JWKS |JWKS keys array exceeds maximum size: %s |Logged when JWKS keys array exceeds the maximum allowed size
+|TokenSheriff-126 |JWKS |JWKS keys array is empty |Logged when JWKS keys array is empty
+|TokenSheriff-127 |JWKS |Failed to parse RSA key with ID %s: %s |Logged when RSA key parsing fails for a specific key ID
+|TokenSheriff-128 |JWKS |Failed to parse EC key with ID %s: %s |Logged when EC key parsing fails for a specific key ID
+|TokenSheriff-129 |RETRY |Retry operation '%s' failed after %s attempts in %sms |Logged when a retry operation fails after exhausting all attempts
+|TokenSheriff-130 |JSON |Failed to parse JWKS JSON: %s |Logged when JSON parsing fails for JWKS content and an empty result is returned as fallback
+|TokenSheriff-131 |ISSUER |IssuerConfig for issuer '%s' has claimSubOptional=true. This is not conform to RFC 7519 which requires the 'sub' claim for ACCESS_TOKEN and ID_TOKEN types. Use this setting only when necessary and ensure appropriate alternative validation mechanisms. |Logged when an issuer configuration has the subject claim marked as optional, which violates RFC 7519 requirements
+|TokenSheriff-132 |JWKS |Invalid Base64 URL encoding detected for JWK field: %s |Logged when Base64 URL encoding validation fails for a JWK field
+|TokenSheriff-133 |JWKS |Background refresh skipped - no HTTP handler available |Logged when background JWKS refresh is skipped because no HTTP handler is available
+|TokenSheriff-134 |JWKS |Background refresh parse error: %s for issuer: %s |Logged when a JSON parsing error occurs during background JWKS refresh for a specific issuer
+|TokenSheriff-135 |ISSUER |Failed to load issuer configuration for %s, status: %s |Logged when issuer configuration loading fails with a specific status
+|TokenSheriff-136 |JWKS |Timeout waiting for JWKS to load for issuer: %s |Logged when JWKS loading times out for a specific issuer
+|TokenSheriff-137 |JWKS |Interrupted while waiting for JWKS to load for issuer: %s |Logged when the thread is interrupted while waiting for JWKS to load
+|TokenSheriff-138 |JWKS |Configured issuer '%s' does not match discovered issuer '%s' from well-known document |Logged when there is a mismatch between configured and discovered issuer from well-known endpoint
+|TokenSheriff-139 |JWKS |Using insecure HTTP protocol for JWKS endpoint: %s - HTTPS should be used in production |Logged when an insecure HTTP protocol is used for JWKS endpoint instead of HTTPS
+|TokenSheriff-140 |JWKS |DSL-JSON returned null for JWKS parsing |Logged when DSL-JSON parser returns null while parsing JWKS content
+|TokenSheriff-141 |JWKS |Failed to parse JWKS content: %s |Logged when JWKS content parsing fails due to IO error or invalid JSON structure
+|TokenSheriff-142 |JWKS |Failed to parse OKP key with ID %s: %s |Logged when OKP (EdDSA) key parsing fails for a specific key ID
+|TokenSheriff-143 |TOKEN |Token type '%s' does not match expected type '%s' |Logged when the JWT typ header does not match the expected token type configured for the issuer (RFC 9068 validation)
+|TokenSheriff-144 |DPOP |DPoP proof is required but the DPoP HTTP header is missing |Logged when a DPoP proof is expected (cnf.jkt present or dpop.required=true) but the DPoP HTTP header is absent
+|TokenSheriff-145 |DPOP |DPoP proof has invalid format: %s |Logged when the DPoP proof JWT cannot be decoded or has structural issues (wrong typ, unsupported algorithm, missing jwk, invalid signature)
+|TokenSheriff-146 |DPOP |DPoP proof iat claim is outside acceptable freshness window |Logged when the DPoP proof iat claim is too old or too far in the future
+|TokenSheriff-147 |DPOP |DPoP proof JWK thumbprint '%s' does not match token cnf.jkt '%s' |Logged when the computed JWK Thumbprint (RFC 7638) of the DPoP proof's public key does not match the cnf.jkt claim in the access token
+|TokenSheriff-148 |DPOP |DPoP proof replay detected for jti: %s |Logged when a DPoP proof with a previously seen jti value is detected (replay attack)
+|TokenSheriff-149 |DPOP |DPoP proof is missing required claim: %s |Logged when the DPoP proof JWT body is missing a required claim (jti, iat, or ath)
+|TokenSheriff-150 |DPOP |DPoP proof ath claim does not match access token hash |Logged when the DPoP proof ath claim (SHA-256 hash of the access token) does not match the actual access token
+|TokenSheriff-151 |DPOP |DPoP is required but access token does not contain cnf.jkt claim |Logged when DPoP validation is required or a DPoP proof is provided but the access token lacks the cnf.jkt claim
+|TokenSheriff-152 |JWE |Failed to decrypt JWE token: %s |Logged when JWE decryption fails due to cryptographic errors (wrong key, tampered content, etc.)
+|TokenSheriff-153 |JWE |Unsupported JWE algorithm: alg=%s, enc=%s |Logged when a JWE token uses an unsupported or rejected algorithm combination
+|TokenSheriff-154 |JWE |Received JWE token but no decryption configuration is available |Logged when a 5-part JWE token is received but no JweDecryptionConfig was configured on TokenValidator
+|TokenSheriff-155 |JWE |No decryption key found for key ID: %s |Logged when the JWE header references a kid that has no matching decryption key and no default key is configured
+|TokenSheriff-156 |JWE |Unsupported JWE compression algorithm: %s |Logged when a JWE token uses an unsupported compression algorithm (only DEF/DEFLATE is supported)
+|TokenSheriff-157 |JWE |Nested JWE tokens are not allowed |Logged when decrypting a JWE token reveals another JWE (5-part) token instead of the expected inner JWS
+|TokenSheriff-158 |Token Age |Token age exceeds maximum allowed age |Logged when a token's `iat` claim indicates it was issued longer ago than the configured `maxTokenAgeSeconds`
+|TokenSheriff-159 |Custom Rule |Custom validation rule rejected token: %s |Logged when a custom `TokenValidationRule` rejects a token by throwing `TokenValidationException`
+|TokenSheriff-160 |JWKS |JWK entry without 'kid' field skipped — kid is required for key identification |Logged when a JWK entry is skipped because it lacks a key ID
+|TokenSheriff-161 |JWKS |RSA JWK without 'alg' field — defaulting to RS256 for key ID: %s |Logged when an RSA JWK lacks an algorithm field and defaults to RS256
+|TokenSheriff-162 |Audience |Access token is missing required audience claim. Expected audience: %s |Logged when an access token is missing the required audience claim
+|TokenSheriff-163 |DPOP |DPoP proof htu claim '%s' does not match request URI '%s' |Logged when the DPoP htu claim doesn't match the actual request URI
+|TokenSheriff-164 |DPOP |DPoP proof htm claim '%s' does not match request method '%s' |Logged when the DPoP htm claim doesn't match the actual request method
+|TokenSheriff-165 |Audience |Audience claim missing but azp claim '%s' matches expected audience — using azp as fallback |Logged when the audience (aud) claim is absent but the azp claim matches the expected audience, falling back to azp for audience validation
+|TokenSheriff-166 |Audience |Access token audience validation skipped (accessTokenAudienceOptional=true). Expected audience: %s |Logged when audience validation is skipped for an access token because accessTokenAudienceOptional is enabled
+|TokenSheriff-167 |Authorized Party |azp claim missing, using client_id claim '%s' for authorized party validation (RFC 9068) |Logged when the azp claim is absent but the client_id claim (per RFC 9068) matches the expected client ID
 |===
 
 == ERROR Level (200-206)
@@ -131,48 +131,48 @@ For more details about security events related to these log messages, see the Se
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
-|OAuthSheriff-200 |TOKEN |Failed to validate validation signature: %s |Logged when a token signature validation fails
-|OAuthSheriff-201 |JWKS |JWKS content size exceeds maximum allowed size (upperLimit=%s, actual=%s) |Logged when the JWKS content size exceeds the maximum allowed size, showing both the configured upper limit and the actual content size
-|OAuthSheriff-202 |JWKS |Failed to parse JWKS JSON: %s |Logged when there is an error parsing the JWKS JSON
-|OAuthSheriff-203 |JWKS |Failed to load JWKS |Logged when a JWKS load operation fails
-|OAuthSheriff-204 |WELLKNOWN |Failed to parse JSON from %s: %s |Logged when JSON parsing fails for a well-known discovery document
-|OAuthSheriff-205 |JWKS |JWKS initialization failed: %s for issuer: %s |Logged when JWKS initialization fails for a specific issuer with error details
-|OAuthSheriff-206 |JWKS |JWKS load execution failed: %s for issuer: %s |Logged when JWKS load execution fails for a specific issuer with error details
+|TokenSheriff-200 |TOKEN |Failed to validate validation signature: %s |Logged when a token signature validation fails
+|TokenSheriff-201 |JWKS |JWKS content size exceeds maximum allowed size (upperLimit=%s, actual=%s) |Logged when the JWKS content size exceeds the maximum allowed size, showing both the configured upper limit and the actual content size
+|TokenSheriff-202 |JWKS |Failed to parse JWKS JSON: %s |Logged when there is an error parsing the JWKS JSON
+|TokenSheriff-203 |JWKS |Failed to load JWKS |Logged when a JWKS load operation fails
+|TokenSheriff-204 |WELLKNOWN |Failed to parse JSON from %s: %s |Logged when JSON parsing fails for a well-known discovery document
+|TokenSheriff-205 |JWKS |JWKS initialization failed: %s for issuer: %s |Logged when JWKS initialization fails for a specific issuer with error details
+|TokenSheriff-206 |JWKS |JWKS load execution failed: %s for issuer: %s |Logged when JWKS load execution fails for a specific issuer with error details
 |===
 
 == Quarkus Integration Messages
 
-This section documents log messages specific to the Quarkus integration module (oauth-sheriff-quarkus).
+This section documents log messages specific to the Quarkus integration module (token-sheriff-validation-quarkus).
 
 === Quarkus INFO Level (001-024)
 
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
-|OAuthSheriff_Q-001 |CONFIG |Resolving issuer configurations from properties |Indicates the start of issuer configuration resolution from application properties
-|OAuthSheriff_Q-002 |CONFIG |Resolved issuer configuration: %s |Shows a single resolved issuer configuration with its details
-|OAuthSheriff_Q-003 |CONFIG |Resolved %s enabled issuer configurations |Summary count of all enabled issuer configurations found
-|OAuthSheriff_Q-004 |CONFIG |Resolved ParserConfig: maxTokenSize=%s bytes, maxPayloadSize=%s bytes, maxStringLength=%s |Shows the resolved JWT parser configuration limits
-|OAuthSheriff_Q-005 |VALIDATION |Initializing JWT validation components from configuration |Indicates the start of JWT validation component initialization
-|OAuthSheriff_Q-006 |VALIDATION |JWT validation components initialized successfully with %s issuers |Confirms successful initialization with issuer count
-|OAuthSheriff_Q-007 |VALIDATION |Resolving access log filter configuration from properties |Indicates the start of access log filter configuration resolution
-|OAuthSheriff_Q-008 |VALIDATION |Claim mapper registry initialized with %s custom mapper(s): %s |Shows the number of custom claim mappers discovered and their names
-|OAuthSheriff_Q-009 |VALIDATION |No custom claim mappers discovered |Indicates that no custom claim mappers were found during CDI discovery
-|OAuthSheriff_Q-010 |VALIDATION |Token validation rule registry initialized with %s custom rule(s) |Shows the number of custom token validation rules discovered during CDI discovery
-|OAuthSheriff_Q-011 |VALIDATION |No custom token validation rules discovered |Indicates that no custom token validation rules were found during CDI discovery
-|OAuthSheriff_Q-012 |METRICS |Initializing JwtMetricsCollector |Indicates the start of JWT metrics collector initialization
-|OAuthSheriff_Q-013 |METRICS |JwtMetricsCollector initialized with %s event types |Confirms successful initialization with event type count
-|OAuthSheriff_Q-014 |CACHE |Resolving access token cache configuration from properties |Indicates the start of access token cache configuration resolution
-|OAuthSheriff_Q-015 |CACHE |Access token cache disabled (maxSize=0) |Indicates that the access token cache is disabled
-|OAuthSheriff_Q-016 |CACHE |Access token cache configured: maxSize=%s, evictionIntervalSeconds=%s |Shows the configured access token cache settings
-|OAuthSheriff_Q-017 |METRICS |Clearing all JWT metrics |Indicates that all JWT metrics are being cleared
-|OAuthSheriff_Q-018 |METRICS |JWT metrics cleared successfully |Confirms successful clearing of JWT metrics
-|OAuthSheriff_Q-019 |JWE |Resolving JWE decryption configuration from properties |Indicates the start of JWE decryption configuration resolution
-|OAuthSheriff_Q-020 |JWE |JWE decryption configuration resolved with %s key(s) |Shows the number of JWE decryption keys resolved
-|OAuthSheriff_Q-021 |JWE |JWE config check: singleKeyPath=%s, keystorePath=%s, multiKeys=%s |Logs the JWE configuration sources being checked
-|OAuthSheriff_Q-022 |JWE |No JWE decryption configuration found - JWE support disabled |Indicates that no JWE decryption configuration was found
-|OAuthSheriff_Q-023 |ACCESS_LOG |CustomAccessLogFilter initialized: %s |Shows the initialized access log filter configuration
-|OAuthSheriff_Q-024 |ACCESS_LOG |%s |Individual access log entry in the configured format
+|TokenSheriff_Q-001 |CONFIG |Resolving issuer configurations from properties |Indicates the start of issuer configuration resolution from application properties
+|TokenSheriff_Q-002 |CONFIG |Resolved issuer configuration: %s |Shows a single resolved issuer configuration with its details
+|TokenSheriff_Q-003 |CONFIG |Resolved %s enabled issuer configurations |Summary count of all enabled issuer configurations found
+|TokenSheriff_Q-004 |CONFIG |Resolved ParserConfig: maxTokenSize=%s bytes, maxPayloadSize=%s bytes, maxStringLength=%s |Shows the resolved JWT parser configuration limits
+|TokenSheriff_Q-005 |VALIDATION |Initializing JWT validation components from configuration |Indicates the start of JWT validation component initialization
+|TokenSheriff_Q-006 |VALIDATION |JWT validation components initialized successfully with %s issuers |Confirms successful initialization with issuer count
+|TokenSheriff_Q-007 |VALIDATION |Resolving access log filter configuration from properties |Indicates the start of access log filter configuration resolution
+|TokenSheriff_Q-008 |VALIDATION |Claim mapper registry initialized with %s custom mapper(s): %s |Shows the number of custom claim mappers discovered and their names
+|TokenSheriff_Q-009 |VALIDATION |No custom claim mappers discovered |Indicates that no custom claim mappers were found during CDI discovery
+|TokenSheriff_Q-010 |VALIDATION |Token validation rule registry initialized with %s custom rule(s) |Shows the number of custom token validation rules discovered during CDI discovery
+|TokenSheriff_Q-011 |VALIDATION |No custom token validation rules discovered |Indicates that no custom token validation rules were found during CDI discovery
+|TokenSheriff_Q-012 |METRICS |Initializing JwtMetricsCollector |Indicates the start of JWT metrics collector initialization
+|TokenSheriff_Q-013 |METRICS |JwtMetricsCollector initialized with %s event types |Confirms successful initialization with event type count
+|TokenSheriff_Q-014 |CACHE |Resolving access token cache configuration from properties |Indicates the start of access token cache configuration resolution
+|TokenSheriff_Q-015 |CACHE |Access token cache disabled (maxSize=0) |Indicates that the access token cache is disabled
+|TokenSheriff_Q-016 |CACHE |Access token cache configured: maxSize=%s, evictionIntervalSeconds=%s |Shows the configured access token cache settings
+|TokenSheriff_Q-017 |METRICS |Clearing all JWT metrics |Indicates that all JWT metrics are being cleared
+|TokenSheriff_Q-018 |METRICS |JWT metrics cleared successfully |Confirms successful clearing of JWT metrics
+|TokenSheriff_Q-019 |JWE |Resolving JWE decryption configuration from properties |Indicates the start of JWE decryption configuration resolution
+|TokenSheriff_Q-020 |JWE |JWE decryption configuration resolved with %s key(s) |Shows the number of JWE decryption keys resolved
+|TokenSheriff_Q-021 |JWE |JWE config check: singleKeyPath=%s, keystorePath=%s, multiKeys=%s |Logs the JWE configuration sources being checked
+|TokenSheriff_Q-022 |JWE |No JWE decryption configuration found - JWE support disabled |Indicates that no JWE decryption configuration was found
+|TokenSheriff_Q-023 |ACCESS_LOG |CustomAccessLogFilter initialized: %s |Shows the initialized access log filter configuration
+|TokenSheriff_Q-024 |ACCESS_LOG |%s |Individual access log entry in the configured format
 |===
 
 === Quarkus WARN Level (100-104)
@@ -180,11 +180,11 @@ This section documents log messages specific to the Quarkus integration module (
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
-|OAuthSheriff_Q-100 |HEALTH |Error checking JWKS loader for issuer %s: %s |Indicates an error occurred while checking JWKS loader status in health check
-|OAuthSheriff_Q-101 |BEARER |Bearer token does not meet requirements. Missing scopes: %s, Missing roles: %s, Missing groups: %s |Details about which requirements are missing from a bearer token
-|OAuthSheriff_Q-102 |BEARER |Bearer token validation failed: %s (eventType=%s) |Token validation failed with a specific event type (e.g., expired, invalid signature)
-|OAuthSheriff_Q-103 |METRICS |No Micrometer counter found for event type %s, delta %s lost |Indicates that a metrics counter was not found and a delta value was lost
-|OAuthSheriff_Q-104 |JWE |JWE keystore configured at %s but no key-alias specified — skipping keystore key loading |Indicates that a JWE keystore was configured but no key alias was specified
+|TokenSheriff_Q-100 |HEALTH |Error checking JWKS loader for issuer %s: %s |Indicates an error occurred while checking JWKS loader status in health check
+|TokenSheriff_Q-101 |BEARER |Bearer token does not meet requirements. Missing scopes: %s, Missing roles: %s, Missing groups: %s |Details about which requirements are missing from a bearer token
+|TokenSheriff_Q-102 |BEARER |Bearer token validation failed: %s (eventType=%s) |Token validation failed with a specific event type (e.g., expired, invalid signature)
+|TokenSheriff_Q-103 |METRICS |No Micrometer counter found for event type %s, delta %s lost |Indicates that a metrics counter was not found and a delta value was lost
+|TokenSheriff_Q-104 |JWE |JWE keystore configured at %s but no key-alias specified — skipping keystore key loading |Indicates that a JWE keystore was configured but no key alias was specified
 |===
 
 === Quarkus ERROR Level (200)
@@ -192,5 +192,5 @@ This section documents log messages specific to the Quarkus integration module (
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
-|OAuthSheriff_Q-200 |VERTX |Vertx HttpServerRequest context is unavailable - no active request context found |Indicates that the Vertx HTTP server request context could not be resolved
+|TokenSheriff_Q-200 |VERTX |Vertx HttpServerRequest context is unavailable - no active request context found |Indicates that the Vertx HTTP server request context could not be resolved
 |===

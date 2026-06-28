@@ -1,0 +1,28 @@
+{
+  "name": "Token-Sheriff",
+  "description": "Runtime module for Quarkus integration for JWT token validation, providing configuration, producers, and integration from SecurityEvents to Micrometer",
+  "metadata": {
+    "keywords": [
+      "jwt",
+      "token-validation", 
+      "security",
+      "authentication",
+      "jwks",
+      "cui"
+    ],
+    "categories": [
+      "security"
+    ],
+    "status": "stable"
+  },
+  "artifact": {
+    "group-id": "de.cuioss.sheriff.token",
+    "artifact-id": "token-sheriff-validation-quarkus",
+    "version": "1.0.0-SNAPSHOT"
+  },
+  "deployment-artifact": {
+    "group-id": "de.cuioss.sheriff.token",
+    "artifact-id": "token-sheriff-validation-quarkus-deployment",
+    "version": "1.0.0-SNAPSHOT"
+  }
+}

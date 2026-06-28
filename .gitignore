@@ -16,7 +16,7 @@ __pycache__/
 /META-INF/MANIFEST.MF
 
 # Node modules in Quarkus deployment module (for DevUI)
-/oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-deployment/node_modules/
+/token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment/node_modules/
 
 # Claude Code configuration
 .claude/settings.local.json

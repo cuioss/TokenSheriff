@@ -19,7 +19,7 @@ set -e
 BENCHMARK_NAME="jwtValidation"
 
 # Service URL uses Docker service name (configured in docker-compose.yml)
-SERVICE_URL="https://oauth-sheriff-integration-tests:8443"
+SERVICE_URL="https://token-sheriff-integration-tests:8443"
 
 # Get script directory for fetch_tokens.sh
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"

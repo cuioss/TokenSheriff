@@ -14,7 +14,7 @@ This document describes TokenSheriff's relationship to the https://download.ecli
 === Document Navigation
 
 * link:../../README.md[README] - Project overview and introduction
-* xref:../../oauth-sheriff-core/README.adoc[Usage Guide] - How to use the library with code examples
+* xref:../../token-sheriff-validation/README.adoc[Usage Guide] - How to use the library with code examples
 * xref:../Requirements.adoc[Requirements] - Functional and non-functional requirements
 * xref:../architecture.adoc[Architecture] - Architecture reference and implementation details
 * xref:token-decryption.adoc[Token Decryption] - JWE decryption specification
@@ -96,13 +96,13 @@ The `upn` claim is MP-JWT's standardized human-readable principal identifier. To
 
 Clock skew tolerance is applied to both `exp` and `nbf` validation, accommodating clock drift in distributed systems. A token is considered expired only when `exp + clockSkew < now`.
 
-Configured per issuer via `sheriff.oauth.issuers.<name>.clock-skew-seconds` (default: 60 seconds).
+Configured per issuer via `sheriff.token.issuers.<name>.clock-skew-seconds` (default: 60 seconds).
 
 === Token Age Verification (`mp.jwt.verify.token.age`)
 
 Maximum token age validation based on `iat` claim. When enabled, rejects tokens where `now - iat > maxTokenAgeSeconds + clockSkewSeconds`, even if not yet expired.
 
-Configured per issuer via `sheriff.oauth.issuers.<name>.max-token-age-seconds` (default: disabled).
+Configured per issuer via `sheriff.token.issuers.<name>.max-token-age-seconds` (default: disabled).
 
 === CDI Producers (`@Produces JsonWebToken`, `@Produces Principal`)
 
@@ -122,10 +122,10 @@ Alternative token extraction from HTTP cookies instead of the `Authorization` he
 
 Configuration:
 
-* `sheriff.oauth.token.header` — `Authorization` (default) or `Cookie`
-* `sheriff.oauth.token.cookie-name` — cookie name (default: `Bearer`)
+* `sheriff.token.token.header` — `Authorization` (default) or `Cookie`
+* `sheriff.token.token.cookie-name` — cookie name (default: `Bearer`)
 
-When `sheriff.oauth.token.header=Cookie`, the token is extracted from the named cookie in the `Cookie` HTTP header. If a valid `Authorization: Bearer <token>` header is also present, it takes precedence.
+When `sheriff.token.token.header=Cookie`, the token is extracted from the named cookie in the `Cookie` HTTP header. If a valid `Authorization: Bearer <token>` header is also present, it takes precedence.
 
 == Not Adopted (By Design)
 
@@ -143,7 +143,7 @@ When `sheriff.oauth.token.header=Cookie`, the token is extracted from the named 
 |Not applicable to Quarkus extension model. TokenSheriff activates via `@BearerAuth` interceptor binding and configuration properties.
 
 |`mp.jwt.*` config namespace
-|`sheriff.oauth.*` is the established convention. TokenSheriff's per-issuer configuration model (`sheriff.oauth.issuers.<name>.*`) has no equivalent in the single-issuer `mp.jwt.*` namespace.
+|`sheriff.token.*` is the established convention. TokenSheriff's per-issuer configuration model (`sheriff.token.issuers.<name>.*`) has no equivalent in the single-issuer `mp.jwt.*` namespace.
 
 |`ClaimValue<T>` (MP-JWT version)
 |TokenSheriff's `ClaimValue` with `ClaimMapper` pipeline (e.g., `ScopeMapper`, `KeycloakDefaultRolesMapper`) is more powerful. MP-JWT's `ClaimValue` is a simple typed wrapper.
@@ -174,43 +174,43 @@ The following capabilities have no equivalent in MP-JWT 2.1:
 |MP-JWT Property |TokenSheriff Equivalent |Notes
 
 |`mp.jwt.verify.issuer`
-|`sheriff.oauth.issuers.<name>.expected-issuer`
+|`sheriff.token.issuers.<name>.expected-issuer`
 |Per-issuer in TokenSheriff
 
 |`mp.jwt.verify.audiences`
-|`sheriff.oauth.issuers.<name>.expected-audience`
+|`sheriff.token.issuers.<name>.expected-audience`
 |Per-issuer in TokenSheriff
 
 |`mp.jwt.verify.publickey.location`
-|`sheriff.oauth.issuers.<name>.jwks.http.well-known-url`
+|`sheriff.token.issuers.<name>.jwks.http.well-known-url`
 |TokenSheriff uses OIDC discovery or direct JWKS URL
 
 |`mp.jwt.verify.publickey.algorithm`
-|`sheriff.oauth.issuers.<name>.allowed-signature-algorithms`
+|`sheriff.token.issuers.<name>.allowed-signature-algorithms`
 |Per-issuer, multiple algorithms supported
 
 |`mp.jwt.verify.clock.skew`
-|`sheriff.oauth.issuers.<name>.clock-skew-seconds`
+|`sheriff.token.issuers.<name>.clock-skew-seconds`
 |Per-issuer in TokenSheriff
 
 |`mp.jwt.verify.token.age`
-|`sheriff.oauth.issuers.<name>.max-token-age-seconds`
+|`sheriff.token.issuers.<name>.max-token-age-seconds`
 |Per-issuer in TokenSheriff
 
 |`mp.jwt.token.header`
-|`sheriff.oauth.token.header`
+|`sheriff.token.token.header`
 |Global setting
 
 |`mp.jwt.token.cookie`
-|`sheriff.oauth.token.cookie-name`
+|`sheriff.token.token.cookie-name`
 |Global setting
 
 |`mp.jwt.decrypt.key.location`
-|`sheriff.oauth.jwe.decrypt-key-location`
+|`sheriff.token.jwe.decrypt-key-location`
 |JWE decryption key
 
 |`mp.jwt.decrypt.key.algorithm`
-|`sheriff.oauth.jwe.key-management-algorithm`
+|`sheriff.token.jwe.key-management-algorithm`
 |JWE key management algorithm
 |===
 

@@ -1,0 +1,87 @@
+= Health Checks
+:toc: left
+:toclevels: 2
+:source-highlighter: highlight.js
+:toc-title: Table of Contents
+:sectnums:
+
+== Overview
+
+The token-sheriff-validation-quarkus extension provides MicroProfile Health checks for JWT validation components using SmallRye Health (MicroProfile Health 4.0).
+
+== Available Health Checks
+
+=== JWKS Endpoint Health Check
+
+* **Type:** Readiness (`@Readiness`) | **Name:** `jwks-endpoints` | **Endpoint:** `/q/health/ready`
+
+[source,json]
+----
+{
+  "status": "UP",
+  "name": "jwks-endpoints",
+  "data": {
+    "checkedEndpoints": 3,
+    "issuer.0.url": "https://keycloak.example.com/auth/realms/master",
+    "issuer.0.jwksType": "HTTP",
+    "issuer.0.status": "UP"
+  }
+}
+----
+
+=== Token Validator Health Check
+
+* **Type:** Liveness (`@Liveness`) | **Name:** `jwt-validator` | **Endpoint:** `/q/health/live`
+
+[source,json]
+----
+{
+  "status": "UP",
+  "name": "jwt-validator",
+  "data": { "issuerCount": 3 }
+}
+----
+
+== Configuration
+
+See xref:../../token-sheriff-validation-quarkus/src/main/resources/META-INF/quarkus-config-doc.adoc#_health_checks[Health Check Configuration] for options.
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-smallrye-health</artifactId>
+</dependency>
+----
+
+== Kubernetes Integration
+
+[source,yaml]
+----
+livenessProbe:
+  httpGet:
+    path: /q/health/live
+    port: 8080
+  periodSeconds: 30
+  timeoutSeconds: 5
+readinessProbe:
+  httpGet:
+    path: /q/health/ready
+    port: 8080
+  periodSeconds: 20
+  timeoutSeconds: 5
+----
+
+== Health Check Behavior
+
+=== JWKS Endpoint Health Check
+
+* Caches results for 30 seconds to prevent excessive network calls
+* Reports per-issuer status including URL, JWKS type, and connectivity
+* Returns DOWN if any configured JWKS endpoint has a non-OK loader status (unreachable, still initializing, or in error state)
+
+=== Token Validator Health Check
+
+* Injects `List<IssuerConfig>` and checks whether the list is non-empty
+* Returns DOWN if no issuer configurations are found
+* Lightweight check focused on configuration availability (does not inject `TokenValidator`)

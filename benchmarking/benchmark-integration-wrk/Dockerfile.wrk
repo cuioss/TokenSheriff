@@ -24,6 +24,6 @@ CMD ["--help"]
 LABEL org.opencontainers.image.title="WRK HTTP Benchmark Tool"
 LABEL org.opencontainers.image.description="Multi-architecture WRK image with embedded benchmark scripts"
 LABEL org.opencontainers.image.version="4.2.0-alpine"
-LABEL org.opencontainers.image.authors="OAuth Sheriff Team"
+LABEL org.opencontainers.image.authors="Token-Sheriff Team"
 LABEL org.opencontainers.image.source="https://github.com/wg/wrk"
 LABEL multi-arch="linux/amd64,linux/arm64"

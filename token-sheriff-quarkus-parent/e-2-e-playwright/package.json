@@ -1,0 +1,36 @@
+{
+  "name": "e-2-e-playwright",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-End Playwright tests for Token-Sheriff Dev-UI",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "playwright:test": "playwright test",
+    "playwright:test:headed": "playwright test --headed",
+    "playwright:test:ui": "playwright test --ui",
+    "playwright:report": "playwright show-report",
+    "test": "node utils/run-tests-with-precheck.js",
+    "test:self": "playwright test tests/self-*.spec.js --reporter=list",
+    "test:functional": "playwright test --grep-invert 'self-|accessibility' --reporter=list",
+    "test:a11y": "playwright test tests/accessibility-wcag-compliance.spec.js --reporter=list",
+    "test:no-precheck": "playwright test --grep-invert self- --reporter=list",
+    "lint": "eslint '{tests,utils,fixtures}/**/*.js'",
+    "lint:fix": "eslint '{tests,utils,fixtures}/**/*.js' --fix",
+    "lint:strict": "eslint '{tests,utils,fixtures}/**/*.js' --max-warnings 30 --report-unused-disable-directives",
+    "format": "prettier --write '{tests,utils,fixtures}/**/*.js'",
+    "format:check": "prettier --check '{tests,utils,fixtures}/**/*.js'"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.58.2",
+    "eslint": "^10.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-security": "^3.0.1",
+    "globals": "^17.3.0",
+    "prettier": "^3.8.1"
+  }
+}

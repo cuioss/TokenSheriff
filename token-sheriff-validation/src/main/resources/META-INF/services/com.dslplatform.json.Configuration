@@ -1,0 +1,4 @@
+de.cuioss.sheriff.token.validation.json._WellKnownResult_DslJsonConverter
+de.cuioss.sheriff.token.validation.json._Jwks_DslJsonConverter
+de.cuioss.sheriff.token.validation.json._JwkKey_DslJsonConverter
+de.cuioss.sheriff.token.validation.json._JwtHeader_DslJsonConverter

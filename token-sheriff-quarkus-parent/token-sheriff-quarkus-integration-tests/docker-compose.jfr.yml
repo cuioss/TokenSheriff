@@ -1,0 +1,15 @@
+# Docker Compose override for JFR profiling
+# Usage: docker compose -f docker-compose.yml -f docker-compose.jfr.yml up -d
+
+services:
+  token-sheriff-integration-tests:
+    image: "token-sheriff-integration-tests:jfr"
+    build:
+      dockerfile: token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/src/main/docker/Dockerfile.native.jfr
+    volumes:
+      # Read-only certificate mount (production pattern)
+      - ./src/main/docker/certificates:/app/certificates:ro
+      # Mount target directory for log files (defaults to ./target)
+      - ${LOG_TARGET_DIR:-./target}:/logs:rw
+      # JFR output directory - must be writable and outside tmpfs
+      - ./target/jfr-output:/tmp/jfr-output:rw

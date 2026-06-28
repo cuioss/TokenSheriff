@@ -212,8 +212,8 @@ JFR output requires a volume mount:
 ----
 # docker-compose.jfr.yml
 services:
-  oauth-sheriff-integration-tests:
-    image: "oauth-sheriff-integration-tests:jfr"
+  token-sheriff-integration-tests:
+    image: "token-sheriff-integration-tests:jfr"
     volumes:
       - ./target/jfr-output:/tmp/jfr-output:rw
 ----
@@ -240,4 +240,4 @@ jfr print --events ExecutionSample jwt-profile.jfr | \
 * link:Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis] — throughput, latency, connection sweep
 * link:Analysis-03.2026-Latency-Decomposition.adoc[Latency Decomposition] — ablation study
 * link:Analysis-03.2026-Micro.adoc[Microbenchmark Analysis] — JMH library timings
-* link:../../oauth-sheriff-quarkus-parent/doc/performance/jfr-profiling-guide.adoc[JFR Profiling Guide] — setup instructions
+* link:../../token-sheriff-quarkus-parent/doc/performance/jfr-profiling-guide.adoc[JFR Profiling Guide] — setup instructions

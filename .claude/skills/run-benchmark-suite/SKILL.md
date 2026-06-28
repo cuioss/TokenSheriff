@@ -48,7 +48,7 @@ All benchmark commands run from `benchmarking/benchmark-integration-wrk/` relati
 1. Navigate to `benchmarking/benchmark-integration-wrk/`
 2. Start containers:
    ```bash
-   bash ../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/scripts/start-integration-container.sh
+   bash ../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/scripts/start-integration-container.sh
    ```
 3. Loop over connection counts (default: 50, 100, 150, 200, 250, 300):
    ```bash
@@ -57,7 +57,7 @@ All benchmark commands run from `benchmarking/benchmark-integration-wrk/` relati
    ```
 4. Stop containers:
    ```bash
-   bash ../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/scripts/stop-integration-container.sh
+   bash ../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/scripts/stop-integration-container.sh
    ```
 5. Analyze logs for each connection count using `references/log-analysis-checklist.md`.
 6. Build comparison table from results across all connection counts.
@@ -102,5 +102,5 @@ Execute workflows 1 through 4 sequentially. Stop and report if any workflow fail
 | `benchmarking/doc/Analysis-*-Integration.adoc` | Connection sweep data tables (find the most recent) |
 | `benchmarking/doc/Analysis-*-Latency-Decomposition.adoc` | Ablation decomposition (find the most recent) |
 | `benchmarking/doc/Analysis-*-JFR-Profiling.adoc` | JFR analysis (find the most recent) |
-| `oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/scripts/start-integration-container.sh` | Container lifecycle start (supports COMPOSE_OVERRIDE) |
-| `oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/scripts/stop-integration-container.sh` | Container lifecycle stop (supports COMPOSE_OVERRIDE) |
+| `token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/scripts/start-integration-container.sh` | Container lifecycle start (supports COMPOSE_OVERRIDE) |
+| `token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/scripts/stop-integration-container.sh` | Container lifecycle stop (supports COMPOSE_OVERRIDE) |

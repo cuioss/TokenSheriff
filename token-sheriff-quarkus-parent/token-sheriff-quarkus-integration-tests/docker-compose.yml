@@ -1,0 +1,252 @@
+# JWT Integration Tests - Production-Grade Configuration
+# Purpose: Test with production-equivalent settings to catch issues early
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.6.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=1h'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - jwt-integration
+
+  keycloak:
+    # NOTE: Dependabot cannot automatically update this image version.
+    # Manual updates required. Check: https://quay.io/keycloak/keycloak
+    image: quay.io/keycloak/keycloak:26.4.0
+    command:
+      - start-dev
+      - --import-realm
+      - --https-certificate-file=/opt/keycloak/certificates/localhost.crt
+      - --https-certificate-key-file=/opt/keycloak/certificates/localhost.key
+      - --https-port=8443
+    ports:
+      - "1443:8443"  # External HTTPS port for Keycloak admin
+      - "1090:9000"  # External port for Keycloak management (health checks)
+    volumes:
+      - ./src/main/docker/keycloak:/opt/keycloak/data/import:ro
+      - ./src/main/docker/certificates:/opt/keycloak/certificates:ro
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+      - KC_HEALTH_ENABLED=true
+      - KC_METRICS_ENABLED=true
+      - KC_LOG_LEVEL=INFO
+      # Hostname configuration v2 for well-known discovery endpoint (research-based)
+      - KC_HOSTNAME_STRICT=false
+      - KC_HTTP_ENABLED=false
+      - KC_HTTPS_PORT=8443
+      - KC_HOSTNAME=localhost
+      # External hostname for Docker container well-known discovery
+      
+      # HTTP Access Logging Configuration (Quarkus-based)
+      # Enable comprehensive request/response logging for JWKS endpoint diagnostics
+      - QUARKUS_HTTP_ACCESS_LOG_ENABLED=true
+      - QUARKUS_HTTP_ACCESS_LOG_PATTERN=combined
+      - QUARKUS_HTTP_ACCESS_LOG_CATEGORY=io.quarkus.http.access-log
+    networks:
+      - jwt-integration
+    
+    # Health check to ensure Keycloak is ready before dependent services start
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && exec 3<&-"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+  token-sheriff-integration-tests:
+    # Use separate Dockerfiles for different variants
+    # For distroless: DOCKERFILE=Dockerfile.native.distroless DOCKER_IMAGE_TAG=distroless
+    # For JFR:       DOCKERFILE=Dockerfile.native.jfr DOCKER_IMAGE_TAG=jfr
+    image: "token-sheriff-integration-tests:${DOCKER_IMAGE_TAG:-distroless}"
+    build:
+      context: ../..
+      dockerfile: token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/src/main/docker/${DOCKERFILE:-Dockerfile.native.distroless}
+      cache_from:
+        - quay.io/quarkus/quarkus-distroless-image:2.0
+        - registry.access.redhat.com/ubi8/ubi-minimal:8.10
+        - quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25
+
+    ports:
+      - "10443:8443"  # External test port for integration tests
+
+    environment:
+      # Log file path configuration - write to mounted /logs directory
+      - LOG_FILE_PATH=/logs/quarkus.log
+      # Quarkus profile — set to "multi-idp" to enable Dex issuer configuration
+      - QUARKUS_PROFILE=${QUARKUS_PROFILE:-prod}
+
+    depends_on:
+      keycloak:
+        condition: service_healthy
+
+    volumes:
+      # Read-only certificate mount (production pattern)
+      - ./src/main/docker/certificates:/app/certificates:ro
+      # Mount target directory for log files (defaults to ./target)
+      - ${LOG_TARGET_DIR:-./target}:/logs:rw
+
+    # OWASP Security hardening (production-grade)
+    security_opt:
+      - no-new-privileges:true
+
+    # Drop all capabilities (principle of least privilege)
+    cap_drop:
+      - ALL
+
+    # Read-only filesystem with tmpfs for temporary files (production setting)
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+
+    # Resource configuration for benchmarking - no CPU limits, autoscale to available resources
+    deploy:
+      resources:
+        limits:
+          memory: 512M  # More than sufficient - peak usage only 128MB
+          # No CPU limit - use all available cores
+        reservations:
+          memory: 256M
+          # No CPU reservation - flexible scaling
+
+    # No health check for distroless - health endpoints are available at /q/health
+
+    # Network isolation (production pattern)
+    networks:
+      - jwt-integration
+
+    # Production restart policy
+    restart: unless-stopped
+
+  # Dex OIDC Provider for Multi-IDP Integration Testing
+  # Lightweight, OpenID Certified provider (~30MB, 2s startup)
+  # Only starts with: COMPOSE_PROFILES=multi-idp docker compose up -d
+  dex:
+    image: dexidp/dex:v2.42.0
+    command:
+      - dex
+      - serve
+      - /etc/dex/config.yaml
+    ports:
+      - "2556:5556"  # External HTTPS port for Dex
+    volumes:
+      - ./src/main/docker/dex:/etc/dex:ro
+      - ./src/main/docker/certificates:/certs:ro
+    networks:
+      - jwt-integration
+    profiles:
+      - multi-idp
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate --quiet --tries=1 --spider https://localhost:5556/dex/.well-known/openid-configuration || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  # Zitadel PostgreSQL database for multi-IDP testing
+  # Only starts with: COMPOSE_PROFILES=multi-idp docker compose up -d
+  zitadel-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: zitadel
+    tmpfs:
+      - /var/lib/postgresql/data:rw
+    networks:
+      - jwt-integration
+    profiles:
+      - multi-idp
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d zitadel"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  # Zitadel OIDC Provider for Multi-IDP Integration Testing
+  # OpenID Certified, client_credentials with JWT access tokens
+  # Only starts with: COMPOSE_PROFILES=multi-idp docker compose up -d
+  # Requires user: "0" to work around start-from-init PAT file permission bug (#8910)
+  zitadel:
+    image: ghcr.io/zitadel/zitadel:v2.71.6
+    command: start-from-init --masterkeyFromEnv --tlsMode disabled
+    user: "0"
+    environment:
+      ZITADEL_MASTERKEY: "IntegrationTestMasterkey32Bytes!"
+      ZITADEL_EXTERNALSECURE: "false"
+      # EXTERNALPORT must match the internal listening port (8080) so that Zitadel serves
+      # JWKS keys when accessed from inside Docker (Host: zitadel:8080). The external port
+      # mapping (3080:8080) is only for the host. Tokens will have iss: http://zitadel:8080.
+      # Test JVM: http://localhost:3080 with Host header "zitadel:8080"
+      # App container: http://zitadel:8080 (direct Docker DNS, Host matches EXTERNALDOMAIN:EXTERNALPORT)
+      ZITADEL_EXTERNALDOMAIN: "zitadel"
+      ZITADEL_EXTERNALPORT: "8080"
+      # Database configuration
+      ZITADEL_DATABASE_POSTGRES_HOST: zitadel-db
+      ZITADEL_DATABASE_POSTGRES_PORT: "5432"
+      ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
+      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: postgres
+      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: postgres
+      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
+      # First instance — machine user with PAT for setup.sh API calls
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: "zitadel-admin-sa"
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: "Admin"
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: "2099-01-01T00:00:00Z"
+      ZITADEL_FIRSTINSTANCE_PATPATH: /machinekey/zitadel-admin-sa.pat
+    ports:
+      - "3080:8080"  # External HTTP port for Zitadel
+    volumes:
+      - zitadel-pat:/machinekey
+    depends_on:
+      zitadel-db:
+        condition: service_healthy
+    networks:
+      - jwt-integration
+    profiles:
+      - multi-idp
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/debug/ready || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  # WRK HTTP benchmarking tool - used by integration benchmarks
+  # Usage: docker compose run --rm wrk -t5 -c50 -d30s --latency https://token-sheriff-integration-tests:8443/q/health/live
+  wrk:
+    build:
+      context: ../..
+      dockerfile: benchmarking/benchmark-integration-wrk/Dockerfile.wrk
+    image: wrk:local
+    networks:
+      - jwt-integration
+    # Only start for benchmarks
+    profiles:
+      - benchmark
+    # No restart policy - this is a run-once service
+    restart: "no"
+
+volumes:
+  # Named volume for Zitadel admin PAT (shared between zitadel container and host setup script)
+  zitadel-pat:
+
+networks:
+  jwt-integration:
+    driver: bridge

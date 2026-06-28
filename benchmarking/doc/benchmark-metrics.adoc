@@ -56,13 +56,13 @@ The metrics system captures real-time CPU, memory, and application metrics from 
 
 Configuration files:
 
-* **prometheus.yml**: `oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/prometheus.yml`
-* **docker-compose.yml**: `oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/docker-compose.yml`
+* **prometheus.yml**: `token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/prometheus.yml`
+* **docker-compose.yml**: `token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/docker-compose.yml`
 
 Key settings:
 
 * Scrape interval: 2 seconds
-* Target: `oauth-sheriff-integration-tests:8443/q/metrics` (internal service name)
+* Target: `token-sheriff-integration-tests:8443/q/metrics` (internal service name)
 * HTTPS with self-signed certificates (`insecure_skip_verify: true`)
 * Data retention: 1 hour (sufficient for benchmarking)
 
@@ -115,19 +115,19 @@ NOTE: External port mapping is `10443→8443`. Prometheus uses internal service 
 |===
 |Metric |Description |Type
 
-|`sheriff_oauth_validation_success_operations_total`
+|`sheriff_token_validation_success_operations_total`
 |Successful JWT validations by event type
 |Counter
 
-|`sheriff_oauth_validation_errors_total`
+|`sheriff_token_validation_errors_total`
 |JWT validation errors by category
 |Counter
 
-|`sheriff_oauth_bearer_token_validation_seconds_count`
+|`sheriff_token_bearer_token_validation_seconds_count`
 |JWT validation count
 |Counter (histogram-derived)
 
-|`sheriff_oauth_bearer_token_validation_seconds_sum`
+|`sheriff_token_bearer_token_validation_seconds_sum`
 |Total JWT validation time in seconds
 |Counter (histogram-derived)
 |===

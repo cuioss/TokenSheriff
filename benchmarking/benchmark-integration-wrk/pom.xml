@@ -3,17 +3,17 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>de.cuioss.sheriff.oauth</groupId>
+        <groupId>de.cuioss.sheriff.token</groupId>
         <artifactId>benchmarking</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>benchmark-integration-wrk</artifactId>
-    <name>OAuth Sheriff WRK-based Integration Benchmarks</name>
+    <name>Token-Sheriff WRK-based Integration Benchmarks</name>
     <description>WRK-based HTTP benchmarks for OAuth/JWT validation endpoints with integration test infrastructure</description>
 
     <properties>
-        <version.lombok>1.18.44</version.lombok>
+        <version.lombok>1.18.46</version.lombok>
         <!-- Skip benchmarks by default (enable with -Pbenchmark) -->
         <skip.benchmark>true</skip.benchmark>
 
@@ -21,18 +21,18 @@
         <skip.container.lifecycle>false</skip.container.lifecycle>
 
         <!-- Scripts location -->
-        <integration.scripts.dir>${project.basedir}/../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/scripts</integration.scripts.dir>
+        <integration.scripts.dir>${project.basedir}/../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/scripts</integration.scripts.dir>
 
         <!-- Docker compose directory for WRK benchmarks -->
-        <integration.compose.dir>${project.basedir}/../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests</integration.compose.dir>
+        <integration.compose.dir>${project.basedir}/../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests</integration.compose.dir>
 
         <!-- Integration test service URLs (host access via published ports) -->
         <integration.service.url>https://localhost:10443</integration.service.url>
         <keycloak.url>https://localhost:1443</keycloak.url>
         <quarkus.metrics.url>https://localhost:10443</quarkus.metrics.url>
 
-        <!-- Note: WRK runs in docker-compose with service names (oauth-sheriff-integration-tests:8443) -->
-        <!-- Network topology managed in oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/docker-compose.yml -->
+        <!-- Note: WRK runs in docker-compose with service names (token-sheriff-integration-tests:8443) -->
+        <!-- Network topology managed in token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/docker-compose.yml -->
 
         <!-- WRK Configuration Properties -->
         <wrk.duration>60s</wrk.duration>  <!-- Default: 1 minute per benchmark -->
@@ -55,7 +55,7 @@
     <dependencies>
         <!-- Core benchmark common utilities -->
         <dependency>
-            <groupId>de.cuioss.sheriff.oauth</groupId>
+            <groupId>de.cuioss.sheriff.token</groupId>
             <artifactId>benchmarking-common</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -271,7 +271,7 @@
                         </goals>
                         <configuration>
                             <skip>${skip.benchmark}</skip>
-                            <mainClass>de.cuioss.sheriff.oauth.wrk.benchmark.WrkResultPostProcessor</mainClass>
+                            <mainClass>de.cuioss.sheriff.token.wrk.benchmark.WrkResultPostProcessor</mainClass>
                             <arguments>
                                 <argument>${wrk.results.dir}</argument>
                             </arguments>
@@ -332,7 +332,7 @@
                                         <argument>-Pintegration-tests</argument>
                                         <argument>-DskipTests</argument>
                                     </arguments>
-                                    <workingDirectory>${project.basedir}/../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests</workingDirectory>
+                                    <workingDirectory>${project.basedir}/../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests</workingDirectory>
                                 </configuration>
                             </execution>
 
@@ -436,7 +436,7 @@
                                     <arguments>
                                         <argument>clean</argument>
                                     </arguments>
-                                    <workingDirectory>${project.basedir}/../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests</workingDirectory>
+                                    <workingDirectory>${project.basedir}/../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests</workingDirectory>
                                 </configuration>
                             </execution>
                         </executions>
@@ -482,7 +482,7 @@
                                         <argument>-DskipTests</argument>
                                         <argument>-Dquarkus.native.container-build=true</argument>
                                     </arguments>
-                                    <workingDirectory>${project.basedir}/../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests</workingDirectory>
+                                    <workingDirectory>${project.basedir}/../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests</workingDirectory>
                                 </configuration>
                             </execution>
 
@@ -500,7 +500,7 @@
                                         <argument>compose</argument>
                                         <argument>build</argument>
                                     </arguments>
-                                    <workingDirectory>${project.basedir}/../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests</workingDirectory>
+                                    <workingDirectory>${project.basedir}/../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests</workingDirectory>
                                     <environmentVariables>
                                         <DOCKERFILE>Dockerfile.native.jfr</DOCKERFILE>
                                         <DOCKER_IMAGE_TAG>jfr</DOCKER_IMAGE_TAG>
@@ -631,7 +631,7 @@
                                     <executable>bash</executable>
                                     <arguments>
                                         <argument>-c</argument>
-                                        <argument>mkdir -p ${jfr.output.dir} &amp;&amp; cp -v ${project.basedir}/../../oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-integration-tests/target/jfr-output/*.jfr ${jfr.output.dir}/ 2&gt;/dev/null || echo "No JFR files found to copy"</argument>
+                                        <argument>mkdir -p ${jfr.output.dir} &amp;&amp; cp -v ${project.basedir}/../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/target/jfr-output/*.jfr ${jfr.output.dir}/ 2&gt;/dev/null || echo "No JFR files found to copy"</argument>
                                     </arguments>
                                 </configuration>
                             </execution>

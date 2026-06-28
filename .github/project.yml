@@ -1,4 +1,4 @@
-name: oauth-sheriff
+name: token-sheriff
 description: A comprehensive framework for validating OAuth/JWT tokens in multi-issuer environments
 
 release:
@@ -28,9 +28,9 @@ github-automation:
   auto-merge-build-timeout: 300
 
 consumers:
-  - nifi-extensions:version.oauth-sheriff
+  - nifi-extensions:version.token-sheriff
 
 dependency-propagation:
-  group-id: de.cuioss.sheriff.oauth
-  artifact-id: oauth-sheriff-core
+  group-id: de.cuioss.sheriff.token
+  artifact-id: token-sheriff-validation
   scope: dependency

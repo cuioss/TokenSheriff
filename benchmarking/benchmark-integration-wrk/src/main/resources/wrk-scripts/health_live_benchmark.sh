@@ -12,7 +12,7 @@ set -e
 BENCHMARK_NAME="healthLiveCheck"
 
 # Service URL uses Docker service name (configured in docker-compose.yml)
-SERVICE_URL="https://oauth-sheriff-integration-tests:8443"
+SERVICE_URL="https://token-sheriff-integration-tests:8443"
 
 # Get compose file directory from environment variable (passed by Maven)
 : "${COMPOSE_DIR:?ERROR: COMPOSE_DIR environment variable is not set}"
