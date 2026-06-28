@@ -15,7 +15,7 @@ toc::[]
 
 == Goal
 
-Decide how the documentation absorbs the two new capabilities from the xref:../decision-oidc-module.adoc[three-module architecture] — `commons` (transport, xref:../03-commons/README.adoc[Plan 03]) and `client` (xref:../04-client-spec/README.adoc[Plan 04]) — and lay out the target structure so their docs have a clean home before that work starts.
+Decide how the documentation absorbs the two new capabilities from the xref:../decision-oidc-module.adoc[module architecture] — `commons` (the base layer, xref:../03-commons/README.adoc[Plan 03]) and `client` (xref:../04-client-spec/README.adoc[Plan 04]) — and lay out the target structure so their docs have a clean home before that work starts.
 
 == Analysis: current structure
 
@@ -31,15 +31,15 @@ Two facts decide the approach:
 
 == Decision: modularize by capability
 
-Reshape the conceptual layer into peer capabilities — `validation`, `commons`, and `client` — one per code module, rather than extending the existing validation docs with the new content.
+Reshape the conceptual layer into peer capabilities — `validation`, `commons`, and `client` — one per *architectural boundary*, rather than extending the existing validation docs with the new content. (These map to *two* Maven modules: `validation` and `client`; `commons` is the ArchUnit-enforced base *layer* inside `validation` but keeps its own doc capability — see xref:../decision-oidc-module.adoc[the module-architecture decision].)
 
 Why not extend:
 
 * `Requirements.adoc` (622) and `threat-model.adoc` (373) would balloon and *mix very different surfaces*. The client's threats (redirect/callback CSRF, `state`/`nonce`, authorization-code interception, token leakage, session fixation) and commons's threats (SSRF, TLS downgrade, response DoS) are unlike validation's — and a security library must keep a clean, per-capability threat model.
-* It mirrors the code boundary (one doc capability per module — validation / commons / client), keeping doc↔code traceability clean.
+* It mirrors the *architectural* boundary (one doc capability per layer — the commons base, validation, client), keeping doc↔code traceability clean even where the base is a package layer rather than its own module.
 * It is consistent with the modularity already present (folders, per-module docs) — an increment, not a new paradigm.
 
-The already-modular parts stay as they are: module `doc/` dirs continue per-module (each new module gets its own), and `specification/` stays a folder (now per-capability). `LogMessages.adoc` stays a single *global* registry covering all capabilities — it is not split or duplicated per capability. The cross-cutting *error model, events and metrics* are *owned by the `commons` capability* (the base module), not a separate bucket; a small `shared/` area holds only a cross-capability glossary.
+The already-modular parts stay as they are: module `doc/` dirs continue per-module, and `specification/` stays a folder (now per-capability). `LogMessages.adoc` stays a single *global* registry covering all capabilities — it is not split or duplicated per capability. The cross-cutting *error model, events and metrics* are *owned by the `commons` capability* (the base layer in validation), not a separate bucket; a small `shared/` area holds only a cross-capability glossary.
 
 == Target structure
 
@@ -48,7 +48,7 @@ The already-modular parts stay as they are: module `doc/` dirs continue per-modu
 doc/
   README.adoc                       # hub — grouped by capability + shared
   LogMessages.adoc                  # GLOBAL log registry — all capabilities, stays at root
-  commons/                # NEW base capability (added with Plan 03)
+  commons/                # NEW base capability (Plan 03) — a package layer in token-sheriff-validation, not its own module
     architecture.adoc
     requirements.adoc               # IDs: CMN-N (transport / error / events / metrics)
     threat-model.adoc               # SSRF / TLS / response-DoS / error-detail-leakage
@@ -76,7 +76,7 @@ doc/
     glossary.adoc
 ----
 
-Module-level docs are unchanged in pattern: each new module (`token-sheriff-commons`, `token-sheriff-client`) gets its own `doc/` for usage/config/dev. Log records stay in the single global `doc/LogMessages.adoc` — not per module or per capability.
+Module-level docs are unchanged in pattern: the new client module (`token-sheriff-client`) gets its own `doc/` for usage/config/dev. `commons` is a package layer inside `token-sheriff-validation`, so its usage/config docs live within validation's module `doc/` — only its *conceptual* capability docs (requirements/spec/threat-model) sit under `doc/commons/`. Log records stay in the single global `doc/LogMessages.adoc` — not per module or per capability.
 
 [NOTE]
 ====

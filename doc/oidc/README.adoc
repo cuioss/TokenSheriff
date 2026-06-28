@@ -14,12 +14,12 @@ implementation plans plus the standing design decisions behind them.
 * xref:02-doc-structure/README.adoc[02 — Documentation Structure] -
   modularize `doc/` into one-per-module peer capabilities (commons, validation,
   client) plus a small shared glossary; runs after Plan 01.
-* xref:03-commons/README.adoc[03 — Commons: the Shared Base Module] -
-  gather the base-layer cross-cutting concerns into a `token-sheriff-commons`
-  module: IdP transport (discovery, JWKS, token, userinfo, revocation,
-  end-session, PAR) + the error model (typed exceptions → RFC 9457 at the edge)
-  + security events + metrics. Spec (`CMN-N`) plus the code extraction of these
-  out of validation. Layering `commons ← validation ← client`.
+* xref:03-commons/README.adoc[03 — Commons: the Shared Base Layer] -
+  gather the base-layer cross-cutting concerns into a `de.cuioss.sheriff.token.commons.*`
+  package layer *inside* `token-sheriff-validation` (ArchUnit-enforced, not a separate
+  artifact): IdP transport (discovery, JWKS, token, userinfo, revocation, end-session,
+  PAR) + the error model (typed exceptions → RFC 9457 at the edge) + security events +
+  metrics. Spec (`CMN-N`) plus the re-packaging of these out of the validation packages.
 * xref:04-client-spec/README.adoc[04 — Client Requirements, Specification & Security] -
   produce the full client document set (requirements, specification,
   threat model, best practices) — modular by aspect (token / retrieval & flow),
@@ -28,7 +28,7 @@ implementation plans plus the standing design decisions behind them.
   replacement target `portal-authentication-oauth`.
 * xref:05-client-module/README.adoc[05 — Add the Client Module, Extension, Assembly & IT (wired, empty)] -
   stand up the full skeleton: standalone validation-like engine `token-sheriff-client`
-  (pure Java, deps `token-sheriff-commons` + `token-sheriff-validation`), a dedicated
+  (pure Java, deps `token-sheriff-validation`, which carries the commons base layer), a dedicated
   `token-sheriff-client-quarkus` extension depending on the existing one, and
   BOM/reactor assembly — plus the client integration-test home (own package) in
   `cui-portal-core` `portal-authentication-oauth`, the real consumer. Cross-repo;
@@ -41,10 +41,10 @@ implementation plans plus the standing design decisions behind them.
 
 == Design decisions
 
-* xref:decision-oidc-module.adoc[Module Architecture — commons, validation, client] -
-  keep everything in this repository (no separate project) split into three layered
-  modules: `commons` (transport + error model + events + metrics) ← `validation` ←
-  `client`. Basis for Plans 03–05.
+* xref:decision-oidc-module.adoc[Module Architecture — validation (with a commons base layer) + client] -
+  keep everything in this repository (no separate project) split into *two* modules:
+  `validation` — carrying an ArchUnit-enforced `commons` base layer (transport + error
+  model + events + metrics) — and `client`. Basis for Plans 03–05.
 
 == Status
 

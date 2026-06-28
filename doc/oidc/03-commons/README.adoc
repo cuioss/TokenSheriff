@@ -1,4 +1,4 @@
-= Plan 03 — Commons: the Shared Base Module (transport, error model, events, metrics)
+= Plan 03 — Commons: the Shared Base Layer (packages in validation, ArchUnit-enforced)
 :toc: macro
 :toclevels: 3
 :sectnums:
@@ -6,88 +6,100 @@
 
 [cols="1,3"]
 |===
-| Status     | Ready to execute (spec after xref:../02-doc-structure/README.adoc[Plan 02]; code extraction after xref:../01-restructure/README.adoc[Plan 01])
+| Status     | Ready to execute (spec after xref:../02-doc-structure/README.adoc[Plan 02]; re-packaging after xref:../01-restructure/README.adoc[Plan 01])
 | Depends on | Plan 01 (rename → `token-sheriff-*`), Plan 02 (doc structure — establishes `doc/commons/`)
-| Focus      | Gather the *cross-cutting concerns every capability sits on* into one *base* module, `token-sheriff-commons`: *IdP transport* (discovery, JWKS, token, userinfo, revocation, end-session, PAR), the *error model* (typed exceptions → RFC 9457 at the edge), *security events*, and *metrics*. Spec-first plus the *code extraction* of these out of validation.
-| Outcome    | A standalone `token-sheriff-commons` artifact that `token-sheriff-validation` and (later) `token-sheriff-client` both depend on; its requirements/spec/threat-model under `doc/commons/`.
+| Focus      | Gather the *cross-cutting concerns every capability sits on* into one *base layer* — the `de.cuioss.sheriff.token.commons.*` packages *inside* `token-sheriff-validation`: *IdP transport*, the *error model* (typed exceptions → RFC 9457 at the edge), *security events*, and *metrics*. *Not a separate artifact* — ArchUnit enforces the layering. Spec-first plus the *re-packaging* of these out of the validation packages.
+| Outcome    | The `commons` base packages + ArchUnit rules living in `token-sheriff-validation`; its requirements/spec/threat-model under `doc/commons/` (`CMN-N`).
 |===
 
 toc::[]
 
-== Why a base module
+== Why a base layer (and why not a separate module)
 
-Several concerns are *base-layer*: validation and the coming client both consume them, none of them owns, and today they are split or duplicated:
+Several concerns are *base-layer*: validation and the coming client both consume them, none of them owns, and today they are scattered through validation:
 
-* *IdP transport* — OIDC discovery (`wellknown`) and JWKS (`jwks.http`) live in validation; the client will add token/userinfo/revocation/end-session/PAR. Same TLS/SSRF/resilience hardening, twice.
-* *Error model* — every capability throws errors; the HTTP edge must render them uniformly (RFC 9457). Today there is no shared contract.
-* *Security events* — `SecurityEventCounter` lives in validation; the client needs the same event surface.
-* *Metrics* — metric identifiers/contracts (`sheriff.token.*`) should be defined once and exported by each Quarkus extension.
+* *IdP transport* — OIDC discovery (`wellknown`) and JWKS (`jwks.http`); the client will add token/userinfo/revocation/end-session/PAR.
+* *Error model* — every capability throws errors; the HTTP edge must render them uniformly (RFC 9457).
+* *Security events* — `SecurityEventCounter`; the client needs the same event surface.
+* *Metrics* — metric identifiers/contracts (`sheriff.token.*`), defined once.
 
-Pulling these into one base module gives a single place to specify, harden and reuse them — and a clean dependency layering. (Logging stays the *global* `doc/LogMessages.adoc` registry, not a commons concern; "reports" are out of scope for now.)
+Gathering these into one *enforced layer* gives a single place to specify and harden them. They are a *package layer*, **not a third artifact** — *no consumer wants the base without validation* (the client validates the tokens it retrieves, so it pulls `validation` anyway and gets the base transitively; `nifi-extensions` wants `validation`). A `token-sheriff-commons` artifact would add a POM/release/BOM surface nobody picks alone. ArchUnit gives the layering guarantee without that overhead. (Promotion to a real module later is cheap and evidence-driven — see xref:../decision-oidc-module.adoc[the module-architecture decision].)
 
-== Decision: `commons` as the base module
+(Logging stays the *global* `doc/LogMessages.adoc` registry, not a commons concern; "reports" are out of scope for now.)
+
+== Decision: `commons` as a base package layer in `token-sheriff-validation`
 
 [source]
 ----
-token-sheriff-commons         (base — transport + error model + events + metrics)
-  transport/   error/   events/   metrics/
-        ▲                ▲
-token-sheriff-validation      │   (validate tokens; uses commons transport + events + error model)
-        ▲                │
-token-sheriff-client ─────────┘   (run flows; uses commons + validation)
+token-sheriff-validation                  (one artifact)
+  de.cuioss.sheriff.token.commons.        base layer — deps: cui-http only
+    transport/  error/  events/  metrics/
+        ▲   ArchUnit: commons must NOT depend on …validation.. / …client..
+  de.cuioss.sheriff.token.validation.     token validation (signatures, claims, pipeline)
+        ▲   Maven
+token-sheriff-client                       separate module → deps: token-sheriff-validation
 ----
 
-* `token-sheriff-commons` depends on `cui-http` only (no validation, no client). Package `de.cuioss.sheriff.token.commons`, sub-packages `transport`/`error`/`events`/`metrics`.
-* `token-sheriff-validation` → depends on `commons` (loses `jwks.http`, `wellknown`, `SecurityEventCounter`, metric identifiers).
-* `token-sheriff-client` → depends on `commons` (transport, events, error model) **and** `validation` (verify retrieved tokens).
+* `commons` is the package root `de.cuioss.sheriff.token.commons` (sub-packages `transport`/`error`/`events`/`metrics`), shipped in the `token-sheriff-validation` artifact, depending on `cui-http` only.
+* `token-sheriff-validation` may depend on `commons`; `token-sheriff-client` (a separate module) depends on `token-sheriff-validation`.
+* The layering is enforced by *ArchUnit* (within the validation module) and by *Maven* (the client boundary) — see <<archunit>>.
 
-The dependency direction never reverses: the shared substrate is the foundation; validation and flows build on it.
+The seam is sharp: **commons moves bytes, raises typed errors, counts events and exposes metrics; it never interprets a token's trust.**
 
 == The four concerns
 
 === Transport
-All outbound IdP HTTP: discovery (`.well-known`, RFC 8414 / OIDC Discovery), JWKS (RFC 7517), token (RFC 6749), userinfo (OIDC Core), revocation (RFC 7009), introspection (RFC 7662), end-session (RP-Initiated Logout), PAR (RFC 9126). Owns *TLS* enforcement, *SSRF defence* (host allow-list, egress restriction, block internal/link-local), timeouts, response size limits, retry/backoff, the `cui-http` client, and JWKS/discovery caching. It moves bytes and hands back a typed result; it *never interprets a token's trust*.
+All outbound IdP HTTP: discovery (`.well-known`, RFC 8414 / OIDC Discovery), JWKS (RFC 7517), token (RFC 6749), userinfo (OIDC Core), revocation (RFC 7009), introspection (RFC 7662), end-session (RP-Initiated Logout), PAR (RFC 9126). Owns *TLS* enforcement, *SSRF defence* (host allow-list, egress restriction, block internal/link-local), timeouts, response size limits, retry/backoff, the `cui-http` client, and JWKS/discovery caching.
 
 === Error model (the exceptions-vs-RFC-9457 split)
 [cols="1,3"]
 |===
 | Layer | Behaviour
 
-| *Libraries* (`commons`, `validation`, `client` engine — pure Java)
+| *Libraries* (`commons` + `validation` packages, the `client` engine — pure Java)
 | Throw a *typed exception hierarchy* (defined in `commons.error`). They MUST NOT produce HTTP problem documents — that is not their layer.
 
 | *HTTP edges* (`token-sheriff-validation-quarkus`, `token-sheriff-client-quarkus`, **and the `portal-authentication-oauth` RESTEasy adapter**)
 | MUST map those exceptions to `application/problem+json` per https://www.rfc-editor.org/rfc/rfc9457[RFC 9457], without leaking internal detail. *Existing validation rejection responses retrofit to this.*
 |===
 
-`commons` also *normalizes inbound* IdP error responses (OAuth `error`/`error_description`, RFC 6749 §5.2) into the typed model the edges render — so the same contract covers both directions. This is the cross-cutting requirement called out earlier: *exceptions are correct for libraries; the RFC 9457 representation is mandatory at every HTTP edge, Quarkus or RESTEasy.*
+`commons` also *normalizes inbound* IdP error responses (OAuth `error`/`error_description`, RFC 6749 §5.2) into the typed model the edges render — one contract, both directions.
 
 === Security events
-`SecurityEventCounter` and the security-event types, *extracted from validation* into `commons.events` so validation and client share one event surface (and one place to add events for retrieval/flow threats). Quarkus extensions expose them as before.
+`SecurityEventCounter` and the security-event types, *moved into* `commons.events` so validation and client share one event surface. Quarkus extensions expose them as before.
 
 === Metrics
-Metric *identifiers/contracts* (`sheriff.token.*`) defined once in `commons.metrics`; each Quarkus extension wires them to Micrometer. Keeps the metric namespace consistent across capabilities.
+Metric *identifiers/contracts* (`sheriff.token.*`) defined once in `commons.metrics`; each Quarkus extension wires them to Micrometer.
 
-== Code extraction (the refactor)
+== Re-packaging (the refactor)
 
-This plan moves existing code, not only spec:
+This plan moves existing code *within* `token-sheriff-validation` — no new module:
 
-* *Relocate* into `token-sheriff-commons`: `…token.validation.jwks.http` + `…token.validation.wellknown` → `commons.transport`; `SecurityEventCounter` + event types → `commons.events`; the metric identifiers → `commons.metrics`; introduce `commons.error`. (OpenRewrite `ChangePackage`/`MoveClass`, same tooling as Plan 01.)
-* *Re-point* `token-sheriff-validation` at `commons`; re-export or adapt any types that are part of validation's *public* API so the one known consumer (`nifi-extensions`) sees *no functional change* — only a possible transitive coordinate. Capture any consumer-visible move in xref:../01-restructure/migration-nifi-extensions.adoc[the migration guide].
-* *Quarkus*: validation's extension keeps wiring discovery/JWKS/events/metrics, now sourced from `commons`; add the RFC 9457 exception→problem+json mapping at each edge.
+* *Re-package*: `…token.validation.jwks.http` + `…token.validation.wellknown` → `…token.commons.transport`; `SecurityEventCounter` + event types → `…token.commons.events`; metric identifiers → `…token.commons.metrics`; introduce `…token.commons.error`. (OpenRewrite `ChangePackage`/`MoveClass`, same tooling as Plan 01.)
+* *No new POM/artifact/BOM entry* — these packages ship in the existing `token-sheriff-validation` jar.
+* *Public-API care*: where a moved type is part of validation's public API, re-export or alias it so the one known consumer (`nifi-extensions`) sees *no functional change* — only a possible package move. Record any consumer-visible move in xref:../01-restructure/migration-nifi-extensions.adoc[the migration guide].
 
-[NOTE]
-====
-Prefer *re-exporting* a relocated type from validation over forcing a consumer change where the type is public API — decide per type during execution, and record any real break in the migration guide.
-====
+[#archunit]
+== ArchUnit rules (the enforced boundary)
+
+Layer rules live in `token-sheriff-validation`'s test sources:
+
+* `…commons..` may depend on: the JDK, `cui-http`, `cui-tooling` — and *not* on `…validation..` or `…client..`.
+* `…validation..` may depend on `…commons..`.
+* No package cycles across the `commons`/`validation` boundary.
+* The client boundary (`client → validation`, never the reverse) is enforced by *Maven* once the client module exists (xref:../05-client-module/README.adoc[Plan 05]).
+
+These give the same guarantee a module boundary would (base stays dependency-light, never depends "up") with one fewer artifact.
 
 == Target document set (under `doc/commons/`)
+
+The *doc-level* `commons` capability is kept (separate from the code being one module):
 
 [source]
 ----
 doc/commons/
   requirements.adoc            # CMN-N, grouped by concern (transport / error / events / metrics)
-  architecture.adoc            # module + sequence; who depends on what
+  architecture.adoc            # the base layer + ArchUnit boundary; who depends on what
   threat-model.adoc            # SSRF / TLS / response-DoS / error-detail-leakage — each sourced
   specification/
     transport.adoc             # discovery, JWKS, token/userinfo/…; TLS, SSRF, resilience
@@ -96,7 +108,7 @@ doc/commons/
   references.adoc              # bibliography (new sources; reuse note for shared standards)
 ----
 
-Requirement IDs use `CMN-N` (per xref:../02-doc-structure/README.adoc[Plan 02]), grouped by concern.
+Requirement IDs use `CMN-N` (per xref:../02-doc-structure/README.adoc[Plan 02]), grouped by concern — a doc-level identity even though the code is a layer of `token-sheriff-validation`.
 
 == Seed: threat catalog (with source anchors)
 
@@ -128,14 +140,14 @@ Requirement IDs use `CMN-N` (per xref:../02-doc-structure/README.adoc[Plan 02]),
 . *Requirements* — `CMN-N`, grouped by concern (transport / error / events / metrics), each sourced.
 . *Threat model* — the catalog above; each entry → source + mitigation + covering requirement.
 . *Specifications* — `transport.adoc`, `error-model.adoc`, `observability.adoc`.
-. *Code extraction* — relocate transport + events + metrics out of validation; introduce the error model; add the RFC 9457 mapping at each Quarkus/REST edge; re-point validation; build green.
-. *Traceability + verify* — requirements ↔ threats ↔ spec ↔ code; confirm the seam (no validation/flow logic in commons).
+. *Re-packaging* — move transport + events + metrics into the `commons` packages; introduce the error model; add the RFC 9457 mapping at each Quarkus/REST edge; add the ArchUnit rules; build green.
+. *Traceability + verify* — requirements ↔ threats ↔ spec ↔ code; confirm the ArchUnit boundary holds.
 
 == Verification
 
-* [ ] `token-sheriff-commons` exists, depends only on `cui-http`; `validation` and `client` depend on it
-* [ ] `wellknown` + `jwks.http` + `SecurityEventCounter` + metric identifiers relocated out of validation; no functional change for `nifi-extensions` (or the break is in the migration guide)
+* [ ] `de.cuioss.sheriff.token.commons.*` packages exist in `token-sheriff-validation`, depend only on `cui-http`; *no new artifact*
+* [ ] ArchUnit rules pass: `commons` never depends on `…validation..`/`…client..`; no cross-boundary cycles
+* [ ] `wellknown` + `jwks.http` + `SecurityEventCounter` + metric identifiers re-packaged into `commons`; no functional change for `nifi-extensions` (or the break is in the migration guide)
 * [ ] Libraries throw typed exceptions only; **every HTTP edge — validation-quarkus, client-quarkus, the portal RESTEasy adapter — emits `application/problem+json` (RFC 9457)**, existing validation errors included
 * [ ] Every `CMN-N` requirement and threat entry cites a source; SSRF/TLS/DoS covered for all relocated + new endpoints
-* [ ] No token-validation or flow/state logic in commons (seam holds)
 * [ ] `doc/commons/` requirements/spec/threat-model present; `references.adoc` resolves
