@@ -1,4 +1,4 @@
-= Plan 02 — Documentation Structure for the Client Capability
+= Plan 02 — Documentation Structure for the Commons & Client Capabilities
 :toc: macro
 :toclevels: 3
 :sectnums:
@@ -8,14 +8,14 @@
 |===
 | Status     | Ready to execute (after xref:../01-restructure/README.adoc[Plan 01])
 | Depends on | Plan 01 — Restructure (rename); run after it to pay link churn once
-| Scope      | Reshape `doc/` so token validation and the coming OIDC client (RP) are peer capabilities
+| Scope      | Reshape `doc/` so validation, Commons and the coming OIDC client are peer capabilities, with a shared cross-cutting area
 |===
 
 toc::[]
 
 == Goal
 
-Decide how the documentation absorbs the second capability (the xref:../decision-oidc-module.adoc[OIDC client module]) and lay out the target structure so client docs have a clean home before client work starts.
+Decide how the documentation absorbs the two new capabilities from the xref:../decision-oidc-module.adoc[three-module architecture] — `commons` (transport, xref:../03-commons/README.adoc[Plan 03]) and `client` (xref:../04-client-spec/README.adoc[Plan 04]) — and lay out the target structure so their docs have a clean home before that work starts.
 
 == Analysis: current structure
 
@@ -31,15 +31,15 @@ Two facts decide the approach:
 
 == Decision: modularize by capability
 
-Reshape the conceptual layer into peer capabilities — `validation` and `client` — rather than extending the existing validation docs with client content.
+Reshape the conceptual layer into peer capabilities — `validation`, `commons`, and `client` — one per code module, rather than extending the existing validation docs with the new content.
 
 Why not extend:
 
-* `Requirements.adoc` (622) and `threat-model.adoc` (373) would balloon and *mix two very different surfaces*. The client's threats (redirect/callback CSRF, `state`/`nonce`, authorization-code interception, token leakage, session fixation) are unlike validation's — and a security library must keep a clean, per-capability threat model.
-* It mirrors the code boundary (validation module vs client module), keeping doc↔code traceability clean.
+* `Requirements.adoc` (622) and `threat-model.adoc` (373) would balloon and *mix very different surfaces*. The client's threats (redirect/callback CSRF, `state`/`nonce`, authorization-code interception, token leakage, session fixation) and commons's threats (SSRF, TLS downgrade, response DoS) are unlike validation's — and a security library must keep a clean, per-capability threat model.
+* It mirrors the code boundary (one doc capability per module — validation / commons / client), keeping doc↔code traceability clean.
 * It is consistent with the modularity already present (folders, per-module docs) — an increment, not a new paradigm.
 
-The already-modular parts stay as they are: module `doc/` dirs continue per-module (the client module gets its own), and `specification/` stays a folder (now per-capability). `LogMessages.adoc` stays a single *global* registry covering all capabilities — it is not split or duplicated per capability.
+The already-modular parts stay as they are: module `doc/` dirs continue per-module (each new module gets its own), and `specification/` stays a folder (now per-capability). `LogMessages.adoc` stays a single *global* registry covering all capabilities — it is not split or duplicated per capability. The cross-cutting *error model, events and metrics* are *owned by the `commons` capability* (the base module), not a separate bucket; a small `shared/` area holds only a cross-capability glossary.
 
 == Target structure
 
@@ -48,6 +48,15 @@ The already-modular parts stay as they are: module `doc/` dirs continue per-modu
 doc/
   README.adoc                       # hub — grouped by capability + shared
   LogMessages.adoc                  # GLOBAL log registry — all capabilities, stays at root
+  commons/                # NEW base capability (added with Plan 03)
+    architecture.adoc
+    requirements.adoc               # IDs: CMN-N (transport / error / events / metrics)
+    threat-model.adoc               # SSRF / TLS / response-DoS / error-detail-leakage
+    references.adoc                 # bibliography / shared standards
+    specification/
+      transport.adoc                # discovery, JWKS, token/userinfo/…; TLS, SSRF
+      error-model.adoc              # typed exceptions -> RFC 9457 at every HTTP edge
+      observability.adoc            # SecurityEventCounter events + metric identifiers
   validation/                       # existing capability (relocated)
     architecture.adoc
     requirements.adoc               # IDs: VAL-N  (per Plan 01)
@@ -63,15 +72,15 @@ doc/
     requirements.adoc               # IDs: CLIENT-N
     threat-model.adoc
     specification/
-  shared/                           # cross-cutting only, if/when needed
+  shared/                           # cross-capability glossary only
     glossary.adoc
 ----
 
-Module-level docs are unchanged in pattern: the client module (`token-sheriff-client`) gets its own `doc/` for usage/config/dev. Log records stay in the single global `doc/LogMessages.adoc` — not per module or per capability.
+Module-level docs are unchanged in pattern: each new module (`token-sheriff-commons`, `token-sheriff-client`) gets its own `doc/` for usage/config/dev. Log records stay in the single global `doc/LogMessages.adoc` — not per module or per capability.
 
 [NOTE]
 ====
-The `doc/oidc/` planning area (this folder) is transient — it holds the plans, not the capability docs. The client *capability* docs live under `doc/client/`. Once these plans execute, the planning area can be retired.
+The `doc/oidc/` planning area (this folder) is transient — it holds the plans, not the capability docs. The *capability* docs live under `doc/commons/`, `doc/client/`, etc. Once these plans execute, the planning area can be retired.
 ====
 
 == Requirement-ID namespacing
@@ -79,7 +88,17 @@ The `doc/oidc/` planning area (this folder) is transient — it holds the plans,
 The IDs are short, capability-scoped, and greppable — no shared brand prefix to repeat on every reference.
 
 * Validation uses `VAL-N` (Plan 01 shortens the existing `OAUTH-SHERIFF-N → VAL-N`).
-* Client requirements use `CLIENT-N` — distinct capability namespace, unambiguous and greppable (`VAL-[0-9]` vs `CLIENT-[0-9]`).
+* Commons uses `CMN-N`, grouped by concern — transport / error / events / metrics (xref:../03-commons/README.adoc[Plan 03]).
+* Client requirements use `CLIENT-N` — distinct capability namespace, unambiguous and greppable (`VAL-[0-9]` vs `CMN-[0-9]` vs `CLIENT-[0-9]`).
+
+== Cross-cutting realization: the RFC 9457 error model
+
+The error model is *owned by `commons`* (`doc/commons/specification/error-model.adoc`, `CMN-N`), but its *realization spans modules*, so it is called out here. The contract:
+
+* *Libraries throw typed exceptions* — `commons`, `validation`, the `client` engine — and MUST NOT produce HTTP problem documents. That is correct for a library.
+* *Every HTTP edge MUST emit `application/problem+json`* per https://www.rfc-editor.org/rfc/rfc9457[RFC 9457] — the Quarkus extensions (`token-sheriff-validation-quarkus`, `token-sheriff-client-quarkus`) *and* the `portal-authentication-oauth` RESTEasy adapter. The exception→problem mapping lives at each edge.
+* *Existing errors conform*: the current validation rejection responses retrofit to problem+json as part of this work.
+* *Inbound side*: `commons` normalizes IdP error responses (OAuth `error`/`error_description`, RFC 6749 §5.2) into the same typed model — one contract, both directions.
 
 == Execution
 
@@ -139,7 +158,7 @@ External referencers (outside the moving set):
 * `benchmarking/README.adoc`, `benchmarking/doc/workflow.adoc`
 * `oauth-sheriff-core/doc/developing.adoc`
 * `oauth-sheriff-quarkus-parent/README.adoc` + `doc/README.adoc` + `oauth-sheriff-quarkus/README.adoc` + `oauth-sheriff-quarkus-deployment/README.adoc` + `oauth-sheriff-quarkus-integration-tests/README.adoc`
-* `doc/oidc/01-restructure/README.adoc` (this planning area references Requirements)
+* `doc/oidc/*` planning area — several plans link `xref:../../Requirements.adoc` (e.g. `01-restructure`, `04-client-spec`); rewrite these to `../../validation/requirements.adoc` *as part of this move* (they intentionally point at the current location until then). The planning area is transient and retired after execution.
 
 Intra-set (the moving docs cross-reference each other): `architecture.adoc`, `Requirements.adoc`, `security/*`, `specification/*`, `faq/keycloak.adoc`, and the hub `doc/README.adoc`. (`LogMessages.adoc` is *not* moving — exclude it.)
 

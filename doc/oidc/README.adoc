@@ -12,31 +12,39 @@ implementation plans plus the standing design decisions behind them.
   migration. Includes the
   xref:01-restructure/migration-nifi-extensions.adoc[nifi-extensions migration guide].
 * xref:02-doc-structure/README.adoc[02 — Documentation Structure] -
-  modularize `doc/` into peer capabilities (validation, client) so the
-  coming client docs have a clean home; runs after Plan 01.
-* xref:03-client-spec/README.adoc[03 — Client Requirements, Specification & Security] -
+  modularize `doc/` into one-per-module peer capabilities (commons, validation,
+  client) plus a small shared glossary; runs after Plan 01.
+* xref:03-commons/README.adoc[03 — Commons: the Shared Base Module] -
+  gather the base-layer cross-cutting concerns into a `token-sheriff-commons`
+  module: IdP transport (discovery, JWKS, token, userinfo, revocation,
+  end-session, PAR) + the error model (typed exceptions → RFC 9457 at the edge)
+  + security events + metrics. Spec (`CMN-N`) plus the code extraction of these
+  out of validation. Layering `commons ← validation ← client`.
+* xref:04-client-spec/README.adoc[04 — Client Requirements, Specification & Security] -
   produce the full client document set (requirements, specification,
-  threat model, best practices) — modular by aspect (token / retrieval / fetch),
-  every normative item source-referenced; spec-first, before client code. Engine
-  for a Backend-For-Frontend; replacement target `portal-authentication-oauth`.
-* xref:04-client-module/README.adoc[04 — Add the Client Module, Extension, Assembly & IT (wired, empty)] -
+  threat model, best practices) — modular by aspect (token / retrieval & flow),
+  incl. step-up (RFC 9470) and RP-initiated logout; transport referenced from
+  commons, not respecified. Spec-first; engine for a Backend-For-Frontend;
+  replacement target `portal-authentication-oauth`.
+* xref:05-client-module/README.adoc[05 — Add the Client Module, Extension, Assembly & IT (wired, empty)] -
   stand up the full skeleton: standalone validation-like engine `token-sheriff-client`
-  (pure Java, `cui-http`), a dedicated `token-sheriff-client-quarkus` extension
-  depending on the existing one, and BOM/reactor assembly — plus the client
-  integration-test home (own package) in `cui-portal-core`
-  `portal-authentication-oauth`, the real consumer. Cross-repo; no content.
-  Runs after Plan 01.
-* xref:05-implement/README.adoc[05 — Implement the Client (protocol by protocol)] -
+  (pure Java, deps `token-sheriff-commons` + `token-sheriff-validation`), a dedicated
+  `token-sheriff-client-quarkus` extension depending on the existing one, and
+  BOM/reactor assembly — plus the client integration-test home (own package) in
+  `cui-portal-core` `portal-authentication-oauth`, the real consumer. Cross-repo;
+  no content. Runs after Plans 01 + 03.
+* xref:06-implement/README.adoc[06 — Implement the Client (protocol by protocol)] -
   implement the `CLIENT-N` requirements as vertical
   protocol-by-protocol increments. Each ships unit tests (MockWebServer, incl.
   adversarial) *and* integration tests against a real Keycloak, ending in the
-  portal E2E replacement. After Plans 03 + 04.
+  portal E2E replacement. After Plans 03 + 04 + 05.
 
 == Design decisions
 
-* xref:decision-oidc-module.adoc[OIDC Client as an Additional Module] -
-  house the active OIDC client functionality as a new module in this repository,
-  depending on the validation module. Basis for a later plan.
+* xref:decision-oidc-module.adoc[Module Architecture — commons, validation, client] -
+  keep everything in this repository (no separate project) split into three layered
+  modules: `commons` (transport + error model + events + metrics) ← `validation` ←
+  `client`. Basis for Plans 03–05.
 
 == Status
 

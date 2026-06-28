@@ -1,0 +1,141 @@
+= Plan 03 — Commons: the Shared Base Module (transport, error model, events, metrics)
+:toc: macro
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+[cols="1,3"]
+|===
+| Status     | Ready to execute (spec after xref:../02-doc-structure/README.adoc[Plan 02]; code extraction after xref:../01-restructure/README.adoc[Plan 01])
+| Depends on | Plan 01 (rename → `token-sheriff-*`), Plan 02 (doc structure — establishes `doc/commons/`)
+| Focus      | Gather the *cross-cutting concerns every capability sits on* into one *base* module, `token-sheriff-commons`: *IdP transport* (discovery, JWKS, token, userinfo, revocation, end-session, PAR), the *error model* (typed exceptions → RFC 9457 at the edge), *security events*, and *metrics*. Spec-first plus the *code extraction* of these out of validation.
+| Outcome    | A standalone `token-sheriff-commons` artifact that `token-sheriff-validation` and (later) `token-sheriff-client` both depend on; its requirements/spec/threat-model under `doc/commons/`.
+|===
+
+toc::[]
+
+== Why a base module
+
+Several concerns are *base-layer*: validation and the coming client both consume them, none of them owns, and today they are split or duplicated:
+
+* *IdP transport* — OIDC discovery (`wellknown`) and JWKS (`jwks.http`) live in validation; the client will add token/userinfo/revocation/end-session/PAR. Same TLS/SSRF/resilience hardening, twice.
+* *Error model* — every capability throws errors; the HTTP edge must render them uniformly (RFC 9457). Today there is no shared contract.
+* *Security events* — `SecurityEventCounter` lives in validation; the client needs the same event surface.
+* *Metrics* — metric identifiers/contracts (`sheriff.token.*`) should be defined once and exported by each Quarkus extension.
+
+Pulling these into one base module gives a single place to specify, harden and reuse them — and a clean dependency layering. (Logging stays the *global* `doc/LogMessages.adoc` registry, not a commons concern; "reports" are out of scope for now.)
+
+== Decision: `commons` as the base module
+
+[source]
+----
+token-sheriff-commons         (base — transport + error model + events + metrics)
+  transport/   error/   events/   metrics/
+        ▲                ▲
+token-sheriff-validation      │   (validate tokens; uses commons transport + events + error model)
+        ▲                │
+token-sheriff-client ─────────┘   (run flows; uses commons + validation)
+----
+
+* `token-sheriff-commons` depends on `cui-http` only (no validation, no client). Package `de.cuioss.sheriff.token.commons`, sub-packages `transport`/`error`/`events`/`metrics`.
+* `token-sheriff-validation` → depends on `commons` (loses `jwks.http`, `wellknown`, `SecurityEventCounter`, metric identifiers).
+* `token-sheriff-client` → depends on `commons` (transport, events, error model) **and** `validation` (verify retrieved tokens).
+
+The dependency direction never reverses: the shared substrate is the foundation; validation and flows build on it.
+
+== The four concerns
+
+=== Transport
+All outbound IdP HTTP: discovery (`.well-known`, RFC 8414 / OIDC Discovery), JWKS (RFC 7517), token (RFC 6749), userinfo (OIDC Core), revocation (RFC 7009), introspection (RFC 7662), end-session (RP-Initiated Logout), PAR (RFC 9126). Owns *TLS* enforcement, *SSRF defence* (host allow-list, egress restriction, block internal/link-local), timeouts, response size limits, retry/backoff, the `cui-http` client, and JWKS/discovery caching. It moves bytes and hands back a typed result; it *never interprets a token's trust*.
+
+=== Error model (the exceptions-vs-RFC-9457 split)
+[cols="1,3"]
+|===
+| Layer | Behaviour
+
+| *Libraries* (`commons`, `validation`, `client` engine — pure Java)
+| Throw a *typed exception hierarchy* (defined in `commons.error`). They MUST NOT produce HTTP problem documents — that is not their layer.
+
+| *HTTP edges* (`token-sheriff-validation-quarkus`, `token-sheriff-client-quarkus`, **and the `portal-authentication-oauth` RESTEasy adapter**)
+| MUST map those exceptions to `application/problem+json` per https://www.rfc-editor.org/rfc/rfc9457[RFC 9457], without leaking internal detail. *Existing validation rejection responses retrofit to this.*
+|===
+
+`commons` also *normalizes inbound* IdP error responses (OAuth `error`/`error_description`, RFC 6749 §5.2) into the typed model the edges render — so the same contract covers both directions. This is the cross-cutting requirement called out earlier: *exceptions are correct for libraries; the RFC 9457 representation is mandatory at every HTTP edge, Quarkus or RESTEasy.*
+
+=== Security events
+`SecurityEventCounter` and the security-event types, *extracted from validation* into `commons.events` so validation and client share one event surface (and one place to add events for retrieval/flow threats). Quarkus extensions expose them as before.
+
+=== Metrics
+Metric *identifiers/contracts* (`sheriff.token.*`) defined once in `commons.metrics`; each Quarkus extension wires them to Micrometer. Keeps the metric namespace consistent across capabilities.
+
+== Code extraction (the refactor)
+
+This plan moves existing code, not only spec:
+
+* *Relocate* into `token-sheriff-commons`: `…token.validation.jwks.http` + `…token.validation.wellknown` → `commons.transport`; `SecurityEventCounter` + event types → `commons.events`; the metric identifiers → `commons.metrics`; introduce `commons.error`. (OpenRewrite `ChangePackage`/`MoveClass`, same tooling as Plan 01.)
+* *Re-point* `token-sheriff-validation` at `commons`; re-export or adapt any types that are part of validation's *public* API so the one known consumer (`nifi-extensions`) sees *no functional change* — only a possible transitive coordinate. Capture any consumer-visible move in xref:../01-restructure/migration-nifi-extensions.adoc[the migration guide].
+* *Quarkus*: validation's extension keeps wiring discovery/JWKS/events/metrics, now sourced from `commons`; add the RFC 9457 exception→problem+json mapping at each edge.
+
+[NOTE]
+====
+Prefer *re-exporting* a relocated type from validation over forcing a consumer change where the type is public API — decide per type during execution, and record any real break in the migration guide.
+====
+
+== Target document set (under `doc/commons/`)
+
+[source]
+----
+doc/commons/
+  requirements.adoc            # CMN-N, grouped by concern (transport / error / events / metrics)
+  architecture.adoc            # module + sequence; who depends on what
+  threat-model.adoc            # SSRF / TLS / response-DoS / error-detail-leakage — each sourced
+  specification/
+    transport.adoc             # discovery, JWKS, token/userinfo/…; TLS, SSRF, resilience
+    error-model.adoc           # typed exceptions → RFC 9457 at the edge (all HTTP surfaces)
+    observability.adoc         # SecurityEventCounter events + metric identifiers
+  references.adoc              # bibliography (new sources; reuse note for shared standards)
+----
+
+Requirement IDs use `CMN-N` (per xref:../02-doc-structure/README.adoc[Plan 02]), grouped by concern.
+
+== Seed: threat catalog (with source anchors)
+
+* *SSRF via `jwks_uri` / discovery / userinfo / any IdP URL* — OWASP, https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180] → host allow-listing, egress restriction, block internal/link-local ranges. **Audit the *existing* `wellknown`/`jwks` code being moved.**
+* *Malicious endpoints advertised via discovery* — RFC 8414 / OIDC Discovery → validate `issuer`, pin/validate metadata.
+* *TLS downgrade / MITM on any fetch* — RFC 9700, RFC 8414 → enforce TLS, validate certificates.
+* *DoS via large/slow metadata, JWKS, or userinfo responses* → timeouts, response size limits, bounded retries.
+* *Internal-detail leakage in error responses* — RFC 9457 → problem documents carry a safe `type`/`title`/`detail`; never stack traces or internal identifiers.
+
+== Seed: source catalog (research 2026-06-26)
+
+.Standards new to commons (normative)
+* https://www.rfc-editor.org/rfc/rfc9457[RFC 9457] — Problem Details for HTTP APIs *(error model)*
+* https://www.rfc-editor.org/rfc/rfc8414[RFC 8414] — OAuth 2.0 Authorization Server Metadata (discovery)
+* https://openid.net/specs/openid-connect-discovery-1_0.html[OpenID Connect Discovery 1.0]
+* https://www.rfc-editor.org/rfc/rfc7009[RFC 7009] — OAuth 2.0 Token Revocation
+* https://www.rfc-editor.org/rfc/rfc7662[RFC 7662] — OAuth 2.0 Token Introspection
+* https://www.rfc-editor.org/rfc/rfc9126[RFC 9126] — Pushed Authorization Requests (PAR)
+* https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OpenID Connect RP-Initiated Logout 1.0] — `end_session_endpoint`
+
+[NOTE]
+====
+*Reused from the validation bibliography — cite, don't restate*: https://www.rfc-editor.org/rfc/rfc7517[RFC 7517 (JWK/JWKS)], https://www.rfc-editor.org/rfc/rfc6749[RFC 6749 (OAuth 2.0, incl. §5.2 error responses)], https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 (Security BCP)].
+====
+
+== Execution
+
+. *Scaffold + bibliography* — `doc/commons/` skeleton and `references.adoc`.
+. *Requirements* — `CMN-N`, grouped by concern (transport / error / events / metrics), each sourced.
+. *Threat model* — the catalog above; each entry → source + mitigation + covering requirement.
+. *Specifications* — `transport.adoc`, `error-model.adoc`, `observability.adoc`.
+. *Code extraction* — relocate transport + events + metrics out of validation; introduce the error model; add the RFC 9457 mapping at each Quarkus/REST edge; re-point validation; build green.
+. *Traceability + verify* — requirements ↔ threats ↔ spec ↔ code; confirm the seam (no validation/flow logic in commons).
+
+== Verification
+
+* [ ] `token-sheriff-commons` exists, depends only on `cui-http`; `validation` and `client` depend on it
+* [ ] `wellknown` + `jwks.http` + `SecurityEventCounter` + metric identifiers relocated out of validation; no functional change for `nifi-extensions` (or the break is in the migration guide)
+* [ ] Libraries throw typed exceptions only; **every HTTP edge — validation-quarkus, client-quarkus, the portal RESTEasy adapter — emits `application/problem+json` (RFC 9457)**, existing validation errors included
+* [ ] Every `CMN-N` requirement and threat entry cites a source; SSRF/TLS/DoS covered for all relocated + new endpoints
+* [ ] No token-validation or flow/state logic in commons (seam holds)
+* [ ] `doc/commons/` requirements/spec/threat-model present; `references.adoc` resolves

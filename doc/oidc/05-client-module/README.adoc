@@ -1,4 +1,4 @@
-= Plan 04 — Add the Client Module, Extension, Assembly & IT (wired, empty)
+= Plan 05 — Add the Client Module, Extension, Assembly & IT (wired, empty)
 :toc: macro
 :toclevels: 3
 :sectnums:
@@ -7,7 +7,7 @@
 [cols="1,3"]
 |===
 | Status     | Ready to execute (after xref:../01-restructure/README.adoc[Plan 01])
-| Depends on | Plan 01 (rename → `token-sheriff-*`). Independent of Plan 03 (structure, not content).
+| Depends on | Plan 01 (rename → `token-sheriff-*`) + Plan 03 (the `token-sheriff-commons` base module it builds on). Independent of Plan 04 (structure, not content).
 | Outcome    | Everything in place — *module, extension, assembly* (in this repo) and the *integration-test home* (in `cui-portal-core`) — fully wired, building green, with *no functional content yet*.
 | Cross-repo | Yes — `module`/`extension`/`assembly` land in OAuthSheriff (→ Token-Sheriff); `it` lands in `cui-portal-core` `portal-authentication-oauth`.
 |===
@@ -16,13 +16,13 @@ toc::[]
 
 == Goal
 
-Stand up the complete skeleton the client work will fill: the engine module, a Quarkus extension for it, the build assembly (BOM + reactor), and the integration-test home in the real consumer. After Plan 04 a developer only adds content (per xref:../03-client-spec/README.adoc[Plan 03]); no structural work remains.
+Stand up the complete skeleton the client work will fill: the engine module, a Quarkus extension for it, the build assembly (BOM + reactor), and the integration-test home in the real consumer. After Plan 05 a developer only adds content (per xref:../04-client-spec/README.adoc[Plan 04]); no structural work remains.
 
 == Decision: standalone engine, dedicated Quarkus extension, ITs in the consumer
 
-. *Engine — standalone, modelled on `token-sheriff-validation`.* Pure Java, HTTP via `cui-http`, depends on `token-sheriff-validation`. *Not* inside the Quarkus extension.
+. *Engine — standalone, modelled on `token-sheriff-validation`.* Pure Java, depends on `token-sheriff-commons` (transport, error model, events, metrics) and `token-sheriff-validation` (verify retrieved tokens). *Not* inside the Quarkus extension.
 +
-Why: the replacement target `portal-authentication-oauth` is *CDI / RESTEasy / portal, not Quarkus* — the engine must be framework-agnostic. It mirrors the proven `validation` + `quarkus` split; the validation module is already pure Java + `cui-http` (the client's HTTP foundation). Opt-in stays clean.
+Why: the replacement target `portal-authentication-oauth` is *CDI / RESTEasy / portal, not Quarkus* — the engine must be framework-agnostic. It mirrors the proven `validation` + `quarkus` split; the transport foundation is `commons` (which wraps `cui-http`), so the client adds flows, not HTTP. Opt-in stays clean.
 
 . *Quarkus — a new extension that depends on the existing one.* `token-sheriff-client-quarkus` (runtime + deployment), depending on the existing `token-sheriff-validation-quarkus` extension *and* the engine. A separate extension (not folded in) preserves opt-in and reuses the existing validation CDI wiring. Verified by the build assembly.
 
@@ -34,11 +34,11 @@ The portal adapter (preserving `Oauth2Service` / `AuthenticatedUserInfo`) and th
 
 [cols="1,1,3"]
 |===
-| Piece | Repo | What lands in Plan 04 (no functional content)
+| Piece | Repo | What lands in Plan 05 (no functional content)
 
 | *module*
 | OAuthSheriff
-| `token-sheriff-client` — top-level, validation-like. `package-info.java` in `de.cuioss.sheriff.token.client`; deps `token-sheriff-validation` + `cui-http`.
+| `token-sheriff-client` — top-level, validation-like. `package-info.java` in `de.cuioss.sheriff.token.client`; deps `token-sheriff-commons` + `token-sheriff-validation`.
 
 | *extension*
 | OAuthSheriff
@@ -53,12 +53,13 @@ The portal adapter (preserving `Oauth2Service` / `AuthenticatedUserInfo`) and th
 | In `portal-authentication-oauth`: a *test dependency* on `token-sheriff-client` and an *own-package* client integration-test scaffold (separated from the existing OAuth tests), reusing the module's OIDC test setup. Scaffold only — real tests arrive with the replacement.
 |===
 
-== Target module tree (post Plan 04)
+== Target module tree (post Plan 05)
 
 [source]
 ----
 # OAuthSheriff (→ Token-Sheriff)
-token-sheriff-client/                          # NEW engine (top-level, validation-like, cui-http)
+token-sheriff-commons/                      # base module: transport + error + events + metrics (Plan 03; extracted from validation)
+token-sheriff-client/                          # NEW engine (top-level, validation-like) -> deps: commons + validation
 token-sheriff-quarkus-parent/
   token-sheriff-validation-quarkus/                   # existing runtime
   token-sheriff-validation-quarkus-deployment/        # existing deployment
@@ -77,7 +78,7 @@ modules/authentication/portal-authentication-oauth/
 
 [cols="1,2"]
 |===
-| Engine         | `de.cuioss.sheriff.token:token-sheriff-client`, package `de.cuioss.sheriff.token.client`, deps `token-sheriff-validation` + `cui-http`
+| Engine         | `de.cuioss.sheriff.token:token-sheriff-client`, package `de.cuioss.sheriff.token.client`, deps `token-sheriff-commons` + `token-sheriff-validation`
 | Client runtime     | `de.cuioss.sheriff.token:token-sheriff-client-quarkus`, package `…token.client.quarkus`, deps `token-sheriff-validation-quarkus` + `token-sheriff-client`
 | Client deployment  | `de.cuioss.sheriff.token:token-sheriff-client-quarkus-deployment`, deps `token-sheriff-validation-quarkus-deployment` + the Client runtime
 | Quarkus feature| `token-sheriff-client`
