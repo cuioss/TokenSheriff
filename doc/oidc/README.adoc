@@ -19,25 +19,26 @@ implementation plans plus the standing design decisions behind them.
   package layer *inside* `token-sheriff-validation` (ArchUnit-enforced, not a separate
   artifact): IdP transport (discovery, JWKS, token, userinfo, revocation, end-session,
   PAR) + the error model (typed exceptions → RFC 9457 at the edge) + security events +
-  metrics. Spec (`CMN-N`) plus the re-packaging of these out of the validation packages.
+  metrics. Spec (`COMMONS-N`) plus the re-packaging of these out of the validation packages,
+  and extending the `generators` test artifact with MockWebServer dispatchers for the new endpoints.
 * xref:04-client-spec/README.adoc[04 — Client Requirements, Specification & Security] -
   produce the full client document set (requirements, specification,
   threat model, best practices) — modular by aspect (token / retrieval & flow),
   incl. step-up (RFC 9470) and RP-initiated logout; transport referenced from
   commons, not respecified. Spec-first; engine for a Backend-For-Frontend;
   replacement target `portal-authentication-oauth`.
-* xref:05-client-module/README.adoc[05 — Add the Client Module, Extension, Assembly & IT (wired, empty)] -
-  stand up the full skeleton: standalone validation-like engine `token-sheriff-client`
+* xref:05-client-module/README.adoc[05 — Add the Client Module, Extension & Assembly (wired, empty)] -
+  stand up the in-repo skeleton: standalone validation-like engine `token-sheriff-client`
   (pure Java, deps `token-sheriff-validation`, which carries the commons base layer), a dedicated
-  `token-sheriff-client-quarkus` extension depending on the existing one, and
-  BOM/reactor assembly — plus the client integration-test home (own package) in
-  `cui-portal-core` `portal-authentication-oauth`, the real consumer. Cross-repo;
-  no content. Runs after Plans 01 + 03.
+  `token-sheriff-client-quarkus` extension depending on the existing one, and BOM/reactor
+  assembly — no functional content. The portal (`portal-authentication-oauth`) is the
+  replacement target (design reference only); its adapter + ITs are future work beyond
+  these plans. Runs after Plans 01 + 03.
 * xref:06-implement/README.adoc[06 — Implement the Client (protocol by protocol)] -
   implement the `CLIENT-N` requirements as vertical
   protocol-by-protocol increments. Each ships unit tests (MockWebServer, incl.
-  adversarial) *and* integration tests against a real Keycloak, ending in the
-  portal E2E replacement. After Plans 03 + 04 + 05.
+  adversarial) *and* integration tests against a real Keycloak in-repo, ending in a
+  full-flow Keycloak E2E. After Plans 03 + 04 + 05.
 
 == Design decisions
 

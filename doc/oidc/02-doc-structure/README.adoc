@@ -50,7 +50,7 @@ doc/
   LogMessages.adoc                  # GLOBAL log registry — all capabilities, stays at root
   commons/                # NEW base capability (Plan 03) — a package layer in token-sheriff-validation, not its own module
     architecture.adoc
-    requirements.adoc               # IDs: CMN-N (transport / error / events / metrics)
+    requirements.adoc               # IDs: COMMONS-N (transport / error / events / metrics)
     threat-model.adoc               # SSRF / TLS / response-DoS / error-detail-leakage
     references.adoc                 # bibliography / shared standards
     specification/
@@ -59,7 +59,7 @@ doc/
       observability.adoc            # SecurityEventCounter events + metric identifiers
   validation/                       # existing capability (relocated)
     architecture.adoc
-    requirements.adoc               # IDs: VAL-N  (per Plan 01)
+    requirements.adoc               # IDs: VALIDATION-N  (per Plan 01)
     threat-model.adoc
     security-reference.adoc
     specification/
@@ -85,18 +85,18 @@ The `doc/oidc/` planning area (this folder) is transient — it holds the plans,
 
 == Requirement-ID namespacing
 
-The IDs are short, capability-scoped, and greppable — no shared brand prefix to repeat on every reference.
+The IDs are capability-scoped, self-documenting, and greppable — no shared brand prefix to repeat on every reference.
 
-* Validation uses `VAL-N` (Plan 01 shortens the existing `OAUTH-SHERIFF-N → VAL-N`).
-* Commons uses `CMN-N`, grouped by concern — transport / error / events / metrics (xref:../03-commons/README.adoc[Plan 03]).
-* Client requirements use `CLIENT-N` — distinct capability namespace, unambiguous and greppable (`VAL-[0-9]` vs `CMN-[0-9]` vs `CLIENT-[0-9]`).
+* Validation uses `VALIDATION-N` (Plan 01 renames the existing `OAUTH-SHERIFF-N → VALIDATION-N`).
+* Commons uses `COMMONS-N`, grouped by concern — transport / error / events / metrics (xref:../03-commons/README.adoc[Plan 03]).
+* Client requirements use `CLIENT-N` — distinct capability namespace, unambiguous and greppable (`VALIDATION-[0-9]` vs `COMMONS-[0-9]` vs `CLIENT-[0-9]`).
 
 == Cross-cutting realization: the RFC 9457 error model
 
-The error model is *owned by `commons`* (`doc/commons/specification/error-model.adoc`, `CMN-N`), but its *realization spans modules*, so it is called out here. The contract:
+The error model is *owned by `commons`* (`doc/commons/specification/error-model.adoc`, `COMMONS-N`), but its *realization spans modules*, so it is called out here. The contract:
 
 * *Libraries throw typed exceptions* — `commons`, `validation`, the `client` engine — and MUST NOT produce HTTP problem documents. That is correct for a library.
-* *Every HTTP edge MUST emit `application/problem+json`* per https://www.rfc-editor.org/rfc/rfc9457[RFC 9457] — the Quarkus extensions (`token-sheriff-validation-quarkus`, `token-sheriff-client-quarkus`) *and* the `portal-authentication-oauth` RESTEasy adapter. The exception→problem mapping lives at each edge.
+* *Every HTTP edge MUST emit `application/problem+json`* per https://www.rfc-editor.org/rfc/rfc9457[RFC 9457] — the Quarkus extensions (`token-sheriff-validation-quarkus`, `token-sheriff-client-quarkus`) *and* any non-Quarkus (RESTEasy) edge, e.g. the future portal adapter. The exception→problem mapping lives at each edge.
 * *Existing errors conform*: the current validation rejection responses retrofit to problem+json as part of this work.
 * *Inbound side*: `commons` normalizes IdP error responses (OAuth `error`/`error_description`, RFC 6749 §5.2) into the same typed model — one contract, both directions.
 

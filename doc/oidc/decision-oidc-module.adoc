@@ -51,7 +51,7 @@ token-sheriff-client                      flows / token acquisition / lifecycle 
 * **`token-sheriff-validation`** — the artifact; ships the `commons` base packages + the validation packages. Today's `wellknown`/`jwks.http`/`SecurityEventCounter`/metric identifiers are re-packaged into the `commons` layer (xref:03-commons/README.adoc[Plan 03]).
 * **`token-sheriff-client`** — a *separate* module/artifact: flows / token acquisition / lifecycle. Depends on `validation` (which transitively provides the `commons` base).
 
-*Why no separate `commons` artifact:* **no consumer wants the base without validation** — the client validates the tokens it retrieves, so it pulls `validation` anyway and gets the base transitively; `nifi-extensions` wants `validation`. A third artifact would add a POM/release/BOM surface for a dependency nobody picks alone. ArchUnit gives the layering guarantee (base stays dependency-light, never depends up) without the packaging overhead. `commons` keeps a *doc-level* identity (`doc/commons/`, `CMN-N`).
+*Why no separate `commons` artifact:* **no consumer wants the base without validation** — the client validates the tokens it retrieves, so it pulls `validation` anyway and gets the base transitively; `nifi-extensions` wants `validation`. A third artifact would add a POM/release/BOM surface for a dependency nobody picks alone. ArchUnit gives the layering guarantee (base stays dependency-light, never depends up) without the packaging overhead. `commons` keeps a *doc-level* identity (`doc/commons/`, `COMMONS-N`).
 
 The seams are *not* "OAuth vs OIDC" (validation already does OIDC discovery and ID tokens). They are:
 
