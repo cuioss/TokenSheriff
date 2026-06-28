@@ -192,7 +192,7 @@ Input for the spec authors — authoritative, citable sources. To avoid duplicat
 [NOTE]
 ====
 *Reused from the validation bibliography — cite, don't restate.* These are already referenced by the validation xref:../../Requirements.adoc[Requirements] and apply unchanged on the client side; `references.adoc` links the existing entries rather than re-listing them:
-RFC 6749 (OAuth 2.0), https://openid.net/specs/openid-connect-core-1_0.html[OIDC Core 1.0] (userinfo, ID-token validation), RFC 8725 (JWT BCP), RFC 9068 (JWT access tokens), RFC 9449 (DPoP), https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1], and the FAPI 2.0 Security Profile.
+https://www.rfc-editor.org/rfc/rfc6749[RFC 6749 (OAuth 2.0)], https://openid.net/specs/openid-connect-core-1_0.html[OIDC Core 1.0] (userinfo, ID-token validation), https://www.rfc-editor.org/rfc/rfc8725[RFC 8725 (JWT BCP)], https://www.rfc-editor.org/rfc/rfc9068[RFC 9068 (JWT access tokens)], https://www.rfc-editor.org/rfc/rfc9449[RFC 9449 (DPoP)], https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1], and the https://openid.net/specs/fapi-security-profile-2_0-final.html[FAPI 2.0 Security Profile].
 ====
 
 .Guidance & real-world (new)
