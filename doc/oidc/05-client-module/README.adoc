@@ -7,7 +7,7 @@
 [cols="1,3"]
 |===
 | Status     | Ready to execute (after xref:../01-restructure/README.adoc[Plan 01])
-| Depends on | Plan 01 (rename → `token-sheriff-*`) + Plan 03 (the `token-sheriff-commons` base module it builds on). Independent of Plan 04 (structure, not content).
+| Depends on | Plan 01 (rename → `token-sheriff-*`) + Plan 03 (the `commons` base layer inside `token-sheriff-validation` it builds on). Independent of Plan 04 (structure, not content).
 | Outcome    | Everything in place — *module, extension, assembly* (in this repo) and the *integration-test home* (in `cui-portal-core`) — fully wired, building green, with *no functional content yet*.
 | Cross-repo | Yes — `module`/`extension`/`assembly` land in OAuthSheriff (→ Token-Sheriff); `it` lands in `cui-portal-core` `portal-authentication-oauth`.
 |===
@@ -20,7 +20,7 @@ Stand up the complete skeleton the client work will fill: the engine module, a Q
 
 == Decision: standalone engine, dedicated Quarkus extension, ITs in the consumer
 
-. *Engine — standalone, modelled on `token-sheriff-validation`.* Pure Java, depends on `token-sheriff-commons` (transport, error model, events, metrics) and `token-sheriff-validation` (verify retrieved tokens). *Not* inside the Quarkus extension.
+. *Engine — standalone, modelled on `token-sheriff-validation`.* Pure Java, depends on `token-sheriff-validation` — which provides both the `commons` base layer (transport, error model, events, metrics) and token validation. *Not* inside the Quarkus extension.
 +
 Why: the replacement target `portal-authentication-oauth` is *CDI / RESTEasy / portal, not Quarkus* — the engine must be framework-agnostic. It mirrors the proven `validation` + `quarkus` split; the transport foundation is `commons` (which wraps `cui-http`), so the client adds flows, not HTTP. Opt-in stays clean.
 
@@ -38,7 +38,7 @@ The portal adapter (preserving `Oauth2Service` / `AuthenticatedUserInfo`) and th
 
 | *module*
 | OAuthSheriff
-| `token-sheriff-client` — top-level, validation-like. `package-info.java` in `de.cuioss.sheriff.token.client`; deps `token-sheriff-commons` + `token-sheriff-validation`.
+| `token-sheriff-client` — top-level, validation-like. `package-info.java` in `de.cuioss.sheriff.token.client`; deps `token-sheriff-validation` (which carries the `commons` base layer).
 
 | *extension*
 | OAuthSheriff
@@ -58,8 +58,8 @@ The portal adapter (preserving `Oauth2Service` / `AuthenticatedUserInfo`) and th
 [source]
 ----
 # OAuthSheriff (→ Token-Sheriff)
-token-sheriff-commons/                      # base module: transport + error + events + metrics (Plan 03; extracted from validation)
-token-sheriff-client/                          # NEW engine (top-level, validation-like) -> deps: commons + validation
+token-sheriff-validation/                   # existing engine — now carries the commons.* base layer (Plan 03; ArchUnit-enforced)
+token-sheriff-client/                          # NEW engine (top-level, validation-like) -> deps: token-sheriff-validation
 token-sheriff-quarkus-parent/
   token-sheriff-validation-quarkus/                   # existing runtime
   token-sheriff-validation-quarkus-deployment/        # existing deployment
@@ -78,7 +78,7 @@ modules/authentication/portal-authentication-oauth/
 
 [cols="1,2"]
 |===
-| Engine         | `de.cuioss.sheriff.token:token-sheriff-client`, package `de.cuioss.sheriff.token.client`, deps `token-sheriff-commons` + `token-sheriff-validation`
+| Engine         | `de.cuioss.sheriff.token:token-sheriff-client`, package `de.cuioss.sheriff.token.client`, deps `token-sheriff-validation` (carries the `commons` base layer)
 | Client runtime     | `de.cuioss.sheriff.token:token-sheriff-client-quarkus`, package `…token.client.quarkus`, deps `token-sheriff-validation-quarkus` + `token-sheriff-client`
 | Client deployment  | `de.cuioss.sheriff.token:token-sheriff-client-quarkus-deployment`, deps `token-sheriff-validation-quarkus-deployment` + the Client runtime
 | Quarkus feature| `token-sheriff-client`

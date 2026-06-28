@@ -1,4 +1,4 @@
-= Design Decision: Module Architecture — commons, validation, client
+= Design Decision: Module Architecture — validation (with a commons base layer) + client
 :toc: macro
 :toclevels: 3
 :sectnums:
@@ -7,8 +7,8 @@
 [cols="1,3"]
 |===
 | Status    | Accepted
-| Date      | 2026-06-24 (revised 2026-06-26: three-module layering)
-| Decides   | How the OIDC capabilities are split into Maven modules in this repository, and that they are *not* a separate Git project
+| Date      | 2026-06-24 (revised 2026-06-26: two modules + an ArchUnit-enforced `commons` base layer)
+| Decides   | How the OIDC capabilities are split into Maven modules (two: validation + client; commons is an ArchUnit-enforced base layer inside validation), and that they are *not* a separate Git project
 | Supersedes| —
 | Related   | xref:01-restructure/README.adoc[Plan 01 — Restructure], xref:03-commons/README.adoc[Plan 03 — Commons], xref:05-client-module/README.adoc[Plan 05 — Add the Client Module], xref:../../README.md[Project README]
 |===
@@ -35,36 +35,39 @@ The question is **where** this code lives: a separate Git project (the original 
 
 == Decision
 
-Keep everything in **this multi-module repository** (no separate Git project) and split into **three layered Maven modules**, each its own artifact:
+Keep everything in **this multi-module repository** (no separate Git project) and split into **two Maven modules** — with the shared base as an *ArchUnit-enforced package layer*, not a third artifact:
 
 [source]
 ----
-token-sheriff-commons      (base — transport + error model + events + metrics)
-        ▲                ▲
-token-sheriff-validation      │   (validate tokens; uses commons transport + events + error model)
-        ▲                ▲
-token-sheriff-client ─────────┘   (run flows; uses commons + validation)
+token-sheriff-validation                 (one artifact, two enforced layers)
+  de.cuioss.sheriff.token.commons.*     base: transport / error / events / metrics   (deps: cui-http, cui-tooling)
+        ▲   ArchUnit: commons must NOT depend on …validation..
+  de.cuioss.sheriff.token.validation.*  token validation (signatures, claims, pipeline)
+        ▲   Maven
+token-sheriff-client                      flows / token acquisition / lifecycle        (deps: validation)
 ----
 
-* **`token-sheriff-commons`** — the shared base: *transport* (discovery, JWKS, token, userinfo, revocation, introspection, end-session, PAR; TLS, SSRF defence, resilience, IdP-error normalization), the *error model* (typed exceptions the HTTP edges map to RFC 9457), *security events*, and *metrics*. Depends on `cui-http` only. *Today's `wellknown` + `jwks.http` + `SecurityEventCounter` + metric identifiers are extracted from validation into it* (xref:03-commons/README.adoc[Plan 03]).
-* **`token-sheriff-validation`** — token validation (signatures, claims, pipeline). Depends on `commons`.
-* **`token-sheriff-client`** — flows / token acquisition / lifecycle. Depends on `commons` + `validation`.
+* **`commons` — a package layer inside `token-sheriff-validation`** (`de.cuioss.sheriff.token.commons.*`): the shared base — *transport* (discovery, JWKS, token, userinfo, revocation, introspection, end-session, PAR; TLS, SSRF defence, resilience, IdP-error normalization), the *error model* (typed exceptions the HTTP edges map to RFC 9457), *security events*, and *metrics*. Depends on `cui-http` and `cui-tooling` only; ArchUnit forbids it depending "up" on `…validation..`.
+* **`token-sheriff-validation`** — the artifact; ships the `commons` base packages + the validation packages. Today's `wellknown`/`jwks.http`/`SecurityEventCounter`/metric identifiers are re-packaged into the `commons` layer (xref:03-commons/README.adoc[Plan 03]).
+* **`token-sheriff-client`** — a *separate* module/artifact: flows / token acquisition / lifecycle. Depends on `validation` (which transitively provides the `commons` base).
+
+*Why no separate `commons` artifact:* **no consumer wants the base without validation** — the client validates the tokens it retrieves, so it pulls `validation` anyway and gets the base transitively; `nifi-extensions` wants `validation`. A third artifact would add a POM/release/BOM surface for a dependency nobody picks alone. ArchUnit gives the layering guarantee (base stays dependency-light, never depends up) without the packaging overhead. `commons` keeps a *doc-level* identity (`doc/commons/`, `CMN-N`).
 
 The seams are *not* "OAuth vs OIDC" (validation already does OIDC discovery and ID tokens). They are:
 
-* **Shared base — transport, error model, events, metrics → `commons`** (hardened substrate; never interprets trust)
-* **Passive validation of tokens → `validation`**
-* **Active acquisition / flows → `client`**
+* **Shared base — transport, error model, events, metrics → `commons` packages** (hardened substrate; never interprets trust)
+* **Passive validation of tokens → `validation` packages**
+* **Active acquisition / flows → `client` module**
 
 == Rationale
 
 The stated goal of separation — "users choose the dependency that matches their requirements" — is satisfied by a separate *artifact*. It does **not** require a separate *repository*. A second repo only buys a repo boundary; it costs a version-compatibility matrix, two release trains, duplicated CI/SonarCloud/release/BOM infrastructure, and cross-repo pull requests every time the seam shifts.
 
-The dependency direction is the natural, clean layering — `client → validation → commons`, transport at the base — and never reverses. A consumer that needs only validation (e.g. `nifi-extensions`) still pulls just `validation` (+ its `commons` transitive); a consumer that needs acquisition adds `client`.
+The dependency direction is the natural, clean layering — `client → validation`, with `commons` the enforced base layer *inside* `validation` — and never reverses. A consumer that needs only validation (e.g. `nifi-extensions`) pulls `validation`; a consumer that needs acquisition adds `client`.
 
 The validation module's public API is still pre-1.0 (Maven Central `v0.8.x`) and actively evolving (a recent 1.0 cleanup renamed `well_known → wellknown`, etc.). The client layer will exercise validation-module APIs in ways that are hard to predict; that co-evolution is *trivial in one repo* and *painful across two*.
 
-The asymmetry is decisive: **extracting a module into its own repo later is cheap** (move the directory, redirect the dependency); **merging two repos back after a premature split is expensive.** Start coupled; split on evidence.
+The asymmetry is decisive: **promoting a coupled layer later is cheap** — `commons` packages → their own module (move the `…commons.*` tree, swap the ArchUnit rule for a Maven dependency), or a module → its own repo (move the directory, redirect the dependency); **merging back after a premature split is expensive.** Start coupled; split on evidence.
 
 == Consequences
 
@@ -91,9 +94,19 @@ Revisit this decision — and split — when **any** of the following becomes tr
 
 Until one of these bites, the module is strictly better.
 
+== When to promote `commons` to its own module
+
+Keep it a package layer until **any** of these becomes true; then move `…commons.*` into a `token-sheriff-commons` artifact and swap the ArchUnit rule for a Maven dependency:
+
+* A consumer genuinely needs the **base without validation** (e.g. an OAuth-client use that does not run the validation pipeline).
+* The base must ship on an **independent release cadence** from validation.
+* The base grows a **dependency tree** that validation-only consumers should not inherit.
+
+Until then, ArchUnit delivers the same layering guarantee with one fewer artifact.
+
 == Resolved by later plans
 
-* *Commons extraction* — the `token-sheriff-commons` base module, the relocation of `wellknown`/`jwks.http` + `SecurityEventCounter` + metric identifiers out of validation, the error model, and its requirements/spec/threat-model under `doc/commons/`. See xref:03-commons/README.adoc[Plan 03].
+* *Commons base layer* — the `de.cuioss.sheriff.token.commons.*` package layer inside `token-sheriff-validation`, the re-packaging of `wellknown`/`jwks.http` + `SecurityEventCounter` + metric identifiers into it, the error model, the ArchUnit rules enforcing the layering, and its requirements/spec/threat-model under `doc/commons/`. See xref:03-commons/README.adoc[Plan 03].
 * *Module/artifact name* — `token-sheriff-client` (engine), `token-sheriff-client-quarkus` (extension). See xref:05-client-module/README.adoc[Plan 05].
 * *Quarkus integration* — a dedicated `token-sheriff-client-quarkus` extension depending on the existing one (not folded in). See xref:05-client-module/README.adoc[Plan 05].
 * *API surface / first flows* — secure-subset scope and the protocol-by-protocol order (`client_credentials` first, then auth-code + PKCE) are in xref:04-client-spec/README.adoc[Plan 04] and xref:06-implement/README.adoc[Plan 06].
