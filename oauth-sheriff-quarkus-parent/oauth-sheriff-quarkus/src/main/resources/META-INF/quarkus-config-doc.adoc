@@ -1,4 +1,4 @@
-= OAuth Sheriff Quarkus Extension Configuration Reference
+= Token-Sheriff Quarkus Extension Configuration Reference
 :toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js

@@ -7,7 +7,7 @@
 
 == Overview
 
-Test framework configuration for the OAuth Sheriff Quarkus extension, covering dependencies, logging, and test execution setup.
+Test framework configuration for the Token-Sheriff Quarkus extension, covering dependencies, logging, and test execution setup.
 
 == Test Dependencies
 

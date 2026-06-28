@@ -6,7 +6,7 @@
 
 == Overview
 
-OAuth-Sheriff validates JWT tokens through a multi-stage pipeline. This document describes the core components, their interactions, and key design decisions.
+Token-Sheriff validates JWT tokens through a multi-stage pipeline. This document describes the core components, their interactions, and key design decisions.
 
 image::plantuml/component-overview.png[Component Overview]
 

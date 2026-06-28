@@ -34,7 +34,7 @@ quarkus.native.monitoring=jcmd,jfr,heapdump
 
 === Reflection Configuration
 
-The OAuth Sheriff Quarkus deployment automatically registers types for reflection across several build steps, covering JWT validation pipeline, JWKS loading, token content, claim mappers, and security/algorithm classes. The total number of registered types (including transitive Quarkus framework types) varies by build.
+The Token-Sheriff Quarkus deployment automatically registers types for reflection across several build steps, covering JWT validation pipeline, JWKS loading, token content, claim mappers, and security/algorithm classes. The total number of registered types (including transitive Quarkus framework types) varies by build.
 
 === Garbage Collection
 

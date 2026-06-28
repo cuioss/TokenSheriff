@@ -7,7 +7,7 @@
 
 == Purpose
 
-Native image configuration for the OAuth Sheriff Quarkus extension, including reflection settings, resource inclusion, and build parameters for GraalVM compilation.
+Native image configuration for the Token-Sheriff Quarkus extension, including reflection settings, resource inclusion, and build parameters for GraalVM compilation.
 
 == Basic Native Image Configuration
 
@@ -23,7 +23,7 @@ quarkus.native.resources.includes=**/*.p12,**/*.crt,**/*.key,**/*.pem
 
 === Reflection Configuration
 
-The OAuth Sheriff Quarkus deployment automatically registers the following classes for reflection:
+The Token-Sheriff Quarkus deployment automatically registers the following classes for reflection:
 
 * **JWT Validation Pipeline**: `NonValidatingJwtParser`, `TokenSignatureValidator`, `TokenHeaderValidator`, `TokenClaimValidator`, `TokenBuilder`, `DecodedJwt`
 * **JWKS Loading**: `HttpJwksLoader`, `JWKSKeyLoader`, `KeyInfo`, `JwksParser`

@@ -7,7 +7,7 @@
 
 == Purpose
 
-JWT validation performance characteristics, baselines, and analysis for the CUI OAuth Sheriff Quarkus integration.
+JWT validation performance characteristics, baselines, and analysis for the CUI Token-Sheriff Quarkus integration.
 
 == Performance Baselines (March 2026)
 

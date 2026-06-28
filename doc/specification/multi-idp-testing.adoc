@@ -7,7 +7,7 @@
 
 == Overview
 
-OAuthSheriff validates JWT tokens from any standards-compliant OIDC provider. To verify this claim beyond a single provider, multi-IDP integration testing exercises the validation pipeline against multiple identity providers running simultaneously.
+TokenSheriff validates JWT tokens from any standards-compliant OIDC provider. To verify this claim beyond a single provider, multi-IDP integration testing exercises the validation pipeline against multiple identity providers running simultaneously.
 
 This specification covers the architecture, provider selection, and usage of the multi-IDP testing infrastructure.
 
@@ -21,7 +21,7 @@ The multi-IDP testing approach extends the existing Docker Compose infrastructur
 │ Docker Compose Network: jwt-integration                               │
 │                                                                       │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐  │
-│  │ Keycloak │  │   Dex    │  │ Zitadel  │  │ OAuthSheriff          │  │
+│  │ Keycloak │  │   Dex    │  │ Zitadel  │  │ TokenSheriff          │  │
 │  │ :8443    │  │  :5556   │  │  :8080   │  │ Integration Tests     │  │
 │  │ (always) │  │ (profile)│  │ (profile)│  │ :8443                 │  │
 │  └──────────┘  └──────────┘  └────┬─────┘  └──────────────────────┘  │
@@ -242,7 +242,7 @@ The `bearerAuthProviders()` method source requires `ROLES + GROUPS + CUSTOM_SCOP
 
 === Dex's value in the test suite
 
-Despite these limitations, Dex proves that OAuthSheriff correctly handles:
+Despite these limitations, Dex proves that TokenSheriff correctly handles:
 
 * A **different OIDC-certified issuer** with different token structure
 * **Missing optional claims** (no `scope` claim — RFC 9068 compliance)

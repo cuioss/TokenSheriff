@@ -36,11 +36,11 @@ The following standards and specifications are referenced in this document:
 
 == OAuth 2.1 Compatibility
 
-OAuthSheriff is a **resource server token validation library**. It validates JWT tokens passed as strings and does not handle authorization flows, token issuance, redirect URIs, or HTTP transport.
+TokenSheriff is a **resource server token validation library**. It validates JWT tokens passed as strings and does not handle authorization flows, token issuance, redirect URIs, or HTTP transport.
 
-The major changes in https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1] (mandatory PKCE, removal of implicit and ROPC grants, exact redirect URI matching, refresh token rotation) target **authorization servers and clients**, not resource servers. **Tokens issued by OAuth 2.1 compliant servers validate correctly with OAuthSheriff as-is**, since OAuth 2.1 does not change the JWT structure or introduce new mandatory claims for access tokens.
+The major changes in https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1] (mandatory PKCE, removal of implicit and ROPC grants, exact redirect URI matching, refresh token rotation) target **authorization servers and clients**, not resource servers. **Tokens issued by OAuth 2.1 compliant servers validate correctly with TokenSheriff as-is**, since OAuth 2.1 does not change the JWT structure or introduce new mandatory claims for access tokens.
 
-OAuthSheriff already satisfies the OAuth 2.1 resource server requirements:
+TokenSheriff already satisfies the OAuth 2.1 resource server requirements:
 
 * **Scope enforcement** - `scope` claim accessible via `AccessTokenContent.getScopes()` for application-level validation; enforced declaratively via Quarkus `@BearerAuth`
 * **Audience validation** - Supported via `expected-audience` configuration; mandatory for ID tokens

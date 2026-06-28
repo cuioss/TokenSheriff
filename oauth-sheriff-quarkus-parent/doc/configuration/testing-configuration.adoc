@@ -7,7 +7,7 @@
 
 == Purpose
 
-Testing configuration patterns and utilities for applications using the OAuth Sheriff Quarkus extension, covering test profiles, token generation, and validation testing.
+Testing configuration patterns and utilities for applications using the Token-Sheriff Quarkus extension, covering test profiles, token generation, and validation testing.
 
 == Test Profile Configuration
 

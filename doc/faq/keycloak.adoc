@@ -6,7 +6,7 @@
 :toc-title: Table of Contents
 
 
-Common issues and solutions when integrating the OAuth Sheriff library with Keycloak.
+Common issues and solutions when integrating the Token-Sheriff library with Keycloak.
 
 == Document Navigation
 
@@ -21,13 +21,13 @@ Common issues and solutions when integrating the OAuth Sheriff library with Keyc
 
 === Problem: Missing 'sub' Claim
 
-*Warning:* `OAuthSheriff-109: Token is missing required claim: sub`
+*Warning:* `TokenSheriff-109: Token is missing required claim: sub`
 
 *Cause:* Some Keycloak configurations or custom client scopes may exclude the `sub` claim from access tokens. While Keycloak includes `sub` by default, certain service account configurations or custom protocol mappers can remove it. The `sub` claim is mandatory for ACCESS_TOKEN and ID_TOKEN types per RFC 7519.
 
 === Solution 1: Configure claimSubOptional (For Specific Edge Cases)
 
-If your Keycloak setup legitimately excludes the `sub` claim (e.g., certain service account configurations), you can configure the OAuth Sheriff library to make the `sub` claim optional:
+If your Keycloak setup legitimately excludes the `sub` claim (e.g., certain service account configurations), you can configure the Token-Sheriff library to make the `sub` claim optional:
 
 [source,properties]
 ----
@@ -42,7 +42,7 @@ sheriff.oauth.issuers.keycloak.claim-sub-optional=true
 - Maintains RFC compliance warnings for awareness
 - Per-issuer configuration allows mixed environments
 
-*Warning:* This relaxes RFC 7519 compliance. The library will log a warning (`OAuthSheriff-134`) when this setting is enabled.
+*Warning:* This relaxes RFC 7519 compliance. The library will log a warning (`TokenSheriff-134`) when this setting is enabled.
 
 === Solution 2: Add Subject Protocol Mapper
 
@@ -184,9 +184,9 @@ Expected token structure after configuration:
 
 Adding the group membership mapper with `"full.path": "false"` to your Keycloak realm configuration resolves this issue completely. The integration tests confirm that tokens now contain group names without leading slashes, making them compatible with `@BearerToken` annotations.
 
-== Alternative: OAuth Sheriff Default Mappers
+== Alternative: Token-Sheriff Default Mappers
 
-Use built-in mappers instead of custom protocol mappers (OAuth Sheriff v1.0+):
+Use built-in mappers instead of custom protocol mappers (Token-Sheriff v1.0+):
 
 [source,properties]
 ----
