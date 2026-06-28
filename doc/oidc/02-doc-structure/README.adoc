@@ -157,7 +157,7 @@ External referencers (outside the moving set):
 * `benchmarking/README.adoc`, `benchmarking/doc/workflow.adoc`
 * `oauth-sheriff-core/doc/developing.adoc`
 * `oauth-sheriff-quarkus-parent/README.adoc` + `doc/README.adoc` + `oauth-sheriff-quarkus/README.adoc` + `oauth-sheriff-quarkus-deployment/README.adoc` + `oauth-sheriff-quarkus-integration-tests/README.adoc`
-* `doc/oidc/01-restructure/README.adoc` (this planning area references Requirements)
+* `doc/oidc/*` planning area — several plans link `xref:../../Requirements.adoc` (e.g. `01-restructure`, `04-client-spec`); rewrite these to `../../validation/requirements.adoc` *as part of this move* (they intentionally point at the current location until then). The planning area is transient and retired after execution.
 
 Intra-set (the moving docs cross-reference each other): `architecture.adoc`, `Requirements.adoc`, `security/*`, `specification/*`, `faq/keycloak.adoc`, and the hub `doc/README.adoc`. (`LogMessages.adoc` is *not* moving — exclude it.)
 
