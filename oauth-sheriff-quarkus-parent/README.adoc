@@ -1,4 +1,4 @@
-= OAuth Sheriff Quarkus Integration
+= Token-Sheriff Quarkus Integration
 :toc: left
 :toclevels: 3
 :sectnumlevels: 1
@@ -7,7 +7,7 @@
 :sectnums:
 
 
-A Quarkus extension for the OAuth Sheriff validation library, consisting of:
+A Quarkus extension for the Token-Sheriff validation library, consisting of:
 
 * xref:oauth-sheriff-quarkus/README.adoc[oauth-sheriff-quarkus] - Runtime module with CDI producers and JWT validation
 * xref:oauth-sheriff-quarkus-deployment/README.adoc[oauth-sheriff-quarkus-deployment] - Build-time deployment processor
@@ -41,7 +41,7 @@ A Quarkus extension for the OAuth Sheriff validation library, consisting of:
 
 == Core Concepts
 
-This module provides integration of the OAuth Sheriff validation library into Quarkus applications. It includes:
+This module provides integration of the Token-Sheriff validation library into Quarkus applications. It includes:
 
 * Quarkus configuration support
 * CDI producers for JWT validation components
@@ -164,7 +164,7 @@ public class InstanceEndpoint {
     public Response getData(@BearerToken BearerTokenResult tokenResult) {
         AccessTokenContent token = tokenResult.getAccessTokenContent()
                 .orElseThrow(() -> new IllegalStateException("Token content missing after successful authorization"));
-        // OAuthSheriff-specific API with richer types
+        // Token-Sheriff-specific API with richer types
         String userId = token.getSubject().orElse("unknown");
         OffsetDateTime expiry = token.getExpirationDateTime();
         List<String> scopes = token.getScopes();

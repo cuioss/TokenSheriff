@@ -1,4 +1,4 @@
-= OAuth Sheriff Benchmarking
+= Token-Sheriff Benchmarking
 :toc:
 :toclevels: 2
 :toc-title: Table of Contents

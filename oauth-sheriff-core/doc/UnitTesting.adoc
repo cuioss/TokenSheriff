@@ -1,4 +1,4 @@
-= OAuth Sheriff Core Test Utilities
+= Token-Sheriff Core Test Utilities
 :doctype: book
 :toc: left
 :toclevels: 3

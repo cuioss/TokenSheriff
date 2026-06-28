@@ -8,12 +8,12 @@
 
 [NOTE]
 ====
-This document defines the architecture, responsibilities, and boundaries of the OAuth Sheriff benchmark modules. All content has been verified against the actual codebase.
+This document defines the architecture, responsibilities, and boundaries of the Token-Sheriff benchmark modules. All content has been verified against the actual codebase.
 ====
 
 == Overview
 
-The OAuth Sheriff benchmarking infrastructure consists of three specialized modules:
+The Token-Sheriff benchmarking infrastructure consists of three specialized modules:
 
 [cols="1,3", options="header"]
 |===

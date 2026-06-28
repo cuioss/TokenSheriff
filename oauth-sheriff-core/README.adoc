@@ -1,4 +1,4 @@
-= OAuth Sheriff Core
+= Token-Sheriff Core
 :toc: left
 :toclevels: 2
 :source-highlighter: highlight.js

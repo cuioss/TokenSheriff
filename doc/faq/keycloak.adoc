@@ -6,7 +6,7 @@
 :toc-title: Table of Contents
 
 
-Common issues and solutions when integrating the OAuth Sheriff library with Keycloak.
+Common issues and solutions when integrating the Token-Sheriff library with Keycloak.
 
 == Document Navigation
 
@@ -27,7 +27,7 @@ Common issues and solutions when integrating the OAuth Sheriff library with Keyc
 
 === Solution 1: Configure claimSubOptional (For Specific Edge Cases)
 
-If your Keycloak setup legitimately excludes the `sub` claim (e.g., certain service account configurations), you can configure the OAuth Sheriff library to make the `sub` claim optional:
+If your Keycloak setup legitimately excludes the `sub` claim (e.g., certain service account configurations), you can configure the Token-Sheriff library to make the `sub` claim optional:
 
 [source,properties]
 ----
@@ -184,9 +184,9 @@ Expected token structure after configuration:
 
 Adding the group membership mapper with `"full.path": "false"` to your Keycloak realm configuration resolves this issue completely. The integration tests confirm that tokens now contain group names without leading slashes, making them compatible with `@BearerToken` annotations.
 
-== Alternative: OAuth Sheriff Default Mappers
+== Alternative: Token-Sheriff Default Mappers
 
-Use built-in mappers instead of custom protocol mappers (OAuth Sheriff v1.0+):
+Use built-in mappers instead of custom protocol mappers (Token-Sheriff v1.0+):
 
 [source,properties]
 ----

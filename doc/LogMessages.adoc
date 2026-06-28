@@ -1,4 +1,4 @@
-= Log Messages for OAuth Sheriff
+= Log Messages for Token-Sheriff
 :toc: left
 :toclevels: 3
 :toc-title: Table of Contents

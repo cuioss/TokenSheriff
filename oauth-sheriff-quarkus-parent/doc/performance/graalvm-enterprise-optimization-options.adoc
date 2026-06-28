@@ -9,7 +9,7 @@
 
 GraalVM Enterprise Edition (Oracle GraalVM) specific optimization options. These features require Oracle GraalVM or commercial licensing.
 
-**Context**: OAuth Sheriff targets GraalVM Community Edition (Mandrel) as primary runtime +
+**Context**: Token-Sheriff targets GraalVM Community Edition (Mandrel) as primary runtime +
 **Current Performance**: Community Edition achieves 25,178 ops/s JWT validation (March 2026)
 
 == Enterprise Edition Features

@@ -1,8 +1,8 @@
-# OAuth-Sheriff
+# Token-Sheriff
 
 ## Status
 
-<img align="right" width="300" src="doc/resources/Sheriff.png" alt="OAuth Sheriff">
+<img align="right" width="300" src="doc/resources/Sheriff.png" alt="Token-Sheriff">
 
 **Build & Quality**
 
@@ -178,7 +178,7 @@ For detailed architectural information, see:
 - [MicroProfile JWT Compatibility](doc/specification/microprofile-jwt-compatibility.adoc) - MP-JWT 2.1 integration and rationale
 - [Multi-IDP Testing](doc/specification/multi-idp-testing.adoc) - Testing with multiple OIDC providers
 
-For configuration details including runtime dependencies and test support, see the [OAuth Sheriff Core documentation](oauth-sheriff-core/README.adoc).
+For configuration details including runtime dependencies and test support, see the [Token-Sheriff Core documentation](oauth-sheriff-core/README.adoc).
 
 ## Performance
 

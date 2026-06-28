@@ -64,7 +64,7 @@ Key Material:
                            |
                            v
 
-RESOURCE SERVER (OAuthSheriff library)
+RESOURCE SERVER (TokenSheriff library)
 ======================================
 
 Key Material:

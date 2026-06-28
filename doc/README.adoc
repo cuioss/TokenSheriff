@@ -1,7 +1,7 @@
 = Documentation Hub
 :sectnums:
 
-This is the central navigation for OAuthSheriff documentation.
+This is the central navigation for TokenSheriff documentation.
 
 == Core
 

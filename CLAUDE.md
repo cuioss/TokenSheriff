@@ -10,7 +10,7 @@ This file contains:
 - OpenRewrite marker handling
 - Custom commands
 
-Please refer to `agents.md` for complete guidance when working on this OAuth Sheriff project.
+Please refer to `agents.md` for complete guidance when working on this Token-Sheriff project.
 
 - Use `.plan/temp/` for ALL temporary files (covered by `Write(.plan/**)` permission - avoids permission prompts)
 

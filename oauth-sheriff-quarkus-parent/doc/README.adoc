@@ -1,4 +1,4 @@
-= OAuth Sheriff Quarkus Extension Documentation
+= Token-Sheriff Quarkus Extension Documentation
 :toc: left
 :toclevels: 3
 :toc-title: Table of Contents
@@ -7,7 +7,7 @@
 
 == Overview
 
-Documentation for the OAuth Sheriff Quarkus extension -- a JWT validation library integrated with Quarkus. The extension provides automatic configuration, health checks, metrics integration, and development UI components.
+Documentation for the Token-Sheriff Quarkus extension -- a JWT validation library integrated with Quarkus. The extension provides automatic configuration, health checks, metrics integration, and development UI components.
 
 == Quick Links
 
@@ -16,7 +16,7 @@ Documentation for the OAuth Sheriff Quarkus extension -- a JWT validation librar
 
 == Architecture & Implementation
 
-The OAuth Sheriff Quarkus extension provides JWT validation through a modular architecture:
+The Token-Sheriff Quarkus extension provides JWT validation through a modular architecture:
 
 * **xref:integration/quarkus-integration.adoc[Quarkus Framework Integration]** - Core extension architecture
 * **xref:integration/health-checks.adoc[Health Checks]** - MicroProfile Health readiness and liveness probes

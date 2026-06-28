@@ -1,6 +1,6 @@
-# OAuth Sheriff - AI Agent Guidance
+# Token-Sheriff - AI Agent Guidance
 
-OAuth Sheriff is a high-performance OAuth 2.0 and OpenID Connect token validation library for Java/Quarkus applications. This document guides AI coding agents when working with the codebase.
+Token-Sheriff is a high-performance OAuth 2.0 and OpenID Connect token validation library for Java/Quarkus applications. This document guides AI coding agents when working with the codebase.
 
 ## Dev Environment Tips
 
@@ -11,7 +11,7 @@ OAuth Sheriff is a high-performance OAuth 2.0 and OpenID Connect token validatio
 
 ### Project Structure
 Multi-module Maven project:
-- `oauth-sheriff-core/` - The core OAuth Sheriff validation library
+- `oauth-sheriff-core/` - The core Token-Sheriff validation library
 - `oauth-sheriff-quarkus-parent/` - Quarkus framework integration
 - `benchmarking/` - Performance benchmarking modules
 - `bom/` - Bill of Materials for dependency management

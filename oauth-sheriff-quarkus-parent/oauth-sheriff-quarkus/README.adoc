@@ -1,4 +1,4 @@
-= OAuth Sheriff Quarkus Runtime
+= Token-Sheriff Quarkus Runtime
 :toc: left
 :toclevels: 3
 :sectnumlevels: 1
