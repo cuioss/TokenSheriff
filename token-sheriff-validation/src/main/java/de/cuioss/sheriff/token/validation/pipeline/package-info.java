@@ -54,7 +54,7 @@
  * </ul>
  * <p>
  * For more detailed specifications, see the
- * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc">Technical Components Specification</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc">Technical Components Specification</a>
  * 
  * @author Oliver Wolff
  * @see de.cuioss.sheriff.token.validation.TokenValidator

@@ -17,7 +17,7 @@
         with a focus on security and ease of use, leveraging standard JDK cryptographic providers.
     </description>
 
-    <url>https://github.com/cuioss/OAuthSheriff/</url>
+    <url>https://github.com/cuioss/TokenSheriff/</url>
     <modules>
         <module>bom</module>
         <module>token-sheriff-validation</module>
@@ -25,17 +25,17 @@
         <module>benchmarking</module>
     </modules>
     <scm>
-        <url>https://github.com/cuioss/OAuthSheriff/</url>
+        <url>https://github.com/cuioss/TokenSheriff/</url>
         <connection>
-            scm:git:https://github.com/cuioss/OAuthSheriff.git
+            scm:git:https://github.com/cuioss/TokenSheriff.git
         </connection>
         <developerConnection>
-            scm:git:https://github.com/cuioss/OAuthSheriff/
+            scm:git:https://github.com/cuioss/TokenSheriff/
         </developerConnection>
         <tag>HEAD</tag>
     </scm>
     <issueManagement>
-        <url>https://github.com/cuioss/OAuthSheriff/issues</url>
+        <url>https://github.com/cuioss/TokenSheriff/issues</url>
         <system>GitHub Issues</system>
     </issueManagement>
 

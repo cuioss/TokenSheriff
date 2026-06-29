@@ -43,7 +43,7 @@ import java.util.Optional;
  * using appropriate claim mappers based on the issuer configuration or standard claim names.
  * <p>
  * For more details on the token building process, see the
- * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#token-validation-pipeline">Token Validation Pipeline</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#token-validation-pipeline">Token Validation Pipeline</a>
  *
  * @apiNote This class is internal to Token-Sheriff and not part of the public API.
  * @since 1.0

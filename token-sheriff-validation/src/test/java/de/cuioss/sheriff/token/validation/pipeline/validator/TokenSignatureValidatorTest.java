@@ -59,7 +59,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * </ul>
  *
  * @author Oliver Wolff
- * @see <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
+ * @see <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
  */
 @EnableTestLogger(rootLevel = TestLogLevel.DEBUG)
 @EnableGeneratorController

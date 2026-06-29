@@ -47,7 +47,7 @@ import java.util.concurrent.ScheduledExecutorService;
  * removed for simplification while keeping essential refresh functionality.
  * <p>
  * For more detailed information about the HTTP-based JWKS loading, see the
- * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#_jwksloader">Technical Components Specification</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#_jwksloader">Technical Components Specification</a>
  *
  * @since 1.0
  * @author Oliver Wolff

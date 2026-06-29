@@ -25,7 +25,7 @@ import java.security.PublicKey;
  * equality by default, making it ideal for representing key information.
  * <p>
  * For more details on the security aspects, see the
- * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
  *
  * @param key The public key used for JWT signature verification. This is the cryptographic
  *            key extracted from the JWK that will be used to verify the signature of JWT tokens.

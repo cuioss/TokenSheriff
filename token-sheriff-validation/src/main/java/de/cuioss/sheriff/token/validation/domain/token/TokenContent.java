@@ -44,7 +44,7 @@ import java.util.Set;
  * <a href="https://datatracker.ietf.org/doc/html/rfc7519">RFC 7519</a>.
  * <p>
  * For more details on token structure, see the
- * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#token-structure">Token Structure</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#token-structure">Token Structure</a>
  * specification.
  *
  * @since 1.0

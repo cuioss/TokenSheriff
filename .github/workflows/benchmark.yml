@@ -77,14 +77,14 @@ jobs:
           ref: main
           path: previous-pages
           sparse-checkout: |
-            OAuth-Sheriff/benchmarks/micro/history
-            OAuth-Sheriff/benchmarks/integration/history
+            TokenSheriff/benchmarks/micro/history
+            TokenSheriff/benchmarks/integration/history
         continue-on-error: true
 
       - name: Prepare Historical Data for Benchmarks
         run: |
           python3 benchmarking/scripts/benchmark-pages.py prepare-history \
-            --previous-pages-dir previous-pages/OAuth-Sheriff/benchmarks \
+            --previous-pages-dir previous-pages/TokenSheriff/benchmarks \
             --output-dir "${GITHUB_WORKSPACE}/benchmark-history"
 
       - name: Run Micro Benchmarks
@@ -115,7 +115,7 @@ jobs:
           python3 benchmarking/scripts/benchmark-pages.py assemble \
             --micro-results benchmarking/benchmark-core/target/benchmark-results/gh-pages-ready \
             --integration-results benchmarking/benchmark-integration-wrk/target/benchmark-results/gh-pages-ready \
-            --previous-pages-dir previous-pages/OAuth-Sheriff/benchmarks \
+            --previous-pages-dir previous-pages/TokenSheriff/benchmarks \
             --output-dir gh-pages \
             --commit-sha "${{ github.sha }}"
 
@@ -131,12 +131,12 @@ jobs:
         with:
           repository: cuioss/cuioss.github.io
           path: _pages-deploy
-          sparse-checkout: OAuth-Sheriff/benchmarks
+          sparse-checkout: TokenSheriff/benchmarks
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Deploy to cuioss.github.io
         run: |
-          TARGET_DIR="_pages-deploy/OAuth-Sheriff/benchmarks"
+          TARGET_DIR="_pages-deploy/TokenSheriff/benchmarks"
           rm -rf "$TARGET_DIR"
           mkdir -p "$TARGET_DIR"
           cp -r gh-pages/* "$TARGET_DIR/"
