@@ -6,7 +6,7 @@
 
 [cols="1,3"]
 |===
-| Status | Ready to execute
+| Status | *Done* — shipped as `0.9.0` on 2026-06-29 (repo renamed, Maven Central published incl. relocation, consumer `nifi-extensions` migrated). Only the OpenSSF entry update is pending.
 | Scope  | Rename the project to *Token-Sheriff* across every surface: repository, Maven coordinates, Java packages, configuration + metric keys, requirement IDs, and documentation
 | Output | First Token-Sheriff release `0.9.0` + Maven Central relocation + consumer migration
 | Version | This rename/refactor ships as *0.9.0*. `1.0.0` is reserved for when the OIDC client module is implemented and tested.
@@ -81,7 +81,7 @@ A module's *own* `<groupId>`/`<artifactId>` has no first-class recipe; those ~6 
 === Phase 0 — Prerequisites
 * Cut the rebrand as version `0.9.0` (the rename/refactor release; `1.0.0` is reserved for the implemented-and-tested client module).
 * Snapshot current published coordinates/versions (needed for relocation stubs).
-* Author the `rewrite.yml` composite and the published consumer migration recipe (`token-sheriff-rewrite`).
+* Author the `rewrite.yml` composite (kept at the repo root). _Outcome: a standalone published recipe artifact (`token-sheriff-rewrite`) was *not* produced; `rewrite.yml` covers the Java package/type migration only, and the consumer guide drives coordinates + config keys directly — see xref:migration-nifi-extensions.adoc[the migration guide]._
 
 === Phase 1 — In-repo rename (single atomic branch)
 
@@ -161,14 +161,14 @@ Publish a stub for *every* old artifact (`-core`, `-quarkus`, `-quarkus-deployme
 
 == Verification checklist
 
-* [ ] `grep -rI "de.cuioss.sheriff.oauth"` → 0 (excluding relocation stubs)
-* [ ] `grep -rI "sheriff.oauth."` → 0
-* [ ] `grep -rI "oauth-sheriff"` → 0
-* [ ] `grep -rIo "OAUTH-SHERIFF-[0-9]"` → 0; `VALIDATION-N` count matches the 51 prior IDs
-* [ ] `./mvnw -Ppre-commit clean verify` and `./mvnw clean install` green
-* [ ] Relocation stubs published for every old artifact; an old-coordinate build prints the relocation warning and resolves
-* [ ] Repo renamed; old GitHub URL redirects; badges, Sonar, Pages, OpenSSF green
-* [ ] `nifi-extensions` builds and tests green against the first Token-Sheriff release
+* [x] `grep -rI "de.cuioss.sheriff.oauth"` → 0 (excluding the planning docs + recorded benchmark fixtures)
+* [x] `grep -rI "sheriff.oauth."` → 0
+* [x] `grep -rI "oauth-sheriff"` → 0 (lowercase; the repo/Pages/Sonar `OAuthSheriff` URLs were flipped in Phase 3)
+* [x] `grep -rIo "OAUTH-SHERIFF-[0-9]"` → 0; `VALIDATION-N` count = 51 (matches the prior IDs)
+* [x] `./mvnw -Ppre-commit clean verify` and `./mvnw clean install` green
+* [x] Relocation stubs published for every published old artifact (`-parent`, `-core`, `-quarkus`, `-quarkus-deployment`); an old-coordinate resolve redirects to `token-sheriff-validation` with a warning (verified). _`bom` was never published, so no stub. Note: an inert empty aggregator pom `oauth-sheriff-relocations:0.9.0` was also published (central-publishing ignores `maven.deploy.skip`) — harmless, immutable._
+* [x] Repo renamed (`OAuthSheriff → TokenSheriff`); old URL redirects; badges, Sonar (`cuioss_TokenSheriff`), Pages (`cuioss.github.io/TokenSheriff`, deployed at release) green. _OpenSSF (project 11849) pending — entry currently has a `TokenSherif` typo to correct._
+* [x] `nifi-extensions` builds and tests green against `0.9.0` — migrated and merged (https://github.com/cuioss/nifi-extensions/pull/398[nifi-extensions#398]); verified: coordinates + `version.token-sheriff` 0.9.0, all imports → `…token.validation.*`, config keys → `sheriff.token.*`, `generators` classifier preserved, zero functional residuals.
 
 == Seed data for planning (discovery 2026-06-24)
 
