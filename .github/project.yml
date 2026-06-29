@@ -2,7 +2,7 @@ name: token-sheriff
 description: A comprehensive framework for validating OAuth/JWT tokens in multi-issuer environments
 
 release:
-  current-version: 0.8.0
+  current-version: 0.9.0
   next-version: 1.0.0-SNAPSHOT
   create-github-release: true
 
