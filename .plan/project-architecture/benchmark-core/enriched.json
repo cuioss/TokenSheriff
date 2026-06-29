@@ -1,0 +1,92 @@
+{
+  "best_practices": [],
+  "insights": [],
+  "internal_dependencies": [
+    "token-sheriff-validation",
+    "benchmarking-common"
+  ],
+  "key_dependencies": [],
+  "key_dependencies_reasoning": "Benchmarks the core library using shared benchmarking-common infrastructure",
+  "key_packages": {
+    "de.cuioss.sheriff.token.validation.benchmark": {
+      "description": "Benchmark runners and the mock token repository driving JMH/JFR/concurrency-sweep runs."
+    },
+    "de.cuioss.sheriff.token.validation.benchmark.jfr.benchmarks": {
+      "description": "JFR-instrumented benchmark variants for profiling validation under different loads."
+    },
+    "de.cuioss.sheriff.token.validation.benchmark.standard": {
+      "description": "Standard JMH benchmarks for core validation and error-load throughput."
+    }
+  },
+  "purpose": "benchmark",
+  "purpose_reasoning": "JMH benchmark classes (jar) targeting the core library",
+  "responsibility": "JMH micro-benchmarks measuring the core token-validation library in isolation. Defines benchmark runners (standard, concurrency-sweep, JFR-profiled), delegates for core/error/mixed validation loads, and a mock token repository to exercise TokenValidator without network.",
+  "responsibility_reasoning": "source: pom description 'Benchmarking module for OAuth/JWT token validation', packages benchmark/standard/jfr/delegates and runners; benchmark profiles",
+  "skills_by_profile": {
+    "implementation": {
+      "defaults": [
+        {
+          "description": "Foundational agent behavior rules (user interaction, tool usage, research, dependency management)",
+          "skill": "plan-marshall:persona-plan-marshall-agent"
+        },
+        {
+          "description": "Language-agnostic code quality, refactoring, and documentation principles",
+          "skill": "plan-marshall:ref-code-quality"
+        },
+        {
+          "description": "Core Java patterns including modern features and performance optimization",
+          "skill": "pm-dev-java:java-core"
+        },
+        "pm-dev-java-cui:cui-logging"
+      ]
+    },
+    "module_testing": {
+      "defaults": [
+        {
+          "description": "Foundational agent behavior rules (user interaction, tool usage, research, dependency management)",
+          "skill": "plan-marshall:persona-plan-marshall-agent"
+        },
+        {
+          "description": "Language-agnostic code quality principles (SRP, CQS, complexity, error handling)",
+          "skill": "plan-marshall:ref-code-quality"
+        },
+        {
+          "description": "Language-agnostic testing methodology (AAA, coverage, reliability, determinism)",
+          "skill": "plan-marshall:persona-module-tester"
+        },
+        {
+          "description": "Core Java patterns including modern features and performance optimization",
+          "skill": "pm-dev-java:java-core"
+        },
+        {
+          "description": "JUnit 5 testing patterns with AAA structure, coverage analysis, and assertion standards",
+          "skill": "pm-dev-java:junit-core"
+        },
+        "pm-dev-java-cui:cui-logging"
+      ]
+    },
+    "quality": {
+      "defaults": [
+        {
+          "description": "Foundational agent behavior rules (user interaction, tool usage, research, dependency management)",
+          "skill": "plan-marshall:persona-plan-marshall-agent"
+        },
+        {
+          "description": "Language-agnostic code quality, refactoring, and documentation principles",
+          "skill": "plan-marshall:ref-code-quality"
+        },
+        {
+          "description": "Core Java patterns including modern features and performance optimization",
+          "skill": "pm-dev-java:java-core"
+        },
+        {
+          "description": "JavaDoc documentation standards including class, method, and code example patterns",
+          "skill": "pm-dev-java:javadoc"
+        },
+        "pm-dev-java-cui:cui-logging"
+      ]
+    }
+  },
+  "skills_by_profile_reasoning": "",
+  "tips": []
+}

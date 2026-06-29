@@ -197,3 +197,8 @@ Execute comprehensive quality verification and commit workflow for a specific mo
 - **NEVER commit with source artifacts** - Source directories must be clean of .class files
 - **ALWAYS fix issues systematically** - Address root causes, not symptoms
 
+
+## Tool Usage
+
+- For ad-hoc file reading, searching, and editing, prefer the dedicated tools (Edit, Read, Write, Glob, Grep) over their shell equivalents (echo, cat, ls, find, grep).
+- This is a default for exploratory work only — it does **not** override the prescribed `grep`/`find`-based steps in the custom commands above (fixOpenRewriteMarkers, verifyCuiLoggingGuidelines, verifyAndCommit) or any other documented verification/cleanup workflow. Run those commands exactly as written.

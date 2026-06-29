@@ -1,0 +1,87 @@
+{
+  "best_practices": [],
+  "insights": [],
+  "internal_dependencies": [
+    "token-sheriff-validation-quarkus"
+  ],
+  "key_dependencies": [
+    "io.quarkus:quarkus-core-deployment"
+  ],
+  "key_dependencies_reasoning": "Deployment module augments the runtime extension at build time via Quarkus deployment API",
+  "key_packages": {
+    "de.cuioss.sheriff.token.quarkus.deployment": {
+      "description": "TokenSheriffProcessor build steps registering beans, native/reflection config and Dev-UI integration."
+    }
+  },
+  "purpose": "deployment",
+  "purpose_reasoning": "Quarkus build-time deployment processor (jar) paired with the runtime extension",
+  "responsibility": "The Quarkus build-time deployment companion to the runtime extension. Its TokenSheriffProcessor defines the @BuildStep wiring (bean registration, reflection/native config, Dev-UI card and JWT debugger/status pages) that Quarkus executes during augmentation.",
+  "responsibility_reasoning": "source: pom description 'Deployment module for Quarkus integration', TokenSheriffProcessor + dev-ui qwc-* resources",
+  "skills_by_profile": {
+    "implementation": {
+      "defaults": [
+        {
+          "description": "Foundational agent behavior rules (user interaction, tool usage, research, dependency management)",
+          "skill": "plan-marshall:persona-plan-marshall-agent"
+        },
+        {
+          "description": "Language-agnostic code quality, refactoring, and documentation principles",
+          "skill": "plan-marshall:ref-code-quality"
+        },
+        {
+          "description": "Core Java patterns including modern features and performance optimization",
+          "skill": "pm-dev-java:java-core"
+        },
+        "pm-dev-java-cui:cui-logging"
+      ]
+    },
+    "module_testing": {
+      "defaults": [
+        {
+          "description": "Foundational agent behavior rules (user interaction, tool usage, research, dependency management)",
+          "skill": "plan-marshall:persona-plan-marshall-agent"
+        },
+        {
+          "description": "Language-agnostic code quality principles (SRP, CQS, complexity, error handling)",
+          "skill": "plan-marshall:ref-code-quality"
+        },
+        {
+          "description": "Language-agnostic testing methodology (AAA, coverage, reliability, determinism)",
+          "skill": "plan-marshall:persona-module-tester"
+        },
+        {
+          "description": "Core Java patterns including modern features and performance optimization",
+          "skill": "pm-dev-java:java-core"
+        },
+        {
+          "description": "JUnit 5 testing patterns with AAA structure, coverage analysis, and assertion standards",
+          "skill": "pm-dev-java:junit-core"
+        },
+        "pm-dev-java-cui:cui-logging"
+      ]
+    },
+    "quality": {
+      "defaults": [
+        {
+          "description": "Foundational agent behavior rules (user interaction, tool usage, research, dependency management)",
+          "skill": "plan-marshall:persona-plan-marshall-agent"
+        },
+        {
+          "description": "Language-agnostic code quality, refactoring, and documentation principles",
+          "skill": "plan-marshall:ref-code-quality"
+        },
+        {
+          "description": "Core Java patterns including modern features and performance optimization",
+          "skill": "pm-dev-java:java-core"
+        },
+        {
+          "description": "JavaDoc documentation standards including class, method, and code example patterns",
+          "skill": "pm-dev-java:javadoc"
+        },
+        "pm-dev-java-cui:cui-logging"
+      ]
+    }
+  },
+  "skills_by_profile_reasoning": "",
+  "tips": []
+}
