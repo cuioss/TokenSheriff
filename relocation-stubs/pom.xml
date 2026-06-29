@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.cuioss</groupId>
+        <artifactId>cui-java-parent</artifactId>
+        <version>1.4.5</version>
+        <relativePath/>
+    </parent>
+
+    <!-- Build/deploy aggregator for the OAuth-Sheriff → Token-Sheriff Maven Central
+         relocation stubs. NOT part of the main reactor and NOT itself published. -->
+    <groupId>de.cuioss.sheriff.oauth</groupId>
+    <artifactId>oauth-sheriff-relocations</artifactId>
+    <version>0.9.0</version>
+    <packaging>pom</packaging>
+
+    <name>OAuth-Sheriff → Token-Sheriff relocation stubs (aggregator)</name>
+    <description>Aggregator that builds and deploys the relocation POMs published under the
+        old de.cuioss.sheriff.oauth coordinates so existing consumer builds auto-redirect to the
+        renamed de.cuioss.sheriff.token artifacts. This aggregator is itself not published.</description>
+    <url>https://github.com/cuioss/TokenSheriff/</url>
+
+    <properties>
+        <!-- the aggregator carries no artifact of its own -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
+    <modules>
+        <module>oauth-sheriff-parent</module>
+        <module>oauth-sheriff-core</module>
+        <module>oauth-sheriff-quarkus</module>
+        <module>oauth-sheriff-quarkus-deployment</module>
+    </modules>
+</project>

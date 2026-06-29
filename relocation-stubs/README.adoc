@@ -1,0 +1,60 @@
+= Maven Central relocation stubs (OAuth-Sheriff → Token-Sheriff)
+:toc: macro
+:sectnums:
+
+Standalone project (NOT part of the main reactor) that publishes a final
+release under each *old* `de.cuioss.sheriff.oauth` coordinate whose
+`distributionManagement/relocation` points at the renamed
+`de.cuioss.sheriff.token` artifact. Resolvers then auto-redirect old-coordinate
+builds to the new artifact and print a `has been relocated` warning.
+
+Relocation redirects *coordinates only* — Java packages
+(`de.cuioss.sheriff.oauth.* → de.cuioss.sheriff.token.*`) and config/metric keys
+(`sheriff.oauth.* → sheriff.token.*`) still require the source changes in
+xref:../doc/oidc/01-restructure/migration-nifi-extensions.adoc[the migration guide].
+
+toc::[]
+
+== Stubs published
+
+[cols="2,2"]
+|===
+| Old coordinate (published at 0.9.0) | Relocates to
+
+| `de.cuioss.sheriff.oauth:oauth-sheriff-parent`             | `de.cuioss.sheriff.token:token-sheriff-parent`
+| `de.cuioss.sheriff.oauth:oauth-sheriff-core`               | `de.cuioss.sheriff.token:token-sheriff-validation`
+| `de.cuioss.sheriff.oauth:oauth-sheriff-quarkus`            | `de.cuioss.sheriff.token:token-sheriff-validation-quarkus`
+| `de.cuioss.sheriff.oauth:oauth-sheriff-quarkus-deployment` | `de.cuioss.sheriff.token:token-sheriff-validation-quarkus-deployment`
+|===
+
+NOTE: `oauth-sheriff-bom` was never published to Maven Central (last release of the
+others was 0.8.0), so it gets no stub. `oauth-sheriff-quarkus-integration-tests` is a
+test module and was never published either.
+
+== When to deploy
+
+*After* the `0.9.0` release of the new `token-sheriff-*` artifacts is live on
+Maven Central (the relocation `<version>0.9.0</version>` targets must exist).
+
+== How to deploy
+
+From the repository root, using the same release profile / credentials as a
+normal release (Sonatype Central publishing + GPG signing are inherited from
+`cui-java-parent`):
+
+[source,bash]
+----
+./mvnw -f relocation-stubs/pom.xml -Prelease clean deploy
+----
+
+The aggregator (`oauth-sheriff-relocations`) sets `maven.deploy.skip=true`, so only
+the four relocation POMs are uploaded.
+
+== Verify
+
+[source,bash]
+----
+# an old-coordinate resolve should redirect + warn
+mvn dependency:get -Dartifact=de.cuioss.sheriff.oauth:oauth-sheriff-core:0.9.0
+# → "[WARNING] The artifact ... has been relocated to de.cuioss.sheriff.token:token-sheriff-validation:0.9.0"
+----

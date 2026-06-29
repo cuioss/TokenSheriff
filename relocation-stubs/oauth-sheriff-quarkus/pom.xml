@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.cuioss</groupId>
+        <artifactId>cui-java-parent</artifactId>
+        <version>1.4.5</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>de.cuioss.sheriff.oauth</groupId>
+    <artifactId>oauth-sheriff-quarkus</artifactId>
+    <version>0.9.0</version>
+    <packaging>pom</packaging>
+
+    <name>OAuth-Sheriff Quarkus (relocated to Token-Sheriff)</name>
+    <description>Renamed to de.cuioss.sheriff.token:token-sheriff-validation-quarkus. This is a
+        relocation stub; resolvers redirect automatically and print a relocation warning.</description>
+    <url>https://github.com/cuioss/TokenSheriff/</url>
+
+    <scm>
+        <connection>scm:git:https://github.com/cuioss/TokenSheriff.git</connection>
+        <developerConnection>scm:git:https://github.com/cuioss/TokenSheriff.git</developerConnection>
+        <url>https://github.com/cuioss/TokenSheriff/</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <distributionManagement>
+        <relocation>
+            <groupId>de.cuioss.sheriff.token</groupId>
+            <artifactId>token-sheriff-validation-quarkus</artifactId>
+            <version>0.9.0</version>
+            <message>OAuth-Sheriff has been renamed to Token-Sheriff. Update coordinates to
+                de.cuioss.sheriff.token:token-sheriff-validation-quarkus. See
+                https://github.com/cuioss/TokenSheriff/blob/main/doc/oidc/01-restructure/migration-nifi-extensions.adoc</message>
+        </relocation>
+    </distributionManagement>
+</project>
