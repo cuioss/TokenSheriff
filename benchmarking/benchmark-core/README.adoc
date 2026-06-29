@@ -141,7 +141,7 @@ Each run generates:
 
 === GitHub Pages
 
-View trends at: https://cuioss.github.io/OAuthSheriff/benchmarks/performance-trends.html
+View trends at: https://cuioss.github.io/TokenSheriff/benchmarks/micro/trends.html
 
 Features:
 

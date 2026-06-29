@@ -6,34 +6,34 @@
 
 **Build & Quality**
 
-[![Java CI with Maven](https://github.com/cuioss/OAuthSheriff/actions/workflows/maven.yml/badge.svg?branch=main)](https://github.com/cuioss/OAuthSheriff/actions/workflows/maven.yml)
-[![Integration Tests](https://github.com/cuioss/OAuthSheriff/actions/workflows/integration-tests.yml/badge.svg?branch=main)](https://github.com/cuioss/OAuthSheriff/actions/workflows/integration-tests.yml)
+[![Java CI with Maven](https://github.com/cuioss/TokenSheriff/actions/workflows/maven.yml/badge.svg?branch=main)](https://github.com/cuioss/TokenSheriff/actions/workflows/maven.yml)
+[![Integration Tests](https://github.com/cuioss/TokenSheriff/actions/workflows/integration-tests.yml/badge.svg?branch=main)](https://github.com/cuioss/TokenSheriff/actions/workflows/integration-tests.yml)
 
-[![Last Build](https://img.shields.io/github/last-commit/cuioss/OAuthSheriff/main)](https://github.com/cuioss/OAuthSheriff/commits/main)
+[![Last Build](https://img.shields.io/github/last-commit/cuioss/TokenSheriff/main)](https://github.com/cuioss/TokenSheriff/commits/main)
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 [![Maven Central](https://img.shields.io/maven-central/v/de.cuioss.sheriff.token/token-sheriff-parent.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/de.cuioss.sheriff.token/token-sheriff-parent)
 
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cuioss_OAuth-Sheriff&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cuioss_OAuth-Sheriff)
-[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=cuioss_OAuth-Sheriff&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=cuioss_OAuth-Sheriff)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=cuioss_OAuth-Sheriff&metric=coverage)](https://sonarcloud.io/summary/new_code?id=cuioss_OAuth-Sheriff)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cuioss_TokenSheriff&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cuioss_TokenSheriff)
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=cuioss_TokenSheriff&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=cuioss_TokenSheriff)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=cuioss_TokenSheriff&metric=coverage)](https://sonarcloud.io/summary/new_code?id=cuioss_TokenSheriff)
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11849/badge)](https://www.bestpractices.dev/projects/11849)
-[![CodeQL](https://github.com/cuioss/OAuthSheriff/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/cuioss/OAuthSheriff/security/code-scanning)
+[![CodeQL](https://github.com/cuioss/TokenSheriff/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/cuioss/TokenSheriff/security/code-scanning)
 
 **Performance Benchmarks**
 
-[![JMH Benchmarks](https://github.com/cuioss/OAuthSheriff/actions/workflows/benchmark.yml/badge.svg)](https://github.com/cuioss/OAuthSheriff/actions/workflows/benchmark.yml)
-[![Last Benchmark Run](https://img.shields.io/endpoint?url=https://cuioss.github.io/OAuth-Sheriff/benchmarks/badges/last-run-badge.json)](https://cuioss.github.io/OAuth-Sheriff/benchmarks/)
+[![JMH Benchmarks](https://github.com/cuioss/TokenSheriff/actions/workflows/benchmark.yml/badge.svg)](https://github.com/cuioss/TokenSheriff/actions/workflows/benchmark.yml)
+[![Last Benchmark Run](https://img.shields.io/endpoint?url=https://cuioss.github.io/TokenSheriff/benchmarks/badges/last-run-badge.json)](https://cuioss.github.io/TokenSheriff/benchmarks/)
 
 *Micro Benchmarks*
 
-[![JWT Performance Score](https://img.shields.io/endpoint?url=https://cuioss.github.io/OAuth-Sheriff/benchmarks/badges/performance-badge.json)](https://cuioss.github.io/OAuth-Sheriff/benchmarks/micro/)
-[![Performance Trend](https://img.shields.io/endpoint?url=https://cuioss.github.io/OAuth-Sheriff/benchmarks/badges/trend-badge.json)](https://cuioss.github.io/OAuth-Sheriff/benchmarks/micro/trends.html)
+[![JWT Performance Score](https://img.shields.io/endpoint?url=https://cuioss.github.io/TokenSheriff/benchmarks/badges/performance-badge.json)](https://cuioss.github.io/TokenSheriff/benchmarks/micro/)
+[![Performance Trend](https://img.shields.io/endpoint?url=https://cuioss.github.io/TokenSheriff/benchmarks/badges/trend-badge.json)](https://cuioss.github.io/TokenSheriff/benchmarks/micro/trends.html)
 
 *Integration Benchmarks*
 
-[![Integration Performance](https://img.shields.io/endpoint?url=https://cuioss.github.io/OAuth-Sheriff/benchmarks/badges/integration-performance-badge.json)](https://cuioss.github.io/OAuth-Sheriff/benchmarks/integration/)
-[![Integration Trend](https://img.shields.io/endpoint?url=https://cuioss.github.io/OAuth-Sheriff/benchmarks/badges/integration-trend-badge.json)](https://cuioss.github.io/OAuth-Sheriff/benchmarks/integration/trends.html)
+[![Integration Performance](https://img.shields.io/endpoint?url=https://cuioss.github.io/TokenSheriff/benchmarks/badges/integration-performance-badge.json)](https://cuioss.github.io/TokenSheriff/benchmarks/integration/)
+[![Integration Trend](https://img.shields.io/endpoint?url=https://cuioss.github.io/TokenSheriff/benchmarks/badges/integration-trend-badge.json)](https://cuioss.github.io/TokenSheriff/benchmarks/integration/trends.html)
 
 [Understanding Performance Metrics](benchmarking/doc/performance-scoring.adoc)
 

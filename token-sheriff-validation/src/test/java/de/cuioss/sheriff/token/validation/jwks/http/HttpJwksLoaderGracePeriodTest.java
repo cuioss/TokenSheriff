@@ -57,7 +57,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * @author Oliver Wolff
  * @see <a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4.5">VALIDATION-4.5: Key Rotation Grace Period</a>
- * @see <a href="https://github.com/cuioss/OAuthSheriff/issues/110">Issue #110: Key rotation grace period</a>
+ * @see <a href="https://github.com/cuioss/TokenSheriff/issues/110">Issue #110: Key rotation grace period</a>
  */
 @EnableTestLogger
 @EnableMockWebServer

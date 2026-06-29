@@ -145,7 +145,7 @@ The GitHub Actions workflow automatically:
 1. Runs both micro and integration benchmarks
 2. Collects generated artifacts from each module
 3. Combines results into a unified GitHub Pages structure
-4. Deploys to `cuioss.github.io/OAuthSheriff/benchmarks`
+4. Deploys to `cuioss.github.io/TokenSheriff/benchmarks`
 
 See link:doc/workflow.adoc[Benchmark Workflow] for the complete process.
 
@@ -185,4 +185,4 @@ When adding new benchmarks or utilities:
 
 Live benchmark results are available at:
 
-* https://cuioss.github.io/OAuthSheriff/benchmarks/
+* https://cuioss.github.io/TokenSheriff/benchmarks/

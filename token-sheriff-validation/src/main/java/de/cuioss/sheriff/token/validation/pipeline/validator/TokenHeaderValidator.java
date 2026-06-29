@@ -38,7 +38,7 @@ import de.cuioss.tools.logging.CuiLogger;
  * The validator logs appropriate warning messages for validation failures.
  * <p>
  * For more details on the validation process, see the
- * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#token-validation-pipeline">Token Validation Pipeline</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#token-validation-pipeline">Token Validation Pipeline</a>
  *
  * @apiNote This class is internal to Token-Sheriff and not part of the public API.
  * @since 1.0

@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * and that the counter implementation is thread-safe for concurrent access.
  *
  * @author Oliver Wolff
- * @see <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/security/security-reference.adoc#security-controls">Security Controls Specification</a>
+ * @see <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/security/security-reference.adoc#security-controls">Security Controls Specification</a>
  */
 @EnableTestLogger
 @EnableGeneratorController

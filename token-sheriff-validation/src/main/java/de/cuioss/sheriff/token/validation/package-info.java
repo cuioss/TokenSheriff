@@ -37,9 +37,9 @@
  * <p>
  * For detailed information about the library, see the following documentation:
  * <ul>
- *   <li><a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/Requirements.adoc">Requirements</a></li>
- *   <li><a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc">Architecture Reference</a></li>
- *   <li><a href="https://github.com/cuioss/OAuthSheriff/tree/main/token-sheriff-validation/README.adoc">Usage Guide</a></li>
+ *   <li><a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/Requirements.adoc">Requirements</a></li>
+ *   <li><a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc">Architecture Reference</a></li>
+ *   <li><a href="https://github.com/cuioss/TokenSheriff/tree/main/token-sheriff-validation/README.adoc">Usage Guide</a></li>
  * </ul>
  * <p>
  * Note: The implementation is primarily tested with Keycloak as the identity provider.

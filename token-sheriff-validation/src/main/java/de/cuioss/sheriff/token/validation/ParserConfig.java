@@ -65,7 +65,7 @@ import lombok.ToString;
  * </ul>
  * <p>
  * For more detailed specifications, see the
- * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc">Token Size Validation Specification</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc">Token Size Validation Specification</a>
  *
  * @since 1.0
  */

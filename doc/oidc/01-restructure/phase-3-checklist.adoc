@@ -1,0 +1,56 @@
+= Plan 01 — Phase 3 Execution Checklist (repo rename + external services)
+:toc: macro
+:sectnums:
+
+This is the committed, self-detecting checklist for Phase 3 of the Token-Sheriff
+rename. Each row carries a read-only *Detect* command (the source of truth — run
+it to learn the real state) and an idempotent *Action*. Trust *Detect*, not the
+*State* column.
+
+[NOTE]
+====
+*Resuming in a fresh checkout/session?* You are in the renamed clone (e.g.
+`/Users/oliver/git/TokenSheriff`). Run every *Detect* top-to-bottom to rebuild
+the true state, then execute the *Action* of each not-yet-done row. The repo
+rename keeps the old URL redirecting, so the primary path needs no re-clone —
+`git remote set-url` suffices (row 2).
+====
+
+toc::[]
+
+== Checklist
+
+[cols="1,3,4",options="header"]
+|===
+| State | Detect (source of truth) | Action (idempotent)
+
+| TODO | `gh repo view cuioss/TokenSheriff --json name -q .name` → `TokenSheriff`
+| *User:* rename the repo on GitHub (Settings → Rename, or `gh repo rename TokenSheriff --repo cuioss/OAuthSheriff --yes`). Old URLs redirect.
+
+| TODO | `git remote get-url origin` contains `TokenSheriff`
+| `git remote set-url origin https://github.com/cuioss/TokenSheriff.git`
+
+| TODO | `curl -sf "https://sonarcloud.io/api/project_badges/measure?project=cuioss_TokenSheriff&metric=alert_status"` returns a real badge (not "project not found")
+| *User:* in SonarCloud, rename the project key `cuioss_OAuth-Sheriff` → `cuioss_TokenSheriff` (`.github/project.yml sonar.project-key` already updated). Must precede merging the URL PR, else CI `sonar-build` targets a missing project.
+
+| TODO | `curl -sfI https://cuioss.github.io/TokenSheriff/ \| head -1` → `200`
+| *Automatic* — no manual step. The cui release workflow deploys Pages from `.github/project.yml pages.reference: TokenSheriff` (`deploy-at-release: true`), so the new path goes live with the next release (the 0.9.0 publish). Benchmark badges resolve from then.
+
+| TODO | OpenSSF project 11849 shows the `cuioss/TokenSheriff` URL
+| *User:* update the OpenSSF Best Practices entry (https://www.bestpractices.dev/projects/11849) repo URL to `cuioss/TokenSheriff`.
+
+| TODO | every badge/link URL in `README.md` returns HTTP 200 (loop-curl)
+| Merge the URL/Sonar/Pages PR (repo URLs, Sonar key, Pages refs flipped); fix any non-200 source.
+|===
+
+== Verification (run after all rows DONE)
+
+[source,bash]
+----
+# repo renamed + redirect works
+gh repo view cuioss/TokenSheriff --json name -q .name        # TokenSheriff
+git remote get-url origin                                     # ...TokenSheriff.git
+# every README badge/link resolves (expect no non-200)
+grep -oE 'https?://[^[:space:]"<>)]+' README.md | sort -u | while read -r u; do
+  code=$(curl -s -o /dev/null -w '%{http_code}' "$u"); [ "$code" = 200 ] || echo "$code  $u"; done
+----

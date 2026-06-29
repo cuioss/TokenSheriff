@@ -10,14 +10,14 @@ Subcommands:
 Usage in CI:
     # Before Maven benchmark runs:
     python3 benchmarking/scripts/benchmark-pages.py prepare-history \\
-        --previous-pages-dir previous-pages/OAuth-Sheriff/benchmarks \\
+        --previous-pages-dir previous-pages/TokenSheriff/benchmarks \\
         --output-dir "$GITHUB_WORKSPACE/benchmark-history"
 
     # After all Maven benchmark runs:
     python3 benchmarking/scripts/benchmark-pages.py assemble \\
         --micro-results benchmarking/benchmark-core/target/benchmark-results/gh-pages-ready \\
         --integration-results benchmarking/benchmark-integration-wrk/target/benchmark-results/gh-pages-ready \\
-        --previous-pages-dir previous-pages/OAuth-Sheriff/benchmarks \\
+        --previous-pages-dir previous-pages/TokenSheriff/benchmarks \\
         --output-dir gh-pages \\
         --commit-sha "$COMMIT_SHA"
 """
@@ -179,7 +179,7 @@ def main() -> None:
     )
     prep.add_argument(
         "--previous-pages-dir", required=True,
-        help="Path to previously deployed pages (e.g. previous-pages/OAuth-Sheriff/benchmarks)",
+        help="Path to previously deployed pages (e.g. previous-pages/TokenSheriff/benchmarks)",
     )
     prep.add_argument(
         "--output-dir", required=True,

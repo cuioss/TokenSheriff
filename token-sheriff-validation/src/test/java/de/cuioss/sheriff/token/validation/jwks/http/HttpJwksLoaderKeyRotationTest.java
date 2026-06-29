@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests for Issue #110: Key rotation grace period functionality in HttpJwksLoader.
  *
  * @author Oliver Wolff
- * @see <a href="https://github.com/cuioss/OAuthSheriff/issues/110">Issue #110</a>
+ * @see <a href="https://github.com/cuioss/TokenSheriff/issues/110">Issue #110</a>
  */
 @EnableTestLogger
 @DisplayName("Tests HttpJwksLoader Key Rotation Grace Period (Issue #110)")

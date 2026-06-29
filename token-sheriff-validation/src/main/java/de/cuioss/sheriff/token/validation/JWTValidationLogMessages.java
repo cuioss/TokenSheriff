@@ -31,7 +31,7 @@ import lombok.experimental.UtilityClass;
  * </ul>
  * <p>
  * For more detailed information about log messages, see the
- * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/LogMessages.adoc">Log Messages Documentation</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/LogMessages.adoc">Log Messages Documentation</a>
  *
  * @since 1.0
  */

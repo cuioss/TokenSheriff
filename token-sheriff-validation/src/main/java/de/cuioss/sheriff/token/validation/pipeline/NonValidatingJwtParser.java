@@ -116,7 +116,7 @@ import java.util.Objects;
  * </pre>
  * <p>
  * For more details on the security aspects, see the
- * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
  *
  * @apiNote This class is internal to Token-Sheriff and not part of the public API.
  * @since 1.0

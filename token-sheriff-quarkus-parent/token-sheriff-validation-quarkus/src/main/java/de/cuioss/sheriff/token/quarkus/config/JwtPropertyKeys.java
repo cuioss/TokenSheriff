@@ -462,7 +462,7 @@ public final class JwtPropertyKeys {
          * </p>
          *
          * @see HttpJwksLoaderConfig#getKeyRotationGracePeriod()
-         * @see <a href="https://github.com/cuioss/OAuthSheriff/issues/110">Issue #110: Key rotation grace period</a>
+         * @see <a href="https://github.com/cuioss/TokenSheriff/issues/110">Issue #110: Key rotation grace period</a>
          */
         public static final String KEY_ROTATION_GRACE_PERIOD_SECONDS = HTTP_BASE + "key-rotation-grace-period-seconds";
 
@@ -482,7 +482,7 @@ public final class JwtPropertyKeys {
          * </p>
          *
          * @see de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig#getMaxRetiredKeySets()
-         * @see <a href="https://github.com/cuioss/OAuthSheriff/issues/110">Issue #110: Key rotation grace period</a>
+         * @see <a href="https://github.com/cuioss/TokenSheriff/issues/110">Issue #110: Key rotation grace period</a>
          */
         public static final String MAX_RETIRED_KEY_SETS = HTTP_BASE + "max-retired-key-sets";
 

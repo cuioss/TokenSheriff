@@ -42,7 +42,7 @@ import static de.cuioss.sheriff.token.validation.domain.claim.ClaimName.*;
  * </ul>
  * <p>
  * For more detailed specifications, see the
- * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#_token_architecture_and_types">Technical Components Specification - Token Architecture and Types</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#_token_architecture_and_types">Technical Components Specification - Token Architecture and Types</a>
  *
  * @since 1.0
  * @author Oliver Wolff

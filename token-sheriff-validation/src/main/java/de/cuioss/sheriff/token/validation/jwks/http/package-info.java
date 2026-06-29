@@ -112,7 +112,7 @@
  * </ul>
  * <p>
  * For more detailed specifications, see the
- * <a href="https://github.com/cuioss/OAuthSheriff/tree/main/doc/architecture.adoc#_jwksloader">Technical Components Specification - JwksLoader</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#_jwksloader">Technical Components Specification - JwksLoader</a>
  * 
  * @author Oliver Wolff
  */

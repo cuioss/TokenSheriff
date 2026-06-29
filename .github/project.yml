@@ -15,12 +15,12 @@ maven-build:
   npm-cache: true
 
 sonar:
-  project-key: cuioss_OAuth-Sheriff
+  project-key: cuioss_TokenSheriff
   enabled: true
   skip-on-dependabot: true
 
 pages:
-  reference: OAuth-Sheriff
+  reference: TokenSheriff
   deploy-at-release: true
 
 github-automation:
