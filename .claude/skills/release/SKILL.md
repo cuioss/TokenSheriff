@@ -102,7 +102,7 @@ README change.
 
 ```bash
 git add .github/project.yml
-git commit -m "chore(release): prepare release <version>"
+git commit -m "chore(release): prepare release <version>" --trailer "Co-Authored-By: Claude <noreply@anthropic.com>"
 git push -u origin chore/release_<version>
 gh pr create --repo cuioss/TokenSheriff --base main \
   --title "chore(release): prepare release <version>" \
@@ -197,8 +197,10 @@ not in the original.
 3. **Dependency Updates** — group by type with `###` subheadings:
    - `### Java` — Java libraries (e.g. Quarkus, gson, commons-io, microprofile-jwt-auth-api)
    - `### JavaScript` — npm deps under
-     `/oauth-sheriff-quarkus-parent/oauth-sheriff-quarkus-deployment` and `/e-2-e-playwright`
-     (eslint, prettier, stylelint, jest, babel, lit, …)
+     `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment` and
+     `token-sheriff-quarkus-parent/e-2-e-playwright` (eslint, prettier, stylelint, jest, babel,
+     lit, …). Note older PR titles may still carry the pre-rebrand `oauth-sheriff-quarkus-*`
+     path — keep the path verbatim from each PR title.
    - `### Infra` — platform/build/CI: build plugins (e.g. frontend-maven-plugin), GitHub Action
      bumps (claude-code-action, harden-runner, actions/*), cui-java-parent, and
      cuioss-organization workflow bumps
