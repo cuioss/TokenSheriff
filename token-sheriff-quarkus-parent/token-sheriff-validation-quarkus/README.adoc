@@ -258,5 +258,5 @@ sheriff.token.issuers.my-issuer.algorithm-preferences=RS256,RS384,RS512
 * xref:../doc/integration/metrics-integration.adoc[Metrics Integration Documentation]
 * xref:../doc/configuration/native-image-configuration.adoc[Native Image Configuration]
 * xref:../doc/development/devui-testing.adoc[DevUI Testing Guide]
-* xref:../../doc/architecture.adoc[Architecture Reference]
-* xref:../../doc/security/security-reference.adoc[Security Reference]
+* xref:../../doc/validation/architecture.adoc[Architecture Reference]
+* xref:../../doc/validation/security-reference.adoc[Security Reference]

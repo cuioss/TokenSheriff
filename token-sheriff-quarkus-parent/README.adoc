@@ -102,7 +102,7 @@ public class MyResource {
 
 When no valid token is present, an empty `JsonWebToken` is injected where all methods return null (per MP-JWT spec).
 
-For details on the MicroProfile JWT compatibility layer, see xref:../doc/specification/microprofile-jwt-compatibility.adoc[MicroProfile JWT Compatibility Specification].
+For details on the MicroProfile JWT compatibility layer, see xref:../doc/validation/specification/microprofile-jwt-compatibility.adoc[MicroProfile JWT Compatibility Specification].
 
 ==== Declarative Security with @BearerAuth (Recommended)
 

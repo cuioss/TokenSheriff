@@ -170,5 +170,5 @@ Configure limits in `ParserConfig` to prevent attacks:
 == Related Documentation
 
 * xref:../README.adoc[README] - Usage examples and configuration
-* xref:../../doc/architecture.adoc[Technical Components] - Architecture details
+* xref:../../doc/validation/architecture.adoc[Technical Components] - Architecture details
 * xref:UnitTesting.adoc[Unit Testing Guide] - Test utilities documentation

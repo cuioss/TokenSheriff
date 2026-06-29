@@ -45,7 +45,7 @@ A comprehensive library for validating JWT tokens in multi-issuer environments w
 
 ### Why another JWT-Library?
 
-This project started as an instrumentation of [SmallRye JWT](https://github.com/smallrye/smallrye-jwt), then shifted to [JJWT](https://github.com/jwtk/jjwt) with the goal to implement robust multi-issuer handling. With a strong focus on security (see [Requirements](doc/Requirements.adoc)), the project evolved through several iterations until it became an entirely new library with its own validation and parsing implementation (JJWT remains only as a test dependency for token generation). The main differentiator is the comprehensive approach to security in multi-issuer environments.
+This project started as an instrumentation of [SmallRye JWT](https://github.com/smallrye/smallrye-jwt), then shifted to [JJWT](https://github.com/jwtk/jjwt) with the goal to implement robust multi-issuer handling. With a strong focus on security (see [Requirements](doc/validation/requirements.adoc)), the project evolved through several iterations until it became an entirely new library with its own validation and parsing implementation (JJWT remains only as a test dependency for token generation). The main differentiator is the comprehensive approach to security in multi-issuer environments.
 
 ### The Challenge
 
@@ -122,7 +122,7 @@ public Response getData() {
 }
 ```
 
-For details, see the [MicroProfile JWT Compatibility](doc/specification/microprofile-jwt-compatibility.adoc) specification and the [Quarkus Extension documentation](token-sheriff-quarkus-parent/README.adoc).
+For details, see the [MicroProfile JWT Compatibility](doc/validation/specification/microprofile-jwt-compatibility.adoc) specification and the [Quarkus Extension documentation](token-sheriff-quarkus-parent/README.adoc).
 
 For a complete working example, see the [integration tests module](token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/README.adoc).
 
@@ -166,17 +166,17 @@ AccessTokenContent accessToken = validator.createAccessToken(AccessTokenRequest.
 
 For detailed architectural information, see:
 
-- [Architecture Reference](doc/architecture.adoc) - Validation pipeline, components, and design
+- [Architecture Reference](doc/validation/architecture.adoc) - Validation pipeline, components, and design
 - [Component Diagram](doc/plantuml/component-overview.png) - Visual architecture overview
 
 ## Documentation
 
 - [Documentation Hub](doc/README.adoc) - Complete guide to all documentation
 - [Usage Guide](token-sheriff-validation/README.adoc) - Detailed usage examples
-- [Requirements](doc/Requirements.adoc) - Functional and non-functional requirements
-- [Threat Model](doc/security/threat-model.adoc) - Security analysis
-- [MicroProfile JWT Compatibility](doc/specification/microprofile-jwt-compatibility.adoc) - MP-JWT 2.1 integration and rationale
-- [Multi-IDP Testing](doc/specification/multi-idp-testing.adoc) - Testing with multiple OIDC providers
+- [Requirements](doc/validation/requirements.adoc) - Functional and non-functional requirements
+- [Threat Model](doc/validation/threat-model.adoc) - Security analysis
+- [MicroProfile JWT Compatibility](doc/validation/specification/microprofile-jwt-compatibility.adoc) - MP-JWT 2.1 integration and rationale
+- [Multi-IDP Testing](doc/validation/specification/multi-idp-testing.adoc) - Testing with multiple OIDC providers
 
 For configuration details including runtime dependencies and test support, see the [Token-Sheriff Core documentation](token-sheriff-validation/README.adoc).
 
