@@ -38,13 +38,13 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * Verifies requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4.1">VALIDATION-4.1: JWKS Endpoint Support</a> (HTTP loading)</li>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4.4">VALIDATION-4.4: Local Key Support</a> (file and in-memory loading)</li>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-7.3">VALIDATION-7.3: Security Events</a> (JWKS operation tracking)</li>
+ *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-4.1">VALIDATION-4.1: JWKS Endpoint Support</a> (HTTP loading)</li>
+ *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-4.4">VALIDATION-4.4: Local Key Support</a> (file and in-memory loading)</li>
+ *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-7.3">VALIDATION-7.3: Security Events</a> (JWKS operation tracking)</li>
  * </ul>
  *
  * @author Oliver Wolff
- * @see <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#jwks-integration">JWKS Integration Specification</a>
+ * @see <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#jwks-integration">JWKS Integration Specification</a>
  */
 @EnableTestLogger
 @DisplayName("Tests for JwksLoaderFactory")

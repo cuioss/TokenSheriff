@@ -52,8 +52,8 @@ import java.security.SignatureException;
  * ensuring excellent compatibility with GraalVM native image compilation and optimal performance.
  * <p>
  * For more details on signature validation, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#token-validation-pipeline">Token Validation Pipeline</a>
- * and <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#token-validation-pipeline">Token Validation Pipeline</a>
+ * and <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/security-reference.adoc">Security Specification</a>
  *
  * @apiNote This class is internal to Token-Sheriff and not part of the public API.
  * @since 1.0

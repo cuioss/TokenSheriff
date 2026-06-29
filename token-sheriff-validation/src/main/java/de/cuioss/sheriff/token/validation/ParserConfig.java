@@ -60,12 +60,12 @@ import lombok.ToString;
  * <p>
  * Implements requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.1">VALIDATION-8.1: Token Size Limits</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.2">VALIDATION-8.2: Safe Parsing</a></li>
+ *   <li><a href="../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-8.1">VALIDATION-8.1: Token Size Limits</a></li>
+ *   <li><a href="../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-8.2">VALIDATION-8.2: Safe Parsing</a></li>
  * </ul>
  * <p>
  * For more detailed specifications, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc">Token Size Validation Specification</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc">Token Size Validation Specification</a>
  *
  * @since 1.0
  */

@@ -61,7 +61,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * </ul>
  * <p>
  * For more details on the security aspects, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/security-reference.adoc">Security Specification</a>
  *
  * @since 1.0
  * @author Oliver Wolff

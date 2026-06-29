@@ -51,10 +51,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * Verifies requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.3">VALIDATION-1.3: Signature Validation</a> (OAuth2 JWT Best Practices)</li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.4">VALIDATION-8.4: Claims Validation</a> (includes audience)</li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-3.3">VALIDATION-3.3: Issuer Validation</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.1">VALIDATION-8.1: Token Size Limits</a></li>
+ *   <li><a href="../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-1.3">VALIDATION-1.3: Signature Validation</a> (OAuth2 JWT Best Practices)</li>
+ *   <li><a href="../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-8.4">VALIDATION-8.4: Claims Validation</a> (includes audience)</li>
+ *   <li><a href="../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-3.3">VALIDATION-3.3: Issuer Validation</a></li>
+ *   <li><a href="../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-8.1">VALIDATION-8.1: Token Size Limits</a></li>
  * </ul>
  *
  * @author Oliver Wolff

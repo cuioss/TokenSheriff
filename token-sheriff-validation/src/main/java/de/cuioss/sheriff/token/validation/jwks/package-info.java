@@ -40,12 +40,12 @@
  * <p>
  * Implements requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4">VALIDATION-4: Key Management</a></li>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.5">VALIDATION-8.5: Cryptographic Agility</a></li>
+ *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-4">VALIDATION-4: Key Management</a></li>
+ *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-8.5">VALIDATION-8.5: Cryptographic Agility</a></li>
  * </ul>
  * <p>
  * For more detailed specifications, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#_jwksloader">Technical Components Specification - JwksLoader</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#_jwksloader">Technical Components Specification - JwksLoader</a>
  * 
  * @see de.cuioss.sheriff.token.validation.pipeline.validator.TokenSignatureValidator
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc7517">RFC 7517 - JSON Web Key (JWK)</a>

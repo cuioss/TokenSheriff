@@ -33,15 +33,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * <p>
  * Verifies requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-7.3">VALIDATION-7.3: Security Events</a> (security event monitoring and tracking)</li>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-10.1">VALIDATION-10.1: Thread Safety</a></li>
+ *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-7.3">VALIDATION-7.3: Security Events</a> (security event monitoring and tracking)</li>
+ *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-10.1">VALIDATION-10.1: Thread Safety</a></li>
  * </ul>
  * <p>
  * This test class ensures that security events are properly counted, can be reset,
  * and that the counter implementation is thread-safe for concurrent access.
  *
  * @author Oliver Wolff
- * @see <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/security/security-reference.adoc#security-controls">Security Controls Specification</a>
+ * @see <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/security-reference.adoc#security-controls">Security Controls Specification</a>
  */
 @EnableTestLogger
 @EnableGeneratorController

@@ -46,7 +46,7 @@ import java.util.Set;
  * where tokens issued for one client are used with a different client.
  * <p>
  * For more details on the security aspects, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/security-reference.adoc">Security Specification</a>
  * <p>
  * Note: Issuer (iss) validation is handled by {@link TokenHeaderValidator}.
  * <p>

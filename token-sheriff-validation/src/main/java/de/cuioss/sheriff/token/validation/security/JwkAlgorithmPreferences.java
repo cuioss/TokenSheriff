@@ -29,7 +29,7 @@ import java.util.List;
  * This is structural validation, not runtime signature verification preferences.
  * <p>
  * For more details on the security aspects, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/security-reference.adoc">Security Specification</a>
  *
  * @since 1.0
  * @author Oliver Wolff

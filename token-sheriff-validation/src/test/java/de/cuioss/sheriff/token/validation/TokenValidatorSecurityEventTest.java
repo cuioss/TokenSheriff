@@ -39,11 +39,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * Verifies requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-7.3">VALIDATION-7.3: Security Events</a> (security event tracking, monitoring, and incident detection)</li>
+ *   <li><a href="../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-7.3">VALIDATION-7.3: Security Events</a> (security event tracking, monitoring, and incident detection)</li>
  * </ul>
  *
  * @author Oliver Wolff
- * @see <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
+ * @see <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/security-reference.adoc">Security Specification</a>
  */
 @EnableTestLogger
 @DisplayName("Tests TokenValidator security event counting")

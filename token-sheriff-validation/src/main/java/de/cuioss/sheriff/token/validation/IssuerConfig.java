@@ -69,13 +69,13 @@ import java.util.*;
  * <p>
  * Implements requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-3">VALIDATION-3: Multi-Issuer Support</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-4">VALIDATION-4: Key Management</a></li>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.4">VALIDATION-8.4: Claims Validation</a></li>
+ *   <li><a href="../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-3">VALIDATION-3: Multi-Issuer Support</a></li>
+ *   <li><a href="../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-4">VALIDATION-4: Key Management</a></li>
+ *   <li><a href="../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-8.4">VALIDATION-8.4: Claims Validation</a></li>
  * </ul>
  * <p>
  * For more detailed specifications, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#_issuerconfig_and_multi_issuer_support">Technical Components Specification - IssuerConfig and Multi-Issuer Support</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#_issuerconfig_and_multi_issuer_support">Technical Components Specification - IssuerConfig and Multi-Issuer Support</a>
  *
  * @since 1.0
  */
