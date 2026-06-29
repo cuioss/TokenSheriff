@@ -8,98 +8,138 @@
 |===
 | Audience | Maintainers of `cuioss/nifi-extensions` (the one known consumer)
 | Context  | xref:README.adoc[Plan 01 — Restructure]
+| Status   | *Executable now.* Token-Sheriff `0.9.0` is published to Maven Central, and the old `de.cuioss.sheriff.oauth` coordinates have relocation stubs at `0.9.0` that redirect to the new ones.
 |===
 
 toc::[]
 
 == What changes
 
-Four consumer-visible surfaces change:
+`nifi-extensions` depends only on the former *core* module (now *validation*). Four
+consumer-visible surfaces change — names only, no functional/API behaviour change:
 
 [cols="2,3,3"]
 |===
 | Surface | From | To
 
-| Maven groupId        | `de.cuioss.sheriff.oauth`   | `de.cuioss.sheriff.token`
-| Artifact IDs         | `oauth-sheriff-*`           | `token-sheriff-*`
-| Java packages        | `de.cuioss.sheriff.oauth.*`  | `de.cuioss.sheriff.token.*`
-| Config + metric keys | `sheriff.oauth.*`           | `sheriff.token.*`
+| Maven groupId        | `de.cuioss.sheriff.oauth`        | `de.cuioss.sheriff.token`
+| Artifact             | `oauth-sheriff-core`             | `token-sheriff-validation` (test classifier `generators` is unchanged)
+| Java packages        | `de.cuioss.sheriff.oauth.core.*` | `de.cuioss.sheriff.token.validation.*`
+| Config keys          | `sheriff.oauth.*`                | `sheriff.token.*`
 |===
 
-Estimated impact in `nifi-extensions`: ~119 groupId/import references, ~109 config-key references, plus the dependency declarations. No functional/API behaviour changes — names only.
+Verified scope in `nifi-extensions@main` (re-check before executing):
+
+* *POMs* declaring the dependency (6): `pom.xml` (dependencyManagement + the
+  `version.oauth-sheriff` property, pinned `0.8.0`), `nifi-cuioss-api`,
+  `nifi-cuioss-common`, `nifi-cuioss-ui`, `nifi-cuioss-rest-processors`,
+  `nifi-cuioss-processors`. Both a `compile` dependency and a `test` dependency with
+  `<classifier>generators</classifier>` are declared; the `generators` classifier name
+  does **not** change.
+* *Java*: ~109 `de.cuioss.sheriff.oauth` references, **all** under
+  `…oauth.core.*` (`domain`, `test`, `security`, `exception`, `jwks`, `pipeline`,
+  `json`, and the package root) → all map to `…token.validation.*`.
+* *Config keys*: ~109 `sheriff.oauth.*` references (in ~35 Java files).
+* *Not present*: no `*-quarkus` artifacts, no Prometheus `sheriff_oauth_*` metric
+  names, and no log-message-ID references. (One incidental code comment cites GitHub
+  issue `OAuthSheriff#212`; cosmetic, optional to update to `TokenSheriff#212`.)
 
 [NOTE]
 ====
-Maven *relocation* keeps an unchanged build working temporarily (it resolves the new artifact and prints a `has been relocated` warning). That warning is the grace window — but Java imports and config keys do **not** auto-migrate, so do the migration in one pass.
+Maven *relocation* makes the dependency *resolve* even if you only bump the version
+(it fetches `token-sheriff-validation` and prints a `has been relocated` warning) — but
+the Java imports and config keys do **not** auto-migrate, so the code will not compile
+until you apply Steps 2 and 3. Do all three steps in one pass.
 ====
 
-== Recommended: run the published OpenRewrite recipe
+== Ordering matters (substring overlap)
 
-Token-Sheriff ships a migration recipe that performs the structural changes (dependency coordinates, Java imports/FQNs, and `sheriff.oauth.*` → `sheriff.token.*` config keys) AST-safely in one reviewable pass:
+`sheriff.oauth` is a substring of `de.cuioss.sheriff.oauth`. Apply the steps in this
+order so the config-key pass (Step 3) only ever sees genuine config keys:
 
-[source,bash]
-----
-mvn -U org.openrewrite.maven:rewrite-maven-plugin:run \
-  -Drewrite.recipeArtifactCoordinates=de.cuioss.sheriff.token:token-sheriff-rewrite:0.9.0 \
-  -Drewrite.activeRecipes=de.cuioss.sheriff.token.MigrateFromOAuthSheriff
-----
+1. Coordinates (`de.cuioss.sheriff.oauth` → `de.cuioss.sheriff.token`) — Step 1
+2. Java packages (`…oauth.core` → `…token.validation`) — Step 2
+3. Config keys (bare `sheriff.oauth` → `sheriff.token`) — Step 3
 
-Review the diff, then go to <<verify,Verify>>. The manual steps below are an equivalent fallback (and cover deployed configuration the recipe cannot reach).
+(macOS/BSD `sed` shown with `-i ''`; on Linux drop the `''`. Review every diff before committing.)
 
-== Manual fallback
+== Step 1 — Coordinates and version property (POMs)
 
-=== Step 1 — Bump the dependency coordinates
-
-In every POM that declares the dependency (`pom.xml`, `nifi-cuioss-api/pom.xml`, `nifi-cuioss-common/pom.xml`, …):
-
-[source,xml]
-----
-<!-- before -->
-<groupId>de.cuioss.sheriff.oauth</groupId>
-<artifactId>oauth-sheriff-core</artifactId>
-
-<!-- after -->
-<groupId>de.cuioss.sheriff.token</groupId>
-<artifactId>token-sheriff-validation</artifactId>
-----
-
-Set the version to the first Token-Sheriff release (`0.9.0`). Apply the same to any `*-quarkus` / test artifacts in use.
-
-=== Step 2 — Rewrite Java imports
-
-The package root is renamed `oauth → token`, *and* the core module is renamed `core → validation`. Since `nifi-extensions` imports only the validation (former `core`) module, every import moves `de.cuioss.sheriff.oauth.core.` → `de.cuioss.sheriff.token.validation.` (the sub-paths below — `domain.token`, `exception`, `security`, `jwks.http`, `test.*`, etc. — are unchanged). Apply the `oauth → token` root rename first for any non-core import, then the `core → validation` segment:
+Rename the version property and bump it to the first Token-Sheriff release, then flip
+the coordinates across all POMs:
 
 [source,bash]
 ----
-# from the nifi-extensions repo root; review the diff before committing
+# from the nifi-extensions repo root
+
+# 1a. version property: rename version.oauth-sheriff → version.token-sheriff (def + refs)
+grep -rl 'version.oauth-sheriff' --include=pom.xml . \
+  | xargs sed -i '' 's/version\.oauth-sheriff/version.token-sheriff/g'
+
+# 1b. bump the pinned value 0.8.0 → 0.9.0 (in pom.xml's property definition)
+sed -i '' 's#<version.token-sheriff>0.8.0</version.token-sheriff>#<version.token-sheriff>0.9.0</version.token-sheriff>#' pom.xml
+
+# 1c. coordinates: groupId + artifactId (generators classifier stays)
+grep -rl 'de.cuioss.sheriff.oauth' --include=pom.xml . \
+  | xargs sed -i '' \
+      -e 's#<groupId>de.cuioss.sheriff.oauth</groupId>#<groupId>de.cuioss.sheriff.token</groupId>#g' \
+      -e 's#<artifactId>oauth-sheriff-core</artifactId>#<artifactId>token-sheriff-validation</artifactId>#g'
+----
+
+== Step 2 — Java imports / FQNs
+
+All references are under `…oauth.core.*`, so a single mapping suffices. (The second line
+is a defensive catch-all for any non-core reference; it is a no-op if none exist.) This
+also fixes Javadoc `{@link de.cuioss.sheriff.oauth.core…}` references.
+
+[source,bash]
+----
 grep -rl 'de\.cuioss\.sheriff\.oauth' --include='*.java' . \
   | xargs sed -i '' \
-      -e 's/de\.cuioss\.sheriff\.oauth\.core\./de.cuioss.sheriff.token.validation./g' \
-      -e 's/de\.cuioss\.sheriff\.oauth\./de.cuioss.sheriff.token./g'   # macOS (BSD sed)
-# Linux: drop the '' after -i
+      -e 's/de\.cuioss\.sheriff\.oauth\.core/de.cuioss.sheriff.token.validation/g' \
+      -e 's/de\.cuioss\.sheriff\.oauth/de.cuioss.sheriff.token/g'
 ----
 
-This also fixes Javadoc `{@link de.cuioss.sheriff.oauth.core...}` references. (The published OpenRewrite recipe does the same `ChangePackage` mapping automatically.)
+This includes the test-support imports `…oauth.core.test.*` (e.g. `TestTokenHolder`,
+generators) → `…token.validation.test.*`, which come from the `generators` classifier jar.
 
-=== Step 3 — Update configuration keys
+== Step 3 — Config keys
 
-Every `sheriff.oauth.*` property becomes `sheriff.token.*` — issuer config, JWKS URLs, bearer settings, etc. These live in NiFi processor properties, `*.properties`, and test fixtures. Match the *bare* `sheriff.oauth` (no trailing dot) too, so any prefix constants are caught:
+Every `sheriff.oauth.*` property key becomes `sheriff.token.*` — issuer config, JWKS
+URLs, bearer settings, etc. In `nifi-extensions` these live in Java string constants;
+also match the bare prefix (no trailing dot) so any prefix constants are caught.
 
 [source,bash]
 ----
-grep -rl 'sheriff\.oauth' --include='*.properties' --include='*.xml' \
-     --include='*.json' --include='*.java' --include='*.adoc' . \
-  | xargs sed -i '' 's/sheriff\.oauth/sheriff.token/g'   # macOS; drop the '' on Linux
+grep -rl 'sheriff\.oauth' --include='*.java' --include='*.properties' --include='*.xml' \
+     --include='*.json' --include='*.yml' . \
+  | xargs sed -i '' 's/sheriff\.oauth/sheriff.token/g'
 ----
 
 [WARNING]
 ====
-This is a breaking runtime change. Any *deployed* NiFi flow / `nifi.properties` referencing `sheriff.oauth.*` keys must be updated in the environment too — code changes alone won't migrate live configuration.
+This is a breaking *runtime* change. Any *deployed* NiFi flow / `nifi.properties`
+referencing `sheriff.oauth.*` keys must be updated in the environment too — code
+changes alone will not migrate live configuration.
 ====
 
-=== Step 4 — Update metrics references (if any)
+== Optional — OpenRewrite for the Java step
 
-If dashboards, alerts, or Prometheus queries reference `sheriff.oauth.*` metric names, rename them to `sheriff.token.*`. (External dashboards are out of reach for the recipe — always a manual step.)
+There is no published migration-recipe artifact. The recipe definition lives in the
+Token-Sheriff repo at
+https://github.com/cuioss/TokenSheriff/blob/main/rewrite.yml[`rewrite.yml`] and performs
+the *Java package* migration only (`ChangePackage` + the `OAuthSheriff*` type renames) —
+it does **not** change Maven coordinates or config keys. If you prefer AST-safe import
+rewriting over Step 2's `sed`, copy that `rewrite.yml` to the `nifi-extensions` repo root
+and run:
+
+[source,bash]
+----
+mvn -U org.openrewrite.maven:rewrite-maven-plugin:run \
+  -Drewrite.activeRecipes=de.cuioss.sheriff.token.MigrateFromOAuthSheriff
+----
+
+Then still do Step 1 (coordinates) and Step 3 (config keys) — those remain manual.
 
 [#verify]
 == Verify
@@ -113,9 +153,15 @@ grep -rI 'de\.cuioss\.sheriff\.oauth\|sheriff\.oauth\|oauth-sheriff' \
 ./mvnw clean verify     # build + tests green
 ----
 
-Confirm no `has been relocated` warnings remain in the build log (they disappear once the coordinates are updated).
+Confirm no `has been relocated` warnings remain in the build log (they disappear once the
+coordinates are updated to `token-sheriff-validation`).
 
 == Coordination
 
-* The rename ships in the first Token-Sheriff release; until `nifi-extensions` bumps, relocation keeps its build working (with warnings).
-* Order: Token-Sheriff `0.9.0` published (incl. relocation stubs) → this migration applied in a `nifi-extensions` branch → verify → merge.
+* Token-Sheriff `0.9.0` (incl. the relocation stubs) is already published — no upstream
+  step is pending.
+* Order: apply Steps 1–3 in a `nifi-extensions` branch → `./mvnw clean verify` green →
+  open PR → merge.
+* Until the bump lands, relocation keeps the existing `0.8.0` build working (it would
+  also redirect at `0.9.0`), but only the full migration makes the code compile against
+  the new packages.
