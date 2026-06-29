@@ -22,14 +22,15 @@ __pycache__/
 .claude/settings.local.json
 
 # Planning system (managed by /plan-marshall)
+# Planning system (managed by /marshall-steward)
+# Runtime state (plans, run-configuration, lessons-learned, memory, logs — managed by plan-marshall)
 .plan/*
 !.plan/marshal.json
+!.plan/project-architecture/
+!.plan/plugin-doctor.yml
+.plan/local/worktrees/
 
-# Planning system (managed by /marshall-steward)
 !.plan/project-structure.toon
 
-# Planning system (managed by /marshall-steward)
 !.plan/project-structure.json
 
-# Planning system (managed by /marshall-steward)
-!.plan/project-architecture/

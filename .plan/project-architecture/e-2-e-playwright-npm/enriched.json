@@ -1,0 +1,68 @@
+{
+  "best_practices": [],
+  "insights": [],
+  "internal_dependencies": [],
+  "key_dependencies": [],
+  "key_dependencies_reasoning": "",
+  "key_packages": {},
+  "purpose": "integration-tests",
+  "purpose_reasoning": "npm Playwright browser E2E test project, no shipped artifact",
+  "responsibility": "The Playwright end-to-end test suite (virtual npm sibling) validating the Quarkus Dev-UI in a real browser. Provides functional and accessibility (axe-core) tests, Keycloak token fixtures, and a precheck-gated runner against a live dev environment.",
+  "responsibility_reasoning": "source: package.json 'End-to-End Playwright tests for Token-Sheriff Dev-UI', @playwright/test + @axe-core deps, test:functional/test:a11y scripts, fixtures/utils",
+  "skills_by_profile": {
+    "implementation": {
+      "defaults": [
+        {
+          "description": "Foundational agent behavior rules (user interaction, tool usage, research, dependency management)",
+          "skill": "plan-marshall:persona-plan-marshall-agent"
+        },
+        {
+          "description": "Language-agnostic code quality, refactoring, and documentation principles",
+          "skill": "plan-marshall:ref-code-quality"
+        },
+        {
+          "description": "Core JavaScript development standards covering ES modules, modern patterns, web component patterns, DOM trust boundaries / XSS prevention, and code quality",
+          "skill": "pm-dev-frontend:javascript"
+        }
+      ]
+    },
+    "module_testing": {
+      "defaults": [
+        {
+          "description": "Foundational agent behavior rules (user interaction, tool usage, research, dependency management)",
+          "skill": "plan-marshall:persona-plan-marshall-agent"
+        },
+        {
+          "description": "Language-agnostic code quality principles (SRP, CQS, complexity, error handling)",
+          "skill": "plan-marshall:ref-code-quality"
+        },
+        {
+          "description": "Language-agnostic testing methodology (AAA, coverage, reliability, determinism)",
+          "skill": "plan-marshall:persona-module-tester"
+        },
+        {
+          "description": "Core JavaScript development standards covering ES modules, modern patterns, web component patterns, DOM trust boundaries / XSS prevention, and code quality",
+          "skill": "pm-dev-frontend:javascript"
+        },
+        {
+          "description": "JavaScript unit testing with Jest, DOM testing, mocking, async patterns",
+          "skill": "pm-dev-frontend:jest-testing"
+        }
+      ]
+    },
+    "quality": {
+      "defaults": [
+        {
+          "description": "Foundational agent behavior rules (user interaction, tool usage, research, dependency management)",
+          "skill": "plan-marshall:persona-plan-marshall-agent"
+        },
+        {
+          "description": "Language-agnostic code quality, refactoring, and documentation principles",
+          "skill": "plan-marshall:ref-code-quality"
+        }
+      ]
+    }
+  },
+  "skills_by_profile_reasoning": "",
+  "tips": []
+}

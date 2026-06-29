@@ -1,0 +1,72 @@
+{
+  "best_practices": [],
+  "insights": [],
+  "internal_dependencies": [],
+  "key_dependencies": [],
+  "key_dependencies_reasoning": "",
+  "key_packages": {
+    "de.cuioss.sheriff.token.quarkus.deployment": {
+      "description": "Dev-UI JavaScript components (qwc-jwt-debugger, qwc-jwt-status-config) and their build/test tooling."
+    }
+  },
+  "purpose": "extension",
+  "purpose_reasoning": "npm virtual module providing the Dev-UI JS components for the Quarkus deployment extension",
+  "responsibility": "The JavaScript/Dev-UI build facet of the deployment module (virtual npm sibling). Owns the Lit-based Dev-UI web components (JWT debugger, status/config cards) under src/main/resources/dev-ui with their npm lint/test/format/coverage tooling.",
+  "responsibility_reasoning": "source: package.json 'DevUI components for Token-Sheriff Quarkus extension', 26 npm scripts (test/lint/css), qwc-jwt-*.js dev-ui sources",
+  "skills_by_profile": {
+    "implementation": {
+      "defaults": [
+        {
+          "description": "Foundational agent behavior rules (user interaction, tool usage, research, dependency management)",
+          "skill": "plan-marshall:persona-plan-marshall-agent"
+        },
+        {
+          "description": "Language-agnostic code quality, refactoring, and documentation principles",
+          "skill": "plan-marshall:ref-code-quality"
+        },
+        {
+          "description": "Core JavaScript development standards covering ES modules, modern patterns, web component patterns, DOM trust boundaries / XSS prevention, and code quality",
+          "skill": "pm-dev-frontend:javascript"
+        }
+      ]
+    },
+    "module_testing": {
+      "defaults": [
+        {
+          "description": "Foundational agent behavior rules (user interaction, tool usage, research, dependency management)",
+          "skill": "plan-marshall:persona-plan-marshall-agent"
+        },
+        {
+          "description": "Language-agnostic code quality principles (SRP, CQS, complexity, error handling)",
+          "skill": "plan-marshall:ref-code-quality"
+        },
+        {
+          "description": "Language-agnostic testing methodology (AAA, coverage, reliability, determinism)",
+          "skill": "plan-marshall:persona-module-tester"
+        },
+        {
+          "description": "Core JavaScript development standards covering ES modules, modern patterns, web component patterns, DOM trust boundaries / XSS prevention, and code quality",
+          "skill": "pm-dev-frontend:javascript"
+        },
+        {
+          "description": "JavaScript unit testing with Jest, DOM testing, mocking, async patterns",
+          "skill": "pm-dev-frontend:jest-testing"
+        }
+      ]
+    },
+    "quality": {
+      "defaults": [
+        {
+          "description": "Foundational agent behavior rules (user interaction, tool usage, research, dependency management)",
+          "skill": "plan-marshall:persona-plan-marshall-agent"
+        },
+        {
+          "description": "Language-agnostic code quality, refactoring, and documentation principles",
+          "skill": "plan-marshall:ref-code-quality"
+        }
+      ]
+    }
+  },
+  "skills_by_profile_reasoning": "",
+  "tips": []
+}

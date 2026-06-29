@@ -1,0 +1,15 @@
+{
+  "best_practices": [],
+  "insights": [],
+  "internal_dependencies": [],
+  "key_dependencies": [],
+  "key_dependencies_reasoning": "",
+  "key_packages": {},
+  "purpose": "documentation",
+  "purpose_reasoning": "documentation build system, only .adoc docs and diagram scripts",
+  "responsibility": "AsciiDoc project documentation tree under doc/, including the OIDC client specification/planning series and PlantUML diagram sources. Holds narrative architecture, specification and migration documents rather than build artifacts.",
+  "responsibility_reasoning": "source: doc/ build_system=documentation, contains README.adoc plus oidc/01-06 spec series and plantuml scripts",
+  "skills_by_profile": {},
+  "skills_by_profile_reasoning": "",
+  "tips": []
+}

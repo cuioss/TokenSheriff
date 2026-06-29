@@ -197,3 +197,8 @@ Execute comprehensive quality verification and commit workflow for a specific mo
 - **NEVER commit with source artifacts** - Source directories must be clean of .class files
 - **ALWAYS fix issues systematically** - Address root causes, not symptoms
 
+
+## Tool Usage
+
+- Use proper tools (Edit, Read, Write) instead of shell commands (echo, cat)
+- Never use Bash for file operations (find, grep, cat, ls) — use Glob, Read, Grep tools instead
