@@ -1,0 +1,41 @@
+name: Release Relocation Stubs
+
+# One-off, manually triggered deploy of the OAuth-Sheriff → Token-Sheriff Maven
+# Central relocation stubs. The stub project lives on the release/legacy branch
+# (deliberately NOT on main); this workflow checks that branch out explicitly, so
+# it can sit transiently on main only long enough to be dispatchable.
+# Run ONCE, AFTER the token-sheriff-* 0.9.0 release is live on Maven Central —
+# the stubs' <relocation> targets point at 0.9.0.
+#
+# Uses the same org secrets as the normal release; no local credentials needed.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-relocation-stubs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release/legacy (where the stubs live)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: release/legacy
+
+      - name: Set up JDK, Maven Central server and GPG
+        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          server-id: central
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Deploy relocation stubs to Maven Central
+        run: ./mvnw -B --no-transfer-progress -f relocation-stubs/pom.xml -Prelease clean deploy
+        env:
+          MAVEN_USERNAME: ${{ secrets.OSS_SONATYPE_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.OSS_SONATYPE_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
