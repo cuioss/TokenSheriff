@@ -30,7 +30,7 @@ import java.util.List;
  * configuration of preferred algorithms and supporting algorithm rotation.
  * <p>
  * For more details on the security aspects, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/security-reference.adoc">Security Specification</a>
  *
  * @since 1.0
  * @author Oliver Wolff

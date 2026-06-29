@@ -45,7 +45,7 @@ import java.util.List;
  * caching or serialization scenarios.
  * <p>
  * For more details on JWT claim handling, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#token-structure">Token Structure</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#token-structure">Token Structure</a>
  * specification.
  *
  * @since 1.0

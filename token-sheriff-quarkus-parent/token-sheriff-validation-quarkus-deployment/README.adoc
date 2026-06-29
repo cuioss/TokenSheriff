@@ -142,4 +142,4 @@ For detailed configuration, reflection classes, and testing information, see xre
 * xref:../doc/development/devui-implementation.adoc[DevUI Implementation Documentation]
 * xref:../doc/development/devui-testing.adoc[DevUI Testing Guide]
 * xref:../doc/configuration/native-image-configuration.adoc[Native Image Configuration]
-* xref:../../doc/architecture.adoc[Architecture Reference]
+* xref:../../doc/validation/architecture.adoc[Architecture Reference]

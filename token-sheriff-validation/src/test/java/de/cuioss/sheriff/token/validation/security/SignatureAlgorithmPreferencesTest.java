@@ -35,10 +35,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests for {@link SignatureAlgorithmPreferences}.
  * <p>
  * This test class verifies the functionality of the SignatureAlgorithmPreferences class,
- * which implements the requirement <a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.5">VALIDATION-8.5: Cryptographic Agility</a> as specified
+ * which implements the requirement <a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-8.5">VALIDATION-8.5: Cryptographic Agility</a> as specified
  * in the security specification.
  * <p>
- * See: doc/security/security-reference.adoc
+ * See: doc/validation/security-reference.adoc
  */
 @EnableTestLogger(debug = SignatureAlgorithmPreferences.class, warn = SignatureAlgorithmPreferences.class)
 @EnableGeneratorController

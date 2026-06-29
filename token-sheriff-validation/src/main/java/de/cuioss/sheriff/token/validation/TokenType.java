@@ -38,11 +38,11 @@ import static de.cuioss.sheriff.token.validation.domain.claim.ClaimName.*;
  * <p>
  * Implements requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.2">VALIDATION-1.2: Token Types</a></li>
+ *   <li><a href="../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-1.2">VALIDATION-1.2: Token Types</a></li>
  * </ul>
  * <p>
  * For more detailed specifications, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#_token_architecture_and_types">Technical Components Specification - Token Architecture and Types</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#_token_architecture_and_types">Technical Components Specification - Token Architecture and Types</a>
  *
  * @since 1.0
  * @author Oliver Wolff

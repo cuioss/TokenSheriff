@@ -53,13 +53,13 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * Verifies requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.1">VALIDATION-1.1: Token Structure</a></li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.3">VALIDATION-1.3: Signature Validation</a> (includes algorithm selection and confusion protection)</li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4">VALIDATION-4: Key Management</a> (key material handling)</li>
+ *   <li><a href="../../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-1.1">VALIDATION-1.1: Token Structure</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-1.3">VALIDATION-1.3: Signature Validation</a> (includes algorithm selection and confusion protection)</li>
+ *   <li><a href="../../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-4">VALIDATION-4: Key Management</a> (key material handling)</li>
  * </ul>
  *
  * @author Oliver Wolff
- * @see <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/security/security-reference.adoc">Security Specification</a>
+ * @see <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/security-reference.adoc">Security Specification</a>
  */
 @EnableTestLogger(rootLevel = TestLogLevel.DEBUG)
 @EnableGeneratorController

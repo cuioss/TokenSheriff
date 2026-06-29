@@ -1,4 +1,4 @@
-= JWT Token Handling - Threat Model
+= Token Validation Threat Model
 :toc: left
 :toclevels: 3
 :sectnums:
@@ -6,7 +6,7 @@
 
 == Overview
 
-_See Requirement xref:../Requirements.adoc#VALIDATION-8[VALIDATION-8: Security Requirements] and xref:../architecture.adoc[Architecture] and xref:security-reference.adoc[Security Reference]_
+_See Requirement xref:requirements.adoc#VALIDATION-8[VALIDATION-8: Security Requirements] and xref:architecture.adoc[Architecture] and xref:security-reference.adoc[Security Reference]_
 
 This document outlines the threat model for the JWT Token Validation library. The threat model follows OWASP recommendations and the STRIDE methodology. Each category lists threats, current mitigations with implementation references, coverage status, and open recommendations.
 
@@ -26,7 +26,7 @@ The JWT Token Validation library:
 
 === Spoofing
 
-_See Requirements xref:../Requirements.adoc#VALIDATION-8.1[VALIDATION-8.1] and xref:../Requirements.adoc#VALIDATION-8.4[VALIDATION-8.4]_
+_See Requirements xref:requirements.adoc#VALIDATION-8.1[VALIDATION-8.1] and xref:requirements.adoc#VALIDATION-8.4[VALIDATION-8.4]_
 
 ==== Threats and Mitigations
 
@@ -68,7 +68,7 @@ _See Requirements xref:../Requirements.adoc#VALIDATION-8.1[VALIDATION-8.1] and x
 
 === Tampering
 
-_See Requirement xref:../Requirements.adoc#VALIDATION-8.2[VALIDATION-8.2: Safe Parsing]_
+_See Requirement xref:requirements.adoc#VALIDATION-8.2[VALIDATION-8.2: Safe Parsing]_
 
 ==== Threats and Mitigations
 
@@ -109,7 +109,7 @@ _See Requirement xref:../Requirements.adoc#VALIDATION-8.2[VALIDATION-8.2: Safe P
 
 === Repudiation
 
-_See Requirement xref:../Requirements.adoc#VALIDATION-7[VALIDATION-7: Logging Requirements]_
+_See Requirement xref:requirements.adoc#VALIDATION-7[VALIDATION-7: Logging Requirements]_
 
 ==== Threats and Mitigations
 
@@ -150,7 +150,7 @@ _See Requirement xref:../Requirements.adoc#VALIDATION-7[VALIDATION-7: Logging Re
 
 === Information Disclosure
 
-_See Requirement xref:../Requirements.adoc#VALIDATION-8.3[VALIDATION-8.3: Secure Communication]_
+_See Requirement xref:requirements.adoc#VALIDATION-8.3[VALIDATION-8.3: Secure Communication]_
 
 ==== Threats and Mitigations
 
@@ -196,7 +196,7 @@ _See Requirement xref:../Requirements.adoc#VALIDATION-8.3[VALIDATION-8.3: Secure
 
 === Denial of Service
 
-_See Requirements xref:../Requirements.adoc#VALIDATION-8.1[VALIDATION-8.1: Token Size Limits] and xref:../Requirements.adoc#VALIDATION-9[VALIDATION-9: Performance]_
+_See Requirements xref:requirements.adoc#VALIDATION-8.1[VALIDATION-8.1: Token Size Limits] and xref:requirements.adoc#VALIDATION-9[VALIDATION-9: Performance]_
 
 ==== Threats and Mitigations
 
@@ -242,7 +242,7 @@ _See Requirements xref:../Requirements.adoc#VALIDATION-8.1[VALIDATION-8.1: Token
 
 === Elevation of Privilege
 
-_See Requirement xref:../Requirements.adoc#VALIDATION-8.4[VALIDATION-8.4: Claims Validation]_
+_See Requirement xref:requirements.adoc#VALIDATION-8.4[VALIDATION-8.4: Claims Validation]_
 
 ==== Threats and Mitigations
 
@@ -304,7 +304,7 @@ _See Requirement xref:../Requirements.adoc#VALIDATION-8.4[VALIDATION-8.4: Claims
 
 === DPoP Threats (RFC 9449)
 
-_See Requirement xref:../Requirements.adoc#VALIDATION-8.7[VALIDATION-8.7: DPoP Sender-Constrained Tokens]_
+_See Requirement xref:requirements.adoc#VALIDATION-8.7[VALIDATION-8.7: DPoP Sender-Constrained Tokens]_
 
 ==== Threats and Mitigations
 

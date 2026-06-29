@@ -131,7 +131,7 @@ curl -k https://localhost:2556/dex/.well-known/openid-configuration
 
 Tests are parameterized via `TestProviders` — Dex is automatically included in the provider list when `-Ddex.enabled=true` is set by the multi-idp-tests Maven profile. Providers missing required capabilities are skipped with an INFO log.
 
-See link:../../doc/specification/multi-idp-testing.adoc[Multi-IDP Testing Specification] for the full architecture and provider roadmap.
+See link:../../doc/validation/specification/multi-idp-testing.adoc[Multi-IDP Testing Specification] for the full architecture and provider roadmap.
 
 == Native Compilation
 

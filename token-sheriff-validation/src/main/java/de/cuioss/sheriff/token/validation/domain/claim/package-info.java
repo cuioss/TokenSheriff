@@ -41,12 +41,12 @@
  * <p>
  * This package implements parts of the following requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-2.1">VALIDATION-2.1: Base Token Functionality</a> (claim access and extraction)</li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-2.3">VALIDATION-2.3: ID Token Functionality</a> (OpenID Connect support)</li>
+ *   <li><a href="../../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-2.1">VALIDATION-2.1: Base Token Functionality</a> (claim access and extraction)</li>
+ *   <li><a href="../../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-2.3">VALIDATION-2.3: ID Token Functionality</a> (OpenID Connect support)</li>
  * </ul>
  * <p>
  * For more details on claim handling, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#token-structure">Token Structure</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#token-structure">Token Structure</a>
  * specification.
  * 
  * @author Oliver Wolff

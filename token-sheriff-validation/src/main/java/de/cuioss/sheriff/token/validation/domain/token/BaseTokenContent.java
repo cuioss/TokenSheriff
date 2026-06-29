@@ -40,7 +40,7 @@ import java.util.Map;
  * via Lombok's {@code @EqualsAndHashCode} and {@code @ToString}.
  * <p>
  * For more details on token structure, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#token-structure">Token Structure</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#token-structure">Token Structure</a>
  * specification.
  *
  * @since 1.0

@@ -100,7 +100,7 @@ A module's *own* `<groupId>`/`<artifactId>` has no first-class recipe; those ~6 
 *1c — Text surfaces* (`text.FindAndReplace` / `properties.ChangePropertyKey`):
 
 * Config + metric prefixes `sheriff.oauth` → `sheriff.token` (`JwtPropertyKeys.PREFIX`, `MetricIdentifier.PREFIX`, `application*.properties`, tests, docs).
-* Requirement IDs `OAUTH-SHERIFF-N → VALIDATION-N` (xref:../../Requirements.adoc[Requirements] anchors + all references).
+* Requirement IDs `OAUTH-SHERIFF-N → VALIDATION-N` (xref:../../validation/requirements.adoc[Requirements] anchors + all references).
 * Docs, badges, README image `alt`, GitHub workflows, `.github/project.yml` Sonar key, `cuioss.github.io/OAuth-Sheriff` URLs.
 
 *1d — Gate:* `./mvnw -Ppre-commit clean verify` then `./mvnw clean install` green.

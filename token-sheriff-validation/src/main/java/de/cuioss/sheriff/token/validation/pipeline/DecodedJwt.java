@@ -48,7 +48,7 @@ import java.util.Optional;
  * ideal for representing decoded JWT data in the validation pipeline.
  * <p>
  * For more details on the token validation process, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#token-validation-pipeline">Token Validation Pipeline</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#token-validation-pipeline">Token Validation Pipeline</a>
  *
  * @param header the decoded header as a JwtHeader
  * @param body the decoded payload (body) as a MapRepresentation

@@ -13,9 +13,9 @@ This document provides a reference for all log messages used in the JWT Token Va
 
 * link:../README.md[README] - Project overview and introduction
 * xref:../token-sheriff-validation/doc/usage-guide.adoc[Usage Guide] - How to use the library with code examples
-* xref:Requirements.adoc[Requirements] - Functional and non-functional requirements
-* xref:architecture.adoc[Architecture] - Architecture reference
-* xref:security/threat-model.adoc[Threat Model] - Security analysis and mitigations
+* xref:validation/requirements.adoc[Requirements] - Functional and non-functional requirements
+* xref:validation/architecture.adoc[Architecture] - Architecture reference
+* xref:validation/threat-model.adoc[Threat Model] - Security analysis and mitigations
 
 === Log Message Format
 
@@ -33,7 +33,7 @@ Note: Only log level INFO and above are documented in this file.
 
 The log messages can be used for troubleshooting issues with the JWT Token Validation library. Each log message is associated with a specific component and provides information about what is happening in the system.
 
-For more details about security events related to these log messages, see the SecurityEventCounter implementation in xref:architecture.adoc#securityeventcounter[Architecture].
+For more details about security events related to these log messages, see the SecurityEventCounter implementation in xref:validation/architecture.adoc#securityeventcounter[Architecture].
 
 == INFO Level (001-009)
 

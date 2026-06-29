@@ -6,7 +6,7 @@
 
 == Overview
 
-_See Requirement xref:../Requirements.adoc#VALIDATION-8[VALIDATION-8: Security]_
+_See Requirement xref:requirements.adoc#VALIDATION-8[VALIDATION-8: Security]_
 
 This document consolidates JWT attack mitigations, security controls, and best practices for the Token-Sheriff library.
 
@@ -16,7 +16,7 @@ This document consolidates JWT attack mitigations, security controls, and best p
 [[signature-validation]]
 === Signature Validation
 
-_See Requirement xref:../Requirements.adoc#VALIDATION-1.3[VALIDATION-1.3: Signature Validation]_
+_See Requirement xref:requirements.adoc#VALIDATION-1.3[VALIDATION-1.3: Signature Validation]_
 
 Supported algorithms (preference order: ECDSA > EdDSA > RSA-PSS > RSA PKCS#1 v1.5):
 

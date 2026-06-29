@@ -52,7 +52,7 @@ import java.util.*;
  * </ul>
  * <p>
  * For more details on token structure and usage, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#token-types">Token Types</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#token-types">Token Types</a>
  * specification.
  *
  * @since 1.0

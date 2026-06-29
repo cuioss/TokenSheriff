@@ -192,8 +192,8 @@ The project includes custom skills in `.claude/skills/`:
 - **Key documents**:
   - `README.adoc` - Project overview
   - `doc/README.adoc` - Documentation hub
-  - `doc/Requirements.adoc` - Functional requirements
-  - `doc/architecture.adoc` - Architecture reference
+  - `doc/validation/requirements.adoc` - Functional requirements
+  - `doc/validation/architecture.adoc` - Architecture reference
   - `doc/LogMessages.adoc` - Logging reference
 - **Cross-references**: Use `xref:` syntax (not `<<>>`)
 - **Blank lines**: Required before all lists
@@ -234,7 +234,7 @@ The project includes custom skills in `.claude/skills/`:
 Key reference files for development:
 - `doc/LogMessages.adoc` - Complete logging reference
 - `doc/README.adoc` - Documentation hub
-- `doc/Requirements.adoc` - Functional requirements
-- `doc/architecture.adoc` - Architecture reference
+- `doc/validation/requirements.adoc` - Functional requirements
+- `doc/validation/architecture.adoc` - Architecture reference
 - `.editorconfig` - Code formatting configuration
 - `lombok.config` - Lombok configuration

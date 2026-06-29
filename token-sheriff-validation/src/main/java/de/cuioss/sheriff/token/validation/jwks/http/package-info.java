@@ -106,13 +106,13 @@
  * 
  * <p>Implements requirements:</p>
  * <ul>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-4.1">VALIDATION-4.1: JWKS Endpoint Support</a></li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.3">VALIDATION-8.3: Secure Communication</a></li>
- *   <li><a href="../../../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.5">VALIDATION-8.5: Cryptographic Agility</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-4.1">VALIDATION-4.1: JWKS Endpoint Support</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-8.3">VALIDATION-8.3: Secure Communication</a></li>
+ *   <li><a href="../../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-8.5">VALIDATION-8.5: Cryptographic Agility</a></li>
  * </ul>
  * <p>
  * For more detailed specifications, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc#_jwksloader">Technical Components Specification - JwksLoader</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#_jwksloader">Technical Components Specification - JwksLoader</a>
  * 
  * @author Oliver Wolff
  */

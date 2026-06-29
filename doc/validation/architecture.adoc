@@ -1,4 +1,4 @@
-= Architecture Reference
+= Token Validation Architecture
 :toc: left
 :toclevels: 3
 :sectnums:
@@ -8,12 +8,12 @@
 
 Token-Sheriff validates JWT tokens through a multi-stage pipeline. This document describes the core components, their interactions, and key design decisions.
 
-image::plantuml/component-overview.png[Component Overview]
+image::../plantuml/component-overview.png[Component Overview]
 
 [[token-validation-pipeline]]
 == Token Validation Pipeline
 
-_See Requirement xref:Requirements.adoc#VALIDATION-1[VALIDATION-1: Token Parsing and Validation]_
+_See Requirement xref:requirements.adoc#VALIDATION-1[VALIDATION-1: Token Parsing and Validation]_
 
 The `TokenValidator` is the primary entry point. It processes tokens through an ordered pipeline:
 
@@ -41,7 +41,7 @@ The pipeline uses `TokenValidationException` for error handling, encapsulating:
 
 === TokenValidator
 
-_See Requirement xref:Requirements.adoc#VALIDATION-2[VALIDATION-2: Token Representation]_
+_See Requirement xref:requirements.adoc#VALIDATION-2[VALIDATION-2: Token Representation]_
 
 The `TokenValidator` manages multiple `IssuerConfig` instances, selects the appropriate configuration for each token, and orchestrates the validation pipeline. It is immutable and thread-safe after construction.
 
@@ -49,9 +49,9 @@ The `TokenValidator` manages multiple `IssuerConfig` instances, selects the appr
 [[token-types]]
 === Token Architecture and Types
 
-_See Requirement xref:Requirements.adoc#VALIDATION-1.2[VALIDATION-1.2: Token Types]_
+_See Requirement xref:requirements.adoc#VALIDATION-1.2[VALIDATION-1.2: Token Types]_
 
-image::plantuml/token-types.png[Token Types]
+image::../plantuml/token-types.png[Token Types]
 
 * **TokenContent** / **BaseTokenContent** - Core interface and abstract base for JWT tokens
 * **AccessTokenContent** - OAuth2 access token with scope and role support
@@ -61,9 +61,9 @@ image::plantuml/token-types.png[Token Types]
 [[multi-issuer]]
 === IssuerConfig and Multi-Issuer Support
 
-_See Requirement xref:Requirements.adoc#VALIDATION-3[VALIDATION-3: Multi-Issuer Support]_
+_See Requirement xref:requirements.adoc#VALIDATION-3[VALIDATION-3: Multi-Issuer Support]_
 
-image::plantuml/multi-issuer-support.png[Multi-Issuer Support]
+image::../plantuml/multi-issuer-support.png[Multi-Issuer Support]
 
 Each `IssuerConfig` holds everything needed to validate tokens from one issuer:
 
@@ -77,9 +77,9 @@ Configuration validation happens at `build()` time (fail-fast). JwksLoader initi
 [[jwks-integration]]
 === JwksLoader and Key Management
 
-_See Requirement xref:Requirements.adoc#VALIDATION-4[VALIDATION-4: Key Management]_
+_See Requirement xref:requirements.adoc#VALIDATION-4[VALIDATION-4: Key Management]_
 
-image::plantuml/key-management.png[Key Management]
+image::../plantuml/key-management.png[Key Management]
 
 The `JwksLoader` interface handles retrieval, caching, and rotation of cryptographic keys. Implementations:
 
@@ -96,14 +96,14 @@ Key features:
 
 === OIDC Discovery
 
-_See Requirement xref:Requirements.adoc#VALIDATION-4.1[VALIDATION-4.1: JWKS Endpoint Support]_
+_See Requirement xref:requirements.adoc#VALIDATION-4.1[VALIDATION-4.1: JWKS Endpoint Support]_
 
 `HttpWellKnownResolver` fetches `/.well-known/openid-configuration` documents and caches the result using lock-free `AtomicReference`. The discovered `issuer` field is used by `IssuerConfigCache` for issuer matching, and the discovered `jwks_uri` is used by `HttpJwksLoader` to fetch public keys.
 
 [[securityeventcounter]]
 === SecurityEventCounter
 
-_See Requirement xref:Requirements.adoc#VALIDATION-7.3[VALIDATION-7.3: Security Events]_
+_See Requirement xref:requirements.adoc#VALIDATION-7.3[VALIDATION-7.3: Security Events]_
 
 Thread-safe counter for security events during token processing. Created by `TokenValidator` and passed to all pipeline components and `JwksLoader` implementations. Follows the same naming scheme as `JWTValidationLogMessages` for correlation between logs and metrics.
 
@@ -124,6 +124,6 @@ High-performance, lock-free monitoring of validation pipeline metrics with micro
 
 == References
 
-* xref:Requirements.adoc[Requirements]
-* xref:security/security-reference.adoc[Security Reference]
+* xref:requirements.adoc[Requirements]
+* xref:security-reference.adoc[Security Reference]
 * xref:specification/token-decryption.adoc[Token Decryption (JWE)]

@@ -48,13 +48,13 @@
  * <p>
  * Implements requirements:
  * <ul>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-1">VALIDATION-1: Token Parsing and Validation</a></li>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-1.3">VALIDATION-1.3: Signature Validation</a></li>
- *   <li><a href="../../../../../../../../../../doc/Requirements.adoc#VALIDATION-8.4">VALIDATION-8.4: Claims Validation</a></li>
+ *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-1">VALIDATION-1: Token Parsing and Validation</a></li>
+ *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-1.3">VALIDATION-1.3: Signature Validation</a></li>
+ *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-8.4">VALIDATION-8.4: Claims Validation</a></li>
  * </ul>
  * <p>
  * For more detailed specifications, see the
- * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/architecture.adoc">Technical Components Specification</a>
+ * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc">Technical Components Specification</a>
  * 
  * @author Oliver Wolff
  * @see de.cuioss.sheriff.token.validation.TokenValidator
