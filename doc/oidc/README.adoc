@@ -51,7 +51,7 @@ implementation plans plus the standing design decisions behind them.
 
 * xref:01-restructure/README.adoc[Plan 01 — Restructure]: *Done* — shipped as `0.9.0`
   (2026-06-29); repository renamed to Token-Sheriff and published to Maven Central with
-  relocation. Consumer migration in progress.
+  relocation; consumer `nifi-extensions` migrated.
 * Plans 02–06: planning only — not yet started.
 
 [NOTE]
