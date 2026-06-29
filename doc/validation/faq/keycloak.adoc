@@ -12,10 +12,10 @@ Common issues and solutions when integrating the Token-Sheriff library with Keyc
 
 * link:../../README.md[README] - Project overview and introduction
 * xref:../../token-sheriff-validation/README.adoc[Usage Guide] - How to use the library with code examples
-* xref:../Requirements.adoc[Requirements] - Functional and non-functional requirements
+* xref:../requirements.adoc[Requirements] - Functional and non-functional requirements
 * xref:../architecture.adoc[Architecture] - Architecture reference
 * xref:../LogMessages.adoc[Log Messages] - Reference for all log messages
-* xref:../security/threat-model.adoc[Threat Model] - Security analysis and mitigations
+* xref:../threat-model.adoc[Threat Model] - Security analysis and mitigations
 
 == Missing Mandatory Claims
 

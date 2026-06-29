@@ -15,7 +15,7 @@ This document describes TokenSheriff's relationship to the https://download.ecli
 
 * link:../../README.md[README] - Project overview and introduction
 * xref:../../token-sheriff-validation/README.adoc[Usage Guide] - How to use the library with code examples
-* xref:../Requirements.adoc[Requirements] - Functional and non-functional requirements
+* xref:../requirements.adoc[Requirements] - Functional and non-functional requirements
 * xref:../architecture.adoc[Architecture] - Architecture reference and implementation details
 * xref:token-decryption.adoc[Token Decryption] - JWE decryption specification
 * xref:multi-idp-testing.adoc[Multi-IDP Testing] - Multi-IDP integration testing

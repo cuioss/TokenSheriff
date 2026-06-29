@@ -8,16 +8,16 @@
 xref:../architecture.adoc[Back to Architecture Reference]
 
 == Overview
-_See Requirement xref:../Requirements.adoc#VALIDATION-1.4[VALIDATION-1.4: Token Decryption]_
+_See Requirement xref:../requirements.adoc#VALIDATION-1.4[VALIDATION-1.4: Token Decryption]_
 
 === Document Navigation
 
 * link:../../README.md[README] - Project overview and introduction
 * xref:../../token-sheriff-validation/README.adoc[Usage Guide] - How to use the library with code examples
-* xref:../Requirements.adoc[Requirements] - Functional and non-functional requirements
+* xref:../requirements.adoc[Requirements] - Functional and non-functional requirements
 * xref:../architecture.adoc[Architecture] - Architecture reference and implementation details
 * xref:../LogMessages.adoc[Log Messages] - Reference for all log messages
-* xref:../security/security-reference.adoc[Security Reference] - Security measures
+* xref:../security-reference.adoc[Security Reference] - Security measures
 
 ==== Status: IMPLEMENTED
 
@@ -464,4 +464,4 @@ All `PrivateKey` fields in `JweDecryptionConfig` are annotated with `@ToString.E
 * https://datatracker.ietf.org/doc/html/rfc7518[RFC 7518 - JSON Web Algorithms (JWA)]
 * https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-56Ar3.pdf[NIST SP 800-56A - Recommendation for Pair-Wise Key-Establishment Schemes]
 * xref:../architecture.adoc[Architecture Reference]
-* xref:../Requirements.adoc[Requirements]
+* xref:../requirements.adoc[Requirements]

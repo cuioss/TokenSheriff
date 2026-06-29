@@ -1,4 +1,4 @@
-= JWT Token Handling Requirements
+= Token Validation Requirements
 :toc: left
 :toclevels: 3
 :toc-title: Table of Contents
@@ -15,7 +15,7 @@ This document outlines the functional and non-functional requirements for the JW
 * xref:../token-sheriff-validation/doc/usage-guide.adoc[Usage Guide] - How to use the library with code examples
 * xref:architecture.adoc[Architecture] - Architecture reference
 * xref:LogMessages.adoc[Log Messages] - Reference for all log messages
-* xref:security/threat-model.adoc[Threat Model] - Security analysis and mitigations
+* xref:threat-model.adoc[Threat Model] - Security analysis and mitigations
 
 == Referenced Standards
 
@@ -60,7 +60,7 @@ NOTE: Requirement IDs are stable identifiers referenced across documentation and
 
 The library must provide robust token parsing and validation capabilities in accordance with https://datatracker.ietf.org/doc/html/rfc7519[RFC 7519 - JSON Web Token (JWT)] (May 2015).
 
-_See specifications: xref:architecture.adoc[Architecture] and xref:security/security-reference.adoc[Security Reference]_
+_See specifications: xref:architecture.adoc[Architecture] and xref:security-reference.adoc[Security Reference]_
 
 [#VALIDATION-1.1]
 ==== VALIDATION-1.1: Token Structure
@@ -115,7 +115,7 @@ Additional security considerations:
 * The library must validate that the algorithm specified in the JWT header matches the expected algorithm for the key
 * The library must reject tokens with invalid signatures rather than falling back to less secure validation methods
 
-_See specifications: xref:architecture.adoc#token-validation-pipeline[Token Validation Pipeline] and xref:security/security-reference.adoc#signature-validation[Signature Validation]_
+_See specifications: xref:architecture.adoc#token-validation-pipeline[Token Validation Pipeline] and xref:security-reference.adoc#signature-validation[Signature Validation]_
 
 [#VALIDATION-1.4]
 ==== VALIDATION-1.4: Token Decryption
@@ -213,7 +213,7 @@ _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
 
 The library must support public key management for token validation in accordance with https://datatracker.ietf.org/doc/html/rfc7517[RFC 7517 - JSON Web Key (JWK)] (May 2015).
 
-_See specifications: xref:architecture.adoc#jwks-integration[Key Management] and xref:security/security-reference.adoc#security-controls[Security Reference]_
+_See specifications: xref:architecture.adoc#jwks-integration[Key Management] and xref:security-reference.adoc#security-controls[Security Reference]_
 
 
 [#VALIDATION-4.1]
@@ -298,7 +298,7 @@ _See specification: xref:architecture.adoc#multi-issuer[Configuration]_
 
 Implement comprehensive logging for troubleshooting and auditing, following the https://owasp.org/www-project-proactive-controls/v4/en/c9-security-logging-and-monitoring[OWASP Proactive Controls C9: Implement Security Logging and Monitoring] guidelines.
 
-_See specifications: xref:architecture.adoc#securityeventcounter[SecurityEventCounter] and xref:security/security-reference.adoc#security-events-monitoring[Security Events]_
+_See specifications: xref:architecture.adoc#securityeventcounter[SecurityEventCounter] and xref:security-reference.adoc#security-events-monitoring[Security Events]_
 
 [#VALIDATION-7.1]
 ==== VALIDATION-7.1: Log Levels
@@ -333,14 +333,14 @@ Log security-relevant events as recommended by https://datatracker.ietf.org/doc/
 * Configuration changes
 * Suspicious token usage patterns
 
-_See specifications: xref:architecture.adoc#securityeventcounter[SecurityEventCounter] and xref:security/security-reference.adoc#security-events-monitoring[Security Events]_
+_See specifications: xref:architecture.adoc#securityeventcounter[SecurityEventCounter] and xref:security-reference.adoc#security-events-monitoring[Security Events]_
 
 [#VALIDATION-8]
 === VALIDATION-8: Security
 
 The library must implement security best practices as defined in the https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html[OWASP JWT Security Cheat Sheet for Java].
 
-_See specifications: xref:security/security-reference.adoc[Security Reference] and xref:security/threat-model.adoc[Threat Model]_
+_See specifications: xref:security-reference.adoc[Security Reference] and xref:threat-model.adoc[Threat Model]_
 
 [#VALIDATION-8.1]
 ==== VALIDATION-8.1: Token Size Limits
@@ -361,14 +361,14 @@ For example, vulnerabilities could include issues like entity expansion in XML p
 
 Refer to https://owasp.org/www-project-top-ten/[OWASP Top 10] (2021) for common vulnerabilities, particularly A8:2021-Software and Data Integrity Failures.
 
-_See specification: xref:security/security-reference.adoc#safe-parsing[Safe Parsing]_
+_See specification: xref:security-reference.adoc#safe-parsing[Safe Parsing]_
 
 [#VALIDATION-8.3]
 ==== VALIDATION-8.3: Secure Communication
 
 Support secure communication for key retrieval using TLS 1.2 or higher as recommended by https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-52r2.pdf[NIST SP 800-52 Rev. 2] (2019).
 
-_See specification: xref:security/security-reference.adoc#secure-communication[Secure Communication]_
+_See specification: xref:security-reference.adoc#secure-communication[Secure Communication]_
 
 [#VALIDATION-8.4]
 ==== VALIDATION-8.4: Claims Validation
@@ -380,14 +380,14 @@ Validate token claims according to RFC 7519 (May 2015) and OpenID Connect Core 1
 * Issuer (iss)
 * Audience (aud)
 
-_See specification: xref:security/security-reference.adoc#claims-validation[Claims Validation]_
+_See specification: xref:security-reference.adoc#claims-validation[Claims Validation]_
 
 [#VALIDATION-8.5]
 ==== VALIDATION-8.5: Cryptographic Agility
 
 The library must support cryptographic agility as recommended by https://datatracker.ietf.org/doc/html/rfc8725#section-3.2[RFC 8725 Section 3.2 - Use Appropriate Algorithms], allowing for algorithm upgrades without breaking changes.
 
-_See specification: xref:security/security-reference.adoc#cryptographic-agility[Cryptographic Agility]_
+_See specification: xref:security-reference.adoc#cryptographic-agility[Cryptographic Agility]_
 
 [#VALIDATION-8.6]
 ==== VALIDATION-8.6: Token Type Header Validation (RFC 9068)
@@ -417,7 +417,7 @@ _See specification: xref:architecture.adoc#token-validation-pipeline[Token Valid
 [#VALIDATION-12]
 === VALIDATION-12: Testing and Quality Assurance
 
-_See specification: xref:security/security-reference.adoc[Security Reference]_
+_See specification: xref:security-reference.adoc[Security Reference]_
 
 [#VALIDATION-12.1]
 ==== VALIDATION-12.1: Security Testing
@@ -432,7 +432,7 @@ Key security tests must include:
 * Signature verification bypass tests
 * Token cracking resistance tests
 
-_See specifications: xref:security/security-reference.adoc[Security Reference]_
+_See specifications: xref:security-reference.adoc[Security Reference]_
 
 [#VALIDATION-12.2]
 ==== VALIDATION-12.2: Unit Testing
@@ -482,7 +482,7 @@ The library must be regularly scanned for vulnerabilities using:
 * Static Application Security Testing (SAST) tools
 * Fuzz-Testing tools for input validation vulnerabilities
 
-_See specification: xref:security/security-reference.adoc[Security Reference]_
+_See specification: xref:security-reference.adoc[Security Reference]_
 
 [#VALIDATION-12.5]
 ==== VALIDATION-12.5: Compliance Testing
@@ -493,7 +493,7 @@ Tests must verify compliance with:
 * https://www.rfc-editor.org/rfc/rfc7519[RFC 7519] JWT specification
 * https://datatracker.ietf.org/doc/html/rfc8725[RFC 8725 - JSON Web Token Best Current Practices]
 
-_See specification: xref:security/security-reference.adoc[Security Reference]_
+_See specification: xref:security-reference.adoc[Security Reference]_
 
 == Non-Functional Requirements
 
