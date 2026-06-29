@@ -143,10 +143,13 @@ Merging this PR (it touches `.github/project.yml`) fires `release.yml` automatic
 ### Step 11 — Wait for the Release workflow (~30 min)
 
 ```bash
-gh run list --repo cuioss/TokenSheriff --workflow "Release" --limit 3 \
-  --json status,conclusion,displayTitle,databaseId
-# then watch the in-progress run
-gh run watch <databaseId> --repo cuioss/TokenSheriff
+# Pick the newest in-progress Release run explicitly (a bare --limit 3 can surface
+# older Release runs alongside the active one):
+RUN_ID=$(gh run list --repo cuioss/TokenSheriff --workflow "Release" --limit 10 \
+  --json databaseId,status --jq 'map(select(.status=="in_progress")) | first | .databaseId')
+# Fallback if the run hasn't registered yet, or to target this release by the merged
+# commit: gh run list ... --json databaseId,headSha --jq 'map(select(.headSha=="<sha>")) | first | .databaseId'
+gh run watch "$RUN_ID" --repo cuioss/TokenSheriff
 ```
 The workflow itself runs ~6 min; allow up to ~30 min for tag + Maven Central propagation +
 Pages deploy + GitHub release publish before treating it as stuck.
