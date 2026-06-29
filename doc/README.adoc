@@ -3,21 +3,30 @@
 
 This is the central navigation for TokenSheriff documentation.
 
-== Core
+== Token Validation
 
-* xref:Requirements.adoc[Requirements] - Functional and non-functional requirements
-* xref:architecture.adoc[Architecture] - Validation pipeline, components, and design
-* xref:LogMessages.adoc[Log Messages] - Reference for all log messages
+The token validation capability — its requirements, architecture, security model, and specifications.
 
-== Security
+* xref:validation/requirements.adoc[Requirements] - Functional and non-functional requirements
+* xref:validation/architecture.adoc[Architecture] - Validation pipeline, components, and design
 
-* xref:security/threat-model.adoc[Threat Model] - STRIDE threat analysis with coverage status
-* xref:security/security-reference.adoc[Security Reference] - Attack mitigations, controls, and best practices
+=== Security
 
-== Specifications
+* xref:validation/threat-model.adoc[Threat Model] - STRIDE threat analysis with coverage status
+* xref:validation/security-reference.adoc[Security Reference] - Attack mitigations, controls, and best practices
 
-* xref:specification/token-decryption.adoc[Token Decryption] - Future JWE support
-* xref:specification/multi-idp-testing.adoc[Multi-IDP Testing] - Testing with multiple OIDC providers
+=== Specifications
+
+* xref:validation/specification/token-decryption.adoc[Token Decryption] - Future JWE support
+* xref:validation/specification/multi-idp-testing.adoc[Multi-IDP Testing] - Testing with multiple OIDC providers
+
+=== FAQ
+
+* xref:validation/faq/keycloak.adoc[Keycloak FAQ]
+
+== Reference
+
+* xref:LogMessages.adoc[Log Messages] - Global registry of all log messages
 
 == Module Documentation
 
@@ -39,7 +48,3 @@ This is the central navigation for TokenSheriff documentation.
 == Configuration
 
 * xref:../token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/resources/META-INF/quarkus-config-doc.adoc[Configuration Reference] - All `sheriff.token.*` properties
-
-== FAQ
-
-* xref:faq/keycloak.adoc[Keycloak FAQ]
