@@ -8,7 +8,7 @@
 
 Token-Sheriff validates JWT tokens through a multi-stage pipeline. This document describes the core components, their interactions, and key design decisions.
 
-image::plantuml/component-overview.png[Component Overview]
+image::../plantuml/component-overview.png[Component Overview]
 
 [[token-validation-pipeline]]
 == Token Validation Pipeline
@@ -51,7 +51,7 @@ The `TokenValidator` manages multiple `IssuerConfig` instances, selects the appr
 
 _See Requirement xref:requirements.adoc#VALIDATION-1.2[VALIDATION-1.2: Token Types]_
 
-image::plantuml/token-types.png[Token Types]
+image::../plantuml/token-types.png[Token Types]
 
 * **TokenContent** / **BaseTokenContent** - Core interface and abstract base for JWT tokens
 * **AccessTokenContent** - OAuth2 access token with scope and role support
@@ -63,7 +63,7 @@ image::plantuml/token-types.png[Token Types]
 
 _See Requirement xref:requirements.adoc#VALIDATION-3[VALIDATION-3: Multi-Issuer Support]_
 
-image::plantuml/multi-issuer-support.png[Multi-Issuer Support]
+image::../plantuml/multi-issuer-support.png[Multi-Issuer Support]
 
 Each `IssuerConfig` holds everything needed to validate tokens from one issuer:
 
@@ -79,7 +79,7 @@ Configuration validation happens at `build()` time (fail-fast). JwksLoader initi
 
 _See Requirement xref:requirements.adoc#VALIDATION-4[VALIDATION-4: Key Management]_
 
-image::plantuml/key-management.png[Key Management]
+image::../plantuml/key-management.png[Key Management]
 
 The `JwksLoader` interface handles retrieval, caching, and rotation of cryptographic keys. Implementations:
 

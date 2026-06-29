@@ -11,10 +11,10 @@ This document outlines the functional and non-functional requirements for the JW
 
 === Document Navigation
 
-* link:../README.md[README] - Project overview and introduction
-* xref:../token-sheriff-validation/doc/usage-guide.adoc[Usage Guide] - How to use the library with code examples
+* link:../../README.md[README] - Project overview and introduction
+* xref:../../token-sheriff-validation/doc/usage-guide.adoc[Usage Guide] - How to use the library with code examples
 * xref:architecture.adoc[Architecture] - Architecture reference
-* xref:LogMessages.adoc[Log Messages] - Reference for all log messages
+* xref:../LogMessages.adoc[Log Messages] - Reference for all log messages
 * xref:threat-model.adoc[Threat Model] - Security analysis and mitigations
 
 == Referenced Standards
@@ -69,7 +69,7 @@ The library must support standard JWT token structure with header, payload, and 
 
 _See specification: xref:architecture.adoc#token-types[Token Architecture and Types]_
 
-image::plantuml/token-structure.png[JWT Token Structure]
+image::../plantuml/token-structure.png[JWT Token Structure]
 
 [#VALIDATION-1.2]
 ==== VALIDATION-1.2: Token Types
@@ -505,7 +505,7 @@ Performance requirements are verified through comprehensive benchmarking:
 * **Micro-benchmarks** (JMH): Library-level performance testing
 * **Integration benchmarks** (WRK): End-to-end HTTP performance testing
 
-_See analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis] and xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis]_
+_See analysis: xref:../../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis] and xref:../../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis]_
 
 [#VALIDATION-9.1]
 ==== VALIDATION-9.1: Library Performance (Micro-Benchmarks)
@@ -526,7 +526,7 @@ _See analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchm
 * **Cache operations**: P50=0.1µs
 * **Token parsing**: P50=4.3µs
 
-_See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis (March 2026)]_
+_See detailed analysis: xref:../../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis (March 2026)]_
 
 [#VALIDATION-9.2]
 ==== VALIDATION-9.2: Error Handling Performance
@@ -542,7 +542,7 @@ _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Mic
 * **50% invalid tokens**: 222,300 ops/s (+39% throughput improvement)
 * **Fast-fail optimization**: Invalid tokens rejected early without full processing
 
-_See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc#_throughput_results[Throughput Results]_
+_See detailed analysis: xref:../../benchmarking/doc/Analysis-03.2026-Micro.adoc#_throughput_results[Throughput Results]_
 
 [#VALIDATION-9.3]
 ==== VALIDATION-9.3: Integration Performance (HTTP/REST)
@@ -563,7 +563,7 @@ _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc#_th
 * **Error rate**: 0% timeouts
 * **CPU usage**: 85.0% peak, 79.7% average (JWT with cache)
 
-_See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis (March 2026)]_
+_See detailed analysis: xref:../../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis (March 2026)]_
 
 [#VALIDATION-9.4]
 ==== VALIDATION-9.4: Cache Performance
@@ -582,7 +582,7 @@ _See detailed analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.ad
 * **Cache effectiveness**: 100% hit rate with cache size 20 across all connection levels
 * **Cached validation time**: 0.26ms average per token
 
-_See analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Performance Analysis]_
+_See analysis: xref:../../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Performance Analysis]_
 
 [#VALIDATION-9.5]
 ==== VALIDATION-9.5: Scalability and Concurrency
@@ -600,7 +600,7 @@ _See analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integr
 * **Thread scaling**: 100 concurrent threads with 159K ops/s (library)
 * **Latency scaling**: P50 increases linearly with connections (5.49ms @ 150 conns)
 
-_See analysis: xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc#_connection_sweep_50_300_connections[Connection Scaling Analysis]_
+_See analysis: xref:../../benchmarking/doc/Analysis-03.2026-Integration.adoc#_connection_sweep_50_300_connections[Connection Scaling Analysis]_
 
 [#VALIDATION-10]
 === VALIDATION-10: Reliability

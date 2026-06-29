@@ -12,11 +12,11 @@ _See Requirement xref:../requirements.adoc#VALIDATION-1.4[VALIDATION-1.4: Token 
 
 === Document Navigation
 
-* link:../../README.md[README] - Project overview and introduction
-* xref:../../token-sheriff-validation/README.adoc[Usage Guide] - How to use the library with code examples
+* link:../../../README.md[README] - Project overview and introduction
+* xref:../../../token-sheriff-validation/README.adoc[Usage Guide] - How to use the library with code examples
 * xref:../requirements.adoc[Requirements] - Functional and non-functional requirements
 * xref:../architecture.adoc[Architecture] - Architecture reference and implementation details
-* xref:../LogMessages.adoc[Log Messages] - Reference for all log messages
+* xref:../../LogMessages.adoc[Log Messages] - Reference for all log messages
 * xref:../security-reference.adoc[Security Reference] - Security measures
 
 ==== Status: IMPLEMENTED
