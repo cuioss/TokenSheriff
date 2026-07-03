@@ -157,19 +157,4 @@ class JwksLoaderFactoryTest {
                 "Should count JWKS_JSON_PARSE_FAILED event");
     }
 
-    @Test
-    @DisplayName("Should return correct providesIssuerIdentifier for all JwksType values")
-    void shouldReturnCorrectProvidesIssuerIdentifierForAllJwksTypes() {
-        // Only WELL_KNOWN should provide issuer identifier
-        assertTrue(JwksType.WELL_KNOWN.providesIssuerIdentifier(),
-                "WELL_KNOWN should provide issuer identifier");
-
-        // All other types should not provide issuer identifier
-        assertFalse(JwksType.HTTP.providesIssuerIdentifier(),
-                "HTTP should not provide issuer identifier");
-        assertFalse(JwksType.FILE.providesIssuerIdentifier(),
-                "FILE should not provide issuer identifier");
-        assertFalse(JwksType.MEMORY.providesIssuerIdentifier(),
-                "MEMORY should not provide issuer identifier");
-    }
 }

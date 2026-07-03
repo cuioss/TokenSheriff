@@ -91,6 +91,31 @@ class TokenValidatorTest {
                 JWTValidationLogMessages.INFO.TOKEN_FACTORY_INITIALIZED.resolveIdentifierString());
     }
 
+    @Test
+    @DisplayName("Should ignore disabled issuer configurations during construction")
+    void shouldIgnoreDisabledIssuerConfigs() {
+        // Disabled configs skip build-time validation and have no JwksLoader —
+        // their presence must not break validator construction
+        IssuerConfig disabled = IssuerConfig.builder().enabled(false).build();
+
+        TokenValidator validator = TokenValidator.builder()
+                .issuerConfig(issuerConfig)
+                .issuerConfig(disabled)
+                .build();
+
+        assertNotNull(validator);
+    }
+
+    @Test
+    @DisplayName("Should reject construction when all issuer configurations are disabled")
+    void shouldRejectAllDisabledIssuerConfigs() {
+        IssuerConfig disabled = IssuerConfig.builder().enabled(false).build();
+        var builder = TokenValidator.builder().issuerConfig(disabled);
+
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("enabled issuer configuration"));
+    }
+
     @Nested
     class TokenCreationTests {
 

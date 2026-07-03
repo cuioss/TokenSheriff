@@ -228,6 +228,30 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
 
             assertTrue(exception.getMessage().contains("No JwksLoader configuration is present"));
         }
+
+        @Test
+        @DisplayName("Should throw exception during build when well-known discovery is configured without issuerIdentifier")
+        void shouldRequireIssuerIdentifierForWellKnownDiscovery() {
+            var builder = IssuerConfig.builder()
+                    .expectedAudience("test-audience")
+                    .httpJwksLoaderConfig(de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig.builder()
+                            .wellKnownUrl("https://example.com/.well-known/openid-configuration")
+                            .build());
+            var exception = assertThrows(IllegalArgumentException.class, builder::build);
+
+            assertTrue(exception.getMessage().contains("issuerIdentifier is required"));
+        }
+
+        @Test
+        @DisplayName("Should build disabled configuration without issuerIdentifier")
+        void shouldBuildDisabledConfigurationWithoutIssuerIdentifier() {
+            var config = IssuerConfig.builder()
+                    .enabled(false)
+                    .build();
+
+            assertFalse(config.isEnabled());
+            assertThrows(IllegalStateException.class, config::getIssuerIdentifier);
+        }
     }
 
     @Nested
