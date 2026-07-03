@@ -131,13 +131,15 @@ public class TokenBuilder {
 
             if (mapper != null) {
                 // Use the configured mapper (either built-in or custom).
-                // Mappers throw IllegalArgumentException on malformed claim values (e.g. a
-                // string-typed 'exp'). Translate to TokenValidationException to honor the
-                // documented contract of TokenValidator.
+                // Mappers (including custom SPI implementations) can throw arbitrary runtime
+                // exceptions on malformed claim values (e.g. a string-typed 'exp'). Translate
+                // to TokenValidationException to honor the documented contract of TokenValidator.
                 ClaimValue claimValue;
                 try {
                     claimValue = mapper.map(mapRepresentation, key);
-                } catch (IllegalArgumentException e) {
+                } catch (TokenValidationException e) {
+                    throw e;
+                } catch (RuntimeException e) {
                     throw new TokenValidationException(
                             SecurityEventCounter.EventType.MISSING_CLAIM,
                             "Malformed claim '" + key + "': " + e.getMessage(),

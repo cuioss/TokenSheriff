@@ -22,6 +22,7 @@ import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -53,6 +54,7 @@ public class JsonCollectionMapper implements ClaimMapper {
             // original value (consistent with the Keycloak mappers). No attempt is made to
             // reconstruct the exact JSON source representation.
             values = list.stream()
+                    .filter(Objects::nonNull)
                     .map(Object::toString)
                     .toList();
             originalValue = values.toString();
