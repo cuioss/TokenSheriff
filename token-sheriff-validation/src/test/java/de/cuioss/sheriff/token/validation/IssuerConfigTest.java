@@ -96,6 +96,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                     .build();
 
             var config = IssuerConfig.builder()
+                    .issuerIdentifier("test-issuer")
                     .expectedAudience(audience)
                     .expectedClientId(clientId)
                     .algorithmPreferences(algorithmPreferences)
@@ -181,6 +182,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
         @DisplayName("Should initialize with HTTP JwksLoader")
         void shouldInitializeWithHttpJwksLoader() {
             var config = IssuerConfig.builder()
+                    .issuerIdentifier("test-issuer")
                     .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
                             .jwksUrl(TEST_JWKS_URL)
                             .issuerIdentifier("test-issuer")
@@ -279,6 +281,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                     .build();
             assertDoesNotThrow(() -> {
                 IssuerConfig.builder()
+                        .issuerIdentifier("test-issuer")
                         .httpJwksLoaderConfig(httpConfig)
                         .audienceValidationDisabled(true)
                         .build();
