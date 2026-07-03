@@ -11,7 +11,7 @@ Maturity: pre-1.0 (0.9.0) — breaking changes are free; recommendations favor r
 
 Dimensions: all (security, api, dead-code, duplication, cleanup)
 
-Scope: all production modules — `token-sheriff-validation` (109 files), `token-sheriff-validation-quarkus` (42), `token-sheriff-validation-quarkus-deployment` (2), `token-sheriff-quarkus-integration-tests` (3), `benchmarking/*` (65). Test code excluded.
+Scope: all `src/main/java` source roots — the shipped modules `token-sheriff-validation` (109 files), `token-sheriff-validation-quarkus` (42), and `token-sheriff-validation-quarkus-deployment` (2), plus the internal tooling in `benchmarking/*` (65) and the sample application in `token-sheriff-quarkus-integration-tests` (3). Test sources (`src/test`) were excluded; findings in non-shipped modules are calibrated to their internal-tooling role.
 
 Date: 2026-07-03
 
