@@ -79,8 +79,10 @@ import java.util.*;
  *
  * @since 1.0
  */
-@EqualsAndHashCode
-@ToString
+// doNotUseGetters: getIssuerIdentifier() intentionally throws for disabled configs,
+// which must remain safe to log/compare (e.g. ISSUER_CONFIG_SKIPPED)
+@EqualsAndHashCode(doNotUseGetters = true)
+@ToString(doNotUseGetters = true)
 public class IssuerConfig implements LoadingStatusProvider {
 
     private static final CuiLogger LOGGER = new CuiLogger(IssuerConfig.class);

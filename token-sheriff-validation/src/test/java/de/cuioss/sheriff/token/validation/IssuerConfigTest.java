@@ -253,6 +253,10 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
 
             assertFalse(config.isEnabled());
             assertThrows(IllegalStateException.class, config::getIssuerIdentifier);
+            // Disabled configs are logged (ISSUER_CONFIG_SKIPPED) and compared —
+            // Lombok-generated methods must not trip over the guarded getter
+            assertDoesNotThrow(config::toString);
+            assertDoesNotThrow(config::hashCode);
         }
     }
 
