@@ -53,6 +53,7 @@ import java.util.*;
  * <pre>
  * // Create an issuer configuration with HTTP-based JWKS loading (well-known discovery)
  * IssuerConfig issuerConfig = IssuerConfig.builder()
+ *     .issuerIdentifier("https://example.com")
  *     .expectedAudience("my-client")
  *     .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
  *         .wellKnownUrl("https://example.com/.well-known/openid-configuration")
@@ -63,7 +64,6 @@ import java.util.*;
  * // Initialize the security event counter -> This is usually done by TokenValidator
  * issuerConfig.initJWKSLoader(new SecurityEventCounter());
  *
- * // Issuer identifier is dynamically obtained from well-known discovery
  * String issuer = issuerConfig.getIssuerIdentifier();
  * </pre>
  * <p>
@@ -79,8 +79,10 @@ import java.util.*;
  *
  * @since 1.0
  */
-@EqualsAndHashCode
-@ToString
+// doNotUseGetters: getIssuerIdentifier() intentionally throws for disabled configs,
+// which must remain safe to log/compare (e.g. ISSUER_CONFIG_SKIPPED)
+@EqualsAndHashCode(doNotUseGetters = true)
+@ToString(doNotUseGetters = true)
 public class IssuerConfig implements LoadingStatusProvider {
 
     private static final CuiLogger LOGGER = new CuiLogger(IssuerConfig.class);
@@ -103,22 +105,22 @@ public class IssuerConfig implements LoadingStatusProvider {
      * Default value is {@code true}.
      */
     @Getter
-    boolean enabled;
+    private final boolean enabled;
 
     /**
      * The issuer identifier for token validation.
      * <p>
-     * This field is required for all JWKS loading variants except well-known discovery.
-     * For well-known discovery, the issuer identifier is automatically extracted from
-     * the discovery document and this field is optional.
+     * This field is required for all enabled issuer configurations, regardless of the
+     * JWKS loading variant. For well-known discovery, the discovered issuer is compared
+     * against this value and a mismatch is logged as a security event, but this configured
+     * value is always authoritative.
      * </p>
      * <p>
      * This identifier must match the "iss" claim in validated tokens.
      * </p>
      */
-    @Getter
     @Nullable
-    String issuerIdentifier;
+    private final String issuerIdentifier;
 
     /**
      * Set of expected audience values.
@@ -129,7 +131,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * {@code true}. An empty audience set with validation enabled will fail at build time.
      */
     @Getter
-    Set<String> expectedAudience;
+    private final Set<String> expectedAudience;
 
     /**
      * Whether audience validation is explicitly disabled for this issuer.
@@ -140,7 +142,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * Default value is {@code false} (audience validation is required).
      */
     @Getter
-    boolean audienceValidationDisabled;
+    private final boolean audienceValidationDisabled;
 
     /**
      * Set of expected client ID values.
@@ -148,7 +150,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * If the token's client ID claim matches any of these values, it is considered valid.
      */
     @Getter
-    Set<String> expectedClientId;
+    private final Set<String> expectedClientId;
 
     /**
      * Whether the "sub" (subject) claim is optional for this issuer.
@@ -173,7 +175,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.2">RFC 7519 - 4.1.2. "sub" (Subject) Claim</a>
      */
     @Getter
-    boolean claimSubOptional;
+    private final boolean claimSubOptional;
 
     /**
      * Whether the audience ("aud") claim is optional for access tokens from this issuer.
@@ -203,7 +205,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-4">RFC 9068 - 4. JWT Access Token Claims</a>
      */
     @Getter
-    boolean accessTokenAudienceOptional;
+    private final boolean accessTokenAudienceOptional;
 
     // Design Decision: expectedTokenType defaults to null (no token type validation).
     //
@@ -242,7 +244,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      */
     @Getter
     @Nullable
-    String expectedTokenType;
+    private final String expectedTokenType;
 
     /**
      * Optional DPoP (Demonstrating Proof of Possession) configuration per RFC 9449.
@@ -260,7 +262,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      */
     @Getter
     @Nullable
-    DpopConfig dpopConfig;
+    private final DpopConfig dpopConfig;
 
     /**
      * Clock skew tolerance in seconds for time-based claim validation (exp, nbf).
@@ -276,7 +278,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * @see <a href="https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html">MP-JWT 2.1 - mp.jwt.verify.clock.skew</a>
      */
     @Getter
-    int clockSkewSeconds;
+    private final int clockSkewSeconds;
 
     /**
      * Maximum token age in seconds based on the {@code iat} claim, or {@code null} if disabled.
@@ -294,17 +296,17 @@ public class IssuerConfig implements LoadingStatusProvider {
      */
     @Getter
     @Nullable
-    Integer maxTokenAgeSeconds;
+    private final Integer maxTokenAgeSeconds;
 
     @Getter
-    SignatureAlgorithmPreferences algorithmPreferences;
+    private final SignatureAlgorithmPreferences algorithmPreferences;
 
     /**
      * Custom claim mappers that take precedence over the default ones.
      * The key is the claim name, and the value is the mapper to use for that claim.
      */
     @Getter
-    Map<String, ClaimMapper> claimMappers;
+    private final Map<String, ClaimMapper> claimMappers;
 
     /**
      * The JwksLoader instance used for loading JWKS keys.
@@ -313,41 +315,24 @@ public class IssuerConfig implements LoadingStatusProvider {
      */
     @Getter
     @Nullable
-    JwksLoader jwksLoader;
+    private final JwksLoader jwksLoader;
 
 
     /**
      * Gets the issuer identifier for token validation.
      * <p>
-     * This method provides the issuer identifier that should be used for token validation.
-     * The resolution logic prioritizes dynamic issuer identification (for well-known discovery)
-     * over static configuration:
-     * </p>
-     * <p>
-     * The resolution logic is:
-     * <ol>
-     *   <li>If the JwksLoader is initialized and healthy, delegate to its issuer identifier first</li>
-     *   <li>If the JwksLoader returns empty (for non-well-known cases), use the configured issuerIdentifier</li>
-     *   <li>Throws an exception if neither is available (validation ensures this never happens)</li>
-     * </ol>
+     * Returns the configured issuer identifier, which is required for all enabled
+     * configurations and validated during {@link IssuerConfigBuilder#build()}.
+     * For well-known discovery, the discovered issuer never overrides this value;
+     * a mismatch is surfaced as a {@code ISSUER_MISMATCH} security event by the loader.
      *
      * @return the issuer identifier, never null
+     * @throws IllegalStateException if called on a disabled configuration that was
+     *         built without an issuer identifier
      */
-   
     public String getIssuerIdentifier() {
-        // First try to get issuer identifier from JwksLoader (for well-known discovery)
-        if (jwksLoader != null && jwksLoader.isLoaderStatusOK()) {
-            Optional<String> jwksLoaderIssuer = jwksLoader.getIssuerIdentifier();
-            if (jwksLoaderIssuer.isPresent()) {
-                return jwksLoaderIssuer.get();
-            }
-        }
-
-        // Fall back to configured issuer identifier (for file-based, in-memory, etc.)
         Preconditions.checkState(issuerIdentifier != null,
-                """
-                        issuerIdentifier is null - this indicates a bug in validation logic. \
-                        Non-well-known JWKS loaders should have been validated to require issuerIdentifier during initialization.""");
+                "issuerIdentifier is null - it is only optional for disabled issuer configurations, which must not be used for validation");
         return issuerIdentifier;
     }
 
@@ -403,7 +388,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * The builder validates configuration consistency during the {@link #build()} method call, ensuring that:
      * <ul>
      *   <li>At least one JWKS loading method is configured for enabled issuers</li>
-     *   <li>Issuer identifier is provided when required (not needed for well-known discovery)</li>
+     *   <li>Issuer identifier is provided for enabled issuers</li>
      *   <li>Algorithm preferences and claim mappers are properly initialized</li>
      * </ul>
      */
@@ -450,9 +435,10 @@ public class IssuerConfig implements LoadingStatusProvider {
         /**
          * Sets the issuer identifier for token validation.
          * <p>
-         * This identifier must match the "iss" claim in validated tokens. It is required for all
-         * JWKS loading variants except well-known discovery, where the issuer identifier is
-         * automatically extracted from the discovery document.
+         * This identifier must match the "iss" claim in validated tokens. It is required for
+         * all enabled issuer configurations, regardless of the JWKS loading variant. For
+         * well-known discovery, set it to the issuer URL of the discovery document; a mismatch
+         * with the discovered issuer is reported as a security event.
          * </p>
          * <p>
          * Examples:
@@ -766,7 +752,7 @@ public class IssuerConfig implements LoadingStatusProvider {
          * <ul>
          *   <li>The loader implements proper error handling and retry logic</li>
          *   <li>The loader's {@link JwksLoader#getJwksType()} method returns an appropriate type</li>
-         *   <li>If the loader doesn't provide issuer identification, set {@link #issuerIdentifier(String)}</li>
+         *   <li>{@link #issuerIdentifier(String)} is set — it is required for all enabled configurations</li>
          * </ul>
          * <p>
          * Note: If a custom JwksLoader is provided, the other JWKS configuration methods
@@ -815,9 +801,10 @@ public class IssuerConfig implements LoadingStatusProvider {
          * builder.httpJwksLoaderConfig(directConfig);
          * </pre>
          * <p>
-         * <strong>Important:</strong> When using well-known discovery, the {@link #issuerIdentifier(String)}
-         * is optional as it will be automatically extracted from the discovery document. For direct JWKS URLs,
-         * the issuer identifier should typically be provided.
+         * <strong>Important:</strong> The {@link #issuerIdentifier(String)} is required for
+         * well-known discovery as well: set it to the issuer URL of the discovery document.
+         * The discovered issuer is compared against it and a mismatch is reported as a
+         * security event, but the configured value is authoritative.
          * </p>
          *
          * @param httpJwksLoaderConfig the HTTP JWKS loader configuration
@@ -926,7 +913,7 @@ public class IssuerConfig implements LoadingStatusProvider {
          * Validation includes:
          * <ul>
          *   <li><strong>JWKS Configuration:</strong> At least one JWKS loading method must be configured for enabled issuers</li>
-         *   <li><strong>Issuer Identifier:</strong> Required for file-based and in-memory JWKS loading (optional for well-known discovery)</li>
+         *   <li><strong>Issuer Identifier:</strong> Required for all enabled issuer configurations</li>
          *   <li><strong>Algorithm Preferences:</strong> Initialized with secure defaults if not explicitly set</li>
          *   <li><strong>Claim Mappers:</strong> Initialized as empty map if not explicitly set</li>
          * </ul>
@@ -981,18 +968,14 @@ public class IssuerConfig implements LoadingStatusProvider {
                         One of httpJwksLoaderConfig, jwksFilePath, jwksContent, or a custom jwksLoader must be provided.""");
             }
 
-            // Validate issuerIdentifier requirements based on JWKS loading method
-            if (jwksLoader != null) {
-                // For custom JwksLoaders, issuerIdentifier is required unless it's a well-known type
-                if (issuerIdentifier == null && !jwksLoader.getJwksType().providesIssuerIdentifier()) {
-                    throw new IllegalArgumentException("issuerIdentifier is required for custom JwksLoader unless it provides its own issuer identifier");
-                }
-            } else {
-                // For built-in JWKS loading methods, validate issuerIdentifier requirements
-                if ((jwksFilePath != null || jwksContent != null) && issuerIdentifier == null) {
-                    throw new IllegalArgumentException("issuerIdentifier is required for file-based and in-memory JWKS loading");
-                }
-                // For HTTP well-known discovery, issuerIdentifier is optional (will be extracted from discovery)
+            // issuerIdentifier is required for every enabled configuration, regardless of
+            // the JWKS loading method. Validator maps and caches are keyed by this value
+            // before any (async) JWKS loading has completed, so it cannot be supplied by
+            // well-known discovery.
+            if (issuerIdentifier == null || issuerIdentifier.isBlank()) {
+                throw new IllegalArgumentException("""
+                        issuerIdentifier is required (non-blank) for enabled issuer configurations. \
+                        For well-known discovery, set it to the issuer URL of the discovery document.""");
             }
         }
 
@@ -1024,9 +1007,9 @@ public class IssuerConfig implements LoadingStatusProvider {
             Map<String, ClaimMapper> claimMappers, @Nullable JwksLoader jwksLoader) {
         this.enabled = enabled;
         this.issuerIdentifier = issuerIdentifier;
-        this.expectedAudience = Objects.requireNonNull(expectedAudience, "expectedAudience must not be null (use Set.of() for empty)");
+        this.expectedAudience = Set.copyOf(Objects.requireNonNull(expectedAudience, "expectedAudience must not be null (use Set.of() for empty)"));
         this.audienceValidationDisabled = audienceValidationDisabled;
-        this.expectedClientId = Objects.requireNonNull(expectedClientId, "expectedClientId must not be null (use Set.of() for empty)");
+        this.expectedClientId = Set.copyOf(Objects.requireNonNull(expectedClientId, "expectedClientId must not be null (use Set.of() for empty)"));
         this.claimSubOptional = claimSubOptional;
         this.accessTokenAudienceOptional = accessTokenAudienceOptional;
         this.expectedTokenType = expectedTokenType;
@@ -1034,7 +1017,7 @@ public class IssuerConfig implements LoadingStatusProvider {
         this.clockSkewSeconds = clockSkewSeconds;
         this.maxTokenAgeSeconds = maxTokenAgeSeconds;
         this.algorithmPreferences = Objects.requireNonNull(algorithmPreferences, "algorithmPreferences must not be null");
-        this.claimMappers = Objects.requireNonNull(claimMappers, "claimMappers must not be null (use Map.of() for empty)");
+        this.claimMappers = Map.copyOf(Objects.requireNonNull(claimMappers, "claimMappers must not be null (use Map.of() for empty)"));
         this.jwksLoader = jwksLoader;
     }
 

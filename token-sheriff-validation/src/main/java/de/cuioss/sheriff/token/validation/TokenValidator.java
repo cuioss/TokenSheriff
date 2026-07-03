@@ -201,6 +201,19 @@ public class TokenValidator implements Closeable {
         if (issuerConfigs.isEmpty()) {
             throw new IllegalArgumentException("At least one issuer configuration must be provided");
         }
+        if (issuerConfigs.contains(null)) {
+            throw new IllegalArgumentException("Issuer configurations must not contain null elements");
+        }
+
+        // Disabled configs skip build-time validation and have no JwksLoader — they must not
+        // participate in validator construction. IssuerConfigCache performs the same filtering
+        // (and logs the skipped configs).
+        List<IssuerConfig> enabledIssuerConfigs = issuerConfigs.stream()
+                .filter(IssuerConfig::isEnabled)
+                .toList();
+        if (enabledIssuerConfigs.isEmpty()) {
+            throw new IllegalArgumentException("At least one enabled issuer configuration must be provided");
+        }
 
         // Use default ParserConfig if not provided
         if (parserConfig == null) {
@@ -238,7 +251,7 @@ public class TokenValidator implements Closeable {
         Map<String, TokenClaimValidator> claimValidatorsMap = new HashMap<>();
         Map<String, TokenHeaderValidator> headerValidatorsMap = new HashMap<>();
 
-        for (IssuerConfig issuerConfig : issuerConfigs) {
+        for (IssuerConfig issuerConfig : enabledIssuerConfigs) {
             String issuerIdentifier = issuerConfig.getIssuerIdentifier();
 
             // Create one shared SignatureTemplateManager per issuer (reused by signature + DPoP validators)
@@ -281,7 +294,7 @@ public class TokenValidator implements Closeable {
         Map<String, DpopProofValidator> dpopValidatorsMap = new HashMap<>();
         long maxNonceCacheTtl = 0;
         int maxNonceCacheSize = 0;
-        for (IssuerConfig issuerConfig : issuerConfigs) {
+        for (IssuerConfig issuerConfig : enabledIssuerConfigs) {
             if (issuerConfig.getDpopConfig() != null) {
                 maxNonceCacheTtl = Math.max(maxNonceCacheTtl, issuerConfig.getDpopConfig().getNonceCacheTtlSeconds());
                 maxNonceCacheSize = Math.max(maxNonceCacheSize, issuerConfig.getDpopConfig().getNonceCacheSize());
@@ -290,7 +303,7 @@ public class TokenValidator implements Closeable {
         this.dpopReplayProtection = maxNonceCacheSize > 0
                 ? new DpopReplayProtection(maxNonceCacheTtl, maxNonceCacheSize)
                 : null;
-        for (IssuerConfig issuerConfig : issuerConfigs) {
+        for (IssuerConfig issuerConfig : enabledIssuerConfigs) {
             if (issuerConfig.getDpopConfig() != null) {
                 DpopProofValidator dpopValidator = new DpopProofValidator(
                         issuerConfig, this.securityEventCounter, this.dpopReplayProtection,
@@ -332,7 +345,7 @@ public class TokenValidator implements Closeable {
         // Compute maximum clock skew across all issuers for cache expiration tolerance.
         // The cache is shared across issuers, so we use the most lenient skew to avoid
         // evicting tokens that would still be valid for their respective issuer.
-        int maxClockSkew = issuerConfigs.stream()
+        int maxClockSkew = enabledIssuerConfigs.stream()
                 .mapToInt(IssuerConfig::getClockSkewSeconds)
                 .max()
                 .orElse(0);
@@ -355,7 +368,9 @@ public class TokenValidator implements Closeable {
         LOGGER.debug("AccessTokenValidationPipeline initialized with cache maxSize=%s, evictionInterval=%ss",
                 cacheConfig.getMaxSize(), cacheConfig.getEvictionIntervalSeconds());
 
-        LOGGER.info(JWTValidationLogMessages.INFO.TOKEN_FACTORY_INITIALIZED, issuerConfigCache.toString());
+        LOGGER.info(JWTValidationLogMessages.INFO.TOKEN_FACTORY_INITIALIZED,
+                "%s enabled issuer(s): %s".formatted(enabledIssuerConfigs.size(),
+                        enabledIssuerConfigs.stream().map(IssuerConfig::getIssuerIdentifier).toList()));
 
         if (jweDecryptionConfig != null) {
             LOGGER.info(JWTValidationLogMessages.INFO.JWE_DECRYPTION_ENABLED, jweDecryptionConfig.getKeyCount());
