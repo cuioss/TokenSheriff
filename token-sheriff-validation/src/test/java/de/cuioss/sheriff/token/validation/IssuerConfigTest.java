@@ -236,7 +236,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
         void shouldRequireIssuerIdentifierForWellKnownDiscovery() {
             var builder = IssuerConfig.builder()
                     .expectedAudience("test-audience")
-                    .httpJwksLoaderConfig(de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig.builder()
+                    .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
                             .wellKnownUrl("https://example.com/.well-known/openid-configuration")
                             .build());
             var exception = assertThrows(IllegalArgumentException.class, builder::build);
