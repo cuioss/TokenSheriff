@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -350,7 +351,12 @@ public abstract class AbstractBenchmarkRunner {
         if (FORWARDED_PROPERTY_PREFIXES.stream().noneMatch(key::startsWith)) {
             return false;
         }
-        if (SECRET_PROPERTY_KEYS.contains(key)) {
+        String lowerKey = key.toLowerCase(Locale.ROOT);
+        if (SECRET_PROPERTY_KEYS.contains(key)
+                || lowerKey.contains("password")
+                || lowerKey.contains("secret")
+                || lowerKey.contains("credential")
+                || lowerKey.contains("private")) {
             LOGGER.warn(SECRET_PROPERTY_ON_FORK_COMMAND_LINE, key);
         }
         return true;

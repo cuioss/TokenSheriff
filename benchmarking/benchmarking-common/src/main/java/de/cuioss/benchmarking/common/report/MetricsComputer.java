@@ -171,7 +171,7 @@ public class MetricsComputer {
      * @return the integration performance score (0-100)
      */
     public static int computeIntegrationScore(double throughput, double latencyMs) {
-        int throughputScore = (int) Math.min(50, throughput / 200);
+        int throughputScore = (int) Math.max(0, Math.min(50, throughput / 200));
         int latencyScore = (int) Math.max(0, 50 - latencyMs / 2);
         return throughputScore + latencyScore;
     }

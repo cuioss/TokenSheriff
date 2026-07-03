@@ -48,7 +48,11 @@ public class ErrorLoadDelegate extends BenchmarkDelegate {
         this.errorPercentage = errorPercentage;
 
         // Initialize error tokens
-        InMemoryKeyMaterialHandler.IssuerKeyMaterial expiredIssuer = tokenRepository.getIssuers()[0];
+        InMemoryKeyMaterialHandler.IssuerKeyMaterial[] issuers = tokenRepository.getIssuers();
+        if (issuers == null || issuers.length == 0) {
+            throw new IllegalStateException("No issuers configured in token repository");
+        }
+        InMemoryKeyMaterialHandler.IssuerKeyMaterial expiredIssuer = issuers[0];
         this.expiredTokenIssuer = expiredIssuer.getIssuerIdentifier();
         this.expiredToken = createExpiredToken(expiredIssuer);
         this.malformedToken = "not.a.valid.jwt.token";
