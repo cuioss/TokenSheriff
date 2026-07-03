@@ -27,6 +27,7 @@ import de.cuioss.test.valueobjects.junit5.contracts.ShouldHandleObjectContracts;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 
+import java.util.HashMap;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -79,6 +80,35 @@ class BaseTokenContentTest implements ShouldHandleObjectContracts<AccessTokenCon
         Optional<ClaimValue> claimOption = content.getClaimOption(ClaimName.ISSUER);
 
         assertTrue(claimOption.isEmpty(), "Claim option should be empty");
+    }
+
+    @ParameterizedTest
+    @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 2)
+    @DisplayName("Expose claims as immutable map")
+    void shouldExposeImmutableClaimsMap(TestTokenHolder tokenHolder) {
+        var content = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
+
+        var claims = content.getClaims();
+        var claimValue = ClaimValue.forPlainString("injected");
+        assertThrows(UnsupportedOperationException.class,
+                () -> claims.put("injected", claimValue),
+                "Claims map must be unmodifiable");
+        assertThrows(UnsupportedOperationException.class,
+                claims::clear,
+                "Claims map must be unmodifiable");
+    }
+
+    @ParameterizedTest
+    @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 2)
+    @DisplayName("Defensively copy the claims map passed to the constructor")
+    void shouldDefensivelyCopyClaims(TestTokenHolder tokenHolder) {
+        var mutableClaims = new HashMap<>(tokenHolder.getClaims());
+        var content = new AccessTokenContent(mutableClaims, tokenHolder.getRawToken());
+
+        mutableClaims.put("added-later", ClaimValue.forPlainString("value"));
+
+        assertFalse(content.getClaims().containsKey("added-later"),
+                "Mutating the source map must not affect the token content");
     }
 
     @Override

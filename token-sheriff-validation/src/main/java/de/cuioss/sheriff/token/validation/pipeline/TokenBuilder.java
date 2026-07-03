@@ -21,7 +21,9 @@ import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.claim.mapper.ClaimMapper;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
+import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -80,6 +82,7 @@ public class TokenBuilder {
      *
      * @param decodedJwt the decoded JWT
      * @return an Optional containing the AccessTokenContent if it could be created, empty otherwise
+     * @throws TokenValidationException if a claim value is malformed and cannot be mapped
      */
     public Optional<AccessTokenContent> createAccessToken(DecodedJwt decodedJwt) {
         MapRepresentation body = decodedJwt.body();
@@ -99,6 +102,7 @@ public class TokenBuilder {
      *
      * @param decodedJwt the decoded JWT
      * @return an Optional containing the IdTokenContent if it could be created, empty otherwise
+     * @throws TokenValidationException if a claim value is malformed and cannot be mapped
      */
     public Optional<IdTokenContent> createIdToken(DecodedJwt decodedJwt) {
         MapRepresentation body = decodedJwt.body();
@@ -126,8 +130,20 @@ public class TokenBuilder {
             ClaimMapper mapper = allMappers.get(key);
 
             if (mapper != null) {
-                // Use the configured mapper (either built-in or custom)
-                ClaimValue claimValue = mapper.map(mapRepresentation, key);
+                // Use the configured mapper (either built-in or custom).
+                // Mappers throw IllegalArgumentException on malformed claim values (e.g. a
+                // string-typed 'exp'). Translate to TokenValidationException to honor the
+                // documented contract of TokenValidator.
+                ClaimValue claimValue;
+                try {
+                    claimValue = mapper.map(mapRepresentation, key);
+                } catch (IllegalArgumentException e) {
+                    throw new TokenValidationException(
+                            SecurityEventCounter.EventType.MISSING_CLAIM,
+                            "Malformed claim '" + key + "': " + e.getMessage(),
+                            e
+                    );
+                }
                 if (claimValue != null) {
                     claims.put(key, claimValue);
                 }

@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.cache;
 
+import de.cuioss.sheriff.token.validation.domain.context.ValidationContext;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import lombok.Builder;
 import lombok.Getter;
@@ -69,7 +70,7 @@ public final class CachedToken {
      * @return true if the token has expired even with clock skew tolerance, false otherwise
      */
     public boolean isExpired(OffsetDateTime currentTime, int clockSkewSeconds) {
-        return expirationTime.plusSeconds(clockSkewSeconds).isBefore(currentTime);
+        return ValidationContext.isExpired(expirationTime, clockSkewSeconds, currentTime);
     }
 
     /**

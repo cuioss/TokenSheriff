@@ -39,6 +39,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
+import java.time.OffsetDateTime;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -233,6 +235,27 @@ class TokenValidatorTest {
                     "Should indicate no issuer config");
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                     JWTValidationLogMessages.WARN.NO_ISSUER_CONFIG.resolveIdentifierString());
+        }
+
+        @ParameterizedTest
+        @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 2)
+        @DisplayName("Wrap malformed claim values as TokenValidationException")
+        void shouldWrapMalformedClaimAsTokenValidationException(TestTokenHolder tokenHolder) {
+            // scope must be a string or array; a numeric value (serialized from a DATETIME
+            // claim) is malformed and makes ScopeMapper throw IllegalArgumentException,
+            // which must not escape from TokenValidator
+            OffsetDateTime anyTime = OffsetDateTime.now();
+            tokenHolder.withClaim(ClaimName.SCOPE.getName(),
+                    ClaimValue.forDateTime(String.valueOf(anyTime.toEpochSecond()), anyTime));
+            String token = tokenHolder.getRawToken();
+
+            var request = AccessTokenRequest.of(token);
+            var exception = assertThrows(TokenValidationException.class,
+                    () -> tokenValidator.createAccessToken(request),
+                    "Malformed claim must surface as TokenValidationException");
+
+            assertTrue(exception.getMessage().contains("scope"),
+                    "Exception message should name the malformed claim: " + exception.getMessage());
         }
     }
 

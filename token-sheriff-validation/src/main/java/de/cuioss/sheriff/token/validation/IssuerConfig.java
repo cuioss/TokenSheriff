@@ -362,8 +362,9 @@ public class IssuerConfig implements LoadingStatusProvider {
      *   <li>Delegates to the underlying {@link JwksLoader#getLoaderStatus()} method</li>
      * </ol>
      * <p>
-     * For HTTP-based loaders, this may trigger lazy loading of JWKS content if not already loaded.
-     * The method is designed to be fail-fast and thread-safe.
+     * This is a non-blocking status read: it never triggers loading of JWKS content itself,
+     * it only reports the loader's current state. The method is designed to be fail-fast
+     * and thread-safe.
      * <p>
      * The status reflects the combined state of configuration and runtime health:
      * <ul>

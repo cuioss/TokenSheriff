@@ -15,14 +15,16 @@
  */
 package de.cuioss.sheriff.token.validation;
 
+import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import java.util.SortedSet;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 @EnableGeneratorController
 @EnableTestLogger
@@ -42,5 +44,19 @@ class TokenTypeTest {
     void shouldHaveNonEmptyMandatoryClaims(TokenType tokenType) {
         assertFalse(tokenType.getMandatoryClaims().isEmpty(),
                 "Mandatory claims should not be empty for " + tokenType);
+    }
+
+    @ParameterizedTest
+    @EnumSource(TokenType.class)
+    @DisplayName("Mandatory claims should be unmodifiable")
+    void shouldExposeUnmodifiableMandatoryClaims(TokenType tokenType) {
+        SortedSet<ClaimName> mandatoryClaims = tokenType.getMandatoryClaims();
+
+        assertThrows(UnsupportedOperationException.class,
+                () -> mandatoryClaims.add(ClaimName.AUDIENCE),
+                "Adding to mandatory claims must be rejected for " + tokenType);
+        assertThrows(UnsupportedOperationException.class,
+                mandatoryClaims::clear,
+                "Clearing mandatory claims must be rejected for " + tokenType);
     }
 }
