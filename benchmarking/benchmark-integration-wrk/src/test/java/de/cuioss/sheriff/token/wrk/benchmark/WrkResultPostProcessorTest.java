@@ -271,6 +271,40 @@ class WrkResultPostProcessorTest {
     }
 
     @Test
+    void missingInputDirectoryFailsBeforeAnyParsing() {
+        Path missingInput = tempDir.resolve("does-not-exist");
+        Path outputDir = tempDir.resolve("output");
+
+        assertThrows(IllegalArgumentException.class, () -> processor.process(missingInput, outputDir),
+                "Missing input directory must fail instead of producing an empty report");
+        assertFalse(Files.exists(outputDir.resolve("gh-pages-ready/data/benchmark-data.json")),
+                "No report may be generated for a missing input directory");
+    }
+
+    @Test
+    void unparseableWrkOutputFailsInsteadOfPublishingZeros() throws Exception {
+        // A result file with valid metadata but no parseable WRK metrics (no Requests/sec line)
+        String unparseable = """
+                === BENCHMARK METADATA ===
+                benchmark_name: jwtValidation
+                start_time: 1700000000
+                === WRK OUTPUT ===
+                wrk crashed before producing any output
+                === BENCHMARK COMPLETE ===
+                end_time: 1700000010
+                """;
+        Path wrkDir = tempDir.resolve("wrk");
+        Files.createDirectories(wrkDir);
+        Files.writeString(wrkDir.resolve(WRK_JWT_OUTPUT_FILE), unparseable);
+
+        Path outputDir = tempDir.resolve("output");
+        assertThrows(IllegalStateException.class, () -> processor.process(tempDir, outputDir),
+                "Runs where no benchmark yields parseable metrics must fail loudly");
+        assertFalse(Files.exists(outputDir.resolve("gh-pages-ready/data/benchmark-data.json")),
+                "No zero-metrics report may be published for unparseable WRK output");
+    }
+
+    @Test
     void parseRealWrkFormatVariations() throws Exception {
         // Test with actual WRK output showing various time units
         String wrkOutput = """

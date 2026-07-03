@@ -33,6 +33,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.INFO.*;
@@ -66,6 +67,20 @@ public abstract class AbstractBenchmarkRunner {
 
     private static final CuiLogger LOGGER =
             new CuiLogger(AbstractBenchmarkRunner.class);
+
+    /**
+     * Prefixes of system properties that are forwarded to forked benchmark JVMs.
+     */
+    private static final List<String> FORWARDED_PROPERTY_PREFIXES = List.of(
+            "jmh.", "benchmark.", "token.", "integration.", "quarkus.", "javax.net.ssl.");
+
+    /**
+     * Known secret-bearing property keys. They are required by the forked JVM
+     * (read via System.getProperty in TokenRepositoryConfig), so they are forwarded when set,
+     * but a warning is emitted because they appear on the fork command line.
+     */
+    private static final Set<String> SECRET_PROPERTY_KEYS = Set.of(
+            "token.keycloak.password", "token.keycloak.clientSecret");
 
     private final PrometheusMetricsManager prometheusMetricsManager;
     private Instant benchmarkStartTime;
@@ -318,15 +333,27 @@ public abstract class AbstractBenchmarkRunner {
                 .warmupTime(config.warmupTime())
                 .threads(config.threads());
 
-        // Pass all system properties from parent JVM to forked JVMs
-        // This ensures all Maven-provided properties are available in benchmark processes
+        // Forward only an explicit allowlist of benchmark-related system properties to forked
+        // JVMs. Forwarding EVERY parent property would leak arbitrary values (including
+        // credentials) onto the fork command line, visible in process listings and CI logs.
         var systemProperties = System.getProperties().entrySet().stream()
+                .filter(e -> isForwardedProperty(String.valueOf(e.getKey())))
                 .map(e -> "-D" + e.getKey() + "=" + e.getValue())
                 .toArray(String[]::new);
 
         builder.jvmArgsPrepend(systemProperties);
 
         return builder;
+    }
+
+    private static boolean isForwardedProperty(String key) {
+        if (FORWARDED_PROPERTY_PREFIXES.stream().noneMatch(key::startsWith)) {
+            return false;
+        }
+        if (SECRET_PROPERTY_KEYS.contains(key)) {
+            LOGGER.warn(SECRET_PROPERTY_ON_FORK_COMMAND_LINE, key);
+        }
+        return true;
     }
 
     /**

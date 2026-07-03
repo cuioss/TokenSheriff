@@ -125,18 +125,69 @@ public class MetricsComputer {
                 LATENCY_NOT_FOUND_FORMAT.formatted(latencyBenchmarkName));
     }
 
-    private double calculatePerformanceScore(double throughput, double latency) {
+    /**
+     * Calculates the composite performance score for micro (JMH) benchmarks.
+     * <p>
+     * Performance scoring per benchmarking/doc/performance-scoring.adoc:
+     * {@code Performance Score = (Throughput / 100 x 0.5) + (100 / Latency_ms x 0.5)}.
+     * Scores are NOT capped - exceptional performance can exceed 100.
+     * <p>
+     * This is the single home for this formula - all callers must delegate here.
+     *
+     * @param throughput throughput in operations per second
+     * @param latency latency in milliseconds per operation
+     * @return the raw (unrounded) performance score
+     */
+    public static double calculatePerformanceScore(double throughput, double latency) {
         double throughputScore = (throughput / 100.0) * 0.5;
-        double latencyScore = (100.0 / latency) * 0.5;
+        double latencyScore = latency > 0 ? (100.0 / latency) * 0.5 : 0.0;
         return throughputScore + latencyScore;
     }
 
-    private String getPerformanceGrade(double score) {
+    /**
+     * Maps a micro (JMH) benchmark performance score to a letter grade.
+     *
+     * @param score the performance score
+     * @return the letter grade (A+, A, B, C, D or F)
+     */
+    public static String getPerformanceGrade(double score) {
         if (score >= 95) return A_PLUS;
         if (score >= 90) return A;
         if (score >= 75) return B;
         if (score >= 60) return C;
         if (score >= 40) return D;
+        return F;
+    }
+
+    /**
+     * Calculates the composite performance score for integration (WRK) benchmarks.
+     * <p>
+     * Uses a different formula and scale than {@link #calculatePerformanceScore(double, double)}:
+     * throughput contributes 0-50 points (capped at 50, 1 point per 200 ops/s) and latency
+     * contributes 0-50 points (50 minus half the latency in milliseconds, floored at 0).
+     *
+     * @param throughput throughput in requests per second
+     * @param latencyMs latency in milliseconds
+     * @return the integration performance score (0-100)
+     */
+    public static int computeIntegrationScore(double throughput, double latencyMs) {
+        int throughputScore = (int) Math.min(50, throughput / 200);
+        int latencyScore = (int) Math.max(0, 50 - latencyMs / 2);
+        return throughputScore + latencyScore;
+    }
+
+    /**
+     * Maps an integration (WRK) benchmark performance score to a letter grade.
+     * Note: uses different thresholds than {@link #getPerformanceGrade(double)} and has no A+.
+     *
+     * @param score the integration performance score
+     * @return the letter grade (A, B, C, D or F)
+     */
+    public static String gradeIntegration(int score) {
+        if (score >= 90) return A;
+        if (score >= 80) return B;
+        if (score >= 70) return C;
+        if (score >= 60) return D;
         return F;
     }
 

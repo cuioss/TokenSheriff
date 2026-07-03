@@ -20,6 +20,10 @@ import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Report.
 /**
  * Immutable record containing all computed benchmark metrics.
  * This is the central data structure shared across all report generators.
+ * <p>
+ * Throughput and latency may be zero: failed or empty benchmark runs are reported
+ * as degraded (F-grade) results instead of crashing report generation.
+ * Negative values are always rejected.
  */
 public record BenchmarkMetrics(
 String throughputBenchmarkName,
@@ -36,11 +40,11 @@ String performanceGrade
         if (latencyBenchmarkName == null || latencyBenchmarkName.isBlank()) {
             throw new IllegalArgumentException(LATENCY_NAME_REQUIRED);
         }
-        if (throughput <= 0) {
-            throw new IllegalArgumentException(THROUGHPUT_POSITIVE + throughput);
+        if (throughput < 0) {
+            throw new IllegalArgumentException(THROUGHPUT_NON_NEGATIVE + throughput);
         }
-        if (latency <= 0) {
-            throw new IllegalArgumentException(LATENCY_POSITIVE + latency);
+        if (latency < 0) {
+            throw new IllegalArgumentException(LATENCY_NON_NEGATIVE + latency);
         }
         if (performanceScore < 0) {
             throw new IllegalArgumentException(SCORE_NON_NEGATIVE + performanceScore);

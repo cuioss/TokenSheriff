@@ -147,7 +147,13 @@ IntegrationConfiguration integrationConfig
     }
 
 
-    private static TimeValue parseTimeValue(String timeStr) {
+    /**
+     * Parses a time value string like {@code "4"} (seconds), {@code "4s"}, {@code "2m"} or {@code "1h"}.
+     *
+     * @param timeStr the time string to parse
+     * @return the parsed time value, defaulting to 1 second for null/empty input
+     */
+    public static TimeValue parseTimeValue(String timeStr) {
         if (timeStr == null || timeStr.isEmpty()) {
             return TimeValue.seconds(1);
         }

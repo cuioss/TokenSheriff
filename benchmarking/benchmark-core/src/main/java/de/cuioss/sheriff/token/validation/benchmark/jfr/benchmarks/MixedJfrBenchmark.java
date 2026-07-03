@@ -74,7 +74,7 @@ public class MixedJfrBenchmark extends AbstractJfrBenchmark {
                 recorder.withError(errorType);
             }
 
-            Object result = errorLoadDelegate0.validateMixed(blackhole);
+            Object result = errorLoadDelegate0.validateMixed(token, blackhole);
             recorder.withSuccess(isValid);
             return result;
         }
@@ -99,7 +99,7 @@ public class MixedJfrBenchmark extends AbstractJfrBenchmark {
                 recorder.withError(errorType);
             }
 
-            Object result = errorLoadDelegate50.validateMixed(blackhole);
+            Object result = errorLoadDelegate50.validateMixed(token, blackhole);
             recorder.withSuccess(isValid);
             return result;
         }
