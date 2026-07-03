@@ -1,0 +1,421 @@
+= Semantic Code Analysis Findings
+:toc: left
+:toclevels: 3
+:sectnums:
+
+== Overview
+
+Semantic analysis of production code — identifying security issues, design problems, dead code, unnecessary complexity, and semantic duplication that automated tools miss.
+
+Maturity: pre-1.0 (0.9.0) — breaking changes are free; recommendations favor removal/fixing over deprecation.
+
+Dimensions: all (security, api, dead-code, duplication, cleanup)
+
+Scope: all `src/main/java` source roots — the shipped modules `token-sheriff-validation` (109 files), `token-sheriff-validation-quarkus` (42), and `token-sheriff-validation-quarkus-deployment` (2), plus the internal tooling in `benchmarking/*` (65) and the sample application in `token-sheriff-quarkus-integration-tests` (3). Test sources (`src/test`) were excluded; findings in non-shipped modules are calibrated to their internal-tooling role.
+
+Date: 2026-07-03
+
+Every finding below was verified by reading the referenced code; caller searches were performed across all modules (including the Quarkus deployment processor's reflective registrations).
+
+== Critical (Security Impact)
+
+No critical findings. The security-sensitive paths were explicitly reviewed and found fail-closed and spec-compliant: DPoP dual-mode default (RFC 9449), htu/htm fail-closed handling, JWE compression-bomb cap and RSA1_5 rejection, ECDH-ES invalid-curve check, AES-CBC-HS constant-time MAC verification, embedded-JWK rejection (CVE-2018-0114), and HS*/none algorithm rejection.
+
+== High (API / Design)
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|H-1
+|`IssuerConfigCache.java:103-107` + `IssuerConfig.java:337-352`
+|The documented "well-known discovery without issuerIdentifier" feature cannot work. The cache constructor calls `config.getIssuerIdentifier()` _before_ triggering `initJWKSLoader()`, and JWKS/well-known loading is fully async. At that moment the loader is never `OK`, so `getIssuerIdentifier()` falls through to `Preconditions.checkState(issuerIdentifier != null, …)` and throws `IllegalStateException` deterministically for any enabled issuer configured only via `wellKnownUrl` — exactly the usage shown in `IssuerConfig`'s class javadoc and explicitly permitted by `validateConfiguration()` ("For HTTP well-known discovery, issuerIdentifier is optional"). `TokenValidator.java:242` repeats the same pattern. The Quarkus layer independently works around this by hard-requiring `issuer-identifier` for well-known (`IssuerConfigResolver.java:473`); no test constructs a validator from a well-known-only config.
+|Either make `issuerIdentifier` mandatory for all loader types and delete the "optional for well-known" branch + javadoc, or key the caches/validator maps only after loading completes. Add a test constructing `TokenValidator` from a well-known-only `IssuerConfig`.
+
+|H-2
+|`IssuerConfigCache.java:112-119, 223-244` vs `HttpJwksLoader.java:121-144`
+|Permanent issuer outage after a transient startup failure. A config enters the cache only inside `future.thenAccept(status -> { if (status == OK) mutableCache.put(…) })`. On initial load failure, `HttpJwksLoader` deliberately returns `UNDEFINED` and starts background refresh "to enable retries" — but `IssuerConfigCache` never re-checks: `checkAndOptimize()` freezes `immutableCache` without the config and clears `loadingFutures`. Even after background refresh succeeds, `resolveConfig()` can never find the issuer again — every token from that issuer fails with `NO_ISSUER_CONFIG` until process restart. Fail-closed, but an IdP briefly unreachable at startup is permanently disabled.
+|On cache miss in `resolveConfig()`, consult the original config list and re-check `getJwksLoader().getLoaderStatus()`, or re-run cache optimization on loader status transitions.
+
+|H-3
+|`IssuerConfigResolver.java:367-401` (quarkus)
+|Silent fail-open for DPoP configuration (false security assumption). `configureDpop()` reads `dpop.required`, `dpop.proof-max-age-seconds`, `dpop.nonce-cache-size`, `dpop.nonce-cache-ttl-seconds` only inside `if (dpopEnabled.isPresent() && TRUE.equals(…))`. An operator who sets `sheriff.token.issuers.<x>.dpop.required=true` without also setting `dpop.enabled=true` gets NO DPoP validation at all — plain bearer tokens are accepted while configuration suggests proof-of-possession is required. No warning, no startup failure.
+|Fail startup (or at minimum WARN via LogRecord) when any `dpop.*` sub-property is configured while `dpop.enabled` is not `true`; or treat `dpop.required=true` as implicitly enabling DPoP.
+
+|H-4
+|`MixedJfrBenchmark.java:64-105` with `ErrorLoadDelegate.java:114-153` (benchmarking)
+|Each benchmark op calls `errorLoadDelegate.selectToken()` to build JFR metadata (payload size, error type, `withSuccess`), then `validateMixed(blackhole)` internally calls `selectToken()` _again_ and validates a different, independently-randomized token. With the 50% error delegate, roughly half the JFR `Operation` events carry success/error labels and payload sizes that do not correspond to the operation actually timed — corrupting the JFR variance analysis this pipeline exists to produce. Same pattern (lower impact) in `ErrorJfrBenchmark.validateValidTokenWithJfr:63-73`.
+|Add a `validateMixed(String token, Blackhole bh)` overload so the token used for metadata is the token validated.
+
+|H-5
+|`WrkBenchmarkConverter.java:195-215` (benchmarking)
+|`ensureStandardPercentiles` fabricates any missing percentile (P0…P99.99) with a crude normal-distribution estimate and inserts it into the same map as genuinely measured wrk percentiles. Downstream report generation cannot distinguish measured from invented values, so published reports can show P99.9/P99.99 latencies that were never measured.
+|Do not synthesize percentiles: leave missing keys absent and render "n/a", or mark estimated values explicitly.
+
+|H-6
+|`ReportDataGenerator.java:177-194` with `BenchmarkMetrics.java:39-44`, `WrkResultPostProcessor.java:146-163` (benchmarking)
+|Every "graceful degradation" path is a guaranteed crash. `extractMetrics` builds `new BenchmarkMetrics("N/A","N/A", 0.0, 0.0, 0, "F")` for null/empty overviews — but the `BenchmarkMetrics` compact constructor throws `IllegalArgumentException` for `throughput <= 0` and `latency <= 0`. A failed wrk run crashes report generation with a confusing validation exception instead of producing the intended F-grade report.
+|Make `BenchmarkMetrics` tolerate zero values, or short-circuit report/badge generation when the overview is empty.
+
+|H-7
+|`JmhBenchmarkConverter.java:226-246` + `MetricsComputer.java:128-141` + `WrkBenchmarkConverter.java:280-293` + `MetricConversionUtil.java:104-112` (benchmarking)
+|Performance score and grade are implemented four times with drift: JmhBenchmarkConverter and MetricsComputer carry byte-identical copies; WrkBenchmarkConverter uses a completely different formula and grade scale (no A+); MetricConversionUtil.calculatePerformanceGrade is a fourth, throughput-only scheme with zero production callers. Micro and integration grades rendered by the same dashboard are not comparable, and a scoring fix must be applied in multiple places.
+|Centralize score/grade in one class (e.g. MetricsComputer), parameterize per benchmark type if formulas must differ, delete `MetricConversionUtil.calculatePerformanceGrade`.
+|===
+
+== Medium (Dead Code / Duplication / Contract Violations)
+
+=== Core module (`token-sheriff-validation`)
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|M-1
+|`TokenSignatureValidator.java:231-245` with `KeyProcessor.java:146-205`
+|Dead algorithm-compatibility logic makes validation over-restrictive. `isAlgorithmCompatible` branches on key-type strings ("RSA"/"EC"), but the value it receives — `keyInfo.get().algorithm()` — is always a JWA id ("RS256", "ES256", "EdDSA"), never a key type. The "RSA"/"EC" branches are unreachable; only exact-match fires. Consequence: an RSA JWKS key whose entry omits `alg` (defaulted to "RS256" by `KeyProcessor:151-153`) REJECTS validly-signed RS384/RS512/PS* tokens. Over-restrictive, not a bypass.
+|Pass the key type (kty) into the check, or rewrite to compare JWA families (RS*/PS* for RSA keys, ES* for EC). Remove the unreachable branches.
+
+|M-2
+|`TokenValidator.java:241-303`
+|Per-issuer validator construction loops iterate ALL `issuerConfigs` with no `isEnabled()` check (unlike `IssuerConfigCache`). `IssuerConfig.build()` skips validation and loader creation for disabled configs, so a disabled config legitimately has `jwksLoader == null` and possibly `issuerIdentifier == null` — calling `getIssuerIdentifier()` at line 242 throws `IllegalStateException`. Merely disabling an issuer (the documented purpose of `enabled(false)`) can crash `TokenValidator` construction. The DPoP loops (284-302) also build validators for unreachable disabled issuers.
+|Filter `issuerConfigs` to enabled ones at the top of the constructor.
+
+|M-3
+|`BaseTokenContent.java:57-58` + `TokenBuilder.java:121-148` + `AccessTokenCache.java:174`
+|Validated token claims are a shared mutable map despite the documented "immutable and thread-safe" contract. `TokenBuilder.extractClaims()` builds a plain `HashMap`, `BaseTokenContent` stores it without copying, and `@Getter getClaims()` exposes it directly. `AccessTokenCache` returns the SAME instance to all threads on cache hits, so any consumer mutating `token.getClaims()` silently alters roles/scopes/groups seen by every subsequent request for that token. `UnvalidatedRefreshToken:67-70` has the same unguarded storage.
+|`Map.copyOf(claims)` in the `BaseTokenContent` and `UnvalidatedRefreshToken` constructors.
+
+|M-4
+|`TokenType.java:52-57`
+|Globally mutable security configuration: `ACCESS_TOKEN`/`ID_TOKEN` mandatory-claim sets are mutable `TreeSet`s exposed verbatim via `@Getter`. Any code executing `TokenType.ACCESS_TOKEN.getMandatoryClaims().clear()` disables mandatory-claims validation JVM-wide (`MandatoryClaimsValidator:65` reads this set on every validation).
+|Wrap in `Collections.unmodifiableSortedSet(…)` in the enum constructor (REFRESH_TOKEN already uses an immutable empty set).
+
+|M-5
+|`UnvalidatedRefreshToken.java:55-63`
+|Credential leak via `toString()`: class-level `@ToString` includes `rawToken` — the refresh token, a long-lived credential — plus all unvalidated claims. Inconsistent with `BaseTokenContent`, which deliberately uses `@ToString.Exclude` on `rawToken`. Any log statement formatting this object writes the refresh token to logs.
+|Add `@ToString.Exclude` on `rawToken` (consider excluding `claims` too).
+
+|M-6
+|`MapRepresentation.java:76-78` + `NonValidatingJwtParser.java:468, 487-492`
+|Charset round-trip bug on the JWT hot path. The parser Base64-decodes header/payload to `String` using UTF-8, then `fromJson(dslJson, String)` re-encodes with `.getBytes()` — the PLATFORM DEFAULT charset. On JVMs where the default is not UTF-8 (Java <18 defaults, or `-Dfile.encoding` overrides), non-ASCII claim values (names, emails) are corrupted. Also a needless bytes→String→bytes conversion per token.
+|Use `getBytes(StandardCharsets.UTF_8)`, or better pass the raw decoded `byte[]` to the existing `fromJson(DslJson, byte[])` overload.
+
+|M-7
+|`domain/claim/mapper/*` + `TokenBuilder.java:130`
+|Inconsistent, contract-breaking malformed-claim handling across the 8 mappers: three throw raw `IllegalArgumentException` on a wrongly-typed claim; the Keycloak mappers silently return `null` (claim vanishes, contradicting their "returns empty list" javadoc); `JsonCollectionMapper` accepts anything via `toString()`. `TokenBuilder.extractClaims` has no catch, so the IAE escapes `TokenValidator.createAccessToken`, whose contract documents only `TokenValidationException` — a signed token with e.g. `"exp": "abc"` produces an uncaught IAE (HTTP 500) instead of a clean validation failure.
+|Wrap `mapper.map(…)` in TokenBuilder and rethrow as `TokenValidationException`; align Keycloak mapper javadoc with actual behavior.
+
+|M-8
+|`MeasurementType.java:159-202`
+|Dead monitoring configuration creating false observability assumptions: 5 of 15 constants (JWKS_OPERATIONS, RETRY_ATTEMPT, RETRY_COMPLETE, RETRY_DELAY, JWE_DECRYPTION) are never recorded anywhere in any module, yet their javadoc asserts they are measured and `doc/validation/architecture.adoc:112` advertises them. Enabling them allocates striped ring buffers that stay permanently empty.
+|Instrument the retry/JWKS/JWE paths or delete the constants and fix architecture.adoc.
+
+|M-9
+|`JWTValidationLogMessages.java:126-130, 133-137, 213-217, 292-296, 341-345, 505-509`
+|Six dead LogRecords with zero production references: JWKS_URI_RESOLVED (INFO-5), RETRY_OPERATION_COMPLETED (INFO-6), UNKNOWN_TOKEN_TYPE (WARN-108), ISSUER_CONFIG_UNHEALTHY (WARN-121), RETRY_OPERATION_FAILED (WARN-129), JWE_COMPRESSION_NOT_SUPPORTED (WARN-156). Notably WARN-156 is dead because `JweDecryptor:113-119` rejects non-DEF compression with a hand-formatted message instead of the LogRecord (violating the project's own CUI logging standards).
+|Delete the six records or wire them at the corresponding code paths (JweDecryptor should use WARN-156).
+
+|M-10
+|`AccessTokenCache.java:314-331` + `AccessTokenCacheConfig.java:88-90, 140-149`
+|Executor ownership violation: `shutdown()` unconditionally shuts down `evictionExecutor`, including a `ScheduledExecutorService` the caller supplied via config — closing a TokenValidator kills a possibly shared, caller-owned executor. Also `getOrCreateScheduledExecutorService()` does not cache what it "creates" — each call mints a new executor.
+|Track whether the executor was internally created and only shut down owned executors; rename or memoize the factory method.
+
+|M-11
+|`JwksParser.java:132-138`
+|Public `parse(Jwks)` overload has zero production callers across all modules — `JWKSKeyLoader` only calls `parse(String)`; the `Jwks`-object path operates on `jwks.keys()` directly. Only other reference is a GraalVM reflection registration (class-level, not method).
+|Remove the unused overload (pre-1.0).
+|===
+
+=== Quarkus modules
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|M-12
+|`META-INF/quarkus-config-doc.adoc:23` vs `IssuerConfigResolver.java:161-166`
+|Documentation/behavior contradiction on the issuer `enabled` default. The shipped config reference documents default `true` and its "Minimal Configuration" example sets no `enabled=true` — but the code defaults to disabled (`.orElse(false)`, "require explicit enabled=true") and then throws `IllegalStateException("No enabled issuer configurations found")`. The documented minimal configuration fails at startup.
+|Fix the adoc: default is `false`; add `enabled=true` to the minimal example. Keep the fail-closed code default.
+
+|M-13
+|`BearerTokenProducer.java:126-134, 168-178`
+|`sheriff.token.token.header` is documented as supporting exactly `Authorization` and `Cookie`, but the value is never validated — it is only compared via `equalsIgnoreCase("Cookie")`. A typo or a custom header name (which the property name invites) silently degrades to Authorization-only behavior with no diagnostic.
+|Validate the value at startup (accept only "Authorization"/"Cookie", fail fast otherwise).
+
+|M-14
+|`JweDecryptionConfigResolver.java:136-139`
+|Inconsistent failure policy in security-critical key loading: `loadKeystoreKey()` logs WARN and returns when `keystore-path` is configured but `key-alias` is missing, while every other key-loading problem is wrapped into a fail-fast `IllegalStateException`. If the keystore is the only key source, the eventual failure reports the misleading generic "At least one decryption key … must be provided"; if a PEM key is also configured, the app starts silently without the keystore key and JWE tokens encrypted for it fail at runtime.
+|Throw `IllegalStateException` naming `sheriff.token.jwe.key-alias`, matching the resolver's fail-fast contract.
+
+|M-15
+|`TokenSheriffProcessor.java:301`
+|Dead CDI registration: `ParserConfigResolver.class` is registered via `AdditionalBeanBuildItem` with `.setUnremovable()`, but the class has no bean-defining annotation and no injection point anywhere — it is only ever instantiated manually (`new ParserConfigResolver(config)` in `TokenValidatorProducer:114`). All sibling resolvers created via `new` are correctly NOT registered.
+|Remove `ParserConfigResolver.class` from `additionalBeans()`.
+|===
+
+=== Benchmarking modules (internal tooling)
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|M-16
+|`PrometheusMetricsManager.java:134-165`, `IntegrationConfiguration.java`, `IterationTimestampParser.java`
+|Dead pipeline: `collectMetricsForResults` early-returns unless `hasIntegrationConfig()`, but `IntegrationConfiguration` is never constructed in production — so JMH-side Prometheus collection can never run. The entire precise-timestamp machinery feeds a dead sink, and the file it parses (`jmh-iteration-timestamps.jsonl`) is produced by a "TimestampProfiler" that does not exist anywhere in the repo. Only the WRK path is live.
+|Wire IntegrationConfiguration into a real runner and add the profiler, or delete IntegrationConfiguration, collectMetricsForResults, processTimestampData and IterationTimestampParser.
+
+|M-17
+|`KeycloakTokenRepository.java`, `TokenProvider.java`, `TokenRepositoryConfig.java:96-145`
+|Dead abstraction + dead configuration: `KeycloakTokenRepository` (235 lines) has zero production callers; no production code consumes the `TokenProvider` interface (`getNextToken()`/`refreshTokens()`/`getTokenPoolSize()` have zero callers — benchmarks use MockTokenRepository's own methods; wrk gets tokens via Lua scripts). `TokenRepositoryConfig`'s `connectionTimeoutMs`/`requestTimeoutMs`/`tokenRefreshThresholdSeconds` are parsed from documented system properties, stored, and never enforced (timeouts hardcoded elsewhere); `tokenPoolSize` javadoc claims default 5000, actual 100.
+|Delete TokenProvider, KeycloakTokenRepository and the unused interface methods; wire or delete the timeout config; fix the javadoc.
+
+|M-18
+|`MetricsTransformer.java` (259 lines), `MetricsJsonExporter.java:108-144, 159-183, 219-268`
+|Dead code: MetricsTransformer is never instantiated in production; MetricsJsonExporter's `exportJwtValidationMetrics`/`exportResourceMetrics` plus helpers have no production callers, and the `"quarkus-metrics.json"` special case has no production writer. `extractTimedMetrics` also fabricates p50/p95/p99 from count/sum/max — if revived it will publish invented percentiles.
+|Delete; if JWT integration metrics export is needed later, rebuild without synthetic percentiles.
+
+|M-19
+|`BenchmarkLoggingSetup.java:43-164`, `JfrSupport.java:27-65`, `AbstractBenchmarkBase.java:44-182`
+|Three dead classes: `BenchmarkLoggingSetup.configureLogging` has zero callers (runners configure logging via the pom's `-Djava.util.logging.config.file` instead — dual-source config); `JfrSupport.isAvailable` is referenced only from javadoc; `AbstractBenchmarkBase` (181-line HTTP-benchmark base) has zero production subclasses, and benchmark-core's `AbstractBenchmark` duplicates its static JUL-init block verbatim instead of extending it.
+|Delete all three (and their tests); deduplicate the static JUL init.
+
+|M-20
+|`JfrInstrumentation.java:109, 164-167`
+|`OperationRecorder.withCached()` has zero callers, so `cacheHits` is never incremented and `OperationStatisticsEvent.cacheHitRate` is always 0.0 — the JFR stream reports a permanently-zero "Cache Hit Rate" that consumers can mistake for a real measurement, even though the validator's cache is active in the benchmarks.
+|Wire cache-hit detection (core exposes cache metrics) or remove withCached/cached/cacheHitRate.
+
+|M-21
+|`ErrorLoadDelegate.java:74-106, 172-187`
+|(a) `createExpiredToken()` signs with a throwaway HS256 key and issuer "benchmark-issuer" — not among the configured issuers — so validation fails at issuer resolution before expiry is ever evaluated: the "expired token" benchmarks actually measure the unknown-issuer path, mislabeling reports and JFR data. (b) `validateExpired/validateMalformed/validateInvalidSignature` silently return the token content if validation _unexpectedly succeeds_ — a validator regression accepting expired/tampered tokens would keep benchmarks green.
+|Build the expired token from a real issuer's RSA key with past `exp`; throw `AssertionError` when a known-bad token validates.
+
+|M-22
+|`PrometheusClient.java:143-160`
+|`parsePrometheusResponse` keeps only `resultArray.get(0)` — for multi-series metrics (e.g. `jvm_memory_used_bytes` with one series per area/id) all but an arbitrary first series are silently dropped. Downstream `findHeapMemory` requires `area="heap"` labels and returns null when the first series is non-heap — heap metrics reported as 0.0 with no warning.
+|Return all series; at minimum log when >1 series is discarded.
+
+|M-23
+|`WrkBenchmarkConverter.java:107-135`, `WrkResultPostProcessor.java:114-190`
+|Fail-open parsing: missing `Requests/sec:`/latency lines silently produce a benchmark with throughput 0 and latency 0; per-file IOExceptions are logged and skipped; the post-processor logs ERROR on missing wrk files/data but continues and exits 0 — a broken benchmark run can be published as a "successful" report. `process()` also parses metadata before validating that inputDir exists.
+|Exit non-zero when no wrk file yields parseable metrics; validate input before metadata parsing.
+
+|M-24
+|`JmhBenchmarkConverter.java:108-127, 175-185, 219-224`, `WrkBenchmarkConverter.java:266-278`, `BadgeGenerator.java:234-258` vs `MetricConversionUtil.java:124-162`
+|Utility reimplementation of the self-declared "SINGLE source of truth": JmhBenchmarkConverter inlines the us/ns/s→ms switch twice instead of calling `convertToMillisecondsPerOp`; `formatThroughput`/`formatLatency` exist in four variants with subtly different rules; ops/ms→ops/s conversion duplicated.
+|Route all unit conversion and display formatting through MetricConversionUtil; delete the private copies.
+
+|M-25
+|`AbstractBenchmarkRunner.java:194-201` + `PrometheusMetricsManager.java:247-254` + `JmhBenchmarkConverter.java:214-217` + `MetricsJsonExporter.java:374-379`; `LibraryMetricsExporter.java:140-146` + `MetricsJsonExporter.java:356-363`
+|"Substring after last dot" benchmark-name extraction implemented four times (two character-identical private methods); `formatNumber` duplicated semantically twice.
+|Move both to a shared util; delete the copies.
+
+|M-26
+|`BenchmarkMetricsTransformer.java:263-305`, `JfrVarianceAnalyzer.java:221-259` vs `StatisticsCalculator.java`
+|StatisticsCalculator is the designated statistics utility, yet two other classes privately reimplement mean/max/stddev/percentile (including a shadowing `Statistics` holder) with _different percentile index formulas_ — three sets of statistics code that already disagree.
+|Extend StatisticsCalculator with a percentile function; use it from both classes.
+
+|M-27
+|`ReportDataGenerator.java:102-163, 389-401`, `HistoricalDataManager.java:161-168` vs `TrendDataProcessor.java:84-97, 256-329`, `OutputDirectoryStructure.java:77, 128-131`
+|History handling is dual-sourced and lossy: (a) trend chart data honors `benchmark.history.dir` while archive + trend badge always use `outputDir/history` — with an external dir set, chart and badge are computed from different histories; (b) history is archived inside the deployable GitHub Pages tree while `OutputDirectoryStructure` documents a non-deployed location (its `getHistoryDir()` has zero callers); (c) `convertOverview` archives only formatted display strings, so trend analysis regex-parses "1.5K ops/s" back to numbers — and a latency formatted "1.5s" parses as 1.5 ms, silently skewing latency trends 1000x for slow runs; (d) `extractTimestamp` is copy-pasted between the two classes, which sort files by different keys.
+|Route history paths through OutputDirectoryStructure; archive numeric fields in the overview; merge the file-listing logic into HistoricalDataManager.
+
+|M-28
+|`BenchmarkResultProcessor.java:141-165` with `ReportGenerator.java:116-129` and `GitHubPagesGenerator.java:85-105, 219-227`
+|robots.txt and sitemap.xml are generated twice per run into the same deployment directory (once by each generator, from identical classpath templates, with duplicated private `loadTemplate` logic). Same double-write in the WRK path.
+|Generate deployment assets in exactly one generator; extract a shared template-loading helper.
+
+|M-29
+|`AbstractBenchmarkRunner.java:321-327`
+|`buildCommonOptions` forwards _every_ parent system property to forked JVMs as `-D` args. Keycloak credentials supplied the documented way (`-Dtoken.keycloak.password=…`, `-Dtoken.keycloak.clientSecret=…`) become visible in `ps` output and JMH's logged fork command line — a credential-leak vector in CI logs. Also blindly forwards multi-line properties.
+|Forward an explicit allowlist (jmh.*, benchmark.*, token.*, integration.*) and mask secret-bearing keys.
+
+|M-30
+|`BenchmarkingLogMessages.java` (902 lines), `BenchmarkConstants.java` (496 lines)
+|Dead declarations at scale: 27 of 118 LogRecord constants and 29 of 185 BenchmarkConstants have zero production references — including `Badge.FileNames.PERFORMANCE_BADGE_JSON`/`TREND_BADGE_JSON`, whose values `BenchmarkType` re-hardcodes as string literals (drift risk), and `Metrics.BearerToken.*`, whose real metric names are hardcoded elsewhere.
+|Delete the unused declarations; make BenchmarkType use the Badge.FileNames constants.
+
+|M-31
+|Multiple (see issue)
+|Dead public API cluster (all verified zero production callers): `BenchmarkConverter.canConvert` + both implementations; `OutputDirectoryStructure.getHistoryDir/getWrkDir/cleanDeploymentDirectory/isDeploymentDirectoryExists`; `HistoricalDataManager.getHistoricalFiles`; `IterationTimestampParser.IterationWindow.isMeasurement`; `BadgeGenerator.writeBadgeFiles` 3-arg overload; `BenchmarkConfiguration.defaults()/toBuilder()`; `JmhBenchmarkConverter` 2-arg constructor; `JfrVarianceAnalyzer.VarianceReport.getOperationMetrics`; `JsonSerializationHelper.writeJsonFile/readJsonFile/toCompactJson/jsonToListOfMaps/toJsonTree/formatDouble` + `COMPACT_GSON`; four fully-unused `WrkResultPostProcessor` constants.
+|Delete these members (pre-1.0, internal tooling); narrow test-only constants to test fixtures.
+
+|M-32
+|`ConcurrencySweepRunner.java:56-102` vs `benchmark-core/pom.xml:222-230`
+|Unlike the sibling runners, this entry point bypasses `AbstractBenchmarkRunner` and hardcodes JMH parameters that duplicate the pom's `jmh.*` properties — the pom's `-Djmh.*` args passed to it are silently ignored, so tuning profile properties does not affect the concurrency sweep. It also writes to its own hardcoded output dir.
+|Read the same jmh.* system properties (or extend AbstractBenchmarkRunner with a thread-count loop).
+|===
+
+== Low (Cleanup)
+
+[cols="1,3,4,3"]
+|===
+|ID |Location |Issue |Recommendation
+
+|L-1
+|`HttpJwksLoaderConfig.java:308-318`
+|Builder javadoc for `keyRotationGracePeriod` states "Defaults to 1 hour" but the actual default is 5 minutes (`DEFAULT_KEY_ROTATION_GRACE_PERIOD`, line 69). Stale doc on a security-relevant timing parameter.
+|Correct to "Defaults to 5 minutes".
+
+|L-2
+|`JwkAlgorithmPreferences.java:59-61` vs `SignatureAlgorithmPreferences.java:65-73`
+|Inconsistent input validation between the two mirrored preference classes: SignatureAlgorithmPreferences rejects HS*/none in custom lists; JwkAlgorithmPreferences performs no validation at all.
+|Document why JWK preferences need no rejection filter, or add symmetric validation.
+
+|L-3
+|`JwksParser.java:178-248`
+|Redundant validation: null/empty-keys checks performed three times across `extractKeys`, `validateJwksStructure`, `extractKeysFromArray`, with `JWKS_KEYS_ARRAY_EMPTY` emitted from two places.
+|Consolidate into a single validation method.
+
+|L-4
+|`DecodedJwt.java:75-85, 130-172`
+|Compact constructor tolerates `parts == null` and downstream methods defend with `IllegalStateException`, but all production constructions pass a guaranteed 3-element array — unreachable defensive code hiding the true invariant.
+|`Objects.requireNonNull(parts)` in the constructor; drop the downstream null checks.
+
+|L-5
+|`TokenValidatorMonitorConfig.java:117-126`
+|`defaultEnabled()` has zero production callers (test-only public API); its javadoc is self-contradictory ("monitors no measurement types" vs "@return configuration with all measurement types enabled").
+|Remove, or fix the javadoc if kept.
+
+|L-6
+|`JwkKey.java:63-127`
+|5 of 13 public Optional-wrapper getters (`getKty/getN/getE/getX/getY`) have zero production callers — they duplicate the record accessors.
+|Delete the unused wrappers.
+
+|L-7
+|`ParserConfig.java:98-121`, `AccessTokenCacheConfig.java:88-89`, `ClaimValueType.java:27-28`
+|Dead Lombok annotations: three `@Builder.Default` without `@Builder` (hand-written builder — no-ops); `@EqualsAndHashCode.Exclude` without `@EqualsAndHashCode`; `@Getter @RequiredArgsConstructor` on a field-less enum.
+|Remove the inert annotations.
+
+|L-8
+|`IssuerConfigCache.java:50-51, 168, 187`
+|`@EqualsAndHashCode`/`@ToString` over mutable cache maps is meaningless and its output is what `TOKEN_FACTORY_INITIALIZED` logs; hardcoded magic `future.get(5, TimeUnit.SECONDS)`; unreachable-throw idiom after `handleIssuerNotFound`.
+|Drop the Lombok equality, extract a named constant for the wait, make `handleIssuerNotFound` return the exception.
+
+|L-9
+|`ValidationContext.java:87-100`
+|The 3-arg constructor is documented "for testing purposes" but is the primary PRODUCTION constructor (both pipelines use it); the 2-arg "production" one is the convenience variant.
+|Fix the javadoc; reconsider whether the 2-arg constructor earns its place.
+
+|L-10
+|`cache/package-info.java:27`, `JWTValidationLogMessages.java:207-211`, `TokenValidator.java:120-123`, `UnvalidatedRefreshToken.java:81`, `IssuerConfig.java:365`
+|Documentation drift cluster: (1) cache docs claim "LRU eviction" but `enforceSize()` evicts by arbitrary iteration order; (2) WARN-107 hardcodes "more than 60 seconds" while clock skew is per-issuer configurable; (3) TokenValidator/TokenValidatorMonitor javadoc examples don't compile (Optional return, package-private constructor); (4) `getClaims()` javadoc says "(package-private access)" but is public; (5) `IssuerConfig.getLoaderStatus()` javadoc claims lazy loading — actual implementation is a pure atomic read.
+|Align the five doc statements with behavior; parameterize WARN-107 with effective skew.
+
+|L-11
+|`CachedToken.java:71-73` vs `ValidationContext.java:123-125`; `AccessTokenCache.java:341-350` vs `JwkThumbprintUtil.java:113-119`; Keycloak mappers
+|Semantic duplication within core: clock-skew expiration predicate implemented twice (cache vs pipeline can drift on boundary semantics); SHA-256 helper with identical exception wrapping implemented twice; the two Keycloak mappers share an identical extract-list→ClaimValue tail.
+|Share a static expiry predicate; extract a `Sha256` util and a `toListClaim` helper.
+
+|L-12
+|`JsonCollectionMapper.java:52-60`, `MapRepresentation.java:60-62, 209-216`, `StringSplitterMapper.java:56-60`, `JwtHeader.java:87-125`
+|Minor robustness: pseudo-JSON reconstruction with naive quoting (no escaping); null-coalescing compact constructor hides caller bugs; `getStringList` silently drops non-String array elements; SPI accepts null `Character` (late NPE); blank-filtering inconsistent across JwtHeader accessors; `isJwe()` duplicates `getEnc().isPresent()`.
+|Proper JSON escaping; reject null in constructors; unify blank-filtering; implement `isJwe()` via `getEnc()`.
+
+|L-13
+|`IssuerConfig.java:105-121, 512-515, 572-575`
+|Documented "immutable after construction" but fields are package-private non-final, and builder-provided `expectedAudience`/`expectedClientId`/`claimMappers` collections are stored without defensive copy — the caller retains a mutable reference. `@EqualsAndHashCode` over a stateful `JwksLoader` is dubious.
+|Make fields final; copy collections with `Set.copyOf`/`Map.copyOf`.
+
+|L-14
+|`TokenValidatorHealthCheck.java:53-56`, `JwksEndpointHealthCheck.java:88-94`, `TokenSheriffDevUIRuntimeService.java:78-99, 186-264` (quarkus)
+|Unreachable "no issuers / JWT disabled" branches: the only producer of `List<IssuerConfig>` throws at startup when zero enabled issuers exist, so the injected list can never be empty — the health checks' empty-list DOWN branch and the DevUI's entire "JWT validation is disabled" handling can never execute.
+|Remove the dead branches, or support a real "zero issuers = disabled" mode so the states become truthful.
+
+|L-15
+|`BearerTokenProducer.java:405-427` (quarkus)
+|`producePrincipal()` calls `produceJsonWebToken()` directly instead of the `@RequestScoped` bean, so injecting both `Principal` and `JsonWebToken` triggers two full validations per request. Mitigated by the access-token cache, but the cache can be disabled.
+|Delegate to the request-scoped JsonWebToken bean.
+
+|L-16
+|`JwtMetricsCollector.java:102-117, 188-243` (quarkus)
+|(a) `initialize()` baselines counters before first export, permanently dropping events counted between validator creation and collector init; (b) negative deltas (external counter reset) silently under-report until the count re-exceeds the stale baseline; (c) `clear()` is test-only production code.
+|Start baselines at 0, handle negative deltas by resetting the baseline, move `clear()` into the test.
+
+|L-17
+|`ClientIpExtractor.java:130-148` (quarkus)
+|RFC 7239 `Forwarded` parsing mangles IPv6: `for="[2001:db8::17]:4711"` → brackets stripped → `split(":")[0]` → logs `2001`. Every IPv6 value is truncated at the first colon. Impact limited to access-log accuracy.
+|Strip the port only for bracket-form or single-colon IPv4:port values.
+
+|L-18
+|`CustomAccessLogFilter.java:147-169, 191-195` (quarkus)
+|URL paths matched with filesystem `PathMatcher` via `Path.of(path)` per request — allocation, potential `InvalidPathException` (→ 500 from a response filter) for platform-invalid characters, and OS-specific glob semantics applied to URLs. Filter is default-disabled, limiting exposure.
+|Translate globs to precompiled regexes at construction; never call `Path.of` on request data.
+
+|L-19
+|`IssuerConfigResolver.java:236-280`, `AccessLogFilterConfigResolver.java:89-113`, `JweDecryptionConfigResolver.java:204-209`, `IssuerConfigResolver.java:136-153` + `JweDecryptionConfigResolver.java:179-195` (quarkus)
+|Semantic duplication: "split on comma, trim, collect" implemented five times with drifting empty-segment semantics (some filter, some don't) although MP Config provides native list conversion; prefix-scan name discovery (`discoverIssuerNames`/`discoverMultiKeyPaths`) implemented twice with identical logic.
+|Use MP Config's list conversion or one shared `splitCsv`; extract a shared `discoverNameSegments(Config, prefix)`.
+
+|L-20
+|`RetryStrategyConfigResolver.java:53-89` (quarkus)
+|Hardcodes retry defaults in `.orElse()` — duplicating values also stated in JwtPropertyKeys javadoc and quarkus-config-doc.adoc (four drift-prone places), while sibling resolvers delegate defaults to the core builder. Javadoc says disabled retry returns "maxAttempts=0"; code uses 1.
+|Delegate defaults to the RetryConfig builder via `ifPresent`; fix the javadoc.
+
+|L-21
+|`BearerTokenResponseFactory.java:141-180` (quarkus)
+|Documented, deliberate RFC 6750 deviation worth a pre-1.0 decision: missing-scope violations return 401 `insufficient_scope` (RFC 9470 step-up rationale) while RFC 6750 §3.1 normatively maps it to 403. Strict clients may misinterpret the 401 as an authentication failure.
+|Decide before 1.0: switch to 403, or make it configurable; document the deviation in user-facing docs (currently only code comments).
+
+|L-22
+|`BenchmarkKeyCache.java:51-62` (benchmarking)
+|Static initializer eagerly generates issuer key material for every count 1..10 (55 RSA keypairs) at class load; production only ever requests count 3 — ~95% wasted startup work.
+|Generate lazily via `computeIfAbsent`; keep the warm-up for count 3.
+
+|L-23
+|`MetricsJsonExporter.java:191-217` (benchmarking)
+|`readExistingMetrics` reacts to a JSON parse failure by _deleting_ the aggregated metrics file — destructive recovery that silently discards accumulated data on transient corruption.
+|Rename the corrupt file aside (`.corrupt`) and log WARN with the preserved path.
+
+|L-24
+|`IterationTimestampParser.java:76-115` (benchmarking)
+|Unguarded `node.get(…)` dereferences: a JSON line missing a field throws NPE, which the per-line catch does not cover — one bad line aborts the whole file. Moot in practice (dead pipeline, see M-16), which argues for deletion.
+|Delete with M-16; if kept, guard per line and collapse the pointless two-arg overload.
+
+|L-25
+|`ReportConfiguration.java:86-115` (benchmarking)
+|Getter with filesystem side effects whose mkdirs-failure branch is an empty if-block; unreachable null-check on `benchmarkType`; builder reads `jmh.result.format` at construction time so the "default" varies with JVM state, unlike all other jmh.* properties.
+|Log/throw on mkdirs failure; drop the dead check; read the property in BenchmarkConfiguration.
+
+|L-26
+|`HttpClientFactory.java:60-79`, `MockTokenRepository.java:169-175` (benchmarking)
+|Opaque `getClient(boolean verifySsl)` whose only (test-only-reachable) caller is dead code, and whose `true` branch builds an uncached client per call; `createTokenValidator(monitorConfig, config)` takes a Config parameter although the instance stores an identical one — dual-source risk.
+|Remove `getClient(boolean)` (or cache both variants); drop the Config parameter.
+
+|L-27
+|`WrkResultPostProcessor.java:357-387` (benchmarking)
+|`findMetadataForBenchmark` falls back to bidirectional substring matching and finally "if only one benchmark, use it" — overlapping names (e.g. "healthCheck" vs "healthLiveCheck", which the converter produces) can attach the wrong Prometheus window to a benchmark without warning.
+|Match exact normalized names only; log and skip when ambiguous.
+
+|L-28
+|`jfr/package-info.java:41-43`, `MockTokenRepository.java:64`, `JmhBenchmarkConverter.java:151` + `WrkBenchmarkConverter.java:225` vs `BenchmarkConstants.Report.Versions` (benchmarking)
+|Stale docs/constants: package-info references classes that don't exist (`JfrEventTest`, `JfrConfiguration`); token-count comment wrong (600/"20 per issuer" vs actual 200/issuer); both converters hardcode reportVersion "2.0" while the (unused) constant declares "1.0", and both hardcode the timestamp pattern instead of `DateFormats.DISPLAY_TIMESTAMP_PATTERN`; the two `createMetadata()` bodies are identical except two fields.
+|Fix comments, delete or update REPORT_VERSION, use the shared pattern constant, extract the shared metadata helper.
+|===
+
+== Summary
+
+[cols="1,1,3"]
+|===
+|Severity |Count |Key Theme
+
+|Critical
+|0
+|Security-critical paths (DPoP, JWE, JWKS, signature validation) verified fail-closed and RFC-compliant.
+
+|High
+|7
+|Broken documented feature + permanent-outage bug in issuer config caching (core); silent DPoP config fail-open (Quarkus); fabricated/mislabeled data in published benchmark results (benchmarking).
+
+|Medium
+|32
+|Contract violations in shipped code (mutable shared claims, credential-leaking toString, charset bug, over-restrictive algorithm check); doc/behavior contradictions; large volumes of dead code and drifting duplication in benchmarking tooling.
+
+|Low
+|28
+|Documentation drift, inert annotations, unreachable defensive code, small semantic duplications, robustness nits.
+|===
+
+Total: 67 findings across all production modules (~37k LOC).
+
+Notably clean areas: `dpop`, `jwe`, `wellknown`, `exception`, `domain/context`, `util` (DER conversion and RFC 7638 thumbprint logic verified correct) in core; interceptor/servlet/registry packages in Quarkus; the JFR event model and the two simple JMH benchmark classes in benchmarking.
