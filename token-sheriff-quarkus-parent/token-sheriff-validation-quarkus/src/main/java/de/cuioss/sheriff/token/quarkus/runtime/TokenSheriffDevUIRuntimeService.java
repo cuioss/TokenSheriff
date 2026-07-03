@@ -41,7 +41,6 @@ import java.util.*;
 public class TokenSheriffDevUIRuntimeService {
 
     // String constants for commonly used literals
-    private static final String JWT_VALIDATION_DISABLED = "JWT validation is disabled";
     private static final String MESSAGE = "message";
     private static final String VALID = "valid";
     private static final String ERROR = "error";
@@ -76,19 +75,13 @@ public class TokenSheriffDevUIRuntimeService {
      */
    
     public Map<String, Object> getValidationStatus() {
+        // JWT validation is always active when this service exists: TokenValidatorProducer
+        // fails application startup when no enabled issuer is configured.
         Map<String, Object> status = new HashMap<>();
-
-        boolean isEnabled = isJwtEnabled();
-        status.put("enabled", isEnabled);
+        status.put("enabled", true);
         status.put("validatorPresent", true);
-        status.put("status", isEnabled ? "ACTIVE" : "INACTIVE");
-
-        if (isEnabled) {
-            status.put("statusMessage", "JWT validation is active and ready");
-        } else {
-            status.put("statusMessage", JWT_VALIDATION_DISABLED);
-        }
-
+        status.put("status", "ACTIVE");
+        status.put("statusMessage", "JWT validation is active and ready");
         return status;
     }
 
@@ -101,8 +94,8 @@ public class TokenSheriffDevUIRuntimeService {
     public Map<String, Object> getJwksStatus() {
         Map<String, Object> jwksInfo = new HashMap<>();
 
-        boolean hasIssuers = !issuerConfigs.isEmpty();
-        jwksInfo.put("status", hasIssuers ? "CONFIGURED" : "NO_ISSUERS");
+        // The produced issuer config list is guaranteed non-empty (startup fails otherwise)
+        jwksInfo.put("status", "CONFIGURED");
 
         // Build issuers array with details for each configured issuer
         List<Map<String, Object>> issuers = new ArrayList<>();
@@ -130,8 +123,7 @@ public class TokenSheriffDevUIRuntimeService {
     public Map<String, Object> getConfiguration() {
         Map<String, Object> configMap = new HashMap<>();
 
-        boolean isEnabled = isJwtEnabled();
-        configMap.put("enabled", isEnabled);
+        configMap.put("enabled", true);
         configMap.put("logLevel", "INFO");
 
         // Parser configuration section — values from actual runtime config
@@ -139,12 +131,9 @@ public class TokenSheriffDevUIRuntimeService {
         parser.put("maxTokenSize", parserConfig.getMaxTokenSize());
         parser.put("maxPayloadSize", parserConfig.getMaxPayloadSize());
         parser.put("maxStringLength", parserConfig.getMaxStringLength());
-        // Clock skew is per-issuer; show first issuer's value or builder default
-        // (IssuerConfig.IssuerConfigBuilder.clockSkewSeconds defaults to 60)
-        int clockSkew = issuerConfigs.isEmpty()
-                ? IssuerConfig.DEFAULT_CLOCK_SKEW_SECONDS
-                : issuerConfigs.getFirst().getClockSkewSeconds();
-        parser.put("clockSkewSeconds", clockSkew);
+        // Clock skew is per-issuer; show the first issuer's value
+        // (the produced issuer config list is guaranteed non-empty)
+        parser.put("clockSkewSeconds", issuerConfigs.getFirst().getClockSkewSeconds());
         configMap.put("parser", parser);
 
         // HTTP JWKS loader configuration section — approximate defaults from HttpHandler (external library)
@@ -193,11 +182,6 @@ public class TokenSheriffDevUIRuntimeService {
             return result;
         }
 
-        if (!isJwtEnabled()) {
-            result.put(ERROR, JWT_VALIDATION_DISABLED);
-            return result;
-        }
-
         try {
             // Only validate as access token
             TokenContent tokenContent = tokenValidator.createAccessToken(AccessTokenRequest.of(token.trim()));
@@ -237,30 +221,13 @@ public class TokenSheriffDevUIRuntimeService {
      */
    
     public Map<String, Object> getHealthInfo() {
+        // Configuration is always valid when this service exists: TokenValidatorProducer
+        // fails application startup when no enabled issuer is configured.
         Map<String, Object> health = new HashMap<>();
-
-        boolean configValid = isJwtEnabled();
-        health.put("configurationValid", configValid);
-
-        if (configValid) {
-            health.put(MESSAGE, "All JWT components are healthy and operational");
-            health.put(HEALTH_STATUS, "UP");
-        } else {
-            health.put(MESSAGE, "JWT validation is disabled or misconfigured");
-            health.put(HEALTH_STATUS, "DOWN");
-        }
-
+        health.put("configurationValid", true);
+        health.put(MESSAGE, "All JWT components are healthy and operational");
+        health.put(HEALTH_STATUS, "UP");
         return health;
-    }
-
-    /**
-     * Helper method to determine if JWT validation is enabled.
-     * JWT is considered enabled if there are any enabled issuers configured.
-     *
-     * @return true if JWT validation is enabled, false otherwise
-     */
-    private boolean isJwtEnabled() {
-        return !issuerConfigs.isEmpty();
     }
 
 }

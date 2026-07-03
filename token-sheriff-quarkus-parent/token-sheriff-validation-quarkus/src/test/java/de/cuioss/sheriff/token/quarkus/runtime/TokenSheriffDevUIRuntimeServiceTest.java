@@ -349,27 +349,6 @@ class TokenSheriffDevUIRuntimeServiceTest {
         }
 
         @Test
-        @DisplayName("Should handle service with no enabled issuers")
-        void shouldHandleServiceWithNoEnabledIssuers() {
-            // Create a service with no enabled issuers - use empty list directly
-            // since IssuerConfigResolver throws exception when no enabled issuers are found
-            List<IssuerConfig> issuerConfigList = List.of(); // Empty list represents no enabled issuers
-            TokenSheriffDevUIRuntimeService testService = new TokenSheriffDevUIRuntimeService(tokenValidator, issuerConfigList, ParserConfig.builder().build());
-
-            Map<String, Object> validationStatus = testService.getValidationStatus();
-            Map<String, Object> configuration = testService.getConfiguration();
-
-            // With no enabled issuers, JWT should be disabled
-            Boolean jwtEnabled = (Boolean) validationStatus.get("enabled");
-            @SuppressWarnings("unchecked")
-            Map<String, Object> issuersMap = (Map<String, Object>) configuration.get("issuers");
-
-            assertFalse(jwtEnabled, "JWT should be disabled with no enabled issuers");
-            assertTrue(issuersMap.isEmpty(), "Should have zero issuers");
-            assertEquals("JWT validation is disabled", validationStatus.get("statusMessage"));
-        }
-
-        @Test
         @DisplayName("Should handle service with multiple issuers")
         void shouldHandleServiceWithMultipleIssuers() {
             // Create a service with multiple issuers
@@ -386,42 +365,16 @@ class TokenSheriffDevUIRuntimeServiceTest {
         }
 
         @Test
-        @DisplayName("Should validate token rejection with disabled JWT")
-        void shouldValidateTokenRejectionWithDisabledJwt() {
-            // Create a service with no enabled issuers - use empty list directly
-            // since IssuerConfigResolver throws exception when no enabled issuers are found
-            List<IssuerConfig> issuerConfigList = List.of(); // Empty list represents no enabled issuers
-            TokenSheriffDevUIRuntimeService testService = new TokenSheriffDevUIRuntimeService(tokenValidator, issuerConfigList, ParserConfig.builder().build());
-
-            // Try to validate a token
-            String token = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0.signature";
-            Map<String, Object> result = testService.validateToken(token);
-
-            // Should be rejected due to disabled JWT
-            Boolean tokenValid = (Boolean) result.get("valid");
-            assertFalse(tokenValid, "Token should be invalid when JWT is disabled");
-            assertEquals("JWT validation is disabled", result.get("error"));
-        }
-
-        @Test
-        @DisplayName("Should determine health based on different configurations")
+        @DisplayName("Should report healthy state for enabled configuration")
         void shouldDetermineHealthBasedOnDifferentConfigurations() {
-            // Test with enabled configuration
+            // With a produced (guaranteed non-empty) issuer list, health is always UP —
+            // startup fails before this service exists when no enabled issuer is configured
             TokenSheriffDevUIRuntimeService enabledService = new TokenSheriffDevUIRuntimeService(tokenValidator, issuerConfigs, ParserConfig.builder().build());
 
             Map<String, Object> enabledHealth = enabledService.getHealthInfo();
             Boolean configurationValid = (Boolean) enabledHealth.get("configurationValid");
             assertTrue(configurationValid, "Configuration should be valid with enabled issuer");
-
-            // Test with disabled configuration - use empty list directly
-            // since IssuerConfigResolver throws exception when no enabled issuers are found
-            List<IssuerConfig> disabledIssuerConfigs = List.of(); // Empty list represents no enabled issuers
-            TokenSheriffDevUIRuntimeService disabledService = new TokenSheriffDevUIRuntimeService(tokenValidator, disabledIssuerConfigs, ParserConfig.builder().build());
-
-            Map<String, Object> disabledHealth = disabledService.getHealthInfo();
-            Boolean disabledConfigurationValid = (Boolean) disabledHealth.get("configurationValid");
-            assertFalse(disabledConfigurationValid, "Configuration should be invalid with no enabled issuers");
-            assertEquals("DOWN", disabledHealth.get("healthStatus"), "Health should be DOWN with invalid configuration");
+            assertEquals("UP", enabledHealth.get("healthStatus"), "Health should be UP");
         }
     }
 
@@ -432,16 +385,16 @@ class TokenSheriffDevUIRuntimeServiceTest {
         @Test
         @DisplayName("Should create service with minimal dependencies")
         void shouldCreateServiceWithMinimalDependencies() {
-            // This tests the constructor's robustness with empty issuer configs
-            assertDoesNotThrow(() -> new TokenSheriffDevUIRuntimeService(null, List.of(), ParserConfig.builder().build()),
-                    "Constructor should not throw exception with null tokenValidator and empty issuerConfigs");
+            // The constructor performs no validation — it only stores its dependencies
+            assertDoesNotThrow(() -> new TokenSheriffDevUIRuntimeService(null, issuerConfigs, ParserConfig.builder().build()),
+                    "Constructor should not throw exception with null tokenValidator");
         }
 
         @Test
         @DisplayName("Should create service with valid dependencies")
         void shouldCreateServiceWithValidDependencies() {
             // Test constructor with actual dependencies
-            TokenSheriffDevUIRuntimeService testService = new TokenSheriffDevUIRuntimeService(tokenValidator, List.of(), ParserConfig.builder().build());
+            TokenSheriffDevUIRuntimeService testService = new TokenSheriffDevUIRuntimeService(tokenValidator, issuerConfigs, ParserConfig.builder().build());
             assertNotNull(testService, "Service should be created successfully with valid dependencies");
 
             // Verify the service can perform basic operations
@@ -449,25 +402,6 @@ class TokenSheriffDevUIRuntimeServiceTest {
                     "Service should be able to get validation status");
             assertDoesNotThrow(testService::getConfiguration,
                     "Service should be able to get configuration");
-        }
-
-        @Test
-        @DisplayName("Should handle mixed null and valid dependencies")
-        void shouldHandleMixedNullAndValidDependencies() {
-            // Test with null tokenValidator but valid issuerConfigs
-            assertDoesNotThrow(() -> new TokenSheriffDevUIRuntimeService(null, List.of(), ParserConfig.builder().build()),
-                    "Constructor should handle null tokenValidator with empty issuerConfigs");
-
-            // Test with valid tokenValidator and empty issuerConfigs
-            assertDoesNotThrow(() -> new TokenSheriffDevUIRuntimeService(tokenValidator, List.of(), ParserConfig.builder().build()),
-                    "Constructor should handle valid tokenValidator with empty issuerConfigs");
-
-            // Verify services can be created in both scenarios
-            TokenSheriffDevUIRuntimeService service1 = new TokenSheriffDevUIRuntimeService(null, List.of(), ParserConfig.builder().build());
-            TokenSheriffDevUIRuntimeService service2 = new TokenSheriffDevUIRuntimeService(tokenValidator, List.of(), ParserConfig.builder().build());
-
-            assertNotNull(service1, "Service should be created with null tokenValidator");
-            assertNotNull(service2, "Service should be created with valid tokenValidator");
         }
     }
 

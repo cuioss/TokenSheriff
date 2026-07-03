@@ -27,8 +27,10 @@ import org.eclipse.microprofile.config.Config;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Duration;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INFO;
 
@@ -134,20 +136,8 @@ public class IssuerConfigResolver {
      * @return set of discovered issuer names
      */
     private Set<String> discoverIssuerNames() {
-        Set<String> issuerNames = new HashSet<>();
-        String basePrefix = JwtPropertyKeys.PREFIX + ".issuers.";
-
-        for (String propertyName : config.getPropertyNames()) {
-            if (propertyName.startsWith(basePrefix)) {
-                String remainder = propertyName.substring(basePrefix.length());
-                int firstDot = remainder.indexOf('.');
-                if (firstDot > 0) {
-                    String issuerName = remainder.substring(0, firstDot);
-                    issuerNames.add(issuerName);
-                }
-            }
-        }
-
+        Set<String> issuerNames = ConfigValueParser.discoverNameSegments(
+                config, JwtPropertyKeys.PREFIX + ".issuers.");
         LOGGER.debug("Discovered issuer names: %s", issuerNames);
         return issuerNames;
     }
@@ -233,9 +223,7 @@ public class IssuerConfigResolver {
         );
 
         if (audienceString.isPresent()) {
-            Set<String> audiences = Arrays.stream(audienceString.get().split(","))
-                    .map(String::trim)
-                    .collect(Collectors.toSet());
+            List<String> audiences = ConfigValueParser.splitCsv(audienceString.get());
             audiences.forEach(builder::expectedAudience);
             LOGGER.debug("Set expected audiences for %s: %s", issuerName, audiences);
         }
@@ -257,9 +245,7 @@ public class IssuerConfigResolver {
         );
 
         if (clientIdString.isPresent()) {
-            Set<String> clientIds = Arrays.stream(clientIdString.get().split(","))
-                    .map(String::trim)
-                    .collect(Collectors.toSet());
+            List<String> clientIds = ConfigValueParser.splitCsv(clientIdString.get());
             clientIds.forEach(builder::expectedClientId);
             LOGGER.debug("Set expected client IDs for %s: %s", issuerName, clientIds);
         }
@@ -275,9 +261,7 @@ public class IssuerConfigResolver {
         );
 
         if (algorithmsString.isPresent()) {
-            List<String> algorithms = Arrays.stream(algorithmsString.get().split(","))
-                    .map(String::trim)
-                    .collect(Collectors.toList());
+            List<String> algorithms = ConfigValueParser.splitCsv(algorithmsString.get());
 
             SignatureAlgorithmPreferences preferences = new SignatureAlgorithmPreferences(algorithms);
 
@@ -363,40 +347,77 @@ public class IssuerConfigResolver {
 
     /**
      * Configures DPoP (Demonstrating Proof of Possession) settings per RFC 9449.
+     * <p>
+     * DPoP is only activated when {@code dpop.enabled=true}. If any other
+     * {@code dpop.*} sub-property is configured without {@code dpop.enabled=true},
+     * an {@link IllegalStateException} is thrown at startup to prevent silently
+     * disabled DPoP validation.
+     * </p>
+     *
+     * @throws IllegalStateException if a dpop sub-property is configured while DPoP is not enabled
      */
     private void configureDpop(IssuerConfig.IssuerConfigBuilder builder, String issuerName) {
-        Optional<Boolean> dpopEnabled = config.getOptionalValue(
+        boolean dpopEnabled = config.getOptionalValue(
                 JwtPropertyKeys.ISSUERS.DPOP_ENABLED.formatted(issuerName),
                 Boolean.class
-        );
+        ).orElse(false);
 
-        if (dpopEnabled.isPresent() && Boolean.TRUE.equals(dpopEnabled.get())) {
-            DpopConfig.DpopConfigBuilder dpopBuilder = DpopConfig.builder();
+        if (!dpopEnabled) {
+            validateNoOrphanedDpopProperties(issuerName);
+            return;
+        }
 
-            config.getOptionalValue(
-                    JwtPropertyKeys.ISSUERS.DPOP_REQUIRED.formatted(issuerName),
-                    Boolean.class
-            ).ifPresent(dpopBuilder::required);
+        DpopConfig.DpopConfigBuilder dpopBuilder = DpopConfig.builder();
 
-            config.getOptionalValue(
-                    JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS.formatted(issuerName),
-                    Long.class
-            ).ifPresent(dpopBuilder::proofMaxAgeSeconds);
+        config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.DPOP_REQUIRED.formatted(issuerName),
+                Boolean.class
+        ).ifPresent(dpopBuilder::required);
 
-            config.getOptionalValue(
-                    JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE.formatted(issuerName),
-                    Integer.class
-            ).ifPresent(dpopBuilder::nonceCacheSize);
+        config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS.formatted(issuerName),
+                Long.class
+        ).ifPresent(dpopBuilder::proofMaxAgeSeconds);
 
-            config.getOptionalValue(
-                    JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS.formatted(issuerName),
-                    Long.class
-            ).ifPresent(dpopBuilder::nonceCacheTtlSeconds);
+        config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE.formatted(issuerName),
+                Integer.class
+        ).ifPresent(dpopBuilder::nonceCacheSize);
 
-            var dpopConfig = dpopBuilder.build();
-            builder.dpopConfig(dpopConfig);
-            LOGGER.debug("Configured DPoP for %s: required=%s", issuerName,
-                    dpopConfig.isRequired());
+        config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS.formatted(issuerName),
+                Long.class
+        ).ifPresent(dpopBuilder::nonceCacheTtlSeconds);
+
+        var dpopConfig = dpopBuilder.build();
+        builder.dpopConfig(dpopConfig);
+        LOGGER.debug("Configured DPoP for %s: required=%s", issuerName,
+                dpopConfig.isRequired());
+    }
+
+    /**
+     * Fails fast when any {@code dpop.*} sub-property is configured while DPoP is
+     * not enabled for the issuer. Without this check, such a configuration would
+     * silently disable DPoP validation.
+     *
+     * @param issuerName the issuer name
+     * @throws IllegalStateException naming the offending property when a dpop sub-property is present
+     */
+    private void validateNoOrphanedDpopProperties(String issuerName) {
+        List<String> dpopSubProperties = List.of(
+                JwtPropertyKeys.ISSUERS.DPOP_REQUIRED.formatted(issuerName),
+                JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS.formatted(issuerName),
+                JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE.formatted(issuerName),
+                JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS.formatted(issuerName));
+
+        for (String property : dpopSubProperties) {
+            if (config.getOptionalValue(property, String.class).isPresent()) {
+                throw new IllegalStateException(
+                        ("Property '%s' is configured but DPoP validation is not enabled for issuer '%s'. "
+                                + "Set '%s' to 'true' to activate DPoP validation, or remove the dpop.* properties.")
+                                .formatted(property, issuerName,
+                                        JwtPropertyKeys.ISSUERS.DPOP_ENABLED.formatted(issuerName)));
+            }
         }
     }
 

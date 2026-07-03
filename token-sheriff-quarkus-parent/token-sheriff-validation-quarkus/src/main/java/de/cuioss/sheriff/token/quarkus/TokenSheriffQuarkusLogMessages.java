@@ -45,7 +45,7 @@ public final class TokenSheriffQuarkusLogMessages {
     public static final String PREFIX = "TokenSheriff_Q";
 
     /**
-     * INFO level log messages (001-024).
+     * INFO level log messages (001-024; identifiers 017 and 018 are retired and must not be reused).
      */
     @UtilityClass
     public static final class INFO {
@@ -146,18 +146,6 @@ public final class TokenSheriffQuarkusLogMessages {
                 .identifier(16)
                 .build();
 
-        public static final LogRecord CLEARING_JWT_METRICS = LogRecordModel.builder()
-                .template("Clearing all JWT metrics")
-                .prefix(PREFIX)
-                .identifier(17)
-                .build();
-
-        public static final LogRecord JWT_METRICS_CLEARED = LogRecordModel.builder()
-                .template("JWT metrics cleared successfully")
-                .prefix(PREFIX)
-                .identifier(18)
-                .build();
-
         public static final LogRecord JWE_DECRYPTION_CONFIG_RESOLVING = LogRecordModel.builder()
                 .template("Resolving JWE decryption configuration from properties")
                 .prefix(PREFIX)
@@ -196,7 +184,7 @@ public final class TokenSheriffQuarkusLogMessages {
     }
 
     /**
-     * WARN level log messages (100-104).
+     * WARN level log messages (100-103).
      */
     @UtilityClass
     public static final class WARN {
@@ -223,12 +211,6 @@ public final class TokenSheriffQuarkusLogMessages {
                 .template("No Micrometer counter found for event type %s, delta %s lost")
                 .prefix(PREFIX)
                 .identifier(103)
-                .build();
-
-        public static final LogRecord JWE_KEYSTORE_MISSING_ALIAS = LogRecordModel.builder()
-                .template("JWE keystore configured at %s but no key-alias specified — skipping keystore key loading")
-                .prefix(PREFIX)
-                .identifier(104)
                 .build();
 
     }

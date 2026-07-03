@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests CustomAccessLogFilter functionality.
@@ -310,6 +310,62 @@ class CustomAccessLogFilterTest {
         EasyMock.replay(requestContext, responseContext, uriInfo);
 
         // When - should not log because path is excluded
+        assertDoesNotThrow(() -> filter.filter(requestContext, responseContext));
+
+        EasyMock.verify(requestContext, responseContext, uriInfo);
+    }
+
+    @Test
+    @DisplayName("Should translate glob patterns to regex with URL-glob semantics")
+    void shouldTranslateGlobPatternsToRegex() {
+        // ** crosses path segments
+        assertTrue(CustomAccessLogFilter.globToRegex("/health/**").matcher("/health/ready").matches());
+        assertTrue(CustomAccessLogFilter.globToRegex("/health/**").matcher("/health/live/deep").matches());
+        assertFalse(CustomAccessLogFilter.globToRegex("/health/**").matcher("/healthz/ready").matches());
+        assertFalse(CustomAccessLogFilter.globToRegex("/health/**").matcher("/api/health/ready").matches());
+
+        // * stays within a single segment
+        assertTrue(CustomAccessLogFilter.globToRegex("/api/*").matcher("/api/users").matches());
+        assertFalse(CustomAccessLogFilter.globToRegex("/api/*").matcher("/api/users/42").matches());
+
+        // ? matches exactly one non-'/' character
+        assertTrue(CustomAccessLogFilter.globToRegex("/api/v?/users").matcher("/api/v1/users").matches());
+        assertFalse(CustomAccessLogFilter.globToRegex("/api/v?/users").matcher("/api/v12/users").matches());
+        assertFalse(CustomAccessLogFilter.globToRegex("/api/v?/users").matcher("/api/v//users").matches());
+
+        // Regex metacharacters in patterns are treated literally
+        assertTrue(CustomAccessLogFilter.globToRegex("/api/items(1)").matcher("/api/items(1)").matches());
+        assertFalse(CustomAccessLogFilter.globToRegex("/api/items.json").matcher("/api/itemsXjson").matches());
+
+        // Request paths that would be invalid as filesystem paths must still match
+        assertTrue(CustomAccessLogFilter.globToRegex("/api/**").matcher("/api/items/a<b>:c|d").matches());
+        assertFalse(CustomAccessLogFilter.globToRegex("/other/**").matcher("/api/items/a<b>:c|d").matches());
+    }
+
+    @Test
+    @DisplayName("Should exclude paths that are not valid filesystem paths")
+    void shouldExcludeNonFilesystemSafePaths() {
+        // Given - enabled filter excluding /internal/**
+        TestConfig config = new TestConfig(Map.of(
+                JwtPropertyKeys.ACCESSLOG.ENABLED, "true",
+                JwtPropertyKeys.ACCESSLOG.EXCLUDE_PATHS, "/internal/**"
+        ));
+        AccessLogFilterConfigResolver resolver = new AccessLogFilterConfigResolver(config);
+        CustomAccessLogFilter filter = new CustomAccessLogFilter(resolver, null);
+
+        // Mock request context for an excluded path containing characters
+        // that are invalid in filesystem paths on some platforms
+        ContainerRequestContext requestContext = EasyMock.niceMock(ContainerRequestContext.class);
+        UriInfo uriInfo = EasyMock.niceMock(UriInfo.class);
+        EasyMock.expect(uriInfo.getPath()).andReturn("/internal/report<v:1>").anyTimes();
+        EasyMock.expect(requestContext.getUriInfo()).andReturn(uriInfo).anyTimes();
+
+        ContainerResponseContext responseContext = EasyMock.niceMock(ContainerResponseContext.class);
+        EasyMock.expect(responseContext.getStatus()).andReturn(500).anyTimes();
+
+        EasyMock.replay(requestContext, responseContext, uriInfo);
+
+        // When - must not throw and must not log (path excluded)
         assertDoesNotThrow(() -> filter.filter(requestContext, responseContext));
 
         EasyMock.verify(requestContext, responseContext, uriInfo);

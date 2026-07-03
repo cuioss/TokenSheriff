@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.token.quarkus.deployment;
 
 import de.cuioss.sheriff.token.quarkus.config.AccessLogFilterConfigResolver;
-import de.cuioss.sheriff.token.quarkus.config.ParserConfigResolver;
 import de.cuioss.sheriff.token.quarkus.interceptor.BearerTokenInterceptor;
 import de.cuioss.sheriff.token.quarkus.logging.CustomAccessLogFilter;
 import de.cuioss.sheriff.token.quarkus.mapper.ClaimMapperRegistry;
@@ -298,7 +297,6 @@ public class TokenSheriffProcessor {
                 .addBeanClasses(
                         TokenValidatorProducer.class,
                         BearerTokenProducer.class,
-                        ParserConfigResolver.class,
                         VertxServletObjectsResolver.class,
                         JwtMetricsCollector.class,
                         // CDI-based claim mapper infrastructure

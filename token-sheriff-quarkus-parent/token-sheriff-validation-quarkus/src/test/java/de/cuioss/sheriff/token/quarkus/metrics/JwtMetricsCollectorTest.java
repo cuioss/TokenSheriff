@@ -19,10 +19,10 @@ import de.cuioss.sheriff.token.quarkus.config.JwtTestProfile;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.security.SecurityEventCounter.EventType;
-import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
@@ -32,8 +32,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Collection;
 import java.util.Objects;
 
-import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INFO;
-import static de.cuioss.test.juli.LogAsserts.assertLogMessagePresent;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -122,40 +120,62 @@ class JwtMetricsCollectorTest {
 
 
     @Test
-    @DisplayName("Should clear all metrics when clear method is called")
-    void shouldClearAllMetrics() {
-        // Get the security event counter
-        SecurityEventCounter securityEventCounter = tokenValidator.getSecurityEventCounter();
-        assertNotNull(securityEventCounter);
+    @DisplayName("Should re-baseline on external counter reset instead of losing events")
+    void shouldRebaselineOnExternalCounterReset() {
+        // Use a locally constructed collector with a SimpleMeterRegistry so counter
+        // values can be asserted deterministically (the injected registry is a
+        // composite and the scheduled update would interfere with delta assertions)
+        SecurityEventCounter securityEventCounter = new SecurityEventCounter();
+        SimpleMeterRegistry localRegistry = new SimpleMeterRegistry();
+        JwtMetricsCollector localCollector = new JwtMetricsCollector(localRegistry, securityEventCounter);
+        localCollector.initialize();
 
-        // Record some events
+        // Record some events and export them
         EventType testEventType = EventType.SIGNATURE_VALIDATION_FAILED;
         securityEventCounter.increment(testEventType);
         securityEventCounter.increment(testEventType);
+        localCollector.updateCounters();
 
-        // Verify data is recorded
-        assertTrue(securityEventCounter.getCount(testEventType) > 0, "Should have recorded security events");
-
-        // Clear all metrics
-        metricsCollector.clear();
-
-        // Verify logging occurred during clear
-        assertLogMessagePresent(TestLogLevel.INFO, INFO.CLEARING_JWT_METRICS.format());
-        assertLogMessagePresent(TestLogLevel.INFO, INFO.JWT_METRICS_CLEARED.format());
-
-        // Verify all metrics are cleared
-        assertEquals(0, securityEventCounter.getCount(testEventType), "Security event counter should be cleared");
-
-        // Verify the tracking maps are cleared by recording new events and checking delta calculation
-        securityEventCounter.increment(testEventType);
-        metricsCollector.updateCounters();
-
-        // The counter should only reflect the new increment, not the old ones
-        Counter metricCounter = registry.find(MetricIdentifier.VALIDATION.ERRORS)
+        Counter metricCounter = localRegistry.find(MetricIdentifier.VALIDATION.ERRORS)
                 .tag("event_type", testEventType.name())
                 .counter();
         assertNotNull(metricCounter, "Counter should exist");
-        // Note: We can't directly check the counter value as it's cumulative in Micrometer,
-        // but we've verified the underlying monitors are cleared
+        assertEquals(2.0, metricCounter.count(), "Both events should be exported");
+
+        // External reset of the underlying monitor (inlined equivalent of the removed clear())
+        securityEventCounter.reset();
+        assertEquals(0, securityEventCounter.getCount(testEventType), "Security event counter should be reset");
+
+        // Negative delta must not decrement the Micrometer counter, only reset the baseline
+        localCollector.updateCounters();
+        assertEquals(2.0, metricCounter.count(),
+                "External reset must not change the cumulative Micrometer counter");
+
+        // New events after the reset must be exported with the re-baselined delta
+        securityEventCounter.increment(testEventType);
+        localCollector.updateCounters();
+        assertEquals(3.0, metricCounter.count(),
+                "Only the single new event should be exported after the external reset");
+    }
+
+    @Test
+    @DisplayName("Should export events recorded before initialization")
+    void shouldExportEventsRecordedBeforeInitialization() {
+        // Events counted before the collector initializes must not be dropped
+        SecurityEventCounter preInitCounter = new SecurityEventCounter();
+        EventType testEventType = EventType.SIGNATURE_VALIDATION_FAILED;
+        preInitCounter.increment(testEventType);
+        preInitCounter.increment(testEventType);
+
+        SimpleMeterRegistry localRegistry = new SimpleMeterRegistry();
+        JwtMetricsCollector localCollector = new JwtMetricsCollector(localRegistry, preInitCounter);
+        localCollector.initialize();
+
+        Counter metricCounter = localRegistry.find(MetricIdentifier.VALIDATION.ERRORS)
+                .tag("event_type", testEventType.name())
+                .counter();
+        assertNotNull(metricCounter, "Counter should exist");
+        assertEquals(2.0, metricCounter.count(),
+                "Pre-initialization events must be exported as deltas, not silently dropped");
     }
 }
