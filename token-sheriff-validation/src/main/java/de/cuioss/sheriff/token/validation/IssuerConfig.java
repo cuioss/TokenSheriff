@@ -970,9 +970,9 @@ public class IssuerConfig implements LoadingStatusProvider {
             // the JWKS loading method. Validator maps and caches are keyed by this value
             // before any (async) JWKS loading has completed, so it cannot be supplied by
             // well-known discovery.
-            if (issuerIdentifier == null) {
+            if (issuerIdentifier == null || issuerIdentifier.isBlank()) {
                 throw new IllegalArgumentException("""
-                        issuerIdentifier is required for enabled issuer configurations. \
+                        issuerIdentifier is required (non-blank) for enabled issuer configurations. \
                         For well-known discovery, set it to the issuer URL of the discovery document.""");
             }
         }

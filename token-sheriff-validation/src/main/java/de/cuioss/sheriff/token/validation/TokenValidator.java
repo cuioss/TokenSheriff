@@ -201,6 +201,9 @@ public class TokenValidator implements Closeable {
         if (issuerConfigs.isEmpty()) {
             throw new IllegalArgumentException("At least one issuer configuration must be provided");
         }
+        if (issuerConfigs.contains(null)) {
+            throw new IllegalArgumentException("Issuer configurations must not contain null elements");
+        }
 
         // Disabled configs skip build-time validation and have no JwksLoader — they must not
         // participate in validator construction. IssuerConfigCache performs the same filtering
