@@ -6,7 +6,7 @@
 
 [cols="1,3"]
 |===
-| Status     | Ready to execute (after xref:../01-restructure/README.adoc[Plan 01])
+| Status     | *Phase 1 done* — the validation capability split shipped via https://github.com/cuioss/TokenSheriff/pull/524[#524] (2026-07). Phase 2 (client scaffolding) deferred by design until client work starts.
 | Depends on | Plan 01 — Restructure (rename); run after it to pay link churn once
 | Scope      | Reshape `doc/` so validation, Commons and the coming OIDC client are peer capabilities, with a shared cross-cutting area
 |===
@@ -110,6 +110,7 @@ The error model is *owned by `commons`* (`doc/commons/specification/error-model.
 
 === Phase 2 — Scaffold the client capability (when client work starts)
 . Create `doc/client/` with stub `architecture.adoc`, `requirements.adoc` (`CLIENT-N`), `threat-model.adoc`, `specification/`.
+. Create `doc/shared/glossary.adoc` — the cross-capability glossary earns its keep only once a second capability exists, so it is scaffolded here, not in Phase 1.
 . Add the client module `doc/` dir for usage/config/dev. Client log records are added to the global `doc/LogMessages.adoc` — no separate client registry.
 . Wire both capabilities into the hub.
 
@@ -125,11 +126,11 @@ The error model is *owned by `commons`* (`doc/commons/specification/error-model.
 
 == Verification
 
-* [ ] `doc/validation/` holds the relocated conceptual docs; titles rescoped to the capability
-* [ ] Every `xref:`/`link:` to the moved docs resolves (root `README.md`, module docs, cross-doc) — zero broken links
-* [ ] `doc/README.adoc` hub presents capabilities as peer groups
-* [ ] Requirement IDs unchanged in count after the move; client namespace `CLIENT-N` reserved
-* [ ] Phase 2 deferred until client work starts (no empty client scaffolding merged early)
+* [x] `doc/validation/` holds the relocated conceptual docs; titles rescoped to the capability ("Token Validation Requirements/Architecture/Threat Model"); the `security/` subdir was flattened — `threat-model.adoc` and `security-reference.adoc` sit directly under `doc/validation/`
+* [x] Every `xref:`/`link:` to the moved docs resolves (root `README.md`, module docs, cross-doc) — link sweep 2026-07-04: zero broken links to the moved set
+* [x] `doc/README.adoc` hub presents capabilities as peer groups ("Token Validation" group; "Client" follows with Phase 2)
+* [x] Requirement IDs unchanged in count after the move (51 distinct `VALIDATION-N` IDs); client namespace `CLIENT-N` reserved
+* [x] Phase 2 deferred until client work starts (no empty client scaffolding merged early)
 
 == Seed data for planning (discovery 2026-06-24)
 
@@ -179,5 +180,5 @@ faq/keycloak.adoc      xref:faq/keycloak.adoc x1
 
 * *Two link syntaxes:* AsciiDoc `xref:`/`link:` in `.adoc`, Markdown `](path)` in `README.md` — both need rewriting.
 * *Up to 5 relative forms per target* → each is depth-dependent; a flat find/replace will break links.
-* *Moving the set together preserves most intra-set short forms* (e.g. `xref:architecture.adoc` inside `requirements.adoc` still resolves if both land in `validation/`). The open sub-decision is whether to keep a `validation/security/` subdir or flatten it — it changes the `security/…` intra-set refs.
+* *Moving the set together preserves most intra-set short forms* (e.g. `xref:architecture.adoc` inside `requirements.adoc` still resolves if both land in `validation/`). The open sub-decision — keep a `validation/security/` subdir or flatten it — was *resolved in execution: flattened* (`threat-model.adoc` and `security-reference.adoc` sit directly under `doc/validation/`).
 * Sequence after Plan 01 so these links are rewritten once.

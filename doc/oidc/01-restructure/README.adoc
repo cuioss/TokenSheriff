@@ -163,7 +163,7 @@ Publish a stub for *every* old artifact (`-core`, `-quarkus`, `-quarkus-deployme
 
 * [x] `grep -rI "de.cuioss.sheriff.oauth"` → 0 (excluding the planning docs + recorded benchmark fixtures)
 * [x] `grep -rI "sheriff.oauth."` → 0
-* [x] `grep -rI "oauth-sheriff"` → 0 (lowercase; the repo/Pages/Sonar `OAuthSheriff` URLs were flipped in Phase 3)
+* [x] `grep -rI "oauth-sheriff"` → 0 (lowercase; the repo/Pages/Sonar `OAuthSheriff` URLs were flipped in Phase 3). _Post-release audit 2026-07-04: one functional residual had escaped this sweep — `Dockerfile.native.jfr` still `COPY`-ed from the deleted `oauth-sheriff-quarkus-parent/…` paths (JFR image build broken); fixed. Remaining hits are intentional: `rewrite.yml` (the migration recipe itself), recorded benchmark fixtures, and a historical note in the release skill._
 * [x] `grep -rIo "OAUTH-SHERIFF-[0-9]"` → 0; `VALIDATION-N` count = 51 (matches the prior IDs)
 * [x] `./mvnw -Ppre-commit clean verify` and `./mvnw clean install` green
 * [x] Relocation stubs published for every published old artifact (`-parent`, `-core`, `-quarkus`, `-quarkus-deployment`); an old-coordinate resolve redirects to `token-sheriff-validation` with a warning (verified). _`bom` was never published, so no stub. Note: an inert empty aggregator pom `oauth-sheriff-relocations:0.9.0` was also published (central-publishing ignores `maven.deploy.skip`) — harmless, immutable._

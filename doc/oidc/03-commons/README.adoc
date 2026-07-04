@@ -93,7 +93,7 @@ These give the same guarantee a module boundary would (base stays dependency-lig
 
 == Test support: extend the dispatcher artifact
 
-The existing `generators`-classifier test artifact (today `oauth-sheriff-core`, post-rename `token-sheriff-validation`) already ships MockWebServer dispatchers for the endpoints validation talks to — `WellKnownDispatcher`, `JwksResolveDispatcher` in `…test.dispatcher`, implementing `ModuleDispatcherElement` from `cui-test-mockwebserver-junit5` (see xref:../../../oauth-sheriff-core/doc/UnitTesting.adoc[Core Test Utilities]).
+The existing `generators`-classifier test artifact (`token-sheriff-validation`) already ships MockWebServer dispatchers for the endpoints validation talks to — `WellKnownDispatcher`, `JwksResolveDispatcher` in `…test.dispatcher`, implementing `ModuleDispatcherElement` from `cui-test-mockwebserver-junit5` (see xref:../../../token-sheriff-validation/doc/UnitTesting.adoc[Core Test Utilities]).
 
 Since `commons` adds the *other* IdP endpoints, *extend this same artifact* with dispatchers for them — so commons, validation and (later) client tests all share one OP simulation:
 

@@ -49,7 +49,7 @@ Main deployment processor handling build-time configuration:
 === DevUI Components
 Development interface components:
 
-* link:src/main/java/de/cuioss/sheriff/token/quarkus/deployment/TokenSheriffDevUIJsonRPCService.java[TokenSheriffDevUIJsonRPCService] - JSON-RPC service for DevUI communication
+* link:../token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/runtime/TokenSheriffDevUIRuntimeService.java[TokenSheriffDevUIRuntimeService] - JSON-RPC service for DevUI communication (runtime module; registered here via `JsonRPCProvidersBuildItem` in `TokenSheriffProcessor`)
 * Web components in `src/main/resources/dev-ui/` for interactive JWT debugging
 
 For detailed component architecture, implementation details, and testing framework, see xref:../doc/development/devui-implementation.adoc[DevUI Implementation Documentation].

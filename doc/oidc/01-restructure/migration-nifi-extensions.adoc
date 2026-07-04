@@ -8,7 +8,7 @@
 |===
 | Audience | Maintainers of `cuioss/nifi-extensions` (the one known consumer)
 | Context  | xref:README.adoc[Plan 01 — Restructure]
-| Status   | *Executable now.* Token-Sheriff `0.9.0` is published to Maven Central, and the old `de.cuioss.sheriff.oauth` coordinates have relocation stubs at `0.9.0` that redirect to the new ones.
+| Status   | *Done — executed and merged* via https://github.com/cuioss/nifi-extensions/pull/398[nifi-extensions#398] against Token-Sheriff `0.9.0` (verified: coordinates, imports, config keys, `generators` classifier — zero functional residuals). Kept as reference for any further consumer.
 |===
 
 toc::[]
