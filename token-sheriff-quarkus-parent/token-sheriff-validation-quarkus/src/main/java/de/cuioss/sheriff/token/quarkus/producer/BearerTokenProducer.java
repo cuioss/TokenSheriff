@@ -32,6 +32,7 @@ import jakarta.enterprise.inject.CreationException;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Inject;
+import jakarta.inject.Provider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
@@ -115,22 +116,35 @@ public class BearerTokenProducer {
 
     private static final CuiLogger LOGGER = new CuiLogger(BearerTokenProducer.class);
     static final String BEARER_PREFIX = "Bearer ";
+    static final String AUTHORIZATION_HEADER_VALUE = "Authorization";
     static final String COOKIE_HEADER_VALUE = "Cookie";
 
     private final TokenValidator tokenValidator;
     private final HttpRequestResolver servletObjectsResolver;
+    private final Provider<JsonWebToken> jsonWebTokenProvider;
     private final String tokenHeader;
     private final String tokenCookieName;
 
     @Inject
     public BearerTokenProducer(TokenValidator tokenValidator,
             @ServletObjectsResolver HttpRequestResolver servletObjectsResolver,
-            @ConfigProperty(name = JwtPropertyKeys.TOKEN.HEADER, defaultValue = "Authorization") String tokenHeader,
+            Provider<JsonWebToken> jsonWebTokenProvider,
+            @ConfigProperty(name = JwtPropertyKeys.TOKEN.HEADER, defaultValue = AUTHORIZATION_HEADER_VALUE) String tokenHeader,
             @ConfigProperty(name = JwtPropertyKeys.TOKEN.COOKIE_NAME, defaultValue = "Bearer") String tokenCookieName) {
+        // Property values may carry accidental surrounding whitespace — trim before validating
+        String trimmedHeader = tokenHeader.trim();
+        if (!AUTHORIZATION_HEADER_VALUE.equalsIgnoreCase(trimmedHeader)
+                && !COOKIE_HEADER_VALUE.equalsIgnoreCase(trimmedHeader)) {
+            throw new IllegalStateException(
+                    "Invalid value '%s' for property '%s'. Supported values are '%s' and '%s'."
+                            .formatted(tokenHeader, JwtPropertyKeys.TOKEN.HEADER,
+                                    AUTHORIZATION_HEADER_VALUE, COOKIE_HEADER_VALUE));
+        }
         this.tokenValidator = tokenValidator;
         this.servletObjectsResolver = servletObjectsResolver;
-        this.tokenHeader = tokenHeader;
-        this.tokenCookieName = tokenCookieName;
+        this.jsonWebTokenProvider = jsonWebTokenProvider;
+        this.tokenHeader = trimmedHeader;
+        this.tokenCookieName = tokenCookieName.trim();
     }
 
     /**
@@ -417,12 +431,17 @@ public class BearerTokenProducer {
      * <pre>{@code
      * @Inject Principal principal;
      * }</pre>
+     * <p>
+     * The {@link JsonWebToken} is resolved through the CDI container (rather than by
+     * calling {@link #produceJsonWebToken()} directly) so that the container caches the
+     * {@code @RequestScoped} instance and the token is validated at most once per request,
+     * even when both {@code Principal} and {@code JsonWebToken} are injected.
      *
      * @return the validated Principal (which is the JsonWebToken), or an empty principal
      */
     @Produces
     @RequestScoped
     public Principal producePrincipal() {
-        return produceJsonWebToken();
+        return jsonWebTokenProvider.get();
     }
 }

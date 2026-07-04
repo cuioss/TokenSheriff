@@ -137,14 +137,50 @@ public class ClientIpExtractor {
                 for (String part : parts) {
                     String trimmed = part.trim();
                     if (trimmed.startsWith("for=")) {
-                        String forValue = trimmed.substring(4);
-                        // Remove quotes and brackets if present, take IP before port
-                        return forValue.replaceAll("[\"\\[\\]]", "").split(":")[0];
+                        return normalizeForwardedForValue(trimmed.substring(4));
                     }
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * Normalizes an RFC 7239 {@code for=} node identifier to a bare address.
+     * <p>
+     * Handles the following forms without truncating IPv6 addresses:
+     * <ul>
+     *   <li>{@code "[2001:db8::17]:4711"} / {@code [2001:db8::17]} — bracketed IPv6,
+     *       optionally with port: returns the bracket content</li>
+     *   <li>{@code 192.0.2.43:47011} — IPv4 (single colon) with port: strips the port</li>
+     *   <li>{@code 2001:db8::17} — bare IPv6 (multiple colons): returned unchanged</li>
+     *   <li>Anything else (plain IPv4, obfuscated identifiers): returned unchanged</li>
+     * </ul>
+     *
+     * @param forValue the raw value of the {@code for=} parameter, possibly quoted
+     * @return the address without quotes, brackets, or port
+     */
+    private static String normalizeForwardedForValue(String forValue) {
+        String value = forValue.trim();
+        // Remove optional surrounding double quotes per RFC 7239
+        if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+            value = value.substring(1, value.length() - 1);
+        }
+        // Bracketed IPv6 form "[...]" with optional ":port" suffix
+        if (value.startsWith("[")) {
+            int closingBracket = value.indexOf(']');
+            if (closingBracket > 0) {
+                return value.substring(1, closingBracket);
+            }
+            return value; // malformed — return unchanged
+        }
+        // IPv4 (or hostname) with port: exactly one colon
+        int firstColon = value.indexOf(':');
+        if (firstColon >= 0 && firstColon == value.lastIndexOf(':')) {
+            return value.substring(0, firstColon);
+        }
+        // Bare IPv6 (multiple colons) or plain address: return unchanged
+        return value;
     }
 
 }

@@ -42,8 +42,12 @@ class ClientIpExtractorTest {
             "X-Originating-IP,         10.1.1.1,                                   10.1.1.1",
             "Forwarded,                for=203.0.113.1; proto=https,               203.0.113.1",
             "Forwarded,                'for=\"203.0.113.1\"; proto=https',         203.0.113.1",
-            "Forwarded,                for=[2001:db8::1]; proto=https,             2001",
+            "Forwarded,                for=[2001:db8::1]; proto=https,             2001:db8::1",
+            "Forwarded,                'for=\"[2001:db8::17]:4711\"; proto=https', 2001:db8::17",
+            "Forwarded,                'for=\"[2001:db8::17]\"; proto=https',      2001:db8::17",
+            "Forwarded,                for=2001:db8::1; proto=https,               2001:db8::1",
             "Forwarded,                for=203.0.113.1:8080; proto=https,          203.0.113.1",
+            "Forwarded,                'for=\"203.0.113.1:8080\"; proto=https',    203.0.113.1",
             "X-Forwarded-For,          '  192.168.1.1  ',                          192.168.1.1",
             "X-Forwarded-For,          2001:db8::1,                                2001:db8::1",
             "X-Forwarded-For,          '203.0.113.1,2001:db8::1',                  203.0.113.1",
@@ -56,6 +60,16 @@ class ClientIpExtractorTest {
         String result = ClientIpExtractor.extractClientIp(headers, null);
 
         assertEquals(expectedIp, result);
+    }
+
+    @Test
+    @DisplayName("Should return malformed bracketed IPv6 value unchanged")
+    void shouldReturnMalformedBracketValueUnchanged() {
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
+        headers.putSingle("Forwarded", "for=\"[2001:db8::1\"; proto=https");
+
+        // No closing bracket: the value cannot be normalized and is returned unchanged
+        assertEquals("[2001:db8::1", ClientIpExtractor.extractClientIp(headers, null));
     }
 
     @Test

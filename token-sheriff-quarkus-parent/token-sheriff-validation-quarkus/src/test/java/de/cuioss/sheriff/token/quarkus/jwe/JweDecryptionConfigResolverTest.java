@@ -173,7 +173,7 @@ class JweDecryptionConfigResolverTest {
     }
 
     @Test
-    @DisplayName("Should throw when keystore configured without alias — no keys loaded means fail-closed")
+    @DisplayName("Should throw when keystore configured without alias — fail fast naming key-alias")
     void shouldThrowWhenKeystoreAliasMissing() throws Exception {
         Path dummyKeystore = tempDir.resolve("dummy.p12");
         Files.writeString(dummyKeystore, "dummy-content");
@@ -185,11 +185,14 @@ class JweDecryptionConfigResolverTest {
         TestConfig config = new TestConfig(props);
         JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(config);
 
-        // JWE is explicitly configured but no keys can be loaded (alias missing),
-        // so builder.build() fails and the resolver throws fail-closed
+        // Keystore path without key alias must fail fast, mirroring the other
+        // key-loading failure paths of this resolver
         var exception = assertThrows(IllegalStateException.class,
                 resolver::resolveJweDecryptionConfig);
-        assertTrue(exception.getMessage().contains("key loading failed"));
+        assertTrue(exception.getMessage().contains("key loading failed"),
+                "Should be wrapped in the fail-closed message: " + exception.getMessage());
+        assertTrue(exception.getMessage().contains(JwtPropertyKeys.JWE.KEY_ALIAS),
+                "Should name the missing property sheriff.token.jwe.key-alias: " + exception.getMessage());
     }
 
     @Test

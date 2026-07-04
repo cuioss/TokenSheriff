@@ -39,8 +39,6 @@ import java.util.List;
 public class TokenValidatorHealthCheck implements HealthCheck {
 
     private static final String HEALTHCHECK_NAME = "jwt-validator";
-    private static final String ERROR_NO_ISSUER_CONFIGS = "No issuer configurations found";
-    private static final String ERROR = "error";
 
     private final List<IssuerConfig> issuerConfigs;
 
@@ -51,26 +49,11 @@ public class TokenValidatorHealthCheck implements HealthCheck {
 
     @Override
     public HealthCheckResponse call() {
-        if (issuerConfigs.isEmpty()) {
-            return createErrorResponse(ERROR_NO_ISSUER_CONFIGS);
-        }
-
+        // The produced issuer config list is guaranteed non-empty: TokenValidatorProducer
+        // fails application startup when no enabled issuer is configured.
         return HealthCheckResponse.named(HEALTHCHECK_NAME)
                 .up()
                 .withData("issuerCount", issuerConfigs.size())
-                .build();
-    }
-
-    /**
-     * Creates an error response with the given error message.
-     *
-     * @param errorMessage the error message
-     * @return the health check response
-     */
-    private HealthCheckResponse createErrorResponse(String errorMessage) {
-        return HealthCheckResponse.named(HEALTHCHECK_NAME)
-                .down()
-                .withData(ERROR, errorMessage)
                 .build();
     }
 }

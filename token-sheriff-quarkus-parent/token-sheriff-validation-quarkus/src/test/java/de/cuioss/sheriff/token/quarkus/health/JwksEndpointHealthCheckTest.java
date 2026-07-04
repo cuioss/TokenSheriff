@@ -176,31 +176,6 @@ class JwksEndpointHealthCheckTest {
     }
 
     @Test
-    @DisplayName("Health check should handle empty issuer configs")
-    void healthCheckEmptyIssuerConfigs() {
-        // Create a health check with empty issuer configs
-        JwksEndpointHealthCheck emptyHealthCheck = new JwksEndpointHealthCheck(
-                List.of(), 30);
-
-        // Call the health check
-        HealthCheckResponse response = emptyHealthCheck.call();
-
-        // Verify response
-        assertNotNull(response, "Response should not be null");
-        assertEquals(HealthCheckResponse.Status.DOWN, response.getStatus(),
-                "Health check status should be DOWN with empty issuer configs");
-        assertEquals("jwks-endpoints", response.getName(),
-                "Health check should have correct name");
-
-        assertTrue(response.getData().isPresent(), "Data should be present");
-        Map<String, Object> data = response.getData().get();
-        assertTrue(data.containsKey("error"),
-                "Should contain error data for empty issuer configs");
-        assertEquals("No issuer configurations found", data.get("error"),
-                "Error message should indicate no issuer configs");
-    }
-
-    @Test
     @DisplayName("Health check should handle error in JwksLoader")
     void healthCheckJwksLoaderError() {
         // Create a mock IssuerConfig with a JwksLoader that throws an exception

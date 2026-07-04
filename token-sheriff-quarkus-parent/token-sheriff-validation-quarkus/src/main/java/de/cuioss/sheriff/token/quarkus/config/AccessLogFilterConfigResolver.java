@@ -20,7 +20,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.Config;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -88,9 +87,7 @@ public class AccessLogFilterConfigResolver {
 
     private Optional<List<Integer>> resolveIntegerList(String key) {
         return config.getOptionalValue(key, String.class)
-                .map(string -> Arrays.stream(string.split(","))
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
+                .map(string -> ConfigValueParser.splitCsv(string).stream()
                         .map(s -> parseInteger(key, s))
                         .toList());
     }
@@ -106,9 +103,6 @@ public class AccessLogFilterConfigResolver {
 
     private Optional<List<String>> resolveStringList(String key) {
         return config.getOptionalValue(key, String.class)
-                .map(string -> Arrays.stream(string.split(","))
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
-                        .toList());
+                .map(ConfigValueParser::splitCsv);
     }
 }

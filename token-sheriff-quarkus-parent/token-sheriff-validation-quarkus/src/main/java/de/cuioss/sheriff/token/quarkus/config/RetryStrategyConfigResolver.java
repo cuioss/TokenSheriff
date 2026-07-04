@@ -54,8 +54,10 @@ public class RetryStrategyConfigResolver {
      * Resolves a RetryConfig instance from configuration properties.
      * <p>
      * Creates a retry configuration with exponential backoff parameters configured
-     * through Quarkus properties. If retry is disabled globally, returns a
-     * configuration with maxAttempts=0 that performs no retries.
+     * through Quarkus properties. Only explicitly configured values are set on the
+     * builder; all other values use the {@link RetryConfig} builder defaults.
+     * If retry is disabled globally, returns a configuration with maxAttempts=1
+     * (try once, no retries).
      * </p>
      *
      * @return configured RetryConfig instance
@@ -73,18 +75,21 @@ public class RetryStrategyConfigResolver {
                     .build();
         }
 
-        // Build exponential backoff configuration from properties
-        return RetryConfig.builder()
-                .maxAttempts(config.getOptionalValue(JwtPropertyKeys.RETRY.MAX_ATTEMPTS, Integer.class)
-                        .orElse(5))
-                .initialDelay(Duration.ofMillis(config.getOptionalValue(JwtPropertyKeys.RETRY.INITIAL_DELAY_MS, Long.class)
-                        .orElse(1000L)))
-                .maxDelay(Duration.ofMillis(config.getOptionalValue(JwtPropertyKeys.RETRY.MAX_DELAY_MS, Long.class)
-                        .orElse(30000L)))
-                .multiplier(config.getOptionalValue(JwtPropertyKeys.RETRY.BACKOFF_MULTIPLIER, Double.class)
-                        .orElse(2.0))
-                .jitter(config.getOptionalValue(JwtPropertyKeys.RETRY.JITTER_FACTOR, Double.class)
-                        .orElse(0.1))
-                .build();
+        // Delegate defaults to the RetryConfig builder — only set explicitly configured values
+        RetryConfig.Builder builder = RetryConfig.builder();
+        config.getOptionalValue(JwtPropertyKeys.RETRY.MAX_ATTEMPTS, Integer.class)
+                .ifPresent(builder::maxAttempts);
+        config.getOptionalValue(JwtPropertyKeys.RETRY.INITIAL_DELAY_MS, Long.class)
+                .map(Duration::ofMillis)
+                .ifPresent(builder::initialDelay);
+        // Exception: the builder default for maxDelay is 60s, but this module documents
+        // 30s (see quarkus-config-doc.adoc). Set it explicitly to keep documented behavior.
+        builder.maxDelay(Duration.ofMillis(config.getOptionalValue(JwtPropertyKeys.RETRY.MAX_DELAY_MS, Long.class)
+                .orElse(30_000L)));
+        config.getOptionalValue(JwtPropertyKeys.RETRY.BACKOFF_MULTIPLIER, Double.class)
+                .ifPresent(builder::multiplier);
+        config.getOptionalValue(JwtPropertyKeys.RETRY.JITTER_FACTOR, Double.class)
+                .ifPresent(builder::jitter);
+        return builder.build();
     }
 }

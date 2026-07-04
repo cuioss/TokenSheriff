@@ -341,6 +341,28 @@ class IssuerConfigResolverTest {
         }
 
         @Test
+        @DisplayName("should ignore empty segments in comma-separated lists")
+        void shouldIgnoreEmptyCsvSegments() {
+            String audiences = "client1,, client2 ,";
+            TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
+                    JwtPropertyKeys.ISSUERS.EXPECTED_AUDIENCE.formatted(TEST_ISSUER), audiences,
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks"
+            ));
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config, RetryConfig.defaults(), null, null);
+
+            List<IssuerConfig> result = resolver.resolveIssuerConfigs();
+
+            assertEquals(1, result.size());
+            IssuerConfig issuer = result.getFirst();
+            assertEquals(2, issuer.getExpectedAudience().size(),
+                    "Empty segments must be filtered out");
+            assertTrue(issuer.getExpectedAudience().contains("client1"), "Should contain client1");
+            assertTrue(issuer.getExpectedAudience().contains("client2"), "Should contain trimmed client2");
+        }
+
+        @Test
         @DisplayName("should configure expected client IDs from comma-separated list")
         void shouldConfigureClientIds() {
             String clientIds = "id1, id2 , id3";
@@ -597,6 +619,50 @@ class IssuerConfigResolverTest {
             assertEquals(120, dpopConfig.getProofMaxAgeSeconds());
             assertEquals(5000, dpopConfig.getNonceCacheSize());
             assertEquals(600, dpopConfig.getNonceCacheTtlSeconds());
+        }
+
+        @Test
+        @DisplayName("should fail fast when dpop.required is set without dpop.enabled")
+        void shouldFailWhenDpopRequiredWithoutEnabled() {
+            TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.DPOP_REQUIRED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
+            ));
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config, RetryConfig.defaults(), null, null);
+
+            IllegalStateException exception = assertThrows(IllegalStateException.class,
+                    resolver::resolveIssuerConfigs,
+                    "Should fail fast instead of silently disabling DPoP");
+            assertTrue(exception.getMessage().contains(
+                            JwtPropertyKeys.ISSUERS.DPOP_REQUIRED.formatted(TEST_ISSUER)),
+                    "Exception should name the offending property: " + exception.getMessage());
+            assertTrue(exception.getMessage().contains(
+                            JwtPropertyKeys.ISSUERS.DPOP_ENABLED.formatted(TEST_ISSUER)),
+                    "Exception should instruct to set dpop.enabled=true: " + exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("should fail fast when a dpop sub-property is set with dpop.enabled=false")
+        void shouldFailWhenDpopSubPropertyWithEnabledFalse() {
+            TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com",
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "https://example.com/jwks",
+                    JwtPropertyKeys.ISSUERS.DPOP_ENABLED.formatted(TEST_ISSUER), "false",
+                    JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS.formatted(TEST_ISSUER), "120",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
+            ));
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config, RetryConfig.defaults(), null, null);
+
+            IllegalStateException exception = assertThrows(IllegalStateException.class,
+                    resolver::resolveIssuerConfigs,
+                    "Should fail fast instead of silently disabling DPoP");
+            assertTrue(exception.getMessage().contains(
+                            JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS.formatted(TEST_ISSUER)),
+                    "Exception should name the offending property: " + exception.getMessage());
         }
     }
 

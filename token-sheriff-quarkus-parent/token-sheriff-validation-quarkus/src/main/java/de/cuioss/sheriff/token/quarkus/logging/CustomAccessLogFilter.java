@@ -30,12 +30,10 @@ import jakarta.ws.rs.container.ContainerResponseContext;
 import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.ext.Provider;
 
-import java.nio.file.FileSystems;
-import java.nio.file.Path;
-import java.nio.file.PathMatcher;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INFO;
 
@@ -67,8 +65,8 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
 
     private final AccessLogFilterConfig config;
     private final Instance<HttpServerRequest> vertxRequest;
-    private final List<PathMatcher> includePathMatchers;
-    private final List<PathMatcher> excludePathMatchers;
+    private final List<Pattern> includePathPatterns;
+    private final List<Pattern> excludePathPatterns;
     private final boolean disabled;
 
     @Inject
@@ -80,9 +78,9 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
         // Cache disabled state for performance optimization
         this.disabled = !config.isEnabled();
 
-        // Compile and cache path matchers once at construction time
-        this.includePathMatchers = compilePathMatchers(config.getIncludePaths());
-        this.excludePathMatchers = compilePathMatchers(config.getExcludePaths());
+        // Compile and cache path patterns once at construction time
+        this.includePathPatterns = compilePathPatterns(config.getIncludePaths());
+        this.excludePathPatterns = compilePathPatterns(config.getExcludePaths());
 
         LOGGER.info(INFO.CUSTOM_ACCESS_LOG_FILTER_INITIALIZED, config);
     }
@@ -143,24 +141,28 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
 
     /**
      * Checks if a path should be included in logging based on include/exclude patterns.
+     * Matches against the raw request path string — no filesystem semantics are involved.
      */
     private boolean isPathIncluded(String path) {
+        // JAX-RS implementations differ on whether UriInfo.getPath() carries a leading
+        // slash; configured patterns conventionally do — normalize before matching
+        String normalizedPath = path.startsWith("/") ? path : "/" + path;
+
         // Check exclude patterns first (take precedence)
-        Path checkPath = Path.of(path);
-        for (PathMatcher matcher : excludePathMatchers) {
-            if (matcher.matches(checkPath)) {
+        for (Pattern pattern : excludePathPatterns) {
+            if (pattern.matcher(normalizedPath).matches()) {
                 return false;
             }
         }
 
         // If no include patterns specified, all paths are included
-        if (includePathMatchers.isEmpty()) {
+        if (includePathPatterns.isEmpty()) {
             return true;
         }
 
         // Check include patterns
-        for (PathMatcher matcher : includePathMatchers) {
-            if (matcher.matches(checkPath)) {
+        for (Pattern pattern : includePathPatterns) {
+            if (pattern.matcher(normalizedPath).matches()) {
                 return true;
             }
         }
@@ -188,10 +190,52 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
                 .replace("{userAgent}", userAgent != null ? userAgent : "-");
     }
 
-    private static List<PathMatcher> compilePathMatchers(List<String> patterns) {
+    private static List<Pattern> compilePathPatterns(List<String> patterns) {
         return patterns.stream()
-                .map(pattern -> FileSystems.getDefault().getPathMatcher("glob:" + pattern))
+                .map(CustomAccessLogFilter::globToRegex)
                 .toList();
+    }
+
+    /**
+     * Translates a URL glob pattern to a precompiled regular expression.
+     * <p>
+     * Supported glob semantics:
+     * <ul>
+     *   <li>{@code **} — matches any number of characters, crossing path segments</li>
+     *   <li>{@code *} — matches any number of characters within a single segment (no {@code /})</li>
+     *   <li>{@code ?} — matches exactly one character within a segment (no {@code /})</li>
+     * </ul>
+     * All other characters are matched literally (regex metacharacters are escaped).
+     * The pattern must match the entire request path.
+     *
+     * @param glob the glob pattern, e.g. {@code /health/**}
+     * @return the compiled regex pattern
+     */
+    static Pattern globToRegex(String glob) {
+        StringBuilder regex = new StringBuilder();
+        int i = 0;
+        while (i < glob.length()) {
+            char c = glob.charAt(i);
+            switch (c) {
+                case '*' -> {
+                    if (i + 1 < glob.length() && glob.charAt(i + 1) == '*') {
+                        regex.append(".*");
+                        i++;
+                    } else {
+                        regex.append("[^/]*");
+                    }
+                }
+                case '?' -> regex.append("[^/]");
+                default -> {
+                    if ("\\^$.|+()[]{}".indexOf(c) >= 0) {
+                        regex.append('\\');
+                    }
+                    regex.append(c);
+                }
+            }
+            i++;
+        }
+        return Pattern.compile(regex.toString());
     }
 
     /**
