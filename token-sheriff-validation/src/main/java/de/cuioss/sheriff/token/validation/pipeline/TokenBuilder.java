@@ -139,7 +139,7 @@ public class TokenBuilder {
                     claimValue = mapper.map(mapRepresentation, key);
                 } catch (TokenValidationException e) {
                     throw e;
-                } catch (RuntimeException e) {
+                } /*~~(TODO: Catch specific not RuntimeException. Suppress: // cui-rewrite:disable InvalidExceptionUsageRecipe)~~>*/ catch (RuntimeException e) {
                     throw new TokenValidationException(
                             SecurityEventCounter.EventType.MISSING_CLAIM,
                             "Malformed claim '" + key + "': " + e.getMessage(),

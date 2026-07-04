@@ -29,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.PublicKey;
 import java.security.SignatureException;
+import java.util.Set;
 
 /**
  * Validator for JWT Token signatures.
@@ -222,26 +223,40 @@ public class TokenSignatureValidator {
     }
 
     /**
-     * Checks if the validation algorithm is compatible with the key algorithm.
+     * The JWA signature algorithms of the RSA family (RSASSA-PKCS1-v1_5 and RSASSA-PSS).
+     * An RSA public key can verify signatures of any of these algorithms.
+     */
+    private static final Set<String> RSA_FAMILY_ALGORITHMS =
+            Set.of("RS256", "RS384", "RS512", "PS256", "PS384", "PS512");
+
+    /**
+     * Checks if the token's signature algorithm is compatible with the key's algorithm.
+     * <p>
+     * Both parameters are JWA algorithm identifiers (e.g. "RS256", "ES384", "EdDSA") —
+     * {@code KeyProcessor} always assigns a JWA identifier to loaded keys (defaulting to
+     * "RS256" for RSA keys without an {@code alg} field and deriving ES* from the curve
+     * for EC keys).
+     * <p>
+     * Compatibility rules:
+     * <ul>
+     *   <li><strong>RSA family (RS* and PS*):</strong> The {@code alg} member of a JWK is advisory
+     *       (RFC 7517, Section 4.4); the RSA key material can verify any RS* or PS* signature.
+     *       Therefore any RSA-family token algorithm is accepted for an RSA-family key.</li>
+     *   <li><strong>EC (ES*):</strong> The curve binds the key to exactly one ES variant
+     *       (P-256 → ES256, P-384 → ES384, P-521 → ES512), so an exact match is required.</li>
+     *   <li><strong>EdDSA:</strong> Single identifier, exact match.</li>
+     *   <li><strong>Anything else:</strong> Exact match.</li>
+     * </ul>
      *
-     * @param tokenAlgorithm the algorithm from the validation header
-     * @param keyAlgorithm   the algorithm from the key
+     * @param tokenAlgorithm the JWA algorithm from the validation header
+     * @param keyAlgorithm   the JWA algorithm associated with the key
      * @return true if the algorithms are compatible, false otherwise
      */
     private boolean isAlgorithmCompatible(String tokenAlgorithm, String keyAlgorithm) {
-        // For RSA keys
-        if ("RSA".equals(keyAlgorithm)) {
-            return tokenAlgorithm.startsWith("RS") || tokenAlgorithm.startsWith("PS");
+        if (RSA_FAMILY_ALGORITHMS.contains(keyAlgorithm)) {
+            return RSA_FAMILY_ALGORITHMS.contains(tokenAlgorithm);
         }
-        // For EC keys
-        if ("EC".equals(keyAlgorithm)) {
-            return tokenAlgorithm.startsWith("ES");
-        }
-        // For EdDSA keys (OKP key type)
-        if ("EdDSA".equals(keyAlgorithm)) {
-            return "EdDSA".equals(tokenAlgorithm);
-        }
-        // For exact matches
+        // EC (curve-bound), EdDSA, and all other algorithms require an exact match
         return tokenAlgorithm.equals(keyAlgorithm);
     }
 }

@@ -28,6 +28,10 @@ import java.util.List;
  * only keys with known/supported algorithms are loaded into the key store.
  * This is structural validation, not runtime signature verification preferences.
  * <p>
+ * Like {@link SignatureAlgorithmPreferences}, custom algorithm lists reject the insecure
+ * symmetric algorithms (HS256, HS384, HS512) and "none" — these can never apply to the
+ * asymmetric key material (RSA, EC, OKP) processed from a JWKS.
+ * <p>
  * For more details on the security aspects, see the
  * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/security-reference.adoc">Security Specification</a>
  *
@@ -45,6 +49,14 @@ public class JwkAlgorithmPreferences {
     private final List<String> supportedAlgorithms;
 
     /**
+     * List of explicitly rejected algorithms for security reasons.
+     * Mirrors {@link SignatureAlgorithmPreferences}: symmetric MAC algorithms and "none"
+     * are never legitimate for asymmetric JWK key material (only RSA, EC, and OKP key
+     * types are processed), so rejecting them here cannot break any valid configuration.
+     */
+    private static final List<String> REJECTED_ALGORITHMS = List.of("HS256", "HS384", "HS512", "none");
+
+    /**
      * Default constructor that initializes the supported algorithms list with default values.
      */
     public JwkAlgorithmPreferences() {
@@ -55,8 +67,16 @@ public class JwkAlgorithmPreferences {
      * Constructor that allows specifying custom supported algorithms.
      *
      * @param supportedAlgorithms the list of supported algorithms for JWK parsing
+     * @throws IllegalArgumentException if the list contains an explicitly rejected
+     *                                  algorithm (HS256, HS384, HS512, none)
      */
     public JwkAlgorithmPreferences(List<String> supportedAlgorithms) {
+        for (String alg : supportedAlgorithms) {
+            if (REJECTED_ALGORITHMS.contains(alg)) {
+                throw new IllegalArgumentException(
+                        "Algorithm '%s' is in the rejected algorithms list and cannot be used as a supported JWK algorithm".formatted(alg));
+            }
+        }
         this.supportedAlgorithms = Collections.unmodifiableList(supportedAlgorithms);
     }
 

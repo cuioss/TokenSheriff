@@ -31,6 +31,7 @@ import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -93,6 +94,19 @@ public class AccessTokenCache {
     private final ScheduledExecutorService evictionExecutor;
 
     /**
+     * Whether this cache created {@link #evictionExecutor} itself.
+     * Only internally created executors are shut down by {@link #shutdown()};
+     * caller-supplied executors are left running.
+     */
+    private final boolean ownsEvictionExecutor;
+
+    /**
+     * The scheduled eviction task, cancelled on {@link #shutdown()} when the
+     * executor is caller-supplied (and therefore not shut down).
+     */
+    private final ScheduledFuture<?> evictionTask;
+
+    /**
      * Creates a new AccessTokenCache with the specified configuration.
      *
      * @param config the cache configuration
@@ -113,16 +127,22 @@ public class AccessTokenCache {
             // Only initialize cache structures when caching is enabled
             this.cache = new ConcurrentHashMap<>(this.maxSize);
 
-            // Use provided executor or create default for background expiration cleanup
-            this.evictionExecutor = config.getOrCreateScheduledExecutorService();
-
-            if (this.evictionExecutor != null) {
-                this.evictionExecutor.scheduleWithFixedDelay(
-                        this::evictExpiredTokens,
-                        config.getEvictionIntervalSeconds(),
-                        config.getEvictionIntervalSeconds(),
-                        TimeUnit.SECONDS);
+            // Use the caller-supplied executor if configured, otherwise create an internally
+            // owned one. Only internally created executors are shut down by shutdown().
+            ScheduledExecutorService configuredExecutor = config.getScheduledExecutorService();
+            if (configuredExecutor != null) {
+                this.evictionExecutor = configuredExecutor;
+                this.ownsEvictionExecutor = false;
+            } else {
+                this.evictionExecutor = config.createScheduledExecutorService();
+                this.ownsEvictionExecutor = true;
             }
+
+            this.evictionTask = this.evictionExecutor.scheduleWithFixedDelay(
+                    this::evictExpiredTokens,
+                    config.getEvictionIntervalSeconds(),
+                    config.getEvictionIntervalSeconds(),
+                    TimeUnit.SECONDS);
 
             LOGGER.debug("AccessTokenCache initialized with maxSize=%s, evictionInterval=%ss",
                     this.maxSize, config.getEvictionIntervalSeconds());
@@ -130,6 +150,8 @@ public class AccessTokenCache {
             // Cache disabled - no cache structures or background threads needed
             this.cache = null;
             this.evictionExecutor = null;
+            this.ownsEvictionExecutor = false;
+            this.evictionTask = null;
             LOGGER.debug("AccessTokenCache disabled (maxSize=0) - no executor started");
         }
     }
@@ -307,11 +329,16 @@ public class AccessTokenCache {
     }
 
     /**
-     * Shuts down the cache and its background threads.
+     * Shuts down the cache and its background eviction.
      * Should be called when the cache is no longer needed.
+     * <p>
+     * The eviction executor is only shut down if it was created internally by this cache.
+     * A caller-supplied executor (configured via
+     * {@link AccessTokenCacheConfig#getScheduledExecutorService()}) is left running —
+     * only the periodic eviction task scheduled on it is cancelled.
      */
     public void shutdown() {
-        if (evictionExecutor != null) {
+        if (ownsEvictionExecutor && evictionExecutor != null) {
             evictionExecutor.shutdown();
             try {
                 if (!evictionExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
@@ -321,6 +348,9 @@ public class AccessTokenCache {
                 evictionExecutor.shutdownNow();
                 Thread.currentThread().interrupt();
             }
+        } else if (evictionTask != null) {
+            // Caller-supplied executor: cancel our periodic task but leave the executor running
+            evictionTask.cancel(false);
         }
 
         if (cache != null) {
@@ -350,6 +380,16 @@ public class AccessTokenCache {
      */
     int size() {
         return cache != null ? cache.size() : 0;
+    }
+
+    /**
+     * Gets the eviction executor.
+     * Package-private for testing purposes.
+     *
+     * @return the eviction executor, or null if caching is disabled
+     */
+    ScheduledExecutorService evictionExecutor() {
+        return evictionExecutor;
     }
 
 

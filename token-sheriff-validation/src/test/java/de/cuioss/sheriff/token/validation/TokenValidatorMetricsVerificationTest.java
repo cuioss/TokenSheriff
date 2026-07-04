@@ -93,8 +93,6 @@ class TokenValidatorMetricsVerificationTest {
         // Check specific metrics that were missing in the benchmark
         checkMetric("ISSUER_EXTRACTION", monitor.getValidationMetrics(MeasurementType.ISSUER_EXTRACTION)
                 .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO));
-        checkMetric("JWKS_OPERATIONS", monitor.getValidationMetrics(MeasurementType.JWKS_OPERATIONS)
-                .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO));
         checkMetric("HEADER_VALIDATION", monitor.getValidationMetrics(MeasurementType.HEADER_VALIDATION)
                 .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO));
     }

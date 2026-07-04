@@ -42,12 +42,6 @@ class MeasurementTypeTest {
         assertEquals(7, MeasurementType.TOKEN_BUILDING.ordinal());
         assertEquals(8, MeasurementType.CLAIMS_VALIDATION.ordinal());
         assertEquals(9, MeasurementType.CACHE_STORE.ordinal());
-
-        // Cross-cutting concerns (10-13)
-        assertEquals(10, MeasurementType.JWKS_OPERATIONS.ordinal());
-        assertEquals(11, MeasurementType.RETRY_ATTEMPT.ordinal());
-        assertEquals(12, MeasurementType.RETRY_COMPLETE.ordinal());
-        assertEquals(13, MeasurementType.RETRY_DELAY.ordinal());
     }
 
     @Test
@@ -63,16 +57,12 @@ class MeasurementTypeTest {
         assertTrue(MeasurementType.TOKEN_BUILDING.getDescription().startsWith("7."));
         assertTrue(MeasurementType.CLAIMS_VALIDATION.getDescription().startsWith("8."));
         assertTrue(MeasurementType.CACHE_STORE.getDescription().startsWith("9."));
-        assertTrue(MeasurementType.JWKS_OPERATIONS.getDescription().startsWith("10."));
-        assertTrue(MeasurementType.RETRY_ATTEMPT.getDescription().startsWith("11."));
-        assertTrue(MeasurementType.RETRY_COMPLETE.getDescription().startsWith("12."));
-        assertTrue(MeasurementType.RETRY_DELAY.getDescription().startsWith("13."));
     }
 
     @Test
-    @DisplayName("Should have all 15 enum values")
+    @DisplayName("Should have all 10 enum values")
     void shouldHaveAll15EnumValues() {
-        assertEquals(15, MeasurementType.values().length);
+        assertEquals(10, MeasurementType.values().length);
     }
 
     @Test
