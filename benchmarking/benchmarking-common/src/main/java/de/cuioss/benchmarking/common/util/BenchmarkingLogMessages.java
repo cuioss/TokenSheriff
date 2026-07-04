@@ -754,6 +754,13 @@ public final class BenchmarkingLogMessages {
                 .identifier(125)
                 .template("Issue during parsing history file: %s")
                 .build();
+
+        /** Warning when a secret-bearing system property is forwarded to a forked JVM command line. */
+        public static final LogRecord SECRET_PROPERTY_ON_FORK_COMMAND_LINE = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(126)
+                .template("Secret system property '%s' is forwarded on the forked JVM command line and may be visible in process listings")
+                .build();
     }
 
     /**

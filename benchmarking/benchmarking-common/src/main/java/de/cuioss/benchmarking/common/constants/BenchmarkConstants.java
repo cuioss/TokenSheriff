@@ -347,8 +347,8 @@ public final class BenchmarkConstants {
             public static final String NO_RESULTS_PROVIDED = "No benchmark results provided";
             public static final String THROUGHPUT_NOT_FOUND_FORMAT = "Required throughput benchmark '%s' not found in results";
             public static final String LATENCY_NOT_FOUND_FORMAT = "Required latency benchmark '%s' not found in results";
-            public static final String THROUGHPUT_POSITIVE = "Throughput must be positive, got: ";
-            public static final String LATENCY_POSITIVE = "Latency must be positive, got: ";
+            public static final String THROUGHPUT_NON_NEGATIVE = "Throughput must not be negative, got: ";
+            public static final String LATENCY_NON_NEGATIVE = "Latency must not be negative, got: ";
             public static final String SCORE_NON_NEGATIVE = "Performance score must be non-negative, got: ";
         }
 

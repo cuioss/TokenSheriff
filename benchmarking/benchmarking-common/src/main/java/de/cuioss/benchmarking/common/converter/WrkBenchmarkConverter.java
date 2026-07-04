@@ -17,6 +17,7 @@ package de.cuioss.benchmarking.common.converter;
 
 import de.cuioss.benchmarking.common.config.BenchmarkType;
 import de.cuioss.benchmarking.common.model.BenchmarkData;
+import de.cuioss.benchmarking.common.report.MetricsComputer;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.io.IOException;
@@ -38,6 +39,9 @@ import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.ERROR.F
 public class WrkBenchmarkConverter implements BenchmarkConverter {
 
     private static final CuiLogger LOGGER = new CuiLogger(WrkBenchmarkConverter.class);
+
+    /** Key for the wrk-reported average latency (ms) in {@link BenchmarkData.Benchmark#getAdditionalData()}. */
+    static final String LATENCY_AVG_MS = "latencyAvgMs";
 
     // Regex patterns for parsing WRK output
     private static final Pattern REQUESTS_PER_SEC = Pattern.compile("Requests/sec:\\s+([\\d.]+)");
@@ -104,16 +108,25 @@ public class WrkBenchmarkConverter implements BenchmarkConverter {
                 .build();
     }
 
+    /**
+     * Parses a single WRK output file into a benchmark.
+     *
+     * @param file the WRK output file
+     * @return the parsed benchmark, or {@code null} if the file contains no parseable
+     *         {@code Requests/sec} line (the caller must skip such files)
+     * @throws IOException if reading the file fails
+     */
     private BenchmarkData.Benchmark parseWrkFile(Path file) throws IOException {
         String content = Files.readString(file);
         String name = extractBenchmarkName(file);
 
-        // Parse requests per second (throughput)
-        double requestsPerSec = 0;
+        // Parse requests per second (throughput) - without it the file yields no usable metrics
         Matcher m = REQUESTS_PER_SEC.matcher(content);
-        if (m.find()) {
-            requestsPerSec = Double.parseDouble(m.group(1));
+        if (!m.find()) {
+            LOGGER.error(FAILED_PARSE_WRK_FILE, file);
+            return null;
         }
+        double requestsPerSec = Double.parseDouble(m.group(1));
 
         // Parse latency statistics
         double latencyAvg = 0;
@@ -124,7 +137,8 @@ public class WrkBenchmarkConverter implements BenchmarkConverter {
             latencyStdev = convertToMs(Double.parseDouble(m.group(3)), m.group(4));
         }
 
-        // Parse percentiles
+        // Parse percentiles - only measured values are reported, missing percentiles
+        // are NOT estimated/fabricated. Downstream consumers tolerate missing keys.
         Map<String, Double> percentiles = new LinkedHashMap<>();
         m = LATENCY_PERCENTILE.matcher(content);
         while (m.find()) {
@@ -132,9 +146,6 @@ public class WrkBenchmarkConverter implements BenchmarkConverter {
             double value = convertToMs(Double.parseDouble(m.group(2)), m.group(3));
             percentiles.put(String.valueOf(percentile), value);
         }
-
-        // Ensure standard percentiles exist
-        ensureStandardPercentiles(percentiles, latencyAvg, latencyStdev);
 
         return BenchmarkData.Benchmark.builder()
                 .name(name)
@@ -150,6 +161,7 @@ public class WrkBenchmarkConverter implements BenchmarkConverter {
                 .confidenceLow(Math.max(0, latencyAvg - latencyStdev))
                 .confidenceHigh(latencyAvg + latencyStdev)
                 .percentiles(percentiles)
+                .additionalData(Map.of(LATENCY_AVG_MS, latencyAvg))
                 .build();
     }
 
@@ -192,28 +204,6 @@ public class WrkBenchmarkConverter implements BenchmarkConverter {
         };
     }
 
-    private void ensureStandardPercentiles(Map<String, Double> percentiles, double avg, double stdev) {
-        String[] standard = {"0.0", "50.0", "90.0", "95.0", "99.0", "99.9", "99.99", "100.0"};
-
-        for (String p : standard) {
-            if (percentiles.containsKey(p)) {
-                continue;
-            }
-            double percentileValue = Double.parseDouble(p);
-            // Simple estimation based on normal distribution
-            double estimated = estimatePercentile(percentileValue, avg, stdev);
-            percentiles.put(p, estimated);
-        }
-    }
-
-    private double estimatePercentile(double percentile, double avg, double stdev) {
-        if (percentile <= 50) {
-            return Math.max(0, avg - stdev * (50 - percentile) / 50);
-        } else {
-            return avg + stdev * (percentile - 50) / 50 * 2;
-        }
-    }
-
     private BenchmarkData.Metadata createMetadata() {
         Instant now = Instant.now();
         return BenchmarkData.Metadata.builder()
@@ -246,9 +236,10 @@ public class WrkBenchmarkConverter implements BenchmarkConverter {
         }
 
         double throughput = primary.getRawScore();
-        double latencyMs = primary.getPercentiles().getOrDefault("50.0", 100.0);
-        int score = calculatePerformanceScore(throughput, latencyMs);
-        String grade = calculatePerformanceGrade(score);
+        double latencyMs = resolveLatencyMs(primary);
+        // Delegate to MetricsComputer - the single home for score/grade computation
+        int score = MetricsComputer.computeIntegrationScore(throughput, latencyMs);
+        String grade = MetricsComputer.gradeIntegration(score);
 
         return BenchmarkData.Overview.builder()
                 .throughput(primary.getThroughput())
@@ -277,18 +268,21 @@ public class WrkBenchmarkConverter implements BenchmarkConverter {
         return String.format(Locale.US, "%.1fms", ms);
     }
 
-    private int calculatePerformanceScore(double throughput, double latencyMs) {
-        // Score based on throughput (0-50 points) and latency (0-50 points)
-        int throughputScore = (int) Math.min(50, throughput / 200);
-        int latencyScore = (int) Math.max(0, 50 - latencyMs / 2);
-        return throughputScore + latencyScore;
-    }
-
-    private String calculatePerformanceGrade(int score) {
-        if (score >= 90) return "A";
-        if (score >= 80) return "B";
-        if (score >= 70) return "C";
-        if (score >= 60) return "D";
-        return "F";
+    /**
+     * Resolves the latency (in milliseconds) for the overview from measured data only:
+     * the measured P50 percentile if present, otherwise the wrk-reported average latency.
+     *
+     * @param benchmark the primary benchmark
+     * @return the measured latency in milliseconds, or 0 if neither value was reported
+     */
+    private double resolveLatencyMs(BenchmarkData.Benchmark benchmark) {
+        if (benchmark.getPercentiles() != null && benchmark.getPercentiles().containsKey("50.0")) {
+            return benchmark.getPercentiles().get("50.0");
+        }
+        if (benchmark.getAdditionalData() != null
+                && benchmark.getAdditionalData().get(LATENCY_AVG_MS) instanceof Double avg) {
+            return avg;
+        }
+        return 0;
     }
 }

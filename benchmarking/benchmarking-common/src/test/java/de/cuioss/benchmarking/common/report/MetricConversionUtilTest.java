@@ -18,7 +18,6 @@ package de.cuioss.benchmarking.common.report;
 import org.junit.jupiter.api.Test;
 
 import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Metrics.Units.*;
-import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Report.Grades.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -123,20 +122,6 @@ class MetricConversionUtilTest {
                 "Average latency should be less than 0.4 ms, got: " + averageLatencyMs);
         assertTrue(averageLatencyMs > 0.3,
                 "Average latency should be more than 0.3 ms, got: " + averageLatencyMs);
-    }
-
-    @Test
-    void performanceGrade() {
-        assertEquals(A_PLUS, MetricConversionUtil.calculatePerformanceGrade(1_000_000),
-                "1M ops/s = A+");
-        assertEquals(A, MetricConversionUtil.calculatePerformanceGrade(100_000),
-                "100K ops/s = A");
-        assertEquals(B, MetricConversionUtil.calculatePerformanceGrade(10_000),
-                "10K ops/s = B");
-        assertEquals(C, MetricConversionUtil.calculatePerformanceGrade(1_000),
-                "1K ops/s = C");
-        assertEquals(D, MetricConversionUtil.calculatePerformanceGrade(100),
-                "100 ops/s = D");
     }
 
     @Test

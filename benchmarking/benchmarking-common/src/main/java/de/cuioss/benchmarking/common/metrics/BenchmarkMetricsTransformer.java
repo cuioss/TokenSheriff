@@ -22,6 +22,10 @@ import java.util.*;
 /**
  * Transforms Prometheus time-series data into the benchmark server metrics format
  * as defined in benchmark-metrics.adoc.
+ * <p>
+ * Each metric may be backed by multiple series (e.g. {@code jvm_memory_used_bytes}
+ * with different {@code area} labels); the transformer selects or aggregates the
+ * relevant series per metric.
  *
  */
 public class BenchmarkMetricsTransformer {
@@ -35,14 +39,14 @@ public class BenchmarkMetricsTransformer {
      * @param benchmarkName Name of the benchmark
      * @param startTime Start time of the benchmark
      * @param endTime End time of the benchmark
-     * @param timeSeriesData Raw time-series data from Prometheus
+     * @param timeSeriesData Raw time-series data from Prometheus (all series per metric)
      * @return Structured benchmark metrics as defined in requirements
      */
     public Map<String, Object> transformToServerMetrics(
             String benchmarkName,
             Instant startTime,
             Instant endTime,
-            Map<String, PrometheusClient.TimeSeries> timeSeriesData) {
+            Map<String, List<PrometheusClient.TimeSeries>> timeSeriesData) {
 
         Map<String, Object> result = new LinkedHashMap<>();
         Duration duration = Duration.between(startTime, endTime);
@@ -65,16 +69,16 @@ public class BenchmarkMetricsTransformer {
     }
 
 
-    private Map<String, Object> createResourceMetrics(Map<String, PrometheusClient.TimeSeries> data) {
+    private Map<String, Object> createResourceMetrics(Map<String, List<PrometheusClient.TimeSeries>> data) {
         Map<String, Object> resources = new LinkedHashMap<>();
 
         // CPU metrics
         Map<String, Object> cpu = new LinkedHashMap<>();
-        cpu.put("process", createCpuMetrics(data.get(METRIC_PROCESS_CPU_USAGE), "Process"));
-        cpu.put("system", createCpuMetrics(data.get("system_cpu_usage"), "System"));
+        cpu.put("process", createCpuMetrics(firstSeries(data, METRIC_PROCESS_CPU_USAGE), "Process"));
+        cpu.put("system", createCpuMetrics(firstSeries(data, "system_cpu_usage"), "System"));
 
         // Get CPU cores
-        PrometheusClient.TimeSeries cpuCount = data.get("system_cpu_count");
+        PrometheusClient.TimeSeries cpuCount = firstSeries(data, "system_cpu_count");
         if (cpuCount != null && !cpuCount.values().isEmpty()) {
             cpu.put("cores_available", (int) cpuCount.values().getFirst().value());
         } else {
@@ -123,10 +127,10 @@ public class BenchmarkMetricsTransformer {
         return cpuMetrics;
     }
 
-    private Map<String, Object> createMemoryMetrics(Map<String, PrometheusClient.TimeSeries> data) {
+    private Map<String, Object> createMemoryMetrics(Map<String, List<PrometheusClient.TimeSeries>> data) {
         Map<String, Object> memory = new LinkedHashMap<>();
 
-        // Heap memory
+        // Heap memory - select the series labeled area="heap" from all memory series
         Map<String, Object> heap = new LinkedHashMap<>();
         PrometheusClient.TimeSeries heapUsed = findHeapMemory(data.get(METRIC_JVM_MEMORY_USED_BYTES));
         if (heapUsed != null && !heapUsed.values().isEmpty()) {
@@ -147,7 +151,7 @@ public class BenchmarkMetricsTransformer {
 
         // GC metrics
         Map<String, Object> gc = new LinkedHashMap<>();
-        PrometheusClient.TimeSeries gcOverhead = data.get("jvm_gc_overhead");
+        PrometheusClient.TimeSeries gcOverhead = firstSeries(data, "jvm_gc_overhead");
         if (gcOverhead != null && !gcOverhead.values().isEmpty()) {
             double avgOverhead = gcOverhead.values().stream()
                     .mapToDouble(PrometheusClient.DataPoint::value)
@@ -161,10 +165,10 @@ public class BenchmarkMetricsTransformer {
         return memory;
     }
 
-    private Map<String, Object> createThreadMetrics(Map<String, PrometheusClient.TimeSeries> data) {
+    private Map<String, Object> createThreadMetrics(Map<String, List<PrometheusClient.TimeSeries>> data) {
         Map<String, Object> threads = new LinkedHashMap<>();
 
-        PrometheusClient.TimeSeries liveThreads = data.get("jvm_threads_live_threads");
+        PrometheusClient.TimeSeries liveThreads = firstSeries(data, "jvm_threads_live_threads");
         if (liveThreads != null && !liveThreads.values().isEmpty()) {
             Statistics stats = calculateStatistics(
                     liveThreads.values().stream()
@@ -180,7 +184,7 @@ public class BenchmarkMetricsTransformer {
             threads.put("final", 0);
         }
 
-        PrometheusClient.TimeSeries daemonThreads = data.get("jvm_threads_daemon_threads");
+        PrometheusClient.TimeSeries daemonThreads = firstSeries(data, "jvm_threads_daemon_threads");
         if (daemonThreads != null && !daemonThreads.values().isEmpty()) {
             threads.put("daemon", (int) daemonThreads.values().getFirst().value());
         } else {
@@ -191,27 +195,29 @@ public class BenchmarkMetricsTransformer {
     }
 
 
-    private Map<String, Object> createApplicationMetrics(Map<String, PrometheusClient.TimeSeries> data) {
+    private Map<String, Object> createApplicationMetrics(Map<String, List<PrometheusClient.TimeSeries>> data) {
         Map<String, Object> application = new LinkedHashMap<>();
 
         Map<String, Object> jwtValidations = new LinkedHashMap<>();
 
-        // JWT validation metrics
-        PrometheusClient.TimeSeries jwtSuccess = data.get("sheriff_token_validation_success_operations_total");
+        // JWT validation metrics - aggregate across ALL series (e.g. per event_type label)
         double totalSuccess = 0;
         double cacheHits = 0;
 
-        if (jwtSuccess != null && !jwtSuccess.values().isEmpty()) {
-            totalSuccess = getDeltaValue(jwtSuccess);
+        for (PrometheusClient.TimeSeries series : allSeries(data, "sheriff_token_validation_success_operations_total")) {
+            double delta = getDeltaValue(series);
+            totalSuccess += delta;
             // Check if it's a cache hit based on metric labels
-            if (jwtSuccess.labels().containsKey("event_type") &&
-                    jwtSuccess.labels().get("event_type").contains("CACHE_HIT")) {
-                cacheHits = totalSuccess;
+            if (series.labels().containsKey("event_type") &&
+                    series.labels().get("event_type").contains("CACHE_HIT")) {
+                cacheHits += delta;
             }
         }
 
-        PrometheusClient.TimeSeries jwtErrors = data.get("sheriff_token_validation_errors_total");
-        double totalErrors = jwtErrors != null ? getDeltaValue(jwtErrors) : 0;
+        double totalErrors = 0;
+        for (PrometheusClient.TimeSeries series : allSeries(data, "sheriff_token_validation_errors_total")) {
+            totalErrors += getDeltaValue(series);
+        }
 
         double total = totalSuccess + totalErrors;
         jwtValidations.put("total", (int) total);
@@ -220,15 +226,17 @@ public class BenchmarkMetricsTransformer {
         jwtValidations.put("cache_hits", (int) cacheHits);
         jwtValidations.put("cache_hit_rate_percent", total > 0 ? round(cacheHits / total * 100, 1) : 0.0);
 
-        // JWT validation timing
-        PrometheusClient.TimeSeries jwtDurationSum = data.get("sheriff_token_bearer_token_validation_seconds_sum");
-        PrometheusClient.TimeSeries jwtDurationCount = data.get("sheriff_token_bearer_token_validation_seconds_count");
-        if (jwtDurationSum != null && jwtDurationCount != null) {
-            double sum = getDeltaValue(jwtDurationSum);
-            double count = getDeltaValue(jwtDurationCount);
-            if (count > 0) {
-                jwtValidations.put("average_validation_time_ms", round(sum / count * 1000, 2));
-            }
+        // JWT validation timing - aggregate sums/counts across all series
+        double sum = 0;
+        double count = 0;
+        for (PrometheusClient.TimeSeries series : allSeries(data, "sheriff_token_bearer_token_validation_seconds_sum")) {
+            sum += getDeltaValue(series);
+        }
+        for (PrometheusClient.TimeSeries series : allSeries(data, "sheriff_token_bearer_token_validation_seconds_count")) {
+            count += getDeltaValue(series);
+        }
+        if (count > 0) {
+            jwtValidations.put("average_validation_time_ms", round(sum / count * 1000, 2));
         }
 
         application.put("jwt_validations", jwtValidations);
@@ -236,16 +244,37 @@ public class BenchmarkMetricsTransformer {
         return application;
     }
 
-    private PrometheusClient.TimeSeries findHeapMemory(PrometheusClient.TimeSeries memorySeries) {
+    /**
+     * Returns the first series of a metric, or {@code null} if the metric has no series.
+     * Use for metrics that are expected to have exactly one series.
+     */
+    private PrometheusClient.TimeSeries firstSeries(Map<String, List<PrometheusClient.TimeSeries>> data, String metricName) {
+        List<PrometheusClient.TimeSeries> series = data.get(metricName);
+        return series == null || series.isEmpty() ? null : series.getFirst();
+    }
+
+    /**
+     * Returns all series of a metric, or an empty list if the metric has no series.
+     */
+    private List<PrometheusClient.TimeSeries> allSeries(Map<String, List<PrometheusClient.TimeSeries>> data, String metricName) {
+        List<PrometheusClient.TimeSeries> series = data.get(metricName);
+        return series == null ? List.of() : series;
+    }
+
+    /**
+     * Selects the heap memory series (label {@code area="heap"}) from all memory series.
+     *
+     * @param memorySeries all series of the memory metric, may be {@code null}
+     * @return the heap series, or {@code null} if none is labeled as heap
+     */
+    private PrometheusClient.TimeSeries findHeapMemory(List<PrometheusClient.TimeSeries> memorySeries) {
         if (memorySeries == null) {
             return null;
         }
-        // Check if this is heap memory based on labels
-        if (memorySeries.labels().containsKey("area") &&
-                "heap".equals(memorySeries.labels().get("area"))) {
-            return memorySeries;
-        }
-        return null;
+        return memorySeries.stream()
+                .filter(series -> "heap".equals(series.labels().get("area")))
+                .findFirst()
+                .orElse(null);
     }
 
     private double getDeltaValue(PrometheusClient.TimeSeries series) {

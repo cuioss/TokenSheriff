@@ -130,6 +130,7 @@ All messages follow the format: `Benchmarking-[identifier]: [message]`
 | 123 | UNKNOWN_TIME_UNIT | Unknown time unit '%s' in '%s', defaulting to seconds
 | 124 | TOKEN_POOL_EMPTY | Token pool is empty, fetching single token
 | 125 | ISSUE_PARSING_HISTORY_FILE | Issue during parsing history file: %s
+| 126 | SECRET_PROPERTY_ON_FORK_COMMAND_LINE | Secret system property '%s' is forwarded on the forked JVM command line and may be visible in process listings
 |===
 
 == ERROR Level Messages (200-299)
