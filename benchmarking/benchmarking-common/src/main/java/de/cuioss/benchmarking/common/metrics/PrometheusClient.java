@@ -78,20 +78,24 @@ public class PrometheusClient {
 
     /**
      * Query Prometheus for time-series data in a specific time range.
+     * <p>
+     * A single metric name can match multiple series (e.g. {@code jvm_memory_used_bytes}
+     * with different {@code area}/{@code id} labels). ALL matching series are returned,
+     * each with its own label set and data points.
      *
      * @param metricNames List of metric names to query
      * @param startTime   Start of time range (inclusive)
      * @param endTime     End of time range (inclusive)
      * @param step        Step size between data points
-     * @return Map of metric name to time series data
+     * @return Map of metric name to all matching time series (empty list if the metric is not exported)
      * @throws PrometheusException if query fails or Prometheus unavailable
      */
-    public Map<String, TimeSeries> queryRange(List<String> metricNames, Instant startTime, Instant endTime, Duration step) throws PrometheusException {
-        Map<String, TimeSeries> results = new HashMap<>();
+    public Map<String, List<TimeSeries>> queryRange(List<String> metricNames, Instant startTime, Instant endTime, Duration step) throws PrometheusException {
+        Map<String, List<TimeSeries>> results = new HashMap<>();
 
         for (String metricName : metricNames) {
             try {
-                TimeSeries timeSeries = queryRangeForMetric(metricName, startTime, endTime, step);
+                List<TimeSeries> timeSeries = queryRangeForMetric(metricName, startTime, endTime, step);
                 results.put(metricName, timeSeries);
             } catch (PrometheusException e) {
                 LOGGER.warn(FAILED_QUERY_METRIC, metricName, e.getMessage());
@@ -102,7 +106,7 @@ public class PrometheusClient {
         return results;
     }
 
-    private TimeSeries queryRangeForMetric(String metricName, Instant startTime, Instant endTime, Duration step) throws PrometheusException {
+    private List<TimeSeries> queryRangeForMetric(String metricName, Instant startTime, Instant endTime, Duration step) throws PrometheusException {
         String stepSeconds = step.getSeconds() + "s";
         String startEpoch = String.valueOf(startTime.getEpochSecond());
         String endEpoch = String.valueOf(endTime.getEpochSecond());
@@ -140,7 +144,7 @@ public class PrometheusClient {
         }
     }
 
-    private TimeSeries parsePrometheusResponse(String metricName, String responseBody) throws PrometheusException {
+    private List<TimeSeries> parsePrometheusResponse(String metricName, String responseBody) throws PrometheusException {
         try {
             JsonObject root = GSON.fromJson(responseBody, JsonObject.class);
             validateStatus(root);
@@ -149,15 +153,18 @@ public class PrometheusClient {
             JsonArray resultArray = data.getAsJsonArray("result");
 
             if (resultArray == null || resultArray.isEmpty()) {
-                // Metric may not be exported by the application - return empty series silently
-                return new TimeSeries(metricName, Map.of(), List.of());
+                // Metric may not be exported by the application - return no series silently
+                return List.of();
             }
 
-            JsonObject firstResult = resultArray.get(0).getAsJsonObject();
-            Map<String, String> labels = extractLabels(firstResult.getAsJsonObject("metric"));
-            List<DataPoint> dataPoints = extractDataPoints(firstResult.getAsJsonArray("values"));
-
-            return new TimeSeries(metricName, labels, dataPoints);
+            List<TimeSeries> allSeries = new ArrayList<>();
+            for (JsonElement resultElement : resultArray) {
+                JsonObject result = resultElement.getAsJsonObject();
+                Map<String, String> labels = extractLabels(result.getAsJsonObject("metric"));
+                List<DataPoint> dataPoints = extractDataPoints(result.getAsJsonArray("values"));
+                allSeries.add(new TimeSeries(metricName, labels, dataPoints));
+            }
+            return List.copyOf(allSeries);
 
         } catch (JsonParseException | IllegalStateException | NullPointerException e) {
             // JsonParseException: malformed JSON

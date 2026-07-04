@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.benchmark;
 
+import de.cuioss.benchmarking.common.config.BenchmarkConfiguration;
 import de.cuioss.sheriff.token.validation.benchmark.standard.SimpleCoreValidationBenchmark;
 import de.cuioss.tools.logging.CuiLogger;
 import org.openjdk.jmh.results.RunResult;
@@ -33,6 +34,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+
+import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Integration.Jmh;
 
 /**
  * Runs the core validation benchmark at multiple thread counts (1, 10, 50, 100)
@@ -60,6 +63,15 @@ public class ConcurrencySweepRunner {
         Path outputPath = Path.of(OUTPUT_DIR);
         Files.createDirectories(outputPath);
 
+        // Honor the same jmh.* system properties as the other runners (see BenchmarkConfiguration),
+        // falling back to the sweep's previous hardcoded values when a property is not set.
+        // Thread counts are the sweep dimension and are therefore not configurable here.
+        int forks = Integer.getInteger(Jmh.FORKS, 1);
+        int warmupIterations = Integer.getInteger(Jmh.WARMUP_ITERATIONS, 3);
+        int measurementIterations = Integer.getInteger(Jmh.MEASUREMENT_ITERATIONS, 5);
+        TimeValue measurementTime = BenchmarkConfiguration.parseTimeValue(System.getProperty(Jmh.MEASUREMENT_TIME, "4s"));
+        TimeValue warmupTime = BenchmarkConfiguration.parseTimeValue(System.getProperty(Jmh.WARMUP_TIME, "1s"));
+
         List<RunResult> allResults = new ArrayList<>();
 
         for (int threads : THREAD_COUNTS) {
@@ -67,11 +79,11 @@ public class ConcurrencySweepRunner {
 
             Options options = new OptionsBuilder()
                     .include(SimpleCoreValidationBenchmark.class.getSimpleName() + "\\.measureAverageTime")
-                    .forks(1)
-                    .warmupIterations(3)
-                    .measurementIterations(5)
-                    .measurementTime(TimeValue.seconds(4))
-                    .warmupTime(TimeValue.seconds(1))
+                    .forks(forks)
+                    .warmupIterations(warmupIterations)
+                    .measurementIterations(measurementIterations)
+                    .measurementTime(measurementTime)
+                    .warmupTime(warmupTime)
                     .threads(threads)
                     .jvmArgsPrepend(
                             "-Djava.util.logging.manager=java.util.logging.LogManager",

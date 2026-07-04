@@ -61,12 +61,13 @@ public class ErrorJfrBenchmark extends AbstractJfrBenchmark {
     @BenchmarkMode(Mode.AverageTime)
     @OutputTimeUnit(TimeUnit.MICROSECONDS)
     public AccessTokenContent validateValidTokenWithJfr() {
+        // Select the token once so JFR metadata describes the token that is actually validated
+        String token = errorLoadDelegate.nextValidToken();
         try (var recorder = jfrInstrumentation.recordOperation("validateValidTokenWithJfr", "validation")) {
-            String token = tokenRepository.getPrimaryToken();
             recorder.withPayloadSize(token.length())
                     .withMetadata(ISSUER, tokenRepository.getTokenIssuer(token).orElse(null));
 
-            AccessTokenContent result = errorLoadDelegate.validateValid();
+            AccessTokenContent result = errorLoadDelegate.validateValid(token);
             recorder.withSuccess(true);
             return result;
         }
@@ -80,8 +81,8 @@ public class ErrorJfrBenchmark extends AbstractJfrBenchmark {
     @OutputTimeUnit(TimeUnit.MICROSECONDS)
     public Object validateExpiredTokenWithJfr() {
         try (var recorder = jfrInstrumentation.recordOperation("validateExpiredTokenWithJfr", ERROR_VALIDATION_OPERATION)) {
-            recorder.withPayloadSize(200) // Approximate size
-                    .withMetadata(ISSUER, "benchmark-issuer")
+            recorder.withPayloadSize(errorLoadDelegate.getExpiredToken().length())
+                    .withMetadata(ISSUER, errorLoadDelegate.getExpiredTokenIssuer())
                     .withError("expired");
 
             Object result = errorLoadDelegate.validateExpired();
