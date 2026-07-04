@@ -24,7 +24,6 @@
  * <h2>Package Structure</h2>
  * <ul>
  *   <li>{@code benchmarks/} - JWT-specific JFR-instrumented benchmark implementations</li>
- *   <li>{@link de.cuioss.sheriff.token.validation.benchmark.jfr.JfrEventTest} - JFR event testing utility</li>
  * </ul>
  * 
  * <h2>Usage</h2>
@@ -35,7 +34,6 @@
  *   <li>{@code JfrInstrumentation} - Central instrumentation management</li>
  *   <li>{@code JfrVarianceAnalyzer} - Variance analysis from JFR recordings</li>
  *   <li>{@code JfrSupport} - JFR availability detection</li>
- *   <li>{@code JfrConfiguration} - Configuration builder for recordings</li>
  * </ul>
  * 
  * <h3>Running Benchmarks with JFR</h3>

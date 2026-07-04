@@ -15,14 +15,11 @@
  */
 package de.cuioss.benchmarking.common.config;
 
-import de.cuioss.tools.logging.CuiLogger;
 import org.openjdk.jmh.results.format.ResultFormatType;
 
 import java.io.File;
 
 import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Files.Directories;
-import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Integration.Jmh;
-import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.WARN.UNKNOWN_RESULT_FORMAT;
 
 /**
  * Configuration for benchmark report generation.
@@ -49,7 +46,6 @@ String resultFile,
 ResultFormatType resultFormat,
 String projectName
 ) {
-    private static final CuiLogger LOGGER = new CuiLogger(ReportConfiguration.class);
 
 
     /**
@@ -90,16 +86,12 @@ String projectName
 
         // Create results directory if it doesn't exist
         File dir = new File(resultsDirectory);
-        if (!dir.exists()) {
-            boolean created = dir.mkdirs();
-            if (!created) {
-                // Directory already exists or could not be created
-                // Log warning if needed, but continue with default path
-            }
+        if (!dir.exists() && !dir.mkdirs() && !dir.exists()) {
+            throw new IllegalStateException("Could not create results directory: " + resultsDirectory);
         }
 
-        // Generate result file name based on benchmark type
-        String typePrefix = benchmarkType != null ? benchmarkType.name().toLowerCase() : "benchmark";
+        // Generate result file name based on benchmark type (non-null, enforced by build())
+        String typePrefix = benchmarkType.name().toLowerCase();
         return resultsDirectory + "/" + typePrefix + "-result.json";
     }
 
@@ -112,7 +104,9 @@ String projectName
         private String latencyBenchmarkName;
         private String resultsDirectory = Directories.RESULTS_DIR;
         private String resultFile;
-        private ResultFormatType resultFormat = parseResultFormat(System.getProperty(Jmh.RESULT_FORMAT, "JSON"));
+        // jmh.result.format is resolved once in BenchmarkConfiguration.fromSystemProperties()
+        // and passed in via withResultFormat — no second property read here
+        private ResultFormatType resultFormat = ResultFormatType.JSON;
         private String projectName;
 
         public Builder withBenchmarkType(BenchmarkType type) {
@@ -179,18 +173,5 @@ String projectName
             );
         }
 
-        private static ResultFormatType parseResultFormat(String format) {
-            return switch (format.toUpperCase()) {
-                case "JSON" -> ResultFormatType.JSON;
-                case "CSV" -> ResultFormatType.CSV;
-                case "SCSV" -> ResultFormatType.SCSV;
-                case "LATEX" -> ResultFormatType.LATEX;
-                case "TEXT" -> ResultFormatType.TEXT;
-                default -> {
-                    LOGGER.warn(UNKNOWN_RESULT_FORMAT, format);
-                    yield ResultFormatType.JSON;
-                }
-            };
-        }
     }
 }

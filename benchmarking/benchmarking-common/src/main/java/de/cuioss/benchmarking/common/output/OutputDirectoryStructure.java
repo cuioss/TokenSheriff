@@ -117,20 +117,6 @@ public class OutputDirectoryStructure {
     }
 
     /**
-     * Gets the history directory (benchmark-results/history).
-     * Historical archive data should be stored in this directory.
-     * This directory is NOT deployed to GitHub Pages.
-     * Creates the directory if it doesn't exist.
-     *
-     * @return the history directory path
-     * @throws IOException if directory creation fails
-     */
-    public Path getHistoryDir() throws IOException {
-        Files.createDirectories(historyDir);
-        return historyDir;
-    }
-
-    /**
      * Gets the raw Prometheus metrics directory (benchmark-results/prometheus).
      * Raw Prometheus data should be stored in this directory.
      * This directory is NOT deployed to GitHub Pages.
@@ -142,45 +128,6 @@ public class OutputDirectoryStructure {
     public Path getPrometheusRawDir() throws IOException {
         Files.createDirectories(prometheusRawDir);
         return prometheusRawDir;
-    }
-
-    /**
-     * Gets the WRK directory (benchmark-results/wrk).
-     * WRK raw results should be stored in this directory.
-     * This directory is NOT deployed to GitHub Pages.
-     * Creates the directory if it doesn't exist.
-     *
-     * @return the WRK directory path
-     * @throws IOException if directory creation fails
-     */
-    public Path getWrkDir() throws IOException {
-        Files.createDirectories(wrkDir);
-        return wrkDir;
-    }
-
-    /**
-     * Checks if the deployment directory exists.
-     *
-     * @return true if the deployment directory exists, false otherwise
-     */
-    public boolean isDeploymentDirectoryExists() {
-        return Files.exists(deploymentDir);
-    }
-
-    /**
-     * Cleans the deployment directory by deleting it and recreating it.
-     * This ensures a fresh start for report generation.
-     *
-     * @throws IOException if deletion or creation fails
-     */
-    public void cleanDeploymentDirectory() throws IOException {
-        if (Files.exists(deploymentDir)) {
-            deleteDirectoryRecursively(deploymentDir);
-        }
-        Files.createDirectories(deploymentDir);
-        Files.createDirectories(dataDir);
-        Files.createDirectories(badgesDir);
-        Files.createDirectories(apiDir);
     }
 
     /**

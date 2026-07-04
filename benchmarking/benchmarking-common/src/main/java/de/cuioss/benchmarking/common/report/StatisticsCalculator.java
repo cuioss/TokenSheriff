@@ -176,6 +176,33 @@ public final class StatisticsCalculator {
      * @return the standard deviation, or 0.0 if the collection has less than 2 elements
      * @throws NullPointerException if values is null
      */
+    /**
+     * Calculates a percentile using the nearest-rank method on a pre-sorted list.
+     * <p>
+     * Definition: index = min(size - 1, floor(size * percentile / 100)) on the
+     * ascending-sorted values. This is the single percentile definition used by
+     * all benchmarking statistics (transformers and JFR variance analysis).
+     *
+     * @param sortedAscending values sorted ascending, must not be null
+     * @param percentile the percentile to compute (0-100)
+     * @return the percentile value, or 0 if the list is empty
+     * @throws NullPointerException if sortedAscending is null
+     */
+    public static double percentile(List<Double> sortedAscending, double percentile) {
+        Objects.requireNonNull(sortedAscending, COLLECTION_CANNOT_BE_NULL);
+        if (percentile < 0.0 || percentile > 100.0) {
+            throw new IllegalArgumentException("Percentile must be between 0 and 100, but was: " + percentile);
+        }
+        if (sortedAscending.isEmpty()) {
+            return 0;
+        }
+        int index = (int) (sortedAscending.size() * percentile / 100.0);
+        if (index >= sortedAscending.size()) {
+            index = sortedAscending.size() - 1;
+        }
+        return sortedAscending.get(index);
+    }
+
     public static double calculateStandardDeviation(Collection<Double> values) {
         Objects.requireNonNull(values, COLLECTION_CANNOT_BE_NULL);
 

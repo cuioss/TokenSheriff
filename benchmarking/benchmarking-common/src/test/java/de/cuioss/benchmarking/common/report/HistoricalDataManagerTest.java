@@ -32,130 +32,6 @@ import static org.junit.jupiter.api.Assertions.*;
 class HistoricalDataManagerTest {
 
     @Test
-    void archiveCurrentRun(@TempDir Path tempDir) throws Exception {
-        HistoricalDataManager manager = new HistoricalDataManager();
-
-        Map<String, Object> testData = new HashMap<>();
-        testData.put("test", "data");
-        testData.put("value", 123);
-
-        String commitSha = "abc123def456789";
-        manager.archiveCurrentRun(testData, tempDir.toString(), commitSha);
-
-        // Verify history directory was created
-        Path historyDir = tempDir.resolve("history");
-        assertTrue(Files.exists(historyDir));
-        assertTrue(Files.isDirectory(historyDir));
-
-        // Verify file was created with correct naming pattern
-        List<Path> files = manager.getHistoricalFiles(historyDir);
-        assertEquals(1, files.size());
-
-        String filename = files.getFirst().getFileName().toString();
-        assertTrue(filename.endsWith("-abc123de.json"), "File should end with truncated SHA");
-        assertTrue(filename.matches("\\d{4}-\\d{2}-\\d{2}-T\\d{4}Z-.*\\.json"),
-                "File should match timestamp pattern");
-
-        // Verify file content
-        String content = Files.readString(files.getFirst());
-        assertTrue(content.contains("\"test\""));
-        assertTrue(content.contains("\"data\""));
-        assertTrue(content.contains("123"));
-    }
-
-    @Test
-    void archiveWithNullCommitSha(@TempDir Path tempDir) throws Exception {
-        HistoricalDataManager manager = new HistoricalDataManager();
-
-        Map<String, Object> testData = new HashMap<>();
-        testData.put("test", "data");
-
-        manager.archiveCurrentRun(testData, tempDir.toString(), null);
-
-        Path historyDir = tempDir.resolve("history");
-        List<Path> files = manager.getHistoricalFiles(historyDir);
-        assertEquals(1, files.size());
-
-        String filename = files.getFirst().getFileName().toString();
-        assertTrue(filename.endsWith("-unknown.json"), "File should end with 'unknown' for null SHA");
-    }
-
-    @Test
-    void enforceRetentionPolicy(@TempDir Path tempDir) throws Exception {
-        HistoricalDataManager manager = new HistoricalDataManager();
-        Path historyDir = tempDir.resolve("history");
-        Files.createDirectories(historyDir);
-
-        // Create 15 test files with different timestamps
-        for (int i = 0; i < 15; i++) {
-            String timestamp = "2025-01-%02d-T1200Z".formatted(i + 1);
-            Path file = historyDir.resolve(timestamp + "-test" + i + ".json");
-            Files.writeString(file, "{}");
-        }
-
-        // Verify all files exist
-        assertEquals(15, Files.list(historyDir).count());
-
-        // Enforce retention policy
-        manager.enforceRetentionPolicy(historyDir);
-
-        // Verify only 10 most recent files remain
-        List<Path> remainingFiles = manager.getHistoricalFiles(historyDir);
-        assertEquals(10, remainingFiles.size());
-
-        // Verify the oldest files were deleted (files 01-05 should be gone)
-        for (Path file : remainingFiles) {
-            String filename = file.getFileName().toString();
-            assertFalse(filename.contains("2025-01-01") ||
-                    filename.contains("2025-01-02") ||
-                    filename.contains("2025-01-03") ||
-                    filename.contains("2025-01-04") ||
-                    filename.contains("2025-01-05"),
-                    "Oldest files should be deleted: " + filename);
-        }
-    }
-
-    @Test
-    void getHistoricalFiles(@TempDir Path tempDir) throws Exception {
-        HistoricalDataManager manager = new HistoricalDataManager();
-        Path historyDir = tempDir.resolve("history");
-        Files.createDirectories(historyDir);
-
-        // Create test files
-        Files.writeString(historyDir.resolve("2025-01-15-T1200Z-abc.json"), "{}");
-        Files.writeString(historyDir.resolve("2025-01-10-T1200Z-def.json"), "{}");
-        Files.writeString(historyDir.resolve("2025-01-20-T1200Z-ghi.json"), "{}");
-        Files.writeString(historyDir.resolve("not-a-json.txt"), "text"); // Should be ignored
-
-        List<Path> files = manager.getHistoricalFiles(historyDir);
-
-        // Should only return JSON files, sorted newest first
-        assertEquals(3, files.size());
-        assertTrue(files.getFirst().toString().contains("2025-01-20"));
-        assertTrue(files.get(1).toString().contains("2025-01-15"));
-        assertTrue(files.get(2).toString().contains("2025-01-10"));
-    }
-
-    @Test
-    void getHistoricalFilesEmptyDirectory(@TempDir Path tempDir) throws Exception {
-        HistoricalDataManager manager = new HistoricalDataManager();
-        Path historyDir = tempDir.resolve("history");
-        Files.createDirectories(historyDir);
-
-        List<Path> files = manager.getHistoricalFiles(historyDir);
-        assertTrue(files.isEmpty());
-    }
-
-    @Test
-    void getHistoricalFilesNonExistentDirectory(@TempDir Path tempDir) throws Exception {
-        HistoricalDataManager manager = new HistoricalDataManager();
-        Path historyDir = tempDir.resolve("non-existent");
-
-        List<Path> files = manager.getHistoricalFiles(historyDir);
-        assertTrue(files.isEmpty());
-    }
-
-    @Test
     void hasHistoricalData(@TempDir Path tempDir) throws Exception {
         HistoricalDataManager manager = new HistoricalDataManager();
 
@@ -172,22 +48,67 @@ class HistoricalDataManagerTest {
         assertTrue(manager.hasHistoricalData(tempDir.toString()));
     }
 
+
     @Test
-    void retentionPolicyWithExactlyTenFiles(@TempDir Path tempDir) throws Exception {
+    void archiveCurrentRun(@TempDir Path tempDir) throws Exception {
+        HistoricalDataManager manager = new HistoricalDataManager();
+        Map<String, Object> data = new HashMap<>();
+        data.put("overview", Map.of("throughput", "1.5K ops/s"));
+
+        manager.archiveCurrentRun(data, tempDir.toString(), "abcdef1234567890");
+
+        Path historyDir = tempDir.resolve("history");
+        try (var files = Files.list(historyDir)) {
+            List<Path> archived = files.toList();
+            assertEquals(1, archived.size());
+            String name = archived.getFirst().getFileName().toString();
+            assertTrue(name.endsWith("-abcdef12.json"), "filename carries truncated sha: " + name);
+            assertTrue(Files.readString(archived.getFirst()).contains("1.5K ops/s"));
+        }
+    }
+
+    @Test
+    void archiveWithNullCommitSha(@TempDir Path tempDir) throws Exception {
+        HistoricalDataManager manager = new HistoricalDataManager();
+        manager.archiveCurrentRun(new HashMap<>(), tempDir.toString(), null);
+
+        try (var files = Files.list(tempDir.resolve("history"))) {
+            List<Path> archived = files.toList();
+            assertEquals(1, archived.size());
+            assertTrue(archived.getFirst().getFileName().toString().endsWith("-unknown.json"));
+        }
+    }
+
+    @Test
+    void enforceRetentionPolicy(@TempDir Path tempDir) throws Exception {
         HistoricalDataManager manager = new HistoricalDataManager();
         Path historyDir = tempDir.resolve("history");
         Files.createDirectories(historyDir);
-
-        // Create exactly 10 files
-        for (int i = 0; i < 10; i++) {
-            String timestamp = "2025-01-%02d-T1200Z".formatted(i + 1);
-            Path file = historyDir.resolve(timestamp + "-test.json");
-            Files.writeString(file, "{}");
+        for (int i = 10; i < 25; i++) {
+            Files.writeString(historyDir.resolve("2025-01-" + i + "-T0000Z-sha" + i + ".json"), "{}");
         }
 
         manager.enforceRetentionPolicy(historyDir);
 
-        // All 10 files should remain
-        assertEquals(10, manager.getHistoricalFiles(historyDir).size());
+        try (var files = Files.list(historyDir)) {
+            assertEquals(HistoricalDataManager.HISTORY_LIMIT, files.count(),
+                    "retention keeps only the newest HISTORY_LIMIT files");
+        }
+        // newest files survive
+        assertTrue(Files.exists(historyDir.resolve("2025-01-24-T0000Z-sha24.json")));
+        assertFalse(Files.exists(historyDir.resolve("2025-01-10-T0000Z-sha10.json")));
+    }
+
+    @Test
+    void resolveHistoryDirDefaultsToOutputSubdirectory(@TempDir Path tempDir) {
+        assertEquals(tempDir.resolve("history"),
+                HistoricalDataManager.resolveHistoryDir(tempDir.toString()));
+    }
+
+    @Test
+    void filenameHelpersParseTimestampAndSha() {
+        assertEquals("2025-01-24-T0000Z", HistoricalDataManager.timestampFromFilename("2025-01-24-T0000Z-abcd1234.json"));
+        assertEquals("abcd1234", HistoricalDataManager.commitFromFilename("2025-01-24-T0000Z-abcd1234.json"));
+        assertEquals("unknown", HistoricalDataManager.commitFromFilename("nodashname"));
     }
 }

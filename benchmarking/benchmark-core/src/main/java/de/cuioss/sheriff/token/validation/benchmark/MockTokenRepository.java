@@ -15,7 +15,6 @@
  */
 package de.cuioss.sheriff.token.validation.benchmark;
 
-import de.cuioss.benchmarking.common.token.TokenProvider;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.cache.AccessTokenCacheConfig;
@@ -28,7 +27,6 @@ import lombok.Value;
 
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Mock token repository for generating JWT tokens in-memory for library benchmark testing.
@@ -51,7 +49,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author Oliver Wolff
  */
 @Getter
-public class MockTokenRepository implements TokenProvider {
+public class MockTokenRepository {
 
     /**
      * Default number of different issuers to simulate issuer config resolution overhead
@@ -61,7 +59,7 @@ public class MockTokenRepository implements TokenProvider {
     /**
      * Default shared token pool size for reduced setup overhead
      */
-    public static final int DEFAULT_TOKEN_POOL_SIZE = 600; // 20 tokens per issuer
+    public static final int DEFAULT_TOKEN_POOL_SIZE = 600; // 200 tokens per issuer (3 issuers)
 
     /**
      * Default expected audience for benchmarking
@@ -73,7 +71,6 @@ public class MockTokenRepository implements TokenProvider {
     private final List<IssuerConfig> issuerConfigs;
     private final InMemoryKeyMaterialHandler.IssuerKeyMaterial[] issuers;
     private final Random random;
-    private final AtomicInteger tokenIndex;
     private final Config config;
 
     /**
@@ -117,7 +114,6 @@ public class MockTokenRepository implements TokenProvider {
         this.config = config;
         this.random = new Random(config.randomSeed);
         this.tokenMetadata = new HashMap<>();
-        this.tokenIndex = new AtomicInteger(0);
 
         // Use pre-generated keys from cache to avoid RSA generation during benchmarks
         this.issuers = BenchmarkKeyCache.getPreGeneratedIssuers(config.issuerCount);
@@ -160,13 +156,13 @@ public class MockTokenRepository implements TokenProvider {
     }
 
     /**
-     * Creates a pre-configured TokenValidator with the specified monitor configuration and config
+     * Creates a pre-configured TokenValidator with the specified monitor configuration.
+     * Uses this repository's configuration for the cache size.
      *
      * @param monitorConfig The monitor configuration to use
-     * @param config The MockTokenRepository config to use for cache size
      * @return A new TokenValidator instance
      */
-    public TokenValidator createTokenValidator(TokenValidatorMonitorConfig monitorConfig, Config config) {
+    public TokenValidator createTokenValidator(TokenValidatorMonitorConfig monitorConfig) {
         return TokenValidator.builder()
                 .issuerConfigs(issuerConfigs)
                 .monitorConfig(monitorConfig)
@@ -258,73 +254,5 @@ public class MockTokenRepository implements TokenProvider {
             array[index] = array[i];
             array[i] = temp;
         }
-    }
-
-    // TokenProvider interface implementation
-
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Returns tokens from the pre-generated pool using round-robin rotation.
-     * </p>
-     */
-    @Override
-    public String getNextToken() {
-        if (tokenPool.length == 0) {
-            throw new IllegalStateException("Token pool is empty");
-        }
-        int index = tokenIndex.getAndIncrement() % tokenPool.length;
-        return tokenPool[index];
-    }
-
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Returns the size of the pre-generated token pool.
-     * </p>
-     */
-    @Override
-    public int getTokenPoolSize() {
-        return tokenPool.length;
-    }
-
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Regenerates the entire token pool with new tokens.
-     * This is useful for long-running benchmarks where tokens may expire.
-     * </p>
-     * <p>
-     * Must only be called from {@code @Setup(Level.Trial)} (single-threaded).
-     * This method is not thread-safe.
-     * </p>
-     */
-    @Override
-    public void refreshTokens() {
-        List<String> newTokens = new ArrayList<>();
-        tokenMetadata.clear();
-
-        // Regenerate tokens for each issuer
-        for (InMemoryKeyMaterialHandler.IssuerKeyMaterial issuer : issuers) {
-            int tokensPerIssuer = config.tokenPoolSize / config.issuerCount;
-            for (int j = 0; j < tokensPerIssuer; j++) {
-                String token = generateTokenForIssuer(issuer, config.expectedAudience);
-                newTokens.add(token);
-
-                // Store metadata
-                tokenMetadata.put(token, TokenMetadata.builder()
-                        .issuerIdentifier(issuer.getIssuerIdentifier())
-                        .tokenSize(token.length())
-                        .keyId(issuer.getKeyId())
-                        .build());
-            }
-        }
-
-        // Replace token pool and shuffle
-        System.arraycopy(newTokens.toArray(new String[0]), 0, tokenPool, 0, tokenPool.length);
-        shuffleArray(tokenPool);
-
-        // Reset index
-        tokenIndex.set(0);
     }
 }

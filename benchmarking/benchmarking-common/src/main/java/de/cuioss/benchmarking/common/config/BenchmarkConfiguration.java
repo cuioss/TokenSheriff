@@ -20,7 +20,7 @@ import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.options.TimeValue;
 
 import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Integration.Jmh;
-import static de.cuioss.benchmarking.common.repository.TokenRepositoryConfig.requireProperty;
+import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.WARN.UNKNOWN_RESULT_FORMAT;
 import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.WARN.UNKNOWN_TIME_UNIT;
 
 /**
@@ -52,8 +52,7 @@ int warmupIterations,
 int measurementIterations,
 TimeValue measurementTime,
 TimeValue warmupTime,
-int threads,
-IntegrationConfiguration integrationConfig
+int threads
 ) {
 
     private static final CuiLogger LOGGER = new CuiLogger(BenchmarkConfiguration.class);
@@ -74,49 +73,8 @@ IntegrationConfiguration integrationConfig
                 .withMeasurementTime(parseTimeValue(requireJmhProperty(Jmh.MEASUREMENT_TIME, "JMH measurement time")))
                 .withWarmupTime(parseTimeValue(requireJmhProperty(Jmh.WARMUP_TIME, "JMH warmup time")))
                 .withThreads(parseThreadCount(requireJmhProperty(Jmh.THREADS, "JMH thread count")))
+                .withResultFormat(parseResultFormat(System.getProperty(Jmh.RESULT_FORMAT, "JSON")))
         ;
-    }
-
-    /**
-     * Creates a default configuration.
-     * 
-     * @return a new builder with default values
-     */
-    public static Builder defaults() {
-        return new Builder();
-    }
-
-    /**
-     * Creates a builder from this configuration.
-     * 
-     * @return a new builder initialized with this configuration's values
-     */
-    public Builder toBuilder() {
-        var builder = new Builder()
-                .withReportConfig(reportConfig)
-                .withIncludePattern(includePattern)
-                .withForks(forks)
-                .withWarmupIterations(warmupIterations)
-                .withMeasurementIterations(measurementIterations)
-                .withMeasurementTime(measurementTime)
-                .withWarmupTime(warmupTime)
-                .withThreads(threads);
-
-        if (integrationConfig != null) {
-            builder.withIntegrationConfig(integrationConfig);
-        }
-        return builder;
-    }
-
-
-    /**
-     * Checks if this configuration includes integration configuration.
-     * Integration configuration is required for integration benchmarks.
-     * 
-     * @return true if integration configuration is present, false otherwise
-     */
-    public boolean hasIntegrationConfig() {
-        return integrationConfig != null;
     }
 
     /**
@@ -209,6 +167,47 @@ IntegrationConfiguration integrationConfig
     }
 
     /**
+     * Requires that a system-property value is present (non-null, non-blank).
+     *
+     * @param value the property value to check
+     * @param description human-readable description of the property
+     * @param propertyName the system property name
+     * @return the validated value
+     * @throws IllegalArgumentException if the value is null or blank
+     */
+    public static String requireProperty(String value, String description, String propertyName) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException("%s is required but not provided. Set system property: %s".formatted(
+                    description, propertyName));
+        }
+        return value;
+    }
+
+    /**
+     * Parses a JMH result format string (e.g. {@code "JSON"}, {@code "CSV"}) into
+     * a {@link ResultFormatType}, defaulting to JSON for unknown values.
+     *
+     * @param format the format string to parse
+     * @return the parsed result format type
+     */
+    public static ResultFormatType parseResultFormat(String format) {
+        if (format == null) {
+            return ResultFormatType.JSON;
+        }
+        return switch (format.toUpperCase()) {
+            case "JSON" -> ResultFormatType.JSON;
+            case "CSV" -> ResultFormatType.CSV;
+            case "SCSV" -> ResultFormatType.SCSV;
+            case "LATEX" -> ResultFormatType.LATEX;
+            case "TEXT" -> ResultFormatType.TEXT;
+            default -> {
+                LOGGER.warn(UNKNOWN_RESULT_FORMAT, format);
+                yield ResultFormatType.JSON;
+            }
+        };
+    }
+
+    /**
      * Builder for BenchmarkConfiguration.
      */
     public static class Builder {
@@ -221,7 +220,6 @@ IntegrationConfiguration integrationConfig
         private TimeValue measurementTime;
         private TimeValue warmupTime;
         private int threads;
-        private IntegrationConfiguration integrationConfig;
 
         /**
          * Sets the complete report configuration.
@@ -348,15 +346,6 @@ IntegrationConfiguration integrationConfig
         }
 
         /**
-         * Sets the integration configuration for integration benchmarks.
-         * This configuration contains URLs needed for integration testing.
-         */
-        public Builder withIntegrationConfig(IntegrationConfiguration config) {
-            this.integrationConfig = config;
-            return this;
-        }
-
-        /**
          * Builds the configuration.
          * 
          * @return the built configuration
@@ -380,8 +369,7 @@ IntegrationConfiguration integrationConfig
                     measurementIterations,
                     measurementTime,
                     warmupTime,
-                    threads,
-                    integrationConfig
+                    threads
             );
         }
     }

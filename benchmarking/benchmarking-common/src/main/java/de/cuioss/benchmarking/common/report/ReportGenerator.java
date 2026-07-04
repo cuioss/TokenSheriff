@@ -26,7 +26,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Files.Html.*;
-import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Files.Support.*;
+import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Files.Support.DATA_LOADER_JS;
+import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Files.Support.REPORT_STYLES_CSS;
 import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Report.Templates.NOT_FOUND_FORMAT;
 import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Report.Templates.PATH_PREFIX;
 import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.INFO;
@@ -123,9 +124,8 @@ public class ReportGenerator {
         // Copy the data loader JavaScript
         copyTemplate(DATA_LOADER_JS, outputDir);
 
-        // Copy robots.txt and sitemap if needed
-        copyTemplate(ROBOTS_TXT, outputDir);
-        copyTemplate(SITEMAP_XML, outputDir);
+        // robots.txt and sitemap.xml are deployment assets and are generated exactly once,
+        // by GitHubPagesGenerator.generateDeploymentAssets(...)
     }
 
     /**

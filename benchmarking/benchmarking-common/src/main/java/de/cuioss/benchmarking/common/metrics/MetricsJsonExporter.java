@@ -24,14 +24,9 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.time.Instant;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.WARN.*;
 
@@ -60,7 +55,6 @@ public class MetricsJsonExporter {
                 return new JsonPrimitive(src);
             })
             .create();
-    public static final String BEARER_TOKEN_RESULT = "getBearerTokenResult";
 
     private final Path targetDirectory;
 
@@ -98,54 +92,7 @@ public class MetricsJsonExporter {
     }
 
     /**
-     * Exports JWT validation metrics for a specific benchmark method.
-     *
-     * @param benchmarkMethodName The name of the benchmark method
-     * @param timestamp The timestamp when the benchmark was executed
-     * @param allMetrics All metrics data
-     * @throws IOException if export fails
-     */
-    public void exportJwtValidationMetrics(String benchmarkMethodName, Instant timestamp,
-            Map<String, Double> allMetrics) throws IOException {
-        LOGGER.debug("Exporting JWT validation metrics for: %s", benchmarkMethodName);
-
-        if (isJwtValidationBenchmark(benchmarkMethodName)) {
-            Map<String, Object> timedMetrics = extractTimedMetrics(allMetrics);
-            Map<String, Object> securityEventMetrics = extractSecurityEventMetrics(allMetrics);
-
-            Map<String, Object> benchmarkData = new LinkedHashMap<>();
-            benchmarkData.put("timestamp", timestamp.toString());
-            benchmarkData.put("bearer_token_producer_metrics", timedMetrics);
-            benchmarkData.put("security_event_counter_metrics", securityEventMetrics);
-
-            String simpleBenchmarkName = extractSimpleBenchmarkName(benchmarkMethodName);
-            updateAggregatedMetrics("integration-metrics.json", simpleBenchmarkName, benchmarkData);
-        } else {
-            LOGGER.debug("Benchmark %s is not JWT validation, raw metrics were saved", benchmarkMethodName);
-        }
-    }
-
-    /**
-     * Exports resource metrics (CPU, memory) for system monitoring.
-     *
-     * @param timestamp The timestamp when metrics were collected
-     * @param allMetrics All metrics data
-     * @throws IOException if export fails
-     */
-    public void exportResourceMetrics(Instant timestamp, Map<String, Double> allMetrics) throws IOException {
-        LOGGER.debug("Exporting resource metrics");
-
-        Map<String, Object> resourceData = new LinkedHashMap<>();
-        resourceData.put("timestamp", timestamp.toString());
-        resourceData.put("cpu_metrics", extractCpuMetrics(allMetrics));
-        resourceData.put("memory_metrics", extractMemoryMetrics(allMetrics));
-
-        exportToFile("resource-metrics.json", resourceData);
-    }
-
-    /**
      * Updates an aggregated metrics file with new benchmark data.
-     * For quarkus-metrics.json files, applies special transformation to create the new structure.
      *
      * @param fileName The name of the aggregated metrics file
      * @param benchmarkName The name of the benchmark
@@ -155,31 +102,10 @@ public class MetricsJsonExporter {
     public void updateAggregatedMetrics(String fileName, String benchmarkName,
             Map<String, Object> benchmarkData) throws IOException {
         Map<String, Object> allMetrics = readExistingMetrics(fileName);
-
-        if ("quarkus-metrics.json".equals(fileName)) {
-            // Apply special transformation for Quarkus runtime metrics
-            String transformedKey = "quarkus-runtime-metrics";
-            Map<String, Object> transformedData = transformToQuarkusRuntimeMetrics(benchmarkData);
-            allMetrics.put(transformedKey, transformedData);
-        } else {
-            allMetrics.put(benchmarkName, benchmarkData);
-        }
+        allMetrics.put(benchmarkName, benchmarkData);
 
         exportToFile(fileName, allMetrics);
         LOGGER.debug("Updated %s with %s benchmarks", fileName, allMetrics.size());
-    }
-
-    /**
-     * Transforms benchmark data into the new Quarkus runtime metrics structure.
-     * Removes the "benchmark" field and ensures proper structure.
-     */
-    private Map<String, Object> transformToQuarkusRuntimeMetrics(Map<String, Object> originalData) {
-        Map<String, Object> transformed = new LinkedHashMap<>(originalData);
-
-        // Remove the "benchmark" field if present
-        transformed.remove("benchmark");
-
-        return transformed;
     }
 
     /**
@@ -205,176 +131,26 @@ public class MetricsJsonExporter {
                 }
             } catch (IOException | JsonSyntaxException e) {
                 LOGGER.warn(FAILED_READ_METRICS_FILE, fileName, e.getMessage());
-                try {
-                    Files.deleteIfExists(filePath);
-                } catch (IOException deleteException) {
-                    LOGGER.warn(deleteException, FAILED_DELETE_CORRUPTED_FILE);
-                }
+                preserveCorruptFile(filePath);
             }
         }
 
         return existingMetrics;
     }
 
-    private boolean isJwtValidationBenchmark(String benchmarkMethodName) {
-        return benchmarkMethodName.contains("JwtValidationBenchmark") ||
-                "JwtValidation".equals(benchmarkMethodName) ||
-                benchmarkMethodName.startsWith("validateJwt") ||
-                "validateJwtToken".equals(benchmarkMethodName) ||
-                benchmarkMethodName.contains("validateAccessToken") ||
-                benchmarkMethodName.contains("validateIdToken");
-    }
-
-    private Map<String, Object> extractTimedMetrics(Map<String, Double> allMetrics) {
-        Map<String, Object> timedMetrics = new LinkedHashMap<>();
-
-        Double count = null;
-        Double sum = null;
-        Double max = null;
-
-        for (Map.Entry<String, Double> entry : allMetrics.entrySet()) {
-            String metricName = entry.getKey();
-            Double value = entry.getValue();
-
-            if (metricName.contains("bearer_token_validation_seconds")) {
-                if (metricName.contains("_count") && metricName.contains(BEARER_TOKEN_RESULT)) {
-                    count = value;
-                } else if (metricName.contains("_sum") && metricName.contains(BEARER_TOKEN_RESULT)) {
-                    sum = value;
-                } else if (metricName.contains("_max") && metricName.contains(BEARER_TOKEN_RESULT)) {
-                    max = value;
-                }
-            }
+    /**
+     * Moves a corrupt metrics file aside instead of deleting it, so the data
+     * remains available for later inspection.
+     *
+     * @param filePath the corrupt metrics file
+     */
+    private void preserveCorruptFile(Path filePath) {
+        try {
+            Path preserved = filePath.resolveSibling(filePath.getFileName() + ".corrupt-" + System.currentTimeMillis());
+            Files.move(filePath, preserved);
+            LOGGER.warn(CORRUPT_METRICS_FILE_PRESERVED, preserved);
+        } catch (IOException moveException) {
+            LOGGER.warn(moveException, FAILED_PRESERVE_CORRUPT_FILE, filePath);
         }
-
-        if (count != null && sum != null && max != null && count > 0) {
-            double avgMicros = (sum / count) * 1_000_000;
-
-            Map<String, Object> validationMetric = new LinkedHashMap<>();
-            validationMetric.put("sample_count", formatNumber(count.longValue()));
-            validationMetric.put("p50_us", formatNumber(avgMicros));
-            validationMetric.put("p95_us", formatNumber(Math.min(avgMicros * 2, max * 1_000_000 * 0.8)));
-            validationMetric.put("p99_us", formatNumber(max * 1_000_000 * 0.9));
-            timedMetrics.put("validation", validationMetric);
-        } else {
-            Map<String, Object> emptyMetric = new LinkedHashMap<>();
-            emptyMetric.put("sample_count", formatNumber(0));
-            emptyMetric.put("p50_us", formatNumber(0));
-            emptyMetric.put("p95_us", formatNumber(0));
-            emptyMetric.put("p99_us", formatNumber(0));
-            timedMetrics.put("validation", emptyMetric);
-        }
-
-        return timedMetrics;
-    }
-
-    private Map<String, Object> extractSecurityEventMetrics(Map<String, Double> allMetrics) {
-        Map<String, Object> securityMetrics = new LinkedHashMap<>();
-        Map<String, Map<String, Object>> errorsByCategory = new LinkedHashMap<>();
-        Map<String, Object> successByType = new LinkedHashMap<>();
-        long totalErrors = 0;
-        long totalSuccess = 0;
-
-        for (Map.Entry<String, Double> entry : allMetrics.entrySet()) {
-            String metricName = entry.getKey();
-            Double value = entry.getValue();
-
-            if (metricName.startsWith("sheriff_token_validation_errors_total")) {
-                String category = extractTag(metricName, "category");
-                String eventType = extractTag(metricName, "event_type");
-
-                if (category != null && eventType != null && value != null && value > 0) {
-                    Map<String, Object> categoryData = errorsByCategory.computeIfAbsent(category, k -> new LinkedHashMap<>());
-                    categoryData.put(eventType, formatNumber(value.longValue()));
-                    totalErrors += value.longValue();
-                }
-            } else if (metricName.startsWith("sheriff_token_validation_success")) {
-                String eventType = extractTag(metricName, "event_type");
-                String result = extractTag(metricName, "result");
-
-                if (eventType != null && "success".equals(result) && value != null && value > 0) {
-                    successByType.put(eventType, formatNumber(value.longValue()));
-                    totalSuccess += value.longValue();
-                }
-            }
-        }
-
-        securityMetrics.put("total_errors", formatNumber(totalErrors));
-        securityMetrics.put("total_success", formatNumber(totalSuccess));
-        securityMetrics.put("errors_by_category", errorsByCategory);
-        securityMetrics.put("success_by_type", successByType);
-
-        return securityMetrics;
-    }
-
-    private Map<String, Object> extractCpuMetrics(Map<String, Double> allMetrics) {
-        Map<String, Object> cpuMetrics = new LinkedHashMap<>();
-
-        for (Map.Entry<String, Double> entry : allMetrics.entrySet()) {
-            String metricName = entry.getKey();
-            Double value = entry.getValue();
-
-            if (metricName.startsWith("system_cpu_usage")) {
-                cpuMetrics.put("system_cpu_usage", formatPercentage(value));
-            } else if (metricName.startsWith("process_cpu_usage")) {
-                cpuMetrics.put("process_cpu_usage", formatPercentage(value));
-            } else if (metricName.startsWith("system_cpu_count")) {
-                cpuMetrics.put("cpu_count", value.intValue());
-            }
-        }
-
-        return cpuMetrics;
-    }
-
-    private Map<String, Object> extractMemoryMetrics(Map<String, Double> allMetrics) {
-        Map<String, Object> memoryMetrics = new LinkedHashMap<>();
-
-        for (Map.Entry<String, Double> entry : allMetrics.entrySet()) {
-            String metricName = entry.getKey();
-            Double value = entry.getValue();
-
-            if (metricName.startsWith("jvm_memory_used_bytes")) {
-                String area = extractTag(metricName, "area");
-                if ("heap".equals(area)) {
-                    memoryMetrics.put("heap_used_bytes", value.longValue());
-                } else if ("nonheap".equals(area)) {
-                    memoryMetrics.put("nonheap_used_bytes", value.longValue());
-                }
-            }
-        }
-
-        return memoryMetrics;
-    }
-
-    private String extractTag(String metricName, String tagName) {
-        String pattern = tagName + "=\"([^\"]+)\"";
-        Pattern regex = Pattern.compile(pattern);
-        Matcher matcher = regex.matcher(metricName);
-        return matcher.find() ? matcher.group(1) : null;
-    }
-
-    private Object formatNumber(double value) {
-        if (value < 10) {
-            DecimalFormat df = new DecimalFormat("0.0", DecimalFormatSymbols.getInstance(Locale.US));
-            return Double.parseDouble(df.format(value));
-        } else {
-            return Math.round(value);
-        }
-    }
-
-    private Object formatPercentage(double value) {
-        double percentage = value * 100.0;
-        if (percentage < 10) {
-            return Math.round(percentage * 10.0) / 10.0;
-        } else {
-            return Math.round(percentage);
-        }
-    }
-
-    private String extractSimpleBenchmarkName(String fullBenchmarkName) {
-        if (fullBenchmarkName.contains(".")) {
-            return fullBenchmarkName.substring(fullBenchmarkName.lastIndexOf('.') + 1);
-        }
-        return fullBenchmarkName;
     }
 }

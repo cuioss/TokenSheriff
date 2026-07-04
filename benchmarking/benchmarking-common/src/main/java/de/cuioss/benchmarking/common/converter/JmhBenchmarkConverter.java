@@ -27,9 +27,6 @@ import de.cuioss.benchmarking.common.report.MetricsComputer;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
@@ -47,11 +44,6 @@ public class JmhBenchmarkConverter implements BenchmarkConverter {
 
     public JmhBenchmarkConverter(BenchmarkType benchmarkType) {
         this(benchmarkType, null, null, null);
-    }
-
-    public JmhBenchmarkConverter(BenchmarkType benchmarkType,
-            String configuredThroughputName, String configuredLatencyName) {
-        this(benchmarkType, configuredThroughputName, configuredLatencyName, null);
     }
 
     public JmhBenchmarkConverter(BenchmarkType benchmarkType,
@@ -81,13 +73,6 @@ public class JmhBenchmarkConverter implements BenchmarkConverter {
                 .build();
     }
 
-    @Override
-    public boolean canConvert(Path sourcePath) {
-        return sourcePath.getFileName().toString().endsWith(".json") &&
-                (sourcePath.getFileName().toString().contains("jmh") ||
-                        sourcePath.getFileName().toString().contains("result"));
-    }
-
     private BenchmarkData.Benchmark convertJmhBenchmark(JsonObject jmh) {
         String name = jmh.get("benchmark").getAsString();
         String mode = jmh.get("mode").getAsString();
@@ -100,9 +85,9 @@ public class JmhBenchmarkConverter implements BenchmarkConverter {
         double convertedScore = score;
         String convertedUnit = scoreUnit;
 
-        // Convert ops/ms to ops/s for throughput benchmarks
+        // Convert ops/ms to ops/s for throughput benchmarks via the single conversion home
         if (THRPT.equals(mode) && "ops/ms".equals(scoreUnit)) {
-            convertedScore = score * 1000; // Convert ops/ms to ops/s
+            convertedScore = MetricConversionUtil.convertToOpsPerSecond(score, scoreUnit);
             convertedUnit = "ops/s";
         }
 
@@ -113,15 +98,10 @@ public class JmhBenchmarkConverter implements BenchmarkConverter {
                 double percentileValue = entry.getValue().getAsDouble();
                 // Apply same unit conversions to percentiles
                 if (THRPT.equals(mode) && "ops/ms".equals(scoreUnit)) {
-                    percentileValue = percentileValue * 1000;
+                    percentileValue = MetricConversionUtil.convertToOpsPerSecond(percentileValue, scoreUnit);
                 } else {
-                    // Convert latency percentiles to milliseconds
-                    percentileValue = switch (scoreUnit) {
-                        case "us/op" -> percentileValue / 1000.0;
-                        case "ns/op" -> percentileValue / 1_000_000.0;
-                        case "s/op" -> percentileValue * 1000.0;
-                        default -> percentileValue;
-                    };
+                    // Convert latency percentiles to milliseconds via the single conversion home
+                    percentileValue = MetricConversionUtil.convertToMillisecondsPerOp(percentileValue, scoreUnit);
                 }
                 percentiles.put(entry.getKey(), percentileValue);
             }
@@ -132,26 +112,17 @@ public class JmhBenchmarkConverter implements BenchmarkConverter {
                 .fullName(name)
                 .mode(mode)
                 .rawScore(convertedScore)
-                .score(formatScore(convertedScore, convertedUnit))
+                .score(MetricConversionUtil.formatScoreWithUnit(convertedScore, convertedUnit))
                 .scoreUnit(convertedUnit)
-                .throughput(THRPT.equals(mode) ? formatScore(convertedScore, convertedUnit) : null)
-                .latency("avgt".equals(mode) || "sample".equals(mode) ? formatScore(score, scoreUnit) : null)
+                .throughput(THRPT.equals(mode) ? MetricConversionUtil.formatScoreWithUnit(convertedScore, convertedUnit) : null)
+                .latency("avgt".equals(mode) || "sample".equals(mode) ? MetricConversionUtil.formatScoreWithUnit(score, scoreUnit) : null)
                 .error(primaryMetric.has("scoreError") ? primaryMetric.get("scoreError").getAsDouble() : 0.0)
                 .percentiles(percentiles)
                 .build();
     }
 
     private BenchmarkData.Metadata createMetadata() {
-        Instant now = Instant.now();
-        return BenchmarkData.Metadata.builder()
-                .timestamp(now.toString())
-                .displayTimestamp(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'UTC'")
-                        .withZone(ZoneOffset.UTC)
-                        .format(now))
-                .benchmarkType(benchmarkType.getDisplayName())
-                .reportVersion("2.0")
-                .projectName(projectName)
-                .build();
+        return ReportMetadataFactory.createMetadata(benchmarkType.getDisplayName(), projectName);
     }
 
     private BenchmarkData.Overview createOverview(List<BenchmarkData.Benchmark> benchmarks) {
@@ -216,13 +187,6 @@ public class JmhBenchmarkConverter implements BenchmarkConverter {
     private String extractSimpleName(String fullName) {
         int lastDot = fullName.lastIndexOf('.');
         return lastDot >= 0 ? fullName.substring(lastDot + 1) : fullName;
-    }
-
-    private String formatScore(double score, String unit) {
-        if (score >= 1000) {
-            return String.format(Locale.US, "%.1fK %s", score / 1000, unit);
-        }
-        return String.format(Locale.US, "%.1f %s", score, unit);
     }
 
 }

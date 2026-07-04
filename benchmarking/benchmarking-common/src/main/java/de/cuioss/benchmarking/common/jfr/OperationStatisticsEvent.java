@@ -91,7 +91,4 @@ public class OperationStatisticsEvent extends Event {
     @Description("Number of concurrent threads during this period")
     public int concurrentThreads;
 
-    @Label("Cache Hit Rate")
-    @Description("Percentage of operations served from cache")
-    public double cacheHitRate;
 }

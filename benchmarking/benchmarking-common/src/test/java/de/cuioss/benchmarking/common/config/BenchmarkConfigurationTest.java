@@ -51,58 +51,6 @@ class BenchmarkConfigurationTest {
     }
 
     @Test
-    void defaults() {
-        // defaults() now returns an empty builder without any default values
-        BenchmarkConfiguration config = BenchmarkConfiguration.defaults()
-                .withBenchmarkType(BenchmarkType.MICRO)
-                .withThroughputBenchmarkName("testThroughput")
-                .withLatencyBenchmarkName("testLatency")
-                .withIncludePattern(".*Benchmark.*")
-                .withForks(1)
-                .withWarmupIterations(3)
-                .withMeasurementIterations(5)
-                .withMeasurementTime(TimeValue.seconds(2))
-                .withWarmupTime(TimeValue.seconds(1))
-                .withThreads(4)
-                .build();
-
-        assertEquals(".*Benchmark.*", config.includePattern());
-        assertEquals(ResultFormatType.JSON, config.reportConfig().resultFormat());
-        assertEquals(1, config.forks());
-        assertEquals(3, config.warmupIterations());
-        assertEquals(5, config.measurementIterations());
-        assertEquals(4, config.threads());
-        assertEquals("target/benchmark-results", config.resultsDirectory());
-        // Integration URLs are now handled by IntegrationConfiguration
-    }
-
-    @Test
-    void customValues() {
-        BenchmarkConfiguration config = BenchmarkConfiguration.defaults()
-                .withBenchmarkType(BenchmarkType.INTEGRATION)
-                .withThroughputBenchmarkName("customThroughput")
-                .withLatencyBenchmarkName("customLatency")
-                .withIncludePattern(".*MyBenchmark.*")
-                .withResultFormat(ResultFormatType.CSV)
-                .withForks(2)
-                .withWarmupIterations(10)
-                .withMeasurementIterations(20)
-                .withThreads(8)
-                .withResultsDirectory(tempDir.resolve("custom-results").toString())
-                // Integration URLs are now handled by IntegrationConfiguration
-                .build();
-
-        assertEquals(".*MyBenchmark.*", config.includePattern());
-        assertEquals(ResultFormatType.CSV, config.reportConfig().resultFormat());
-        assertEquals(2, config.forks());
-        assertEquals(10, config.warmupIterations());
-        assertEquals(20, config.measurementIterations());
-        assertEquals(8, config.threads());
-        assertEquals(tempDir.resolve("custom-results").toString(), config.resultsDirectory());
-        // Integration URLs are now handled by IntegrationConfiguration
-    }
-
-    @Test
     void builderWithSystemProperties() {
         // Set all required system properties
         System.setProperty("jmh.include", ".*SystemTest.*");
@@ -130,39 +78,8 @@ class BenchmarkConfigurationTest {
     }
 
     @Test
-    void toBuilder() {
-        BenchmarkConfiguration original = BenchmarkConfiguration.defaults()
-                .withBenchmarkType(BenchmarkType.MICRO)
-                .withThroughputBenchmarkName("origThroughput")
-                .withLatencyBenchmarkName("origLatency")
-                .withIncludePattern(".*Original.*")
-                .withForks(5)
-                .withWarmupIterations(3)
-                .withMeasurementIterations(5)
-                .withMeasurementTime(TimeValue.seconds(2))
-                .withWarmupTime(TimeValue.seconds(1))
-                .withThreads(4)
-                .build();
-
-        BenchmarkConfiguration modified = original.toBuilder()
-                .withIncludePattern(".*Modified.*")
-                .withThreads(12)
-                .build();
-
-        // Original should be unchanged
-        assertEquals(".*Original.*", original.includePattern());
-        assertEquals(5, original.forks());
-        assertEquals(4, original.threads());
-
-        // Modified should have new values
-        assertEquals(".*Modified.*", modified.includePattern());
-        assertEquals(5, modified.forks()); // inherited
-        assertEquals(12, modified.threads()); // new
-    }
-
-    @Test
     void toJmhOptions() {
-        BenchmarkConfiguration config = BenchmarkConfiguration.defaults()
+        BenchmarkConfiguration config = new BenchmarkConfiguration.Builder()
                 .withBenchmarkType(BenchmarkType.MICRO)
                 .withThroughputBenchmarkName("jmhThroughput")
                 .withLatencyBenchmarkName("jmhLatency")
@@ -228,7 +145,7 @@ class BenchmarkConfigurationTest {
     @Test
     void resultFileGeneration() {
         setRequiredSystemProperties();
-        BenchmarkConfiguration config = BenchmarkConfiguration.builder()
+        BenchmarkConfiguration config = new BenchmarkConfiguration.Builder()
                 .withBenchmarkType(BenchmarkType.INTEGRATION)
                 .withThroughputBenchmarkName("fileThroughput")
                 .withLatencyBenchmarkName("fileLatency")
@@ -247,7 +164,7 @@ class BenchmarkConfigurationTest {
         assertNotNull(config, "Configuration should not be null");
 
         // Test that result file can be generated when not explicitly set
-        BenchmarkConfiguration configWithoutFile = BenchmarkConfiguration.builder()
+        BenchmarkConfiguration configWithoutFile = new BenchmarkConfiguration.Builder()
                 .withBenchmarkType(BenchmarkType.INTEGRATION)
                 .withThroughputBenchmarkName("throughput")
                 .withLatencyBenchmarkName("latency")
@@ -266,7 +183,7 @@ class BenchmarkConfigurationTest {
     void invalidResultFormat() {
         setRequiredSystemProperties();
         System.setProperty("jmh.result.format", "INVALID");
-        BenchmarkConfiguration config = BenchmarkConfiguration.builder()
+        BenchmarkConfiguration config = new BenchmarkConfiguration.Builder()
                 .withBenchmarkType(BenchmarkType.MICRO)
                 .withThroughputBenchmarkName("formatThroughput")
                 .withLatencyBenchmarkName("formatLatency")
@@ -304,55 +221,8 @@ class BenchmarkConfigurationTest {
     }
 
     @Test
-    void allSystemProperties() {
-        // Set all supported system properties
-        System.setProperty("jmh.include", ".*AllTest.*");
-        System.setProperty("jmh.result.format", "CSV");
-        System.setProperty("jmh.forks", "4");
-        System.setProperty("jmh.warmupIterations", "8");
-        System.setProperty("jmh.iterations", "15");
-        System.setProperty("jmh.time", "3s");
-        System.setProperty("jmh.warmupTime", "1s");
-        System.setProperty("jmh.threads", "24");
-        System.setProperty("integration.service.url", "http://service:8080");
-        System.setProperty("keycloak.url", "http://keycloak:8180");
-        System.setProperty("quarkus.metrics.url", "http://metrics:9090");
-
-        BenchmarkConfiguration config = BenchmarkConfiguration.builder()
-                .withBenchmarkType(BenchmarkType.INTEGRATION)
-                .withThroughputBenchmarkName("allThroughput")
-                .withLatencyBenchmarkName("allLatency")
-                .build();
-
-        assertEquals(".*AllTest.*", config.includePattern());
-        assertEquals(ResultFormatType.CSV, config.reportConfig().resultFormat());
-        assertEquals(4, config.forks());
-        assertEquals(8, config.warmupIterations());
-        assertEquals(15, config.measurementIterations());
-        assertEquals(TimeValue.seconds(3), config.measurementTime());
-        assertEquals(TimeValue.seconds(1), config.warmupTime());
-        assertEquals(24, config.threads());
-        // Results directory is now fixed, not configurable
-        assertEquals("target/benchmark-results", config.resultsDirectory());
-        // Integration URLs are now handled by IntegrationConfiguration
-
-        // Clean up all system properties
-        System.clearProperty("jmh.include");
-        System.clearProperty("jmh.result.format");
-        System.clearProperty("jmh.forks");
-        System.clearProperty("jmh.warmupIterations");
-        System.clearProperty("jmh.iterations");
-        System.clearProperty("jmh.time");
-        System.clearProperty("jmh.warmupTime");
-        System.clearProperty("jmh.threads");
-        System.clearProperty("integration.service.url");
-        System.clearProperty("keycloak.url");
-        System.clearProperty("quarkus.metrics.url");
-    }
-
-    @Test
     void recordEquality() {
-        BenchmarkConfiguration config1 = BenchmarkConfiguration.defaults()
+        BenchmarkConfiguration config1 = new BenchmarkConfiguration.Builder()
                 .withBenchmarkType(BenchmarkType.MICRO)
                 .withThroughputBenchmarkName("eqThroughput")
                 .withLatencyBenchmarkName("eqLatency")
@@ -360,7 +230,7 @@ class BenchmarkConfigurationTest {
                 .withForks(2)
                 .build();
 
-        BenchmarkConfiguration config2 = BenchmarkConfiguration.defaults()
+        BenchmarkConfiguration config2 = new BenchmarkConfiguration.Builder()
                 .withBenchmarkType(BenchmarkType.MICRO)
                 .withThroughputBenchmarkName("eqThroughput")
                 .withLatencyBenchmarkName("eqLatency")
@@ -368,7 +238,7 @@ class BenchmarkConfigurationTest {
                 .withForks(2)
                 .build();
 
-        BenchmarkConfiguration config3 = BenchmarkConfiguration.defaults()
+        BenchmarkConfiguration config3 = new BenchmarkConfiguration.Builder()
                 .withBenchmarkType(BenchmarkType.MICRO)
                 .withThroughputBenchmarkName("eqThroughput")
                 .withLatencyBenchmarkName("eqLatency")
@@ -384,19 +254,19 @@ class BenchmarkConfigurationTest {
     @Test
     void requiredFieldValidation() {
         // Missing benchmark type
-        var builder1 = BenchmarkConfiguration.defaults()
+        var builder1 = new BenchmarkConfiguration.Builder()
                 .withThroughputBenchmarkName("throughput")
                 .withLatencyBenchmarkName("latency");
         assertThrows(IllegalArgumentException.class, builder1::build);
 
         // Missing throughput benchmark name
-        var builder2 = BenchmarkConfiguration.defaults()
+        var builder2 = new BenchmarkConfiguration.Builder()
                 .withBenchmarkType(BenchmarkType.MICRO)
                 .withLatencyBenchmarkName("latency");
         assertThrows(IllegalArgumentException.class, builder2::build);
 
         // Missing latency benchmark name
-        var builder3 = BenchmarkConfiguration.defaults()
+        var builder3 = new BenchmarkConfiguration.Builder()
                 .withBenchmarkType(BenchmarkType.MICRO)
                 .withThroughputBenchmarkName("throughput");
         assertThrows(IllegalArgumentException.class, builder3::build);

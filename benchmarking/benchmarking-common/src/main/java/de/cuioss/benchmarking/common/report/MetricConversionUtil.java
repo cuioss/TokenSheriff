@@ -143,4 +143,74 @@ public final class MetricConversionUtil {
             return formatForDisplay(ms) + Units.SUFFIX_MS;
         }
     }
+
+    /**
+     * Formats a JMH score with its unit for report display (e.g. "45.1K ops/s", "1.3 ms/op").
+     *
+     * @param score the converted score value
+     * @param unit the unit string to append
+     * @return formatted score with unit
+     */
+    public static String formatScoreWithUnit(double score, String unit) {
+        if (score >= 1000) {
+            return String.format(Locale.US, "%.1fK %s", score / 1000, unit);
+        }
+        return String.format(Locale.US, "%.1f %s", score, unit);
+    }
+
+    /**
+     * Formats wrk (integration benchmark) throughput for report display (e.g. "1.5K ops/s").
+     *
+     * @param reqPerSec throughput in requests per second
+     * @return formatted string with units
+     */
+    public static String formatWrkThroughput(double reqPerSec) {
+        if (reqPerSec >= 1000) {
+            return String.format(Locale.US, "%.1fK ops/s", reqPerSec / 1000);
+        }
+        return String.format(Locale.US, "%.0f ops/s", reqPerSec);
+    }
+
+    /**
+     * Formats wrk (integration benchmark) latency for report display (e.g. "1.5ms", "750μs").
+     *
+     * @param ms latency in milliseconds
+     * @return formatted string with units
+     */
+    public static String formatWrkLatency(double ms) {
+        if (ms < 1) {
+            return String.format(Locale.US, "%.0fμs", ms * 1000);
+        }
+        return String.format(Locale.US, "%.1fms", ms);
+    }
+
+    /**
+     * Formats throughput for badge display: short form without unit
+     * (e.g. 500 → "500", 1500 → "1.5k", 45000 → "45k").
+     *
+     * @param throughput throughput in ops/s
+     * @return short formatted string
+     */
+    public static String formatBadgeThroughput(double throughput) {
+        if (throughput >= 1000) {
+            double kThroughput = throughput / 1000.0;
+            if (kThroughput >= 10) {
+                return String.format(Locale.US, "%.0fk", kThroughput);
+            }
+            String formatted = String.format(Locale.US, "%.1fk", kThroughput);
+            return formatted.endsWith(".0k") ?
+                    formatted.substring(0, formatted.length() - 3) + "k" : formatted;
+        }
+        return String.format(Locale.US, "%.0f", throughput);
+    }
+
+    /**
+     * Formats latency for badge display: fixed two decimals, no unit suffix.
+     *
+     * @param latency latency in milliseconds
+     * @return short formatted string
+     */
+    public static String formatBadgeLatency(double latency) {
+        return String.format(Locale.US, "%.2f", latency);
+    }
 }

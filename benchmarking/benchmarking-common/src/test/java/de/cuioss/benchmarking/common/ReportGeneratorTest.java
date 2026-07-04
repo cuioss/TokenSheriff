@@ -201,13 +201,12 @@ class ReportGeneratorTest {
         Path jsFile = tempDir.resolve("data-loader.js");
         assertTrue(Files.exists(jsFile), "JavaScript file should be copied");
 
-        // Check robots.txt
-        Path robotsFile = tempDir.resolve("robots.txt");
-        assertTrue(Files.exists(robotsFile), "robots.txt should be copied");
-
-        // Check sitemap.xml
-        Path sitemapFile = tempDir.resolve("sitemap.xml");
-        assertTrue(Files.exists(sitemapFile), "sitemap.xml should be copied");
+        // robots.txt and sitemap.xml are deployment assets generated exactly once
+        // by GitHubPagesGenerator — copySupportFiles must NOT write them anymore
+        assertFalse(Files.exists(tempDir.resolve("robots.txt")),
+                "robots.txt is written by GitHubPagesGenerator only");
+        assertFalse(Files.exists(tempDir.resolve("sitemap.xml")),
+                "sitemap.xml is written by GitHubPagesGenerator only");
     }
 
     @Test

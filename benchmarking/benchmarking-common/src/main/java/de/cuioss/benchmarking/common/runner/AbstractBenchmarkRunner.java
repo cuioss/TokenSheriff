@@ -16,8 +16,6 @@
 package de.cuioss.benchmarking.common.runner;
 
 import de.cuioss.benchmarking.common.config.BenchmarkConfiguration;
-import de.cuioss.benchmarking.common.metrics.IterationTimestampParser;
-import de.cuioss.benchmarking.common.metrics.PrometheusMetricsManager;
 import de.cuioss.tools.logging.CuiLogger;
 import org.openjdk.jmh.results.RunResult;
 import org.openjdk.jmh.runner.Runner;
@@ -28,17 +26,14 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
-import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.INFO.*;
-import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.WARN.*;
+import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.INFO.BENCHMARKS_COMPLETED_WITH_ARTIFACTS;
+import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.INFO.BENCHMARK_RUNNER_STARTING_WITH_DETAILS;
+import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.WARN.SECRET_PROPERTY_ON_FORK_COMMAND_LINE;
 
 /**
  * Abstract base class for JMH benchmark runners that integrates with CUI benchmarking infrastructure.
@@ -76,23 +71,12 @@ public abstract class AbstractBenchmarkRunner {
             "jmh.", "benchmark.", "token.", "integration.", "quarkus.", "javax.net.ssl.");
 
     /**
-     * Known secret-bearing property keys. They are required by the forked JVM
-     * (read via System.getProperty in TokenRepositoryConfig), so they are forwarded when set,
-     * but a warning is emitted because they appear on the fork command line.
+     * Known secret-bearing property keys. They may be required by the forked JVM,
+     * so they are forwarded when set, but a warning is emitted because they appear
+     * on the fork command line.
      */
     private static final Set<String> SECRET_PROPERTY_KEYS = Set.of(
             "token.keycloak.password", "token.keycloak.clientSecret");
-
-    private final PrometheusMetricsManager prometheusMetricsManager;
-    private Instant benchmarkStartTime;
-    private Instant benchmarkEndTime;
-
-    /**
-     * Default constructor that initializes the Prometheus metrics manager.
-     */
-    protected AbstractBenchmarkRunner() {
-        this.prometheusMetricsManager = new PrometheusMetricsManager();
-    }
 
     /**
      * Creates the benchmark configuration for this runner.
@@ -134,17 +118,13 @@ public abstract class AbstractBenchmarkRunner {
 
     /**
      * Processes the benchmark results.
-     * Default implementation uses BenchmarkResultProcessor and collects Prometheus metrics.
+     * Default implementation uses BenchmarkResultProcessor.
      *
      * @param results the benchmark results
      * @param config the benchmark configuration
      * @throws IOException if processing fails
      */
     protected void processResults(Collection<RunResult> results, BenchmarkConfiguration config) throws IOException {
-        // Collect Prometheus metrics BEFORE processing results
-        // This ensures metrics exist when GitHubPagesGenerator runs
-        prometheusMetricsManager.collectMetricsForResults(results, config);
-
         // Process results (generates reports and GitHub Pages)
         BenchmarkResultProcessor processor = new BenchmarkResultProcessor(
                 config.reportConfig().benchmarkType(),
@@ -169,149 +149,22 @@ public abstract class AbstractBenchmarkRunner {
     /**
      * Hook method called before benchmark execution starts.
      * Override to add custom pre-benchmark logic.
-     * Default implementation records benchmark start time for Prometheus metrics.
      *
      * @param config the benchmark configuration
      */
     protected void beforeBenchmark(BenchmarkConfiguration config) {
-        // Record benchmark start time for real-time metrics collection
-        benchmarkStartTime = Instant.now();
-        LOGGER.debug("Benchmark execution started at: %s", benchmarkStartTime);
-
-        // Record start time for each benchmark if we know the names
-        if (config.throughputBenchmarkName() != null) {
-            prometheusMetricsManager.recordBenchmarkStart(config.throughputBenchmarkName());
-        }
-        if (config.latencyBenchmarkName() != null &&
-                !config.latencyBenchmarkName().equals(config.throughputBenchmarkName())) {
-            prometheusMetricsManager.recordBenchmarkStart(config.latencyBenchmarkName());
-        }
+        LOGGER.debug("Benchmark execution starting");
     }
 
     /**
      * Hook method called after benchmark execution completes.
      * Override to add custom post-benchmark logic.
-     * Default implementation logs completion.
      *
      * @param results the benchmark results
      * @param config the benchmark configuration
      */
     protected void afterBenchmark(Collection<RunResult> results, BenchmarkConfiguration config) {
-        LOGGER.debug("Benchmark execution completed at: %s", benchmarkEndTime);
-    }
-
-
-    /**
-     * Extracts a clean benchmark name from the JMH RunResult.
-     *
-     * @param result the JMH run result
-     * @return a clean benchmark name suitable for file naming
-     */
-    private String extractBenchmarkName(RunResult result) {
-        String label = result.getPrimaryResult().getLabel();
-        int lastDot = label.lastIndexOf('.');
-        if (lastDot >= 0 && lastDot < label.length() - 1) {
-            return label.substring(lastDot + 1);
-        }
-        return label;
-    }
-
-    /**
-     * Processes timestamp data from TimestampProfiler and records it in Prometheus metrics.
-     * Attempts to use precise iteration timestamps when available, falls back to session timestamps.
-     *
-     * @param results the benchmark results
-     * @param outputPath the directory containing the timestamp file
-     */
-    private void processTimestampData(Collection<RunResult> results, Path outputPath) {
-        Path timestampsFile = outputPath.resolve("jmh-iteration-timestamps.jsonl");
-
-        if (!Files.exists(timestampsFile)) {
-            LOGGER.debug("No timestamp file found at %s, using session-wide timestamps", timestampsFile);
-            recordSessionTimestamps(results);
-            return;
-        }
-
-        try {
-            processPreciseTimestamps(results, timestampsFile);
-        } catch (IOException e) {
-            LOGGER.warn(FAILED_PARSE_TIMESTAMP_FILE, e.getMessage());
-            recordSessionTimestamps(results);
-        }
-    }
-
-    /**
-     * Processes precise timestamps from the timestamp file.
-     *
-     * @param results the benchmark results
-     * @param timestampsFile the path to the timestamp file
-     * @throws IOException if reading the file fails
-     */
-    private void processPreciseTimestamps(Collection<RunResult> results, Path timestampsFile) throws IOException {
-        List<IterationTimestampParser.IterationWindow> allWindows =
-                IterationTimestampParser.parseJsonlFile(timestampsFile);
-
-        Map<String, List<IterationTimestampParser.IterationWindow>> byBenchmark =
-                allWindows.stream().collect(Collectors.groupingBy(
-                        IterationTimestampParser.IterationWindow::benchmarkName));
-
-        for (RunResult result : results) {
-            String benchmarkName = extractBenchmarkName(result);
-            List<IterationTimestampParser.IterationWindow> benchmarkWindows = byBenchmark.get(benchmarkName);
-
-            if (benchmarkWindows == null || benchmarkWindows.isEmpty()) {
-                LOGGER.warn(NO_TIMESTAMP_DATA, benchmarkName);
-                recordBenchmarkTimestamp(benchmarkName);
-                continue;
-            }
-
-            recordPreciseBenchmarkTimestamp(benchmarkName, benchmarkWindows);
-        }
-    }
-
-    /**
-     * Records precise timestamps for a benchmark from its iteration windows.
-     *
-     * @param benchmarkName the name of the benchmark
-     * @param benchmarkWindows the iteration windows for this benchmark
-     */
-    private void recordPreciseBenchmarkTimestamp(String benchmarkName,
-            List<IterationTimestampParser.IterationWindow> benchmarkWindows) {
-        Optional<IterationTimestampParser.IterationWindow> measurementWindow =
-                benchmarkWindows.stream()
-                        .filter(w -> !w.isWarmup())
-                        .findFirst();
-
-        if (measurementWindow.isPresent()) {
-            IterationTimestampParser.IterationWindow window = measurementWindow.get();
-            LOGGER.info(USING_PRECISE_TIMESTAMPS, benchmarkName, window.startTime(), window.endTime());
-            prometheusMetricsManager.recordBenchmarkTimestamps(
-                    benchmarkName, window.startTime(), window.endTime());
-        } else {
-            LOGGER.warn(NO_MEASUREMENT_WINDOWS, benchmarkName);
-            recordBenchmarkTimestamp(benchmarkName);
-        }
-    }
-
-    /**
-     * Records session-wide timestamps for all results.
-     *
-     * @param results the benchmark results
-     */
-    private void recordSessionTimestamps(Collection<RunResult> results) {
-        for (RunResult result : results) {
-            recordBenchmarkTimestamp(extractBenchmarkName(result));
-        }
-    }
-
-    /**
-     * Records session-wide timestamps for a single benchmark.
-     *
-     * @param benchmarkName the name of the benchmark
-     */
-    private void recordBenchmarkTimestamp(String benchmarkName) {
-        prometheusMetricsManager.recordBenchmarkTimestamps(
-                benchmarkName, benchmarkStartTime, benchmarkEndTime);
+        LOGGER.debug("Benchmark execution completed with %s results", results.size());
     }
 
     /**
@@ -415,9 +268,6 @@ public abstract class AbstractBenchmarkRunner {
         BenchmarkConfiguration config = createConfiguration();
         validateConfiguration(config);
 
-        // Clear any previous timestamps to ensure fresh metrics collection
-        prometheusMetricsManager.clear();
-
         String outputDir = config.resultsDirectory();
         LOGGER.info(BENCHMARK_RUNNER_STARTING_WITH_DETAILS, config.benchmarkType(), outputDir);
 
@@ -442,14 +292,10 @@ public abstract class AbstractBenchmarkRunner {
                 throw new IllegalStateException("No benchmark results produced");
             }
 
-            // Step 7: Use precise iteration timestamps from TimestampProfiler
-            benchmarkEndTime = Instant.now();
-            processTimestampData(results, outputPath);
-
-            // Step 8: Process results (including Prometheus metrics collection)
+            // Step 7: Process results
             processResults(results, config);
 
-            // Step 9: Post-benchmark hook
+            // Step 8: Post-benchmark hook
             afterBenchmark(results, config);
 
             LOGGER.info(BENCHMARKS_COMPLETED_WITH_ARTIFACTS, results.size(), outputDir);

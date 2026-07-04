@@ -17,6 +17,8 @@ package de.cuioss.benchmarking.common.config;
 
 import lombok.Getter;
 
+import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Report.Badge.FileNames;
+
 /**
  * Enumeration of benchmark types supported by the CUI benchmarking infrastructure.
  * <p>
@@ -67,7 +69,7 @@ public enum BenchmarkType {
      * @return the performance badge file name
      */
     public String getPerformanceBadgeFileName() {
-        return this == MICRO ? "performance-badge.json" : "integration-performance-badge.json";
+        return this == MICRO ? FileNames.PERFORMANCE_BADGE_JSON : FileNames.INTEGRATION_PERFORMANCE_BADGE_JSON;
     }
 
     /**
@@ -76,6 +78,6 @@ public enum BenchmarkType {
      * @return the trend badge file name
      */
     public String getTrendBadgeFileName() {
-        return this == MICRO ? "trend-badge.json" : "integration-trend-badge.json";
+        return this == MICRO ? FileNames.TREND_BADGE_JSON : FileNames.INTEGRATION_TREND_BADGE_JSON;
     }
 }
