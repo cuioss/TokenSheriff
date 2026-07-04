@@ -24,7 +24,7 @@ import lombok.RequiredArgsConstructor;
  * Each measurement type represents a specific phase of the JWT validation process
  * that can be independently monitored and analyzed for performance optimization.
  * <p>
- * The enum constants are ordered by their execution sequence in the validation pipeline (ordinals 0-13).
+ * The enum constants are ordered by their execution sequence in the validation pipeline (ordinals 0-9).
  * This natural ordering makes it easy to identify pipeline flow and bottlenecks by ordinal value.
  * <p>
  * <strong>Pipeline Execution Order (Access Token):</strong>
@@ -41,17 +41,9 @@ import lombok.RequiredArgsConstructor;
  *   <li>CACHE_STORE (9) - Store validated token in cache</li>
  * </ol>
  * <p>
- * <strong>Cross-Cutting Concerns:</strong>
- * <ul>
- *   <li>JWKS_OPERATIONS (10) - Key loading (happens within signature validation)</li>
- *   <li>RETRY_ATTEMPT (11) - Individual retry attempts</li>
- *   <li>RETRY_COMPLETE (12) - Complete retry cycle with delays</li>
- *   <li>RETRY_DELAY (13) - Exponential backoff delay timing</li>
- * </ul>
- * <p>
  * <strong>Pipeline Usage:</strong>
  * <ul>
- *   <li><strong>AccessTokenValidationPipeline</strong>: Uses ordinals 0-10 for complete instrumentation</li>
+ *   <li><strong>AccessTokenValidationPipeline</strong>: Uses ordinals 0-9 for complete instrumentation</li>
  *   <li><strong>IdTokenValidationPipeline</strong>: No metrics (uses NoOpMetricsTicker)</li>
  *   <li><strong>RefreshTokenValidationPipeline</strong>: No metrics (uses NoOpMetricsTicker)</li>
  * </ul>
@@ -153,53 +145,7 @@ public enum MeasurementType {
      * serialization and LRU management. This metric helps identify caching overhead.
      * Only used by AccessTokenValidationPipeline.
      */
-    CACHE_STORE("9. Cache store operation"),
-
-    /**
-     * 10. JWKS key retrieval and processing operations (cross-cutting).
-     * <p>
-     * Measures time to fetch JWKS keys from remote endpoints, parse key material,
-     * and perform key caching operations. This happens within SIGNATURE_VALIDATION
-     * when keys need to be loaded. High values here may indicate network
-     * latency issues, JWKS endpoint problems, or key processing inefficiencies.
-     */
-    JWKS_OPERATIONS("10. JWKS key operations"),
-
-    /**
-     * 11. HTTP retry operation - single attempt (cross-cutting).
-     * <p>
-     * Measures time for individual retry attempts within the retry strategy.
-     * This includes the actual operation execution time but excludes retry delays.
-     * Useful for analyzing per-attempt performance patterns.
-     */
-    RETRY_ATTEMPT("11. HTTP retry single attempt"),
-
-    /**
-     * 12. HTTP retry operation - complete with all attempts (cross-cutting).
-     * <p>
-     * Measures total time for retry operations including all attempts, delays,
-     * and eventual success or failure. This represents the complete retry cycle
-     * from the caller's perspective and includes exponential backoff delays.
-     */
-    RETRY_COMPLETE("12. HTTP retry complete operation"),
-
-    /**
-     * 13. HTTP retry delay time (cross-cutting).
-     * <p>
-     * Measures actual delay time between retry attempts as calculated by the
-     * exponential backoff algorithm including jitter. This helps analyze
-     * retry timing patterns and backoff effectiveness.
-     */
-    RETRY_DELAY("13. HTTP retry delay time"),
-
-    /**
-     * 14. JWE decryption operation (cross-cutting).
-     * <p>
-     * Measures time to decrypt a JWE token including key resolution,
-     * CEK decryption, content decryption, and optional decompression.
-     * This step occurs within TOKEN_PARSING when a 5-part JWE token is detected.
-     */
-    JWE_DECRYPTION("14. JWE decryption");
+    CACHE_STORE("9. Cache store operation");
 
     /**
      * Human-readable description of this measurement type for logging and monitoring.

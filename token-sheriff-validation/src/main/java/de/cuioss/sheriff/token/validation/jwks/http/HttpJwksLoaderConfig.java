@@ -306,7 +306,7 @@ public class HttpJwksLoaderConfig {
 
         /**
          * Sets the key rotation grace period.
-         * Defaults to 1 hour if not specified.
+         * Defaults to 5 minutes if not specified.
          *
          * @param keyRotationGracePeriod the grace period duration
          * @return this builder instance

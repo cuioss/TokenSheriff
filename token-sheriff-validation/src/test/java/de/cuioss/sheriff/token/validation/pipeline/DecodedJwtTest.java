@@ -176,15 +176,14 @@ class DecodedJwtTest {
     }
 
     @Test
-    @DisplayName("Should throw IllegalStateException for null parts when getting signature bytes")
-    void shouldThrowIllegalStateExceptionForNullParts() {
+    @DisplayName("Should reject null parts at construction time")
+    void shouldRejectNullPartsAtConstruction() {
         JwtHeader header = createTestHeader();
         MapRepresentation body = createTestBody();
 
-        // Test with null parts
-        DecodedJwt jwtNullParts = new DecodedJwt(header, body, SIGNATURE, null, RAW_TOKEN);
-        IllegalStateException exception = assertThrows(IllegalStateException.class, jwtNullParts::getSignatureAsDecodedBytes);
-        assertTrue(exception.getMessage().contains("JWT format is invalid"));
+        // Null parts are rejected by the constructor — the invariant is explicit now
+        assertThrows(NullPointerException.class,
+                () -> new DecodedJwt(header, body, SIGNATURE, null, RAW_TOKEN));
     }
 
     @Test
@@ -228,18 +227,6 @@ class DecodedJwtTest {
         // Test successful data extraction
         String dataToVerify = jwt.getDataToVerify();
         assertEquals("encodedHeader.encodedPayload", dataToVerify);
-    }
-
-    @Test
-    @DisplayName("Should throw IllegalStateException for null parts when getting data to verify")
-    void shouldThrowIllegalStateExceptionForNullPartsWhenGettingDataToVerify() {
-        JwtHeader header = createTestHeader();
-        MapRepresentation body = createTestBody();
-
-        // Test with null parts
-        DecodedJwt jwtNullParts = new DecodedJwt(header, body, SIGNATURE, null, RAW_TOKEN);
-        IllegalStateException exception = assertThrows(IllegalStateException.class, jwtNullParts::getDataToVerify);
-        assertTrue(exception.getMessage().contains("JWT format is invalid"));
     }
 
     private JwtHeader createTestHeader() {
