@@ -1,0 +1,94 @@
+= Commons Architecture
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+_See xref:requirements.adoc[Commons Requirements], xref:threat-model.adoc[Threat Model] and
+the xref:../oidc/decision-oidc-module.adoc[module-architecture decision]._
+
+`commons` is the *shared base layer* every capability sits on. It is the package root
+`de.cuioss.sheriff.token.commons` — with sub-packages `transport`, `error`, `events` and
+`metrics` — *shipped inside the `token-sheriff-validation` artifact*. It is **not a
+separate module**: no consumer wants the base without validation (the client validates the
+tokens it retrieves, so it pulls `validation` and gets the base transitively;
+`nifi-extensions` wants `validation`). A `token-sheriff-commons` artifact would add a
+POM / release / BOM surface nobody picks alone. The layering guarantee a module boundary
+would give is instead enforced by *ArchUnit*.
+
+== The base layer
+
+[source]
+----
+token-sheriff-validation                       (one artifact)
+  de.cuioss.sheriff.token.commons.              base layer — deps: cui-http, cui-tooling
+    transport/   error/   events/   metrics/
+        ▲   ArchUnit: commons must NOT depend on …validation..
+  de.cuioss.sheriff.token.validation.           token validation (signatures, claims, pipeline)
+        ▲   Maven
+token-sheriff-client                            separate module → deps: token-sheriff-validation
+----
+
+The seam is sharp: *commons moves bytes, raises typed errors, counts events and exposes
+metrics; it never interprets a token's trust.*
+
+=== The four concerns
+
+[cols="1,3", options="header"]
+|===
+| Sub-package | Responsibility
+
+| `commons.transport`
+| All outbound IdP HTTP — discovery (`.well-known`, RFC 8414), JWKS (RFC 7517), and
+  (client-facing) token / userinfo / revocation / introspection / end-session / PAR. Owns
+  TLS enforcement, SSRF defence, timeouts, response-size limits, retry/backoff, the
+  `cui-http` client, and discovery / JWKS caching. See xref:specification/transport.adoc[transport spec].
+
+| `commons.error`
+| The typed exception hierarchy that library code throws, plus the inbound normalization of
+  OAuth `error` / `error_description` (RFC 6749 §5.2). The RFC 9457 rendering lives at each
+  HTTP edge, not here. See xref:specification/error-model.adoc[error-model spec].
+
+| `commons.events`
+| `SecurityEventCounter` and the security-event types, so validation and the future client
+  share one event surface. Thread-safe, no Micrometer dependency. See
+  xref:specification/observability.adoc[observability spec].
+
+| `commons.metrics`
+| Metric identifiers / contracts (`sheriff.token.*`) defined once; edges wire them to
+  Micrometer.
+|===
+
+== [[archunit]] ArchUnit boundary
+
+The layering is enforced by ArchUnit rules living in `token-sheriff-validation`'s test
+sources — giving the same guarantee a module boundary would, with one fewer artifact:
+
+* `…commons..` may depend only on the JDK, `cui-http`, `cui-tooling` — and *not* on
+  `…validation..`.
+* `…validation..` may depend on `…commons..` (the allowed direction).
+* No package cycles across the `commons` / `validation` boundary.
+* The client boundary (`client → validation`, never the reverse) is enforced by *Maven*
+  once the client module exists (xref:../oidc/05-client-module/README.adoc[Plan 05]).
+
+Because commons must not depend on validation, the security-event types in `commons.events`
+carry no link to validation's log-message registry, and the transport layer keeps its
+dependencies to `cui-http` / `cui-tooling` plus commons-internal types.
+
+== Who depends on what
+
+* `validation` → `commons` (uses transport, events, metrics, error).
+* `token-sheriff-validation-quarkus` → renders `commons.error` exceptions as RFC 9457.
+* `token-sheriff-client` (future, separate module) → `validation`, and thus `commons`
+  transitively.
+* `nifi-extensions` (external consumer) → `validation`; any commons-visible package move is
+  recorded in xref:../oidc/01-restructure/migration-nifi-extensions.adoc[the migration guide].
+
+== See also
+
+* xref:specification/transport.adoc[Transport specification]
+* xref:specification/error-model.adoc[Error-model specification]
+* xref:specification/observability.adoc[Observability specification]
+* xref:../oidc/03-commons/README.adoc[Plan 03 — Commons]

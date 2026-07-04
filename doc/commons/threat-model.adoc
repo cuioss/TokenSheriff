@@ -1,0 +1,104 @@
+= Commons Threat Model
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+_See xref:requirements.adoc[Commons Requirements] and xref:architecture.adoc[Architecture]._
+
+Threat model for the `commons` base layer. Commons is where the system *touches the
+network* (outbound IdP HTTP) and where it *renders failures to callers* (RFC 9457 at the
+edge), so its threats are transport threats — SSRF, TLS downgrade, response-DoS — and
+information-disclosure through error responses. Token-*trust* threats (forged signatures,
+claim tampering, replay) belong to the xref:../validation/threat-model.adoc[validation
+threat model], not here.
+
+Each entry cites a source, a mitigation, and the covering `COMMONS-N` requirement.
+
+== System context
+
+The commons layer:
+
+* Issues all outbound HTTP to OpenID Providers (discovery, JWKS; client-facing:
+  token / userinfo / revocation / introspection / end-session / PAR).
+* Follows URLs that are partly *IdP-controlled* (advertised via discovery).
+* Normalizes inbound IdP error responses and raises typed exceptions.
+* Is rendered to end-callers by the HTTP edges as `application/problem+json`.
+
+The relocated `wellknown` and `jwks.http` code is *in scope* — its egress and TLS paths are
+audited to the requirements below as part of the move into commons.
+
+== Threat catalog
+
+[cols="1,2,3,1,1", options="header"]
+|===
+| ID | Threat | Mitigation | Source | Requirement
+
+| [[T-SSRF]]T-SSRF
+| *SSRF via `jwks_uri` / discovery / userinfo / any IdP-advertised URL.* An attacker who
+  controls or spoofs IdP metadata points a URL at an internal service (cloud metadata,
+  link-local, loopback) to make the server fetch it.
+| HTTPS-only scheme restriction, host allow-list / egress policy, and blocking of
+  internal / link-local / loopback ranges before any advertised URL is fetched. Audit the
+  *existing* `wellknown` / `jwks` fetch code being relocated.
+| https://owasp.org/www-community/attacks/Server_Side_Request_Forgery[OWASP SSRF], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180]
+| xref:requirements.adoc#COMMONS-3[COMMONS-3]
+
+| [[T-DISCOVERY]]T-DISCOVERY
+| *Malicious endpoints advertised via discovery.* A tampered `.well-known` document
+  advertises attacker-controlled `jwks_uri` / `token_endpoint` / `userinfo_endpoint`.
+| Validate the advertised `issuer` against the configured issuer; treat every advertised
+  URL as untrusted input and subject it to T-SSRF controls before use.
+| https://www.rfc-editor.org/rfc/rfc8414[RFC 8414 §3.3], https://openid.net/specs/openid-connect-discovery-1_0.html[OIDC Discovery 1.0 §4.3]
+| xref:requirements.adoc#COMMONS-5[COMMONS-5]
+
+| [[T-TLS]]T-TLS
+| *TLS downgrade / MITM on any IdP fetch.* Downgrade to plaintext or a forged certificate
+  lets an attacker substitute metadata, keys, or token-endpoint responses.
+| Enforce TLS 1.2+ with certificate validation on every outbound request; reject plain
+  HTTP endpoints. TLS is configured centrally, not per-caller.
+| https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §2.6], https://www.rfc-editor.org/rfc/rfc8414[RFC 8414 §2]
+| xref:requirements.adoc#COMMONS-2[COMMONS-2]
+
+| [[T-DOS]]T-DOS
+| *DoS via large / slow metadata, JWKS or userinfo responses.* A hostile or degraded IdP
+  returns a multi-gigabyte body or trickles bytes to exhaust memory / threads.
+| Connect/read timeouts, response-size limits, and bounded retry/backoff on every fetch;
+  no unbounded buffering.
+| https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4], https://www.rfc-editor.org/rfc/rfc7230[RFC 7230]
+| xref:requirements.adoc#COMMONS-4[COMMONS-4]
+
+| [[T-LEAK]]T-LEAK
+| *Internal-detail leakage in error responses.* An error surface returns a stack trace,
+  internal identifiers, upstream URLs, or credential fragments to the caller.
+| Library code raises typed exceptions only (no HTTP documents); edges render RFC 9457
+  problem documents carrying a safe `type` / `title` / `detail`, never stack traces or
+  internal identifiers. Inbound IdP errors are normalized, not passed through verbatim.
+| https://www.rfc-editor.org/rfc/rfc9457#section-3[RFC 9457 §3], https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4]
+| xref:requirements.adoc#COMMONS-9[COMMONS-9], xref:requirements.adoc#COMMONS-10[COMMONS-10], xref:requirements.adoc#COMMONS-11[COMMONS-11], xref:requirements.adoc#COMMONS-12[COMMONS-12]
+|===
+
+== Adversarial test coverage
+
+Each transport threat is exercised by the `generators` test artifact's dispatchers in an
+*adversarial* mode (see xref:specification/transport.adoc#_adversarial_dispatchers[Transport
+spec]):
+
+[cols="1,3", options="header"]
+|===
+| Threat | Adversarial dispatcher behaviour
+
+| T-SSRF | Discovery / JWKS / userinfo dispatchers advertise redirect or internal-range URLs.
+| T-DISCOVERY | Discovery dispatcher advertises a mismatched `issuer` / attacker `jwks_uri`.
+| T-TLS | Endpoint offered over plain HTTP / with a downgrade is rejected by the client.
+| T-DOS | Dispatchers emit oversized / slow-drip bodies.
+| T-LEAK | Edge tests assert problem+json carries no stack trace / internal identifier.
+|===
+
+== Out of scope (delegated)
+
+Token-trust threats — forged signatures, `alg` confusion, claim tampering, expiry/replay —
+are covered by the xref:../validation/threat-model.adoc[validation threat model]. Commons
+delivers bytes and raises typed errors; it never decides whether a token is trustworthy.

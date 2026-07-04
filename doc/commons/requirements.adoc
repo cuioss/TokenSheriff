@@ -1,0 +1,203 @@
+= Commons Requirements
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+Functional and non-functional requirements for the `commons` base layer — the
+`de.cuioss.sheriff.token.commons.*` packages inside `token-sheriff-validation`. Commons
+gathers the four cross-cutting concerns every capability sits on: *IdP transport*, the
+*error model*, *security events* and *metrics*. It *moves bytes, raises typed errors,
+counts events and exposes metrics; it never interprets a token's trust* — that is the
+validation layer's job.
+
+Requirement IDs use the `COMMONS-N` scheme (per xref:../oidc/02-doc-structure/README.adoc[Plan 02]),
+grouped by concern. IDs are stable identifiers referenced across documentation and the
+xref:threat-model.adoc[threat model]; they are not sequential across groups.
+
+=== Document Navigation
+
+* xref:architecture.adoc[Architecture] — the base layer and its ArchUnit boundary
+* xref:threat-model.adoc[Threat Model] — SSRF / TLS / response-DoS / error-detail leakage
+* xref:references.adoc[References] — bibliography
+* xref:specification/transport.adoc[Transport spec] · xref:specification/error-model.adoc[Error-model spec] · xref:specification/observability.adoc[Observability spec]
+
+=== Referenced Standards
+
+New standards are catalogued in xref:references.adoc[References]. Standards reused from the
+validation bibliography (RFC 7517, RFC 6749, RFC 9700) are cited inline below and not
+restated here.
+
+== Transport requirements
+
+_All outbound IdP HTTP. See xref:specification/transport.adoc[Transport specification] and
+xref:threat-model.adoc[Threat Model]._
+
+[#COMMONS-1]
+=== COMMONS-1: Outbound IdP HTTP transport
+
+Commons is the single owner of all outbound HTTP to an OpenID Provider. It provides the
+HTTP client (built on `cui-http`) used for discovery, JWKS, and — for the client
+capability — token, userinfo, revocation, introspection, end-session and PAR. No other
+package issues outbound IdP requests directly.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (single hardened HTTP surface).
+
+[#COMMONS-2]
+=== COMMONS-2: TLS enforcement
+
+All outbound IdP requests MUST use TLS 1.2 or higher with certificate validation. Plain
+HTTP endpoints MUST be rejected. TLS configuration is centralized (via `cui-http`'s
+`SecureSSLContextProvider`), not per-caller.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §2.6], https://www.rfc-editor.org/rfc/rfc8414[RFC 8414 §2] (metadata retrieved over TLS).
+
+[#COMMONS-3]
+=== COMMONS-3: SSRF defence for advertised URLs
+
+Any URL taken from an IdP-controlled source (`jwks_uri`, discovery endpoints, `userinfo`,
+or any endpoint advertised via discovery) MUST be constrained before it is fetched:
+scheme restricted to HTTPS, host subject to an allow-list / egress policy, and internal /
+link-local / loopback address ranges blocked. The *existing* `wellknown` and `jwks`
+fetch paths are audited to this requirement as part of their relocation into commons.
+
+* Source: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery[OWASP SSRF], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180], https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4.10].
+
+[#COMMONS-4]
+=== COMMONS-4: Response resilience and DoS bounds
+
+Every outbound fetch MUST apply a connect/read timeout, a response-size limit, and bounded
+retry/backoff. Large or slow metadata, JWKS or userinfo responses MUST NOT be able to
+exhaust memory or block a caller indefinitely.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (availability), https://www.rfc-editor.org/rfc/rfc7230[RFC 7230] (message framing bounds).
+
+[#COMMONS-5]
+=== COMMONS-5: Discovery (`.well-known`)
+
+Commons fetches and parses OpenID Provider metadata from
+`.well-known/openid-configuration` (OIDC Discovery) and OAuth authorization-server
+metadata (RFC 8414). The advertised `issuer` MUST be validated against the configured
+issuer; advertised endpoint URLs are subject to <<COMMONS-3>>.
+
+* Source: https://openid.net/specs/openid-connect-discovery-1_0.html[OpenID Connect Discovery 1.0 §4.3], https://www.rfc-editor.org/rfc/rfc8414[RFC 8414 §3.3].
+
+[#COMMONS-6]
+=== COMMONS-6: JWKS retrieval
+
+Commons retrieves JWKS documents (RFC 7517) over the hardened transport, subject to
+<<COMMONS-2>>, <<COMMONS-3>> and <<COMMONS-4>>, and caches them (<<COMMONS-8>>). Key
+*material parsing* is a transport-format concern; *trust decisions* about the resulting
+keys remain in validation.
+
+* Source: https://www.rfc-editor.org/rfc/rfc7517[RFC 7517] (reused from validation bibliography).
+
+[#COMMONS-7]
+=== COMMONS-7: Extended IdP endpoints (client-facing)
+
+Commons defines the transport contract for the endpoints the OIDC client capability will
+add: token (RFC 6749), userinfo (OIDC Core), revocation (RFC 7009), introspection
+(RFC 7662), end-session / RP-initiated logout, and PAR (RFC 9126). Each is exercised by a
+dedicated MockWebServer dispatcher in the `generators` test artifact (default + adversarial
+modes) so the contract is testable before the client engine exists.
+
+* Source: https://www.rfc-editor.org/rfc/rfc6749[RFC 6749], https://www.rfc-editor.org/rfc/rfc7009[RFC 7009], https://www.rfc-editor.org/rfc/rfc7662[RFC 7662], https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OIDC RP-Initiated Logout 1.0].
+
+[#COMMONS-8]
+=== COMMONS-8: Caching of discovery and JWKS
+
+Discovery documents and JWKS are cached with a bounded lifetime to avoid re-fetching on
+every validation. Cache refresh MUST re-apply <<COMMONS-2>>–<<COMMONS-4>>.
+
+* Source: https://openid.net/specs/openid-connect-discovery-1_0.html[OpenID Connect Discovery 1.0 §4.3] (caching guidance).
+
+== Error-model requirements
+
+_See xref:specification/error-model.adoc[Error-model specification]._
+
+[#COMMONS-9]
+=== COMMONS-9: Typed exception hierarchy
+
+Library code (the `commons` and `validation` packages, and the future client engine — pure
+Java) MUST signal failure through a typed exception hierarchy defined in `commons.error`.
+Library code MUST NOT produce HTTP problem documents — that is not its layer.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9457[RFC 9457 §3] (problem details are an HTTP-edge concern).
+
+[#COMMONS-10]
+=== COMMONS-10: RFC 9457 rendering at every HTTP edge
+
+Every HTTP edge — `token-sheriff-validation-quarkus`, the future `token-sheriff-client-quarkus`,
+and any future non-Quarkus/RESTEasy edge (e.g. a portal adapter) — MUST map the typed
+exceptions to `application/problem+json` per RFC 9457. Existing validation rejection
+responses are retrofitted to this contract.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9457[RFC 9457].
+
+[#COMMONS-11]
+=== COMMONS-11: Inbound IdP error normalization
+
+Commons MUST normalize inbound IdP error responses (OAuth `error` / `error_description`
+per RFC 6749 §5.2) into the typed model the edges render — one contract, both directions.
+
+* Source: https://www.rfc-editor.org/rfc/rfc6749#section-5.2[RFC 6749 §5.2] (reused from validation bibliography).
+
+[#COMMONS-12]
+=== COMMONS-12: No internal-detail leakage
+
+Rendered problem documents MUST carry only a safe `type` / `title` / `detail`, and MUST NOT
+leak stack traces, internal identifiers, upstream URLs, or credential material.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9457#section-3[RFC 9457 §3] (member semantics), https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (information disclosure).
+
+== Security-event requirements
+
+_See xref:specification/observability.adoc[Observability specification]._
+
+[#COMMONS-13]
+=== COMMONS-13: Shared security-event surface
+
+`SecurityEventCounter` and the security-event types live in `commons.events` so validation
+and the future client share one event surface. The counter MUST remain thread-safe and
+free of any Micrometer dependency; Quarkus extensions expose it as before.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (security monitoring).
+
+[#COMMONS-14]
+=== COMMONS-14: Event categorization
+
+Each security event MUST carry a category (structure / signature / semantic) usable by an
+edge to select a response. Event categories MUST NOT depend on any validation-layer type
+(the ArchUnit boundary — see xref:architecture.adoc#_archunit_boundary[Architecture]).
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4].
+
+== Metrics requirements
+
+[#COMMONS-15]
+=== COMMONS-15: Metric identifiers defined once
+
+Metric identifiers / contracts (`sheriff.token.*`) are defined once in `commons.metrics`.
+Each Quarkus extension wires them to Micrometer; the identifiers themselves carry no
+Micrometer dependency.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (observability), project metric-naming convention (`sheriff.token.*`).
+
+== Traceability
+
+Each requirement is covered by the xref:threat-model.adoc[threat model] and realized in the
+xref:specification/transport.adoc[transport], xref:specification/error-model.adoc[error-model]
+and xref:specification/observability.adoc[observability] specifications.
+
+[cols="1,2,2", options="header"]
+|===
+| Requirement | Threats | Specification
+
+| COMMONS-1..8 | T-SSRF, T-TLS, T-DOS, T-DISCOVERY | transport.adoc
+| COMMONS-9..12 | T-LEAK | error-model.adoc
+| COMMONS-13..14 | T-LEAK (categorization) | observability.adoc
+| COMMONS-15 | — | observability.adoc
+|===

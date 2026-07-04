@@ -3,6 +3,23 @@
 
 This is the central navigation for TokenSheriff documentation.
 
+== Commons (base layer)
+
+The shared base layer every capability sits on — the `de.cuioss.sheriff.token.commons.*`
+packages inside `token-sheriff-validation` (transport, error model, security events,
+metrics), enforced by ArchUnit rather than shipped as a separate module.
+
+* xref:commons/requirements.adoc[Requirements] - `COMMONS-N`, grouped by concern
+* xref:commons/architecture.adoc[Architecture] - The base layer and its ArchUnit boundary
+* xref:commons/threat-model.adoc[Threat Model] - SSRF / TLS / response-DoS / error-detail leakage
+* xref:commons/references.adoc[References] - Bibliography
+
+=== Specifications
+
+* xref:commons/specification/transport.adoc[Transport] - Discovery, JWKS, token/userinfo/…; TLS, SSRF, resilience
+* xref:commons/specification/error-model.adoc[Error Model] - Typed exceptions → RFC 9457 at every HTTP edge
+* xref:commons/specification/observability.adoc[Observability] - SecurityEventCounter events + metric identifiers
+
 == Token Validation
 
 The token validation capability — its requirements, architecture, security model, and specifications.

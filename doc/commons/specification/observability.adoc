@@ -1,0 +1,55 @@
+= Commons Specification — Observability
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+_Realizes xref:../requirements.adoc#COMMONS-13[COMMONS-13]–xref:../requirements.adoc#COMMONS-15[COMMONS-15]._
+
+Observability in commons is two things: the *security-event surface* (`commons.events`) and
+the *metric identifiers* (`commons.metrics`). Both are defined once, carry no Micrometer
+dependency, and are wired to Micrometer by each Quarkus extension.
+
+== Security events (`commons.events`)
+
+`SecurityEventCounter` and the security-event types move into `commons.events` so validation
+and the future client share one event surface (xref:../requirements.adoc#COMMONS-13[COMMONS-13]).
+
+* `SecurityEventCounter` — a thread-safe, highly concurrent counter keyed by event type; no
+  Micrometer dependency (so the base layer stays dependency-light).
+* `SecurityEventCounter.EventType` — the enumerated events, each carrying an
+  `EventCategory`.
+* `EventCategory` — `INVALID_STRUCTURE`, `INVALID_SIGNATURE`, `SEMANTIC_ISSUES` — usable by
+  an edge to choose a response (xref:../requirements.adoc#COMMONS-14[COMMONS-14]).
+
+Because commons must not depend on validation (the
+xref:../architecture.adoc#archunit[ArchUnit boundary]), the event types carry *no compile
+link to validation's log-message registry*. The correlation with `JWTValidationLogMessages`
+numbering is maintained by convention and documented in the single global
+xref:../../LogMessages.adoc[Log Messages] registry, not by a cross-layer type reference.
+
+Quarkus extensions expose the counter as before — the move is a package relocation, not a
+behavioural change.
+
+== Metric identifiers (`commons.metrics`)
+
+Metric identifiers / contracts under the `sheriff.token.*` namespace are defined once in
+`commons.metrics` (xref:../requirements.adoc#COMMONS-15[COMMONS-15]). The identifiers are
+plain constants / descriptors with no Micrometer dependency; each Quarkus extension binds
+them to a `MeterRegistry`.
+
+This keeps the metric contract stable across the validation and client capabilities and
+avoids duplicating identifier strings per extension.
+
+== Relationship to logging
+
+Logging stays the *global* xref:../../LogMessages.adoc[LogMessages] registry — it is not a
+commons concern and is not split per capability. Security events and metrics are the
+commons observability surface; log records remain the project-wide registry.
+
+== See also
+
+* xref:error-model.adoc[Error-model specification] — categories feed the RFC 9457 mapping
+* xref:../architecture.adoc[Architecture]
