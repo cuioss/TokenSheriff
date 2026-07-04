@@ -171,6 +171,7 @@ class TokenSheriffDevUIRuntimeServiceUnitTest {
         Map<String, String> claims = (Map<String, String>) result.get("claims");
         assertNotNull(claims, "valid token must expose its claims");
         assertFalse(claims.isEmpty(), "claims must not be empty");
+        assertEquals(tokenHolder.getIssuer(), claims.get("iss"), "issuer claim must match");
     }
 
     @Test
