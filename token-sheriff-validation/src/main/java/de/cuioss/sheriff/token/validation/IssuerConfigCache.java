@@ -19,8 +19,6 @@ import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.util.LoaderStatus;
 import de.cuioss.tools.logging.CuiLogger;
-import lombok.EqualsAndHashCode;
-import lombok.ToString;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Collection;
@@ -45,13 +43,21 @@ import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
  *   <li>A ConcurrentHashMap for mutable cache during initialization</li>
  *   <li>An immutable Map for optimal lock-free reads after all configs are loaded</li>
  * </ul>
+ * <p>
+ * Issuers whose initial JWKS load fails are not lost: on every cache miss the resolver
+ * re-checks the loader status of the originally configured issuer, so an issuer that
+ * recovers via background refresh becomes resolvable again without a restart.
  * @since 1.0
  */
-@EqualsAndHashCode
-@ToString(of = {"mutableCache", "immutableCache", "loadingFutures"})
 public class IssuerConfigCache {
 
     private static final CuiLogger LOGGER = new CuiLogger(IssuerConfigCache.class);
+
+    /**
+     * Maximum time to wait for an in-flight initial JWKS load before treating the
+     * issuer as unavailable for the current validation attempt.
+     */
+    private static final long LOADING_WAIT_SECONDS = 5;
 
     /**
      * Mutable cache used during initialization phase.
@@ -72,6 +78,13 @@ public class IssuerConfigCache {
      */
     @SuppressWarnings("java:S3077") // Map.copyOf() creates truly immutable map, safe for concurrent reads after volatile publication
     private volatile @Nullable Map<String, IssuerConfig> immutableCache;
+
+    /**
+     * All enabled issuer configurations keyed by issuer identifier.
+     * Used as the recovery source when an issuer's initial load failed but its
+     * loader later became healthy through background refresh.
+     */
+    private final Map<String, IssuerConfig> enabledConfigsByIssuer;
 
     /**
      * Security event counter for tracking validation events.
@@ -95,12 +108,13 @@ public class IssuerConfigCache {
         this.loadingFutures = new ConcurrentHashMap<>();
         this.immutableCache = null; // Will be set after all loading completes
 
+        Map<String, IssuerConfig> enabledConfigs = new ConcurrentHashMap<>();
         // Trigger ALL async loading in constructor
-        int enabledCount = 0;
         int totalCount = issuerConfigs.size();
         for (IssuerConfig config : issuerConfigs) {
             if (config.isEnabled()) {
                 String issuer = config.getIssuerIdentifier();
+                enabledConfigs.put(issuer, config);
 
                 // Single initialization point: trigger async JWKS loading
                 CompletableFuture<LoaderStatus> future =
@@ -118,14 +132,14 @@ public class IssuerConfigCache {
                     }
                 });
 
-                enabledCount++;
                 LOGGER.debug("Triggered async loading for issuer: %s", issuer);
             } else {
                 LOGGER.info(INFO.ISSUER_CONFIG_SKIPPED, config);
             }
         }
+        this.enabledConfigsByIssuer = Map.copyOf(enabledConfigs);
 
-        LOGGER.debug("IssuerConfigCache initialized with %s enabled configurations (%s total)", enabledCount, totalCount);
+        LOGGER.debug("IssuerConfigCache initialized with %s enabled configurations (%s total)", enabledConfigsByIssuer.size(), totalCount);
 
         // After all futures are registered, create a combined future to optimize cache when all complete
         if (!loadingFutures.isEmpty()) {
@@ -140,10 +154,12 @@ public class IssuerConfigCache {
     /**
      * Resolves the issuer configuration for the given issuer identifier.
      * <p>
-     * This method implements a three-tier resolution strategy:
+     * This method implements a four-tier resolution strategy:
      * <ol>
      *   <li><strong>Fast path:</strong> Direct cache lookup (lock-free, constant time)</li>
      *   <li><strong>Loading wait:</strong> Wait for ongoing async loading if in progress</li>
+     *   <li><strong>Recovery:</strong> Re-check the configured issuer's loader status — an
+     *       issuer whose initial load failed may have recovered via background refresh</li>
      *   <li><strong>Failure:</strong> Throw exception if no healthy config is available</li>
      * </ol>
      * <p>
@@ -165,7 +181,7 @@ public class IssuerConfigCache {
         if (future != null) {
             try {
                 // Wait for loading to complete (with timeout)
-                LoaderStatus status = future.get(5, TimeUnit.SECONDS);
+                LoaderStatus status = future.get(LOADING_WAIT_SECONDS, TimeUnit.SECONDS);
                 if (status == LoaderStatus.OK) {
                     IssuerConfig loadedConfig = getCachedConfig(issuer);
                     if (loadedConfig != null) {
@@ -182,9 +198,19 @@ public class IssuerConfigCache {
             }
         }
 
+        // Recovery path: an issuer whose initial load failed is not in the caches, but its
+        // loader keeps retrying via background refresh. If it has become healthy since,
+        // re-admit it instead of failing until process restart.
+        IssuerConfig candidate = enabledConfigsByIssuer.get(issuer);
+        if (candidate != null && candidate.getJwksLoader() != null
+                && candidate.getJwksLoader().getLoaderStatus() == LoaderStatus.OK) {
+            mutableCache.put(issuer, candidate);
+            LOGGER.info(INFO.ISSUER_CONFIG_LOADED, issuer);
+            return candidate;
+        }
+
         // Not found or not healthy
-        handleIssuerNotFound(issuer);
-        throw new IllegalStateException("handleIssuerNotFound should have thrown an exception");
+        throw issuerNotFound(issuer);
     }
 
     /**
@@ -244,18 +270,16 @@ public class IssuerConfigCache {
     }
 
     /**
-     * Handles the case where no issuer configuration is found.
-     * <p>
-     * This method logs a warning, increments the security event counter,
-     * and throws a TokenValidationException with appropriate details.
+     * Creates the exception for the case where no issuer configuration is found,
+     * logging a warning and incrementing the security event counter.
      *
      * @param issuer the issuer identifier that wasn't found
-     * @throws TokenValidationException always thrown with NO_ISSUER_CONFIG event type
+     * @return the exception to throw, with NO_ISSUER_CONFIG event type
      */
-    private void handleIssuerNotFound(String issuer) {
+    private TokenValidationException issuerNotFound(String issuer) {
         LOGGER.warn(WARN.NO_ISSUER_CONFIG, issuer);
         securityEventCounter.increment(SecurityEventCounter.EventType.NO_ISSUER_CONFIG);
-        throw new TokenValidationException(
+        return new TokenValidationException(
                 SecurityEventCounter.EventType.NO_ISSUER_CONFIG,
                 "No healthy issuer configuration found for issuer: " + issuer
         );

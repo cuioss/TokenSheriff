@@ -96,6 +96,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                     .build();
 
             var config = IssuerConfig.builder()
+                    .issuerIdentifier("test-issuer")
                     .expectedAudience(audience)
                     .expectedClientId(clientId)
                     .algorithmPreferences(algorithmPreferences)
@@ -181,6 +182,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
         @DisplayName("Should initialize with HTTP JwksLoader")
         void shouldInitializeWithHttpJwksLoader() {
             var config = IssuerConfig.builder()
+                    .issuerIdentifier("test-issuer")
                     .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
                             .jwksUrl(TEST_JWKS_URL)
                             .issuerIdentifier("test-issuer")
@@ -228,6 +230,34 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
 
             assertTrue(exception.getMessage().contains("No JwksLoader configuration is present"));
         }
+
+        @Test
+        @DisplayName("Should throw exception during build when well-known discovery is configured without issuerIdentifier")
+        void shouldRequireIssuerIdentifierForWellKnownDiscovery() {
+            var builder = IssuerConfig.builder()
+                    .expectedAudience("test-audience")
+                    .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
+                            .wellKnownUrl("https://example.com/.well-known/openid-configuration")
+                            .build());
+            var exception = assertThrows(IllegalArgumentException.class, builder::build);
+
+            assertTrue(exception.getMessage().contains("issuerIdentifier is required"));
+        }
+
+        @Test
+        @DisplayName("Should build disabled configuration without issuerIdentifier")
+        void shouldBuildDisabledConfigurationWithoutIssuerIdentifier() {
+            var config = IssuerConfig.builder()
+                    .enabled(false)
+                    .build();
+
+            assertFalse(config.isEnabled());
+            assertThrows(IllegalStateException.class, config::getIssuerIdentifier);
+            // Disabled configs are logged (ISSUER_CONFIG_SKIPPED) and compared —
+            // Lombok-generated methods must not trip over the guarded getter
+            assertDoesNotThrow(config::toString);
+            assertDoesNotThrow(config::hashCode);
+        }
     }
 
     @Nested
@@ -255,6 +285,7 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
                     .build();
             assertDoesNotThrow(() -> {
                 IssuerConfig.builder()
+                        .issuerIdentifier("test-issuer")
                         .httpJwksLoaderConfig(httpConfig)
                         .audienceValidationDisabled(true)
                         .build();

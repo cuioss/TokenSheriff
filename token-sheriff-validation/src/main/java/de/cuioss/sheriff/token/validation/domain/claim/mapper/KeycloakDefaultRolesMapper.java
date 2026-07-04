@@ -19,7 +19,6 @@ import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import de.cuioss.tools.logging.CuiLogger;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,10 +46,10 @@ import java.util.Optional;
  * <p>
  * The mapper handles:
  * <ul>
- *   <li>Missing {@code realm_access} object - returns empty list</li>
- *   <li>Missing {@code roles} array within {@code realm_access} - returns empty list</li>
- *   <li>Empty roles array - returns empty list</li>
- *   <li>Non-array roles value - returns empty list</li>
+ *   <li>Missing {@code realm_access} object - returns {@code null} (claim treated as absent)</li>
+ *   <li>Missing {@code roles} array within {@code realm_access} - returns {@code null} (claim treated as absent)</li>
+ *   <li>Non-array {@code roles} value - returns {@code null} (claim treated as absent)</li>
+ *   <li>Empty roles array - returns claim value with empty list</li>
  * </ul>
  *
  * @since 1.0
@@ -83,9 +82,8 @@ public class KeycloakDefaultRolesMapper implements ClaimMapper {
         }
 
         List<String> rolesList = rolesValue.get();
-        String originalValue = rolesList.toString();
 
         LOGGER.debug("Successfully mapped roles: %s", rolesList);
-        return ClaimValue.forList(originalValue, Collections.unmodifiableList(rolesList));
+        return KeycloakMapperSupport.toListClaimValue(rolesList);
     }
 }

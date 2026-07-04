@@ -59,9 +59,9 @@ public enum TokenType {
     /**
      * Constructor for TokenType.
      *
-     * @param mandatoryClaims the mandatory claims
+     * @param mandatoryClaims the mandatory claims, stored as an unmodifiable view
      */
     TokenType(SortedSet<ClaimName> mandatoryClaims) {
-        this.mandatoryClaims = mandatoryClaims;
+        this.mandatoryClaims = Collections.unmodifiableSortedSet(mandatoryClaims);
     }
 }

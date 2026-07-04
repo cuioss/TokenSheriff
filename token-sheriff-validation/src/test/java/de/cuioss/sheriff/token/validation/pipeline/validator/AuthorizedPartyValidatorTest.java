@@ -168,18 +168,19 @@ class AuthorizedPartyValidatorTest {
     }
 
     @Test
-    @DisplayName("Should handle null claim value gracefully")
-    void shouldHandleNullClaimValueGracefully() {
+    @DisplayName("Should reject null claim values at token construction")
+    void shouldRejectNullClaimValuesAtTokenConstruction() {
+        // Since the claims map is defensively copied via Map.copyOf, null claim values are
+        // rejected at construction time - a null azp value can never reach the validator.
+        // The absent-claim case is covered by shouldFailValidationWhenAuthorizedPartyClaimIsMissing.
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.put(ClaimName.AUTHORIZED_PARTY.getName(), null);
         claims.remove(ClaimName.CLIENT_ID.getName());
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken());
+        String rawToken = tokenHolder.getRawToken();
 
-        TokenValidationException exception = assertThrows(TokenValidationException.class,
-                () -> validator.validateAuthorizedParty(token));
-        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
-        assertTrue(exception.getMessage().contains("Missing required authorized party claim (azp or client_id)"));
-        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+        assertThrows(NullPointerException.class,
+                () -> new AccessTokenContent(claims, rawToken),
+                "Null claim values must be rejected by the defensive copy");
     }
 }
