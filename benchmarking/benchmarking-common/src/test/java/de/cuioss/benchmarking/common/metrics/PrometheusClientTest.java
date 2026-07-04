@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -60,14 +62,15 @@ class PrometheusClientTest {
         List<String> metricNames = List.of("process_cpu_usage");
 
         // When
-        Map<String, PrometheusClient.TimeSeries> result = prometheusClient.queryRange(
+        Map<String, List<PrometheusClient.TimeSeries>> result = prometheusClient.queryRange(
                 metricNames, START_TIME, END_TIME, STEP);
 
         // Then
         assertEquals(1, result.size());
         assertTrue(result.containsKey("process_cpu_usage"));
 
-        PrometheusClient.TimeSeries timeSeries = result.get("process_cpu_usage");
+        assertEquals(1, result.get("process_cpu_usage").size());
+        PrometheusClient.TimeSeries timeSeries = result.get("process_cpu_usage").getFirst();
         assertEquals("process_cpu_usage", timeSeries.metricName());
 
         // Verify labels
@@ -93,7 +96,7 @@ class PrometheusClientTest {
         List<String> metricNames = List.of("process_cpu_usage", "system_cpu_usage", "jvm_memory_used_bytes");
 
         // When
-        Map<String, PrometheusClient.TimeSeries> result = prometheusClient.queryRange(
+        Map<String, List<PrometheusClient.TimeSeries>> result = prometheusClient.queryRange(
                 metricNames, START_TIME, END_TIME, STEP);
 
         // Then
@@ -103,10 +106,13 @@ class PrometheusClientTest {
         assertTrue(result.containsKey("jvm_memory_used_bytes"));
 
         // Verify each metric has expected structure
-        result.forEach((metricName, timeSeries) -> {
-            assertEquals(metricName, timeSeries.metricName());
-            assertFalse(timeSeries.labels().isEmpty());
-            assertFalse(timeSeries.values().isEmpty());
+        result.forEach((metricName, seriesList) -> {
+            assertFalse(seriesList.isEmpty());
+            for (PrometheusClient.TimeSeries timeSeries : seriesList) {
+                assertEquals(metricName, timeSeries.metricName());
+                assertFalse(timeSeries.labels().isEmpty());
+                assertFalse(timeSeries.values().isEmpty());
+            }
         });
 
         assertEquals(3, moduleDispatcher.getCallCounter());
@@ -119,15 +125,13 @@ class PrometheusClientTest {
         List<String> metricNames = List.of("non_existent_metric");
 
         // When
-        Map<String, PrometheusClient.TimeSeries> result = prometheusClient.queryRange(
+        Map<String, List<PrometheusClient.TimeSeries>> result = prometheusClient.queryRange(
                 metricNames, START_TIME, END_TIME, STEP);
 
         // Then
         assertEquals(1, result.size());
-        PrometheusClient.TimeSeries timeSeries = result.get("non_existent_metric");
-        assertEquals("non_existent_metric", timeSeries.metricName());
-        assertTrue(timeSeries.labels().isEmpty());
-        assertTrue(timeSeries.values().isEmpty());
+        assertTrue(result.get("non_existent_metric").isEmpty(),
+                "Metric without data should yield an empty series list");
 
         assertEquals(1, moduleDispatcher.getCallCounter());
     }
@@ -287,11 +291,11 @@ class PrometheusClientTest {
         List<String> metricNames = List.of("sheriff_token_validation_success_operations_total");
 
         // When
-        Map<String, PrometheusClient.TimeSeries> result = prometheusClient.queryRange(
+        Map<String, List<PrometheusClient.TimeSeries>> result = prometheusClient.queryRange(
                 metricNames, START_TIME, END_TIME, STEP);
 
         // Then
-        PrometheusClient.TimeSeries timeSeries = result.get("sheriff_token_validation_success_operations_total");
+        PrometheusClient.TimeSeries timeSeries = result.get("sheriff_token_validation_success_operations_total").getFirst();
         Map<String, String> labels = timeSeries.labels();
 
         assertEquals("ACCESS_TOKEN_CREATED", labels.get("event_type"));
@@ -303,6 +307,39 @@ class PrometheusClientTest {
         assertEquals(10960018.0, values.getFirst().value());
         assertEquals(10960018.0, values.get(1).value());
         assertEquals(10960018.0, values.get(2).value());
+    }
+
+    @Test
+    void shouldReturnAllSeriesForMultiLabelMetric() throws Exception {
+        // Given - real jvm_memory_used_bytes fixture with 5 series (3 heap areas, 2 nonheap areas)
+        String multiSeriesResponse = Files.readString(
+                Path.of("src/test/resources/metrics/jvm_memory_used.json"));
+        moduleDispatcher.setCustomResponse(multiSeriesResponse);
+        List<String> metricNames = List.of("jvm_memory_used_bytes");
+
+        // When
+        Map<String, List<PrometheusClient.TimeSeries>> result = prometheusClient.queryRange(
+                metricNames, START_TIME, END_TIME, STEP);
+
+        // Then - ALL series must be returned, not only the first one
+        List<PrometheusClient.TimeSeries> allSeries = result.get("jvm_memory_used_bytes");
+        assertEquals(5, allSeries.size(), "All 5 series of the multi-label metric must be returned");
+
+        long heapSeries = allSeries.stream()
+                .filter(series -> "heap".equals(series.labels().get("area")))
+                .count();
+        long nonHeapSeries = allSeries.stream()
+                .filter(series -> "nonheap".equals(series.labels().get("area")))
+                .count();
+        assertEquals(3, heapSeries, "All heap series must be present");
+        assertEquals(2, nonHeapSeries, "All nonheap series must be present");
+
+        // Each series carries its own label set and data points
+        for (PrometheusClient.TimeSeries series : allSeries) {
+            assertEquals("jvm_memory_used_bytes", series.metricName());
+            assertTrue(series.labels().containsKey("id"), "Each series keeps its own labels");
+            assertFalse(series.values().isEmpty(), "Each series keeps its own data points");
+        }
     }
 
     @Test

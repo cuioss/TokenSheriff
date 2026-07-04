@@ -15,9 +15,13 @@
  */
 package de.cuioss.benchmarking.common.report;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import de.cuioss.benchmarking.common.config.BenchmarkType;
 import de.cuioss.benchmarking.common.model.BenchmarkData;
 import de.cuioss.benchmarking.common.util.JsonSerializationHelper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -108,5 +112,76 @@ class ReportDataGeneratorTest {
         List<Double> p50Values = datasets.get("50.0th");
         assertNotNull(p50Values, "P50 values should exist");
         assertFalse(p50Values.isEmpty(), "Should have at least one percentile value");
+    }
+
+    @Test
+    void nullOverviewProducesFGradeReportWithoutException(@TempDir Path tempDir) throws Exception {
+        // Failed runs (null/empty overview, no benchmarks) must produce a degraded
+        // F-grade report instead of crashing report generation (H-6)
+        BenchmarkData degraded = BenchmarkData.builder()
+                .metadata(null)
+                .overview(null)
+                .benchmarks(List.of())
+                .build();
+
+        ReportDataGenerator generator = new ReportDataGenerator();
+        assertDoesNotThrow(() ->
+                generator.generateDataFile(degraded, BenchmarkType.INTEGRATION, tempDir.toString()));
+
+        Path dataFile = tempDir.resolve("data/benchmark-data.json");
+        assertTrue(Files.exists(dataFile), "Degraded report data file must be written");
+
+        JsonObject json = JsonParser.parseString(Files.readString(dataFile)).getAsJsonObject();
+        JsonObject overview = json.getAsJsonObject("overview");
+        assertEquals("F", overview.get("performanceGrade").getAsString(),
+                "Degraded report must carry an F grade");
+        assertEquals(0, overview.get("performanceScore").getAsInt());
+        assertEquals("N/A", overview.get("throughput").getAsString());
+        assertEquals("N/A", overview.get("latency").getAsString());
+    }
+
+    @Test
+    void missingPercentileKeysAreTolerated() throws Exception {
+        // WRK reports only measured percentiles (e.g. 50/75/90/99); the chart data must
+        // tolerate missing standard keys instead of requiring fabricated values (H-5)
+        BenchmarkData.Benchmark benchmark = BenchmarkData.Benchmark.builder()
+                .name("jwtValidation")
+                .fullName("wrk.jwtValidation")
+                .mode("thrpt")
+                .rawScore(10000.0)
+                .score("10.0K ops/s")
+                .scoreUnit("ops/s")
+                .percentiles(Map.of(
+                        "50.0", 1.5,
+                        "75.0", 2.0,
+                        "90.0", 3.5,
+                        "99.0", 9.0))
+                .build();
+
+        ReportDataGenerator generator = new ReportDataGenerator();
+        java.lang.reflect.Method createChartDataMethod = ReportDataGenerator.class.getDeclaredMethod(
+                "createChartData", List.class);
+        createChartDataMethod.setAccessible(true);
+
+        @SuppressWarnings("unchecked") Map<String, Object> chartData =
+                (Map<String, Object>) assertDoesNotThrow(() ->
+                        createChartDataMethod.invoke(generator, List.of(benchmark)));
+
+        @SuppressWarnings("unchecked") Map<String, Object> percentilesData =
+                (Map<String, Object>) chartData.get("percentilesData");
+        @SuppressWarnings("unchecked") Map<String, List<Double>> dataByBenchmark =
+                (Map<String, List<Double>>) percentilesData.get("data");
+
+        List<Double> values = dataByBenchmark.get("jwtValidation");
+        assertNotNull(values, "Benchmark with P50 must be included in percentile chart data");
+
+        // Keys: 0.0, 50.0, 90.0, 95.0, 99.0, 99.9, 99.99, 100.0
+        assertNull(values.getFirst(), "Unmeasured P0 must be null, not fabricated");
+        assertEquals(1.5, values.get(1), "Measured P50 must be present");
+        assertEquals(3.5, values.get(2), "Measured P90 must be present");
+        assertNull(values.get(3), "Unmeasured P95 must be null, not fabricated");
+        assertEquals(9.0, values.get(4), "Measured P99 must be present");
+        assertNull(values.get(5), "Unmeasured P99.9 must be null, not fabricated");
+        assertNull(values.get(7), "Unmeasured P100 must be null, not fabricated");
     }
 }

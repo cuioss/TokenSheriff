@@ -76,6 +76,9 @@ public class WrkResultPostProcessor {
      * Main entry point for processing WRK benchmark results.
      * Usage:
      *   - args[0]=inputDir, args[1]=outputDir (optional)
+     * <p>
+     * Exits with a non-zero code when processing fails, including when the input
+     * directory is missing or no benchmark yields parseable metrics.
      *
      * @param args Command line arguments
      */
@@ -98,7 +101,7 @@ public class WrkResultPostProcessor {
 
             LOGGER.info(INFO.RESULTS_AVAILABLE, outputDir);
 
-        } catch (IOException e) {
+        } catch (IOException | IllegalStateException | IllegalArgumentException e) {
             LOGGER.error(e, ERROR.WRK_PROCESSOR_FAILED);
             System.exit(1);
         }
@@ -110,14 +113,13 @@ public class WrkResultPostProcessor {
      * @param inputDir Directory containing WRK output files
      * @param outputDir Directory to write reports to
      * @throws IOException if processing fails
+     * @throws IllegalArgumentException if the input directory is missing or not a directory
+     * @throws IllegalStateException if no benchmark yields parseable metrics
      */
     public void process(Path inputDir, Path outputDir) throws IOException {
         LOGGER.info(INFO.WRK_PROCESSING_START);
 
-        // Parse all WRK result files to extract metadata
-        parseBenchmarkMetadata(inputDir);
-
-        // Validate input directory
+        // Validate input directory BEFORE any parsing
         if (!Files.exists(inputDir)) {
             throw new IllegalArgumentException("Input directory does not exist: " + inputDir);
         }
@@ -126,47 +128,23 @@ public class WrkResultPostProcessor {
             throw new IllegalArgumentException("Input path is not a directory: " + inputDir);
         }
 
-        // Check for WRK output files in wrk subdirectory
-        Path wrkDir = inputDir.resolve("wrk");
-        boolean hasWrkFiles = false;
-        if (Files.exists(wrkDir)) {
-            try (Stream<Path> files = Files.list(wrkDir)) {
-                hasWrkFiles = files.anyMatch(p -> p.getFileName().toString().endsWith(".txt"));
-            }
-        }
-
-        if (!hasWrkFiles) {
-            LOGGER.error(ERROR.NO_WRK_FILES, wrkDir);
-        }
+        // Parse all WRK result files to extract metadata (fails if no result files exist)
+        parseBenchmarkMetadata(inputDir);
 
         // Convert WRK output to BenchmarkData from wrk subdirectory
-        BenchmarkData benchmarkData;
+        Path wrkDir = inputDir.resolve("wrk");
         if (!Files.exists(wrkDir)) {
             LOGGER.error(ERROR.WRK_DIR_NOT_EXIST, wrkDir);
-            benchmarkData = BenchmarkData.builder()
-                    .metadata(BenchmarkData.Metadata.builder()
-                            .reportVersion("2.0")
-                            .timestamp(Instant.now().toString())
-                            .displayTimestamp(Instant.now().toString())
-                            .benchmarkType("Integration Performance")
-                            .build())
-                    .overview(BenchmarkData.Overview.builder()
-                            .throughput("0 ops/s")
-                            .latency("0ms")
-                            .throughputBenchmarkName("N/A")
-                            .latencyBenchmarkName("N/A")
-                            .performanceScore(0)
-                            .performanceGrade("F")
-                            .performanceGradeClass("grade-f")
-                            .build())
-                    .benchmarks(List.of())
-                    .build();
-        } else {
-            benchmarkData = converter.convert(wrkDir);
+            throw new IllegalStateException("WRK output directory does not exist: " + wrkDir);
         }
 
+        BenchmarkData benchmarkData = converter.convert(wrkDir);
+
+        // Fail loudly instead of publishing a report with fabricated zero-metrics
         if (benchmarkData.getBenchmarks() == null || benchmarkData.getBenchmarks().isEmpty()) {
             LOGGER.error(ERROR.NO_BENCHMARK_DATA);
+            throw new IllegalStateException(
+                    "No benchmark yielded parseable metrics from WRK output in: " + wrkDir);
         }
 
         // Generate reports using new OutputDirectoryStructure (no duplication)

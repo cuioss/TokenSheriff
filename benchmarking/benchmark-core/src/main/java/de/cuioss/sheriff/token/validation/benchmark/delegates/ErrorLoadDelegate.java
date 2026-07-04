@@ -19,6 +19,7 @@ import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.benchmark.MockTokenRepository;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import io.jsonwebtoken.Jwts;
 import org.openjdk.jmh.infra.Blackhole;
 
@@ -36,6 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ErrorLoadDelegate extends BenchmarkDelegate {
 
     private final String expiredToken;
+    private final String expiredTokenIssuer;
     private final String malformedToken;
     private final String invalidSignatureToken;
     private final int errorPercentage;
@@ -46,20 +48,47 @@ public class ErrorLoadDelegate extends BenchmarkDelegate {
         this.errorPercentage = errorPercentage;
 
         // Initialize error tokens
-        this.expiredToken = createExpiredToken();
+        InMemoryKeyMaterialHandler.IssuerKeyMaterial[] issuers = tokenRepository.getIssuers();
+        if (issuers == null || issuers.length == 0) {
+            throw new IllegalStateException("No issuers configured in token repository");
+        }
+        InMemoryKeyMaterialHandler.IssuerKeyMaterial expiredIssuer = issuers[0];
+        this.expiredTokenIssuer = expiredIssuer.getIssuerIdentifier();
+        this.expiredToken = createExpiredToken(expiredIssuer);
         this.malformedToken = "not.a.valid.jwt.token";
         this.invalidSignatureToken = createInvalidSignatureToken();
+    }
+
+    /**
+     * Returns the next token from the valid-token rotation pool.
+     * Use this to obtain the token that will be validated by {@link #validateValid(String)},
+     * so metadata (issuer, size) can be derived from the same token that is actually validated.
+     *
+     * @return the next valid token from the pool
+     */
+    public String nextValidToken() {
+        return tokenRepository.getToken(tokenIndex.getAndIncrement());
     }
 
     /**
      * Validates a valid token using full spectrum rotation.
      *
      * @return the validated access token content
-     * @throws RuntimeException if validation fails unexpectedly
+     * @throws IllegalStateException if validation fails unexpectedly
      */
     public AccessTokenContent validateValid() {
+        return validateValid(nextValidToken());
+    }
+
+    /**
+     * Validates the given valid token.
+     *
+     * @param token the token to validate
+     * @return the validated access token content
+     * @throws IllegalStateException if validation fails unexpectedly
+     */
+    public AccessTokenContent validateValid(String token) {
         try {
-            String token = tokenRepository.getToken(tokenIndex.getAndIncrement());
             return validateToken(token);
         } catch (TokenValidationException e) {
             throw new IllegalStateException("Unexpected validation failure for valid token", e);
@@ -69,11 +98,14 @@ public class ErrorLoadDelegate extends BenchmarkDelegate {
     /**
      * Validates an expired token.
      *
-     * @return the exception or null if validation unexpectedly succeeds
+     * @return the expected validation exception
+     * @throws IllegalStateException if validation unexpectedly succeeds
      */
     public Object validateExpired() {
         try {
-            return validateToken(expiredToken);
+            AccessTokenContent content = validateToken(expiredToken);
+            throw new IllegalStateException(
+                    "Validation of known-expired token unexpectedly succeeded: " + content);
         } catch (TokenValidationException e) {
             return e; // Expected
         }
@@ -82,11 +114,14 @@ public class ErrorLoadDelegate extends BenchmarkDelegate {
     /**
      * Validates a malformed token.
      *
-     * @return the exception or null if validation unexpectedly succeeds
+     * @return the expected validation exception
+     * @throws IllegalStateException if validation unexpectedly succeeds
      */
     public Object validateMalformed() {
         try {
-            return validateToken(malformedToken);
+            AccessTokenContent content = validateToken(malformedToken);
+            throw new IllegalStateException(
+                    "Validation of known-malformed token unexpectedly succeeded: " + content);
         } catch (TokenValidationException | IllegalArgumentException e) {
             return e; // Expected - malformed tokens can throw various validation exceptions
         }
@@ -95,11 +130,14 @@ public class ErrorLoadDelegate extends BenchmarkDelegate {
     /**
      * Validates a token with invalid signature.
      *
-     * @return the exception or null if validation unexpectedly succeeds
+     * @return the expected validation exception
+     * @throws IllegalStateException if validation unexpectedly succeeds
      */
     public Object validateInvalidSignature() {
         try {
-            return validateToken(invalidSignatureToken);
+            AccessTokenContent content = validateToken(invalidSignatureToken);
+            throw new IllegalStateException(
+                    "Validation of token with known-invalid signature unexpectedly succeeded: " + content);
         } catch (TokenValidationException e) {
             return e; // Expected
         }
@@ -107,12 +145,24 @@ public class ErrorLoadDelegate extends BenchmarkDelegate {
 
     /**
      * Validates mixed tokens based on error percentage.
+     * Selects a token internally; use {@link #validateMixed(String, Blackhole)} when the
+     * caller needs to know which token is validated (e.g. for JFR metadata).
      *
      * @param blackhole JMH blackhole to consume results
      * @return the validation result (token content or exception)
      */
     public Object validateMixed(Blackhole blackhole) {
-        String token = selectToken();
+        return validateMixed(selectToken(), blackhole);
+    }
+
+    /**
+     * Validates the given token, tolerating validation failures (mixed valid/error load).
+     *
+     * @param token the token to validate
+     * @param blackhole JMH blackhole to consume results
+     * @return the validation result (token content or exception)
+     */
+    public Object validateMixed(String token, Blackhole blackhole) {
         try {
             AccessTokenContent result = validateToken(token);
             if (blackhole != null) {
@@ -169,20 +219,49 @@ public class ErrorLoadDelegate extends BenchmarkDelegate {
         return "valid";
     }
 
-    private String createExpiredToken() {
+    /**
+     * Gets the issuer identifier used for the expired token.
+     * This is a real configured issuer, so the expired-token benchmark measures the
+     * expiry path (not unknown-issuer rejection).
+     *
+     * @return the issuer identifier of the expired token
+     */
+    public String getExpiredTokenIssuer() {
+        return expiredTokenIssuer;
+    }
+
+    /**
+     * Gets the expired token used by {@link #validateExpired()}.
+     *
+     * @return the expired token
+     */
+    public String getExpiredToken() {
+        return expiredToken;
+    }
+
+    /**
+     * Creates a token that is signed by a real configured issuer's key but is already expired.
+     * Signing with a configured issuer ensures the validator reaches the expiry check instead
+     * of rejecting the token earlier for an unknown issuer.
+     */
+    private String createExpiredToken(InMemoryKeyMaterialHandler.IssuerKeyMaterial issuer) {
+        String audience = tokenRepository.getConfig().getExpectedAudience();
         Instant past = Instant.now().minusSeconds(3600);
 
         return Jwts.builder()
-                .issuer("benchmark-issuer")
+                .header()
+                .keyId(issuer.getKeyId())
+                .and()
+                .issuer(issuer.getIssuerIdentifier())
                 .subject("benchmark-user")
-                .audience().add("benchmark-client").and()
+                .audience().add(audience).and()
                 .expiration(Date.from(past)) // Already expired
                 .notBefore(Date.from(past.minusSeconds(60)))
                 .issuedAt(Date.from(past.minusSeconds(120)))
                 .id(UUID.randomUUID().toString())
                 .claim("typ", "Bearer")
-                .claim("azp", "benchmark-client")
-                .signWith(Jwts.SIG.HS256.key().build())
+                .claim("azp", audience)
+                .signWith(issuer.getPrivateKey())
                 .compact();
     }
 

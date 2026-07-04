@@ -19,7 +19,6 @@ import java.util.Locale;
 
 import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Metrics.Conversions;
 import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Metrics.Units;
-import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Report.Grades;
 
 /**
  * Central utility for converting benchmark metrics between different units.
@@ -93,22 +92,6 @@ public final class MetricConversionUtil {
         }
         // Unknown unit, return 0 to filter out in calculations
         return 0;
-    }
-
-    /**
-     * Calculates a performance grade based on throughput.
-     * 
-     * @param throughput operations per second
-     * @return performance grade string
-     */
-    public static String calculatePerformanceGrade(double throughput) {
-        return switch ((int) Math.log10(Math.max(1, throughput))) {
-            case 6, 7, 8, 9 -> Grades.A_PLUS;
-            case 5 -> Grades.A;
-            case 4 -> Grades.B;
-            case 3 -> Grades.C;
-            default -> Grades.D;
-        };
     }
 
     /**

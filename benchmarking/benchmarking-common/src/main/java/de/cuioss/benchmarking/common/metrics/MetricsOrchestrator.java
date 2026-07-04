@@ -96,7 +96,7 @@ public class MetricsOrchestrator {
         try {
             // Query Prometheus for metrics within the benchmark time window
             Duration step = Duration.ofSeconds(2); // 2-second resolution matching scrape interval
-            Map<String, PrometheusClient.TimeSeries> timeSeriesData =
+            Map<String, List<PrometheusClient.TimeSeries>> timeSeriesData =
                     prometheusClient.queryRange(metricNames, startTime, endTime, step);
 
             // Transform time-series data using the new BenchmarkMetricsTransformer

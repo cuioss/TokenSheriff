@@ -22,6 +22,7 @@ import com.google.gson.JsonObject;
 import de.cuioss.benchmarking.common.config.BenchmarkType;
 import de.cuioss.benchmarking.common.model.BenchmarkData;
 import de.cuioss.benchmarking.common.report.MetricConversionUtil;
+import de.cuioss.benchmarking.common.report.MetricsComputer;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -184,8 +185,9 @@ public class JmhBenchmarkConverter implements BenchmarkConverter {
             };
         }).orElse(0.0);
 
-        int score = calculatePerformanceScore(throughput, latency);
-        String grade = calculatePerformanceGrade(score);
+        // Delegate to MetricsComputer - the single home for score/grade computation
+        int score = (int) Math.round(MetricsComputer.calculatePerformanceScore(throughput, latency));
+        String grade = MetricsComputer.getPerformanceGrade(score);
 
         return BenchmarkData.Overview.builder()
                 .throughput(bestThroughput.map(BenchmarkData.Benchmark::getScore).orElse("N/A"))
@@ -223,25 +225,4 @@ public class JmhBenchmarkConverter implements BenchmarkConverter {
         return String.format(Locale.US, "%.1f %s", score, unit);
     }
 
-    private int calculatePerformanceScore(double throughput, double latency) {
-        // Performance scoring per benchmarking/doc/performance-scoring.adoc
-        // Performance Score = (Throughput_Score × 0.5) + (Latency_Score × 0.5)
-        // Where:
-        // - Throughput_Score = Throughput ÷ 100
-        // - Latency_Score = 100 ÷ Latency_ms
-        // Scores are NOT capped - exceptional performance can exceed 100
-        double throughputScore = throughput / 100.0;
-        double latencyScore = latency > 0 ? 100.0 / latency : 0.0;
-        double rawScore = (throughputScore * 0.5) + (latencyScore * 0.5);
-        return (int) Math.round(rawScore);
-    }
-
-    private String calculatePerformanceGrade(int score) {
-        if (score >= 95) return "A+";
-        if (score >= 90) return "A";
-        if (score >= 75) return "B";
-        if (score >= 60) return "C";
-        if (score >= 40) return "D";
-        return "F";
-    }
 }
