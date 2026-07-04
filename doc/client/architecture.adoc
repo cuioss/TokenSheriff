@@ -1,0 +1,190 @@
+= Client Architecture
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+_See xref:requirements.adoc[Client Requirements], xref:threat-model.adoc[Threat Model],
+xref:best-practices.adoc[Best Practices] and the
+xref:../oidc/decision-oidc-module.adoc[module-architecture decision]._
+
+The `client` capability is the *active* OIDC side: a server-side *confidential-client engine*
+that retrieves tokens, holds and refreshes them server-side, and drives the flows on top of
+the xref:../commons/architecture.adoc[commons] transport. It is the engine a
+*Backend-For-Frontend (BFF)* is built on — *it is not itself a BFF*. This document maps the
+engine's components, its boundaries with commons and validation, and the sequences it drives.
+
+[IMPORTANT]
+====
+*We do not build a BFF here.* The BFF is a separate application layered on top of this
+engine. This capability's job is to specify the engine so that *building a BFF on top stays
+feasible and is not made unnecessarily complicated*. The BFF deployment shapes below are
+documented only as the *consumers the design must keep viable*
+(xref:requirements.adoc#CLIENT-19[CLIENT-19]), not as features delivered here.
+====
+
+== Position in the module architecture
+
+[source]
+----
+token-sheriff-validation                       (one artifact, two ArchUnit-enforced layers)
+  de.cuioss.sheriff.token.commons.              base: transport / error / events / metrics
+    transport/  error/  events/  metrics/         (deps: cui-http, cui-tooling)
+        ▲   ArchUnit: commons must NOT depend on …validation..
+  de.cuioss.sheriff.token.validation.           token validation (signatures, claims, pipeline)
+        ▲   Maven: client → validation, never the reverse
+token-sheriff-client                            THIS capability — flows / retrieval / lifecycle
+  de.cuioss.sheriff.token.client.               pure Java; deps: token-sheriff-validation
+        ▲
+token-sheriff-client-quarkus                    HTTP edge — RFC 9457 problem+json, CDI wiring
+----
+
+* The engine is *pure Java* (xref:requirements.adoc#CLIENT-21[CLIENT-21]) — no CDI /
+  MicroProfile / JAX-RS inside it. It depends on `token-sheriff-validation`, which
+  transitively provides the `commons` base layer.
+* The `client → validation` dependency direction is enforced by *Maven* once the module
+  exists (xref:../oidc/05-client-module/README.adoc[Plan 05]); it never reverses.
+* The HTTP edge (`token-sheriff-client-quarkus`, or a future RESTEasy / portal adapter) maps
+  the engine's typed exceptions to `application/problem+json`
+  (xref:requirements.adoc#CLIENT-20[CLIENT-20], `COMMONS-10`).
+
+NOTE: The Maven module, the `token-sheriff-client-quarkus` extension, and the BOM/reactor
+assembly are *not* created by this capability — that is
+xref:../oidc/05-client-module/README.adoc[Plan 05]. This document specifies the engine those
+modules will host.
+
+== The engine seam
+
+The engine owns three responsibilities and *delegates the rest*:
+
+[cols="1,3", options="header"]
+|===
+| Concern | Where it lives
+
+| *Retrieval & flow* — construct the authorization request (PKCE, `state`, `nonce`,
+  `acr_values`, PAR); exchange the code; authenticate to the token endpoint; request
+  sender-constrained tokens; drive step-up and RP-initiated logout.
+| *This engine* (`client`), xref:specification/retrieval-flow.adoc[retrieval-flow] +
+  xref:specification/step-up-and-logout.adoc[step-up-and-logout] specs.
+
+| *Server-side token lifecycle* — hold, refresh (with rotation), revoke; preserve
+  sender-constraint; keep tokens off the browser.
+| *This engine* (`client`), xref:specification/token-handling.adoc[token-handling] spec.
+
+| *Token trust* — signature, algorithm policy, `iss`/`aud`/`exp`/`iat`, DPoP proof.
+| *validation* module (inherited; `CLIENT-15` calls it, never re-implements it).
+
+| *Outbound IdP HTTP* — discovery, JWKS, token, userinfo, revocation, introspection,
+  end-session, PAR; TLS, SSRF, timeouts, resilience, caching.
+| *commons* transport (`COMMONS-1`–`COMMONS-8`); the engine issues *no* HTTP of its own.
+
+| *Error rendering* — typed exceptions → `application/problem+json`.
+| Engine *throws* (`COMMONS-9`); the *HTTP edge renders* (`COMMONS-10`).
+|===
+
+The seam is deliberately narrow: the engine is the *policy* layer (which parameters, which
+order, which checks); commons is the *transport* layer (bytes over hardened HTTP); validation
+is the *trust* layer.
+
+== Confidential authorization-code + PKCE sequence
+
+The core in-scope flow (xref:requirements.adoc#CLIENT-1[CLIENT-1], server-side, no tokens in
+the browser):
+
+[source]
+----
+Browser            Client engine (backend)        commons transport        Authorization Server
+   |  start login        |                                |                          |
+   |-------------------->|  build auth request:           |                          |
+   |                     |   PKCE S256, state, nonce,     |                          |
+   |                     |   exact redirect_uri,          |                          |
+   |                     |   [acr_values/max_age]         |                          |
+   |                     |  [PAR: push params]----------->|-- POST /par ------------>|
+   |                     |                                |<- request_uri -----------|
+   |<-- 302 to AS -------|  (authorize?request_uri=… or full params)                 |
+   |------------------------------- user authenticates at AS ---------------------->|
+   |<== form_post callback: code, state, iss =============================(no token in URL)
+   |-------------------->|  verify state (session-bound)  |                          |
+   |                     |  verify iss (mix-up defence)   |                          |
+   |                     |  exchange code --------------->|-- POST /token ---------->|
+   |                     |   client auth (private_key_jwt |   grant=authorization_code
+   |                     |    / mTLS / secret),           |   + code_verifier        |
+   |                     |   [DPoP proof]                 |<- tokens (+ id_token) ----|
+   |                     |  validate tokens (VALIDATION)  |                          |
+   |                     |  verify nonce, at_hash, sub    |                          |
+   |                     |  store server-side (BFF binding)                          |
+   |<-- session cookie --|  (opaque session-id  OR  encrypted token cookie)          |
+----
+
+The *browser never receives a usable token*. What the browser holds is the BFF's own
+session artifact — see <<_bff_binding_shapes>>.
+
+== [[_bff_binding_shapes]] BFF binding shapes (enabled, not built here)
+
+A BFF built on this engine binds the acquired tokens to the browser session one of two ways;
+in *both*, the token stays inaccessible to the browser, and the engine seam is *identical*
+(xref:requirements.adoc#CLIENT-19[CLIENT-19]):
+
+[cols="1,3", options="header"]
+|===
+| BFF deployment | How the token is bound to the browser session
+
+| *Stateful BFF — server-side token store*
+| The browser holds an opaque *session-id cookie*; tokens live in a *server-side store* and
+  the backend *proxies* every resource-server call.
+
+| *Stateless BFF — encrypted token cookie*
+| The access token reaches the browser only inside an *HttpOnly cookie encrypted with a
+  server-side symmetric key*; the backend *decrypts* it per request. No server-side store.
+|===
+
+What differs — a server-side store vs. an encrypted cookie — is the *BFF application's*
+concern (session cookie, symmetric-key management, backend-API CSRF, request proxying,
+login/consent UX, logout *receivers*). The engine must *enable either without forcing the
+choice*; it implements neither.
+
+== Boundaries enforced
+
+* *Engine → validation* (Maven): the engine validates every retrieved token via the
+  validation pipeline (`CLIENT-15`); it never re-implements signature/claim checks.
+* *Engine → commons* (transitive): all outbound IdP HTTP goes through commons transport; the
+  engine adds no HTTP, no SSRF/TLS logic (`COMMONS-1`–`COMMONS-8`).
+* *Engine throws, edge renders*: the pure-Java engine throws commons typed exceptions
+  (`COMMONS-9`); only the HTTP edge produces problem+json (`CLIENT-20`, `COMMONS-10`).
+* *Engine ≠ BFF*: the browser session / cookie layer is out of the engine entirely
+  (`CLIENT-19`).
+
+== Reference & replacement target: portal-authentication-oauth
+
+[NOTE]
+====
+*Design reference only.* `cui-portal-core`'s
+`modules/authentication/portal-authentication-oauth` is an existing confidential server-side
+OIDC client (CDI + MicroProfile Config + RESTEasy/JAX-RS) — effectively a BFF-style RP that
+already implements most of the in-scope flow (auth-code + PKCE `S256`, `state`, light
+`nonce`, `client_credentials`, refresh, discovery, userinfo, RP-initiated logout with
+`id_token_hint`; tokens held in the portal session).
+
+It grounds this capability's scope and is the *eventual replacement target* — the engine
+would supersede it via a thin portal adapter preserving the portal contract (`Oauth2Service`,
+`Oauth2AuthenticationFacade`, `OauthRedirector`, `OidcRpInitiatedLogoutParams`, result type
+`AuthenticatedUserInfo`; config namespace `authentication.oidc.*`). That replacement — the
+adapter and its integration tests — is *future work beyond Plans 01–06*; no current plan
+touches it. The modernization deltas it motivates (cryptographic ID-token validation via the
+validation module, `iss` mix-up defence, `private_key_jwt`/mTLS, PAR, DPoP/mTLS
+sender-constraining, stronger `nonce`, commons-hardened HTTP with SSRF defence) are each
+captured as sourced `CLIENT-N` requirements above.
+====
+
+== See also
+
+* xref:requirements.adoc[Client Requirements] — `CLIENT-N`, grouped by aspect
+* xref:threat-model.adoc[Client Threat Model]
+* xref:best-practices.adoc[Client Best Practices]
+* xref:specification/retrieval-flow.adoc[Retrieval & flow specification]
+* xref:specification/step-up-and-logout.adoc[Step-up & logout specification]
+* xref:specification/token-handling.adoc[Token-handling specification]
+* xref:../oidc/04-client-spec/README.adoc[Plan 04 — Client Spec]

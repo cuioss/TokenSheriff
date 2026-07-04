@@ -1,0 +1,101 @@
+= Client Specification — Step-Up & RP-Initiated Logout
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+_Realizes xref:../requirements.adoc#CLIENT-12[CLIENT-12] and xref:../requirements.adoc#CLIENT-13[CLIENT-13].
+See xref:../threat-model.adoc[Threat Model], xref:../best-practices.adoc[Best Practices] and
+xref:../architecture.adoc[Architecture]._
+
+Two flows layered on the confidential authorization-code engine
+(xref:retrieval-flow.adoc[Retrieval & flow]): *step-up authentication* — raising the
+authentication assurance for a sensitive operation — and *RP-initiated logout* — ending the
+session at the IdP and revoking held tokens. Both drive the commons transport
+(`COMMONS-1`); the engine issues no HTTP of its own.
+
+== Step-up authentication (RFC 9470)
+
+Step-up lets a resource server demand a higher authentication assurance than the current
+session provides (xref:../requirements.adoc#CLIENT-12[CLIENT-12],
+xref:../threat-model.adoc#T-STEPUP[T-STEPUP]).
+
+=== Requesting an assurance level
+
+On an authorization request the engine can require an assurance level via:
+
+* `acr_values` — one or more requested authentication context class references;
+* `max_age` — the maximum acceptable age (seconds) of the end-user authentication.
+
+These are sent on the authorization request built in xref:retrieval-flow.adoc[Retrieval &
+flow].
+
+=== Handling the challenge
+
+When a resource server responds to an under-authenticated request with an
+`insufficient_user_authentication` challenge (RFC 9470 — a `WWW-Authenticate: Bearer
+error="insufficient_user_authentication"` carrying the required `acr_values` / `max_age`), the
+engine:
+
+. parses the challenge to recover the required `acr_values` / `max_age`;
+. *re-drives authorization* with those parameters (a fresh authorization-code flow, all the
+  flow-integrity checks of xref:retrieval-flow.adoc[Retrieval & flow] applying);
+. on return, *verifies* the resulting ID token's `acr` satisfies the requirement and
+  `auth_time` satisfies `max_age` — only then is the operation treated as sufficiently
+  authenticated.
+
+A response whose `acr` / `auth_time` does not satisfy the requirement MUST NOT be treated as
+a successful step-up.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9470[RFC 9470], https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest[OIDC Core §3.1.2.1].
+
+== RP-initiated logout
+
+The engine triggers logout at the IdP's `end_session_endpoint` and revokes the tokens it
+holds (xref:../requirements.adoc#CLIENT-13[CLIENT-13],
+xref:../threat-model.adoc#T-LOGOUT[T-LOGOUT]).
+
+=== The end-session request
+
+The engine drives the `end_session_endpoint` with:
+
+[cols="1,3", options="header"]
+|===
+| Parameter | Rule
+
+| `id_token_hint` | The held ID token, identifying the session to end.
+| `post_logout_redirect_uri` | A *pre-registered* value matched by *exact string comparison* — never pattern / prefix, to prevent an open redirect.
+| `state` | Session-bound, verified on return, as on the authorization request.
+|===
+
+=== Revoking held tokens
+
+Logout is not complete until the tokens the engine holds are revoked, so a logout does not
+leave live tokens behind. The engine revokes the access and refresh tokens via the commons
+revocation transport (RFC 7009, `COMMONS-7`) and clears them from the server-side lifecycle
+(xref:token-handling.adoc[token handling], xref:../requirements.adoc#CLIENT-17[CLIENT-17]).
+
+=== Boundary: receivers are the BFF's concern
+
+RP-initiated logout *triggering* (above) and token revocation are the in-scope building
+blocks. *Front-channel / back-channel logout receivers* and the *Session-Management iframe*
+are browser-session concerns owned by the BFF application, not this engine
+(xref:../requirements.adoc#CLIENT-19[CLIENT-19]).
+
+* Source: https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OpenID Connect RP-Initiated Logout 1.0], https://www.rfc-editor.org/rfc/rfc7009[RFC 7009] (revocation), https://www.rfc-editor.org/rfc/rfc9700#section-4.1[RFC 9700 §4.1] (open-redirect defence).
+
+== Adversarial coverage
+
+The commons `EndSessionDispatcher` *adversarial* mode returns open-redirect / mismatched
+`post_logout_redirect_uri` responses, which the engine rejects; revocation of held tokens is
+asserted after logout (xref:../requirements.adoc#CLIENT-22[CLIENT-22], `COMMONS-7`). Step-up
+is exercised by driving an `insufficient_user_authentication` challenge and asserting the
+re-driven `acr` / `auth_time` verification.
+
+== See also
+
+* xref:retrieval-flow.adoc[Retrieval & flow specification]
+* xref:token-handling.adoc[Token-handling specification]
+* xref:../architecture.adoc[Architecture]

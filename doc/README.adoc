@@ -42,6 +42,28 @@ The token validation capability — its requirements, architecture, security mod
 
 * xref:validation/faq/keycloak.adoc[Keycloak FAQ]
 
+== Client
+
+The active OIDC capability — the server-side confidential-client engine that retrieves
+tokens, holds and refreshes them server-side, and drives the flows on top of the commons
+transport. It is the engine a Backend-For-Frontend (BFF) is built on; it is not itself a BFF.
+Spec-first: this document set is authored ahead of the `token-sheriff-client` module.
+
+* xref:client/requirements.adoc[Requirements] - `CLIENT-N`, grouped by aspect (Retrieval & flow / Token)
+* xref:client/architecture.adoc[Architecture] - Client/BFF engine seam and boundaries
+* xref:client/references.adoc[References] - Bibliography
+
+=== Security
+
+* xref:client/threat-model.adoc[Threat Model] - Attack catalog per aspect, each entry sourced
+* xref:client/best-practices.adoc[Best Practices] - Normative, sourced checklist
+
+=== Specifications
+
+* xref:client/specification/retrieval-flow.adoc[Retrieval & Flow] - Auth-code + PKCE, grants, client auth, `state`/`nonce`, mix-up, PAR
+* xref:client/specification/step-up-and-logout.adoc[Step-up & Logout] - RFC 9470 step-up; RP-initiated logout
+* xref:client/specification/token-handling.adoc[Token Handling] - Server-side lifecycle delta (references the validation module)
+
 == Reference
 
 * xref:LogMessages.adoc[Log Messages] - Global registry of all log messages

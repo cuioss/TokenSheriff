@@ -1,0 +1,413 @@
+= Client Requirements
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+Functional and non-functional requirements for the `client` capability — the server-side
+*confidential-client* engine that *retrieves tokens*, *holds and refreshes them
+server-side*, and drives the OAuth 2.0 / OpenID Connect *flows* on top of the
+xref:../commons/requirements.adoc[commons] transport. The engine is designed so a
+*Backend-For-Frontend (BFF)* can be built on top of it (see
+xref:architecture.adoc[Architecture]); it is not itself a BFF.
+
+Security is the leading topic: this is the *smallest, most secure current subset* of
+confidential-client OAuth 2.0 / OpenID Connect, not a spec-complete implementation. A
+capability is in scope only if it is required for secure operation or is the secure way to
+perform a needed operation — "the spec allows it" is not, by itself, a reason to include it
+(xref:best-practices.adoc[Best Practices]). Legacy / discouraged mechanisms are refused and
+sourced (<<_security_exclusions_legacy_discouraged>>).
+
+Requirement IDs use the `CLIENT-N` scheme (per xref:../oidc/02-doc-structure/README.adoc[Plan 02]),
+*grouped by aspect*: xref:#_retrieval_flow_requirements[Retrieval & flow] (net-new) and
+xref:#_token_requirements[Token] (the server-side lifecycle delta). IDs are stable
+identifiers referenced across documentation and the xref:threat-model.adoc[threat model];
+they are not sequential across groups. Every normative requirement traces to a threat it
+mitigates or is the secure way to perform a needed operation.
+
+=== Document Navigation
+
+* xref:architecture.adoc[Architecture] — the client/BFF engine seam and its boundaries
+* xref:threat-model.adoc[Threat Model] — attack catalog per aspect, each entry sourced
+* xref:best-practices.adoc[Best Practices] — the normative, sourced checklist
+* xref:references.adoc[References] — bibliography
+* xref:specification/retrieval-flow.adoc[Retrieval & flow spec] · xref:specification/step-up-and-logout.adoc[Step-up & logout spec] · xref:specification/token-handling.adoc[Token-handling spec]
+
+=== Referenced Standards
+
+New standards are catalogued in xref:references.adoc[References]. Standards reused from the
+validation bibliography (RFC 6749, OIDC Core, RFC 8725, RFC 9068, RFC 9449, OAuth 2.1,
+FAPI 2.0) and owned by commons (transport standards, RFC 9457) are cited inline below and
+not restated here.
+
+=== Aspect separation and what is referenced, not duplicated
+
+[cols="1,3", options="header"]
+|===
+| Not owned here | Where it lives
+
+| *Outbound IdP HTTP* — discovery, JWKS, token, userinfo, revocation, introspection,
+  end-session, PAR transport; TLS, SSRF defence, timeouts / size-limits, resilience.
+| xref:../commons/requirements.adoc[commons] (`COMMONS-1`–`COMMONS-8`). The client *uses*
+  the transport and cites `COMMONS-N`; it issues no outbound IdP HTTP of its own and adds no
+  SSRF/TLS controls.
+
+| *Token-signature / algorithm policy* — rejecting `alg=none`, HMAC and weak/short-key
+  algorithms; asymmetric signature verification; DPoP *proof* validation.
+| xref:../validation/requirements.adoc#VALIDATION-1[validation] (`VALIDATION-1.3`,
+  `VALIDATION-8.7`, RFC 8725). Inherited by every retrieved token; not restated here.
+
+| *RFC 9457 problem+json rendering* — the HTTP-edge mapping of typed exceptions.
+| xref:../commons/requirements.adoc#COMMONS-10[commons] (`COMMONS-10`). The client engine
+  throws typed exceptions (`COMMONS-9`); `token-sheriff-client-quarkus` and any RESTEasy edge
+  render problem+json (<<CLIENT-20>>).
+|===
+
+== Retrieval & flow requirements
+
+_The genuinely net-new aspect this capability owns: the confidential-client authorization-code
++ PKCE flow (server-side) and the use of the token endpoint. See
+xref:specification/retrieval-flow.adoc[Retrieval & flow specification] and
+xref:specification/step-up-and-logout.adoc[Step-up & logout specification]._
+
+[#CLIENT-1]
+=== CLIENT-1: Confidential-client authorization-code flow (server-side)
+
+The engine MUST implement the OAuth 2.0 authorization-code flow as a *confidential client*,
+entirely server-side: the authorization request is constructed with `response_type=code`,
+and the resulting code is exchanged for tokens at the token endpoint *by the backend*. No
+token is ever exposed to the browser. `response_mode=form_post` (or plain query on the
+back-channel exchange) is used so tokens never appear in a URL. This is the recommended
+pattern for browser-based apps (the BFF), superseding in-browser public-client OAuth.
+
+* Source: https://www.rfc-editor.org/rfc/rfc6749#section-4.1[RFC 6749 §4.1], https://www.rfc-editor.org/rfc/rfc9700#section-2.1[RFC 9700 §2.1], https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps].
+
+[#CLIENT-2]
+=== CLIENT-2: PKCE with `S256`, and downgrade defence
+
+Every authorization-code request MUST use PKCE with the `S256` code-challenge method;
+`plain` MUST NOT be used. The engine MUST confirm the authorization server advertises
+`S256` support (`code_challenge_methods_supported` in discovery) and MUST NOT silently fall
+back to a non-PKCE or `plain` request — a PKCE downgrade is refused.
+
+* Source: https://www.rfc-editor.org/rfc/rfc7636[RFC 7636], https://www.rfc-editor.org/rfc/rfc9700#section-2.1.1[RFC 9700 §2.1.1], https://www.rfc-editor.org/rfc/rfc9700#section-4.8[RFC 9700 §4.8] (PKCE downgrade).
+
+[#CLIENT-3]
+=== CLIENT-3: Token-endpoint grants (secure subset)
+
+The engine MUST support the token-endpoint grants needed for a confidential BFF engine:
+`authorization_code` (with PKCE, <<CLIENT-2>>), `refresh_token` (server-side refresh,
+<<CLIENT-17>>), and `client_credentials` (service-to-service). Token Exchange
+(`urn:ietf:params:oauth:grant-type:token-exchange`, RFC 8693) is a *candidate* grant,
+included only where a delegation use-case requires it. The `password` (ROPC) and `implicit`
+grants MUST NOT be implemented (<<_security_exclusions_legacy_discouraged>>).
+
+* Source: https://www.rfc-editor.org/rfc/rfc6749#section-4.1[RFC 6749 §4.1], https://www.rfc-editor.org/rfc/rfc6749#section-4.4[RFC 6749 §4.4] (client credentials), https://www.rfc-editor.org/rfc/rfc8693[RFC 8693] (token exchange, candidate).
+
+[#CLIENT-4]
+=== CLIENT-4: Strong token-endpoint client authentication
+
+The engine MUST authenticate to the token endpoint (and PAR / revocation / introspection
+endpoints) and MUST prefer the *strongest method the authorization server offers*:
+`private_key_jwt` (RFC 7523) or mTLS (RFC 8705) over a shared `client_secret`. When a
+`client_secret` is used it MUST be sent only over TLS (<<CLIENT-14>>, transport TLS is
+`COMMONS-2`) and via `client_secret_basic` / `client_secret_post` — never in a URL. Client
+credentials MUST be protected at rest and MUST NOT be logged.
+
+* Source: https://www.rfc-editor.org/rfc/rfc7523[RFC 7523], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705], https://www.rfc-editor.org/rfc/rfc9700#section-2.2[RFC 9700 §2.2] (client authentication), https://www.rfc-editor.org/rfc/rfc6749#section-2.3[RFC 6749 §2.3].
+
+[#CLIENT-5]
+=== CLIENT-5: Session-bound `state` (callback CSRF defence)
+
+Every authorization request MUST carry a `state` value bound to the initiating user session
+and unguessable. On the callback the engine MUST reject any response whose `state` is
+missing or does not match the session-bound value, defeating CSRF on the redirect endpoint.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700#section-4.7[RFC 9700 §4.7] (CSRF), https://www.rfc-editor.org/rfc/rfc6749#section-10.12[RFC 6749 §10.12].
+
+[#CLIENT-6]
+=== CLIENT-6: `nonce` binding (OpenID Connect)
+
+For OpenID Connect requests the engine MUST send a fresh, session-bound `nonce` and MUST
+verify it against the `nonce` claim of the returned ID token, rejecting a missing or
+mismatched value. This binds the ID token to the authorization request and is a second
+defence against code / token injection.
+
+* Source: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest[OIDC Core §3.1.2.1], https://openid.net/specs/openid-connect-core-1_0.html#NonceNotes[OIDC Core §15.5.2], https://www.rfc-editor.org/rfc/rfc9700#section-4.5[RFC 9700 §4.5].
+
+[#CLIENT-7]
+=== CLIENT-7: Exact redirect-URI matching
+
+The `redirect_uri` sent in the authorization request MUST be registered with the
+authorization server and MUST be matched by *exact string comparison* — no pattern,
+wildcard, prefix or substring matching. The engine sends a single, exact, pre-registered
+`redirect_uri`.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700#section-4.1[RFC 9700 §4.1], https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1] (exact redirect-URI matching).
+
+[#CLIENT-8]
+=== CLIENT-8: Issuer identification / mix-up defence (`iss`)
+
+When more than one authorization server is configured, the engine MUST defend against
+mix-up attacks: it MUST validate the `iss` authorization-response parameter (RFC 9207)
+against the issuer it initiated the flow with, and/or use a distinct `redirect_uri` per
+authorization server. A response whose `iss` does not match the initiating issuer MUST be
+rejected before the code is exchanged.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9207[RFC 9207], https://www.rfc-editor.org/rfc/rfc9700#section-4.4[RFC 9700 §4.4] (mix-up).
+
+[#CLIENT-9]
+=== CLIENT-9: Authorization-code injection defence
+
+The engine MUST bind the authorization code to the browser session that requested it, so a
+code injected by an attacker cannot be redeemed: PKCE (`S256`, <<CLIENT-2>>) binds the code
+to the `code_verifier`, and for OpenID Connect the `nonce` (<<CLIENT-6>>) binds the ID
+token. A code presented without the matching `code_verifier` / session context MUST be
+rejected at exchange.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700#section-4.5[RFC 9700 §4.5] (authorization-code injection), https://www.rfc-editor.org/rfc/rfc7636[RFC 7636].
+
+[#CLIENT-10]
+=== CLIENT-10: Pushed Authorization Requests (PAR)
+
+Where the authorization server advertises PAR (`pushed_authorization_request_endpoint`), the
+engine SHOULD push the authorization request parameters over the back channel and drive the
+front-channel redirect with the returned `request_uri`, so authorization parameters are not
+exposed or tamperable in the browser. PAR is required by FAPI 2.0 and preferred by the BCP.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0] (PAR mandatory), https://www.rfc-editor.org/rfc/rfc9700#section-2.1[RFC 9700 §2.1].
+
+[#CLIENT-11]
+=== CLIENT-11: Requesting sender-constrained tokens (DPoP / mTLS)
+
+The engine MUST be able to *request* sender-constrained tokens at the token endpoint — DPoP
+(RFC 9449) by presenting a DPoP proof, or mTLS (RFC 8705) certificate-bound tokens — so
+retrieved tokens cannot be replayed by a bearer that stole them. The *validation* of the
+resulting binding is inherited from the validation module (`VALIDATION-8.7`); this
+requirement is the client-side delta of *asking for* the constraint and preserving it
+(<<CLIENT-18>>).
+
+* Source: https://www.rfc-editor.org/rfc/rfc9449[RFC 9449], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705], https://www.rfc-editor.org/rfc/rfc9700#section-4.10[RFC 9700 §4.10], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0].
+
+[#CLIENT-12]
+=== CLIENT-12: Step-up authentication challenge (RFC 9470)
+
+The engine MUST support step-up authentication: it MUST be able to request a required
+authentication assurance (`acr_values` and/or `max_age`) on the authorization request, and
+MUST handle a resource server's `insufficient_user_authentication` challenge (RFC 9470) by
+re-driving authorization with the requested `acr_values` / `max_age` and then verifying the
+resulting `acr` / `auth_time` before treating the operation as sufficiently authenticated.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9470[RFC 9470], https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest[OIDC Core §3.1.2.1] (`acr_values`, `max_age`).
+
+[#CLIENT-13]
+=== CLIENT-13: RP-initiated logout
+
+The engine MUST support RP-initiated logout: it triggers the IdP `end_session_endpoint`
+sending `id_token_hint`, an *exact-matched* registered `post_logout_redirect_uri`, and a
+session-bound `state`. Logout MUST also revoke the tokens it holds (<<CLIENT-17>>) so a
+logout does not leave live tokens behind. Front-/back-channel logout *receivers* and the
+Session-Management iframe are the BFF application's concern, not this engine's.
+
+* Source: https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OpenID Connect RP-Initiated Logout 1.0], https://www.rfc-editor.org/rfc/rfc9700#section-4.1[RFC 9700 §4.1] (open-redirect on `post_logout_redirect_uri`).
+
+[#CLIENT-14]
+=== CLIENT-14: Token-response and no-secrets-in-URL handling
+
+The engine MUST validate the token-endpoint response before use: the `token_type`, the
+presence of the expected artifacts, and — where the authorization server supports it — the
+issuer identity of the response. Tokens and authorization codes MUST NOT be transmitted in
+URL query or fragment components; the code is exchanged at the token endpoint and the
+authorization response uses `form_post`. All token-endpoint traffic relies on the transport
+TLS enforcement owned by commons (`COMMONS-2`).
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700#section-4.3[RFC 9700 §4.3] (credentials in URLs), https://www.rfc-editor.org/rfc/rfc9207[RFC 9207], https://www.rfc-editor.org/rfc/rfc6749#section-5.1[RFC 6749 §5.1] (token response).
+
+== Token requirements
+
+_The server-side lifecycle delta on top of the validation module — storage, refresh,
+revocation, sender-constraint preservation, and validation of ID-token / userinfo responses.
+References the validation module; adds no signature/algorithm policy. See
+xref:specification/token-handling.adoc[Token-handling specification]._
+
+[#CLIENT-15]
+=== CLIENT-15: Validate every retrieved token via the validation pipeline
+
+Every token the engine retrieves (access token, ID token) MUST be validated through the
+xref:../validation/requirements.adoc[validation] pipeline — signature, `iss`, `aud`, `exp`,
+`iat` — before it is trusted or stored. The client MUST NOT re-implement or weaken any part
+of that validation; the algorithm / signature policy (`VALIDATION-1.3`, RFC 8725) is
+inherited unchanged. This is the primary validation synergy: tokens are cryptographically
+validated, not merely received.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9068[RFC 9068], https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation[OIDC Core §3.1.3.7], xref:../validation/requirements.adoc#VALIDATION-1[VALIDATION-1].
+
+[#CLIENT-16]
+=== CLIENT-16: ID-token and userinfo validation
+
+The ID token MUST be validated per OpenID Connect (signature via the validation pipeline;
+`iss`, `aud`, `azp`, `exp`, `nonce` (<<CLIENT-6>>) and, where present, `at_hash`). When the
+userinfo endpoint is used, the response MUST be validated (signature if signed) and its
+`sub` MUST be bound to the `sub` of the validated ID token — a userinfo response whose `sub`
+does not match MUST be rejected. Identity MUST NOT be taken from an unvalidated userinfo
+response.
+
+* Source: https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation[OIDC Core §3.1.3.7], https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse[OIDC Core §5.3.2] (userinfo `sub` binding).
+
+[#CLIENT-17]
+=== CLIENT-17: Server-side token lifecycle — storage, refresh, revocation
+
+Retrieved tokens are held *server-side* and never returned to the browser in usable form
+(the BFF binding — server-side store or encrypted cookie — is the application's choice,
+<<CLIENT-19>>). The engine MUST: refresh access tokens with `refresh_token`, applying
+*refresh-token rotation* and *revoking on detected misuse / reuse*; revoke held tokens at
+logout (<<CLIENT-13>>) via the commons revocation transport (RFC 7009); protect tokens at
+rest; and prefer short-lived access tokens.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700#section-4.14[RFC 9700 §4.14] (refresh-token protection / rotation), https://www.rfc-editor.org/rfc/rfc7009[RFC 7009] (revocation), https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[Browser-Based Apps] (tokens held server-side).
+
+[#CLIENT-18]
+=== CLIENT-18: Preserve the sender-constraint through storage and forwarding
+
+Where a token is sender-constrained (DPoP or mTLS, <<CLIENT-11>>), the engine MUST keep the
+binding intact across server-side storage, refresh and any forwarding: the stored token
+stays associated with its proof key / certificate binding, and refresh preserves the
+constraint. Storage MUST be minimal — no wider copying of bound tokens than the lifecycle
+requires.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9449[RFC 9449], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705].
+
+[#CLIENT-19]
+=== CLIENT-19: BFF groundwork — enable either token-binding shape without forcing it
+
+The engine MUST NOT preclude *either* BFF token-binding deployment: a *stateful* BFF (opaque
+session-id cookie + server-side token store, backend proxies resource calls) or a *stateless*
+BFF (access token returned to the browser only inside an HttpOnly cookie encrypted with a
+server-side symmetric key). The engine seam — confidential-client retrieval, server-side
+lifecycle, validation — MUST be identical for both; the browser↔backend session cookie,
+symmetric-key management, backend-API CSRF and request proxying are the *BFF application's*
+concern and are *not* implemented here.
+
+* Source: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps] (stateful & stateless BFF).
+
+[#CLIENT-20]
+=== CLIENT-20: Errors via the commons typed-exception / RFC 9457 model
+
+The client engine (pure Java) MUST signal failure through the commons typed-exception
+hierarchy (`COMMONS-9`) and MUST NOT produce HTTP problem documents itself. HTTP-surfaced
+client errors MUST conform to the commons RFC 9457 error model: `token-sheriff-client-quarkus`
+(and any future RESTEasy edge, e.g. a portal adapter) maps the typed exceptions to
+`application/problem+json` (`COMMONS-10`), leaking no internal detail (`COMMONS-12`). Inbound
+IdP error responses are normalized by commons (`COMMONS-11`), not passed through verbatim.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9457[RFC 9457], xref:../commons/requirements.adoc#COMMONS-9[COMMONS-9]–xref:../commons/requirements.adoc#COMMONS-12[COMMONS-12].
+
+== [[_security_exclusions_legacy_discouraged]] Security exclusions (legacy / discouraged, refused)
+
+Sourced non-goals *specific to the client capability*. The engine MUST NOT require or
+implement these. Each exclusion is threat-driven — it removes an acquisition/flow attack
+surface.
+
+[cols="2,3,1", options="header"]
+|===
+| Excluded | Reason | Source
+
+| *Implicit grant* (`response_type=token`)
+| Front-channel token exposure; superseded by confidential auth-code.
+| https://www.rfc-editor.org/rfc/rfc9700#section-2.1.2[RFC 9700 §2.1.2] (SHOULD NOT), removed in https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1]
+
+| *Resource Owner Password Credentials (ROPC)* grant
+| Hands the client the user's password; no delegation.
+| https://www.rfc-editor.org/rfc/rfc9700#section-2.4[RFC 9700 §2.4] (MUST NOT), removed in OAuth 2.1
+
+| *Hybrid flows*
+| Unnecessary for a confidential BFF; re-introduce front-channel token exposure. Use plain `code`.
+| https://www.rfc-editor.org/rfc/rfc9700#section-2.1.2[RFC 9700 §2.1.2]
+
+| *In-browser token storage* (public-client OAuth)
+| The BFF holds tokens server-side precisely to avoid this.
+| https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[Browser-Based Apps]
+
+| *PKCE `plain`*
+| Offers no protection against a passive observer of the challenge; `S256` only.
+| https://www.rfc-editor.org/rfc/rfc7636#section-4.2[RFC 7636 §4.2], https://www.rfc-editor.org/rfc/rfc9700[RFC 9700]
+
+| *Tokens / codes in URL query or fragment*
+| Leak via history, logs, `Referer`. Use `form_post` + token-endpoint exchange.
+| https://www.rfc-editor.org/rfc/rfc9700#section-4.3[RFC 9700 §4.3]
+
+| *Weak client auth where `private_key_jwt`/mTLS is available; secrets over non-TLS*
+| Shared secrets are the weakest link; strong auth is available.
+| https://www.rfc-editor.org/rfc/rfc9700[RFC 9700], https://www.rfc-editor.org/rfc/rfc7523[RFC 7523], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705]
+
+| *Unvalidated `jwks_uri` / metadata URLs* (SSRF)
+| Excluded here by *delegation*: SSRF defence on advertised URLs is owned by commons
+  (`COMMONS-3`); the client performs no outbound IdP HTTP of its own.
+| https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180], xref:../commons/requirements.adoc#COMMONS-3[COMMONS-3]
+|===
+
+NOTE: *Token-signature exclusions are not restated here.* Rejecting `alg=none`, HMAC and
+weak/short-key algorithms, and requiring asymmetric signature verification, is already
+mandated by the validation requirements (`VALIDATION-1.3`, RFC 8725) and inherited by every
+token this client retrieves (<<CLIENT-15>>). The client spec covers only the acquisition /
+flow exclusions above.
+
+== Non-functional requirements
+
+[#CLIENT-21]
+=== CLIENT-21: Framework-agnostic engine (pure Java)
+
+The engine MUST be pure Java, depending on `token-sheriff-validation` (which transitively
+provides the commons base layer) — no CDI, no MicroProfile Config, no JAX-RS in the engine
+itself. Framework bindings (Quarkus, and any RESTEasy/portal adapter) sit *outside* the
+engine, so the engine is reusable across framework contexts. The `client → validation`
+dependency direction is enforced by Maven once the module exists
+(xref:../oidc/05-client-module/README.adoc[Plan 05]).
+
+* Source: xref:../oidc/decision-oidc-module.adoc[Module Architecture decision] (client → validation, never the reverse).
+
+[#CLIENT-22]
+=== CLIENT-22: Thread safety and adversarial test coverage
+
+The engine MUST be thread-safe (shared per-issuer configuration, concurrent flows). Each
+`CLIENT-N` flow / token requirement MUST be exercised by unit tests driving the commons
+`generators` dispatchers in both default and *adversarial* modes (the token / userinfo /
+end-session / PAR dispatchers, `COMMONS-7`), plus real-IdP integration tests
+(xref:../oidc/06-implement/README.adoc[Plan 06]).
+
+* Source: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/05-Authorization_Testing/05-Testing_for_OAuth_Weaknesses[OWASP WSTG — Testing for OAuth Weaknesses], xref:../commons/requirements.adoc#COMMONS-7[COMMONS-7].
+
+== Traceability
+
+Each requirement is threat-driven (xref:threat-model.adoc[threat model]), reflected in the
+sourced xref:best-practices.adoc[best-practices] checklist, and realized in a specification.
+
+[cols="1,2,2", options="header"]
+|===
+| Requirement | Threats (xref:threat-model.adoc[]) | Specification
+
+| CLIENT-1 | T-URL-LEAK | xref:specification/retrieval-flow.adoc[retrieval-flow]
+| CLIENT-2 | T-CODE-INJECTION, T-PKCE-DOWNGRADE | retrieval-flow
+| CLIENT-3 | T-CLIENT-CRED (grant hygiene) | retrieval-flow
+| CLIENT-4 | T-CLIENT-CRED | retrieval-flow
+| CLIENT-5 | T-CSRF | retrieval-flow
+| CLIENT-6 | T-CODE-INJECTION | retrieval-flow
+| CLIENT-7 | T-REDIRECT | retrieval-flow
+| CLIENT-8 | T-MIXUP | retrieval-flow
+| CLIENT-9 | T-CODE-INJECTION | retrieval-flow
+| CLIENT-10 | T-CODE-INJECTION (parameter integrity) | retrieval-flow
+| CLIENT-11 | T-TOKEN-REPLAY | retrieval-flow
+| CLIENT-12 | T-STEPUP | xref:specification/step-up-and-logout.adoc[step-up-and-logout]
+| CLIENT-13 | T-LOGOUT | step-up-and-logout
+| CLIENT-14 | T-URL-LEAK, T-TLS-TOKEN (delegated) | retrieval-flow
+| CLIENT-15 | T-AUD-CONFUSION | xref:specification/token-handling.adoc[token-handling]
+| CLIENT-16 | T-IDTOKEN-INTEGRITY | token-handling
+| CLIENT-17 | T-REFRESH-THEFT, T-LOGOUT | token-handling
+| CLIENT-18 | T-CONSTRAINT-LOSS | token-handling
+| CLIENT-19 | (BFF groundwork — non-preclusion) | xref:architecture.adoc[architecture], token-handling
+| CLIENT-20 | T-LEAK (delegated to commons) | token-handling
+| CLIENT-21..22 | (cross-cutting: engine boundary + adversarial coverage) | architecture, all specs
+|===

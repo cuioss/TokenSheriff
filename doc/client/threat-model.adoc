@@ -1,0 +1,212 @@
+= Client Threat Model
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+_See xref:requirements.adoc[Client Requirements], xref:best-practices.adoc[Best Practices]
+and xref:architecture.adoc[Architecture]._
+
+Threat model for the `client` capability — the server-side confidential-client engine that
+*retrieves tokens* and drives the OAuth 2.0 / OpenID Connect *flows*. Its threats are the
+*acquisition and flow* threats: authorization-code injection, mix-up between multiple
+authorization servers, callback CSRF, redirect-URI abuse, weak client credentials, token
+replay, insufficient authentication assurance, and logout that leaves tokens live — plus the
+server-side *token-lifecycle* threats of refresh-token theft, audience confusion and
+sender-constraint loss.
+
+Each entry cites a source, a mitigation, and the covering `CLIENT-N` requirement, grouped by
+aspect. Threats are kept *separate by aspect* and *not blended* with the transport or
+token-trust threats owned elsewhere (<<_out_of_scope_delegated>>).
+
+== System context
+
+The client engine:
+
+* Constructs authorization requests and exchanges authorization codes for tokens as a
+  *confidential client*, entirely server-side (no tokens in the browser).
+* Authenticates to the token / PAR / revocation / introspection endpoints and *requests*
+  sender-constrained tokens.
+* Holds retrieved tokens *server-side*, refreshes and revokes them, and validates them
+  through the validation pipeline.
+* Triggers RP-initiated logout and honours step-up challenges.
+* Issues *no outbound IdP HTTP of its own* — all fetching is done by
+  xref:../commons/threat-model.adoc[commons], whose transport threats (SSRF, TLS downgrade,
+  response-DoS) the flow *inherits* and does not restate.
+
+== Retrieval & flow aspect
+
+[cols="1,2,3,1,1", options="header"]
+|===
+| ID | Threat | Mitigation | Source | Requirement
+
+| [[T-CODE-INJECTION]]T-CODE-INJECTION
+| *Authorization-code injection.* An attacker injects a code obtained elsewhere into a
+  victim's session (or vice-versa) to have it redeemed under the wrong context.
+| Bind the code to the requesting session: PKCE `S256` binds it to the `code_verifier`; for
+  OIDC the session-bound `nonce` binds the ID token. Redeem only with the matching verifier.
+| https://www.rfc-editor.org/rfc/rfc9700#section-4.5[RFC 9700 §4.5], https://www.rfc-editor.org/rfc/rfc7636[RFC 7636]
+| xref:requirements.adoc#CLIENT-2[CLIENT-2], xref:requirements.adoc#CLIENT-6[CLIENT-6], xref:requirements.adoc#CLIENT-9[CLIENT-9]
+
+| [[T-PKCE-DOWNGRADE]]T-PKCE-DOWNGRADE
+| *PKCE downgrade.* An attacker strips or downgrades PKCE (to `plain` or none) so the code is
+  no longer bound to a verifier.
+| Require `S256`; confirm the AS advertises `code_challenge_methods_supported=S256`; never
+  fall back to `plain` or a non-PKCE request.
+| https://www.rfc-editor.org/rfc/rfc9700#section-4.8[RFC 9700 §4.8]
+| xref:requirements.adoc#CLIENT-2[CLIENT-2]
+
+| [[T-MIXUP]]T-MIXUP
+| *Mix-up attack (multiple authorization servers).* With more than one AS configured, an
+  attacker tricks the client into sending a code/response issued by AS-A to AS-B.
+| Validate the `iss` authorization-response parameter (RFC 9207) against the initiating
+  issuer and/or use a distinct `redirect_uri` per AS; reject on mismatch before exchange.
+| https://www.rfc-editor.org/rfc/rfc9207[RFC 9207], https://www.rfc-editor.org/rfc/rfc9700#section-4.4[RFC 9700 §4.4]
+| xref:requirements.adoc#CLIENT-8[CLIENT-8]
+
+| [[T-REDIRECT]]T-REDIRECT
+| *Insufficient redirect-URI validation.* Pattern / prefix matching lets an attacker steer
+  the response (and code) to an attacker-controlled URI.
+| Register and send a single, exact `redirect_uri`; rely on exact string matching only — no
+  wildcard / prefix / substring.
+| https://www.rfc-editor.org/rfc/rfc9700#section-4.1[RFC 9700 §4.1]
+| xref:requirements.adoc#CLIENT-7[CLIENT-7]
+
+| [[T-CSRF]]T-CSRF
+| *CSRF on the callback.* An attacker replays a crafted callback to bind their session /
+  authorization to the victim.
+| Send an unguessable, session-bound `state` on every request; reject a callback whose
+  `state` is missing or does not match.
+| https://www.rfc-editor.org/rfc/rfc9700#section-4.7[RFC 9700 §4.7]
+| xref:requirements.adoc#CLIENT-5[CLIENT-5]
+
+| [[T-CLIENT-CRED]]T-CLIENT-CRED
+| *Weak or leaked client credentials.* A shared `client_secret` is guessed, leaked from
+  config/logs, or intercepted, letting an attacker impersonate the client.
+| Prefer `private_key_jwt` / mTLS over `client_secret`; send secrets only over TLS and never
+  in a URL; protect credentials at rest; never log them; restrict grants to the secure subset.
+| https://www.rfc-editor.org/rfc/rfc7523[RFC 7523], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705], https://www.rfc-editor.org/rfc/rfc9700#section-2.2[RFC 9700 §2.2]
+| xref:requirements.adoc#CLIENT-3[CLIENT-3], xref:requirements.adoc#CLIENT-4[CLIENT-4]
+
+| [[T-TOKEN-REPLAY]]T-TOKEN-REPLAY
+| *Token replay (no sender-constraining).* A stolen bearer access token is replayed by any
+  holder.
+| Request sender-constrained tokens — DPoP proof or mTLS certificate binding — at the token
+  endpoint; validation of the binding is inherited (`VALIDATION-8.7`).
+| https://www.rfc-editor.org/rfc/rfc9700#section-4.10[RFC 9700 §4.10], https://www.rfc-editor.org/rfc/rfc9449[RFC 9449], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0]
+| xref:requirements.adoc#CLIENT-11[CLIENT-11]
+
+| [[T-STEPUP]]T-STEPUP
+| *Insufficient authentication assurance for a sensitive operation.* An operation proceeds
+  with a session authenticated at too low an assurance.
+| Request `acr_values` / `max_age`; honour the resource server's
+  `insufficient_user_authentication` challenge (RFC 9470) by re-driving authorization; verify
+  the resulting `acr` / `auth_time` before proceeding.
+| https://www.rfc-editor.org/rfc/rfc9470[RFC 9470]
+| xref:requirements.adoc#CLIENT-12[CLIENT-12]
+
+| [[T-LOGOUT]]T-LOGOUT
+| *Logout that leaves tokens live / open-redirect on `post_logout_redirect_uri`.* Logout
+  clears the browser session but held tokens stay usable, or the post-logout redirect is
+  abused as an open redirect.
+| Send `id_token_hint`; exact-match the registered `post_logout_redirect_uri`; bind `state`;
+  revoke the held tokens as part of logout.
+| https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OIDC RP-Initiated Logout], https://www.rfc-editor.org/rfc/rfc9700#section-4.1[RFC 9700 §4.1]
+| xref:requirements.adoc#CLIENT-13[CLIENT-13], xref:requirements.adoc#CLIENT-17[CLIENT-17]
+
+| [[T-URL-LEAK]]T-URL-LEAK
+| *Tokens / codes exposed in URL query or fragment.* Credentials leak through browser
+  history, server logs, or the `Referer` header.
+| Use `response_mode=form_post`; exchange the code at the token endpoint over the back
+  channel; never place tokens/codes in a URL.
+| https://www.rfc-editor.org/rfc/rfc9700#section-4.3[RFC 9700 §4.3]
+| xref:requirements.adoc#CLIENT-1[CLIENT-1], xref:requirements.adoc#CLIENT-14[CLIENT-14]
+
+| [[T-TLS-TOKEN]]T-TLS-TOKEN
+| *Token-endpoint TLS downgrade / MITM.* An on-path attacker downgrades or MITMs a token /
+  PAR / revocation request to substitute responses or capture secrets.
+| *Delegated to commons* — TLS 1.2+ with certificate validation on every outbound request
+  (`COMMONS-2`); the flow relies on it and adds no transport of its own.
+| https://www.rfc-editor.org/rfc/rfc9700#section-2.6[RFC 9700 §2.6], xref:../commons/threat-model.adoc#T-TLS[commons T-TLS]
+| xref:requirements.adoc#CLIENT-14[CLIENT-14] (relies on xref:../commons/requirements.adoc#COMMONS-2[COMMONS-2])
+|===
+
+== Token aspect
+
+[cols="1,2,3,1,1", options="header"]
+|===
+| ID | Threat | Mitigation | Source | Requirement
+
+| [[T-REFRESH-THEFT]]T-REFRESH-THEFT
+| *Refresh-token theft (server-side).* A refresh token exfiltrated from the server-side store
+  is used to mint fresh access tokens indefinitely.
+| Rotate refresh tokens on each use; detect reuse of a rotated token and revoke the family;
+  sender-constrain where available; protect the at-rest store; minimal storage.
+| https://www.rfc-editor.org/rfc/rfc9700#section-4.14[RFC 9700 §4.14]
+| xref:requirements.adoc#CLIENT-17[CLIENT-17], xref:requirements.adoc#CLIENT-18[CLIENT-18]
+
+| [[T-AUD-CONFUSION]]T-AUD-CONFUSION
+| *Token replay / audience confusion.* A token issued for one audience is accepted where it
+  should not be, or a forged/expired token is trusted.
+| Validate every retrieved token through the validation pipeline — signature, `iss`, `aud`,
+  `exp`, `iat` — before trust or storage; never take identity from an unvalidated token.
+| https://www.rfc-editor.org/rfc/rfc9068[RFC 9068], https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation[OIDC Core §3.1.3.7]
+| xref:requirements.adoc#CLIENT-15[CLIENT-15]
+
+| [[T-IDTOKEN-INTEGRITY]]T-IDTOKEN-INTEGRITY
+| *ID-token / userinfo integrity.* Identity is taken from an unvalidated ID token, or from a
+  userinfo response whose `sub` does not match the ID token (identity confusion).
+| Validate the ID-token signature and claims (`iss`/`aud`/`exp`/`nonce`/`at_hash`); validate a
+  signed userinfo response and bind its `sub` to the ID token's `sub`, rejecting mismatches.
+| https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation[OIDC Core §3.1.3.7], https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse[OIDC Core §5.3.2]
+| xref:requirements.adoc#CLIENT-16[CLIENT-16]
+
+| [[T-CONSTRAINT-LOSS]]T-CONSTRAINT-LOSS
+| *Sender-constraint loss in storage / forwarding.* A DPoP- or mTLS-bound token is stored or
+  forwarded in a way that drops its binding, degrading it to a replayable bearer token.
+| Keep the token associated with its proof-key / certificate binding across storage, refresh
+  and forwarding; preserve the constraint on refresh; keep storage minimal.
+| https://www.rfc-editor.org/rfc/rfc9449[RFC 9449], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705]
+| xref:requirements.adoc#CLIENT-18[CLIENT-18]
+|===
+
+== Adversarial test coverage
+
+Each flow / token threat is exercised by the commons `generators` dispatchers in their
+*adversarial* mode (xref:../commons/specification/transport.adoc#adversarial_dispatchers[commons
+transport spec], `COMMONS-7`), driven by the client unit tests
+(xref:requirements.adoc#CLIENT-22[CLIENT-22]) and the
+xref:../oidc/06-implement/README.adoc[Plan 06] integration suite:
+
+[cols="1,3", options="header"]
+|===
+| Threat | Adversarial dispatcher behaviour driven by the client tests
+
+| T-CODE-INJECTION / T-PKCE-DOWNGRADE | `TokenDispatcher` rejects/accepts codes against the presented `code_verifier`; missing-PKCE and `plain` requests refused.
+| T-MIXUP | `WellKnownDispatcher` advertises a mismatched `issuer`; the `iss` response parameter is cross-checked before exchange.
+| T-CSRF / T-REDIRECT | Callback handling asserts session-bound `state` and exact `redirect_uri`; crafted callbacks rejected.
+| T-CLIENT-CRED | `TokenDispatcher` asserts the configured client-auth method; secret-in-URL and non-TLS attempts are not made.
+| T-TOKEN-REPLAY / T-CONSTRAINT-LOSS | `TokenDispatcher` issues DPoP / mTLS-bound responses; the binding is validated and preserved through storage/refresh.
+| T-LOGOUT | `EndSessionDispatcher` adversarial mode returns open-redirect / mismatched `post_logout_redirect_uri`, which are rejected; revocation of held tokens asserted.
+| T-REFRESH-THEFT | `TokenDispatcher` refresh mode drives rotation; a reused rotated token triggers family revocation.
+| T-IDTOKEN-INTEGRITY / T-AUD-CONFUSION | `TokenDispatcher` / `UserInfoDispatcher` emit tampered claims and `sub` mismatches; validation pipeline rejects; userinfo `sub` binding enforced.
+|===
+
+== [[_out_of_scope_delegated]] Out of scope (delegated)
+
+* *Transport threats* — SSRF via IdP-advertised URLs, TLS downgrade / MITM on any fetch, and
+  response-DoS on discovery / JWKS / token / userinfo — belong to the
+  xref:../commons/threat-model.adoc[commons threat model] (`T-SSRF`, `T-TLS`, `T-DOS`,
+  `T-DISCOVERY`). The flow *inherits* them; it does not restate them. `T-TLS-TOKEN` above is
+  listed only to record the flow's reliance on the commons TLS control.
+* *Token-trust threats* — forged signatures, `alg` confusion, claim tampering, expiry / replay
+  at validation time — belong to the xref:../validation/threat-model.adoc[validation threat
+  model]. The client retrieves tokens; validation decides their trust (`CLIENT-15`).
+* *Error-detail leakage* at the HTTP edge — the RFC 9457 no-leak control — is the commons
+  `T-LEAK` threat (`COMMONS-12`); the client engine only throws typed exceptions
+  (`CLIENT-20`).
+* *BFF application concerns* — the browser↔backend session cookie, symmetric-key management,
+  backend-API CSRF, request proxying, and front-/back-channel logout *receivers* — are the
+  BFF application's threat surface, not this engine's (`CLIENT-19`).
