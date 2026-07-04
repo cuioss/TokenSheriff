@@ -31,10 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.awaitility.Awaitility.await;
@@ -668,4 +665,38 @@ class AccessTokenCacheTest {
         assertEquals(1, cache.size());
     }
 
+
+    @Test
+    void shutdownDoesNotStopCallerSuppliedExecutor() {
+        ScheduledExecutorService callerExecutor =
+                Executors.newSingleThreadScheduledExecutor();
+        try {
+            AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
+                    .maxSize(10)
+                    .evictionIntervalSeconds(300L)
+                    .scheduledExecutorService(callerExecutor)
+                    .build();
+            AccessTokenCache ownedByCaller = new AccessTokenCache(config, securityEventCounter, 0);
+
+            ownedByCaller.shutdown();
+
+            assertFalse(callerExecutor.isShutdown(),
+                    "shutdown() must not stop a caller-supplied executor");
+        } finally {
+            callerExecutor.shutdownNow();
+        }
+    }
+
+    @Test
+    void shutdownStopsInternallyCreatedExecutor() {
+        AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
+                .maxSize(10)
+                .evictionIntervalSeconds(300L)
+                .build();
+        AccessTokenCache internallyOwned = new AccessTokenCache(config, securityEventCounter, 0);
+
+        // No handle on the internal executor; shutdown must simply not throw and be idempotent
+        assertDoesNotThrow(internallyOwned::shutdown);
+        assertDoesNotThrow(internallyOwned::shutdown);
+    }
 }

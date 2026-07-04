@@ -164,37 +164,26 @@ class AccessTokenCacheConfigTest {
     }
 
     @Test
-    void getOrCreateScheduledExecutorServiceWhenCachingDisabled() {
-        // Given
-        AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
-                .maxSize(0)
-                .build();
-
-        // When
-        ScheduledExecutorService executor = config.getOrCreateScheduledExecutorService();
-
-        // Then
-        assertNull(executor);
-    }
-
-    @Test
-    void getOrCreateScheduledExecutorServiceWithDefault() {
+    void createScheduledExecutorServiceCreatesNewInstancePerCall() {
         // Given
         AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
                 .maxSize(100)
                 .build();
 
         // When
-        ScheduledExecutorService executor = config.getOrCreateScheduledExecutorService();
+        ScheduledExecutorService first = config.createScheduledExecutorService();
+        ScheduledExecutorService second = config.createScheduledExecutorService();
 
         // Then
-        assertNotNull(executor);
+        assertNotNull(first);
+        assertNotSame(first, second, "each call creates a new executor the caller owns");
         // Cleanup
-        executor.shutdown();
+        first.shutdown();
+        second.shutdown();
     }
 
     @Test
-    void getOrCreateScheduledExecutorServiceWithProvided() {
+    void callerSuppliedExecutorIsExposedViaGetter() {
         // Given
         ScheduledExecutorService providedExecutor = Executors.newSingleThreadScheduledExecutor();
         AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
@@ -202,11 +191,8 @@ class AccessTokenCacheConfigTest {
                 .scheduledExecutorService(providedExecutor)
                 .build();
 
-        // When
-        ScheduledExecutorService executor = config.getOrCreateScheduledExecutorService();
-
         // Then
-        assertSame(providedExecutor, executor);
+        assertSame(providedExecutor, config.getScheduledExecutorService());
         // Cleanup
         providedExecutor.shutdown();
     }

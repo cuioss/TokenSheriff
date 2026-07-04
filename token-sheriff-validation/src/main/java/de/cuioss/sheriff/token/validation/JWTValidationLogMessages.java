@@ -88,8 +88,6 @@ public final class JWTValidationLogMessages {
                 .identifier(206)
                 .template("JWKS load execution failed: %s for issuer: %s")
                 .build();
-
-        // Retry operation error messages are handled at WARN level
     }
 
     /**
@@ -121,19 +119,6 @@ public final class JWTValidationLogMessages {
                 .prefix(PREFIX)
                 .identifier(4)
                 .template("Skipping disabled issuer configuration %s")
-                .build();
-
-        public static final LogRecord JWKS_URI_RESOLVED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(5)
-                .template("Successfully resolved JWKS URI from well-known endpoint: %s")
-                .build();
-
-        // Retry operation info messages
-        public static final LogRecord RETRY_OPERATION_COMPLETED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(6)
-                .template("Retry operation '%s' completed successfully after %s attempts in %sms")
                 .build();
 
         public static final LogRecord JWKS_LOADED = LogRecordModel.builder()
@@ -210,12 +195,6 @@ public final class JWTValidationLogMessages {
                 .template("Token has a 'not before' claim that is more than %s seconds in the future")
                 .build();
 
-        public static final LogRecord UNKNOWN_TOKEN_TYPE = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(108)
-                .template("Unknown token type: %s")
-                .build();
-
         public static final LogRecord MISSING_CLAIM = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(109)
@@ -288,13 +267,6 @@ public final class JWTValidationLogMessages {
                 .template("Invalid or unsupported algorithm: %s")
                 .build();
 
-        // New entries for direct logging conversions
-        public static final LogRecord ISSUER_CONFIG_UNHEALTHY = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(121)
-                .template("Found unhealthy issuer config: %s")
-                .build();
-
         public static final LogRecord BACKGROUND_REFRESH_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(122)
@@ -335,13 +307,6 @@ public final class JWTValidationLogMessages {
                 .prefix(PREFIX)
                 .identifier(128)
                 .template("Failed to parse EC key with ID %s: %s")
-                .build();
-
-        // Retry operation warning messages
-        public static final LogRecord RETRY_OPERATION_FAILED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(129)
-                .template("Retry operation '%s' failed after %s attempts in %sms")
                 .build();
 
         public static final LogRecord JWKS_JSON_PARSE_FAILED = LogRecordModel.builder()

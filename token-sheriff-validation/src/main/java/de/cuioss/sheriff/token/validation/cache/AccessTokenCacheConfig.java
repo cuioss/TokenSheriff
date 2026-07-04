@@ -16,10 +16,8 @@
 package de.cuioss.sheriff.token.validation.cache;
 
 import lombok.Builder;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
-import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -83,10 +81,10 @@ public class AccessTokenCacheConfig {
 
     /**
      * The scheduled executor service for background tasks.
-     * If not provided, a default executor will be created when maxSize > 0.
+     * If not provided, {@link AccessTokenCache} creates (and owns) a default executor
+     * via {@link #createScheduledExecutorService()} when caching is enabled.
      */
     @Getter
-    @EqualsAndHashCode.Exclude
     private final ScheduledExecutorService scheduledExecutorService;
 
     /**
@@ -132,19 +130,19 @@ public class AccessTokenCacheConfig {
     }
 
     /**
-     * Gets the configured or default scheduled executor service.
-     * Creates a default executor if none was provided and caching is enabled.
+     * Creates a new single-threaded daemon scheduler for background eviction.
+     * <p>
+     * Used by {@link AccessTokenCache} when no {@link #getScheduledExecutorService()
+     * caller-supplied} executor is configured. Every call creates a new executor
+     * instance — the caller owns its lifecycle and is responsible for shutting it down.
      *
-     * @return the scheduled executor service or null if caching is disabled
+     * @return a new single-threaded scheduled executor service with a daemon thread
      */
-    public ScheduledExecutorService getOrCreateScheduledExecutorService() {
-        if (!isCachingEnabled()) {
-            return null;
-        }
-        return Objects.requireNonNullElseGet(scheduledExecutorService, () -> Executors.newSingleThreadScheduledExecutor(r -> {
+    public ScheduledExecutorService createScheduledExecutorService() {
+        return Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "AccessTokenCache-Eviction");
             thread.setDaemon(true);
             return thread;
-        }));
+        });
     }
 }

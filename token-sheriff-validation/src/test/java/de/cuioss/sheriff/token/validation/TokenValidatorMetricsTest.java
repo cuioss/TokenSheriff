@@ -108,8 +108,6 @@ class TokenValidatorMetricsTest {
         // These might be missing or have zero duration
         LOGGER.info("ISSUER_EXTRACTION duration: " + monitor.getValidationMetrics(MeasurementType.ISSUER_EXTRACTION)
                 .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() + " ns");
-        LOGGER.info("JWKS_OPERATIONS duration: " + monitor.getValidationMetrics(MeasurementType.JWKS_OPERATIONS)
-                .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() + " ns");
     }
 
     @Test
@@ -201,21 +199,14 @@ class TokenValidatorMetricsTest {
         tokenValidator.createAccessToken(AccessTokenRequest.of(tokenString));
 
         // Then
-        Duration jwksOperations = monitor.getValidationMetrics(MeasurementType.JWKS_OPERATIONS)
-                .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO);
         Duration signatureValidation = monitor.getValidationMetrics(MeasurementType.SIGNATURE_VALIDATION)
                 .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO);
 
-        LOGGER.info("\nJWKS operations analysis:");
-        LOGGER.info("JWKS_OPERATIONS: %s ns (%s ms)%n",
-                jwksOperations.toNanos(),
-                jwksOperations.toNanos() / 1_000_000.0);
         LOGGER.info("SIGNATURE_VALIDATION: %s ns (%s ms)%n",
                 signatureValidation.toNanos(),
                 signatureValidation.toNanos() / 1_000_000.0);
 
-        // JWKS operations time should be included in signature validation time
-        assertTrue(signatureValidation.toNanos() > jwksOperations.toNanos(),
-                "Signature validation should include JWKS operations time");
+        assertTrue(signatureValidation.toNanos() > 0,
+                "Signature validation should record a measurable duration");
     }
 }

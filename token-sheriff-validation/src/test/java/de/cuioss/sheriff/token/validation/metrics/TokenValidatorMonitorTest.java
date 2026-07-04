@@ -269,7 +269,7 @@ class TokenValidatorMonitorTest {
     @DisplayName("Should handle zero and negative durations")
     void shouldHandleZeroAndNegativeDurations() {
         var monitor = TokenValidatorMonitorConfig.defaultEnabled().createMonitor();
-        var measurementType = MeasurementType.JWKS_OPERATIONS;
+        var measurementType = MeasurementType.CACHE_LOOKUP;
 
         // Record zero duration
         monitor.recordMeasurement(measurementType, 0);
