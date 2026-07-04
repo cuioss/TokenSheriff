@@ -46,8 +46,8 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * <strong>Usage Example:</strong>
  * <pre>
- * // Create monitor with default window size (100 samples)
- * TokenValidatorMonitor monitor = new TokenValidatorMonitor();
+ * // Create monitor via its configuration (default window size, all measurement types)
+ * TokenValidatorMonitor monitor = TokenValidatorMonitorConfig.defaultEnabled().createMonitor();
  *
  * // Record a measurement
  * long startNanos = System.nanoTime();

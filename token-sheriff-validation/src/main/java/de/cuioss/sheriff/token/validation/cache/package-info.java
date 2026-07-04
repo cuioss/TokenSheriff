@@ -23,7 +23,7 @@
  * Key features:
  * <ul>
  *   <li>Thread-safe caching with configurable size limits</li>
- *   <li>LRU eviction policy for size management</li>
+ *   <li>Size-based eviction (arbitrary iteration order) for size management</li>
  *   <li>Automatic expiration checking and background cleanup</li>
  *   <li>Security event tracking for cache effectiveness monitoring</li>
  *   <li>No external dependencies (Quarkus compatible)</li>

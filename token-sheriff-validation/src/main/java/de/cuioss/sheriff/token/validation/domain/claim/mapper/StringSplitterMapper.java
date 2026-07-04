@@ -21,6 +21,7 @@ import de.cuioss.tools.string.Splitter;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -55,8 +56,14 @@ public class StringSplitterMapper implements ClaimMapper {
    
     private final Character splitChar;
 
+    /**
+     * Creates a new mapper splitting on the given character.
+     *
+     * @param splitChar the character to split by, must not be {@code null}
+     * @throws NullPointerException if splitChar is {@code null}
+     */
     public StringSplitterMapper(Character splitChar) {
-        this.splitChar = splitChar;
+        this.splitChar = Objects.requireNonNull(splitChar, "splitChar must not be null");
     }
 
     @Override

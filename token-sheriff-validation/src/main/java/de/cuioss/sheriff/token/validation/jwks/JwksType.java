@@ -21,30 +21,18 @@ package de.cuioss.sheriff.token.validation.jwks;
  */
 public enum JwksType {
     /** HTTP JWKS endpoint */
-    HTTP("http", false),
+    HTTP("http"),
     /** Well-known discovery JWKS endpoint */
-    WELL_KNOWN("well-known", true),
+    WELL_KNOWN("well-known"),
     /** File-based JWKS */
-    FILE("file", false),
+    FILE("file"),
     /** In-memory JWKS */
-    MEMORY("memory", false);
+    MEMORY("memory");
 
     private final String value;
-    private final boolean providesIssuerIdentifier;
 
-    JwksType(String value, boolean providesIssuerIdentifier) {
+    JwksType(String value) {
         this.value = value;
-        this.providesIssuerIdentifier = providesIssuerIdentifier;
-    }
-
-    /**
-     * Returns true if this JWKS type provides its own issuer identifier.
-     * Currently only true for well-known discovery endpoints.
-     *
-     * @return true if this type provides issuer identifier, false otherwise
-     */
-    public boolean providesIssuerIdentifier() {
-        return providesIssuerIdentifier;
     }
 
     @Override

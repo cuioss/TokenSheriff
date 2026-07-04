@@ -32,8 +32,10 @@ import lombok.RequiredArgsConstructor;
  *   <li>Not before time (nbf) - tokens must not be used before their valid time</li>
  * </ul>
  * <p>
- * The validator includes a 60-second clock skew tolerance for the not-before validation
- * to account for time differences between token issuer and validator.
+ * The validator applies the per-issuer configurable clock skew tolerance (provided via the
+ * {@link de.cuioss.sheriff.token.validation.domain.context.ValidationContext}) to the
+ * expiration and not-before validation, accounting for time differences between token
+ * issuer and validator.
  *
  * @apiNote This class is internal to Token-Sheriff and not part of the public API.
  * @since 1.0
@@ -98,7 +100,7 @@ public class ExpirationValidator {
         }
 
         if (context.isNotBeforeInvalid(notBefore.get())) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_NBF_FUTURE);
+            LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_NBF_FUTURE, context.getClockSkewSeconds());
             securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.TOKEN_NBF_FUTURE,
