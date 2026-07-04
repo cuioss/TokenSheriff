@@ -21,6 +21,9 @@ import de.cuioss.sheriff.token.quarkus.test.TestConfig;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.net.SocketAddress;
+import jakarta.enterprise.inject.Instance;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerResponseContext;
 import jakarta.ws.rs.core.MultivaluedHashMap;
@@ -399,5 +402,195 @@ class CustomAccessLogFilterTest {
         assertDoesNotThrow(() -> filter.filter(requestContext, responseContext));
 
         EasyMock.verify(requestContext, responseContext, uriInfo);
+    }
+
+    @Test
+    @DisplayName("Should not log when include patterns are configured but none matches")
+    void shouldNotLogWhenNoIncludePatternMatches() {
+        TestConfig config = new TestConfig(Map.of(
+                JwtPropertyKeys.ACCESSLOG.ENABLED, "true",
+                JwtPropertyKeys.ACCESSLOG.INCLUDE_PATHS, "/api/**"
+        ));
+        AccessLogFilterConfigResolver resolver = new AccessLogFilterConfigResolver(config);
+        CustomAccessLogFilter filter = new CustomAccessLogFilter(resolver, null);
+
+        ContainerRequestContext requestContext = EasyMock.niceMock(ContainerRequestContext.class);
+        UriInfo uriInfo = EasyMock.niceMock(UriInfo.class);
+        EasyMock.expect(uriInfo.getPath()).andReturn("/other/resource").anyTimes();
+        EasyMock.expect(requestContext.getUriInfo()).andReturn(uriInfo).anyTimes();
+
+        ContainerResponseContext responseContext = EasyMock.niceMock(ContainerResponseContext.class);
+        EasyMock.expect(responseContext.getStatus()).andReturn(500).anyTimes();
+
+        EasyMock.replay(requestContext, responseContext, uriInfo);
+
+        // When - path matches no include pattern, so nothing is logged
+        assertDoesNotThrow(() -> filter.filter(requestContext, responseContext));
+
+        EasyMock.verify(requestContext, responseContext, uriInfo);
+    }
+
+    @Test
+    @DisplayName("Should log non-excluded path when exclude patterns are configured")
+    void shouldLogNonExcludedPathWhenExcludesConfigured() {
+        TestConfig config = new TestConfig(Map.of(
+                JwtPropertyKeys.ACCESSLOG.ENABLED, "true",
+                JwtPropertyKeys.ACCESSLOG.EXCLUDE_PATHS, "/health/**"
+        ));
+        AccessLogFilterConfigResolver resolver = new AccessLogFilterConfigResolver(config);
+        CustomAccessLogFilter filter = new CustomAccessLogFilter(resolver, null);
+
+        ContainerRequestContext requestContext = EasyMock.niceMock(ContainerRequestContext.class);
+        UriInfo uriInfo = EasyMock.niceMock(UriInfo.class);
+        EasyMock.expect(uriInfo.getPath()).andReturn("/api/orders").anyTimes();
+        EasyMock.expect(requestContext.getUriInfo()).andReturn(uriInfo).anyTimes();
+        EasyMock.expect(requestContext.getMethod()).andReturn("GET").anyTimes();
+        EasyMock.expect(requestContext.getProperty("cui.access-log.start-time"))
+                .andReturn(Instant.now()).anyTimes();
+        EasyMock.expect(requestContext.getHeaders())
+                .andReturn(new MultivaluedHashMap<>()).anyTimes();
+        EasyMock.expect(requestContext.getHeaderString("User-Agent"))
+                .andReturn("TestAgent/1.0").anyTimes();
+
+        ContainerResponseContext responseContext = EasyMock.niceMock(ContainerResponseContext.class);
+        EasyMock.expect(responseContext.getStatus()).andReturn(500).anyTimes();
+
+        EasyMock.replay(requestContext, responseContext, uriInfo);
+
+        assertDoesNotThrow(() -> filter.filter(requestContext, responseContext));
+
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "/api/orders");
+        EasyMock.verify(requestContext, responseContext, uriInfo);
+    }
+
+    @Test
+    @DisplayName("Should log status outside range when listed in include status codes")
+    void shouldLogStatusFromIncludeList() {
+        TestConfig config = new TestConfig(Map.of(
+                JwtPropertyKeys.ACCESSLOG.ENABLED, "true",
+                JwtPropertyKeys.ACCESSLOG.INCLUDE_STATUS_CODES, "201"
+        ));
+        AccessLogFilterConfigResolver resolver = new AccessLogFilterConfigResolver(config);
+        CustomAccessLogFilter filter = new CustomAccessLogFilter(resolver, null);
+
+        ContainerRequestContext requestContext = EasyMock.niceMock(ContainerRequestContext.class);
+        UriInfo uriInfo = EasyMock.niceMock(UriInfo.class);
+        EasyMock.expect(uriInfo.getPath()).andReturn("/api/created").anyTimes();
+        EasyMock.expect(requestContext.getUriInfo()).andReturn(uriInfo).anyTimes();
+        EasyMock.expect(requestContext.getMethod()).andReturn("POST").anyTimes();
+        EasyMock.expect(requestContext.getProperty("cui.access-log.start-time"))
+                .andReturn(Instant.now()).anyTimes();
+        EasyMock.expect(requestContext.getHeaders())
+                .andReturn(new MultivaluedHashMap<>()).anyTimes();
+        EasyMock.expect(requestContext.getHeaderString("User-Agent"))
+                .andReturn("TestAgent/1.0").anyTimes();
+
+        // 201 is below the default 400-599 range but explicitly included
+        ContainerResponseContext responseContext = EasyMock.niceMock(ContainerResponseContext.class);
+        EasyMock.expect(responseContext.getStatus()).andReturn(201).anyTimes();
+
+        EasyMock.replay(requestContext, responseContext, uriInfo);
+
+        assertDoesNotThrow(() -> filter.filter(requestContext, responseContext));
+
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "/api/created");
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "201");
+        EasyMock.verify(requestContext, responseContext, uriInfo);
+    }
+
+    @Test
+    @DisplayName("Should use Vert.x remote address as fallback client address")
+    void shouldUseVertxRemoteAddressAsFallback() {
+        TestConfig config = new TestConfig(Map.of(
+                JwtPropertyKeys.ACCESSLOG.ENABLED, "true",
+                JwtPropertyKeys.ACCESSLOG.PATTERN, "{method} {path} {status} {remoteAddr}"
+        ));
+        AccessLogFilterConfigResolver resolver = new AccessLogFilterConfigResolver(config);
+
+        // Vert.x request resolvable through the CDI Instance: its host is the fallback address
+        SocketAddress socketAddress = EasyMock.niceMock(SocketAddress.class);
+        EasyMock.expect(socketAddress.host()).andReturn("10.20.30.40").anyTimes();
+        HttpServerRequest vertxRequest = EasyMock.niceMock(HttpServerRequest.class);
+        EasyMock.expect(vertxRequest.remoteAddress()).andReturn(socketAddress).anyTimes();
+        @SuppressWarnings("unchecked")
+        Instance<HttpServerRequest> vertxInstance = EasyMock.niceMock(Instance.class);
+        EasyMock.expect(vertxInstance.isUnsatisfied()).andReturn(false).anyTimes();
+        EasyMock.expect(vertxInstance.get()).andReturn(vertxRequest).anyTimes();
+        EasyMock.replay(socketAddress, vertxRequest, vertxInstance);
+
+        CustomAccessLogFilter filter = new CustomAccessLogFilter(resolver, vertxInstance);
+
+        ContainerRequestContext requestContext = EasyMock.niceMock(ContainerRequestContext.class);
+        UriInfo uriInfo = EasyMock.niceMock(UriInfo.class);
+        EasyMock.expect(uriInfo.getPath()).andReturn("/api/fallback").anyTimes();
+        EasyMock.expect(requestContext.getUriInfo()).andReturn(uriInfo).anyTimes();
+        EasyMock.expect(requestContext.getMethod()).andReturn("GET").anyTimes();
+        EasyMock.expect(requestContext.getProperty("cui.access-log.start-time"))
+                .andReturn(Instant.now()).anyTimes();
+        // No proxy headers: the Vert.x address must be used
+        EasyMock.expect(requestContext.getHeaders())
+                .andReturn(new MultivaluedHashMap<>()).anyTimes();
+        EasyMock.expect(requestContext.getHeaderString("User-Agent"))
+                .andReturn("TestAgent/1.0").anyTimes();
+
+        ContainerResponseContext responseContext = EasyMock.niceMock(ContainerResponseContext.class);
+        EasyMock.expect(responseContext.getStatus()).andReturn(500).anyTimes();
+
+        EasyMock.replay(requestContext, responseContext, uriInfo);
+
+        assertDoesNotThrow(() -> filter.filter(requestContext, responseContext));
+
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "10.20.30.40");
+        EasyMock.verify(requestContext, responseContext, uriInfo, vertxInstance, vertxRequest, socketAddress);
+    }
+
+    @Test
+    @DisplayName("Should log with fallback address when Vert.x request resolution fails")
+    void shouldHandleVertxRequestResolutionFailure() {
+        TestConfig config = new TestConfig(Map.of(
+                JwtPropertyKeys.ACCESSLOG.ENABLED, "true"
+        ));
+        AccessLogFilterConfigResolver resolver = new AccessLogFilterConfigResolver(config);
+
+        // Outside an active request scope, resolving the Vert.x request throws
+        @SuppressWarnings("unchecked")
+        Instance<HttpServerRequest> vertxInstance = EasyMock.niceMock(Instance.class);
+        EasyMock.expect(vertxInstance.isUnsatisfied()).andReturn(false).anyTimes();
+        EasyMock.expect(vertxInstance.get())
+                .andThrow(new IllegalStateException("no active request context")).anyTimes();
+        EasyMock.replay(vertxInstance);
+
+        CustomAccessLogFilter filter = new CustomAccessLogFilter(resolver, vertxInstance);
+
+        ContainerRequestContext requestContext = EasyMock.niceMock(ContainerRequestContext.class);
+        UriInfo uriInfo = EasyMock.niceMock(UriInfo.class);
+        EasyMock.expect(uriInfo.getPath()).andReturn("/api/no-vertx").anyTimes();
+        EasyMock.expect(requestContext.getUriInfo()).andReturn(uriInfo).anyTimes();
+        EasyMock.expect(requestContext.getMethod()).andReturn("GET").anyTimes();
+        EasyMock.expect(requestContext.getProperty("cui.access-log.start-time"))
+                .andReturn(Instant.now()).anyTimes();
+        EasyMock.expect(requestContext.getHeaders())
+                .andReturn(new MultivaluedHashMap<>()).anyTimes();
+        EasyMock.expect(requestContext.getHeaderString("User-Agent"))
+                .andReturn("TestAgent/1.0").anyTimes();
+
+        ContainerResponseContext responseContext = EasyMock.niceMock(ContainerResponseContext.class);
+        EasyMock.expect(responseContext.getStatus()).andReturn(500).anyTimes();
+
+        EasyMock.replay(requestContext, responseContext, uriInfo);
+
+        // When - resolution failure must be swallowed and the entry still logged
+        assertDoesNotThrow(() -> filter.filter(requestContext, responseContext));
+
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "/api/no-vertx");
+        EasyMock.verify(requestContext, responseContext, uriInfo, vertxInstance);
+    }
+
+    @Test
+    @DisplayName("Should keep single-star glob within one segment when more literal text follows")
+    void shouldTranslateMidPatternSingleStar() {
+        assertTrue(CustomAccessLogFilter.globToRegex("/api/v*beta").matcher("/api/v2beta").matches());
+        assertTrue(CustomAccessLogFilter.globToRegex("/api/v*beta").matcher("/api/vbeta").matches());
+        assertFalse(CustomAccessLogFilter.globToRegex("/api/v*beta").matcher("/api/v2/beta").matches());
     }
 }
