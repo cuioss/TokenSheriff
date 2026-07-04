@@ -17,14 +17,15 @@
  * Provides security-related functionality for JWT Token handling.
  * <p>
  * This package contains classes that implement security best practices for JWT Token
- * processing, including algorithm preferences, secure SSL context provision, and security
- * event monitoring.
+ * processing, including algorithm preferences and secure SSL context provision.
+ * <p>
+ * Security-event monitoring ({@code SecurityEventCounter}) has moved to the
+ * {@link de.cuioss.sheriff.token.commons.events} base layer.
  * <p>
  * Key components:
  * <ul>
  *   <li>{@link de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences} - Manages algorithm preferences for JWT signature validation</li>
  *   <li>{@link de.cuioss.sheriff.token.validation.security.JwkAlgorithmPreferences} - Manages algorithm preferences for JWK parsing</li>
- *   <li>{@link de.cuioss.sheriff.token.validation.security.SecurityEventCounter} - Tracks security-relevant events for monitoring</li>
  * </ul>
  * <p>
  * The classes in this package implement security best practices, including:

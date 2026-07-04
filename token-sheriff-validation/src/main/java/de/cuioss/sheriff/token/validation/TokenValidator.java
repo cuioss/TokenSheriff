@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.cache.AccessTokenCacheConfig;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.context.IdTokenRequest;
@@ -33,7 +34,6 @@ import de.cuioss.sheriff.token.validation.pipeline.validator.TokenHeaderValidato
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenSignatureValidator;
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenStringValidator;
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenValidationRule;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.Builder;
 import lombok.Getter;

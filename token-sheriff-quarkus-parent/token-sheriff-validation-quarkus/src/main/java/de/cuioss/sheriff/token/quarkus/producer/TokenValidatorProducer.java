@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.quarkus.producer;
 
 import de.cuioss.http.client.adapter.RetryConfig;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.quarkus.config.AccessTokenCacheConfigResolver;
 import de.cuioss.sheriff.token.quarkus.config.IssuerConfigResolver;
 import de.cuioss.sheriff.token.quarkus.config.ParserConfigResolver;
@@ -28,8 +29,8 @@ import de.cuioss.sheriff.token.validation.ParserConfig;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.cache.AccessTokenCacheConfig;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;

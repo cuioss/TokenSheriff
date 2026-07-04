@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
@@ -23,7 +24,6 @@ import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -139,10 +139,11 @@ public class TokenBuilder {
                     claimValue = mapper.map(mapRepresentation, key);
                 } catch (TokenValidationException e) {
                     throw e;
-                    // cui-rewrite:disable InvalidExceptionUsageRecipe
-                    // Custom SPI mappers can throw arbitrary runtime exceptions — the broad
-                    // catch is deliberate; TokenValidationException is rethrown above.
-                } catch (RuntimeException e) {
+                }
+                // cui-rewrite:disable InvalidExceptionUsageRecipe
+                // Custom SPI mappers can throw arbitrary runtime exceptions — the broad
+                // catch is deliberate; TokenValidationException is rethrown above.
+                catch (RuntimeException e) {
                     throw new TokenValidationException(
                             SecurityEventCounter.EventType.MISSING_CLAIM,
                             "Malformed claim '" + key + "': " + e.getMessage(),

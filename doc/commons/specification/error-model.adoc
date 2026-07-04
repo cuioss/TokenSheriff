@@ -1,0 +1,90 @@
+= Commons Specification — Error Model
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+_Realizes xref:../requirements.adoc#COMMONS-9[COMMONS-9]–xref:../requirements.adoc#COMMONS-12[COMMONS-12].
+See xref:../threat-model.adoc#T-LEAK[T-LEAK]._
+
+The error model splits cleanly by layer: *libraries throw typed exceptions*; *HTTP edges
+render RFC 9457 problem documents*. Commons owns the typed hierarchy (`commons.error`) and
+the inbound normalization of IdP error responses; each edge owns its RFC 9457 mapping.
+
+== The layer split
+
+[cols="1,3", options="header"]
+|===
+| Layer | Behaviour
+
+| *Libraries* — `commons` + `validation` packages, the future client engine (pure Java)
+| Throw a *typed exception hierarchy* defined in `commons.error`. They MUST NOT produce HTTP
+  problem documents — that is not their layer (xref:../requirements.adoc#COMMONS-9[COMMONS-9]).
+
+| *HTTP edges* — `token-sheriff-validation-quarkus`, `token-sheriff-client-quarkus`, and any
+  future non-Quarkus / RESTEasy edge (e.g. a portal adapter)
+| MUST map those exceptions to `application/problem+json` per
+  https://www.rfc-editor.org/rfc/rfc9457[RFC 9457], without leaking internal detail
+  (xref:../requirements.adoc#COMMONS-10[COMMONS-10], xref:../requirements.adoc#COMMONS-12[COMMONS-12]).
+  Existing validation rejection responses retrofit to this.
+|===
+
+== Typed exception hierarchy (`commons.error`)
+
+A small, stable hierarchy that library code throws and edges map. The concrete shape is
+defined during re-packaging; the contract is:
+
+* A common base carrying a *category* (from `commons.events`, structure / signature /
+  semantic) and a *safe, caller-facing message* — never internal detail.
+* Transport failures (TLS rejected, SSRF blocked, timeout, oversized response, unreachable
+  endpoint) are one branch.
+* Token-validation failures (the existing `TokenValidationException`, keyed by
+  `SecurityEventCounter.EventType`) are another — retrofitted onto the shared base so the
+  edges have one mapping surface.
+
+== RFC 9457 mapping at the edge
+
+Each edge maps the typed exception to a problem document:
+
+[cols="1,1,2", options="header"]
+|===
+| Category | HTTP status | `type` / `title`
+
+| Transport (SSRF blocked, TLS rejected, unreachable, timeout) | 502 / 503 as appropriate | Stable `type` URI + generic title
+| Structure / signature / semantic (token rejection) | 401 | Stable `type` URI + generic title
+| Bad request (malformed input) | 400 | Stable `type` URI + generic title
+|===
+
+A problem document carries `type`, `title`, `status`, and a *safe* `detail`. It MUST NOT
+carry stack traces, internal identifiers, upstream URLs, or credential material
+(xref:../requirements.adoc#COMMONS-12[COMMONS-12], mitigating xref:../threat-model.adoc#T-LEAK[T-LEAK]).
+
+Because every rendered member is a fixed, per-category constant (no request or exception
+data is interpolated), the `validation-quarkus` edge builds the document from constant
+strings — guaranteeing the exact `application/problem+json` bytes with no escaping surface.
+*If a future edge needs a dynamic `detail`* (interpolating request-derived text), it MUST
+switch to a serialized DTO with proper JSON escaping rather than string concatenation.
+
+.Example problem document
+[source,json]
+----
+{
+  "type": "https://cuioss.github.io/TokenSheriff/problems/token-invalid",
+  "title": "Token validation failed",
+  "status": 401,
+  "detail": "The presented token could not be validated."
+}
+----
+
+== Inbound IdP error normalization (COMMONS-11)
+
+Commons normalizes inbound OAuth error responses (`error` / `error_description`, RFC 6749
+§5.2) into the same typed model the edges render — *one contract, both directions*. The
+raw upstream error is never passed through to the caller verbatim.
+
+== See also
+
+* xref:observability.adoc[Observability specification] — `SecurityEventCounter` / categories
+* xref:../architecture.adoc[Architecture]

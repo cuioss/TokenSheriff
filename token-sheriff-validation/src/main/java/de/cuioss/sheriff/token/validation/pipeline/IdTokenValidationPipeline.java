@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfigCache;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
@@ -25,7 +26,6 @@ import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenClaimValidator;
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenHeaderValidator;
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenSignatureValidator;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.util.Map;

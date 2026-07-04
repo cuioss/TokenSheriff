@@ -16,6 +16,8 @@
 package de.cuioss.sheriff.token.validation.dpop;
 
 import com.dslplatform.json.DslJson;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
@@ -26,8 +28,6 @@ import de.cuioss.sheriff.token.validation.jwks.key.JwkKeyHandler;
 import de.cuioss.sheriff.token.validation.pipeline.DecodedJwt;
 import de.cuioss.sheriff.token.validation.pipeline.SignatureTemplateManager;
 import de.cuioss.sheriff.token.validation.pipeline.SignatureVerificationUtil;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.token.validation.util.JwkThumbprintUtil;
 import de.cuioss.tools.logging.CuiLogger;

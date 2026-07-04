@@ -1,0 +1,99 @@
+= Commons Specification — Transport
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+_Realizes xref:../requirements.adoc#COMMONS-1[COMMONS-1]–xref:../requirements.adoc#COMMONS-8[COMMONS-8].
+See xref:../threat-model.adoc[Threat Model] and xref:../architecture.adoc[Architecture]._
+
+`commons.transport` is the single owner of all outbound HTTP to an OpenID Provider. It
+*moves bytes* — it never decides whether a token is trustworthy. It owns TLS enforcement,
+SSRF defence, timeouts, response-size limits, retry/backoff, the `cui-http` client, and
+discovery / JWKS caching.
+
+== Endpoints
+
+[cols="1,2,2,1", options="header"]
+|===
+| Endpoint | Purpose | Standard | Status
+
+| Discovery | OP metadata (`.well-known/openid-configuration`, RFC 8414 metadata) | https://openid.net/specs/openid-connect-discovery-1_0.html[OIDC Discovery 1.0], https://www.rfc-editor.org/rfc/rfc8414[RFC 8414] | Relocated from validation
+| JWKS | Signing-key retrieval | https://www.rfc-editor.org/rfc/rfc7517[RFC 7517] | Relocated from validation
+| Token | Token issuance / exchange | https://www.rfc-editor.org/rfc/rfc6749[RFC 6749] | Contract + dispatcher (client-facing)
+| UserInfo | Claims about the authenticated end-user | https://openid.net/specs/openid-connect-core-1_0.html[OIDC Core] | Contract + dispatcher
+| Revocation | Token revocation | https://www.rfc-editor.org/rfc/rfc7009[RFC 7009] | Contract + dispatcher
+| Introspection | Token status / metadata | https://www.rfc-editor.org/rfc/rfc7662[RFC 7662] | Contract + dispatcher
+| End-session | RP-initiated logout | https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OIDC RP-Initiated Logout 1.0] | Contract + dispatcher
+| PAR | Pushed authorization requests | https://www.rfc-editor.org/rfc/rfc9126[RFC 9126] | Contract + dispatcher
+|===
+
+Discovery and JWKS are *relocated existing code* (`wellknown`, `jwks.http`); the remaining
+six are *transport contracts* the OIDC client engine (xref:../../oidc/06-implement/README.adoc[Plan 06])
+will drive. All eight are exercised by dispatchers in the `generators` test artifact.
+
+== Security controls
+
+=== TLS enforcement (COMMONS-2)
+
+Every outbound request uses TLS 1.2+ with certificate validation, configured centrally via
+`cui-http`'s `SecureSSLContextProvider`. Plain-HTTP endpoints are rejected. Mitigates
+xref:../threat-model.adoc#T-TLS[T-TLS].
+
+=== SSRF defence (COMMONS-3)
+
+Any URL from an IdP-controlled source (`jwks_uri`, discovery, `userinfo`, or any advertised
+endpoint) is constrained before it is fetched:
+
+* scheme restricted to HTTPS;
+* host subject to an allow-list / egress policy;
+* internal / link-local / loopback ranges blocked.
+
+The advertised `issuer` is validated against the configured issuer before advertised URLs
+are trusted. Mitigates xref:../threat-model.adoc#T-SSRF[T-SSRF] and
+xref:../threat-model.adoc#T-DISCOVERY[T-DISCOVERY].
+
+=== Resilience / DoS bounds (COMMONS-4)
+
+Each fetch applies a connect/read timeout, a response-size limit, and bounded
+retry/backoff. No unbounded buffering of response bodies. Mitigates
+xref:../threat-model.adoc#T-DOS[T-DOS].
+
+=== Caching (COMMONS-8)
+
+Discovery documents and JWKS are cached with a bounded lifetime; refresh re-applies the TLS,
+SSRF and resilience controls above.
+
+== Boundary with validation
+
+Transport delivers *bytes and parsed transport structures* (metadata documents, JWK sets).
+Whether a key is *trusted* for a given issuer, and every token-trust decision, stays in the
+validation layer. Transport therefore depends only on `cui-http`, `cui-tooling`, and
+commons-internal types (the xref:../architecture.adoc#archunit[ArchUnit boundary]).
+
+== [[adversarial_dispatchers]] Test doubles: the dispatcher artifact
+
+The `generators`-classifier test artifact ships MockWebServer dispatchers implementing
+`ModuleDispatcherElement` (from `cui-test-mockwebserver-junit5`). Commons extends it with a
+dispatcher per new endpoint, each following the existing pattern
+(`returnDefault()` / `returnError()` / … + `assertCallsAnswered(int)`) and adding an
+*adversarial* mode for the threat catalog:
+
+[cols="1,2,2", options="header"]
+|===
+| Dispatcher | Default mode | Adversarial mode
+
+| `TokenDispatcher` | Valid grant responses | RFC 6749 §5.2 errors, malformed / oversized bodies
+| `UserInfoDispatcher` | Valid userinfo | Tampered claims, `sub` mismatch
+| `RevocationDispatcher` | RFC 7009 success (200, empty) | Error responses, oversized body
+| `IntrospectionDispatcher` | RFC 7662 `active` responses | Tampered / inconsistent metadata
+| `EndSessionDispatcher` | RP-initiated logout redirect | Open-redirect / mismatched `post_logout_redirect_uri`
+| `ParDispatcher` | RFC 9126 `request_uri` responses | Error responses, oversized body
+| `WellKnownDispatcher` (existing) | Valid metadata | Mismatched `issuer`, attacker `jwks_uri`, slow / oversized
+| `JwksResolveDispatcher` (existing) | Valid JWKS | Internal-range redirect, oversized JWKS
+|===
+
+These are the unit-test doubles xref:../../oidc/06-implement/README.adoc[Plan 06] drives for
+its MockWebServer adversarial coverage.

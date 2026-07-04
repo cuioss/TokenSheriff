@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.quarkus.deployment;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfigCache;
 import de.cuioss.sheriff.token.validation.ParserConfig;
@@ -25,7 +26,6 @@ import de.cuioss.sheriff.token.validation.domain.claim.mapper.ScopeMapper;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader;
 import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;

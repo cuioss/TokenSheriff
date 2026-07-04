@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.token.quarkus.metrics;
+package de.cuioss.sheriff.token.commons.metrics;
 
 import lombok.experimental.UtilityClass;
 

@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.token.validation.pipeline.IdTokenValidationPipeline;
 import de.cuioss.sheriff.token.validation.pipeline.NonValidatingJwtParser;
@@ -22,7 +23,6 @@ import de.cuioss.sheriff.token.validation.pipeline.SignatureTemplateManager;
 import de.cuioss.sheriff.token.validation.pipeline.TokenBuilder;
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenHeaderValidator;
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenSignatureValidator;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.juli.junit5.EnableTestLogger;

@@ -15,8 +15,8 @@
  */
 package de.cuioss.sheriff.token.validation.test;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import lombok.experimental.UtilityClass;
 
 /**

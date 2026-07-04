@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.quarkus.deployment;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.quarkus.config.AccessLogFilterConfigResolver;
 import de.cuioss.sheriff.token.quarkus.interceptor.BearerTokenInterceptor;
 import de.cuioss.sheriff.token.quarkus.logging.CustomAccessLogFilter;
@@ -54,7 +55,6 @@ import de.cuioss.sheriff.token.validation.pipeline.validator.TokenClaimValidator
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenHeaderValidator;
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenSignatureValidator;
 import de.cuioss.sheriff.token.validation.security.JwkAlgorithmPreferences;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
 import de.cuioss.tools.logging.CuiLogger;
 import de.cuioss.tools.logging.LogRecord;
