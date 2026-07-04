@@ -27,10 +27,7 @@ import okhttp3.Headers;
 import java.util.Optional;
 import java.util.Set;
 
-import static jakarta.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
-import static jakarta.servlet.http.HttpServletResponse.SC_CREATED;
-import static jakarta.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
-import static jakarta.servlet.http.HttpServletResponse.SC_OK;
+import static jakarta.servlet.http.HttpServletResponse.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -109,10 +106,12 @@ public class ParDispatcher implements ModuleDispatcherElement {
             case SERVER_ERROR -> Optional.of(new MockResponse(SC_INTERNAL_SERVER_ERROR, Headers.of(), ""));
             case OVERSIZED_BODY -> Optional.of(new MockResponse(SC_OK, json, AdversarialResponses.oversizedJson()));
             default -> Optional.of(new MockResponse(SC_CREATED, json,
-                    "{\n" +
-                            "  \"request_uri\": \"urn:ietf:params:oauth:request_uri:mock-par-reference\",\n" +
-                            "  \"expires_in\": 90\n" +
-                            "}"));
+                    """
+                    {
+                      "request_uri": "urn:ietf:params:oauth:request_uri:mock-par-reference",
+                      "expires_in": 90
+                    }\
+                    """));
         };
     }
 

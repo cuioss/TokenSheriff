@@ -123,14 +123,16 @@ public class IntrospectionDispatcher implements ModuleDispatcherElement {
     }
 
     private String activeResponse() {
-        return "{\n" +
-                "  \"active\": true,\n" +
-                "  \"scope\": \"openid profile email\",\n" +
-                "  \"client_id\": \"test-client\",\n" +
-                "  \"sub\": \"test-subject\",\n" +
-                "  \"token_type\": \"Bearer\",\n" +
-                "  \"exp\": 9999999999\n" +
-                "}";
+        return """
+                {
+                  "active": true,
+                  "scope": "openid profile email",
+                  "client_id": "test-client",
+                  "sub": "test-subject",
+                  "token_type": "Bearer",
+                  "exp": 9999999999
+                }\
+                """;
     }
 
     @Override

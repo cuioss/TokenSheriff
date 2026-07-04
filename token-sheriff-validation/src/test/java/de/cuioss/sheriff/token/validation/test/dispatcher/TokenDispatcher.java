@@ -27,9 +27,7 @@ import okhttp3.Headers;
 import java.util.Optional;
 import java.util.Set;
 
-import static jakarta.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
-import static jakarta.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
-import static jakarta.servlet.http.HttpServletResponse.SC_OK;
+import static jakarta.servlet.http.HttpServletResponse.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -127,14 +125,16 @@ public class TokenDispatcher implements ModuleDispatcherElement {
     }
 
     private String defaultTokenResponse() {
-        return "{\n" +
-                "  \"access_token\": \"mock-access-token\",\n" +
-                "  \"token_type\": \"Bearer\",\n" +
-                "  \"expires_in\": 3600,\n" +
-                "  \"refresh_token\": \"mock-refresh-token\",\n" +
-                "  \"id_token\": \"mock-id-token\",\n" +
-                "  \"scope\": \"openid profile email\"\n" +
-                "}";
+        return """
+                {
+                  "access_token": "mock-access-token",
+                  "token_type": "Bearer",
+                  "expires_in": 3600,
+                  "refresh_token": "mock-refresh-token",
+                  "id_token": "mock-id-token",
+                  "scope": "openid profile email"
+                }\
+                """;
     }
 
     @Override

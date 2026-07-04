@@ -29,9 +29,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Smoke tests for the extended IdP endpoint dispatchers (token / userinfo / revocation /
@@ -88,7 +86,7 @@ class EndpointDispatchersTest {
 
     @Test
     @DisplayName("Token endpoint: default grant and RFC 6749 §5.2 error")
-    void tokenEndpoint() throws IOException, InterruptedException {
+    void tokenEndpoint() throws Exception {
         var ok = post(TokenDispatcher.LOCAL_PATH);
         assertEquals(200, ok.statusCode());
         assertTrue(ok.body().contains("access_token"));
@@ -108,7 +106,7 @@ class EndpointDispatchersTest {
 
     @Test
     @DisplayName("UserInfo endpoint: default, sub mismatch and invalid_token")
-    void userInfoEndpoint() throws IOException, InterruptedException {
+    void userInfoEndpoint() throws Exception {
         var ok = get(UserInfoDispatcher.LOCAL_PATH);
         assertEquals(200, ok.statusCode());
         assertTrue(ok.body().contains(UserInfoDispatcher.DEFAULT_SUBJECT));
@@ -127,7 +125,7 @@ class EndpointDispatchersTest {
 
     @Test
     @DisplayName("Revocation endpoint: RFC 7009 success and error")
-    void revocationEndpoint() throws IOException, InterruptedException {
+    void revocationEndpoint() throws Exception {
         var ok = post(RevocationDispatcher.LOCAL_PATH);
         assertEquals(200, ok.statusCode());
         assertTrue(ok.body().isEmpty());
@@ -142,7 +140,7 @@ class EndpointDispatchersTest {
 
     @Test
     @DisplayName("Introspection endpoint: active and inactive")
-    void introspectionEndpoint() throws IOException, InterruptedException {
+    void introspectionEndpoint() throws Exception {
         var active = post(IntrospectionDispatcher.LOCAL_PATH);
         assertEquals(200, active.statusCode());
         assertTrue(active.body().contains("\"active\": true"));
@@ -157,7 +155,7 @@ class EndpointDispatchersTest {
 
     @Test
     @DisplayName("End-session endpoint: registered redirect and open-redirect")
-    void endSessionEndpoint() throws IOException, InterruptedException {
+    void endSessionEndpoint() throws Exception {
         var ok = get(EndSessionDispatcher.LOCAL_PATH);
         assertEquals(302, ok.statusCode());
         assertEquals(EndSessionDispatcher.REGISTERED_REDIRECT, ok.headers().firstValue("Location").orElseThrow());
@@ -172,7 +170,7 @@ class EndpointDispatchersTest {
 
     @Test
     @DisplayName("PAR endpoint: RFC 9126 request_uri and error")
-    void parEndpoint() throws IOException, InterruptedException {
+    void parEndpoint() throws Exception {
         var ok = post(ParDispatcher.LOCAL_PATH);
         assertEquals(201, ok.statusCode());
         assertTrue(ok.body().contains("request_uri"));

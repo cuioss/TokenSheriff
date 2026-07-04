@@ -107,6 +107,14 @@ public class EndSessionDispatcher implements ModuleDispatcherElement {
         };
     }
 
+    /**
+     * RP-Initiated Logout allows POST as well as GET; delegate to {@link #handleGet}.
+     */
+    @Override
+    public Optional<MockResponse> handlePost(@NonNull RecordedRequest request) {
+        return handleGet(request);
+    }
+
     @Override
     public String getBaseUrl() {
         return LOCAL_PATH;

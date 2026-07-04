@@ -19,11 +19,7 @@ import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValueType;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * A {@link ClaimMapper} implementation for mapping JSON values to collections.

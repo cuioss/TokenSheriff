@@ -128,6 +128,14 @@ public class UserInfoDispatcher implements ModuleDispatcherElement {
         };
     }
 
+    /**
+     * OIDC Core §5.3.1 allows GET or POST for UserInfo; delegate to {@link #handleGet}.
+     */
+    @Override
+    public Optional<MockResponse> handlePost(@NonNull RecordedRequest request) {
+        return handleGet(request);
+    }
+
     private String userInfo(String sub, String name, String email) {
         return "{\n" +
                 "  \"sub\": \"" + sub + "\",\n" +
