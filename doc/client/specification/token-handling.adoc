@@ -1,0 +1,126 @@
+= Client Specification — Token Handling
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+_Realizes xref:../requirements.adoc#CLIENT-15[CLIENT-15]–xref:../requirements.adoc#CLIENT-20[CLIENT-20].
+See xref:../threat-model.adoc[Threat Model], xref:../best-practices.adoc[Best Practices] and
+xref:../architecture.adoc[Architecture]._
+
+The *Token* aspect is the server-side lifecycle *delta* on top of the validation module: how
+retrieved tokens are validated, held, refreshed, revoked, and kept sender-constrained. It
+*references the validation module* for all token-trust decisions and adds no
+signature/algorithm policy of its own. It is deliberately kept separate from
+xref:retrieval-flow.adoc[Retrieval & flow]: retrieval acquires tokens; token handling is what
+happens to them afterwards.
+
+== Validation is inherited, not re-implemented
+
+Every token the engine retrieves — access token and ID token — is validated through the
+xref:../../validation/requirements.adoc[validation] pipeline *before it is trusted or stored*
+(xref:../requirements.adoc#CLIENT-15[CLIENT-15],
+xref:../threat-model.adoc#T-AUD-CONFUSION[T-AUD-CONFUSION]):
+
+* signature verification and the algorithm policy (`VALIDATION-1.3`, RFC 8725 — asymmetric
+  only; `alg=none` / HMAC / weak keys rejected) are *inherited unchanged*;
+* `iss`, `aud`, `exp`, `iat` claim validation is performed by the pipeline;
+* DPoP-bound tokens are validated per `VALIDATION-8.7`.
+
+The client MUST NOT re-implement or weaken any of this. This is the primary *validation
+synergy*: tokens are cryptographically validated, not merely received — closing the biggest
+gap in the xref:../architecture.adoc[portal reference], where identity is taken from userinfo
+with no ID-token signature validation.
+
+== ID-token and userinfo validation
+
+For OpenID Connect (xref:../requirements.adoc#CLIENT-16[CLIENT-16],
+xref:../threat-model.adoc#T-IDTOKEN-INTEGRITY[T-IDTOKEN-INTEGRITY]):
+
+* the *ID token* is validated for signature (via the pipeline) and claims — `iss`, `aud`,
+  `azp`, `exp`, the session-bound `nonce` (xref:retrieval-flow.adoc[Retrieval & flow],
+  `CLIENT-6`), and `at_hash` where present;
+* when the *userinfo* endpoint is used, the response is validated (signature, if signed) and
+  its `sub` is *bound to the `sub` of the validated ID token* — a userinfo `sub` mismatch is
+  rejected;
+* identity MUST NOT be taken from an unvalidated ID token or userinfo response.
+
+* Source: https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation[OIDC Core §3.1.3.7], https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse[OIDC Core §5.3.2].
+
+== Server-side token lifecycle
+
+Retrieved tokens are held *server-side* and never returned to the browser in usable form
+(xref:../requirements.adoc#CLIENT-17[CLIENT-17]). The lifecycle:
+
+[cols="1,3", options="header"]
+|===
+| Stage | Rule
+
+| *Store* | Held server-side; the BFF binding shape (server-side store or encrypted cookie) is the application's choice (<<_bff_groundwork_non_preclusion>>). Storage is minimal and protected at rest.
+| *Refresh* | Access tokens are refreshed with `refresh_token`; *refresh-token rotation* is applied, and a detected reuse of a rotated token triggers *revocation of the token family* (xref:../threat-model.adoc#T-REFRESH-THEFT[T-REFRESH-THEFT]).
+| *Revoke* | Tokens are revoked via the commons revocation transport (RFC 7009, `COMMONS-7`) on logout (xref:step-up-and-logout.adoc[step-up & logout]) and on detected misuse.
+| *Expiry* | Short-lived access tokens are preferred; refresh drives renewal.
+|===
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700#section-4.14[RFC 9700 §4.14] (refresh-token protection / rotation), https://www.rfc-editor.org/rfc/rfc7009[RFC 7009] (revocation).
+
+== Preserving the sender-constraint
+
+Where a retrieved token is sender-constrained — DPoP (`cnf.jkt`) or mTLS-bound — the engine
+keeps the binding intact across storage, refresh and any forwarding
+(xref:../requirements.adoc#CLIENT-18[CLIENT-18],
+xref:../threat-model.adoc#T-CONSTRAINT-LOSS[T-CONSTRAINT-LOSS]): the stored token stays
+associated with its proof-key / certificate binding, refresh preserves the constraint, and
+storage is kept minimal so a bound token is never copied more widely than the lifecycle
+requires. A sender-constrained token MUST NOT be degraded to a replayable bearer token by the
+way it is stored or forwarded.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9449[RFC 9449], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705].
+
+== [[_bff_groundwork_non_preclusion]] BFF groundwork — non-preclusion
+
+The lifecycle above is the *BFF groundwork* this capability owns
+(xref:../requirements.adoc#CLIENT-19[CLIENT-19]). It MUST support *either* token-binding
+deployment without forcing the choice:
+
+* *stateful BFF* — an opaque session-id cookie + a server-side token store the engine's
+  lifecycle populates;
+* *stateless BFF* — the access token returned to the browser only inside an HttpOnly cookie
+  encrypted with a server-side symmetric key, decrypted per request.
+
+The engine seam — confidential retrieval, server-side lifecycle, validation — is identical
+for both. The browser↔backend session cookie, symmetric-key management, backend-API CSRF and
+request proxying are the *BFF application's* concern and are not implemented here.
+
+* Source: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps].
+
+== Error surfacing (delegated to commons)
+
+The engine (pure Java) signals every failure — validation rejection, refresh failure,
+normalized inbound IdP error — through the commons typed-exception hierarchy (`COMMONS-9`) and
+produces *no* HTTP problem documents itself (xref:../requirements.adoc#CLIENT-20[CLIENT-20]).
+HTTP-surfaced client errors conform to the commons RFC 9457 model: the
+`token-sheriff-client-quarkus` edge (and any future RESTEasy / portal adapter) maps the typed
+exceptions to `application/problem+json` (`COMMONS-10`), leaking no internal detail
+(`COMMONS-12`). Inbound IdP error responses (`error` / `error_description`, RFC 6749 §5.2) are
+normalized by commons (`COMMONS-11`), never passed through verbatim.
+
+* Source: https://www.rfc-editor.org/rfc/rfc9457[RFC 9457], xref:../../commons/specification/error-model.adoc[commons error-model spec].
+
+== Adversarial coverage
+
+The commons `TokenDispatcher` / `UserInfoDispatcher` *adversarial* modes emit tampered
+claims, `sub` mismatches, and reused rotated refresh tokens
+(xref:../../commons/specification/transport.adoc#adversarial_dispatchers[commons transport
+spec], `COMMONS-7`); the client tests assert the validation pipeline rejects tampered tokens,
+the userinfo `sub` binding is enforced, rotation triggers family revocation on reuse, and the
+sender-constraint survives a refresh (xref:../requirements.adoc#CLIENT-22[CLIENT-22]).
+
+== See also
+
+* xref:retrieval-flow.adoc[Retrieval & flow specification]
+* xref:step-up-and-logout.adoc[Step-up & logout specification]
+* xref:../../validation/requirements.adoc[Validation Requirements] — the inherited token-trust pipeline
+* xref:../../commons/specification/error-model.adoc[Commons error-model specification]

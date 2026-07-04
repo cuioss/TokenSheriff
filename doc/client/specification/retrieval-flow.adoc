@@ -1,0 +1,149 @@
+= Client Specification — Retrieval & Flow
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+== Overview
+
+_Realizes xref:../requirements.adoc#CLIENT-1[CLIENT-1]–xref:../requirements.adoc#CLIENT-11[CLIENT-11]
+and xref:../requirements.adoc#CLIENT-14[CLIENT-14]. See xref:../threat-model.adoc[Threat Model],
+xref:../best-practices.adoc[Best Practices] and xref:../architecture.adoc[Architecture]._
+
+This specification covers the net-new aspect the client capability owns: the
+*confidential-client authorization-code + PKCE flow*, server-side, and the use of the token
+endpoint — grants, client authentication, flow-integrity parameters (`state` / `nonce` /
+exact `redirect_uri`), mix-up defence (`iss`), authorization-code-injection defence, PAR, and
+requesting sender-constrained tokens. Step-up and RP-initiated logout are specified
+separately (xref:step-up-and-logout.adoc[Step-up & logout]); the token lifecycle is
+xref:token-handling.adoc[Token handling].
+
+All outbound HTTP in every step below is performed by the
+xref:../../commons/specification/transport.adoc[commons transport] (`COMMONS-1`); the engine
+supplies parameters and interprets responses, and issues no HTTP of its own.
+
+== The authorization request
+
+The engine constructs a single authorization request as a confidential client
+(xref:../requirements.adoc#CLIENT-1[CLIENT-1]):
+
+[cols="1,3", options="header"]
+|===
+| Parameter | Rule
+
+| `response_type` | `code` only — never `token` or a hybrid combination (exclusions).
+| `response_mode` | `form_post` so the response (code, `state`, `iss`) never rides in a URL (xref:../requirements.adoc#CLIENT-14[CLIENT-14]).
+| `code_challenge` / `code_challenge_method` | PKCE with `S256`; the AS must advertise `S256` support, or the request is refused (xref:../requirements.adoc#CLIENT-2[CLIENT-2]).
+| `state` | Unguessable, bound to the initiating session; verified on callback (xref:../requirements.adoc#CLIENT-5[CLIENT-5]).
+| `nonce` | For OIDC: fresh, session-bound; verified against the ID token (xref:../requirements.adoc#CLIENT-6[CLIENT-6]).
+| `redirect_uri` | A single pre-registered value, matched by exact string comparison (xref:../requirements.adoc#CLIENT-7[CLIENT-7]).
+| `acr_values` / `max_age` | Optional step-up parameters (xref:step-up-and-logout.adoc[step-up spec], xref:../requirements.adoc#CLIENT-12[CLIENT-12]).
+| `scope` | The requested scopes (incl. `openid` for OIDC).
+|===
+
+Where the AS advertises `pushed_authorization_request_endpoint`, the parameters are *pushed
+via PAR* over the back channel (authenticated per <<_client_authentication>>) and the
+front-channel redirect carries only the returned `request_uri`
+(xref:../requirements.adoc#CLIENT-10[CLIENT-10]) — keeping the authorization parameters off
+the browser and tamper-proof. PAR is mandatory under FAPI 2.0.
+
+== The callback and code exchange
+
+On the redirect callback (delivered by `form_post`) the engine performs *ordered checks
+before it exchanges the code*:
+
+. *`state`* matches the session-bound value — else reject (CSRF,
+  xref:../threat-model.adoc#T-CSRF[T-CSRF]).
+. *`iss`* response parameter (RFC 9207) matches the issuer the flow was initiated with, when
+  more than one AS is configured — else reject before exchange (mix-up,
+  xref:../threat-model.adoc#T-MIXUP[T-MIXUP], xref:../requirements.adoc#CLIENT-8[CLIENT-8]).
+. The authorization *code* is exchanged at the token endpoint with the matching
+  `code_verifier` — a code without it cannot be redeemed
+  (xref:../threat-model.adoc#T-CODE-INJECTION[T-CODE-INJECTION],
+  xref:../requirements.adoc#CLIENT-9[CLIENT-9]).
+
+The exchange is a back-channel `POST` to the token endpoint (`grant_type=authorization_code`,
+`code`, `code_verifier`, `redirect_uri`), authenticated per <<_client_authentication>>, over
+TLS (`COMMONS-2`). The token response is validated (<<_token_response_validation>>) and every
+token is validated through the validation pipeline before use
+(xref:token-handling.adoc[token handling]).
+
+== Grants
+
+The engine supports the secure subset of token-endpoint grants
+(xref:../requirements.adoc#CLIENT-3[CLIENT-3]):
+
+[cols="1,3,1", options="header"]
+|===
+| Grant | Use | Status
+
+| `authorization_code` | The confidential BFF login flow (with PKCE). | Core
+| `refresh_token` | Server-side refresh of access tokens, with rotation (xref:token-handling.adoc[token handling]). | Core
+| `client_credentials` | Service-to-service token acquisition (no user). | Core
+| `urn:…:token-exchange` (RFC 8693) | Delegation / down-scoping where a use-case requires it. | Candidate
+| `password` (ROPC), `implicit` | — | *Excluded* (xref:../requirements.adoc#_security_exclusions_legacy_discouraged[exclusions])
+|===
+
+== [[_client_authentication]] Client authentication
+
+The engine authenticates to the token, PAR, revocation and introspection endpoints, choosing
+the *strongest method the AS offers* (xref:../requirements.adoc#CLIENT-4[CLIENT-4],
+xref:../threat-model.adoc#T-CLIENT-CRED[T-CLIENT-CRED]):
+
+[cols="1,2,1", options="header"]
+|===
+| Method | Notes | Source
+
+| `private_key_jwt` | Preferred — asymmetric client assertion; no shared secret in transit. | https://www.rfc-editor.org/rfc/rfc7523[RFC 7523]
+| mTLS | Preferred — certificate-bound; also enables certificate-bound tokens. | https://www.rfc-editor.org/rfc/rfc8705[RFC 8705]
+| `client_secret_basic` / `client_secret_post` | Fallback only; secret sent over TLS, never in a URL. | https://www.rfc-editor.org/rfc/rfc6749#section-2.3[RFC 6749 §2.3]
+|===
+
+Client credentials are protected at rest and never logged. When mTLS is used for client
+authentication, the same channel can carry the certificate binding for sender-constrained
+tokens (<<_sender_constrained_tokens>>).
+
+== [[_sender_constrained_tokens]] Requesting sender-constrained tokens
+
+The engine can *request* that retrieved tokens be sender-constrained
+(xref:../requirements.adoc#CLIENT-11[CLIENT-11],
+xref:../threat-model.adoc#T-TOKEN-REPLAY[T-TOKEN-REPLAY]):
+
+* *DPoP* (RFC 9449) — the engine presents a DPoP proof on the token request so the issued
+  access token is bound to its proof key (`cnf.jkt`).
+* *mTLS* (RFC 8705) — the token is bound to the client certificate.
+
+Validation of the resulting binding is *inherited* from the validation module
+(`VALIDATION-8.7`); this spec covers only the client-side act of *asking for* the constraint.
+The binding is then preserved through storage and refresh
+(xref:token-handling.adoc[token handling], xref:../requirements.adoc#CLIENT-18[CLIENT-18]).
+
+== [[_token_response_validation]] Token-response validation
+
+Before any token is used (xref:../requirements.adoc#CLIENT-14[CLIENT-14]):
+
+* the `token_type` and the presence of the expected artifacts are checked;
+* where the AS supports it, the *issuer identity* of the response is confirmed (RFC 9207);
+* every token is then validated through the validation pipeline
+  (xref:token-handling.adoc[token handling], xref:../requirements.adoc#CLIENT-15[CLIENT-15]).
+
+Tokens and codes are never transmitted in URL query or fragment components — the
+authorization response uses `form_post` and the code is exchanged at the token endpoint
+(xref:../threat-model.adoc#T-URL-LEAK[T-URL-LEAK]). All token-endpoint traffic relies on the
+commons TLS enforcement (xref:../threat-model.adoc#T-TLS-TOKEN[T-TLS-TOKEN], `COMMONS-2`).
+
+== Adversarial coverage
+
+Each check above is exercised against the commons `TokenDispatcher` / `WellKnownDispatcher` /
+`ParDispatcher` in *adversarial* mode
+(xref:../../commons/specification/transport.adoc#adversarial_dispatchers[commons transport
+spec], `COMMONS-7`) and the xref:../../oidc/06-implement/README.adoc[Plan 06] integration
+suite (xref:../requirements.adoc#CLIENT-22[CLIENT-22]): PKCE downgrade refused, `state` /
+`iss` / `redirect_uri` mismatches rejected, injected codes not redeemable, and the configured
+client-auth method asserted.
+
+== See also
+
+* xref:step-up-and-logout.adoc[Step-up & logout specification]
+* xref:token-handling.adoc[Token-handling specification]
+* xref:../architecture.adoc[Architecture] — the auth-code + PKCE sequence
