@@ -17,6 +17,7 @@ The token validation capability — its requirements, architecture, security mod
 
 === Specifications
 
+* xref:validation/specification/microprofile-jwt-compatibility.adoc[MicroProfile JWT Compatibility] - MP-JWT 2.1 integration and rationale
 * xref:validation/specification/token-decryption.adoc[Token Decryption] - Future JWE support
 * xref:validation/specification/multi-idp-testing.adoc[Multi-IDP Testing] - Testing with multiple OIDC providers
 
