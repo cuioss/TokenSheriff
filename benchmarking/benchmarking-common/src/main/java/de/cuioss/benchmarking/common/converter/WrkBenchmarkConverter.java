@@ -17,16 +17,17 @@ package de.cuioss.benchmarking.common.converter;
 
 import de.cuioss.benchmarking.common.config.BenchmarkType;
 import de.cuioss.benchmarking.common.model.BenchmarkData;
+import de.cuioss.benchmarking.common.report.MetricConversionUtil;
 import de.cuioss.benchmarking.common.report.MetricsComputer;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -59,15 +60,6 @@ public class WrkBenchmarkConverter implements BenchmarkConverter {
             // Convert single WRK output file
             return convertFile(sourcePath);
         }
-    }
-
-    @Override
-    public boolean canConvert(Path sourcePath) {
-        if (sourcePath.toFile().isDirectory()) {
-            return sourcePath.getFileName().toString().contains("wrk");
-        }
-        String fileName = sourcePath.getFileName().toString();
-        return fileName.contains("wrk") && fileName.endsWith(".txt");
     }
 
     private BenchmarkData convertDirectory(Path dir) throws IOException {
@@ -152,10 +144,10 @@ public class WrkBenchmarkConverter implements BenchmarkConverter {
                 .fullName("wrk." + name)
                 .mode("thrpt")
                 .rawScore(requestsPerSec)
-                .score(formatThroughput(requestsPerSec))
+                .score(MetricConversionUtil.formatWrkThroughput(requestsPerSec))
                 .scoreUnit("ops/s")
-                .throughput(formatThroughput(requestsPerSec))
-                .latency(formatLatency(latencyAvg))
+                .throughput(MetricConversionUtil.formatWrkThroughput(requestsPerSec))
+                .latency(MetricConversionUtil.formatWrkLatency(latencyAvg))
                 .error(latencyStdev)
                 .variabilityCoefficient(latencyAvg > 0 ? (latencyStdev / latencyAvg * 100) : 0)
                 .confidenceLow(Math.max(0, latencyAvg - latencyStdev))
@@ -205,15 +197,7 @@ public class WrkBenchmarkConverter implements BenchmarkConverter {
     }
 
     private BenchmarkData.Metadata createMetadata() {
-        Instant now = Instant.now();
-        return BenchmarkData.Metadata.builder()
-                .timestamp(now.toString())
-                .displayTimestamp(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'UTC'")
-                        .withZone(ZoneOffset.UTC)
-                        .format(now))
-                .benchmarkType(BenchmarkType.INTEGRATION.getDisplayName())
-                .reportVersion("2.0")
-                .build();
+        return ReportMetadataFactory.createMetadata(BenchmarkType.INTEGRATION.getDisplayName(), null);
     }
 
     private BenchmarkData.Overview createOverview(List<BenchmarkData.Benchmark> benchmarks) {
@@ -254,19 +238,6 @@ public class WrkBenchmarkConverter implements BenchmarkConverter {
                 .build();
     }
 
-    private String formatThroughput(double reqPerSec) {
-        if (reqPerSec >= 1000) {
-            return String.format(Locale.US, "%.1fK ops/s", reqPerSec / 1000);
-        }
-        return String.format(Locale.US, "%.0f ops/s", reqPerSec);
-    }
-
-    private String formatLatency(double ms) {
-        if (ms < 1) {
-            return String.format(Locale.US, "%.0fμs", ms * 1000);
-        }
-        return String.format(Locale.US, "%.1fms", ms);
-    }
 
     /**
      * Resolves the latency (in milliseconds) for the overview from measured data only:

@@ -61,23 +61,6 @@ public class HttpClientFactory {
         return CLIENT;
     }
 
-    /**
-     * Returns an {@link HttpClient} based on the given SSL verification flag.
-     *
-     * @param verifySsl when {@code true} a standard client with default SSL verification is
-     *                  returned; when {@code false} the shared insecure client is returned
-     * @return the appropriate {@link HttpClient} instance
-     */
-    public static HttpClient getClient(boolean verifySsl) {
-        if (verifySsl) {
-            return HttpClient.newBuilder()
-                    .version(getHttpVersion())
-                    .connectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT_SECONDS))
-                    .build();
-        }
-        return CLIENT;
-    }
-
     @SuppressWarnings("java:S4830") // ok for testing purposes
     private static HttpClient createClient() {
         try {

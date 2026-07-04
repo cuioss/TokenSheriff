@@ -17,6 +17,7 @@ package de.cuioss.benchmarking.common.report;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import de.cuioss.benchmarking.common.config.BenchmarkType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -184,7 +185,7 @@ class BadgeGeneratorEnhancedTest {
                 "up", 5.0, 82.0, 10.0, -5.0
         );
 
-        generator.writeBadgeFiles(metrics, trendMetrics, tempDir.toString());
+        generator.writeBadgeFiles(metrics, trendMetrics, BenchmarkType.MICRO, tempDir.toString());
 
         // Verify all badge files were created
         Path badgesDir = tempDir.resolve("badges");
@@ -224,7 +225,7 @@ class BadgeGeneratorEnhancedTest {
         );
 
         // Call with null trend metrics
-        generator.writeBadgeFiles(metrics, null, tempDir.toString());
+        generator.writeBadgeFiles(metrics, null, BenchmarkType.MICRO, tempDir.toString());
 
         Path badgesDir = tempDir.resolve("badges");
         Path trendBadge = badgesDir.resolve("trend-badge.json");

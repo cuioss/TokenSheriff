@@ -106,7 +106,6 @@ public class JfrInstrumentation {
                 event.coefficientOfVariation = snapshot.getMean() > 0 ?
                         (snapshot.getStdDeviation() / snapshot.getMean() * 100) : 0;
                 event.concurrentThreads = stats.maxConcurrentThreads.getAndSet(0);
-                event.cacheHitRate = stats.cacheHits.getAndSet(0) * 100.0 / snapshot.getTotalCount();
                 event.commit();
             }
         });
@@ -161,11 +160,6 @@ public class JfrInstrumentation {
             return this;
         }
 
-        public OperationRecorder withCached(boolean cached) {
-            event.cached = cached;
-            return this;
-        }
-
         @Override
         public void close() {
             concurrentOperations.decrementAndGet();
@@ -186,9 +180,6 @@ public class JfrInstrumentation {
                 stats.errorCount.incrementAndGet();
             }
 
-            if (event.cached) {
-                stats.cacheHits.incrementAndGet();
-            }
         }
     }
 
@@ -196,7 +187,6 @@ public class JfrInstrumentation {
         final Recorder recorder = new Recorder(HIGHEST_TRACKABLE_VALUE, NUMBER_OF_SIGNIFICANT_VALUE_DIGITS);
         final AtomicLong successCount = new AtomicLong();
         final AtomicLong errorCount = new AtomicLong();
-        final AtomicLong cacheHits = new AtomicLong();
         final AtomicInteger maxConcurrentThreads = new AtomicInteger();
     }
 }

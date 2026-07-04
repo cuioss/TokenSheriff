@@ -86,19 +86,7 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Message when generating performance badges. */
-        public static final LogRecord GENERATING_BADGES = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(7)
-                .template("Generating performance badges for %s benchmarks")
-                .build();
-
         /** Message when generating metrics. */
-        public static final LogRecord GENERATING_METRICS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(8)
-                .template("Generating performance metrics")
-                .build();
-
         /** Message when generating HTML reports. */
         public static final LogRecord GENERATING_REPORTS = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -114,19 +102,7 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Message when writing benchmark summary. */
-        public static final LogRecord WRITING_SUMMARY = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(11)
-                .template("Writing benchmark summary file")
-                .build();
-
         /** Message when generating metrics JSON. */
-        public static final LogRecord GENERATING_METRICS_JSON = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(12)
-                .template("Generating metrics JSON for %s benchmark results")
-                .build();
-
         /** Message when metrics file is generated. */
         public static final LogRecord METRICS_FILE_GENERATED = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -135,12 +111,6 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Message when individual metric files are generated. */
-        public static final LogRecord INDIVIDUAL_METRICS_GENERATED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(14)
-                .template("Generated %s individual metric files")
-                .build();
-
         /** Message when performance badge is generated. */
         public static final LogRecord BADGE_GENERATED = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -156,12 +126,6 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Message showing source directory. */
-        public static final LogRecord SOURCE_DIRECTORY = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(17)
-                .template("Source: %s")
-                .build();
-
         /** Message showing deploy directory. */
         public static final LogRecord DEPLOY_DIRECTORY = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -212,19 +176,7 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Message when writing benchmark summary. */
-        public static final LogRecord WRITING_BENCHMARK_SUMMARY = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(24)
-                .template("Writing benchmark summary for %s %s results")
-                .build();
-
         /** Message when summary file is generated. */
-        public static final LogRecord SUMMARY_FILE_GENERATED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(25)
-                .template("Generated summary file: %s")
-                .build();
-
         /** Message when JMH result file is copied to data directory. */
         public static final LogRecord JMH_RESULT_COPIED = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -254,103 +206,19 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Message when unified report generation starts. */
-        public static final LogRecord UNIFIED_REPORT_GENERATION_START = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(30)
-                .template("Starting unified report generation")
-                .build();
-
         /** Message when unified report generation completes. */
-        public static final LogRecord UNIFIED_REPORT_GENERATION_COMPLETE = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(31)
-                .template("Unified report generation completed")
-                .build();
-
         /** Message when generating data file. */
-        public static final LogRecord GENERATING_DATA_FILE = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(32)
-                .template("Generating benchmark data JSON file")
-                .build();
-
         /** Message when data file is generated. */
-        public static final LogRecord DATA_FILE_GENERATED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(33)
-                .template("Generated data file: %s")
-                .build();
-
         /** Message when generating HTML files. */
-        public static final LogRecord GENERATING_HTML_FILES = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(34)
-                .template("Generating HTML report files")
-                .build();
-
         /** Message when HTML files are generated. */
-        public static final LogRecord HTML_FILES_GENERATED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(35)
-                .template("Generated HTML files in: %s")
-                .build();
-
         /** Message when generating badges (unified). */
-        public static final LogRecord GENERATING_BADGES_UNIFIED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(36)
-                .template("Generating performance badges")
-                .build();
-
         /** Message when badges are generated. */
-        public static final LogRecord BADGES_GENERATED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(37)
-                .template("Generated badges in: %s")
-                .build();
-
         /** Message when generating API endpoints. */
-        public static final LogRecord GENERATING_API_ENDPOINTS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(38)
-                .template("Generating API endpoint files")
-                .build();
-
         /** Message when API endpoints are generated. */
-        public static final LogRecord API_ENDPOINTS_GENERATED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(39)
-                .template("Generated API endpoints in: %s")
-                .build();
-
         /** Message when copying Prometheus metrics. */
-        public static final LogRecord COPYING_PROMETHEUS_METRICS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(40)
-                .template("Copying Prometheus metrics to deployment directory")
-                .build();
-
         /** Message when Prometheus metrics are copied. */
-        public static final LogRecord PROMETHEUS_METRICS_COPIED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(41)
-                .template("Copied Prometheus metrics to: %s")
-                .build();
-
         /** Message when copying support files. */
-        public static final LogRecord COPYING_SUPPORT_FILES = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(42)
-                .template("Copying support files (CSS, JS)")
-                .build();
-
         /** Message when support files are copied. */
-        public static final LogRecord SUPPORT_FILES_COPIED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(43)
-                .template("Copied support files to: %s")
-                .build();
-
         /** Message when key cache is initialized. */
         public static final LogRecord KEY_CACHE_INITIALIZED = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -359,19 +227,7 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Message when Quarkus JWT integration benchmarks start. */
-        public static final LogRecord QUARKUS_BENCHMARKS_STARTING = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(45)
-                .template("Quarkus JWT integration benchmarks starting - Service: %s, Keycloak: %s")
-                .build();
-
         /** Message when processing results starts. */
-        public static final LogRecord PROCESSING_RESULTS_STARTING = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(46)
-                .template("QuarkusIntegrationRunner.processResults() - Starting with %s results")
-                .build();
-
         /** Message when results are available. */
         public static final LogRecord RESULTS_AVAILABLE = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -415,19 +271,7 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Message when iteration windows are parsed from timestamp file. */
-        public static final LogRecord ITERATION_WINDOWS_PARSED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(53)
-                .template("Parsed %s iteration windows from %s")
-                .build();
-
         /** Message when using precise timestamps for benchmark. */
-        public static final LogRecord USING_PRECISE_TIMESTAMPS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(54)
-                .template("Using precise timestamps for benchmark '%s': %s to %s")
-                .build();
-
         /** Message when starting benchmark runner with configuration details. */
         public static final LogRecord BENCHMARK_RUNNER_STARTING_WITH_DETAILS = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -457,12 +301,6 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Message when collecting real-time metrics from Prometheus. */
-        public static final LogRecord COLLECTING_PROMETHEUS_METRICS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(59)
-                .template("Collecting real-time metrics from Prometheus at: %s")
-                .build();
-
         /** Message when collecting real-time metrics for WRK benchmark. */
         public static final LogRecord COLLECTING_WRK_PROMETHEUS_METRICS = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -478,19 +316,7 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Message when using session timestamps for benchmark. */
-        public static final LogRecord USING_SESSION_TIMESTAMPS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(62)
-                .template("Using session timestamps for benchmark '%s': %s to %s")
-                .build();
-
         /** Message when collecting Prometheus metrics for benchmark. */
-        public static final LogRecord COLLECTING_BENCHMARK_METRICS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(63)
-                .template("Collecting Prometheus metrics for benchmark '%s'")
-                .build();
-
         /** Message when collecting real-time metrics for benchmark with time range. */
         public static final LogRecord COLLECTING_REALTIME_METRICS = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -534,12 +360,6 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Message when using external history directory. */
-        public static final LogRecord USING_EXTERNAL_HISTORY_DIR = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(70)
-                .template("Using external history directory: %s")
-                .build();
-
         /** Message when history directory not found. */
         public static final LogRecord HISTORY_DIR_NOT_FOUND = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -574,26 +394,8 @@ public final class BenchmarkingLogMessages {
         }
 
         /** Warning when failed to copy HTML file. */
-        public static final LogRecord FAILED_COPY_HTML = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(100)
-                .template("Failed to copy HTML file: %s")
-                .build();
-
         /** Warning when failed to copy badge file. */
-        public static final LogRecord FAILED_COPY_BADGE = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(101)
-                .template("Failed to copy badge file: %s")
-                .build();
-
         /** Warning when failed to copy data file. */
-        public static final LogRecord FAILED_COPY_DATA = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(102)
-                .template("Failed to copy data file: %s")
-                .build();
-
         /** Warning for issues during index generation or processing. */
         public static final LogRecord ISSUE_DURING_INDEX_GENERATION = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -602,12 +404,6 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Warning when key cache miss occurs during benchmark. */
-        public static final LogRecord KEY_CACHE_MISS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(104)
-                .template("BenchmarkKeyCache miss for count=%s. Generating keys during benchmark!")
-                .build();
-
         /** Warning when invalid metrics data type. */
         public static final LogRecord INVALID_METRICS_TYPE = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -616,40 +412,10 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Warning when timestamp file does not exist. */
-        public static final LogRecord TIMESTAMP_FILE_NOT_EXIST = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(106)
-                .template("Timestamp file does not exist: %s")
-                .build();
-
         /** Warning when failed to parse timestamp line. */
-        public static final LogRecord FAILED_PARSE_TIMESTAMP_LINE = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(107)
-                .template("Failed to parse timestamp line: %s")
-                .build();
-
         /** Warning when failed to parse timestamp file. */
-        public static final LogRecord FAILED_PARSE_TIMESTAMP_FILE = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(108)
-                .template("Failed to parse timestamp file, using session-wide timestamps: %s")
-                .build();
-
         /** Warning when no timestamp data found for benchmark. */
-        public static final LogRecord NO_TIMESTAMP_DATA = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(109)
-                .template("No timestamp data found for benchmark '%s', using session timestamps")
-                .build();
-
         /** Warning when no measurement windows found for benchmark. */
-        public static final LogRecord NO_MEASUREMENT_WINDOWS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(110)
-                .template("No measurement windows found for benchmark '%s', using session timestamps")
-                .build();
-
         /** Warning when failed to query metric. */
         public static final LogRecord FAILED_QUERY_METRIC = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -658,19 +424,7 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Warning when overwriting existing start time. */
-        public static final LogRecord OVERWRITING_START_TIME = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(112)
-                .template("Overwriting existing start time for benchmark: %s")
-                .build();
-
         /** Warning when invalid timestamps detected. */
-        public static final LogRecord INVALID_TIMESTAMPS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(113)
-                .template("Invalid timestamps for benchmark '%s': start=%s, end=%s")
-                .build();
-
         /** Warning when failed to collect Prometheus metrics. */
         public static final LogRecord FAILED_COLLECT_PROMETHEUS = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -693,19 +447,7 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Warning when no valid timestamps found. */
-        public static final LogRecord NO_VALID_TIMESTAMPS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(117)
-                .template("No valid timestamps found for benchmark '%s', skipping metrics collection. Available timestamps: %s")
-                .build();
-
         /** Warning when failed to collect metrics for benchmark. */
-        public static final LogRecord FAILED_COLLECT_BENCHMARK_METRICS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(118)
-                .template("Failed to collect metrics for benchmark '%s': %s")
-                .build();
-
         /** Warning when failed to create target directory. */
         public static final LogRecord FAILED_CREATE_TARGET_DIR = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -720,11 +462,18 @@ public final class BenchmarkingLogMessages {
                 .template("Failed to read existing metrics file %s: %s")
                 .build();
 
-        /** Warning when failed to delete corrupted metrics file. */
-        public static final LogRecord FAILED_DELETE_CORRUPTED_FILE = LogRecordModel.builder()
+        /** Warning when a corrupt metrics file has been moved aside for later inspection. */
+        public static final LogRecord CORRUPT_METRICS_FILE_PRESERVED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(121)
-                .template("Failed to delete corrupted metrics file")
+                .template("Corrupt metrics file preserved as: %s")
+                .build();
+
+        /** Warning when a corrupt metrics file could not be moved aside. */
+        public static final LogRecord FAILED_PRESERVE_CORRUPT_FILE = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(127)
+                .template("Failed to move corrupt metrics file aside: %s")
                 .build();
 
         /** Warning when unknown result format detected. */
@@ -742,12 +491,6 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Warning when token pool is empty. */
-        public static final LogRecord TOKEN_POOL_EMPTY = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(124)
-                .template("Token pool is empty, fetching single token")
-                .build();
-
         /** Warning when issue parsing history file. */
         public static final LogRecord ISSUE_PARSING_HISTORY_FILE = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -886,12 +629,6 @@ public final class BenchmarkingLogMessages {
                 .build();
 
         /** Error when failed to fetch token. */
-        public static final LogRecord FAILED_FETCH_TOKEN = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(216)
-                .template("Failed to fetch token. Status: %s, Body: %s")
-                .build();
-
         /** Error when failed to parse WRK file. */
         public static final LogRecord FAILED_PARSE_WRK_FILE = LogRecordModel.builder()
                 .prefix(PREFIX)

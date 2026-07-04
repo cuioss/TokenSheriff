@@ -75,8 +75,8 @@ public class BadgeGenerator {
         badge.put(SCHEMA_VERSION, 1);
         badge.put(LABEL, Labels.PERFORMANCE);
 
-        String formattedThroughput = formatThroughput(metrics.throughput());
-        String formattedLatency = formatLatency(metrics.latency());
+        String formattedThroughput = MetricConversionUtil.formatBadgeThroughput(metrics.throughput());
+        String formattedLatency = MetricConversionUtil.formatBadgeLatency(metrics.latency());
         String message = String.format(Locale.US, "Grade %s (%s ops/s, %sms)",
                 metrics.performanceGrade(), formattedThroughput, formattedLatency);
 
@@ -134,21 +134,6 @@ public class BadgeGenerator {
         badge.put(COLOR, LIGHT_GRAY);
 
         return gson.toJson(badge);
-    }
-
-    /**
-     * Writes all badge files to the specified directory using default MICRO benchmark type.
-     * Convenience overload that defaults to {@link BenchmarkType#MICRO}.
-     *
-     * @param metrics the current benchmark metrics
-     * @param trendMetrics the trend metrics (can be null)
-     * @param outputDir the output directory path
-     * @throws IOException if writing badge files fails
-     */
-    public void writeBadgeFiles(BenchmarkMetrics metrics,
-            TrendDataProcessor.TrendMetrics trendMetrics,
-            String outputDir) throws IOException {
-        writeBadgeFiles(metrics, trendMetrics, BenchmarkType.MICRO, outputDir);
     }
 
     /**
@@ -227,33 +212,4 @@ public class BadgeGenerator {
         };
     }
 
-    /**
-     * Formats throughput value with appropriate unit (k for thousands).
-     * Examples: 500 -> "500", 1500 -> "1.5k", 45000 -> "45k"
-     */
-    private String formatThroughput(double throughput) {
-        if (throughput >= 1000) {
-            double kThroughput = throughput / 1000.0;
-            if (kThroughput >= 10) {
-                // For values >= 10k, no decimal places
-                return String.format(Locale.US, "%.0fk", kThroughput);
-            } else {
-                // For values < 10k, show one decimal if not .0
-                String formatted = String.format(Locale.US, "%.1fk", kThroughput);
-                return formatted.endsWith(".0k") ?
-                        formatted.substring(0, formatted.length() - 3) + "k" : formatted;
-            }
-        } else {
-            // For values < 1000, show as integer
-            return String.format(Locale.US, "%.0f", throughput);
-        }
-    }
-
-    /**
-     * Formats latency value with appropriate precision.
-     * For values < 1ms: 2 decimals, for values >= 1ms: 2 decimals with trailing zeros
-     */
-    private String formatLatency(double latency) {
-        return String.format(Locale.US, "%.2f", latency);
-    }
 }

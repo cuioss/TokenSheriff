@@ -35,11 +35,4 @@ public interface BenchmarkConverter {
      */
     BenchmarkData convert(Path sourcePath) throws IOException;
 
-    /**
-     * Checks if this converter can handle the given file
-     *
-     * @param sourcePath Path to check
-     * @return true if this converter can process the file
-     */
-    boolean canConvert(Path sourcePath);
 }

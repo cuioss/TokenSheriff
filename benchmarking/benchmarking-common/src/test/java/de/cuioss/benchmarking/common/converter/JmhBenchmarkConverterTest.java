@@ -210,15 +210,6 @@ class JmhBenchmarkConverterTest {
     }
 
     @Test
-    void canConvertDetectsJmhFiles() {
-        assertTrue(converter.canConvert(Path.of("jmh-result.json")));
-        assertTrue(converter.canConvert(Path.of("benchmark-result.json")));
-        assertTrue(converter.canConvert(Path.of("test-jmh-output.json")));
-        assertFalse(converter.canConvert(Path.of("wrk-output.txt")));
-        assertFalse(converter.canConvert(Path.of("some-file.xml")));
-    }
-
-    @Test
     void shouldConvertMicrosecondLatencyToMillisecondsInOverview() throws Exception {
         // BUG FIX TEST: Verify that latency in us/op is converted to ms/op in the overview
         // This test ensures that the badge generator receives latency in milliseconds

@@ -18,14 +18,9 @@ package de.cuioss.benchmarking.common.util;
 import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 
-import java.io.IOException;
 import java.lang.reflect.Type;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -53,60 +48,8 @@ public final class JsonSerializationHelper {
             .registerTypeAdapter(Instant.class, new InstantSerializer())
             .create();
 
-    /**
-     * Compact Gson instance for minimal output (no pretty printing).
-     * Useful for reducing JSON size in performance-critical situations.
-     */
-    public static final Gson COMPACT_GSON = new GsonBuilder()
-            .serializeSpecialFloatingPointValues()
-            .registerTypeAdapter(Double.class, new DoubleSerializer())
-            .registerTypeAdapter(Instant.class, new InstantSerializer())
-            .create();
-
     private JsonSerializationHelper() {
         // Utility class
-    }
-
-    /**
-     * Writes an object to a JSON file.
-     *
-     * @param path the file path to write to
-     * @param object the object to serialize
-     * @throws IOException if an I/O error occurs
-     */
-    public static void writeJsonFile(Path path, Object object) throws IOException {
-        String json = GSON.toJson(object);
-        Files.createDirectories(path.getParent());
-        Files.writeString(path, json);
-    }
-
-    /**
-     * Reads a JSON file into an object.
-     *
-     * @param <T> the type to deserialize to
-     * @param path the file path to read from
-     * @param type the class of the type to deserialize
-     * @return the deserialized object
-     * @throws IOException if an I/O error occurs
-     */
-    public static <T> T readJsonFile(Path path, Class<T> type) throws IOException {
-        String json = Files.readString(path);
-        return GSON.fromJson(json, type);
-    }
-
-    /**
-     * Reads a JSON file into a generic type using TypeToken.
-     * Useful for deserializing collections and generic types.
-     *
-     * @param <T> the type to deserialize to
-     * @param path the file path to read from
-     * @param typeToken the TypeToken representing the generic type
-     * @return the deserialized object
-     * @throws IOException if an I/O error occurs
-     */
-    public static <T> T readJsonFile(Path path, TypeToken<T> typeToken) throws IOException {
-        String json = Files.readString(path);
-        return GSON.fromJson(json, typeToken.getType());
     }
 
     /**
@@ -117,16 +60,6 @@ public final class JsonSerializationHelper {
      */
     public static String toJson(Object object) {
         return GSON.toJson(object);
-    }
-
-    /**
-     * Serializes an object to compact JSON string (no pretty printing).
-     *
-     * @param object the object to serialize
-     * @return the compact JSON string representation
-     */
-    public static String toCompactJson(Object object) {
-        return COMPACT_GSON.toJson(object);
     }
 
     /**
@@ -163,42 +96,6 @@ public final class JsonSerializationHelper {
         Type type = new TypeToken<Map<String, Object>>() {
         }.getType();
         return GSON.fromJson(json, type);
-    }
-
-    /**
-     * Convenience method for deserializing JSON to List&lt;Map&lt;String, Object&gt;&gt;.
-     *
-     * @param json the JSON string
-     * @return the deserialized list of maps
-     */
-    public static List<Map<String, Object>> jsonToListOfMaps(String json) {
-        Type type = new TypeToken<List<Map<String, Object>>>() {
-        }.getType();
-        return GSON.fromJson(json, type);
-    }
-
-    /**
-     * Creates a JsonElement from an object using the default GSON instance.
-     *
-     * @param object the object to convert
-     * @return the JsonElement representation
-     */
-    public static JsonElement toJsonTree(Object object) {
-        return GSON.toJsonTree(object);
-    }
-
-    /**
-     * Formats a double value for display.
-     * Returns integer representation if the value is a whole number.
-     *
-     * @param value the value to format
-     * @return formatted string
-     */
-    public static String formatDouble(double value) {
-        if (value == (long) value) {
-            return String.valueOf((long) value);
-        }
-        return String.format(Locale.US, "%.2f", value);
     }
 
     /**

@@ -48,7 +48,10 @@ import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.WARN;
 public class HistoricalDataManager {
 
     private static final CuiLogger LOGGER = new CuiLogger(HistoricalDataManager.class);
-    private static final int RETENTION_COUNT = 10;
+    /**
+     * Single limit for archived history: retention on write and load window for trends.
+     */
+    public static final int HISTORY_LIMIT = 10;
     private static final String HISTORY_DIR = "history";
     private static final String JSON_EXTENSION = ".json";
     private static final DateTimeFormatter TIMESTAMP_FORMAT =
@@ -65,7 +68,7 @@ public class HistoricalDataManager {
      */
     public void archiveCurrentRun(Map<String, Object> currentData, String outputDir, String commitSha)
             throws IOException {
-        Path historyDir = Path.of(outputDir, HISTORY_DIR);
+        Path historyDir = resolveHistoryDir(outputDir);
         Files.createDirectories(historyDir);
 
         String timestamp = TIMESTAMP_FORMAT.format(Instant.now());
@@ -99,34 +102,13 @@ public class HistoricalDataManager {
                     .sorted(Comparator.comparing(this::extractTimestamp).reversed())
                     .toList();
 
-            if (jsonFiles.size() > RETENTION_COUNT) {
-                List<Path> filesToDelete = jsonFiles.subList(RETENTION_COUNT, jsonFiles.size());
+            if (jsonFiles.size() > HISTORY_LIMIT) {
+                List<Path> filesToDelete = jsonFiles.subList(HISTORY_LIMIT, jsonFiles.size());
                 for (Path file : filesToDelete) {
                     Files.delete(file);
                     LOGGER.info(INFO.REMOVED_HISTORY_FILE, file.getFileName());
                 }
             }
-        }
-    }
-
-    /**
-     * Retrieves a sorted list of historical data files.
-     *
-     * @param historyDir the history directory path
-     * @return sorted list of historical data files (newest first)
-     * @throws IOException if reading the directory fails
-     */
-    public List<Path> getHistoricalFiles(Path historyDir) throws IOException {
-        if (!Files.exists(historyDir)) {
-            return List.of();
-        }
-
-        try (Stream<Path> files = Files.list(historyDir)) {
-            return files
-                    .filter(Files::isRegularFile)
-                    .filter(p -> p.toString().endsWith(JSON_EXTENSION))
-                    .sorted(Comparator.comparing(this::extractTimestamp).reversed())
-                    .toList();
         }
     }
 
@@ -153,17 +135,57 @@ public class HistoricalDataManager {
     }
 
     /**
+     * Resolves the single history directory used for archiving, retention and trend
+     * analysis. Honors the {@code benchmark.history.dir} system property (CI/CD
+     * workflows); defaults to {@code <outputDir>/history}.
+     *
+     * @param outputDir the base output directory
+     * @return the resolved history directory
+     */
+    public static Path resolveHistoryDir(String outputDir) {
+        String externalHistoryPath = System.getProperty("benchmark.history.dir");
+        if (externalHistoryPath != null && !externalHistoryPath.isEmpty()) {
+            return Path.of(externalHistoryPath);
+        }
+        return Path.of(outputDir, HISTORY_DIR);
+    }
+
+    /**
+     * Extracts the timestamp prefix from a history filename ({@code <timestamp>-<sha>.json}).
+     *
+     * @param filename the history file name
+     * @return the timestamp portion, or the filename itself if it has no dash
+     */
+    public static String timestampFromFilename(String filename) {
+        int dashIndex = filename.lastIndexOf('-');
+        if (dashIndex > 0) {
+            return filename.substring(0, dashIndex);
+        }
+        return filename;
+    }
+
+    /**
+     * Extracts the commit SHA portion from a history filename ({@code <timestamp>-<sha>.json}).
+     *
+     * @param filename the history file name
+     * @return the SHA portion, or "unknown" if the pattern does not match
+     */
+    public static String commitFromFilename(String filename) {
+        int dashIndex = filename.lastIndexOf('-');
+        int dotIndex = filename.lastIndexOf('.');
+        if (dashIndex > 0 && dotIndex > dashIndex) {
+            return filename.substring(dashIndex + 1, dotIndex);
+        }
+        return "unknown";
+    }
+
+    /**
      * Extracts the timestamp from a historical data filename.
      *
      * @param file the file path
      * @return the timestamp string, or empty string if extraction fails
      */
     private String extractTimestamp(Path file) {
-        String filename = file.getFileName().toString();
-        int dashIndex = filename.lastIndexOf('-');
-        if (dashIndex > 0) {
-            return filename.substring(0, dashIndex);
-        }
-        return "";
+        return timestampFromFilename(file.getFileName().toString());
     }
 }

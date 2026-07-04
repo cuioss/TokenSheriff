@@ -107,7 +107,7 @@ public class ReportDataGenerator {
         historyManager.archiveCurrentRun(data, outputDir, commitSha);
 
         // Enforce retention policy
-        Path historyDir = Path.of(outputDir, "history");
+        Path historyDir = HistoricalDataManager.resolveHistoryDir(outputDir);
         historyManager.enforceRetentionPolicy(historyDir);
 
         // Generate badges
@@ -154,6 +154,10 @@ public class ReportDataGenerator {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(BenchmarkConstants.Report.JsonFields.THROUGHPUT, overview.getThroughput());
         result.put(LATENCY, overview.getLatency());
+        // Archive the numeric values too: trend analysis reads these directly instead of
+        // regex-parsing display strings (which silently mis-scales values like "1.5s")
+        result.put("throughputOpsPerSec", overview.getThroughputOpsPerSec());
+        result.put("latencyMs", overview.getLatencyMs());
         result.put(THROUGHPUT_BENCHMARK_NAME, overview.getThroughputBenchmarkName());
         result.put(LATENCY_BENCHMARK_NAME, overview.getLatencyBenchmarkName());
         result.put(PERFORMANCE_SCORE, overview.getPerformanceScore());
@@ -387,18 +391,8 @@ public class ReportDataGenerator {
     }
 
     private Map<String, Object> createTrendData(String outputDir, BenchmarkMetrics metrics) {
-        // Check if external history directory is provided via system property
-        String externalHistoryPath = System.getProperty("benchmark.history.dir");
-        Path historyDir;
-
-        if (externalHistoryPath != null && !externalHistoryPath.isEmpty()) {
-            // Use external history directory (e.g., for CI/CD workflows)
-            historyDir = Path.of(externalHistoryPath);
-            LOGGER.info(INFO.USING_EXTERNAL_HISTORY_DIR, historyDir);
-        } else {
-            // Default to output directory/history (for local runs and tests)
-            historyDir = Path.of(outputDir, "history");
-        }
+        // Single resolution point: archive, retention and trends all use the same directory
+        Path historyDir = HistoricalDataManager.resolveHistoryDir(outputDir);
 
         if (!Files.exists(historyDir)) {
             // First run, no history available

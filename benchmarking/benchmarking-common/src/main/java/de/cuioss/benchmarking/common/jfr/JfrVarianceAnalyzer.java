@@ -15,6 +15,7 @@
  */
 package de.cuioss.benchmarking.common.jfr;
 
+import de.cuioss.benchmarking.common.report.StatisticsCalculator;
 import de.cuioss.tools.logging.CuiLogger;
 import jdk.jfr.consumer.RecordedEvent;
 import jdk.jfr.consumer.RecordingFile;
@@ -159,12 +160,6 @@ public class JfrVarianceAnalyzer {
                     });
         }
 
-        /**
-         * Returns the collected operation metrics map.
-         */
-        public Map<String, OperationMetrics> getOperationMetrics() {
-            return new HashMap<>(operationMetrics);
-        }
     }
 
     /**
@@ -226,26 +221,16 @@ public class JfrVarianceAnalyzer {
             // Sort durations for percentile calculation
             Collections.sort(operationDurations);
 
-            // Calculate percentiles
-            int size = operationDurations.size();
-            p50Latency = operationDurations.get((int) (size * 0.50));
-            p95Latency = operationDurations.get((int) (size * 0.95));
-            p99Latency = operationDurations.get((int) (size * 0.99));
-            maxLatency = operationDurations.get(size - 1);
+            // Delegate to the shared statistics home (single percentile definition)
+            List<Double> asDoubles = operationDurations.stream().map(Long::doubleValue).toList();
+            p50Latency = (long) StatisticsCalculator.percentile(asDoubles, 50);
+            p95Latency = (long) StatisticsCalculator.percentile(asDoubles, 95);
+            p99Latency = (long) StatisticsCalculator.percentile(asDoubles, 99);
+            maxLatency = operationDurations.getLast();
 
-            // Calculate mean
-            double mean = operationDurations.stream()
-                    .mapToLong(Long::longValue)
-                    .average()
-                    .orElse(0);
-
-            // Calculate variance and standard deviation
-            variance = operationDurations.stream()
-                    .mapToDouble(d -> Math.pow(d - mean, 2))
-                    .average()
-                    .orElse(0);
-
-            standardDeviation = Math.sqrt(variance);
+            double mean = StatisticsCalculator.calculateMean(asDoubles);
+            standardDeviation = StatisticsCalculator.calculateStandardDeviation(asDoubles);
+            variance = standardDeviation * standardDeviation;
 
             // Calculate coefficient of variation
             coefficientOfVariation = mean > 0 ? (standardDeviation / mean * 100) : 0;

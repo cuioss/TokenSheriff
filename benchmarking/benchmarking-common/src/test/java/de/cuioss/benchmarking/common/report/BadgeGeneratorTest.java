@@ -25,7 +25,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 
 import static de.cuioss.benchmarking.common.TestHelper.createTestMetrics;
-import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Files.Data.*;
 import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Report.Badge.*;
 import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Report.Badge.Colors.BLUE;
 import static de.cuioss.benchmarking.common.constants.BenchmarkConstants.Report.Badge.Labels.LAST_RUN;
@@ -47,7 +46,7 @@ class BadgeGeneratorTest {
         // Generate badge
         BadgeGenerator generator = new BadgeGenerator();
         String badgeJson = generator.generatePerformanceBadge(createTestMetrics(jsonFile));
-        Path badgeFile = tempDir.resolve(INTEGRATION_PERFORMANCE_BADGE_JSON);
+        Path badgeFile = tempDir.resolve(FileNames.INTEGRATION_PERFORMANCE_BADGE_JSON);
         Files.writeString(badgeFile, badgeJson);
 
         // Verify badge file was created
@@ -83,7 +82,7 @@ class BadgeGeneratorTest {
         // Generate badge
         BadgeGenerator generator = new BadgeGenerator();
         String badgeJson = generator.generatePerformanceBadge(createTestMetrics(jsonFile));
-        Path badgeFile = tempDir.resolve(PERFORMANCE_BADGE_JSON);
+        Path badgeFile = tempDir.resolve(FileNames.PERFORMANCE_BADGE_JSON);
         Files.writeString(badgeFile, badgeJson);
 
         // Verify badge file was created
@@ -117,7 +116,7 @@ class BadgeGeneratorTest {
         BadgeGenerator generator = new BadgeGenerator();
         // Generate default trend badge (no history)
         String badgeJson = generator.generateDefaultTrendBadge();
-        Path badgeFile = tempDir.resolve(INTEGRATION_TREND_BADGE_JSON);
+        Path badgeFile = tempDir.resolve(FileNames.INTEGRATION_TREND_BADGE_JSON);
         Files.writeString(badgeFile, badgeJson);
         assertTrue(Files.exists(badgeFile));
 
@@ -134,7 +133,7 @@ class BadgeGeneratorTest {
     void lastRunBadgeGeneration(@TempDir Path tempDir) throws Exception {
         BadgeGenerator generator = new BadgeGenerator();
         String badgeJson = generator.generateLastRunBadge(Instant.now());
-        Path badgeFile = tempDir.resolve(LAST_RUN_BADGE_JSON);
+        Path badgeFile = tempDir.resolve(FileNames.LAST_RUN_BADGE_JSON);
         Files.writeString(badgeFile, badgeJson);
         assertTrue(Files.exists(badgeFile));
 

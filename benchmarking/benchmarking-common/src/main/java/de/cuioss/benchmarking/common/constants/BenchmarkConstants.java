@@ -38,22 +38,6 @@ public final class BenchmarkConstants {
         public static final String PREFIX = "sheriff.token";
 
         /**
-         * Metrics related to bearer token operations.
-         */
-        @UtilityClass
-        public static final class BearerToken {
-            /**
-             * Base path for bearer token metrics.
-             */
-            public static final String BASE = PREFIX + ".bearer.token";
-
-            /**
-             * Metric identifier for bearer token validation duration.
-             */
-            public static final String VALIDATION = BASE + ".validation";
-        }
-
-        /**
          * Benchmark modes.
          */
         @UtilityClass
@@ -145,15 +129,10 @@ public final class BenchmarkConstants {
         public static final class JsonFields {
             // Primary fields
             public static final String PRIMARY_METRIC = "primaryMetric";
-            public static final String SECONDARY_METRICS = "secondaryMetrics";
             public static final String BENCHMARK = "benchmark";
             public static final String MODE = "mode";
             public static final String SCORE = "score";
             public static final String SCORE_UNIT = "scoreUnit";
-            public static final String RAW_DATA = "rawData";
-            public static final String SCORE_PERCENTILES = "scorePercentiles";
-            public static final String SCORE_ERROR = "scoreError";
-            public static final String SCORE_CONFIDENCE = "scoreConfidence";
             public static final String TIMESTAMP = "timestamp";
             public static final String BENCHMARKS = "benchmarks";
             public static final String SUMMARY = "summary";
@@ -196,14 +175,12 @@ public final class BenchmarkConstants {
             public static final String STATUS = "status";
             public static final String GENERATED = "generated";
             public static final String LAST_RUN = "last_run";
-            public static final String SERVICES = "services";
             public static final String LINKS = "links";
             public static final String AVAILABLE = "available";
 
             // Summary fields
             public static final String TOTAL_BENCHMARKS = "total_benchmarks";
             public static final String PERFORMANCE_GRADE_KEY = "performance_grade";
-            public static final String AVERAGE_THROUGHPUT = "average_throughput";
         }
 
         /**
@@ -237,7 +214,6 @@ public final class BenchmarkConstants {
             @UtilityClass
             public static final class Labels {
                 public static final String PERFORMANCE = "Performance";
-                public static final String PERFORMANCE_TREND = "Performance Trend";
                 public static final String TREND = "Trend";
                 public static final String LAST_RUN = "Last Run";
             }
@@ -248,8 +224,6 @@ public final class BenchmarkConstants {
             @UtilityClass
             public static final class Trends {
                 public static final String STABLE = "→ stable";
-                public static final String IMPROVING_FORMAT = "↑ +%.1f%%";
-                public static final String DEGRADING_FORMAT = "↓ %.1f%%";
             }
 
             /**
@@ -267,6 +241,8 @@ public final class BenchmarkConstants {
             public static final class FileNames {
                 public static final String PERFORMANCE_BADGE_JSON = "performance-badge.json";
                 public static final String TREND_BADGE_JSON = "trend-badge.json";
+                public static final String INTEGRATION_PERFORMANCE_BADGE_JSON = "integration-performance-badge.json";
+                public static final String INTEGRATION_TREND_BADGE_JSON = "integration-trend-badge.json";
                 public static final String LAST_RUN_BADGE_JSON = "last-run-badge.json";
             }
 
@@ -309,13 +285,7 @@ public final class BenchmarkConstants {
              */
             @UtilityClass
             public static final class CssClasses {
-                public static final String GRADE_A_PLUS = "grade-a-plus";
-                public static final String GRADE_A = "grade-a";
-                public static final String GRADE_B = "grade-b";
-                public static final String GRADE_C = "grade-c";
-                public static final String GRADE_D = "grade-d";
                 public static final String GRADE_F = "grade-f";
-                public static final String GRADE_UNKNOWN = "grade-unknown";
             }
         }
 
@@ -325,7 +295,6 @@ public final class BenchmarkConstants {
         @UtilityClass
         public static final class Defaults {
             public static final String N_A = "N/A";
-            public static final String NOT_AVAILABLE = "n/a";
         }
 
         /**
@@ -376,7 +345,7 @@ public final class BenchmarkConstants {
          */
         @UtilityClass
         public static final class Versions {
-            public static final String REPORT_VERSION = "1.0";
+            public static final String REPORT_VERSION = "2.0";
         }
 
         /**
@@ -393,8 +362,6 @@ public final class BenchmarkConstants {
             public static final String BADGES_PATH = "/badges/";
 
             // Status values
-            public static final String STATUS_OPERATIONAL = "operational";
-            public static final String STATUS_NO_DATA = "no_data";
             public static final String STATUS_HEALTHY = "healthy";
             public static final String STATUS_SUCCESS = "success";
         }
@@ -411,9 +378,6 @@ public final class BenchmarkConstants {
          */
         @UtilityClass
         public static final class Properties {
-            public static final String INTEGRATION_SERVICE_URL = "integration.service.url";
-            public static final String KEYCLOAK_URL = "keycloak.url";
-            public static final String METRICS_URL = "quarkus.metrics.url";
         }
 
         /**
@@ -444,10 +408,7 @@ public final class BenchmarkConstants {
         @UtilityClass
         public static final class Directories {
             public static final String RESULTS_DIR = "target/benchmark-results";
-            public static final String REPORTS_DIR = "reports";
-            public static final String BADGES_DIR = "badges";
             public static final String DATA_DIR = "data";
-            public static final String API_DIR = "api";
         }
 
         /**
@@ -478,11 +439,7 @@ public final class BenchmarkConstants {
         @UtilityClass
         public static final class Data {
             public static final String BENCHMARK_DATA_JSON = "benchmark-data.json";
-            public static final String BENCHMARK_SUMMARY_JSON = "data/benchmark-summary.json";
             public static final String LAST_RUN_BADGE_JSON = "last-run-badge.json";
-            public static final String INTEGRATION_PERFORMANCE_BADGE_JSON = "integration-performance-badge.json";
-            public static final String PERFORMANCE_BADGE_JSON = "performance-badge.json";
-            public static final String INTEGRATION_TREND_BADGE_JSON = "integration-trend-badge.json";
         }
 
         /**

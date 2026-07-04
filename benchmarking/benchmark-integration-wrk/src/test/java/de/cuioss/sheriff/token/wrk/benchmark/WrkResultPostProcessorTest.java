@@ -26,7 +26,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
-import static de.cuioss.sheriff.token.wrk.benchmark.WrkResultPostProcessor.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -35,6 +34,16 @@ import static org.junit.jupiter.api.Assertions.*;
  * not specific values that change with each benchmark run.
  */
 class WrkResultPostProcessorTest {
+
+    // Test fixtures (previously public constants on the production class)
+    private static final String WRK_HEALTH_OUTPUT_FILE = "wrk-health-results.txt";
+    private static final String WRK_JWT_OUTPUT_FILE = "wrk-jwt-results.txt";
+    private static final String BENCHMARK_NAME_HEALTH = "healthCheck";
+    private static final String BENCHMARK_NAME_JWT = "jwtValidation";
+    private static final String PROMETHEUS_METRICS_DIR = "prometheus";
+    private static final String GH_PAGES_DATA_DIR = "gh-pages-ready/data";
+    private static final String HEALTH_METRICS_FILE = BENCHMARK_NAME_HEALTH + "-metrics.json";
+    private static final String JWT_METRICS_FILE = BENCHMARK_NAME_JWT + "-metrics.json";
 
     @TempDir
     Path tempDir;

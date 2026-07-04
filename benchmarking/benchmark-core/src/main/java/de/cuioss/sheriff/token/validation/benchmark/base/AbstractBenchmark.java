@@ -63,8 +63,7 @@ public abstract class AbstractBenchmark {
                 TokenValidatorMonitorConfig.builder()
                         .measurementTypes(TokenValidatorMonitorConfig.ALL_MEASUREMENT_TYPES)
                         .windowSize(10000)
-                        .build(),
-                config);
+                        .build());
 
         LOGGER.debug("JWT library benchmark setup completed");
     }

@@ -23,7 +23,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.INFO;
-import static de.cuioss.benchmarking.common.util.BenchmarkingLogMessages.WARN;
 
 /**
  * Pre-generates and caches RSA key pairs for benchmarking to avoid key generation
@@ -44,21 +43,22 @@ public final class BenchmarkKeyCache {
     private static final Map<Integer, IssuerKeyMaterial[]> ISSUER_CACHE = new ConcurrentHashMap<>();
 
     /**
-     * Maximum number of issuers to pre-generate
+     * The issuer count that is eagerly warmed up at class load — the default used by
+     * all benchmarks. Other counts are generated lazily on first request.
      */
-    private static final int MAX_CACHED_ISSUERS = 10;
+    private static final int WARMED_UP_ISSUER_COUNT = 3;
 
     static {
-        // Pre-generate key materials for common issuer counts
+        // Warm up only the count actually used by the benchmarks; generating key
+        // material for unused counts wasted ~95% of the startup RSA generation.
         long startTime = System.currentTimeMillis();
         LOGGER.info(INFO.KEY_PREGENERATION_STARTING);
 
-        for (int count = 1; count <= MAX_CACHED_ISSUERS; count++) {
-            ISSUER_CACHE.put(count, InMemoryKeyMaterialHandler.createMultipleIssuers(count));
-        }
+        ISSUER_CACHE.put(WARMED_UP_ISSUER_COUNT,
+                InMemoryKeyMaterialHandler.createMultipleIssuers(WARMED_UP_ISSUER_COUNT));
 
         long duration = System.currentTimeMillis() - startTime;
-        LOGGER.info(INFO.KEY_PREGENERATION_COMPLETED, MAX_CACHED_ISSUERS, duration);
+        LOGGER.info(INFO.KEY_PREGENERATION_COMPLETED, WARMED_UP_ISSUER_COUNT, duration);
     }
 
     /**
@@ -80,17 +80,8 @@ public final class BenchmarkKeyCache {
             throw new IllegalArgumentException("Issuer count must be positive");
         }
 
-        IssuerKeyMaterial[] cached = ISSUER_CACHE.get(count);
-        if (cached != null) {
-            // Return the cached array directly - no cloning needed as IssuerKeyMaterial is immutable
-            return cached;
-        }
-
-        // Generate on demand if not cached (this should be rare in benchmarks)
-        LOGGER.warn(WARN.KEY_CACHE_MISS, count);
-        IssuerKeyMaterial[] generated = InMemoryKeyMaterialHandler.createMultipleIssuers(count);
-        ISSUER_CACHE.put(count, generated);
-        return generated;
+        // Lazily generate and cache per requested count; arrays are immutable, no cloning needed
+        return ISSUER_CACHE.computeIfAbsent(count, InMemoryKeyMaterialHandler::createMultipleIssuers);
     }
 
 

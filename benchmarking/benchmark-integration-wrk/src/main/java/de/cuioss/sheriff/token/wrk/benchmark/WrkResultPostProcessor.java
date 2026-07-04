@@ -51,12 +51,6 @@ public class WrkResultPostProcessor {
     public static final String WRK_OUTPUT_FILE_SUFFIX = "-results.txt";
     public static final String WRK_HEALTH_OUTPUT_FILE = "wrk-health-results.txt";
     public static final String WRK_JWT_OUTPUT_FILE = "wrk-jwt-results.txt";
-    public static final String BENCHMARK_NAME_HEALTH = "healthCheck";
-    public static final String BENCHMARK_NAME_JWT = "jwtValidation";
-    public static final String PROMETHEUS_METRICS_DIR = "prometheus";
-    public static final String GH_PAGES_DATA_DIR = "gh-pages-ready/data";
-    public static final String HEALTH_METRICS_FILE = BENCHMARK_NAME_HEALTH + "-metrics.json";
-    public static final String JWT_METRICS_FILE = BENCHMARK_NAME_JWT + "-metrics.json";
 
     private final WrkBenchmarkConverter converter = new WrkBenchmarkConverter();
     private final ReportGenerator reportGenerator = new ReportGenerator();
@@ -347,20 +341,9 @@ public class WrkResultPostProcessor {
             baseName = baseName.substring(0, baseName.length() - 8);
         }
 
-        // Try to find by matching base name
-        for (Map.Entry<String, BenchmarkMetadata> entry : benchmarkMetadataMap.entrySet()) {
-            if (entry.getKey().equals(baseName) ||
-                    entry.getKey().contains(baseName) ||
-                    baseName.contains(entry.getKey())) {
-                return entry.getValue();
-            }
-        }
-
-        // If still not found and we only have one benchmark, use it
-        if (benchmarkMetadataMap.size() == 1) {
-            return benchmarkMetadataMap.values().iterator().next();
-        }
-
-        return null;
+        // Exact normalized-name match only: substring or single-benchmark fallbacks can
+        // silently attach the wrong Prometheus window (e.g. healthCheck vs healthLiveCheck).
+        // The caller logs NO_METADATA_FOR_BENCHMARK when this returns null.
+        return benchmarkMetadataMap.get(baseName);
     }
 }

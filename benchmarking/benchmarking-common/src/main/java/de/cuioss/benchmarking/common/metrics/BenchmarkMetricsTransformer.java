@@ -15,6 +15,8 @@
  */
 package de.cuioss.benchmarking.common.metrics;
 
+import de.cuioss.benchmarking.common.report.StatisticsCalculator;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -298,34 +300,17 @@ public class BenchmarkMetricsTransformer {
         Collections.sort(sorted);
 
         Statistics stats = new Statistics();
-        stats.mean = values.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        stats.mean = StatisticsCalculator.calculateMean(values);
         stats.min = sorted.getFirst();
         stats.max = sorted.getLast();
+        stats.stdDev = StatisticsCalculator.calculateStandardDeviation(values);
 
-        if (values.size() > 1) {
-            double variance = values.stream()
-                    .mapToDouble(v -> Math.pow(v - stats.mean, 2))
-                    .average().orElse(0);
-            stats.stdDev = Math.sqrt(variance);
-        }
-
-        stats.p50 = getPercentile(sorted, 50);
-        stats.p75 = getPercentile(sorted, 75);
-        stats.p90 = getPercentile(sorted, 90);
-        stats.p99 = getPercentile(sorted, 99);
+        stats.p50 = StatisticsCalculator.percentile(sorted, 50);
+        stats.p75 = StatisticsCalculator.percentile(sorted, 75);
+        stats.p90 = StatisticsCalculator.percentile(sorted, 90);
+        stats.p99 = StatisticsCalculator.percentile(sorted, 99);
 
         return stats;
-    }
-
-    private double getPercentile(List<Double> sorted, int percentile) {
-        if (sorted.isEmpty()) {
-            return 0;
-        }
-        int index = (sorted.size() * percentile) / 100;
-        if (index >= sorted.size()) {
-            index = sorted.size() - 1;
-        }
-        return sorted.get(index);
     }
 
     private double round(double value, int decimals) {

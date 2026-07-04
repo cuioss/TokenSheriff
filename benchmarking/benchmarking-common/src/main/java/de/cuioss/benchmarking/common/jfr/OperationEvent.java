@@ -62,10 +62,6 @@ public class OperationEvent extends Event {
     @Description("Type of error if operation failed")
     public String errorType;
 
-    @Label("Cached")
-    @Description("Whether the result was served from cache")
-    public boolean cached;
-
     @Label("Concurrent Operations")
     @Description("Number of concurrent operations at the time of execution")
     public int concurrentOperations;
