@@ -139,7 +139,10 @@ public class TokenBuilder {
                     claimValue = mapper.map(mapRepresentation, key);
                 } catch (TokenValidationException e) {
                     throw e;
-                } /*~~(TODO: Catch specific not RuntimeException. Suppress: // cui-rewrite:disable InvalidExceptionUsageRecipe)~~>*/catch (RuntimeException e) {
+                    // cui-rewrite:disable InvalidExceptionUsageRecipe
+                    // Custom SPI mappers can throw arbitrary runtime exceptions — the broad
+                    // catch is deliberate; TokenValidationException is rethrown above.
+                } catch (RuntimeException e) {
                     throw new TokenValidationException(
                             SecurityEventCounter.EventType.MISSING_CLAIM,
                             "Malformed claim '" + key + "': " + e.getMessage(),

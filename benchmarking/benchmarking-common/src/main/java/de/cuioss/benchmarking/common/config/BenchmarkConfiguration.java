@@ -191,6 +191,9 @@ int threads
      * @return the parsed result format type
      */
     public static ResultFormatType parseResultFormat(String format) {
+        if (format == null) {
+            return ResultFormatType.JSON;
+        }
         return switch (format.toUpperCase()) {
             case "JSON" -> ResultFormatType.JSON;
             case "CSV" -> ResultFormatType.CSV;

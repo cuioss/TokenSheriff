@@ -190,6 +190,9 @@ public final class StatisticsCalculator {
      */
     public static double percentile(List<Double> sortedAscending, double percentile) {
         Objects.requireNonNull(sortedAscending, COLLECTION_CANNOT_BE_NULL);
+        if (percentile < 0.0 || percentile > 100.0) {
+            throw new IllegalArgumentException("Percentile must be between 0 and 100, but was: " + percentile);
+        }
         if (sortedAscending.isEmpty()) {
             return 0;
         }
