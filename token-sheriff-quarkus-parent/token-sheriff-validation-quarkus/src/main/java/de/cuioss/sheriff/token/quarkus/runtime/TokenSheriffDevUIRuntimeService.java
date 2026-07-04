@@ -79,7 +79,7 @@ public class TokenSheriffDevUIRuntimeService {
         // fails application startup when no enabled issuer is configured.
         Map<String, Object> status = new HashMap<>();
         status.put("enabled", true);
-        status.put("validatorPresent", true);
+        status.put("validatorPresent", tokenValidator != null);
         status.put("status", "ACTIVE");
         status.put("statusMessage", "JWT validation is active and ready");
         return status;

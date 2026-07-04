@@ -144,9 +144,13 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
      * Matches against the raw request path string — no filesystem semantics are involved.
      */
     private boolean isPathIncluded(String path) {
+        // JAX-RS implementations differ on whether UriInfo.getPath() carries a leading
+        // slash; configured patterns conventionally do — normalize before matching
+        String normalizedPath = path.startsWith("/") ? path : "/" + path;
+
         // Check exclude patterns first (take precedence)
         for (Pattern pattern : excludePathPatterns) {
-            if (pattern.matcher(path).matches()) {
+            if (pattern.matcher(normalizedPath).matches()) {
                 return false;
             }
         }
@@ -158,7 +162,7 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
 
         // Check include patterns
         for (Pattern pattern : includePathPatterns) {
-            if (pattern.matcher(path).matches()) {
+            if (pattern.matcher(normalizedPath).matches()) {
                 return true;
             }
         }

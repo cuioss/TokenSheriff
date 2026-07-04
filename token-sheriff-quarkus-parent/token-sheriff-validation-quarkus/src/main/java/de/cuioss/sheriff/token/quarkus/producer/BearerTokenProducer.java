@@ -131,8 +131,10 @@ public class BearerTokenProducer {
             Provider<JsonWebToken> jsonWebTokenProvider,
             @ConfigProperty(name = JwtPropertyKeys.TOKEN.HEADER, defaultValue = AUTHORIZATION_HEADER_VALUE) String tokenHeader,
             @ConfigProperty(name = JwtPropertyKeys.TOKEN.COOKIE_NAME, defaultValue = "Bearer") String tokenCookieName) {
-        if (!AUTHORIZATION_HEADER_VALUE.equalsIgnoreCase(tokenHeader)
-                && !COOKIE_HEADER_VALUE.equalsIgnoreCase(tokenHeader)) {
+        // Property values may carry accidental surrounding whitespace — trim before validating
+        String trimmedHeader = tokenHeader.trim();
+        if (!AUTHORIZATION_HEADER_VALUE.equalsIgnoreCase(trimmedHeader)
+                && !COOKIE_HEADER_VALUE.equalsIgnoreCase(trimmedHeader)) {
             throw new IllegalStateException(
                     "Invalid value '%s' for property '%s'. Supported values are '%s' and '%s'."
                             .formatted(tokenHeader, JwtPropertyKeys.TOKEN.HEADER,
@@ -141,8 +143,8 @@ public class BearerTokenProducer {
         this.tokenValidator = tokenValidator;
         this.servletObjectsResolver = servletObjectsResolver;
         this.jsonWebTokenProvider = jsonWebTokenProvider;
-        this.tokenHeader = tokenHeader;
-        this.tokenCookieName = tokenCookieName;
+        this.tokenHeader = trimmedHeader;
+        this.tokenCookieName = tokenCookieName.trim();
     }
 
     /**
