@@ -55,14 +55,6 @@ String y      // EC y coordinate (Base64url-encoded, EC only)
     private static final Pattern BASE64_URL_PATTERN = Pattern.compile("^[A-Za-z0-9\\-_]*=*$");
     private static final CuiLogger LOGGER = new CuiLogger(JwkKey.class);
 
-    /**
-     * Gets the key type as Optional.
-     * 
-     * @return Optional containing the key type, empty if null
-     */
-    public Optional<String> getKty() {
-        return Optional.ofNullable(kty);
-    }
 
     /**
      * Gets the key ID as Optional.
@@ -82,23 +74,6 @@ String y      // EC y coordinate (Base64url-encoded, EC only)
         return Optional.ofNullable(alg);
     }
 
-    /**
-     * Gets the RSA modulus as Optional.
-     * 
-     * @return Optional containing the RSA modulus, empty if null
-     */
-    public Optional<String> getN() {
-        return Optional.ofNullable(n);
-    }
-
-    /**
-     * Gets the RSA exponent as Optional.
-     * 
-     * @return Optional containing the RSA exponent, empty if null
-     */
-    public Optional<String> getE() {
-        return Optional.ofNullable(e);
-    }
 
     /**
      * Gets the EC curve as Optional.
@@ -109,23 +84,6 @@ String y      // EC y coordinate (Base64url-encoded, EC only)
         return Optional.ofNullable(crv);
     }
 
-    /**
-     * Gets the EC x coordinate as Optional.
-     * 
-     * @return Optional containing the x coordinate, empty if null
-     */
-    public Optional<String> getX() {
-        return Optional.ofNullable(x);
-    }
-
-    /**
-     * Gets the EC y coordinate as Optional.
-     * 
-     * @return Optional containing the y coordinate, empty if null
-     */
-    public Optional<String> getY() {
-        return Optional.ofNullable(y);
-    }
 
     /**
      * Gets the RSA modulus as BigInteger with Base64 URL decoding and validation.

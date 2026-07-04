@@ -124,10 +124,6 @@ class TokenValidatorPerformanceIntegrationTest {
                 sampleCount(performanceMonitor, MeasurementType.CLAIMS_VALIDATION),
                 performanceMonitor.getValidationMetrics(MeasurementType.CLAIMS_VALIDATION)
                         .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() / 1000.0);
-        LOGGER.info("- JWKS operations: %s samples, avg %s μs",
-                sampleCount(performanceMonitor, MeasurementType.JWKS_OPERATIONS),
-                performanceMonitor.getValidationMetrics(MeasurementType.JWKS_OPERATIONS)
-                        .map(StripedRingBufferStatistics::p50).orElse(Duration.ZERO).toNanos() / 1000.0);
     }
 
     @Test

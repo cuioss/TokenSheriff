@@ -45,6 +45,11 @@ public class JwksParser {
 
     private static final CuiLogger LOGGER = new CuiLogger(JwksParser.class);
 
+    /**
+     * Maximum number of keys accepted in a JWKS keys array (denial-of-service protection).
+     */
+    private static final int MAX_KEYS_COUNT = 50;
+
 
     private final DslJson<Object> dslJson;
 
@@ -124,28 +129,40 @@ public class JwksParser {
     }
 
     /**
-     * Parse JWKS content that's already a Jwks object.
-     * 
-     * @param jwks the JWKS content as a Jwks object
-     * @return a list of parsed JWK objects, empty if parsing fails
-     */
-    public List<JwkKey> parse(Jwks jwks) {
-        if (jwks == null) {
-            LOGGER.error(JWTValidationLogMessages.ERROR.JWKS_INVALID_JSON, "JWKS object is null");
-            return new ArrayList<>();
-        }
-        return parseJwks(jwks);
-    }
-
-    /**
      * Internal method to parse a Jwks object into individual JWK objects.
-     * 
+     * <p>
+     * The caller guarantees a non-null JWKS with a non-null keys array. This is the single
+     * validation path for the keys array: emptiness, size limits, and per-key structure are
+     * each checked (and logged) in exactly one place.
+     *
      * @param jwks the JWKS object to parse
-     * @return a list of parsed JWK objects
+     * @return a list of parsed JWK objects, empty if validation fails
      */
     private List<JwkKey> parseJwks(Jwks jwks) {
         List<JwkKey> result = new ArrayList<>();
-        extractKeys(jwks, result);
+        List<JwkKey> keysArray = jwks.keys();
+
+        if (keysArray.isEmpty()) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.JWKS_KEYS_ARRAY_EMPTY);
+            securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
+            return result;
+        }
+
+        if (keysArray.size() > MAX_KEYS_COUNT) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.JWKS_KEYS_ARRAY_TOO_LARGE, keysArray.size());
+            securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
+            return result;
+        }
+
+        for (JwkKey key : keysArray) {
+            if (key != null && key.kty() != null) {
+                result.add(key);
+            } else if (key != null) {
+                // Key exists but missing kty field
+                LOGGER.warn(JWTValidationLogMessages.WARN.JWK_MISSING_KTY);
+                securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
+            }
+        }
         return result;
     }
 
@@ -168,82 +185,4 @@ public class JwksParser {
         return true;
     }
 
-    /**
-     * Extract keys from JWKS structure.
-     * Handles both standard JWKS format (with "keys" array) and single key format.
-     * 
-     * @param jwks the JWKS object
-     * @param result the list to store extracted keys
-     */
-    private void extractKeys(Jwks jwks, List<JwkKey> result) {
-        // Validate JWKS structure first
-        if (!validateJwksStructure(jwks)) {
-            return;
-        }
-
-        // JWKS structure already contains keys array
-        if (jwks.keys() != null && !jwks.keys().isEmpty()) {
-            extractKeysFromArray(jwks, result);
-        } else {
-            // Keys field present but empty
-            LOGGER.warn(JWTValidationLogMessages.WARN.JWKS_KEYS_ARRAY_EMPTY);
-            securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
-        }
-    }
-
-    /**
-     * Validates the structure and content of a JWKS object.
-     * 
-     * @param jwks the JWKS object to validate
-     * @return true if the JWKS structure is valid, false otherwise
-     */
-    private boolean validateJwksStructure(Jwks jwks) {
-        // Basic null check
-        if (jwks == null) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.JWKS_OBJECT_NULL);
-            securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
-            return false;
-        }
-
-        // Check if it has keys array
-        if (jwks.keys() != null) {
-            List<JwkKey> keysArray = jwks.keys();
-
-            // Check array size limits
-            if (keysArray.size() > 50) {
-                LOGGER.warn(JWTValidationLogMessages.WARN.JWKS_KEYS_ARRAY_TOO_LARGE, keysArray.size());
-                securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
-                return false;
-            }
-
-            // Don't log here for empty arrays - let extractKeys handle the logging
-        }
-
-        return true;
-    }
-
-    /**
-     * Extract keys from a standard JWKS with "keys" array.
-     * 
-     * @param jwks the JWKS object
-     * @param result the list to store extracted keys
-     */
-    private void extractKeysFromArray(Jwks jwks, List<JwkKey> result) {
-        List<JwkKey> keysArray = jwks.keys();
-        if (keysArray != null && !keysArray.isEmpty()) {
-            // Validate each key before adding
-            for (JwkKey key : keysArray) {
-                if (key != null && key.kty() != null) {
-                    result.add(key);
-                } else if (key != null) {
-                    // Key exists but missing kty field
-                    LOGGER.warn(JWTValidationLogMessages.WARN.JWK_MISSING_KTY, key.kid());
-                    securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
-                }
-            }
-        } else {
-            LOGGER.warn(JWTValidationLogMessages.WARN.JWKS_KEYS_ARRAY_EMPTY);
-            securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
-        }
-    }
 }

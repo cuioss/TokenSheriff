@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.token.validation;
 
 import com.dslplatform.json.DslJson;
-import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
@@ -95,7 +94,6 @@ public final class ParserConfig {
      * This limit is applied to the entire token string before any processing begins.
      * Protects against denial-of-service attacks via extremely large token strings.
      */
-    @Builder.Default
     int maxTokenSize = DEFAULT_MAX_TOKEN_SIZE;
 
     /**
@@ -103,7 +101,6 @@ public final class ParserConfig {
      * This limit is applied to each Base64-decoded JWT part (header, payload).
      * Since Base64 encoding increases size by ~33%, decoded parts are smaller than the original token.
      */
-    @Builder.Default
     int maxPayloadSize = DEFAULT_MAX_PAYLOAD_SIZE;
 
     /**
@@ -117,7 +114,6 @@ public final class ParserConfig {
      *
      * @return the maximum string length in bytes
      */
-    @Builder.Default
     int maxStringLength = DEFAULT_MAX_STRING_LENGTH;
 
     /**

@@ -15,8 +15,6 @@
  */
 package de.cuioss.sheriff.token.validation.domain.claim;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
 /**
  * Defines the types of claim values supported by the system.
@@ -24,8 +22,6 @@ import lombok.RequiredArgsConstructor;
  *
  * @since 1.0
  */
-@Getter
-@RequiredArgsConstructor
 public enum ClaimValueType {
     /**
      * Represents a string value claim like "iss", "sub", etc.

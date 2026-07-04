@@ -44,8 +44,6 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-002 |JWKS |Keys updated due to data change - load state: %s |Logged when JWKS keys are updated due to data changes from the endpoint
 |TokenSheriff-003 |JWKS |Background JWKS refresh started with interval: %s seconds |Logged when background JWKS refresh is started with specified interval
 |TokenSheriff-004 |TOKEN |Skipping disabled issuer configuration %s |Logged when an issuer configuration is skipped because it's disabled
-|TokenSheriff-005 |JWKS |Successfully resolved JWKS URI from well-known endpoint: %s |Logged when JWKS URI is successfully resolved via well-known discovery
-|TokenSheriff-006 |RETRY |Retry operation '%s' completed successfully after %s attempts in %sms |Logged when a retry operation completes successfully with timing information
 |TokenSheriff-007 |JWKS |JWKS loaded successfully for issuer: %s |Logged when JWKS is successfully loaded for a specific issuer
 |TokenSheriff-008 |ISSUER |Issuer configuration loaded successfully: %s |Logged when an issuer configuration is successfully loaded
 |TokenSheriff-009 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
@@ -64,7 +62,6 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-105 |TOKEN |Decoded part exceeds maximum size limit of %s bytes |Logged when a decoded part of the token exceeds the maximum size limit
 |TokenSheriff-106 |TOKEN |Unsupported algorithm: %s |Logged when an unsupported algorithm is encountered
 |TokenSheriff-107 |TOKEN |Token has a 'not before' claim that is more than %s seconds in the future |Logged when a token has a 'not before' claim that is further in the future than the configured clock skew tolerance
-|TokenSheriff-108 |TOKEN |Unknown token type: %s |Logged when an unknown token type is encountered
 |TokenSheriff-109 |TOKEN |Token is missing required claim: %s |Logged when a token is missing a required claim
 |TokenSheriff-110 |TOKEN |Token has expired |Logged when a token has expired
 |TokenSheriff-111 |TOKEN |Token authorized party '%s' does not match expected client ID '%s' |Logged when the azp claim in the token does not match the expected client ID
@@ -77,7 +74,6 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-118 |JWKS |Unsupported key type: %s |Logged when an unsupported JWK key type is encountered
 |TokenSheriff-119 |JWKS |Key ID exceeds maximum length: %s |Logged when a JWK key ID exceeds the maximum allowed length
 |TokenSheriff-120 |JWKS |Invalid or unsupported algorithm: %s |Logged when an invalid or unsupported algorithm is encountered in a JWK
-|TokenSheriff-121 |TOKEN |Found unhealthy issuer config: %s |Logged when an issuer configuration is found to be unhealthy during health checks
 |TokenSheriff-122 |JWKS |Background JWKS refresh failed: %s |Logged when background JWKS refresh operation fails
 |TokenSheriff-123 |JWKS |Failed to resolve JWKS URI from well-known resolver |Logged when JWKS URI resolution fails from well-known discovery
 |TokenSheriff-124 |JWKS |JWKS object is null |Logged when JWKS object validation fails due to null object
@@ -85,7 +81,6 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-126 |JWKS |JWKS keys array is empty |Logged when JWKS keys array is empty
 |TokenSheriff-127 |JWKS |Failed to parse RSA key with ID %s: %s |Logged when RSA key parsing fails for a specific key ID
 |TokenSheriff-128 |JWKS |Failed to parse EC key with ID %s: %s |Logged when EC key parsing fails for a specific key ID
-|TokenSheriff-129 |RETRY |Retry operation '%s' failed after %s attempts in %sms |Logged when a retry operation fails after exhausting all attempts
 |TokenSheriff-130 |JSON |Failed to parse JWKS JSON: %s |Logged when JSON parsing fails for JWKS content and an empty result is returned as fallback
 |TokenSheriff-131 |ISSUER |IssuerConfig for issuer '%s' has claimSubOptional=true. This is not conform to RFC 7519 which requires the 'sub' claim for ACCESS_TOKEN and ID_TOKEN types. Use this setting only when necessary and ensure appropriate alternative validation mechanisms. |Logged when an issuer configuration has the subject claim marked as optional, which violates RFC 7519 requirements
 |TokenSheriff-132 |JWKS |Invalid Base64 URL encoding detected for JWK field: %s |Logged when Base64 URL encoding validation fails for a JWK field

@@ -68,14 +68,15 @@ String[] parts,
 String rawToken
 ) {
     /**
-     * Compact constructor that validates the body is non-null and parts format.
+     * Compact constructor that validates the header, body, and parts are non-null and
+     * that parts contains exactly 3 elements (header.payload.signature).
      * A properly decoded JWT must always have a parseable body.
-     * If parts are provided, they must contain exactly 3 elements (header.payload.signature).
      */
     public DecodedJwt {
         Objects.requireNonNull(header, "header must not be null");
         Objects.requireNonNull(body, "body must not be null");
-        if (parts != null && parts.length != 3) {
+        Objects.requireNonNull(parts, "parts must not be null");
+        if (parts.length != 3) {
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
                     "JWT format is invalid: expected 3 parts (header.payload.signature) but found %s"
@@ -114,26 +115,13 @@ String rawToken
     /**
      * Gets the decoded signature bytes from the JWT token.
      * <p>
-     * This method decodes the Base64URL-encoded signature string to raw bytes.
-     * <p>
-     * <strong>Preconditions:</strong>
-     * <ul>
-     *   <li>The JWT must have been properly parsed with 3 parts (header.payload.signature)</li>
-     *   <li>The parts array must contain exactly 3 elements</li>
-     *   <li>The signature part (parts[2]) must be a valid Base64URL-encoded string</li>
-     * </ul>
+     * This method decodes the Base64URL-encoded signature string to raw bytes. The constructor
+     * guarantees a non-null parts array with exactly 3 elements.
      *
      * @return the decoded signature bytes, never null
-     * @throws IllegalStateException if the JWT format is invalid (not 3 parts) or if the signature
-     *                               cannot be decoded from Base64URL format
+     * @throws IllegalStateException if the signature cannot be decoded from Base64URL format
      */
     public byte[] getSignatureAsDecodedBytes() {
-        if (parts == null) {
-            throw new IllegalStateException(
-                    "JWT format is invalid: parts array is null"
-            );
-        }
-
         // Decode the signature from Base64URL
         try {
             return Base64.getUrlDecoder().decode(parts[2]);
@@ -149,24 +137,12 @@ String rawToken
      * Gets the data to verify for signature validation.
      * <p>
      * This method returns the concatenated header and payload parts (header.payload) that should
-     * be used for signature verification according to the JWT specification.
-     * <p>
-     * <strong>Preconditions:</strong>
-     * <ul>
-     *   <li>The JWT must have been properly parsed with 3 parts (header.payload.signature)</li>
-     *   <li>The parts array must contain exactly 3 elements</li>
-     * </ul>
+     * be used for signature verification according to the JWT specification. The constructor
+     * guarantees a non-null parts array with exactly 3 elements.
      *
      * @return the data to verify as a string in the format "header.payload", never null
-     * @throws IllegalStateException if the JWT format is invalid (not 3 parts)
      */
     public String getDataToVerify() {
-        if (parts == null) {
-            throw new IllegalStateException(
-                    "JWT format is invalid: parts array is null"
-            );
-        }
-
         // Return the concatenated header and payload
         return "%s.%s".formatted(parts[0], parts[1]);
     }

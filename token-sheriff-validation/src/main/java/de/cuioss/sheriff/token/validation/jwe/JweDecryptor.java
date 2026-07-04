@@ -114,6 +114,7 @@ public class JweDecryptor {
         if (zipOptional.isPresent()) {
             String zipAlg = zipOptional.get();
             if (!"DEF".equals(zipAlg)) {
+                LOGGER.warn(JWTValidationLogMessages.WARN.JWE_COMPRESSION_NOT_SUPPORTED, zipAlg);
                 throw new TokenValidationException(
                         SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
                         "Unsupported compression algorithm: %s".formatted(zipAlg));

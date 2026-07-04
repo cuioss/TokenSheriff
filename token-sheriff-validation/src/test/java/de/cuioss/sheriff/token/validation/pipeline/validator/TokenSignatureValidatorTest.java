@@ -36,13 +36,16 @@ import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import io.jsonwebtoken.Jwts;
 import lombok.NonNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Base64;
+import java.util.Date;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -330,6 +333,56 @@ class TokenSignatureValidatorTest {
 
         // Construct a token with the modified header but keep the original payload and signature
         return modifiedHeader + "." + parts[1] + "." + parts[2];
+    }
+
+    @Test
+    @DisplayName("Should accept RS384 token for RSA key whose JWKS entry omits alg (defaulted RS256)")
+    void shouldAcceptRsaFamilyTokenForKeyWithoutAlg() {
+        // JWKS for the RS384 default key, with the alg member stripped: KeyProcessor
+        // defaults such RSA keys to RS256. The RSA key material can still verify RS384.
+        String jwks = InMemoryJWKSFactory.createDefaultJwks(InMemoryKeyMaterialHandler.Algorithm.RS384)
+                .replace(",\"alg\":\"RS384\"", "");
+        assertFalse(jwks.contains("RS384"), "alg member should be stripped from JWKS");
+
+        String token = Jwts.builder()
+                .header().keyId(InMemoryJWKSFactory.DEFAULT_KEY_ID).and()
+                .issuer("test-issuer").subject("test-subject")
+                .expiration(Date.from(Instant.now().plusSeconds(300)))
+                .signWith(InMemoryKeyMaterialHandler.getDefaultPrivateKey(
+                        InMemoryKeyMaterialHandler.Algorithm.RS384), Jwts.SIG.RS384)
+                .compact();
+
+        DecodedJwt decodedJwt = jwtParser.decode(token);
+        JwksLoader jwksLoader = JwksLoaderFactory.createInMemoryLoader(jwks);
+        jwksLoader.initJWKSLoader(securityEventCounter);
+        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter,
+                new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
+
+        assertDoesNotThrow(() -> validator.validateSignature(decodedJwt),
+                "RSA-family token must be accepted for RSA key without explicit alg");
+    }
+
+    @Test
+    @DisplayName("Should accept PS256 token for RSA key labeled RS384 (same RSA family)")
+    void shouldAcceptCrossAlgorithmWithinRsaFamily() {
+        String jwks = InMemoryJWKSFactory.createDefaultJwks(InMemoryKeyMaterialHandler.Algorithm.RS384);
+
+        String token = Jwts.builder()
+                .header().keyId(InMemoryJWKSFactory.DEFAULT_KEY_ID).and()
+                .issuer("test-issuer").subject("test-subject")
+                .expiration(Date.from(Instant.now().plusSeconds(300)))
+                .signWith(InMemoryKeyMaterialHandler.getDefaultPrivateKey(
+                        InMemoryKeyMaterialHandler.Algorithm.RS384), Jwts.SIG.PS256)
+                .compact();
+
+        DecodedJwt decodedJwt = jwtParser.decode(token);
+        JwksLoader jwksLoader = JwksLoaderFactory.createInMemoryLoader(jwks);
+        jwksLoader.initJWKSLoader(securityEventCounter);
+        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter,
+                new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
+
+        assertDoesNotThrow(() -> validator.validateSignature(decodedJwt),
+                "PS256 token must be accepted for RS384-labeled RSA key");
     }
 
     /**

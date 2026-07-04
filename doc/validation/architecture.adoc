@@ -109,7 +109,7 @@ Thread-safe counter for security events during token processing. Created by `Tok
 
 === TokenValidatorMonitor
 
-High-performance, lock-free monitoring of validation pipeline metrics with microsecond precision. Measures 16 types including: `COMPLETE_VALIDATION`, `TOKEN_FORMAT_CHECK`, `TOKEN_PARSING`, `ISSUER_EXTRACTION`, `CACHE_LOOKUP`, `ISSUER_CONFIG_RESOLUTION`, `HEADER_VALIDATION`, `SIGNATURE_VALIDATION`, `TOKEN_BUILDING`, `CLAIMS_VALIDATION`, `CACHE_STORE`, `JWKS_OPERATIONS`, `RETRY_ATTEMPT`, `RETRY_COMPLETE`, `RETRY_DELAY`, `JWE_DECRYPTION`. Exposed as Micrometer counters in Quarkus (`sheriff.token.validation.errors`, `sheriff.token.validation.success`).
+High-performance, lock-free monitoring of validation pipeline metrics with microsecond precision. Measures the validation pipeline steps: `COMPLETE_VALIDATION`, `TOKEN_FORMAT_CHECK`, `TOKEN_PARSING`, `ISSUER_EXTRACTION`, `CACHE_LOOKUP`, `ISSUER_CONFIG_RESOLUTION`, `HEADER_VALIDATION`, `SIGNATURE_VALIDATION`, `TOKEN_BUILDING`, `CLAIMS_VALIDATION`, `CACHE_STORE`. Exposed as Micrometer counters in Quarkus (`sheriff.token.validation.errors`, `sheriff.token.validation.success`).
 
 == Size Limits
 
