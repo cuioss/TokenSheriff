@@ -68,6 +68,13 @@ class BearerTokenProducerTest {
     }
 
     @Test
+    @DisplayName("producePrincipal resolves the request-scoped JsonWebToken from the provider")
+    void producePrincipalDelegatesToProvider() {
+        assertSame(EmptyJsonWebToken.INSTANCE, producer.producePrincipal(),
+                "Principal must be the provider-resolved JsonWebToken (single validation per request)");
+    }
+
+    @Test
     @DisplayName("Should reject invalid token header configuration at construction time")
     void invalidTokenHeaderConfiguration() {
         IllegalStateException exception = assertThrows(IllegalStateException.class,

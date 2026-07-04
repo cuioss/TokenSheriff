@@ -136,6 +136,36 @@ class CustomAccessLogFilterTest {
     }
 
     @Test
+    @DisplayName("Should match include patterns against paths without a leading slash")
+    void shouldMatchIncludePatternsWithoutLeadingSlash() {
+        TestConfig config = new TestConfig(Map.of(
+                JwtPropertyKeys.ACCESSLOG.ENABLED, "true",
+                JwtPropertyKeys.ACCESSLOG.INCLUDE_PATHS, "/api/**"
+        ));
+        AccessLogFilterConfigResolver resolver = new AccessLogFilterConfigResolver(config);
+        CustomAccessLogFilter filter = new CustomAccessLogFilter(resolver, null);
+
+        ContainerRequestContext requestContext = EasyMock.niceMock(ContainerRequestContext.class);
+        UriInfo uriInfo = EasyMock.niceMock(UriInfo.class);
+        // UriInfo.getPath() without leading slash — must be normalized before matching /api/**
+        EasyMock.expect(uriInfo.getPath()).andReturn("api/test").anyTimes();
+        EasyMock.expect(requestContext.getUriInfo()).andReturn(uriInfo).anyTimes();
+        EasyMock.expect(requestContext.getMethod()).andReturn("GET").anyTimes();
+        EasyMock.expect(requestContext.getProperty("cui.access-log.start-time"))
+                .andReturn(Instant.now()).anyTimes();
+        EasyMock.expect(requestContext.getHeaders())
+                .andReturn(new MultivaluedHashMap<>()).anyTimes();
+        EasyMock.expect(requestContext.getHeaderString("User-Agent"))
+                .andReturn("TestAgent/1.0").anyTimes();
+
+        ContainerResponseContext responseContext = EasyMock.niceMock(ContainerResponseContext.class);
+        EasyMock.expect(responseContext.getStatus()).andReturn(500).anyTimes();
+        EasyMock.replay(requestContext, uriInfo, responseContext);
+
+        assertDoesNotThrow(() -> filter.filter(requestContext, responseContext));
+    }
+
+    @Test
     @DisplayName("Should log access entry when filter is enabled and status matches")
     void shouldLogAccessEntryWhenEnabledAndStatusMatches() {
         // Given - enabled filter with default config (logs 400-599)

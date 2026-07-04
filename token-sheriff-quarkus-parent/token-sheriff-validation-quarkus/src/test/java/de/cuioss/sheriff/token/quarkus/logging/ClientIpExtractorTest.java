@@ -63,6 +63,16 @@ class ClientIpExtractorTest {
     }
 
     @Test
+    @DisplayName("Should return malformed bracketed IPv6 value unchanged")
+    void shouldReturnMalformedBracketValueUnchanged() {
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
+        headers.putSingle("Forwarded", "for=\"[2001:db8::1\"; proto=https");
+
+        // No closing bracket: the value cannot be normalized and is returned unchanged
+        assertEquals("[2001:db8::1", ClientIpExtractor.extractClientIp(headers, null));
+    }
+
+    @Test
     @DisplayName("Should return unknown when no headers provided")
     void shouldReturnUnknownWhenNoHeaders() {
         MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
