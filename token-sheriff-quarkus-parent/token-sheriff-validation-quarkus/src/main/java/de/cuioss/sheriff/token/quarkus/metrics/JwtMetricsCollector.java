@@ -30,7 +30,9 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INFO;
@@ -106,9 +108,8 @@ public class JwtMetricsCollector {
         // Register counters for all event types
         registerEventCounters();
 
-        // Initialize the last known counts
-        Map<SecurityEventCounter.EventType, Long> currentCounts = securityEventCounter.getCounters();
-        lastKnownCounts.putAll(currentCounts);
+        // Baselines start at zero (implicit via getOrDefault) so that events recorded
+        // before initialization are exported as deltas by the initial update below
 
         LOGGER.info(INFO.JWT_METRICS_COLLECTOR_INITIALIZED, counters.size());
 
@@ -174,30 +175,6 @@ public class JwtMetricsCollector {
     }
 
     /**
-     * Clears all metrics by resetting the underlying monitors and clearing tracking maps.
-     * <p>
-     * This method performs the following operations:
-     * <ul>
-     *   <li>Clears the SecurityEventCounter to reset all security event counts</li>
-     *   <li>Resets internal tracking maps to ensure proper delta calculations after clearing</li>
-     * </ul>
-     * <p>
-     * Note: This method only clears the underlying monitors. The Micrometer metrics
-     * themselves will retain their values until the next scheduled update cycle.
-     */
-    void clear() {
-        LOGGER.info(INFO.CLEARING_JWT_METRICS);
-
-        // Clear security event counter
-        securityEventCounter.reset();
-
-        // Clear tracking maps to reset delta calculations
-        lastKnownCounts.clear();
-
-        LOGGER.info(INFO.JWT_METRICS_CLEARED);
-    }
-
-    /**
      * Updates security event counters from the SecurityEventCounter state.
      */
     private void updateSecurityEventCounters() {
@@ -214,13 +191,17 @@ public class JwtMetricsCollector {
             }
         }
 
-        // Update counters based on current counts
-        for (Map.Entry<SecurityEventCounter.EventType, Long> entry : currentCounts.entrySet()) {
-            SecurityEventCounter.EventType eventType = entry.getKey();
-            Long currentCount = entry.getValue();
+        // Update counters based on current counts. Iterate the union of current and
+        // baseline keys: after an external reset, event types disappear from the
+        // current counts and would otherwise keep a stale baseline.
+        Set<SecurityEventCounter.EventType> eventTypes = new HashSet<>(currentCounts.keySet());
+        eventTypes.addAll(lastKnownCounts.keySet());
+
+        for (SecurityEventCounter.EventType eventType : eventTypes) {
+            long currentCount = currentCounts.getOrDefault(eventType, 0L);
 
             // Get the last known count for this event type
-            Long lastCount = lastKnownCounts.getOrDefault(eventType, 0L);
+            long lastCount = lastKnownCounts.getOrDefault(eventType, 0L);
 
             // Calculate the delta
             long delta = currentCount - lastCount;
@@ -238,6 +219,12 @@ public class JwtMetricsCollector {
                 }
 
                 // Update the last known count
+                lastKnownCounts.put(eventType, currentCount);
+            } else if (delta < 0) {
+                // The underlying counter was reset externally — re-baseline to the current
+                // count so subsequent events are exported correctly instead of being ignored
+                LOGGER.debug("Detected external reset for event type %s (delta %s), re-baselining to %s",
+                        eventType.name(), delta, currentCount);
                 lastKnownCounts.put(eventType, currentCount);
             }
         }

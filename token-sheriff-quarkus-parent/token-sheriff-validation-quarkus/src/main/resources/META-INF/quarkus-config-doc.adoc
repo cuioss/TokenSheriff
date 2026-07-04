@@ -9,6 +9,8 @@ All `sheriff.token.*` properties for the Quarkus extension. For the core library
 
 [source,properties]
 ----
+# Issuers must be explicitly enabled (default is disabled)
+sheriff.token.issuers.keycloak.enabled=true
 # OpenID Connect Discovery (recommended) — issuer, JWKS, and algorithms auto-discovered
 sheriff.token.issuers.keycloak.jwks.http.well-known-url=https://keycloak.example.com/realms/master/.well-known/openid-configuration
 ----
@@ -20,7 +22,7 @@ Properties under `sheriff.token.issuers.<name>.*` — one block per issuer.
 [cols="2,1,1,3", options="header"]
 |===
 |Property |Type |Default |Description
-|`enabled` |boolean |`true` |Enable/disable this issuer
+|`enabled` |boolean |`false` |Enable/disable this issuer. Must be explicitly set to `true` to activate the issuer.
 |`issuer-identifier` |String |— |Matched against `iss` claim. Auto-discovered when using well-known.
 |`expected-audience` |String (csv) |— |Expected `aud` claim values
 |`expected-client-id` |String (csv) |— |Expected `azp` / `client_id` claim values
@@ -63,6 +65,9 @@ Properties under `sheriff.token.issuers.<name>.*` — one block per issuer.
 |`dpop.nonce-cache-size` |int |`10000` |JTI replay cache size
 |`dpop.nonce-cache-ttl-seconds` |long |`300` |JTI cache entry TTL
 |===
+
+NOTE: All `dpop.*` sub-properties require `dpop.enabled=true`. Configuring any of them
+without enabling DPoP fails at application startup to prevent silently disabled DPoP validation.
 
 == Parser
 
@@ -134,3 +139,27 @@ Properties under `sheriff.token.issuers.<name>.*` — one block per issuer.
 |`cui.http.access-log.filter.exclude-paths` |String (csv) |— |URL path patterns to exclude (glob)
 |`cui.http.access-log.filter.pattern` |String |`+{remoteAddr} {method} {path} -> {status} ({duration}ms)+` |Log format
 |===
+
+== Bearer Token Error Responses
+
+Error responses created via `BearerTokenResult.createErrorResponse()` follow RFC 6750
+(OAuth 2.0 Bearer Token Usage) with one deliberate deviation:
+
+[cols="2,1,3", options="header"]
+|===
+|Condition |Status |`WWW-Authenticate` error code
+|No token present |`401` |—
+|Invalid or expired token |`401` |`invalid_token`
+|Malformed bearer token (e.g. empty) |`400` |`invalid_request`
+|Missing required scopes |`401` |`insufficient_scope` (deviation, see below)
+|Missing required roles/groups |`403` |`insufficient_privileges`
+|===
+
+*Deviation from RFC 6750:* RFC 6750 Section 3.1 specifies `403 Forbidden` for
+`insufficient_scope`. This extension deliberately returns `401 Unauthorized` instead,
+following the OAuth 2.0 Step-Up Authentication Challenge protocol (RFC 9470): an
+insufficient-scope challenge is actionable — the client can re-authenticate or obtain a
+token with higher scope/ACR and retry. Role/group violations are terminal (no
+re-authentication can fix them) and therefore return `403`. When both scope and
+role/group requirements are unmet, the scope challenge (`401`) takes precedence so the
+client gets a chance to step up first.

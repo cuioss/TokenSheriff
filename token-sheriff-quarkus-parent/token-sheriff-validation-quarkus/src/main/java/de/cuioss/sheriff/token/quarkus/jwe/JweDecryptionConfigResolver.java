@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.quarkus.jwe;
 
+import de.cuioss.sheriff.token.quarkus.config.ConfigValueParser;
 import de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.token.validation.jwe.JweAlgorithmPreferences;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
@@ -27,7 +28,6 @@ import java.security.PrivateKey;
 import java.util.*;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INFO;
-import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WARN;
 
 /**
  * Resolver for creating {@link JweDecryptionConfig} from Quarkus configuration properties.
@@ -134,8 +134,10 @@ public class JweDecryptionConfigResolver {
                 JwtPropertyKeys.JWE.KEY_PASSWORD, String.class);
 
         if (alias.isEmpty()) {
-            LOGGER.warn(WARN.JWE_KEYSTORE_MISSING_ALIAS, keystorePath);
-            return;
+            throw new IllegalStateException(
+                    ("JWE keystore is configured at '%s' but no key alias is specified. "
+                            + "Configure '%s' to select the key entry, or remove '%s' to disable keystore key loading.")
+                            .formatted(keystorePath, JwtPropertyKeys.JWE.KEY_ALIAS, JwtPropertyKeys.JWE.KEYSTORE_PATH));
         }
 
         char[] storePass = storePassOpt.map(String::toCharArray).orElse(new char[0]);
@@ -180,16 +182,9 @@ public class JweDecryptionConfigResolver {
         Map<String, String> keyPaths = new LinkedHashMap<>();
         String multiKeyPrefix = JwtPropertyKeys.JWE.MULTI_KEY_PREFIX;
 
-        for (String propertyName : config.getPropertyNames()) {
-            if (propertyName.startsWith(multiKeyPrefix) && propertyName.endsWith(".path")) {
-                String remainder = propertyName.substring(multiKeyPrefix.length());
-                int dotIndex = remainder.indexOf('.');
-                if (dotIndex > 0) {
-                    String kid = remainder.substring(0, dotIndex);
-                    config.getOptionalValue(propertyName, String.class)
-                            .ifPresent(path -> keyPaths.put(kid, path));
-                }
-            }
+        for (String kid : ConfigValueParser.discoverNameSegments(config, multiKeyPrefix)) {
+            config.getOptionalValue(multiKeyPrefix + kid + ".path", String.class)
+                    .ifPresent(path -> keyPaths.put(kid, path));
         }
         return keyPaths;
     }
@@ -202,10 +197,10 @@ public class JweDecryptionConfigResolver {
 
         if (keyMgmtAlgs.isPresent() || contentEncAlgs.isPresent()) {
             List<String> keyAlgs = keyMgmtAlgs
-                    .map(s -> Arrays.stream(s.split(",")).map(String::trim).toList())
+                    .map(ConfigValueParser::splitCsv)
                     .orElseGet(JweAlgorithmPreferences::getDefaultKeyManagementAlgorithms);
             List<String> encAlgs = contentEncAlgs
-                    .map(s -> Arrays.stream(s.split(",")).map(String::trim).toList())
+                    .map(ConfigValueParser::splitCsv)
                     .orElseGet(JweAlgorithmPreferences::getDefaultContentEncryptionAlgorithms);
 
             builder.algorithmPreferences(new JweAlgorithmPreferences(keyAlgs, encAlgs));

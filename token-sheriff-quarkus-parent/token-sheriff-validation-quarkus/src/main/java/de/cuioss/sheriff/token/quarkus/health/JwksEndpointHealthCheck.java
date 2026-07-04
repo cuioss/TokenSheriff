@@ -51,8 +51,6 @@ public class JwksEndpointHealthCheck implements HealthCheck {
     private static final CuiLogger LOGGER = new CuiLogger(JwksEndpointHealthCheck.class);
     private static final String DEFAULT_CACHE_SECONDS = "30";
     private static final String HEALTHCHECK_NAME = "jwks-endpoints";
-    private static final String ERROR_NO_ISSUER_CONFIGS = "No issuer configurations found";
-    private static final String ERROR = "error";
     private static final String STATUS_UP = "UP";
     private static final String STATUS_DOWN = "DOWN";
 
@@ -86,13 +84,8 @@ public class JwksEndpointHealthCheck implements HealthCheck {
      * @return the health check response
      */
     private HealthCheckResponse performHealthCheck() {
-        if (issuerConfigs.isEmpty()) {
-            return HealthCheckResponse.named(HEALTHCHECK_NAME)
-                    .down()
-                    .withData(ERROR, ERROR_NO_ISSUER_CONFIGS)
-                    .build();
-        }
-
+        // The produced issuer config list is guaranteed non-empty: TokenValidatorProducer
+        // fails application startup when no enabled issuer is configured.
         var responseBuilder = HealthCheckResponse.named(HEALTHCHECK_NAME).up();
 
         var results = issuerConfigs.stream()

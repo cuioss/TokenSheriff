@@ -63,7 +63,40 @@ class BearerTokenProducerTest {
         tokenValidator = createMock(TokenValidator.class);
         servletResolverMock = new HttpRequestResolverMock();
         HttpRequestResolver servletResolver = servletResolverMock;
-        producer = new BearerTokenProducer(tokenValidator, servletResolver, "Authorization", "Bearer");
+        producer = new BearerTokenProducer(tokenValidator, servletResolver,
+                () -> EmptyJsonWebToken.INSTANCE, "Authorization", "Bearer");
+    }
+
+    @Test
+    @DisplayName("producePrincipal resolves the request-scoped JsonWebToken from the provider")
+    void producePrincipalDelegatesToProvider() {
+        assertSame(EmptyJsonWebToken.INSTANCE, producer.producePrincipal(),
+                "Principal must be the provider-resolved JsonWebToken (single validation per request)");
+    }
+
+    @Test
+    @DisplayName("Should reject invalid token header configuration at construction time")
+    void invalidTokenHeaderConfiguration() {
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new BearerTokenProducer(tokenValidator, servletResolverMock,
+                        () -> EmptyJsonWebToken.INSTANCE, "X-Custom-Header", "Bearer"),
+                "Unsupported token.header values must fail fast at startup");
+        assertTrue(exception.getMessage().contains("X-Custom-Header"),
+                "Exception should name the invalid value: " + exception.getMessage());
+        assertTrue(exception.getMessage().contains("sheriff.token.token.header"),
+                "Exception should name the property: " + exception.getMessage());
+        assertTrue(exception.getMessage().contains("Authorization")
+                && exception.getMessage().contains("Cookie"),
+                "Exception should list the supported values: " + exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("Should accept supported token header values case-insensitively")
+    void supportedTokenHeaderValuesCaseInsensitive() {
+        assertDoesNotThrow(() -> new BearerTokenProducer(tokenValidator, servletResolverMock,
+                () -> EmptyJsonWebToken.INSTANCE, "authorization", "Bearer"));
+        assertDoesNotThrow(() -> new BearerTokenProducer(tokenValidator, servletResolverMock,
+                () -> EmptyJsonWebToken.INSTANCE, "COOKIE", "Bearer"));
     }
 
     @Test
