@@ -20,6 +20,7 @@ import lombok.Getter;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Utility class for managing algorithm preferences for JWK (JSON Web Key) parsing.
@@ -71,6 +72,7 @@ public class JwkAlgorithmPreferences {
      *                                  algorithm (HS256, HS384, HS512, none)
      */
     public JwkAlgorithmPreferences(List<String> supportedAlgorithms) {
+        Objects.requireNonNull(supportedAlgorithms, "supportedAlgorithms must not be null");
         for (String alg : supportedAlgorithms) {
             if (REJECTED_ALGORITHMS.contains(alg)) {
                 throw new IllegalArgumentException(

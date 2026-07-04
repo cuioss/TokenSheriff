@@ -253,6 +253,9 @@ public class TokenSignatureValidator {
      * @return true if the algorithms are compatible, false otherwise
      */
     private boolean isAlgorithmCompatible(String tokenAlgorithm, String keyAlgorithm) {
+        if (tokenAlgorithm == null || keyAlgorithm == null) {
+            return false;
+        }
         if (RSA_FAMILY_ALGORITHMS.contains(keyAlgorithm)) {
             return RSA_FAMILY_ALGORITHMS.contains(tokenAlgorithm);
         }
