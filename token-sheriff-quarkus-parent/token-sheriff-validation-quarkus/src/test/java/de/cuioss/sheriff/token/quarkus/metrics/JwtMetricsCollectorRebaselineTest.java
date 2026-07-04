@@ -16,6 +16,9 @@
 package de.cuioss.sheriff.token.quarkus.metrics;
 
 import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
+import de.cuioss.test.juli.LogAsserts;
+import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * deltas increment Micrometer counters, and an external reset re-baselines
  * instead of silently under-reporting.
  */
+@EnableTestLogger
 class JwtMetricsCollectorRebaselineTest {
 
     private static final SecurityEventCounter.EventType EVENT =
@@ -82,5 +86,41 @@ class JwtMetricsCollectorRebaselineTest {
         collector.updateCounters();
         assertEquals(4.0, counterValue(registry),
                 "post-reset events must be exported against the re-baselined count");
+    }
+
+    @Test
+    @DisplayName("Update without new events leaves exported totals unchanged")
+    void updateWithoutNewEventsIsNoop() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        SecurityEventCounter securityEventCounter = new SecurityEventCounter();
+        JwtMetricsCollector collector = new JwtMetricsCollector(registry, securityEventCounter);
+        collector.initialize();
+
+        securityEventCounter.increment(EVENT);
+        collector.updateCounters();
+        assertEquals(1.0, counterValue(registry));
+
+        // Zero delta: neither increment nor re-baseline must happen
+        collector.updateCounters();
+        assertEquals(1.0, counterValue(registry), "unchanged counts must not be re-exported");
+    }
+
+    @Test
+    @DisplayName("Missing Micrometer counter is reported as WARN and the delta is consumed")
+    void warnsWhenNoMicrometerCounterRegistered() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        SecurityEventCounter securityEventCounter = new SecurityEventCounter();
+        JwtMetricsCollector collector = new JwtMetricsCollector(registry, securityEventCounter);
+
+        // initialize() is deliberately not called: no Micrometer counters are registered
+        securityEventCounter.increment(EVENT);
+        collector.updateCounters();
+
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "No Micrometer counter found");
+
+        // The baseline still advances, so late registration must not re-export the lost delta
+        collector.initialize();
+        assertEquals(0.0, counterValue(registry),
+                "delta reported while no counter existed must not be exported retroactively");
     }
 }
