@@ -19,8 +19,6 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.Map;
 
@@ -35,15 +33,13 @@ import java.util.Map;
  *   <li>Base64url encoding without padding</li>
  * </ol>
  * <p>
- * Uses only {@link MessageDigest} and {@link Base64} — no external dependencies.
+ * Uses only {@link Sha256Util} and {@link Base64} — no external dependencies.
  *
  * @since 1.0
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc7638">RFC 7638 - JSON Web Key (JWK) Thumbprint</a>
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class JwkThumbprintUtil {
-
-    private static final String SHA_256 = "SHA-256";
 
     /**
      * Computes the JWK Thumbprint (RFC 7638) for the given JWK represented as a Map.
@@ -56,7 +52,7 @@ public final class JwkThumbprintUtil {
     public static String computeThumbprint(Map<String, Object> jwkMap) {
         String kty = getRequired(jwkMap, "kty");
         String minimalJson = buildMinimalJson(jwkMap, kty);
-        byte[] hash = sha256(minimalJson.getBytes(StandardCharsets.UTF_8));
+        byte[] hash = Sha256Util.digest(minimalJson.getBytes(StandardCharsets.UTF_8));
         return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
     }
 
@@ -108,13 +104,5 @@ public final class JwkThumbprintUtil {
             throw new IllegalArgumentException("JWK is missing required field for thumbprint: " + key);
         }
         return value.toString();
-    }
-
-    private static byte[] sha256(byte[] input) {
-        try {
-            return MessageDigest.getInstance(SHA_256).digest(input);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
     }
 }

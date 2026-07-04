@@ -63,7 +63,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-104 |TOKEN |Invalid JWT Token format: expected 3 parts (JWS) or 5 parts (JWE) but got %s |Logged when the JWT token format is invalid
 |TokenSheriff-105 |TOKEN |Decoded part exceeds maximum size limit of %s bytes |Logged when a decoded part of the token exceeds the maximum size limit
 |TokenSheriff-106 |TOKEN |Unsupported algorithm: %s |Logged when an unsupported algorithm is encountered
-|TokenSheriff-107 |TOKEN |Token has a 'not before' claim that is more than 60 seconds in the future |Logged when a token has a 'not before' claim that is too far in the future
+|TokenSheriff-107 |TOKEN |Token has a 'not before' claim that is more than %s seconds in the future |Logged when a token has a 'not before' claim that is further in the future than the configured clock skew tolerance
 |TokenSheriff-108 |TOKEN |Unknown token type: %s |Logged when an unknown token type is encountered
 |TokenSheriff-109 |TOKEN |Token is missing required claim: %s |Logged when a token is missing a required claim
 |TokenSheriff-110 |TOKEN |Token has expired |Logged when a token has expired

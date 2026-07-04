@@ -100,7 +100,7 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
                 Arguments.of(
                         ClaimName.AUDIENCE,
                         createJsonObjectWithArrayClaim("aud", List.of("client1", "client2")),
-                        ClaimValue.forList("[\"client1\",\"client2\"]", List.of("client1", "client2"))
+                        ClaimValue.forList("[client1, client2]", List.of("client1", "client2"))
                 ),
 
                 Arguments.of(
@@ -175,7 +175,7 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
                 Arguments.of(
                         ClaimName.ROLES,
                         createJsonObjectWithArrayClaim("roles", List.of("admin", "user", "manager")),
-                        ClaimValue.forList("[\"admin\",\"user\",\"manager\"]", List.of("admin", "user", "manager"))
+                        ClaimValue.forList("[admin, user, manager]", List.of("admin", "user", "manager"))
                 ),
 
                 Arguments.of(
@@ -187,7 +187,7 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
                 Arguments.of(
                         ClaimName.GROUPS,
                         createJsonObjectWithArrayClaim("groups", List.of("group1", "group2", "group3")),
-                        ClaimValue.forList("[\"group1\",\"group2\",\"group3\"]", List.of("group1", "group2", "group3"))
+                        ClaimValue.forList("[group1, group2, group3]", List.of("group1", "group2", "group3"))
                 ),
 
                 Arguments.of(

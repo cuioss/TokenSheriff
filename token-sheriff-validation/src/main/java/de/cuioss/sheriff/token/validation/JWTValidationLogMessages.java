@@ -207,7 +207,7 @@ public final class JWTValidationLogMessages {
         public static final LogRecord TOKEN_NBF_FUTURE = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(107)
-                .template("Token has a 'not before' claim that is more than 60 seconds in the future")
+                .template("Token has a 'not before' claim that is more than %s seconds in the future")
                 .build();
 
         public static final LogRecord UNKNOWN_TOKEN_TYPE = LogRecordModel.builder()

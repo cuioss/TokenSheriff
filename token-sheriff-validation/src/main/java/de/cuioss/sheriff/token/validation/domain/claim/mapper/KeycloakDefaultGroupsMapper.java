@@ -19,7 +19,6 @@ import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import de.cuioss.tools.logging.CuiLogger;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -45,9 +44,9 @@ import java.util.Optional;
  * <p>
  * The mapper handles:
  * <ul>
- *   <li>Missing {@code groups} claim - returns empty list</li>
- *   <li>Empty groups array - returns empty list</li>
- *   <li>Non-array groups value - returns empty list</li>
+ *   <li>Missing {@code groups} claim - returns {@code null} (claim treated as absent)</li>
+ *   <li>Non-array {@code groups} value - returns {@code null} (claim treated as absent)</li>
+ *   <li>Empty groups array - returns claim value with empty list</li>
  *   <li>Group names with or without path prefixes</li>
  * </ul>
  *
@@ -71,9 +70,8 @@ public class KeycloakDefaultGroupsMapper implements ClaimMapper {
         }
 
         List<String> groupsList = groupsValue.get();
-        String originalValue = groupsList.toString();
 
         LOGGER.debug("Successfully mapped groups: %s", groupsList);
-        return ClaimValue.forList(originalValue, Collections.unmodifiableList(groupsList));
+        return KeycloakMapperSupport.toListClaimValue(groupsList);
     }
 }

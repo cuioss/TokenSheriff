@@ -23,11 +23,10 @@ import de.cuioss.sheriff.token.validation.metrics.MetricsTicker;
 import de.cuioss.sheriff.token.validation.metrics.MetricsTickerFactory;
 import de.cuioss.sheriff.token.validation.metrics.TokenValidatorMonitor;
 import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
+import de.cuioss.sheriff.token.validation.util.Sha256Util;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -339,14 +338,8 @@ public class AccessTokenCache {
      * @return hex-encoded SHA-256 digest
      */
     private static String sha256Hex(String tokenString) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(tokenString.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            // SHA-256 is required by the Java specification; this should never happen
-            throw new IllegalStateException("SHA-256 algorithm not available", e);
-        }
+        byte[] hash = Sha256Util.digest(tokenString.getBytes(StandardCharsets.UTF_8));
+        return HexFormat.of().formatHex(hash);
     }
 
     /**

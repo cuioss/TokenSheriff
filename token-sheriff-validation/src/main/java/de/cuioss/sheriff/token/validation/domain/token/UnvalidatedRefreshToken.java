@@ -60,13 +60,24 @@ public final class UnvalidatedRefreshToken implements MinimalTokenContent {
     private static final long serialVersionUID = 1L;
 
     @Getter
+    @ToString.Exclude
     private final String rawToken;
 
+    @ToString.Exclude
     private final Map<String, ClaimValue> claims;
 
+    /**
+     * Creates a new UnvalidatedRefreshToken.
+     * <p>
+     * The given claims map is defensively copied into an unmodifiable map. It must not
+     * contain {@code null} keys or values.
+     *
+     * @param rawToken the raw refresh token string
+     * @param claims   the (unvalidated) claims extracted from the token, may be empty
+     */
     public UnvalidatedRefreshToken(String rawToken, Map<String, ClaimValue> claims) {
         this.rawToken = rawToken;
-        this.claims = claims;
+        this.claims = Map.copyOf(claims);
     }
 
     /**
@@ -75,9 +86,9 @@ public final class UnvalidatedRefreshToken implements MinimalTokenContent {
      * When the identity provider returns a JWT-formatted refresh token, this provides
      * access to the raw claims. These claims are <em>not</em> validated in any way.
      * <p>
-     * Never {@code null}, but may be empty.
+     * Never {@code null}, but may be empty. The returned map is unmodifiable.
      *
-     * @return unvalidated claims map (package-private access)
+     * @return unmodifiable map of unvalidated claims
      */
     public Map<String, ClaimValue> getClaims() {
         return claims;

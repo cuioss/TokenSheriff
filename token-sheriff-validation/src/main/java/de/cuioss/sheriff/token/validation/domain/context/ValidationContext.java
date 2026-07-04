@@ -69,7 +69,11 @@ public class ValidationContext {
     private final Integer maxTokenAgeSeconds;
 
     /**
-     * Creates a new ValidationContext with token age validation.
+     * Creates a new ValidationContext, capturing the current time via {@link OffsetDateTime#now()}.
+     * <p>
+     * Convenience constructor for callers that do not already hold a timestamp. Prefer the
+     * three-argument constructor when a consistent timestamp is already available (as the
+     * validation pipelines do), so that all steps of an operation share the same time.
      *
      * @param clockSkewSeconds the clock skew tolerance in seconds
      * @param maxTokenAgeSeconds the maximum token age in seconds, or null to disable
@@ -84,7 +88,12 @@ public class ValidationContext {
     }
 
     /**
-     * Creates a new ValidationContext with all parameters for testing purposes.
+     * Creates a new ValidationContext with an explicitly provided current time.
+     * <p>
+     * This is the primary constructor used by the validation pipelines: they capture the
+     * current time once at the start of validation and pass it in, so cache checks and all
+     * validation steps operate on a single consistent timestamp. It is equally useful in
+     * tests to validate against a fixed point in time.
      *
      * @param currentTime the current time to use for validation
      * @param clockSkewSeconds the clock skew tolerance in seconds
@@ -121,7 +130,23 @@ public class ValidationContext {
      * @return true if the token is expired (even accounting for clock skew), false otherwise
      */
     public boolean isExpired(OffsetDateTime expirationTime) {
-        return expirationTime.plusSeconds(clockSkewSeconds).isBefore(currentTime);
+        return isExpired(expirationTime, clockSkewSeconds, currentTime);
+    }
+
+    /**
+     * Shared expiry predicate: checks whether an expiration time (extended by the clock skew
+     * tolerance) lies before the given reference time.
+     * <p>
+     * Centralizes the expiry semantics used by both the validation pipeline and the access
+     * token cache, ensuring both apply clock skew identically.
+     *
+     * @param expirationTime the token's expiration time
+     * @param clockSkewSeconds the clock skew tolerance in seconds
+     * @param now the reference time to check against
+     * @return true if the token is expired (even accounting for clock skew), false otherwise
+     */
+    public static boolean isExpired(OffsetDateTime expirationTime, int clockSkewSeconds, OffsetDateTime now) {
+        return expirationTime.plusSeconds(clockSkewSeconds).isBefore(now);
     }
 
     /**

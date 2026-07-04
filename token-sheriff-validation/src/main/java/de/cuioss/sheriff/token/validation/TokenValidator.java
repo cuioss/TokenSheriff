@@ -119,8 +119,9 @@ import java.util.Map;
  *
  * // Access the performance monitor for detailed pipeline metrics
  * TokenValidatorMonitor performanceMonitor = tokenValidator.getPerformanceMonitor();
- * StripedRingBufferStatistics metrics = performanceMonitor.getValidationMetrics(MeasurementType.SIGNATURE_VALIDATION);
- * Duration p50SignatureTime = metrics.p50();
+ * Optional&lt;StripedRingBufferStatistics&gt; metrics =
+ *         performanceMonitor.getValidationMetrics(MeasurementType.SIGNATURE_VALIDATION);
+ * Optional&lt;Duration&gt; p50SignatureTime = metrics.map(StripedRingBufferStatistics::p50);
  * </pre>
  * <p>
  * Implements requirements:

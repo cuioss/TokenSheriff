@@ -22,8 +22,8 @@ import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * A {@link ClaimMapper} implementation for mapping JSON values to collections.
@@ -50,14 +50,14 @@ public class JsonCollectionMapper implements ClaimMapper {
         List<String> values;
 
         if (value instanceof List<?> list) {
-            // Handle List (array) - create JSON array representation
-            originalValue = list.stream()
-                    .map(Object::toString)
-                    .map(s -> "\"" + s + "\"")
-                    .collect(Collectors.joining(",", "[", "]"));
+            // Handle List (array): convert elements once, use the list's toString() as
+            // original value (consistent with the Keycloak mappers). No attempt is made to
+            // reconstruct the exact JSON source representation.
             values = list.stream()
+                    .filter(Objects::nonNull)
                     .map(Object::toString)
                     .toList();
+            originalValue = values.toString();
         } else {
             // Handle all other types by wrapping them in a single-element list
             originalValue = value.toString();
