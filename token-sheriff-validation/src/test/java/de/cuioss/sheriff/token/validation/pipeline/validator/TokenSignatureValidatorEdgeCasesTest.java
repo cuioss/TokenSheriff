@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline.validator;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
@@ -22,7 +23,6 @@ import de.cuioss.sheriff.token.validation.jwks.JwksLoaderFactory;
 import de.cuioss.sheriff.token.validation.pipeline.DecodedJwt;
 import de.cuioss.sheriff.token.validation.pipeline.NonValidatingJwtParser;
 import de.cuioss.sheriff.token.validation.pipeline.SignatureTemplateManager;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;

@@ -15,13 +15,13 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline.validator;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
 import de.cuioss.sheriff.token.validation.pipeline.DecodedJwt;
 import de.cuioss.sheriff.token.validation.pipeline.SignatureTemplateManager;
 import de.cuioss.sheriff.token.validation.pipeline.SignatureVerificationUtil;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.Getter;
 

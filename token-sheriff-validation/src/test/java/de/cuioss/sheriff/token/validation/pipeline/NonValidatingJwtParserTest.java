@@ -15,11 +15,11 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.ParserConfig;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter.EventType;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;

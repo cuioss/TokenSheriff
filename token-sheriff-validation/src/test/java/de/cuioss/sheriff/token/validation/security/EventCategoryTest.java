@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.security;
 
+import de.cuioss.sheriff.token.commons.events.EventCategory;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import org.junit.jupiter.api.Test;
 

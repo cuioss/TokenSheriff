@@ -16,8 +16,8 @@
 package de.cuioss.sheriff.token.validation.wellknown;
 
 import de.cuioss.http.client.adapter.RetryConfig;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.json.WellKnownResult;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.test.dispatcher.WellKnownDispatcher;
 import de.cuioss.sheriff.token.validation.util.LoaderStatus;
 import de.cuioss.test.juli.junit5.EnableTestLogger;

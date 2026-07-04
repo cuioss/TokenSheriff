@@ -15,11 +15,11 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.JwtHeader;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 
 import java.util.Arrays;
 import java.util.Base64;

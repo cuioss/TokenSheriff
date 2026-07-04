@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.validation.pipeline;
 
 import com.dslplatform.json.DslJson;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.ParserConfig;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
@@ -23,7 +24,6 @@ import de.cuioss.sheriff.token.validation.json.JwtHeader;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptor;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.tools.base.Preconditions;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.EqualsAndHashCode;

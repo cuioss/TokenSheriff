@@ -16,12 +16,12 @@
 package de.cuioss.sheriff.token.validation.jwe;
 
 import com.dslplatform.json.DslJson;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.JwkKey;
 import de.cuioss.sheriff.token.validation.json.JwtHeader;
 import de.cuioss.sheriff.token.validation.jwks.key.JwkKeyHandler;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 
 import javax.crypto.Cipher;

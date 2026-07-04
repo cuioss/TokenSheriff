@@ -15,10 +15,10 @@
  */
 package de.cuioss.sheriff.token.validation;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.ClaimControlParameter;

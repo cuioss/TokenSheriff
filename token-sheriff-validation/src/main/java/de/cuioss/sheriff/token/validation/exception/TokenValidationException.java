@@ -15,8 +15,9 @@
  */
 package de.cuioss.sheriff.token.validation.exception;
 
-import de.cuioss.sheriff.token.validation.security.EventCategory;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter.EventType;
+import de.cuioss.sheriff.token.commons.error.TokenSheriffException;
+import de.cuioss.sheriff.token.commons.events.EventCategory;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import lombok.Getter;
 
 import java.io.Serial;
@@ -39,7 +40,7 @@ import java.io.Serial;
  * @since 1.0
  * @author Oliver Wolff
  */
-public class TokenValidationException extends RuntimeException {
+public class TokenValidationException extends TokenSheriffException {
 
     @Serial
     private static final long serialVersionUID = 1L;

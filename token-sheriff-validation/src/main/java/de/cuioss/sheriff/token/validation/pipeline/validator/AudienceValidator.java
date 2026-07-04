@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline.validator;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
@@ -22,7 +23,6 @@ import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValueType;
 import de.cuioss.sheriff.token.validation.domain.token.TokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.RequiredArgsConstructor;
 

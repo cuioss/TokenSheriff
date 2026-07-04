@@ -15,12 +15,13 @@
  */
 package de.cuioss.sheriff.token.quarkus.producer;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.ClaimControlParameter;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

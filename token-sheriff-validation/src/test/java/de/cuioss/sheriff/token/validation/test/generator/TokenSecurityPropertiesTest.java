@@ -15,9 +15,9 @@
  */
 package de.cuioss.sheriff.token.validation.test.generator;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;

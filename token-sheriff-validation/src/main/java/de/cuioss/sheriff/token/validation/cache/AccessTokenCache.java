@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.cache;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
@@ -22,7 +23,6 @@ import de.cuioss.sheriff.token.validation.metrics.MeasurementType;
 import de.cuioss.sheriff.token.validation.metrics.MetricsTicker;
 import de.cuioss.sheriff.token.validation.metrics.MetricsTickerFactory;
 import de.cuioss.sheriff.token.validation.metrics.TokenValidatorMonitor;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.util.Sha256Util;
 import de.cuioss.tools.logging.CuiLogger;
 

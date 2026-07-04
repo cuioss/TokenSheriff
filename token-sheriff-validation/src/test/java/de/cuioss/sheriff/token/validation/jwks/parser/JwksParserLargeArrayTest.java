@@ -15,10 +15,10 @@
  */
 package de.cuioss.sheriff.token.validation.jwks.parser;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.ParserConfig;
 import de.cuioss.sheriff.token.validation.json.JwkKey;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;

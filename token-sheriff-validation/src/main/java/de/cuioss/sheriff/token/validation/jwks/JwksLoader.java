@@ -15,8 +15,8 @@
  */
 package de.cuioss.sheriff.token.validation.jwks;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.util.LoaderStatus;
 import de.cuioss.sheriff.token.validation.util.LoadingStatusProvider;
 

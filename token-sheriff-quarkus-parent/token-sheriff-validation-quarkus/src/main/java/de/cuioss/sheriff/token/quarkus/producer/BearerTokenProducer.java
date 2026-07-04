@@ -15,16 +15,17 @@
  */
 package de.cuioss.sheriff.token.quarkus.producer;
 
+import de.cuioss.sheriff.token.commons.metrics.MetricIdentifier;
 import de.cuioss.sheriff.token.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.token.quarkus.annotation.ServletObjectsResolver;
 import de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys;
-import de.cuioss.sheriff.token.quarkus.metrics.MetricIdentifier;
 import de.cuioss.sheriff.token.quarkus.servlet.HttpRequestResolver;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.tools.logging.CuiLogger;
+
 import io.micrometer.core.annotation.Timed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.RequestScoped;

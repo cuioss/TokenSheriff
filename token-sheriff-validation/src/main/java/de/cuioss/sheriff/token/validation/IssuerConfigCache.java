@@ -15,8 +15,8 @@
  */
 package de.cuioss.sheriff.token.validation;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.util.LoaderStatus;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;

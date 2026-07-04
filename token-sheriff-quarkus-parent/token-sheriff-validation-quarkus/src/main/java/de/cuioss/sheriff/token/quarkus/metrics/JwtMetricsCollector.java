@@ -15,11 +15,12 @@
  */
 package de.cuioss.sheriff.token.quarkus.metrics;
 
-
+import de.cuioss.sheriff.token.commons.events.EventCategory;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.metrics.MetricIdentifier;
 import de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys;
-import de.cuioss.sheriff.token.validation.security.EventCategory;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
+
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;

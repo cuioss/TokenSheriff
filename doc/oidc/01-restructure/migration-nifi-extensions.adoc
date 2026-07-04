@@ -156,6 +156,41 @@ grep -rI 'de\.cuioss\.sheriff\.oauth\|sheriff\.oauth\|oauth-sheriff' \
 Confirm no `has been relocated` warnings remain in the build log (they disappear once the
 coordinates are updated to `token-sheriff-validation`).
 
+== Plan 03 (Commons) follow-up — package moves
+
+xref:../03-commons/README.adoc[Plan 03] gathers cross-cutting concerns into the
+`de.cuioss.sheriff.token.commons.*` base layer (still shipped in the
+`token-sheriff-validation` artifact — *no new dependency*). Two types `nifi-extensions`
+imports move package (names only, no behavioural change):
+
+[cols="3,3"]
+|===
+| From | To
+
+| `de.cuioss.sheriff.token.validation.security.SecurityEventCounter`
+| `de.cuioss.sheriff.token.commons.events.SecurityEventCounter`
+
+| `de.cuioss.sheriff.token.validation.security.EventCategory`
+| `de.cuioss.sheriff.token.commons.events.EventCategory`
+|===
+
+`TokenValidationException` stays in `de.cuioss.sheriff.token.validation.exception` (now
+extending the new `commons.error.TokenSheriffException` base — a superclass change only, no
+import change for consumers). The `generators` classifier is unchanged.
+
+Consumer fix (same style as Step 2):
+
+[source,bash]
+----
+grep -rl 'de\.cuioss\.sheriff\.token\.validation\.security\.\(SecurityEventCounter\|EventCategory\)' \
+     --include='*.java' . \
+  | xargs sed -i '' \
+      -e 's/validation\.security\.SecurityEventCounter/commons.events.SecurityEventCounter/g' \
+      -e 's/validation\.security\.EventCategory/commons.events.EventCategory/g'
+----
+
+(These moves ship in the first release that includes Plan 03; earlier releases are unaffected.)
+
 == Coordination
 
 * Token-Sheriff `0.9.0` (incl. the relocation stubs) is already published — no upstream

@@ -15,13 +15,13 @@
  */
 package de.cuioss.sheriff.token.validation.jwks.parser;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
 import de.cuioss.sheriff.token.validation.json.JwkKey;
 import de.cuioss.sheriff.token.validation.jwks.key.JwkKeyHandler;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.sheriff.token.validation.security.JwkAlgorithmPreferences;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter.EventType;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.security.spec.InvalidKeySpecException;

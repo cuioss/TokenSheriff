@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.cuioss.sheriff.token.validation.security;
+package de.cuioss.sheriff.token.commons.events;
 
 /**
  * Categorizes security events by their type and impact.
@@ -27,6 +27,8 @@ package de.cuioss.sheriff.token.validation.security;
  *   <li>InvalidSignature: For signature verification failures (typically thrown by TokenSignatureValidator). Usually maps to HTTP 401.</li>
  *   <li>SemanticIssues: For semantic validation failures (typically thrown by TokenClaimValidator, e.g., time or audience issues). Usually maps to HTTP 401.</li>
  * </ul>
+ * <p>
+ * Part of the {@code commons.events} base layer (see {@code doc/commons/specification/observability.adoc}).
  *
  * @since 1.0
  * @author Oliver Wolff

@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.jwks.http;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.TokenValidator;
@@ -24,7 +25,6 @@ import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;

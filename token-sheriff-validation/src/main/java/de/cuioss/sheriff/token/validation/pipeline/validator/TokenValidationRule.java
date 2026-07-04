@@ -49,7 +49,7 @@ public interface TokenValidationRule {
      * <p>
      * If the token does not satisfy the rule, the implementation must throw a
      * {@link TokenValidationException} with a clear message and appropriate
-     * {@link de.cuioss.sheriff.token.validation.security.SecurityEventCounter.EventType}.
+     * {@link de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType}.
      * Returning normally indicates the token passed this rule.
      *
      * @param token   the fully validated access token content, never {@code null}

@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.jwks.key;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.ParserConfig;
 import de.cuioss.sheriff.token.validation.json.JwkKey;
 import de.cuioss.sheriff.token.validation.json.Jwks;
@@ -23,7 +24,6 @@ import de.cuioss.sheriff.token.validation.jwks.JwksType;
 import de.cuioss.sheriff.token.validation.jwks.parser.JwksParser;
 import de.cuioss.sheriff.token.validation.jwks.parser.KeyProcessor;
 import de.cuioss.sheriff.token.validation.security.JwkAlgorithmPreferences;
-import de.cuioss.sheriff.token.validation.security.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.util.LoaderStatus;
 import de.cuioss.tools.logging.CuiLogger;
 import de.cuioss.tools.string.MoreStrings;
