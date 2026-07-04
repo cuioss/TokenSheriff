@@ -61,6 +61,12 @@ A problem document carries `type`, `title`, `status`, and a *safe* `detail`. It 
 carry stack traces, internal identifiers, upstream URLs, or credential material
 (xref:../requirements.adoc#COMMONS-12[COMMONS-12], mitigating xref:../threat-model.adoc#T-LEAK[T-LEAK]).
 
+Because every rendered member is a fixed, per-category constant (no request or exception
+data is interpolated), the `validation-quarkus` edge builds the document from constant
+strings — guaranteeing the exact `application/problem+json` bytes with no escaping surface.
+*If a future edge needs a dynamic `detail`* (interpolating request-derived text), it MUST
+switch to a serialized DTO with proper JSON escaping rather than string concatenation.
+
 .Example problem document
 [source,json]
 ----
