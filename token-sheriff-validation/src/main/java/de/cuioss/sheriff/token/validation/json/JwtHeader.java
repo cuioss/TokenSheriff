@@ -81,38 +81,38 @@ String apv
 
     /**
      * Gets the algorithm parameter as Optional.
-     * 
-     * @return Optional containing the algorithm, empty if null or empty
+     *
+     * @return Optional containing the algorithm, empty if null or blank
      */
     public Optional<String> getAlg() {
-        return Optional.ofNullable(alg).filter(s -> !s.trim().isEmpty());
+        return nonBlank(alg);
     }
 
     /**
      * Gets the type parameter as Optional.
-     * 
-     * @return Optional containing the type, empty if null
+     *
+     * @return Optional containing the type, empty if null or blank
      */
     public Optional<String> getTyp() {
-        return Optional.ofNullable(typ);
+        return nonBlank(typ);
     }
 
     /**
      * Gets the key ID parameter as Optional.
-     * 
-     * @return Optional containing the key ID, empty if null
+     *
+     * @return Optional containing the key ID, empty if null or blank
      */
     public Optional<String> getKid() {
-        return Optional.ofNullable(kid);
+        return nonBlank(kid);
     }
 
     /**
      * Gets the JSON Web Key parameter as Optional.
-     * 
-     * @return Optional containing the JWK, empty if null
+     *
+     * @return Optional containing the JWK, empty if null or blank
      */
     public Optional<String> getJwk() {
-        return Optional.ofNullable(jwk);
+        return nonBlank(jwk);
     }
 
     /**
@@ -121,43 +121,43 @@ String apv
      * @return Optional containing the encryption algorithm, empty if null or blank
      */
     public Optional<String> getEnc() {
-        return Optional.ofNullable(enc).filter(s -> !s.isBlank());
+        return nonBlank(enc);
     }
 
     /**
      * Gets the compression algorithm parameter as Optional (JWE only).
      *
-     * @return Optional containing the compression algorithm, empty if null
+     * @return Optional containing the compression algorithm, empty if null or blank
      */
     public Optional<String> getZip() {
-        return Optional.ofNullable(zip);
+        return nonBlank(zip);
     }
 
     /**
      * Gets the ephemeral public key parameter as Optional (JWE ECDH-ES only).
      *
-     * @return Optional containing the ephemeral public key JSON, empty if null
+     * @return Optional containing the ephemeral public key JSON, empty if null or blank
      */
     public Optional<String> getEpk() {
-        return Optional.ofNullable(epk);
+        return nonBlank(epk);
     }
 
     /**
      * Gets the Agreement PartyUInfo parameter as Optional (JWE ECDH-ES only).
      *
-     * @return Optional containing the apu value, empty if null
+     * @return Optional containing the apu value, empty if null or blank
      */
     public Optional<String> getApu() {
-        return Optional.ofNullable(apu);
+        return nonBlank(apu);
     }
 
     /**
      * Gets the Agreement PartyVInfo parameter as Optional (JWE ECDH-ES only).
      *
-     * @return Optional containing the apv value, empty if null
+     * @return Optional containing the apv value, empty if null or blank
      */
     public Optional<String> getApv() {
-        return Optional.ofNullable(apv);
+        return nonBlank(apv);
     }
 
     /**
@@ -169,6 +169,16 @@ String apv
      * @return {@code true} if this is a JWE header, {@code false} if JWS
      */
     public boolean isJwe() {
-        return enc != null && !enc.isBlank();
+        return getEnc().isPresent();
+    }
+
+    /**
+     * Wraps a header parameter in an Optional, treating null and blank values as absent.
+     *
+     * @param value the raw header parameter value
+     * @return Optional containing the value, empty if null or blank
+     */
+    private static Optional<String> nonBlank(String value) {
+        return Optional.ofNullable(value).filter(s -> !s.isBlank());
     }
 }

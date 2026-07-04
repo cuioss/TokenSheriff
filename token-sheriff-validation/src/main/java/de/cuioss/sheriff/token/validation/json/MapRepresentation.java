@@ -21,8 +21,10 @@ import de.cuioss.tools.string.MoreStrings;
 import java.io.IOException;
 import java.io.Serial;
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -55,10 +57,12 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
     private static final long serialVersionUID = 1L;
 
     /**
-     * Compact constructor that guarantees data is never null.
+     * Compact constructor that rejects null data.
+     * <p>
+     * Callers that want an empty representation should pass {@link Map#of()}.
      */
     public MapRepresentation {
-        data = data != null ? data : Map.of();
+        Objects.requireNonNull(data, "data must not be null");
     }
 
     /**
@@ -74,7 +78,7 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
      * @throws IOException if the JSON content cannot be parsed
      */
     public static MapRepresentation fromJson(DslJson<Object> dslJson, String jsonContent) throws IOException {
-        return fromJson(dslJson, MoreStrings.nullToEmpty(jsonContent).getBytes());
+        return fromJson(dslJson, MoreStrings.nullToEmpty(jsonContent).getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -202,6 +206,10 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
 
     /**
      * Gets a string list from an array claim.
+     * <p>
+     * Non-String elements of the array are silently dropped: the returned list contains
+     * only the elements that are actual JSON strings, which may therefore be shorter than
+     * the source array (or empty).
      *
      * @param key the key to look up
      * @return Optional containing the string list, or empty if not found or not convertible

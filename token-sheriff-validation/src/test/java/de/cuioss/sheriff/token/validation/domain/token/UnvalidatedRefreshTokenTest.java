@@ -69,6 +69,34 @@ class UnvalidatedRefreshTokenTest implements ShouldHandleObjectContracts<Unvalid
         assertEquals(testValue, refreshTokenContent.getClaims().get("test-claim").getOriginalString(), "Claim value should match");
     }
 
+    @ParameterizedTest
+    @TestTokenSource(value = TokenType.REFRESH_TOKEN, count = 2)
+    @DisplayName("toString must not leak the raw token or claims")
+    void toStringShouldNotLeakCredential(TestTokenHolder tokenHolder) {
+        tokenHolder.withClaim("secret-claim", ClaimValue.forPlainString("secret-claim-value"));
+        var refreshTokenContent = new UnvalidatedRefreshToken(tokenHolder.getRawToken(), tokenHolder.getClaims());
+
+        String stringRepresentation = refreshTokenContent.toString();
+
+        assertFalse(stringRepresentation.contains(tokenHolder.getRawToken()),
+                "toString must not contain the raw refresh token (credential)");
+        assertFalse(stringRepresentation.contains("secret-claim-value"),
+                "toString must not contain claim values");
+    }
+
+    @ParameterizedTest
+    @TestTokenSource(value = TokenType.REFRESH_TOKEN, count = 2)
+    @DisplayName("Expose claims as immutable map")
+    void shouldExposeImmutableClaimsMap(TestTokenHolder tokenHolder) {
+        var refreshTokenContent = new UnvalidatedRefreshToken(tokenHolder.getRawToken(), tokenHolder.getClaims());
+
+        var claims = refreshTokenContent.getClaims();
+        var claimValue = ClaimValue.forPlainString("injected");
+        assertThrows(UnsupportedOperationException.class,
+                () -> claims.put("injected", claimValue),
+                "Claims map must be unmodifiable");
+    }
+
     @Override
     public UnvalidatedRefreshToken getUnderTest() {
         Map<String, ClaimValue> anyClaims = new HashMap<>();

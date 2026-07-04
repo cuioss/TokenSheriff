@@ -36,8 +36,10 @@ import java.util.Map;
  *   <li>{@link UnvalidatedRefreshToken} - For OAuth2 refresh tokens</li>
  * </ul>
  * <p>
- * The class is immutable and thread-safe, implementing equality and string representation
- * via Lombok's {@code @EqualsAndHashCode} and {@code @ToString}.
+ * The class is immutable and thread-safe: the claims map is defensively copied into an
+ * unmodifiable map in the constructor, so callers can neither mutate the stored claims
+ * through the constructor argument nor through {@link #getClaims()}. Equality and string
+ * representation are implemented via Lombok's {@code @EqualsAndHashCode} and {@code @ToString}.
  * <p>
  * For more details on token structure, see the
  * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#token-structure">Token Structure</a>
@@ -66,6 +68,10 @@ public abstract sealed class BaseTokenContent implements TokenContent
 
     /**
      * Constructor for BaseTokenContent.
+     * <p>
+     * The given claims map is defensively copied into an unmodifiable map, guaranteeing
+     * immutability even when the token content is shared across threads (e.g. via the
+     * access token cache). The map must not contain {@code null} keys or values.
      *
      * @param claims    the token claims
      * @param rawToken  the raw token string
@@ -73,7 +79,7 @@ public abstract sealed class BaseTokenContent implements TokenContent
      */
     protected BaseTokenContent(Map<String, ClaimValue> claims, String rawToken,
             TokenType tokenType) {
-        this.claims = claims;
+        this.claims = Map.copyOf(claims);
         this.rawToken = rawToken;
         this.tokenType = tokenType;
     }

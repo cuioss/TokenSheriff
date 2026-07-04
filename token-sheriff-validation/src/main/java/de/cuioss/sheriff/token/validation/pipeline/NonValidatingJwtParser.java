@@ -462,10 +462,9 @@ public class NonValidatingJwtParser {
      * @throws IOException if decoding fails
      */
     private JwtHeader decodeJwtHeader(String encodedHeader) throws IOException {
-        String decodedJson = decodeBase64UrlPart(encodedHeader);
+        byte[] jsonBytes = decodeBase64UrlPart(encodedHeader);
         DslJson<Object> dslJson = config.getDslJson();
 
-        byte[] jsonBytes = decodedJson.getBytes();
         JwtHeader header = dslJson.deserialize(JwtHeader.class, jsonBytes, jsonBytes.length);
 
         if (header == null) {
@@ -486,19 +485,23 @@ public class NonValidatingJwtParser {
      * @throws IOException if decoding fails
      */
     private MapRepresentation decodePayload(String encodedPayload) throws IOException {
-        String decodedJson = decodeBase64UrlPart(encodedPayload);
+        byte[] jsonBytes = decodeBase64UrlPart(encodedPayload);
         DslJson<Object> dslJson = config.getDslJson();
 
-        return MapRepresentation.fromJson(dslJson, decodedJson);
+        return MapRepresentation.fromJson(dslJson, jsonBytes);
     }
 
     /**
-     * Decodes a Base64Url encoded part to JSON string.
+     * Decodes a Base64Url encoded part to its raw (UTF-8 encoded JSON) bytes.
+     * <p>
+     * Returning the raw bytes avoids a lossy byte-to-String-to-byte round trip and
+     * guarantees that no platform-default charset is involved (JWT JSON is always UTF-8
+     * per RFC 7515).
      *
      * @param encodedPart the Base64Url encoded part
-     * @return the decoded JSON string
+     * @return the decoded JSON bytes
      */
-    private String decodeBase64UrlPart(String encodedPart) {
+    private byte[] decodeBase64UrlPart(String encodedPart) {
         try {
             byte[] decodedBytes = Base64.getUrlDecoder().decode(encodedPart);
 
@@ -512,7 +515,7 @@ public class NonValidatingJwtParser {
                 );
             }
 
-            return new String(decodedBytes, StandardCharsets.UTF_8);
+            return decodedBytes;
         } catch (IllegalArgumentException e) {
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT,
