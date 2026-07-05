@@ -1,0 +1,57 @@
+= Token-Sheriff Client
+:toc: left
+:toclevels: 2
+:source-highlighter: highlight.js
+:toc-title: Table of Contents
+:sectnums:
+
+Framework-agnostic OIDC/OAuth *client* engine for Token-Sheriff — the outbound counterpart to
+`token-sheriff-validation`. Pure Java, no framework dependency.
+
+[NOTE]
+====
+*Status: wired, empty skeleton (Plan 05).* This module is stood up, building, and part of the
+reactor and BOM, but carries *no functional client content yet*. Flows are added in later
+increments (see xref:../doc/oidc/06-implement/README.adoc[Plan 06]).
+====
+
+== Maven Coordinates
+
+[source,xml]
+----
+<dependency>
+    <groupId>de.cuioss.sheriff.token</groupId>
+    <artifactId>token-sheriff-client</artifactId>
+</dependency>
+----
+
+== What it will do
+
+The client engine drives the outbound OIDC/OAuth flows that complement token validation:
+
+* Token retrieval — https://www.rfc-editor.org/rfc/rfc6749[RFC 6749]
+* UserInfo — https://openid.net/specs/openid-connect-core-1_0.html[OIDC Core]
+* Token revocation — https://www.rfc-editor.org/rfc/rfc7009[RFC 7009]
+* Token introspection — https://www.rfc-editor.org/rfc/rfc7662[RFC 7662]
+* RP-Initiated Logout / `end_session`
+* Pushed Authorization Requests — https://www.rfc-editor.org/rfc/rfc9126[RFC 9126]
+
+It adds *flows, not HTTP plumbing*: outbound bytes travel through the `commons` transport base
+layer (`de.cuioss.sheriff.token.commons.transport`) that ships inside `token-sheriff-validation`.
+Because it validates the tokens it retrieves, it depends on `token-sheriff-validation` and gets the
+`commons` base layer transitively.
+
+== Documentation
+
+* xref:../doc/client/architecture.adoc[Client Architecture]
+* xref:../doc/client/requirements.adoc[Client Requirements] (`CLIENT-N`)
+* xref:../doc/client/threat-model.adoc[Client Threat Model]
+* xref:../doc/client/specification/[Client Specifications]
+* xref:doc/[Module documentation]
+
+== Framework bindings
+
+The engine is framework-agnostic. The Quarkus binding lives in
+`token-sheriff-quarkus-parent/token-sheriff-client-quarkus` (runtime + deployment); other runtimes
+(e.g. a CDI/RESTEasy portal adapter) can bind the same engine. See the
+xref:../doc/oidc/decision-oidc-module.adoc[module-architecture decision].

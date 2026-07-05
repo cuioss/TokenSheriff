@@ -15,14 +15,14 @@
  */
 package de.cuioss.sheriff.token.quarkus.runtime;
 
+import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
-import de.cuioss.sheriff.token.validation.ParserConfig;
 import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.dpop.DpopConfig;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.ClaimControlParameter;
-import de.cuioss.sheriff.token.validation.util.LoaderStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

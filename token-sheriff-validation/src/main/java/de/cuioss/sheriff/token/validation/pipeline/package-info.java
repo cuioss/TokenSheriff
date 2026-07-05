@@ -31,7 +31,7 @@
  *   <li>{@link de.cuioss.sheriff.token.validation.pipeline.validator.TokenHeaderValidator} - Validates token headers against issuer configuration</li>
  *   <li>{@link de.cuioss.sheriff.token.validation.pipeline.validator.TokenSignatureValidator} - Validates token signatures using JWKS</li>
  *   <li>{@link de.cuioss.sheriff.token.validation.IssuerConfig} - Configuration for a token issuer</li>
- *   <li>{@link de.cuioss.sheriff.token.validation.ParserConfig} - Configuration for token parsing</li>
+ *   <li>{@link de.cuioss.sheriff.token.commons.transport.ParserConfig} - Configuration for token parsing</li>
  * </ul>
  * <p>
  * The typical token processing pipeline is:

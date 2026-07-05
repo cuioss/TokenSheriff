@@ -16,6 +16,8 @@
 package de.cuioss.sheriff.token.quarkus.deployment;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.quarkus.config.AccessLogFilterConfigResolver;
 import de.cuioss.sheriff.token.quarkus.interceptor.BearerTokenInterceptor;
 import de.cuioss.sheriff.token.quarkus.logging.CustomAccessLogFilter;
@@ -33,7 +35,6 @@ import de.cuioss.sheriff.token.quarkus.validation.DiscoverableTokenValidationRul
 import de.cuioss.sheriff.token.quarkus.validation.TokenValidationRuleRegistry;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfigCache;
-import de.cuioss.sheriff.token.validation.ParserConfig;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
@@ -44,7 +45,6 @@ import de.cuioss.sheriff.token.validation.jwe.JweAlgorithmPreferences;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptor;
 import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader;
-import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.validation.jwks.key.JWKSKeyLoader;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.sheriff.token.validation.jwks.parser.JwksParser;
@@ -256,9 +256,9 @@ public class TokenSheriffProcessor {
 
         // Explicitly register our generated converters as service providers
         serviceProvider.produce(new ServiceProviderBuildItem("com.dslplatform.json.Configuration",
-                "de.cuioss.sheriff.token.validation.json._WellKnownConfiguration_DslJsonConverter",
-                "de.cuioss.sheriff.token.validation.json._Jwks_DslJsonConverter",
-                "de.cuioss.sheriff.token.validation.json._JwkKey_DslJsonConverter",
+                "de.cuioss.sheriff.token.commons.transport._WellKnownResult_DslJsonConverter",
+                "de.cuioss.sheriff.token.commons.transport._Jwks_DslJsonConverter",
+                "de.cuioss.sheriff.token.commons.transport._JwkKey_DslJsonConverter",
                 "de.cuioss.sheriff.token.validation.json._JwtHeader_DslJsonConverter"));
     }
 

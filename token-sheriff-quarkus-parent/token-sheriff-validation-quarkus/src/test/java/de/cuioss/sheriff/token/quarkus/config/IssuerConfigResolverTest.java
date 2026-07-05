@@ -16,9 +16,9 @@
 package de.cuioss.sheriff.token.quarkus.config;
 
 import de.cuioss.http.client.adapter.RetryConfig;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.quarkus.test.TestConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
-import de.cuioss.sheriff.token.validation.ParserConfig;
 import de.cuioss.sheriff.token.validation.dpop.DpopConfig;
 import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
 import de.cuioss.test.juli.TestLogLevel;

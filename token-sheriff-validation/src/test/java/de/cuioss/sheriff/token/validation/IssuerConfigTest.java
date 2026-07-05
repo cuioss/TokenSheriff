@@ -15,9 +15,9 @@
  */
 package de.cuioss.sheriff.token.validation;
 
+import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.validation.domain.claim.mapper.IdentityMapper;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
-import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;

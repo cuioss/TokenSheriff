@@ -23,7 +23,7 @@
  * <ul>
  *   <li>{@link de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader} - Main component that implements
  *       {@link de.cuioss.sheriff.token.validation.jwks.JwksLoader} for HTTP-based JWKS sources</li>
- *   <li>{@link de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig} - Configuration parameters
+ *   <li>{@link de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig} - Configuration parameters
  *       for the HTTP JWKS loader</li>
  *   <li>JwksHttpClient - Client for making HTTP requests
  *       to JWKS endpoints</li>

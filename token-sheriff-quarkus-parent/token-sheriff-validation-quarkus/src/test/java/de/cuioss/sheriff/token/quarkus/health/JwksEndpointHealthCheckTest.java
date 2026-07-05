@@ -16,14 +16,13 @@
 package de.cuioss.sheriff.token.quarkus.health;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.JwksType;
+import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.quarkus.config.JwtTestProfile;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
-import de.cuioss.sheriff.token.validation.jwks.JwksType;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
-import de.cuioss.sheriff.token.validation.util.LoaderStatus;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
-
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;

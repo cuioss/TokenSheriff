@@ -1,0 +1,13 @@
+name: Token-Sheriff Client
+description: Wires the framework-agnostic Token-Sheriff OIDC/OAuth client engine into Quarkus, building on the Token-Sheriff validation extension
+metadata:
+  keywords:
+    - oidc
+    - oauth
+    - client
+    - token
+    - security
+  guide: https://github.com/cuioss/TokenSheriff/tree/main/token-sheriff-quarkus-parent/token-sheriff-client-quarkus
+  categories:
+    - "security"
+  status: "experimental"

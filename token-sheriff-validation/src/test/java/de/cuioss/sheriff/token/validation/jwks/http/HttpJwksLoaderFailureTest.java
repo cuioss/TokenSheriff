@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.validation.jwks.http;
 
 import de.cuioss.http.client.HttpLogMessages;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;

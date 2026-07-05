@@ -15,7 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline;
 
-import de.cuioss.sheriff.token.validation.ParserConfig;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

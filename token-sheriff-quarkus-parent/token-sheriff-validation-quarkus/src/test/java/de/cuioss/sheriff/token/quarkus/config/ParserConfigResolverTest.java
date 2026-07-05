@@ -15,8 +15,8 @@
  */
 package de.cuioss.sheriff.token.quarkus.config;
 
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.quarkus.test.TestConfig;
-import de.cuioss.sheriff.token.validation.ParserConfig;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;

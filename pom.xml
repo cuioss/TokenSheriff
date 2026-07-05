@@ -21,6 +21,7 @@
     <modules>
         <module>bom</module>
         <module>token-sheriff-validation</module>
+        <module>token-sheriff-client</module>
         <module>token-sheriff-quarkus-parent</module>
         <module>benchmarking</module>
     </modules>

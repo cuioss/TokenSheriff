@@ -71,12 +71,6 @@ public final class JWTValidationLogMessages {
                 .template("Failed to load JWKS")
                 .build();
 
-        public static final LogRecord JSON_PARSE_FAILED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(204)
-                .template("Failed to parse JSON from %s: %s")
-                .build();
-
         public static final LogRecord JWKS_INITIALIZATION_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(205)
@@ -237,11 +231,6 @@ public final class JWTValidationLogMessages {
                 .template("Algorithm %s is explicitly rejected for security reasons")
                 .build();
 
-        public static final LogRecord INVALID_JWKS_URI = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(116)
-                .template("Creating HttpJwksLoaderConfig with invalid JWKS URI. The loader will return empty results.")
-                .build();
 
         public static final LogRecord JWK_MISSING_KTY = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -309,22 +298,10 @@ public final class JWTValidationLogMessages {
                 .template("Failed to parse EC key with ID %s: %s")
                 .build();
 
-        public static final LogRecord JWKS_JSON_PARSE_FAILED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(130)
-                .template("Failed to parse JWKS JSON: %s")
-                .build();
-
         public static final LogRecord CLAIM_SUB_OPTIONAL_WARNING = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(131)
                 .template("IssuerConfig for issuer '%s' has claimSubOptional=true. This is not conform to RFC 7519 which requires the 'sub' claim for ACCESS_TOKEN and ID_TOKEN types. Use this setting only when necessary and ensure appropriate alternative validation mechanisms.")
-                .build();
-
-        public static final LogRecord INVALID_BASE64_URL_ENCODING = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(132)
-                .template("Invalid Base64 URL encoding detected for JWK field: %s")
                 .build();
 
         public static final LogRecord BACKGROUND_REFRESH_NO_HANDLER = LogRecordModel.builder()
@@ -361,24 +338,6 @@ public final class JWTValidationLogMessages {
                 .prefix(PREFIX)
                 .identifier(138)
                 .template("Configured issuer '%s' does not match discovered issuer '%s' from well-known document")
-                .build();
-
-        public static final LogRecord INSECURE_HTTP_JWKS = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(139)
-                .template("Using insecure HTTP protocol for JWKS endpoint: %s - HTTPS should be used in production")
-                .build();
-
-        public static final LogRecord JWKS_PARSE_NULL_RESULT = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(140)
-                .template("DSL-JSON returned null for JWKS parsing")
-                .build();
-
-        public static final LogRecord JWKS_PARSE_IO_ERROR = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(141)
-                .template("Failed to parse JWKS content: %s")
                 .build();
 
         public static final LogRecord OKP_KEY_PARSE_FAILED = LogRecordModel.builder()

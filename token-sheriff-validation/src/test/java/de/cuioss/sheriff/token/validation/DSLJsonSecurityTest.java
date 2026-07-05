@@ -16,8 +16,9 @@
 package de.cuioss.sheriff.token.validation;
 
 import com.dslplatform.json.DslJson;
-import de.cuioss.sheriff.token.validation.json.Jwks;
-import de.cuioss.sheriff.token.validation.json.WellKnownResult;
+import de.cuioss.sheriff.token.commons.transport.Jwks;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
+import de.cuioss.sheriff.token.commons.transport.WellKnownResult;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

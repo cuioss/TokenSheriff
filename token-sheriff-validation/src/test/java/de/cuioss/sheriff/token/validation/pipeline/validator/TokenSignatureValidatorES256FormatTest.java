@@ -16,7 +16,7 @@
 package de.cuioss.sheriff.token.validation.pipeline.validator;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
-import de.cuioss.sheriff.token.validation.ParserConfig;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.json.JwtHeader;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;

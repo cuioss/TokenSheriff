@@ -1,0 +1,27 @@
+= Token-Sheriff Client — Module Documentation
+:toc: left
+:toclevels: 2
+:source-highlighter: highlight.js
+:toc-title: Table of Contents
+:sectnums:
+
+Module-level documentation for `token-sheriff-client` (usage, configuration, development).
+
+[NOTE]
+====
+*Status: stub (Plan 05).* The module is a wired, empty skeleton with no functional content yet.
+Usage guides, configuration reference and developer notes land alongside the client flows in later
+increments (xref:../../doc/oidc/06-implement/README.adoc[Plan 06]).
+====
+
+== Capability documentation
+
+The conceptual *client capability* docs (requirements, architecture, threat model, specifications)
+live at the repository root under xref:../../doc/client/[`doc/client/`], as peer capabilities to
+`doc/validation/` and `doc/commons/` (see xref:../../doc/oidc/02-doc-structure/README.adoc[Plan 02]).
+
+== Contents (to come)
+
+* `usage-guide.adoc` — obtaining and using the client engine
+* `configuration/` — client configuration reference
+* `developing.adoc` — extending the client
