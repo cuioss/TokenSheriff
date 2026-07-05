@@ -18,10 +18,10 @@ package de.cuioss.sheriff.token.validation.jwks.parser;
 import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
+import de.cuioss.sheriff.token.commons.transport.JwkKey;
+import de.cuioss.sheriff.token.commons.transport.Jwks;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
-import de.cuioss.sheriff.token.validation.ParserConfig;
-import de.cuioss.sheriff.token.validation.json.JwkKey;
-import de.cuioss.sheriff.token.validation.json.Jwks;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.io.IOException;

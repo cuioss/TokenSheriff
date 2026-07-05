@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>de.cuioss.sheriff.token</groupId>
+        <artifactId>token-sheriff-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>token-sheriff-client</artifactId>
+    <packaging>jar</packaging>
+    <name>Token-Sheriff Client</name>
+    <description>Framework-agnostic OIDC/OAuth client engine for Token-Sheriff. Builds on the commons transport
+        base layer (shipped in token-sheriff-validation) to add the client-side flows — token retrieval,
+        userinfo, revocation, introspection, end-session and PAR. Pure Java, no framework dependency.
+    </description>
+
+    <properties>
+        <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.token.client</maven.jar.plugin.automatic.module.name>
+        <!-- Wired, empty skeleton (Plan 05): only package-info.java, so Javadoc has no public
+             classes to document and would fail. Re-enable once client flows land (Plan 06). -->
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>de.cuioss.sheriff.token</groupId>
+                <artifactId>token-sheriff-bom</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- The client validates the tokens it retrieves, so it depends on validation, which also
+             carries the commons base layer (transport, error model, events, metrics) transitively. -->
+        <dependency>
+            <groupId>de.cuioss.sheriff.token</groupId>
+            <artifactId>token-sheriff-validation</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.cuioss</groupId>
+            <artifactId>cui-java-tools</artifactId>
+        </dependency>
+
+        <!-- Unit testing -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

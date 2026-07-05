@@ -15,8 +15,9 @@
  */
 package de.cuioss.sheriff.token.validation.jwks;
 
+import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
+import de.cuioss.sheriff.token.commons.transport.JwksType;
 import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader;
-import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.validation.jwks.key.JWKSKeyLoader;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.experimental.UtilityClass;

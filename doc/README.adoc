@@ -47,7 +47,9 @@ The token validation capability — its requirements, architecture, security mod
 The active OIDC capability — the server-side confidential-client engine that retrieves
 tokens, holds and refreshes them server-side, and drives the flows on top of the commons
 transport. It is the engine a Backend-For-Frontend (BFF) is built on; it is not itself a BFF.
-Spec-first: this document set is authored ahead of the `token-sheriff-client` module.
+The `token-sheriff-client` module (and its `token-sheriff-client-quarkus` extension) now exist
+as a wired, empty skeleton (xref:oidc/05-client-module/README.adoc[Plan 05]); this document set
+still leads the functional content, which lands per xref:oidc/06-implement/README.adoc[Plan 06].
 
 * xref:client/requirements.adoc[Requirements] - `CLIENT-N`, grouped by aspect (Retrieval & flow / Token)
 * xref:client/architecture.adoc[Architecture] - Client/BFF engine seam and boundaries
@@ -70,13 +72,17 @@ Spec-first: this document set is authored ahead of the `token-sheriff-client` mo
 
 == Module Documentation
 
-* xref:../token-sheriff-validation/README.adoc[token-sheriff-validation] - Core library usage and API
+* xref:../token-sheriff-validation/README.adoc[token-sheriff-validation] - Core library usage and API (also carries the `commons` base layer)
 ** xref:../token-sheriff-validation/doc/usage-guide.adoc[Usage Guide]
 ** xref:../token-sheriff-validation/doc/api-reference.adoc[API Reference]
 ** xref:../token-sheriff-validation/doc/developing.adoc[Developing]
 ** xref:../token-sheriff-validation/doc/UnitTesting.adoc[Unit Testing]
-* xref:../token-sheriff-quarkus-parent/README.adoc[token-sheriff-quarkus-parent] - Quarkus extension
+* xref:../token-sheriff-client/README.adoc[token-sheriff-client] - Framework-agnostic OIDC/OAuth client engine _(wired, empty skeleton — Plan 05)_
+** xref:../token-sheriff-client/doc/README.adoc[Module Documentation]
+* xref:../token-sheriff-quarkus-parent/README.adoc[token-sheriff-quarkus-parent] - Quarkus extensions
 ** xref:../token-sheriff-quarkus-parent/doc/README.adoc[Module Documentation]
+** `token-sheriff-validation-quarkus` (+ `-deployment`) - validation extension
+** `token-sheriff-client-quarkus` (+ `-deployment`) - client extension _(wired, empty skeleton — Plan 05)_
 
 == Benchmarking
 

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>de.cuioss.sheriff.token</groupId>
+        <artifactId>token-sheriff-quarkus-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>token-sheriff-client-quarkus</artifactId>
+    <packaging>jar</packaging>
+    <name>Token-Sheriff Client Quarkus Integration - Runtime</name>
+    <description>Runtime module of the Quarkus extension for the Token-Sheriff OIDC/OAuth client engine.
+        Builds on the existing token-sheriff-validation-quarkus extension and the framework-agnostic
+        token-sheriff-client engine. Wired, empty skeleton (Plan 05) — no functional content yet.
+    </description>
+
+    <properties>
+        <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.token.client.quarkus</maven.jar.plugin.automatic.module.name>
+        <!-- Wired, empty skeleton (Plan 05): only package-info.java, so Javadoc has no public
+             classes to document and would fail. Re-enable once client runtime code lands (Plan 06). -->
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+    </properties>
+
+    <dependencies>
+        <!-- The framework-agnostic client engine this extension wires into Quarkus -->
+        <dependency>
+            <groupId>de.cuioss.sheriff.token</groupId>
+            <artifactId>token-sheriff-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Depends on the existing validation extension: reuses its CDI wiring, keeps opt-in clean -->
+        <dependency>
+            <groupId>de.cuioss.sheriff.token</groupId>
+            <artifactId>token-sheriff-validation-quarkus</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-extension-maven-plugin</artifactId>
+                <version>${version.quarkus}</version>
+                <executions>
+                    <execution>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>extension-descriptor</goal>
+                        </goals>
+                        <configuration>
+                            <deployment>${project.groupId}:token-sheriff-client-quarkus-deployment:${project.version}</deployment>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.quarkus</groupId>
+                            <artifactId>quarkus-extension-processor</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                    <release>21</release>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

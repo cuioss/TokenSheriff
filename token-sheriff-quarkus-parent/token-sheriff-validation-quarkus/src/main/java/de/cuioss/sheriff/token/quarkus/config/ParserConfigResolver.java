@@ -15,7 +15,7 @@
  */
 package de.cuioss.sheriff.token.quarkus.config;
 
-import de.cuioss.sheriff.token.validation.ParserConfig;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.tools.logging.CuiLogger;
 import org.eclipse.microprofile.config.Config;
 

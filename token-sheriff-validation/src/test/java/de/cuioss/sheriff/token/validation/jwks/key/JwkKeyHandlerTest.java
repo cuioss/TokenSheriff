@@ -15,8 +15,8 @@
  */
 package de.cuioss.sheriff.token.validation.jwks.key;
 
-import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
-import de.cuioss.sheriff.token.validation.json.JwkKey;
+import de.cuioss.sheriff.token.commons.transport.JwkKey;
+import de.cuioss.sheriff.token.commons.transport.TransportLogMessages;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
@@ -107,7 +107,7 @@ class JwkKeyHandlerTest {
         // Verify that the warning was logged for invalid characters
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "invalid!base64");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
-                JWTValidationLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
+                TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
     }
 
     @Test
@@ -123,7 +123,7 @@ class JwkKeyHandlerTest {
         // Verify that the warning was logged for invalid characters
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "invalid!base64");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
-                JWTValidationLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
+                TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
     }
 
     @Test
@@ -163,7 +163,7 @@ class JwkKeyHandlerTest {
         // Verify that the warning was logged for invalid characters
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "invalid!base64");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
-                JWTValidationLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
+                TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
     }
 
     @Test
@@ -180,7 +180,7 @@ class JwkKeyHandlerTest {
         // Verify that the warning was logged for invalid characters
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "invalid!base64");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
-                JWTValidationLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
+                TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
     }
 
     @ParameterizedTest
@@ -222,7 +222,7 @@ class JwkKeyHandlerTest {
         // Verify that the warning was logged
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "abc==");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
-                JWTValidationLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
+                TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
     }
 
     @Test
@@ -240,7 +240,7 @@ class JwkKeyHandlerTest {
         // Verify that the warning was logged
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "abc==");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
-                JWTValidationLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
+                TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
     }
 
     @Test

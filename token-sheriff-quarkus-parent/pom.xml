@@ -16,6 +16,8 @@
     <modules>
         <module>token-sheriff-validation-quarkus</module>
         <module>token-sheriff-validation-quarkus-deployment</module>
+        <module>token-sheriff-client-quarkus</module>
+        <module>token-sheriff-client-quarkus-deployment</module>
         <module>token-sheriff-quarkus-integration-tests</module>
         <module>e-2-e-playwright</module>
     </modules>
@@ -323,6 +325,8 @@
                     ${project.build.directory}/site/jacoco/jacoco.xml,
                     token-sheriff-validation-quarkus/target/site/jacoco/jacoco.xml,
                     token-sheriff-validation-quarkus-deployment/target/site/jacoco/jacoco.xml,
+                    token-sheriff-client-quarkus/target/site/jacoco/jacoco.xml,
+                    token-sheriff-client-quarkus-deployment/target/site/jacoco/jacoco.xml,
                     ../target/site/jacoco/jacoco.xml
                 </sonar.coverage.jacoco.xmlReportPaths>
             </properties>

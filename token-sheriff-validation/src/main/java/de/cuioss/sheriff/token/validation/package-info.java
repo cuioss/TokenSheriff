@@ -22,7 +22,7 @@
  * <ul>
  *   <li>{@link de.cuioss.sheriff.token.validation.TokenValidator} - Main entry point for creating and validating tokens</li>
  *   <li>{@link de.cuioss.sheriff.token.validation.IssuerConfig} - Configuration for token issuers</li>
- *   <li>{@link de.cuioss.sheriff.token.validation.ParserConfig} - Configuration for token parsing</li>
+ *   <li>{@link de.cuioss.sheriff.token.commons.transport.ParserConfig} - Configuration for token parsing</li>
  *   <li>{@link de.cuioss.sheriff.token.validation.JWTValidationLogMessages} - Structured logging messages</li>
  * </ul>
  * <p>

@@ -16,14 +16,14 @@
 package de.cuioss.sheriff.token.validation;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
+import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
+import de.cuioss.sheriff.token.commons.transport.LoadingStatusProvider;
 import de.cuioss.sheriff.token.validation.domain.claim.mapper.ClaimMapper;
 import de.cuioss.sheriff.token.validation.dpop.DpopConfig;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoaderFactory;
-import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
-import de.cuioss.sheriff.token.validation.util.LoaderStatus;
-import de.cuioss.sheriff.token.validation.util.LoadingStatusProvider;
 import de.cuioss.tools.base.Preconditions;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.EqualsAndHashCode;

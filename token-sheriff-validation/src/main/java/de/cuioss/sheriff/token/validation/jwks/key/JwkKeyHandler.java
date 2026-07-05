@@ -15,7 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.jwks.key;
 
-import de.cuioss.sheriff.token.validation.json.JwkKey;
+import de.cuioss.sheriff.token.commons.transport.JwkKey;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 

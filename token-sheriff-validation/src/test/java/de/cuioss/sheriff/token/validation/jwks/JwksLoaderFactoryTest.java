@@ -17,11 +17,12 @@ package de.cuioss.sheriff.token.validation.jwks;
 
 import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
+import de.cuioss.sheriff.token.commons.transport.JwksType;
+import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader;
-import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.validation.jwks.key.JWKSKeyLoader;
 import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
-import de.cuioss.sheriff.token.validation.util.LoaderStatus;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

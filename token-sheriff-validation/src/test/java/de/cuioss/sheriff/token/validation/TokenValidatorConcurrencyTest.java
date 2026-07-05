@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation;
 
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import org.junit.jupiter.api.RepeatedTest;

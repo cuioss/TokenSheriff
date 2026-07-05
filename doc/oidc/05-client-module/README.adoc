@@ -18,6 +18,14 @@ toc::[]
 
 Stand up the complete in-repo skeleton the client work will fill: the engine module, a Quarkus extension for it, and the build assembly (BOM + reactor). After Plan 05 a developer only adds content (per xref:../04-client-spec/README.adoc[Plan 04]); no structural work remains.
 
+[NOTE]
+.Execution decision — transport migration folded in (option b)
+====
+xref:../03-commons/README.adoc[Plan 03] deferred the transport re-packaging (`…validation.wellknown` + `…validation.jwks.http` → `…commons.transport`, plus the log-registry split) onto this plan. Two options were on the table: *(a)* keep Plan 05 a pure empty skeleton and defer the transport migration to a dedicated PR ahead of Plan 06; *(b)* fold the transport migration into Plan 05.
+
+*Chosen: (b)* — the transport migration was folded in. Within (b), the `HttpJwksLoader ↔ JWKS-crypto` coupling was *inverted/split* (not carried into commons): the pure HTTP/JSON transport plumbing moved to `commons.transport`, while the JWKS crypto orchestrator (`HttpJwksLoader implements JwksLoader`, `JWKSKeyLoader`, `KeyInfo`, `jwks.parser/key`, `security`) stayed in `validation` and now depends *down* on `commons.transport`. This honors the Plan 03 seam ("commons moves bytes… never interprets a token's trust") and satisfies the `CommonsLayeringTest` ArchUnit boundary. See the xref:../03-commons/README.adoc#_verification[Plan 03 verification] entry for the full type inventory.
+====
+
 == Decision: standalone engine, dedicated Quarkus extension
 
 . *Engine — standalone, modelled on `token-sheriff-validation`.* Pure Java, depends on `token-sheriff-validation` — which provides both the `commons` base layer (transport, error model, events, metrics) and token validation. *Not* inside the Quarkus extension.
@@ -94,8 +102,9 @@ Empty modules can fail quality gates (JaCoCo on zero classes, PMD, Sonar new-cod
 
 == Verification
 
-* [ ] `token-sheriff-client`, `token-sheriff-client-quarkus`, `…-deployment` appear in the reactor; engine + runtime in the BOM; full build green
-* [ ] client extension registers the `token-sheriff-client` feature and depends on the existing extension + engine; engine has *no* Quarkus dependency
-* [ ] Nothing landed in `cui-portal-core` (out of scope — the portal replacement is future work beyond Plans 01–06)
-* [ ] No client functional content and no real test bodies introduced (structure only)
-* [ ] Root README and `doc/README.adoc` list the new module + extension
+* [x] `token-sheriff-client`, `token-sheriff-client-quarkus`, `…-deployment` appear in the reactor; engine + runtime + client extension in the BOM; full build green
+* [x] client extension registers the `token-sheriff-client` feature and depends on the existing extension + engine; engine has *no* Quarkus dependency
+* [x] Nothing landed in `cui-portal-core` (out of scope — the portal replacement is future work beyond Plans 01–06)
+* [x] No client functional content introduced (structure only); the sole test asserts the extension registers its feature
+* [x] Root README and `doc/README.adoc` list the new module + extension
+* [x] *Transport migration folded in (option b)* — `commons.transport` now holds the discovery + JWKS transport plumbing; `CommonsLayeringTest` ArchUnit boundary green; see xref:../03-commons/README.adoc[Plan 03]

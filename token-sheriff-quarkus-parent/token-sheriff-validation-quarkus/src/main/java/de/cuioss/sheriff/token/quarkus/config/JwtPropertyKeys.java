@@ -15,8 +15,8 @@
  */
 package de.cuioss.sheriff.token.quarkus.config;
 
+import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
-import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig;
 import lombok.experimental.UtilityClass;
 
 /**
@@ -339,7 +339,7 @@ public final class JwtPropertyKeys {
          * <strong>Requires</strong> {@link #ISSUER_IDENTIFIER}.
          * </p>
          *
-         * @see de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig
+         * @see de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig
          */
         public static final String JWKS_URL = HTTP_BASE + "url";
 
@@ -356,7 +356,7 @@ public final class JwtPropertyKeys {
          * Provides {@link #ISSUER_IDENTIFIER} automatically from discovery document.
          * </p>
          *
-         * @see de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig
+         * @see de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig
          */
         public static final String WELL_KNOWN_URL = HTTP_BASE + "well-known-url";
 
@@ -410,7 +410,7 @@ public final class JwtPropertyKeys {
          * <strong>Only applicable</strong> for {@link #JWKS_URL} and {@link #WELL_KNOWN_URL}.
          * </p>
          *
-         * @see de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig
+         * @see de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig
          */
         public static final String REFRESH_INTERVAL_SECONDS = HTTP_BASE + "refresh-interval-seconds";
 
@@ -425,7 +425,7 @@ public final class JwtPropertyKeys {
          * <strong>Only applicable</strong> for {@link #JWKS_URL} and {@link #WELL_KNOWN_URL}.
          * </p>
          *
-         * @see de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig
+         * @see de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig
          */
         public static final String CONNECT_TIMEOUT_SECONDS = HTTP_BASE + "connect-timeout-seconds";
 
@@ -441,7 +441,7 @@ public final class JwtPropertyKeys {
          * <strong>Only applicable</strong> for {@link #JWKS_URL} and {@link #WELL_KNOWN_URL}.
          * </p>
          *
-         * @see de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig
+         * @see de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig
          */
         public static final String READ_TIMEOUT_SECONDS = HTTP_BASE + "read-timeout-seconds";
 
@@ -481,7 +481,7 @@ public final class JwtPropertyKeys {
          * <strong>Only applicable</strong> for {@link #JWKS_URL} and {@link #WELL_KNOWN_URL}.
          * </p>
          *
-         * @see de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig#getMaxRetiredKeySets()
+         * @see de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig#getMaxRetiredKeySets()
          * @see <a href="https://github.com/cuioss/TokenSheriff/issues/110">Issue #110: Key rotation grace period</a>
          */
         public static final String MAX_RETIRED_KEY_SETS = HTTP_BASE + "max-retired-key-sets";

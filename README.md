@@ -169,6 +169,17 @@ For detailed architectural information, see:
 - [Architecture Reference](doc/validation/architecture.adoc) - Validation pipeline, components, and design
 - [Component Diagram](doc/plantuml/component-overview.png) - Visual architecture overview
 
+### Modules
+
+| Module | Description |
+| --- | --- |
+| [`token-sheriff-validation`](token-sheriff-validation/README.adoc) | Core JWT validation engine. Also carries the `commons` base layer (`de.cuioss.sheriff.token.commons.*`: transport, error model, events, metrics), enforced by ArchUnit. |
+| [`token-sheriff-client`](token-sheriff-client/README.adoc) | Framework-agnostic OIDC/OAuth **client** engine (token retrieval, userinfo, revocation, introspection, end-session, PAR). Depends on `token-sheriff-validation`. _Wired, empty skeleton (Plan 05) — no functional content yet._ |
+| [`token-sheriff-validation-quarkus`](token-sheriff-quarkus-parent/README.adoc) | Quarkus extension (runtime + deployment) for token validation. |
+| `token-sheriff-client-quarkus` | Quarkus extension (runtime + deployment) that wires the client engine into Quarkus, building on the validation extension. _Wired, empty skeleton (Plan 05)._ |
+| [`bom`](bom/pom.xml) | Bill of Materials for all Token-Sheriff artifacts. |
+| [`benchmarking`](benchmarking/README.adoc) | JMH micro-benchmarks and WRK integration load tests. |
+
 ## Documentation
 
 - [Documentation Hub](doc/README.adoc) - Complete guide to all documentation

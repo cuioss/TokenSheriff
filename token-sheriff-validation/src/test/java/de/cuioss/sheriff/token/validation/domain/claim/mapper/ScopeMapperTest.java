@@ -16,7 +16,7 @@
 package de.cuioss.sheriff.token.validation.domain.claim.mapper;
 
 import com.dslplatform.json.DslJson;
-import de.cuioss.sheriff.token.validation.ParserConfig;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValueType;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;

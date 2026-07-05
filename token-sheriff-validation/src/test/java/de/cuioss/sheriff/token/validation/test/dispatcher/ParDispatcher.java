@@ -107,11 +107,11 @@ public class ParDispatcher implements ModuleDispatcherElement {
             case OVERSIZED_BODY -> Optional.of(new MockResponse(SC_OK, json, AdversarialResponses.oversizedJson()));
             default -> Optional.of(new MockResponse(SC_CREATED, json,
                     """
-                    {
-                      "request_uri": "urn:ietf:params:oauth:request_uri:mock-par-reference",
-                      "expires_in": 90
-                    }\
-                    """));
+                            {
+                              "request_uri": "urn:ietf:params:oauth:request_uri:mock-par-reference",
+                              "expires_in": 90
+                            }\
+                            """));
         };
     }
 
