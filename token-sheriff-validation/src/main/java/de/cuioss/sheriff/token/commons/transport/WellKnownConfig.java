@@ -19,6 +19,7 @@ import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.SecureSSLContextProvider;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.tools.logging.CuiLogger;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
@@ -43,6 +44,8 @@ import java.net.URI;
 @ToString
 @EqualsAndHashCode
 public class WellKnownConfig {
+
+    private static final CuiLogger LOGGER = new CuiLogger(WellKnownConfig.class);
 
     /**
      * Default connect timeout in seconds for well-known endpoint requests.
@@ -104,17 +107,32 @@ public class WellKnownConfig {
         private final HttpHandler.HttpHandlerBuilder httpHandlerBuilder;
         private RetryConfig retryConfig = RetryConfig.defaults();
         private ParserConfig parserConfig;
+        private boolean allowInsecureHttp = true;
 
         /**
          * Constructor initializing the HttpHandlerBuilder with sensible defaults.
          */
         public WellKnownConfigBuilder() {
             this.httpHandlerBuilder = HttpHandler.builder()
-                    // Permit http:// endpoints; this layer emits its own security warning
-                    // for insecure schemes rather than rejecting them outright.
-                    .allowInsecureHttp(true)
                     .connectionTimeoutSeconds(DEFAULT_CONNECT_TIMEOUT_SECONDS)
                     .readTimeoutSeconds(DEFAULT_READ_TIMEOUT_SECONDS);
+        }
+
+        /**
+         * Controls whether plaintext {@code http://} discovery endpoints are permitted.
+         * <p>
+         * Defaults to {@code true}, which preserves the "allow but warn" contract:
+         * cleartext endpoints are accepted but a {@code TokenSheriff-129}
+         * ({@code INSECURE_HTTP_WELLKNOWN}) warning is emitted. Set to {@code false} to
+         * enforce HTTPS and have {@link #build()} reject {@code http://} discovery
+         * endpoints, which is recommended for production.
+         *
+         * @param allowInsecureHttp {@code false} to require HTTPS, {@code true} (default) to allow cleartext HTTP
+         * @return this builder instance
+         */
+        public WellKnownConfigBuilder allowInsecureHttp(boolean allowInsecureHttp) {
+            this.allowInsecureHttp = allowInsecureHttp;
+            return this;
         }
 
         /**
@@ -218,7 +236,15 @@ public class WellKnownConfig {
          */
         public WellKnownConfig build() {
             try {
+                httpHandlerBuilder.allowInsecureHttp(allowInsecureHttp);
                 HttpHandler httpHandler = httpHandlerBuilder.build();
+
+                // Emit a security warning when the discovery endpoint uses cleartext HTTP,
+                // mirroring the JWKS insecure-HTTP warning so insecure endpoints are not silent.
+                if ("http".equalsIgnoreCase(httpHandler.getUri().getScheme())) {
+                    LOGGER.warn(TransportLogMessages.WARN.INSECURE_HTTP_WELLKNOWN, httpHandler.getUri().toString());
+                }
+
                 ParserConfig finalParserConfig = parserConfig != null ? parserConfig : ParserConfig.builder().build();
                 return new WellKnownConfig(httpHandler, retryConfig, finalParserConfig);
             } catch (IllegalArgumentException | IllegalStateException e) {

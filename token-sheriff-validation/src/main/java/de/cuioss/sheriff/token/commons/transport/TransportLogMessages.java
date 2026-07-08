@@ -61,6 +61,12 @@ public final class TransportLogMessages {
                 .template("Invalid Base64 URL encoding detected for JWK field: %s")
                 .build();
 
+        public static final LogRecord INSECURE_HTTP_WELLKNOWN = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(129)
+                .template("Using insecure HTTP protocol for well-known discovery endpoint: %s - HTTPS should be used in production")
+                .build();
+
         public static final LogRecord INSECURE_HTTP_JWKS = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(139)

@@ -81,6 +81,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-126 |JWKS |JWKS keys array is empty |Logged when JWKS keys array is empty
 |TokenSheriff-127 |JWKS |Failed to parse RSA key with ID %s: %s |Logged when RSA key parsing fails for a specific key ID
 |TokenSheriff-128 |JWKS |Failed to parse EC key with ID %s: %s |Logged when EC key parsing fails for a specific key ID
+|TokenSheriff-129 |JWKS |Using insecure HTTP protocol for well-known discovery endpoint: %s - HTTPS should be used in production |Logged when an insecure HTTP protocol is used for the OIDC well-known discovery endpoint instead of HTTPS
 |TokenSheriff-130 |JSON |Failed to parse JWKS JSON: %s |Logged when JSON parsing fails for JWKS content and an empty result is returned as fallback
 |TokenSheriff-131 |ISSUER |IssuerConfig for issuer '%s' has claimSubOptional=true. This is not conform to RFC 7519 which requires the 'sub' claim for ACCESS_TOKEN and ID_TOKEN types. Use this setting only when necessary and ensure appropriate alternative validation mechanisms. |Logged when an issuer configuration has the subject claim marked as optional, which violates RFC 7519 requirements
 |TokenSheriff-132 |JWKS |Invalid Base64 URL encoding detected for JWK field: %s |Logged when Base64 URL encoding validation fails for a JWK field

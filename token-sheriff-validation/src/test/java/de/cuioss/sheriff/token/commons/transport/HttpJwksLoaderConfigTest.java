@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.commons.transport;
 
 import de.cuioss.http.client.adapter.RetryConfig;
+import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.SecureSSLContextProvider;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
@@ -38,6 +39,44 @@ class HttpJwksLoaderConfigTest {
 
     private static final String VALID_URL = "https://example.com/.well-known/jwks.json";
     private static final int REFRESH_INTERVAL = 60;
+
+    @Test
+    @DisplayName("Should reject http:// JWKS URL when allowInsecureHttp(false)")
+    void shouldRejectInsecureHttpWhenDisallowed() {
+        var builder = HttpJwksLoaderConfig.builder()
+                .jwksUrl("http://example.com/.well-known/jwks.json")
+                .issuerIdentifier("test-issuer")
+                .allowInsecureHttp(false);
+        assertThrows(IllegalArgumentException.class, builder::build,
+                "http:// JWKS URL must be rejected when insecure HTTP is disallowed");
+    }
+
+    @Test
+    @DisplayName("Should allow https:// JWKS URL when allowInsecureHttp(false)")
+    void shouldAllowHttpsWhenInsecureDisallowed() {
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .jwksUrl(VALID_URL)
+                .issuerIdentifier("test-issuer")
+                .allowInsecureHttp(false)
+                .build();
+        assertTrue(config.getHttpHandler().getUrl().toString().startsWith("https://"),
+                "https:// JWKS URL must be accepted when insecure HTTP is disallowed");
+    }
+
+    @Test
+    @DisplayName("Should warn when creating a handler for a discovered http:// JWKS URL")
+    void shouldWarnForDiscoveredInsecureJwksUrl() {
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .jwksUrl(VALID_URL)
+                .issuerIdentifier("test-issuer")
+                .build();
+
+        HttpHandler handler = config.getHttpHandler("http://internal.example/jwks.json");
+        assertTrue(handler.getUri().toString().startsWith("http://"),
+                "Discovered http:// JWKS URL is allowed by default");
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                TransportLogMessages.WARN.INSECURE_HTTP_JWKS.resolveIdentifierString());
+    }
 
     @Test
     @DisplayName("Should create config with default values")
