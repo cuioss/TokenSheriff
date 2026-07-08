@@ -76,9 +76,10 @@ class HttpJwksLoaderFailureTest {
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
                     JWTValidationLogMessages.ERROR.JWKS_LOAD_FAILED.resolveIdentifierString());
 
-            // After migration: ETagAwareHttpAdapter logs HTTP-200 (CONFIGURATION_ERROR_DURING_REQUEST) for connection errors
-            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
-                    HttpLogMessages.ERROR.CONFIGURATION_ERROR_DURING_REQUEST.resolveIdentifierString());
+            // A connection failure (ConnectException) surfaces as a network error from the HTTP
+            // client adapter, logged at WARN via NETWORK_ERROR_DURING_REQUEST (HTTP-114).
+            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                    HttpLogMessages.WARN.NETWORK_ERROR_DURING_REQUEST.resolveIdentifierString());
         }
     }
 

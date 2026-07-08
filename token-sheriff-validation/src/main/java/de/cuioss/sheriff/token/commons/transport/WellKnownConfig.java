@@ -109,7 +109,12 @@ public class WellKnownConfig {
          * Constructor initializing the HttpHandlerBuilder with sensible defaults.
          */
         public WellKnownConfigBuilder() {
+            // Permit cleartext HTTP endpoints for well-known discovery. Since cui-http 2.0.0,
+            // HttpHandler.build() refuses plaintext HTTP unless allowInsecureHttp(true) is set;
+            // opt in here to preserve the prior allow-but-warn behavior (the insecure-HTTP warning
+            // is emitted by HttpJwksLoaderConfig.build()).
             this.httpHandlerBuilder = HttpHandler.builder()
+                    .allowInsecureHttp(true)
                     .connectionTimeoutSeconds(DEFAULT_CONNECT_TIMEOUT_SECONDS)
                     .readTimeoutSeconds(DEFAULT_READ_TIMEOUT_SECONDS);
         }

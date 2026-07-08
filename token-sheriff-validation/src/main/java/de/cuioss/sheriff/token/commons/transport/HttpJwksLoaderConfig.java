@@ -285,7 +285,12 @@ public class HttpJwksLoaderConfig {
          * Constructor initializing the HttpHandlerBuilder.
          */
         public HttpJwksLoaderConfigBuilder() {
-            this.httpHandlerBuilder = HttpHandler.builder();
+            // Permit cleartext HTTP endpoints: this configuration deliberately allows plaintext
+            // HTTP (logging TransportLogMessages.WARN.INSECURE_HTTP_JWKS in build()) rather than
+            // rejecting it outright. Since cui-http 2.0.0, HttpHandler.build() refuses plaintext
+            // HTTP unless allowInsecureHttp(true) is set, so we opt in here to preserve that
+            // allow-but-warn behavior.
+            this.httpHandlerBuilder = HttpHandler.builder().allowInsecureHttp(true);
         }
 
         /**
