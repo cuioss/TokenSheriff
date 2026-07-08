@@ -210,9 +210,10 @@ public class HttpJwksLoaderConfig {
         // Reuse existing HttpHandler configuration as base
         HttpHandler baseHandler = getHttpHandler();
 
-        // Create a new handler with the same configuration but different URL
+        // Create a new handler with the same configuration but different URL.
+        // asBuilder() copies the base handler's settings (including allowInsecureHttp),
+        // so the caller's security preference is preserved.
         return baseHandler.asBuilder()
-                .allowInsecureHttp(true)
                 .url(url)
                 .build();
     }
