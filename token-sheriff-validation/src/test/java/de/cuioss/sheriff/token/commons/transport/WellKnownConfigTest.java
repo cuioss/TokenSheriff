@@ -16,6 +16,9 @@
 package de.cuioss.sheriff.token.commons.transport;
 
 import de.cuioss.http.client.handler.SecureSSLContextProvider;
+import de.cuioss.test.juli.LogAsserts;
+import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -24,11 +27,49 @@ import java.net.URI;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@EnableTestLogger
 @DisplayName("Tests WellKnownConfig")
 class WellKnownConfigTest {
 
     private static final String TEST_WELL_KNOWN_URL = "https://example.com/.well-known/openid-configuration";
     private static final URI TEST_WELL_KNOWN_URI = URI.create(TEST_WELL_KNOWN_URL);
+    private static final String INSECURE_WELL_KNOWN_URL = "http://example.com/.well-known/openid-configuration";
+
+    @Test
+    @DisplayName("Should warn about insecure HTTP well-known discovery URL")
+    void shouldWarnAboutInsecureHttpWellKnownUrl() {
+        WellKnownConfig config = WellKnownConfig.builder()
+                .wellKnownUrl(INSECURE_WELL_KNOWN_URL)
+                .build();
+
+        assertTrue(config.getHttpHandler().getUri().toString().startsWith("http://"),
+                "Insecure HTTP well-known URL is allowed by default");
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                TransportLogMessages.WARN.INSECURE_HTTP_WELLKNOWN.resolveIdentifierString());
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, INSECURE_WELL_KNOWN_URL);
+    }
+
+    @Test
+    @DisplayName("Should reject insecure HTTP well-known URL when allowInsecureHttp(false)")
+    void shouldRejectInsecureHttpWellKnownUrlWhenDisallowed() {
+        var builder = WellKnownConfig.builder()
+                .allowInsecureHttp(false)
+                .wellKnownUrl(INSECURE_WELL_KNOWN_URL);
+        assertThrows(IllegalArgumentException.class, builder::build,
+                "http:// well-known URL must be rejected when insecure HTTP is disallowed");
+    }
+
+    @Test
+    @DisplayName("Should allow https well-known URL when allowInsecureHttp(false)")
+    void shouldAllowHttpsWellKnownUrlWhenInsecureDisallowed() {
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowInsecureHttp(false)
+                .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                .build();
+
+        assertNotNull(config.getHttpHandler());
+        assertTrue(config.getHttpHandler().getUri().toString().startsWith("https://"));
+    }
 
     @Test
     @DisplayName("Should create config with URL string")

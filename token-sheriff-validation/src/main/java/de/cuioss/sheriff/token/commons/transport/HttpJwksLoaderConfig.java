@@ -210,10 +210,19 @@ public class HttpJwksLoaderConfig {
         // Reuse existing HttpHandler configuration as base
         HttpHandler baseHandler = getHttpHandler();
 
-        // Create a new handler with the same configuration but different URL
-        return baseHandler.asBuilder()
+        // Create a new handler with the same configuration but different URL.
+        // asBuilder() copies the base handler's settings (including allowInsecureHttp),
+        // so the caller's security preference is preserved.
+        HttpHandler handler = baseHandler.asBuilder()
                 .url(url)
                 .build();
+
+        // Emit the insecure-HTTP warning for JWKS URLs discovered via well-known lookup,
+        // mirroring the direct-configuration path in build().
+        if ("http".equalsIgnoreCase(handler.getUri().getScheme())) {
+            LOGGER.warn(TransportLogMessages.WARN.INSECURE_HTTP_JWKS, handler.getUri().toString());
+        }
+        return handler;
     }
 
     /**
@@ -273,6 +282,7 @@ public class HttpJwksLoaderConfig {
         private Duration keyRotationGracePeriod = DEFAULT_KEY_ROTATION_GRACE_PERIOD;
         private int maxRetiredKeySets = DEFAULT_MAX_RETIRED_KEY_SETS;
         private ParserConfig parserConfig;
+        private boolean allowInsecureHttp = true;
 
         // Pending well-known values — WellKnownConfig creation is deferred to build()
         private String pendingWellKnownUrl;
@@ -286,6 +296,24 @@ public class HttpJwksLoaderConfig {
          */
         public HttpJwksLoaderConfigBuilder() {
             this.httpHandlerBuilder = HttpHandler.builder();
+        }
+
+        /**
+         * Controls whether plaintext {@code http://} endpoints are permitted.
+         * <p>
+         * Defaults to {@code true}, which preserves the "allow but warn" contract:
+         * cleartext endpoints are accepted but a {@code TokenSheriff-139}
+         * ({@code INSECURE_HTTP_JWKS}) warning is emitted. Set to {@code false} to
+         * enforce HTTPS and have {@link #build()} reject {@code http://} endpoints,
+         * which is recommended for production to protect against man-in-the-middle
+         * attacks on JWKS resolution.
+         *
+         * @param allowInsecureHttp {@code false} to require HTTPS, {@code true} (default) to allow cleartext HTTP
+         * @return this builder instance
+         */
+        public HttpJwksLoaderConfigBuilder allowInsecureHttp(boolean allowInsecureHttp) {
+            this.allowInsecureHttp = allowInsecureHttp;
+            return this;
         }
 
         /**
@@ -571,7 +599,8 @@ public class HttpJwksLoaderConfig {
                 // Build WellKnownConfig with the resolved ParserConfig
                 var wkBuilder = WellKnownConfig.builder()
                         .retryConfig(RetryConfig.defaults())
-                        .parserConfig(resolvedParserConfig);
+                        .parserConfig(resolvedParserConfig)
+                        .allowInsecureHttp(allowInsecureHttp);
                 if (pendingWellKnownUrl != null) {
                     wkBuilder.wellKnownUrl(pendingWellKnownUrl);
                 } else {
@@ -581,6 +610,7 @@ public class HttpJwksLoaderConfig {
             } else {
                 // Build the HttpHandler for direct URL/URI configuration
                 try {
+                    httpHandlerBuilder.allowInsecureHttp(allowInsecureHttp);
                     jwksHttpHandler = httpHandlerBuilder.build();
 
                     // Check for insecure HTTP protocol
