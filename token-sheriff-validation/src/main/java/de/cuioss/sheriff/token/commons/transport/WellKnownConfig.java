@@ -110,6 +110,9 @@ public class WellKnownConfig {
          */
         public WellKnownConfigBuilder() {
             this.httpHandlerBuilder = HttpHandler.builder()
+                    // Permit http:// endpoints; this layer emits its own security warning
+                    // for insecure schemes rather than rejecting them outright.
+                    .allowInsecureHttp(true)
                     .connectionTimeoutSeconds(DEFAULT_CONNECT_TIMEOUT_SECONDS)
                     .readTimeoutSeconds(DEFAULT_READ_TIMEOUT_SECONDS);
         }

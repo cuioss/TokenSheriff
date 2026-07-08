@@ -212,6 +212,7 @@ public class HttpJwksLoaderConfig {
 
         // Create a new handler with the same configuration but different URL
         return baseHandler.asBuilder()
+                .allowInsecureHttp(true)
                 .url(url)
                 .build();
     }
@@ -285,7 +286,9 @@ public class HttpJwksLoaderConfig {
          * Constructor initializing the HttpHandlerBuilder.
          */
         public HttpJwksLoaderConfigBuilder() {
-            this.httpHandlerBuilder = HttpHandler.builder();
+            // Permit http:// endpoints; this layer emits its own security warning
+            // (INSECURE_HTTP_JWKS) for insecure schemes rather than rejecting them outright.
+            this.httpHandlerBuilder = HttpHandler.builder().allowInsecureHttp(true);
         }
 
         /**

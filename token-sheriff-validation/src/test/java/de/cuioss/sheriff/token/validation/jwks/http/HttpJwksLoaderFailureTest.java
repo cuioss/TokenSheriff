@@ -76,9 +76,10 @@ class HttpJwksLoaderFailureTest {
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
                     JWTValidationLogMessages.ERROR.JWKS_LOAD_FAILED.resolveIdentifierString());
 
-            // After migration: ETagAwareHttpAdapter logs HTTP-200 (CONFIGURATION_ERROR_DURING_REQUEST) for connection errors
-            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
-                    HttpLogMessages.ERROR.CONFIGURATION_ERROR_DURING_REQUEST.resolveIdentifierString());
+            // cui-http 2.0.0 classifies an unreachable host as a network error and logs
+            // REQUEST_FAILED_MAX_ATTEMPTS at WARN once retries are exhausted.
+            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                    HttpLogMessages.WARN.REQUEST_FAILED_MAX_ATTEMPTS.resolveIdentifierString());
         }
     }
 
