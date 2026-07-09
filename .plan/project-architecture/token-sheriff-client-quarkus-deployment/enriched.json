@@ -1,14 +1,20 @@
 {
   "best_practices": [],
   "insights": [],
-  "internal_dependencies": [],
+  "internal_dependencies": [
+    "token-sheriff-client-quarkus"
+  ],
   "key_dependencies": [],
-  "key_dependencies_reasoning": "",
-  "key_packages": {},
-  "purpose": "parent",
-  "purpose_reasoning": "packaging=pom at repo root aggregating all modules",
-  "responsibility": "Root reactor and parent POM for the Token-Sheriff project. Aggregates all modules (validation core, client, Quarkus extensions, benchmarking, docs and E2E) and centralizes shared build configuration, inheriting from cui-java-parent.",
-  "responsibility_reasoning": "root pom.xml description + build_file[17] aggregating every module; parent cui-java-parent",
+  "key_dependencies_reasoning": "Build-time deployment counterpart of the client runtime extension",
+  "key_packages": {
+    "de.cuioss.sheriff.token.client.quarkus.deployment": {
+      "description": "Build-time processor registering the token-sheriff-client Quarkus feature (skeleton)."
+    }
+  },
+  "purpose": "deployment",
+  "purpose_reasoning": "Quarkus build-time deployment/processor module registering the client feature",
+  "responsibility": "Deployment (build-time) module of the Quarkus extension for the Token-Sheriff OIDC/OAuth client engine. Registers the token-sheriff-client feature during augmentation. Wired, empty skeleton (Plan 05).",
+  "responsibility_reasoning": "pom.xml description; single de.cuioss.sheriff.token.client.quarkus.deployment package with the feature processor",
   "skills_by_profile": {
     "implementation": {
       "defaults": [

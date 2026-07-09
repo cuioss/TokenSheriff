@@ -3,28 +3,30 @@
   "insights": [],
   "internal_dependencies": [],
   "key_dependencies": [
+    "de.cuioss:cui-java-tools",
     "de.cuioss:cui-http",
-    "de.cuioss:cui-java-tools"
+    "io.jsonwebtoken:jjwt-api",
+    "jakarta.json:jakarta.json-api"
   ],
-  "key_dependencies_reasoning": "cui-http provides the resilient HTTP/ETag client used by HttpJwksLoader; cui-java-tools provides core utilities and logging",
+  "key_dependencies_reasoning": "Uses cui-java-tools and cui-http as the transport/utility base, JJWT for JWT primitives and Jakarta JSON (Parsson/dsl-json) for parsing; pure Java with no framework runtime deps.",
   "key_packages": {
     "de.cuioss.sheriff.token.validation": {
-      "description": "Public API surface: TokenValidator entry point, IssuerConfig, ParserConfig, TokenType and issuer-config caching."
+      "description": "Public entry point: TokenValidator plus IssuerConfig/IssuerConfigCache, TokenType and the JWT validation LogMessages."
     },
-    "de.cuioss.sheriff.token.validation.domain.claim.mapper": {
-      "description": "Claim value mappers, including Keycloak-specific roles/groups and scope/collection mappers."
+    "de.cuioss.sheriff.token.validation.domain.token": {
+      "description": "Immutable token content domain types (access/id/refresh) returned from validation."
     },
     "de.cuioss.sheriff.token.validation.jwks": {
-      "description": "JWKS key loading (HTTP/file/in-memory), parsing and key resolution for signature verification."
+      "description": "JWKS key material loading and the JwksLoader factory used to resolve signing keys per issuer."
     },
     "de.cuioss.sheriff.token.validation.pipeline": {
-      "description": "The staged token-validation pipeline orchestrating signature, claim and expiration checks."
+      "description": "Staged validation pipelines (access/id/refresh) with JWT decoding, signature verification and token building."
     }
   },
   "purpose": "library",
-  "purpose_reasoning": "packaging=jar, framework-agnostic core, depended on by Quarkus and benchmark modules",
-  "responsibility": "The standalone core JWT validation library. Provides the TokenValidator entry point and a full validation pipeline: multi-issuer configuration, JWKS key loading/caching, signature verification, claim extraction and mapping (incl. Keycloak mappers), JWE decryption, DPoP proof validation, and OIDC well-known discovery \u2014 all with no runtime framework dependency.",
-  "responsibility_reasoning": "source: README.adoc 'Comprehensive JWT token validation library', pom description 'Core library for OAuth/JWT token validation in multi-issuer environments', package layout (pipeline, jwks, jwe, dpop, domain.claim.mapper)",
+  "purpose_reasoning": "jar packaging, framework-agnostic pure-Java library consumed by all other modules",
+  "responsibility": "Core library for offline OAuth/JWT token validation in multi-issuer environments. Provides the TokenValidator entry point, issuer configuration, staged validation pipelines for access/id/refresh tokens, JWKS loading, signature verification, JWE decryption, DPoP proof validation, and token caching, using standard JDK cryptographic providers.",
+  "responsibility_reasoning": "pom.xml description + package structure (validation, pipeline, jwks, jwe, dpop, cache, security)",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -88,8 +90,17 @@
         },
         "pm-dev-java-cui:cui-logging"
       ]
+    },
+    "security": {
+      "defaults": [
+        "pm-dev-java-cui:cui-logging",
+        {
+          "description": "CUI HTTP request-sanitization security surface",
+          "skill": "pm-dev-java-cui:cui-http"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }

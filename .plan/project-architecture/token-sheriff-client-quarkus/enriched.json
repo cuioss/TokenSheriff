@@ -1,14 +1,21 @@
 {
   "best_practices": [],
   "insights": [],
-  "internal_dependencies": [],
+  "internal_dependencies": [
+    "token-sheriff-client",
+    "token-sheriff-validation-quarkus"
+  ],
   "key_dependencies": [],
-  "key_dependencies_reasoning": "",
-  "key_packages": {},
-  "purpose": "parent",
-  "purpose_reasoning": "packaging=pom at repo root aggregating all modules",
-  "responsibility": "Root reactor and parent POM for the Token-Sheriff project. Aggregates all modules (validation core, client, Quarkus extensions, benchmarking, docs and E2E) and centralizes shared build configuration, inheriting from cui-java-parent.",
-  "responsibility_reasoning": "root pom.xml description + build_file[17] aggregating every module; parent cui-java-parent",
+  "key_dependencies_reasoning": "Runtime extension building on the client engine and the validation Quarkus extension",
+  "key_packages": {
+    "de.cuioss.sheriff.token.client.quarkus": {
+      "description": "Quarkus runtime wiring (skeleton) exposing the client engine as CDI beans/config."
+    }
+  },
+  "purpose": "extension",
+  "purpose_reasoning": "Quarkus extension runtime jar for the client engine",
+  "responsibility": "Runtime module of the Quarkus extension for the Token-Sheriff OIDC/OAuth client engine. Builds on the token-sheriff-validation-quarkus extension and the framework-agnostic token-sheriff-client engine. Wired, empty skeleton (Plan 05) with no functional content yet.",
+  "responsibility_reasoning": "pom.xml description; single de.cuioss.sheriff.token.client.quarkus package, status skeleton",
   "skills_by_profile": {
     "implementation": {
       "defaults": [

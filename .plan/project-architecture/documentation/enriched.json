@@ -5,11 +5,32 @@
   "key_dependencies": [],
   "key_dependencies_reasoning": "",
   "key_packages": {},
-  "purpose": "documentation",
-  "purpose_reasoning": "documentation build system, only .adoc docs and diagram scripts",
-  "responsibility": "AsciiDoc project documentation tree under doc/, including the OIDC client specification/planning series and PlantUML diagram sources. Holds narrative architecture, specification and migration documents rather than build artifacts.",
-  "responsibility_reasoning": "source: doc/ build_system=documentation, contains README.adoc plus oidc/01-06 spec series and plantuml scripts",
-  "skills_by_profile": {},
-  "skills_by_profile_reasoning": "",
+  "purpose": "library",
+  "purpose_reasoning": "documentation-only module with no build artifact; classified as library per best judgment",
+  "responsibility": "Project-level documentation module holding the AsciiDoc specifications and READMEs for the commons, validation, client and OIDC capability areas, including the multi-plan OIDC restructure/implementation docs.",
+  "responsibility_reasoning": "doc/ tree of README.adoc files (client, commons, oidc/01-06, validation)",
+  "skills_by_profile": {
+    "documentation": {
+      "defaults": [
+        {
+          "description": "AsciiDoc formatting, validation, link verification, and template creation",
+          "skill": "pm-documents:ref-asciidoc"
+        },
+        {
+          "description": "Content quality, tone analysis, organization standards, and review orchestration",
+          "skill": "pm-documents:ref-documentation"
+        },
+        {
+          "description": "Narrative styles for technical documentation \u2014 tone, voice, and arc for the engineering-narrative style",
+          "skill": "pm-documents:ref-narrative-styles"
+        },
+        {
+          "description": "SVG diagram authoring standards \u2014 visual language, theme handling, AsciiDoc embedding, per-diagram-type patterns",
+          "skill": "pm-documents:ref-svg-diagrams"
+        }
+      ]
+    }
+  },
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }

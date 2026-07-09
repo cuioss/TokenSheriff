@@ -5,12 +5,12 @@
     "e-2-e-playwright-npm"
   ],
   "key_dependencies": [],
-  "key_dependencies_reasoning": "Maven facet delegates to the npm Playwright test sibling",
+  "key_dependencies_reasoning": "Maven wrapper delegates to the npm Playwright sibling sharing the same physical directory",
   "key_packages": {},
   "purpose": "integration-tests",
-  "purpose_reasoning": "Maven wrapper (pom) driving the Playwright E2E npm tests",
-  "responsibility": "Maven build facet (virtual) that hooks the Playwright end-to-end Dev-UI tests into the Maven lifecycle via the e2e-tests profile, orchestrating the npm test run against a started dev environment.",
-  "responsibility_reasoning": "source: pom packaging=pom, description 'End-to-End Playwright tests for Token-Sheriff Dev-UI components', e2e-tests profile, paired npm sibling",
+  "purpose_reasoning": "packaging=pom that runs Playwright E2E tests through the e2e-tests profile",
+  "responsibility": "Maven-side wrapper for the Playwright end-to-end tests of the Token-Sheriff Quarkus Dev-UI. Wires the npm Playwright suite into the Maven reactor via the e2e-tests profile and dev-environment start/stop scripts.",
+  "responsibility_reasoning": "pom.xml description + e2e-tests profile + start/stop-dev-environment scripts wrapping the npm sibling",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -74,8 +74,17 @@
         },
         "pm-dev-java-cui:cui-logging"
       ]
+    },
+    "security": {
+      "defaults": [
+        "pm-dev-java-cui:cui-logging",
+        {
+          "description": "CUI HTTP request-sanitization security surface",
+          "skill": "pm-dev-java-cui:cui-http"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }

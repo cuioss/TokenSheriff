@@ -6,6 +6,7 @@
       "thoroughness": "inherit",
       "scope": "inherit"
     },
+    "finding_raw_input_max_bytes": 65536,
     "phase-1-init": {
       "branch_strategy": "feature",
       "use_worktree": true,
@@ -14,7 +15,12 @@
       "deep_lane": "auto",
       "escalation": "auto",
       "auto_route_recipe": true,
-      "auto_route_recipe_threshold": 0.6
+      "auto_route_recipe_threshold": 0.6,
+      "lane_selection": "ask",
+      "lane_prune_thresholds": {
+        "confidence_complete": 95,
+        "linear_change_max_deliverables": 1
+      }
     },
     "phase-2-refine": {
       "confidence_threshold": 95,
@@ -25,11 +31,12 @@
     },
     "phase-3-outline": {
       "plan_without_asking": false,
-      "qgate": "auto",
+      "q_gate_validation": "once",
       "effort": "level-4"
     },
     "phase-4-plan": {
       "execute_without_asking": true,
+      "q_gate_validation": "once",
       "effort": "level-3"
     },
     "phase-5-execute": {
@@ -40,15 +47,18 @@
         "default:verify:module-tests"
       ],
       "cost_size_token_table": {
+        "XS": "5K",
         "S": "25K",
         "M": "60K",
         "L": "130K",
-        "XL": "260K"
+        "XL": "260K",
+        "XXL": "520K"
       },
       "per_envelope_budget_tokens": "400K",
       "verification_steps": {
         "default:verify:quality-gate": {},
-        "default:verify:module-tests": {}
+        "default:verify:module-tests": {},
+        "default:verify:coverage": {}
       },
       "effort": {
         "default": "level-4",
@@ -58,17 +68,10 @@
     "phase-6-finalize": {
       "max_iterations": 3,
       "finalize_without_asking": true,
-      "loop_back_without_asking": true,
+      "loop_back_without_asking": false,
       "qgate": "auto",
       "checks_wait_timeout_seconds": 600,
       "steps": {
-        "default:finalize-step-sync-baseline": {
-          "auto_rebase_threshold": "no_overlap_only"
-        },
-        "default:pre-push-quality-gate": {},
-        "default:finalize-step-simplify": {
-          "simplify": "auto"
-        },
         "default:push": {},
         "default:create-pr": {},
         "default:ci-verify": {},
@@ -77,19 +80,20 @@
           "re_review_on_loopback": false,
           "re_review_on_branch_cleanup": true,
           "re_review_await_timeout_seconds": 600,
-          "re_review_on_timeout": "ask"
+          "re_review_on_timeout": "ask",
+          "review_rate_window_await": false,
+          "review_rate_window_timeout_seconds": 3600
         },
-        "default:sonar-roundtrip": {
-          "touched_file_cleanup": "new_code_only",
-          "do_transition": false,
-          "ce_wait_timeout_seconds": 600
-        },
+        "default:sonar-roundtrip": {},
         "default:lessons-capture": {},
         "default:branch-cleanup": {
           "pr_merge_strategy": "squash",
           "final_merge_without_asking": false,
           "auto_rebase_threshold": "no_overlap_only",
           "merge_queue_wait_budget_seconds": 1800,
+          "merge_hold_window": "full_window_release_at_waits",
+          "merge_hold_budget_seconds": 3600,
+          "use_merge_queue": false,
           "admin_merge_on_stuck_state": false
         },
         "default:record-metrics": {},
@@ -107,47 +111,6 @@
       "max_slots": 5,
       "max_retries": 10,
       "upper_limit_seconds": 600
-    },
-    "map": {
-      "java": [
-        {
-          "glob": "*/src/main/*.java",
-          "role": "production",
-          "build_class": "compile"
-        },
-        {
-          "glob": "*/src/test/*.java",
-          "role": "test",
-          "build_class": "module-tests"
-        },
-        {
-          "glob": "pom.xml",
-          "role": "config",
-          "build_class": "verify"
-        }
-      ],
-      "javascript": [
-        {
-          "glob": "*.js",
-          "role": "production",
-          "build_class": "compile"
-        },
-        {
-          "glob": "*.spec.js",
-          "role": "test",
-          "build_class": "module-tests"
-        },
-        {
-          "glob": "*.test.js",
-          "role": "test",
-          "build_class": "module-tests"
-        },
-        {
-          "glob": "package.json",
-          "role": "config",
-          "build_class": "verify"
-        }
-      ]
     }
   },
   "project": {
@@ -185,6 +148,21 @@
       "defaults": [],
       "optionals": []
     },
+    "general-dev": {
+      "bundle": "plan-marshall"
+    },
+    "documentation": {
+      "bundle": "pm-documents",
+      "workflow_skill_extensions": {
+        "triage": "pm-documents:ext-triage-docs"
+      }
+    },
+    "javascript": {
+      "bundle": "pm-dev-frontend",
+      "workflow_skill_extensions": {
+        "triage": "pm-dev-frontend:ext-triage-js"
+      }
+    },
     "java": {
       "bundle": "pm-dev-java",
       "workflow_skill_extensions": {
@@ -193,21 +171,6 @@
     },
     "java-cui": {
       "bundle": "pm-dev-java-cui"
-    },
-    "javascript": {
-      "bundle": "pm-dev-frontend",
-      "workflow_skill_extensions": {
-        "triage": "pm-dev-frontend:ext-triage-js"
-      }
-    },
-    "documentation": {
-      "bundle": "pm-documents",
-      "workflow_skill_extensions": {
-        "triage": "pm-documents:ext-triage-docs"
-      }
-    },
-    "general-dev": {
-      "bundle": "plan-marshall"
     },
     "active_profiles": [
       "implementation",
@@ -221,6 +184,8 @@
       "archived_plans_days": 5,
       "lessons_superseded_days": 0,
       "temp_on_maintenance": true
-    }
+    },
+    "provisioned_version": "0.1.1075",
+    "config_seed_fingerprint": "9f5161c2"
   }
 }

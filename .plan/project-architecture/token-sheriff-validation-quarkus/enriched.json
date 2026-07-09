@@ -6,27 +6,28 @@
   ],
   "key_dependencies": [
     "io.quarkus:quarkus-arc",
-    "io.quarkus:quarkus-rest"
+    "org.eclipse.microprofile.jwt:microprofile-jwt-auth-api",
+    "io.quarkus:quarkus-smallrye-health"
   ],
-  "key_dependencies_reasoning": "Wraps the core token-sheriff-validation library; built on Quarkus ARC (CDI) and REST",
+  "key_dependencies_reasoning": "Wraps token-sheriff-validation with Quarkus (Arc CDI, config, health, vertx-http) and MicroProfile JWT APIs",
   "key_packages": {
-    "de.cuioss.sheriff.token.quarkus.annotation": {
-      "description": "Injection annotations (@BearerToken, @BearerAuth) and the servlet objects resolver for the CDI security integration."
-    },
     "de.cuioss.sheriff.token.quarkus.config": {
-      "description": "MicroProfile-Config-driven resolvers mapping application properties into core IssuerConfig/ParserConfig/cache/JWE configuration."
+      "description": "MicroProfile/YAML configuration mapping into issuer and validation configuration."
     },
     "de.cuioss.sheriff.token.quarkus.health": {
-      "description": "SmallRye health checks for the token validator and configured JWKS endpoints."
+      "description": "SmallRye health checks reporting issuer/JWKS readiness and liveness."
     },
     "de.cuioss.sheriff.token.quarkus.producer": {
-      "description": "CDI producers turning validated bearer tokens into injectable results (TokenValidatorProducer, BearerTokenProducer)."
+      "description": "CDI producers exposing TokenValidator and related beans to the Quarkus application."
+    },
+    "de.cuioss.sheriff.token.quarkus.servlet": {
+      "description": "Servlet-layer integration for extracting and validating bearer tokens from HTTP requests."
     }
   },
   "purpose": "extension",
-  "purpose_reasoning": "Quarkus runtime extension (jar) with CDI producers, config resolvers and Dev-UI runtime service; paired with deployment module",
-  "responsibility": "The Quarkus runtime extension that wires the core validation library into Quarkus/CDI. Provides CDI producers for TokenValidator and bearer-token injection (@BearerToken/@BearerAuth), MicroProfile-Config-driven issuer/parser/cache/JWE resolvers, health checks, Micrometer metrics, access logging, and Keycloak claim-mapper beans.",
-  "responsibility_reasoning": "source: pom description 'Runtime module for Quarkus integration...providing configuration, producers, and integration from SecurityEvents to Micrometer', packages quarkus.producer/config/health/metrics/annotation",
+  "purpose_reasoning": "Quarkus extension runtime jar wiring the validation library into Quarkus",
+  "responsibility": "Runtime module of the Quarkus extension for OAuth/JWT token validation. Exposes token-sheriff-validation as CDI producers, maps YAML/MicroProfile configuration to issuer configs, integrates SecurityEvents into Micrometer metrics, adds SmallRye health checks, a bearer-token servlet layer, JWE support and error mapping.",
+  "responsibility_reasoning": "pom.xml description + packages (producer, config, metrics, health, servlet, mapper, jwe, error) and Quarkus deps",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -90,8 +91,17 @@
         },
         "pm-dev-java-cui:cui-logging"
       ]
+    },
+    "security": {
+      "defaults": [
+        "pm-dev-java-cui:cui-logging",
+        {
+          "description": "CUI HTTP request-sanitization security surface",
+          "skill": "pm-dev-java-cui:cui-http"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }

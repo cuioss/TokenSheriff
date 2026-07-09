@@ -1,18 +1,16 @@
 {
   "best_practices": [],
   "insights": [],
-  "internal_dependencies": [],
+  "internal_dependencies": [
+    "token-sheriff-validation-quarkus-deployment-maven"
+  ],
   "key_dependencies": [],
-  "key_dependencies_reasoning": "",
-  "key_packages": {
-    "de.cuioss.sheriff.token.quarkus.deployment": {
-      "description": "Dev-UI JavaScript components (qwc-jwt-debugger, qwc-jwt-status-config) and their build/test tooling."
-    }
-  },
-  "purpose": "extension",
-  "purpose_reasoning": "npm virtual module providing the Dev-UI JS components for the Quarkus deployment extension",
-  "responsibility": "The JavaScript/Dev-UI build facet of the deployment module (virtual npm sibling). Owns the Lit-based Dev-UI web components (JWT debugger, status/config cards) under src/main/resources/dev-ui with their npm lint/test/format/coverage tooling.",
-  "responsibility_reasoning": "source: package.json 'DevUI components for Token-Sheriff Quarkus extension', 26 npm scripts (test/lint/css), qwc-jwt-*.js dev-ui sources",
+  "key_dependencies_reasoning": "JS toolchain sharing the physical deployment module directory, building/testing its Dev-UI web components",
+  "key_packages": {},
+  "purpose": "deployment",
+  "purpose_reasoning": "npm build/test toolchain for the Dev-UI components of the deployment module",
+  "responsibility": "npm/JavaScript side of the validation Quarkus deployment module. Builds, lints, formats and unit-tests (Jest) the Lit-based Dev-UI web components (qwc-jwt-debugger, qwc-jwt-status-config) shipped by the extension.",
+  "responsibility_reasoning": "package.json scripts (test/lint/format/quality) + src/main/resources/dev-ui qwc-*.js and src/test/js component tests",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -65,8 +63,24 @@
           "skill": "plan-marshall:ref-code-quality"
         }
       ]
+    },
+    "security": {
+      "defaults": [
+        {
+          "description": "Core JavaScript development standards covering ES modules, modern patterns, web component patterns, DOM trust boundaries / XSS prevention, and code quality",
+          "skill": "pm-dev-frontend:javascript"
+        },
+        {
+          "description": "Language-agnostic code quality principles (SRP, CQS, complexity, error handling)",
+          "skill": "plan-marshall:ref-code-quality"
+        },
+        {
+          "description": "JavaScript security \u2014 DOM trust boundaries, XSS sinks, sanitization, and Trusted Types",
+          "skill": "pm-dev-frontend:javascript-security"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }

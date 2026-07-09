@@ -1,14 +1,21 @@
 {
   "best_practices": [],
   "insights": [],
-  "internal_dependencies": [],
+  "internal_dependencies": [
+    "token-sheriff-validation-quarkus",
+    "token-sheriff-validation-quarkus-deployment-maven",
+    "token-sheriff-client-quarkus",
+    "token-sheriff-client-quarkus-deployment",
+    "token-sheriff-quarkus-integration-tests",
+    "e-2-e-playwright-maven"
+  ],
   "key_dependencies": [],
-  "key_dependencies_reasoning": "",
+  "key_dependencies_reasoning": "Reactor parent aggregating the Quarkus runtime/deployment extensions, integration tests and E2E modules",
   "key_packages": {},
   "purpose": "parent",
-  "purpose_reasoning": "packaging=pom aggregating Quarkus runtime/deployment/IT modules",
-  "responsibility": "Parent POM for the Quarkus integration sub-tree. Aggregates the runtime extension, build-time deployment module, integration-tests and Playwright E2E modules, and centralizes Quarkus-specific build configuration and the coverage profile.",
-  "responsibility_reasoning": "source: token-sheriff-quarkus-parent/pom.xml packaging=pom, description references Quarkus integration parent, aggregates 7 build files",
+  "purpose_reasoning": "packaging=pom aggregating all Quarkus-related submodules",
+  "responsibility": "Parent (aggregator) module for the Token-Sheriff Quarkus integration. Groups the validation and client runtime/deployment extensions, integration tests and E2E Playwright modules, and centralizes their shared build configuration (including SecurityEvents-to-Micrometer integration).",
+  "responsibility_reasoning": "pom.xml description + build_file list aggregating validation-quarkus, client-quarkus(+deployment), integration-tests, e-2-e-playwright",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -72,8 +79,17 @@
         },
         "pm-dev-java-cui:cui-logging"
       ]
+    },
+    "security": {
+      "defaults": [
+        "pm-dev-java-cui:cui-logging",
+        {
+          "description": "CUI HTTP request-sanitization security surface",
+          "skill": "pm-dev-java-cui:cui-http"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }

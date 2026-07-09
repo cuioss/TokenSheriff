@@ -5,16 +5,16 @@
     "benchmarking-common"
   ],
   "key_dependencies": [],
-  "key_dependencies_reasoning": "Reuses benchmarking-common converters/reporting for wrk result processing",
+  "key_dependencies_reasoning": "Reuses benchmarking-common report/metrics infrastructure to publish WRK results",
   "key_packages": {
     "de.cuioss.sheriff.token.wrk.benchmark": {
-      "description": "WrkResultPostProcessor converting raw wrk output into the shared benchmark data/report model."
+      "description": "Java harness coordinating WRK HTTP benchmark runs and result collection."
     }
   },
   "purpose": "benchmark",
-  "purpose_reasoning": "HTTP load benchmarks (jar) using external wrk against running endpoints",
-  "responsibility": "WRK-based HTTP integration benchmarks driving the deployed Quarkus validation endpoints. Bundles wrk Lua/shell scripts (ablation, JFR, concurrency, health) plus a WrkResultPostProcessor that parses raw wrk output into the common benchmark report model.",
-  "responsibility_reasoning": "source: pom description 'WRK-based HTTP benchmarks for OAuth/JWT validation endpoints', WrkResultPostProcessor + wrk-scripts resources",
+  "purpose_reasoning": "jar with benchmark profiles driving WRK HTTP benchmarks against running endpoints",
+  "responsibility": "WRK-based HTTP load benchmarks for the deployed OAuth/JWT validation endpoints, with integration-test infrastructure and shell benchmark/ablation scripts orchestrating token fetch and endpoint stress runs.",
+  "responsibility_reasoning": "pom.xml description + wrk-scripts resources + single de.cuioss.sheriff.token.wrk.benchmark package",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -78,8 +78,17 @@
         },
         "pm-dev-java-cui:cui-logging"
       ]
+    },
+    "security": {
+      "defaults": [
+        "pm-dev-java-cui:cui-logging",
+        {
+          "description": "CUI HTTP request-sanitization security surface",
+          "skill": "pm-dev-java-cui:cui-http"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }
