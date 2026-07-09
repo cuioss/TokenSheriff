@@ -81,6 +81,13 @@ public final class ClientLogMessages {
                 .identifier(103)
                 .template("Discovery document issuer '%s' does not match configured issuer '%s'")
                 .build();
+
+        /** A superseded refresh token was replayed; the rotation family has been revoked. */
+        public static final LogRecord REFRESH_TOKEN_REUSE = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(104)
+                .template("Refresh token reuse detected; the refresh token family has been revoked")
+                .build();
     }
 
     /**
