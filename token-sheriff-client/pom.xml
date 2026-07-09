@@ -116,6 +116,28 @@
             <classifier>generators</classifier>
             <scope>test</scope>
         </dependency>
+        <!-- JJWT: the validation test utilities (TestTokenHolder) sign test tokens with JJWT. -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- jakarta.json implementation for the validation pipeline at test runtime. -->
+        <dependency>
+            <groupId>org.eclipse.parsson</groupId>
+            <artifactId>parsson</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- ArchUnit: enforce the client engine boundary (no CDI/MicroProfile/JAX-RS; client → validation only). -->
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
