@@ -6,7 +6,7 @@
 
 [cols="1,3"]
 |===
-| Status     | *Done* (2026-07-05, https://github.com/cuioss/TokenSheriff/pull/537[#537]) — `CLIENT-1..22` requirements, specification, threat model and best practices live under `doc/client/`
+| Status     | *Done* — `CLIENT-1..22` requirements, specification, threat model and best practices live under `doc/client/`. Ship date + PR in the xref:../README.adoc[status roll-up].
 | Depends on | Plan 02 (doc structure) and xref:../03-commons/README.adoc[Plan 03] (the Commons transport this builds on); produces the spec the future client module is built against (spec-first)
 | Focus      | Server-side *token retrieval* (token-endpoint grants incl. confidential authorization-code + PKCE), the *flow integrity* around it (`state`/`nonce`/PKCE, mix-up defence, step-up, RP-initiated logout), and the *token lifecycle* — the engine a *Backend-For-Frontend (BFF)* is built on. The *outbound IdP HTTP* it uses (discovery, JWKS, token, userinfo, …) belongs to xref:../03-commons/README.adoc[commons] and is referenced, not respecified. A *most-secure current subset*, security-led, every normative item source-referenced.
 |===

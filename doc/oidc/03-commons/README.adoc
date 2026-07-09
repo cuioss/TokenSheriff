@@ -6,7 +6,7 @@
 
 [cols="1,3"]
 |===
-| Status     | *Done* (2026-07-04, https://github.com/cuioss/TokenSheriff/pull/536[#536]) — see <<Verification>>; the `wellknown`/`jwks.http` transport migration was folded into xref:../05-client-module/README.adoc[Plan 05]
+| Status     | *Done* — see <<Verification>>; the `wellknown`/`jwks.http` transport migration was folded into xref:../05-client-module/README.adoc[Plan 05]. Ship date + PR in the xref:../README.adoc[status roll-up].
 | Depends on | Plan 01 (rename → `token-sheriff-*`), Plan 02 (doc structure — establishes `doc/commons/`)
 | Focus      | Gather the *cross-cutting concerns every capability sits on* into one *base layer* — the `de.cuioss.sheriff.token.commons.*` packages *inside* `token-sheriff-validation`: *IdP transport*, the *error model* (typed exceptions → RFC 9457 at the edge), *security events*, and *metrics*. *Not a separate artifact* — ArchUnit enforces the layering. Spec-first plus the *re-packaging* of these out of the validation packages.
 | Outcome    | The `commons` base packages + ArchUnit rules living in `token-sheriff-validation`; its requirements/spec/threat-model under `doc/commons/` (`COMMONS-N`).

@@ -77,7 +77,8 @@ implementation plans plus the standing design decisions behind them.
 
 [NOTE]
 ====
-Plans 03–05 are executed but not yet wired into the top-level
-xref:../README.adoc[Documentation Hub]; the client capability docs link in as Plan 06
-delivers the code behind them.
+The commons, validation and client *capability* documentation is wired into the top-level
+xref:../README.adoc[Documentation Hub]. This OIDC *planning* workspace (the numbered plans
+above) is the working area behind those capabilities and is intentionally not itself a hub
+section.
 ====
