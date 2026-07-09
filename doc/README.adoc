@@ -9,6 +9,7 @@ The shared base layer every capability sits on — the `de.cuioss.sheriff.token.
 packages inside `token-sheriff-validation` (transport, error model, security events,
 metrics), enforced by ArchUnit rather than shipped as a separate module.
 
+* xref:commons/README.adoc[Overview] - Capability entry point: intro, scope, reading order, document map
 * xref:commons/requirements.adoc[Requirements] - `COMMONS-N`, grouped by concern
 * xref:commons/architecture.adoc[Architecture] - The base layer and its ArchUnit boundary
 * xref:commons/threat-model.adoc[Threat Model] - SSRF / TLS / response-DoS / error-detail leakage
@@ -24,6 +25,7 @@ metrics), enforced by ArchUnit rather than shipped as a separate module.
 
 The token validation capability — its requirements, architecture, security model, and specifications.
 
+* xref:validation/README.adoc[Overview] - Capability entry point: intro, scope, reading order, document map
 * xref:validation/requirements.adoc[Requirements] - Functional and non-functional requirements
 * xref:validation/architecture.adoc[Architecture] - Validation pipeline, components, and design
 
@@ -51,6 +53,7 @@ The `token-sheriff-client` module (and its `token-sheriff-client-quarkus` extens
 as a wired, empty skeleton (xref:oidc/05-client-module/README.adoc[Plan 05]); this document set
 still leads the functional content, which lands per xref:oidc/06-implement/README.adoc[Plan 06].
 
+* xref:client/README.adoc[Overview] - Capability entry point: intro, scope, reading order, document map
 * xref:client/requirements.adoc[Requirements] - `CLIENT-N`, grouped by aspect (Retrieval & flow / Token)
 * xref:client/architecture.adoc[Architecture] - Client/BFF engine seam and boundaries
 * xref:client/references.adoc[References] - Bibliography

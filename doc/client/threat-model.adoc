@@ -17,9 +17,12 @@ replay, insufficient authentication assurance, and logout that leaves tokens liv
 server-side *token-lifecycle* threats of refresh-token theft, audience confusion and
 sender-constraint loss.
 
-Each entry cites a source, a mitigation, and the covering `CLIENT-N` requirement, grouped by
-aspect. Threats are kept *separate by aspect* and *not blended* with the transport or
-token-trust threats owned elsewhere (<<_out_of_scope_delegated>>).
+The catalog builds on the foundational OAuth 2.0 threat model
+(https://www.rfc-editor.org/rfc/rfc6819[RFC 6819]) and the current OAuth 2.0 Security BCP
+(https://www.rfc-editor.org/rfc/rfc9700[RFC 9700]). Each entry cites a source, a mitigation,
+and the covering `CLIENT-N` requirement, grouped by aspect. Threats are kept *separate by
+aspect* and *not blended* with the transport or token-trust threats owned elsewhere
+(<<_out_of_scope_delegated>>).
 
 == System context
 
@@ -57,6 +60,15 @@ The client engine:
   fall back to `plain` or a non-PKCE request.
 | https://www.rfc-editor.org/rfc/rfc9700#section-4.8[RFC 9700 §4.8]
 | xref:requirements.adoc#CLIENT-2[CLIENT-2]
+
+| [[T-PARAM-INTEGRITY]]T-PARAM-INTEGRITY
+| *Authorization-request parameter tampering / exposure (front channel).* Authorization
+  parameters carried through the browser can be inspected or altered before they reach the AS.
+| Where the AS advertises PAR, push the authorization parameters over the authenticated back
+  channel and drive the front-channel redirect with only the returned `request_uri`, so the
+  parameters are neither exposed nor tamperable in the browser.
+| https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0], https://www.rfc-editor.org/rfc/rfc9700#section-2.1[RFC 9700 §2.1]
+| xref:requirements.adoc#CLIENT-10[CLIENT-10]
 
 | [[T-MIXUP]]T-MIXUP
 | *Mix-up attack (multiple authorization servers).* With more than one AS configured, an
@@ -158,8 +170,9 @@ The client engine:
 | [[T-IDTOKEN-INTEGRITY]]T-IDTOKEN-INTEGRITY
 | *ID-token / userinfo integrity.* Identity is taken from an unvalidated ID token, or from a
   userinfo response whose `sub` does not match the ID token (identity confusion).
-| Validate the ID-token signature and claims (`iss`/`aud`/`exp`/`nonce`/`at_hash`); validate a
-  signed userinfo response and bind its `sub` to the ID token's `sub`, rejecting mismatches.
+| Validate the ID-token signature and claims (`iss`/`aud`/`azp`/`exp`/`nonce`/`at_hash`);
+  validate a signed userinfo response and bind its `sub` to the ID token's `sub`, rejecting
+  mismatches.
 | https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation[OIDC Core §3.1.3.7], https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse[OIDC Core §5.3.2]
 | xref:requirements.adoc#CLIENT-16[CLIENT-16]
 
@@ -186,6 +199,7 @@ xref:../oidc/06-implement/README.adoc[Plan 06] integration suite:
 
 | T-CODE-INJECTION / T-PKCE-DOWNGRADE | `TokenDispatcher` rejects/accepts codes against the presented `code_verifier`; missing-PKCE and `plain` requests refused.
 | T-MIXUP | `WellKnownDispatcher` advertises a mismatched `issuer`; the `iss` response parameter is cross-checked before exchange.
+| T-PARAM-INTEGRITY | `ParDispatcher` accepts the pushed parameters and returns a `request_uri`; the front-channel redirect is asserted to carry only that `request_uri`, never the raw authorization parameters.
 | T-CSRF / T-REDIRECT | Callback handling asserts session-bound `state` and exact `redirect_uri`; crafted callbacks rejected.
 | T-CLIENT-CRED | `TokenDispatcher` asserts the configured client-auth method; secret-in-URL and non-TLS attempts are not made.
 | T-TOKEN-REPLAY / T-CONSTRAINT-LOSS | `TokenDispatcher` issues DPoP / mTLS-bound responses; the binding is validated and preserved through storage/refresh.

@@ -1,0 +1,72 @@
+= Client Capability
+:source-highlighter: highlight.js
+
+The *active* OIDC side of Token-Sheriff: a server-side *confidential-client engine* that
+retrieves tokens, holds and refreshes them server-side, and drives the OAuth 2.0 / OpenID
+Connect flows on top of the xref:../commons/requirements.adoc[commons] transport. It is the
+engine a *Backend-For-Frontend (BFF)* is built on — *it is not itself a BFF*.
+
+The set is documented *spec-first*: the requirements, threat model and specifications below
+lead; the functional code lands protocol-by-protocol under
+xref:../oidc/06-implement/README.adoc[Plan 06]. The `token-sheriff-client` module currently
+exists as a wired, empty skeleton (xref:../oidc/05-client-module/README.adoc[Plan 05]).
+
+== Scope at a glance
+
+The engine *owns* two aspects and *delegates the rest* — it issues no HTTP of its own and adds
+no signature policy (the seam is detailed in xref:architecture.adoc[Architecture]):
+
+* *Retrieval & flow* (net-new) — auth-code + PKCE, the token-endpoint grants, client
+  authentication, flow integrity (`state` / `nonce` / exact `redirect_uri`), mix-up defence,
+  PAR, step-up, RP-initiated logout, and sender-constraint requests.
+* *Token* (lifecycle delta) — validate every retrieved token, then hold / refresh / revoke it
+  server-side and preserve its sender-constraint.
+* *Delegated* — outbound IdP HTTP, TLS and SSRF defence to xref:../commons/requirements.adoc[commons];
+  token trust (signatures, claims, algorithm policy) to xref:../validation/requirements.adoc[validation];
+  RFC 9457 problem+json rendering to the HTTP edge.
+
+== Start here
+
+. xref:requirements.adoc[Requirements] — the `CLIENT-N` contract, grouped by aspect.
+. xref:threat-model.adoc[Threat Model] — the attack catalog each requirement answers.
+. xref:architecture.adoc[Architecture] — where the engine sits and what it delegates.
+. The <<_document_map,specifications>> — how each requirement is realized.
+
+== [[_document_map]] Document map
+
+[cols="1,3", options="header"]
+|===
+| Document | Purpose
+
+| xref:requirements.adoc[Requirements]
+| `CLIENT-1`–`CLIENT-22`, grouped by aspect; each sourced and threat-driven.
+
+| xref:architecture.adoc[Architecture]
+| The engine seam, its commons / validation boundaries, the auth-code + PKCE sequence, and the BFF binding shapes it must keep viable.
+
+| xref:threat-model.adoc[Threat Model]
+| Acquisition / flow and token-lifecycle threats, each with a mitigation, a source and the covering requirement.
+
+| xref:best-practices.adoc[Best Practices]
+| The normative MUST/SHOULD checklist, tracing each item to a requirement and (where threat-driven) a threat.
+
+| xref:references.adoc[References]
+| Bibliography — standards new to the client, and those reused (cited, not restated) from commons / validation.
+
+| xref:specification/retrieval-flow.adoc[Spec — Retrieval & flow]
+| Auth-code + PKCE flow, grants, client authentication, `state` / `nonce`, mix-up, PAR, sender-constraint requests (`CLIENT-1`–`CLIENT-11`, `CLIENT-14`).
+
+| xref:specification/step-up-and-logout.adoc[Spec — Step-up & logout]
+| RFC 9470 step-up authentication and RP-initiated logout (`CLIENT-12`, `CLIENT-13`).
+
+| xref:specification/token-handling.adoc[Spec — Token handling]
+| The server-side lifecycle delta — validation, storage, refresh, revocation, sender-constraint preservation (`CLIENT-15`–`CLIENT-20`).
+|===
+
+== See also
+
+* xref:../README.adoc[Documentation Hub]
+* xref:../commons/requirements.adoc[Commons] — the transport / error / events / metrics base layer
+* xref:../validation/requirements.adoc[Validation] — the inherited token-trust pipeline
+* xref:../oidc/decision-oidc-module.adoc[Module Architecture decision] — the validation + client split
+* xref:../oidc/04-client-spec/README.adoc[Plan 04] (this document set) · xref:../oidc/06-implement/README.adoc[Plan 06] (implementation)
