@@ -58,10 +58,26 @@ implementation plans plus the standing design decisions behind them.
   capability split under `doc/validation/` is executed and wired into the
   xref:../README.adoc[Documentation Hub]. Phase 2 (client scaffolding) is deferred by
   design until client work starts.
-* Plans 03–06: planning only — not yet started.
+* xref:03-commons/README.adoc[Plan 03 — Commons]: *Done*
+  (2026-07-04, https://github.com/cuioss/TokenSheriff/pull/536[#536]) — the
+  `de.cuioss.sheriff.token.commons.*` base layer (transport / error / events / metrics),
+  ArchUnit boundary, RFC 9457 mapping, and extended MockWebServer dispatchers ship inside
+  `token-sheriff-validation`; `doc/commons/` document set present.
+* xref:04-client-spec/README.adoc[Plan 04 — Client Spec]: *Done*
+  (2026-07-05, https://github.com/cuioss/TokenSheriff/pull/537[#537]) — the client
+  capability document set (`CLIENT-1..22` requirements, specification, threat model, best
+  practices) is under `doc/client/`.
+* xref:05-client-module/README.adoc[Plan 05 — Client Module]: *Done*
+  (2026-07-05, https://github.com/cuioss/TokenSheriff/pull/538[#538]) — the wired-but-empty
+  `token-sheriff-client` engine plus `token-sheriff-client-quarkus` extension/deployment
+  and BOM/reactor assembly exist; the `commons.transport` migration was folded in.
+* xref:06-implement/README.adoc[Plan 06 — Implement the Client]: *Next — not yet started.*
+  All dependencies (Plans 03–05) are satisfied; execution begins with Increment 1
+  (client config + discovery).
 
 [NOTE]
 ====
-Plans 03–06 are not yet wired into the top-level
-xref:../README.adoc[Documentation Hub]; they will be linked in as each is executed.
+Plans 03–05 are executed but not yet wired into the top-level
+xref:../README.adoc[Documentation Hub]; the client capability docs link in as Plan 06
+delivers the code behind them.
 ====

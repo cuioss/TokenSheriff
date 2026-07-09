@@ -6,7 +6,7 @@
 
 [cols="1,3"]
 |===
-| Status     | Ready after xref:../04-client-spec/README.adoc[Plan 04] (spec) + xref:../05-client-module/README.adoc[Plan 05] (skeleton)
+| Status     | *Ready to execute — next plan.* Dependencies satisfied (Plan 03 #536, Plan 04 #537, Plan 05 #538, all done); execution begins with Increment 1 (client config + discovery). Not yet started.
 | Depends on | Plan 03 (the `commons` base layer + `COMMONS-N` spec + the extended MockWebServer dispatchers), Plan 04 (`CLIENT-N` requirements + threat model), Plan 05 (`token-sheriff-client` module/extension/assembly)
 | Approach   | Vertical *protocol-by-protocol* increments, dependency-ordered. Each ships unit tests (MockWebServer) *and* integration tests against a *real Keycloak*. Security-driven.
 |===
