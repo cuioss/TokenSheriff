@@ -408,5 +408,5 @@ sourced xref:best-practices.adoc[best-practices] checklist, and realized in a sp
 | CLIENT-18 | T-CONSTRAINT-LOSS | token-handling
 | CLIENT-19 | (BFF groundwork — non-preclusion) | xref:architecture.adoc[architecture], token-handling
 | CLIENT-20 | xref:../commons/threat-model.adoc#T-LEAK[commons T-LEAK] (delegated) | token-handling
-| CLIENT-21..22 | (cross-cutting: engine boundary + adversarial coverage) | architecture, xref:specification/test-strategy.adoc[test-strategy], all specs
+| CLIENT-21..22 | (cross-cutting: engine boundary + adversarial coverage) | xref:architecture.adoc[architecture], xref:specification/test-strategy.adoc[test-strategy], all specs
 |===
