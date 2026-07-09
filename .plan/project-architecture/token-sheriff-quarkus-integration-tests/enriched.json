@@ -2,19 +2,25 @@
   "best_practices": [],
   "insights": [],
   "internal_dependencies": [
-    "token-sheriff-validation-quarkus"
+    "token-sheriff-validation-quarkus",
+    "token-sheriff-validation-quarkus-deployment-maven"
   ],
-  "key_dependencies": [],
-  "key_dependencies_reasoning": "Integration-tests the Quarkus runtime extension end-to-end",
+  "key_dependencies": [
+    "io.rest-assured:rest-assured"
+  ],
+  "key_dependencies_reasoning": "Exercises the deployed validation extension end-to-end via REST-assured against Keycloak",
   "key_packages": {
+    "de.cuioss.sheriff.token.integration": {
+      "description": "Integration test support/bootstrapping shared across the endpoint and scenario tests."
+    },
     "de.cuioss.sheriff.token.integration.endpoint": {
-      "description": "Test JAX-RS endpoints (real + mock) used as the system-under-test for validation IT suites."
+      "description": "Test REST endpoints that invoke token validation for the integration/native container tests."
     }
   },
   "purpose": "integration-tests",
-  "purpose_reasoning": "jar of Failsafe *IT tests + container infrastructure, no published API",
-  "responsibility": "End-to-end integration tests for the Quarkus extension. Ships a TestApplication with JWT/mock validation endpoints and *IT suites exercising bearer auth, DPoP, JWE, and health against real Keycloak/Zitadel IdPs in Docker, including native-image and HTTPS scenarios.",
-  "responsibility_reasoning": "source: pom description 'Integration tests for the Token-Sheriff Quarkus extension including native container testing with HTTPS', *SpecIT/*IT classes, docker keycloak/zitadel scripts",
+  "purpose_reasoning": "test-focused module with integration-tests profile and container/Keycloak harness",
+  "responsibility": "Integration tests for the Token-Sheriff Quarkus extension. Stands up test endpoints and exercises token validation, bearer-token, health, security and API behavior against a real Keycloak, including native-container testing with HTTPS.",
+  "responsibility_reasoning": "pom.xml description + integration-tests profile + endpoint main package and test packages (token, security, health, bearer, api)",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -78,8 +84,17 @@
         },
         "pm-dev-java-cui:cui-logging"
       ]
+    },
+    "security": {
+      "defaults": [
+        "pm-dev-java-cui:cui-logging",
+        {
+          "description": "CUI HTTP request-sanitization security surface",
+          "skill": "pm-dev-java-cui:cui-http"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }

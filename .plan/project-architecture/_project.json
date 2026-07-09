@@ -1,6 +1,6 @@
 {
-  "description": "Token-Sheriff is a security-focused Java/Quarkus framework for validating OAuth2/OIDC JWT tokens in multi-issuer environments. It provides a standalone core validation library (parsing, JWKS key loading, claim mapping, JWE decryption, DPoP), a Quarkus extension (runtime + build-time deployment) with Dev-UI tooling, plus benchmarking and end-to-end test harnesses.",
-  "description_reasoning": "source: README.md introduction and parent pom description; corroborated by module descriptions",
+  "description": "Token-Sheriff is a comprehensive library for offline JWT token validation in multi-issuer environments, with a strong focus on security. It ships a core validation library plus Quarkus runtime/deployment extensions, a client, benchmarking suites, and E2E test harnesses.",
+  "description_reasoning": "source: README.md 'What is it?' and 'Motivation' sections",
   "extensions_used": [
     "plan-marshall",
     "pm-documents"
@@ -14,6 +14,9 @@
     "e-2-e-playwright-maven": {},
     "e-2-e-playwright-npm": {},
     "token-sheriff-bom": {},
+    "token-sheriff-client": {},
+    "token-sheriff-client-quarkus": {},
+    "token-sheriff-client-quarkus-deployment": {},
     "token-sheriff-parent": {},
     "token-sheriff-quarkus-integration-tests": {},
     "token-sheriff-quarkus-parent": {},

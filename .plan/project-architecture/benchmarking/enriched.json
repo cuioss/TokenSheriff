@@ -1,14 +1,18 @@
 {
   "best_practices": [],
   "insights": [],
-  "internal_dependencies": [],
+  "internal_dependencies": [
+    "benchmark-core",
+    "benchmark-integration-wrk",
+    "benchmarking-common"
+  ],
   "key_dependencies": [],
-  "key_dependencies_reasoning": "",
+  "key_dependencies_reasoning": "Reactor parent aggregating the three benchmark submodules",
   "key_packages": {},
   "purpose": "parent",
-  "purpose_reasoning": "packaging=pom aggregating benchmark sub-modules",
-  "responsibility": "Parent POM aggregating all benchmarking sub-modules (common infrastructure, JMH micro-benchmarks, WRK integration benchmarks). Coordinates the benchmark build profile and groups performance-measurement tooling.",
-  "responsibility_reasoning": "source: benchmarking/pom.xml packaging=pom, description 'Parent module for all benchmarking related modules'",
+  "purpose_reasoning": "packaging=pom, aggregates the three benchmark submodules",
+  "responsibility": "Aggregator (parent) module for all benchmarking-related modules, including the JMH library benchmarks, WRK integration benchmarks, and shared benchmarking infrastructure.",
+  "responsibility_reasoning": "pom.xml description + build_file list aggregating benchmark-core, benchmark-integration-wrk, benchmarking-common",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -72,8 +76,17 @@
         },
         "pm-dev-java-cui:cui-logging"
       ]
+    },
+    "security": {
+      "defaults": [
+        "pm-dev-java-cui:cui-logging",
+        {
+          "description": "CUI HTTP request-sanitization security surface",
+          "skill": "pm-dev-java-cui:cui-http"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }

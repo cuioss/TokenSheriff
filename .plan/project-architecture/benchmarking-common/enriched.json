@@ -2,26 +2,29 @@
   "best_practices": [],
   "insights": [],
   "internal_dependencies": [],
-  "key_dependencies": [],
-  "key_dependencies_reasoning": "",
+  "key_dependencies": [
+    "org.openjdk.jmh:jmh-core",
+    "de.cuioss:cui-java-tools"
+  ],
+  "key_dependencies_reasoning": "Built on the JMH harness with cui-java-tools utilities for the shared runner/report infrastructure",
   "key_packages": {
-    "de.cuioss.benchmarking.common.converter": {
-      "description": "Converters normalizing JMH and WRK raw output into the common BenchmarkData model."
+    "de.cuioss.benchmarking.common.jfr": {
+      "description": "Java Flight Recorder integration for profiling benchmark executions."
     },
     "de.cuioss.benchmarking.common.metrics": {
-      "description": "Metrics collection/transformation pipeline incl. Prometheus client and JSON exporters."
+      "description": "Metrics collection and aggregation across benchmark runs."
     },
     "de.cuioss.benchmarking.common.report": {
-      "description": "Report, badge and GitHub-Pages generation from benchmark results with historical trend data."
+      "description": "Report generation turning benchmark results into published output artifacts."
     },
-    "de.cuioss.benchmarking.common.repository": {
-      "description": "Keycloak-backed token repositories/providers supplying real tokens for benchmark load."
+    "de.cuioss.benchmarking.common.runner": {
+      "description": "Benchmark execution runner orchestrating JMH runs and artifact generation."
     }
   },
   "purpose": "library",
-  "purpose_reasoning": "packaging=jar of reusable benchmark infrastructure consumed by benchmark-core and benchmark-integration-wrk",
-  "responsibility": "Shared benchmarking infrastructure used by all benchmark modules. Provides JMH/WRK result converters, a metrics pipeline (Prometheus client, transformers, JFR instrumentation), Keycloak token repositories/providers for load generation, and HTML/badge report + GitHub-Pages generation.",
-  "responsibility_reasoning": "source: pom description 'Common benchmarking infrastructure with JMH integration', packages config/converter/metrics/jfr/report/repository",
+  "purpose_reasoning": "jar packaging, reusable benchmarking infrastructure consumed by benchmark-core and benchmark-integration-wrk",
+  "responsibility": "Shared benchmarking infrastructure with JMH integration. Provides the benchmark runner, metrics collection and converters, JFR support, and report/output generation used to produce artifacts during benchmark execution.",
+  "responsibility_reasoning": "pom.xml description + packages (runner, metrics, converter, jfr, report, output)",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -85,8 +88,17 @@
         },
         "pm-dev-java-cui:cui-logging"
       ]
+    },
+    "security": {
+      "defaults": [
+        "pm-dev-java-cui:cui-logging",
+        {
+          "description": "CUI HTTP request-sanitization security surface",
+          "skill": "pm-dev-java-cui:cui-http"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }

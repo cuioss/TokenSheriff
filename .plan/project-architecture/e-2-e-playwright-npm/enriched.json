@@ -2,13 +2,17 @@
   "best_practices": [],
   "insights": [],
   "internal_dependencies": [],
-  "key_dependencies": [],
-  "key_dependencies_reasoning": "",
+  "key_dependencies": [
+    "@playwright/test",
+    "@axe-core/playwright",
+    "eslint"
+  ],
+  "key_dependencies_reasoning": "Playwright test runner with axe-core accessibility checks and ESLint tooling (all dev dependencies)",
   "key_packages": {},
   "purpose": "integration-tests",
-  "purpose_reasoning": "npm Playwright browser E2E test project, no shipped artifact",
-  "responsibility": "The Playwright end-to-end test suite (virtual npm sibling) validating the Quarkus Dev-UI in a real browser. Provides functional and accessibility (axe-core) tests, Keycloak token fixtures, and a precheck-gated runner against a live dev environment.",
-  "responsibility_reasoning": "source: package.json 'End-to-End Playwright tests for Token-Sheriff Dev-UI', @playwright/test + @axe-core deps, test:functional/test:a11y scripts, fixtures/utils",
+  "purpose_reasoning": "npm Playwright E2E suite driving the running Dev-UI",
+  "responsibility": "Playwright end-to-end test suite for the Token-Sheriff Quarkus Dev-UI. Verifies status/config views, the token debugger and WCAG accessibility against a live dev environment, using Keycloak-issued tokens.",
+  "responsibility_reasoning": "package.json scripts + tests/*.spec.js (status-config, token-debugger, accessibility-wcag) and keycloak-token-service util",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -61,8 +65,24 @@
           "skill": "plan-marshall:ref-code-quality"
         }
       ]
+    },
+    "security": {
+      "defaults": [
+        {
+          "description": "Core JavaScript development standards covering ES modules, modern patterns, web component patterns, DOM trust boundaries / XSS prevention, and code quality",
+          "skill": "pm-dev-frontend:javascript"
+        },
+        {
+          "description": "Language-agnostic code quality principles (SRP, CQS, complexity, error handling)",
+          "skill": "plan-marshall:ref-code-quality"
+        },
+        {
+          "description": "JavaScript security \u2014 DOM trust boundaries, XSS sinks, sanitization, and Trusted Types",
+          "skill": "pm-dev-frontend:javascript-security"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }

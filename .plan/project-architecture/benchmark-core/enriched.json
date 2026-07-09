@@ -5,23 +5,26 @@
     "token-sheriff-validation",
     "benchmarking-common"
   ],
-  "key_dependencies": [],
-  "key_dependencies_reasoning": "Benchmarks the core library using shared benchmarking-common infrastructure",
+  "key_dependencies": [
+    "org.openjdk.jmh:jmh-core",
+    "io.jsonwebtoken:jjwt-api"
+  ],
+  "key_dependencies_reasoning": "Benchmarks token-sheriff-validation via JMH using benchmarking-common infrastructure",
   "key_packages": {
     "de.cuioss.sheriff.token.validation.benchmark": {
-      "description": "Benchmark runners and the mock token repository driving JMH/JFR/concurrency-sweep runs."
+      "description": "Top-level JMH benchmark classes and base state for validation benchmarks."
     },
-    "de.cuioss.sheriff.token.validation.benchmark.jfr.benchmarks": {
-      "description": "JFR-instrumented benchmark variants for profiling validation under different loads."
+    "de.cuioss.sheriff.token.validation.benchmark.jfr": {
+      "description": "JFR-instrumented benchmark variants for flight-recorder profiling."
     },
     "de.cuioss.sheriff.token.validation.benchmark.standard": {
-      "description": "Standard JMH benchmarks for core validation and error-load throughput."
+      "description": "Standard end-to-end token validation benchmark scenarios."
     }
   },
   "purpose": "benchmark",
-  "purpose_reasoning": "JMH benchmark classes (jar) targeting the core library",
-  "responsibility": "JMH micro-benchmarks measuring the core token-validation library in isolation. Defines benchmark runners (standard, concurrency-sweep, JFR-profiled), delegates for core/error/mixed validation loads, and a mock token repository to exercise TokenValidator without network.",
-  "responsibility_reasoning": "source: pom description 'Benchmarking module for OAuth/JWT token validation', packages benchmark/standard/jfr/delegates and runners; benchmark profiles",
+  "purpose_reasoning": "jar with JMH deps and benchmark profiles, contains the library JMH benchmarks",
+  "responsibility": "JMH micro-benchmarks for the token-sheriff-validation library. Measures in-process token validation throughput and latency across standard and delegate scenarios, with JFR-instrumented benchmark variants.",
+  "responsibility_reasoning": "pom.xml description + packages (benchmark, benchmark.standard, benchmark.delegates, benchmark.jfr) and JMH deps",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -85,8 +88,17 @@
         },
         "pm-dev-java-cui:cui-logging"
       ]
+    },
+    "security": {
+      "defaults": [
+        "pm-dev-java-cui:cui-logging",
+        {
+          "description": "CUI HTTP request-sanitization security surface",
+          "skill": "pm-dev-java-cui:cui-http"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }

@@ -1,14 +1,22 @@
 {
   "best_practices": [],
   "insights": [],
-  "internal_dependencies": [],
-  "key_dependencies": [],
-  "key_dependencies_reasoning": "",
-  "key_packages": {},
-  "purpose": "parent",
-  "purpose_reasoning": "packaging=pom at repo root aggregating all modules",
-  "responsibility": "Root reactor and parent POM for the Token-Sheriff project. Aggregates all modules (validation core, client, Quarkus extensions, benchmarking, docs and E2E) and centralizes shared build configuration, inheriting from cui-java-parent.",
-  "responsibility_reasoning": "root pom.xml description + build_file[17] aggregating every module; parent cui-java-parent",
+  "internal_dependencies": [
+    "token-sheriff-validation"
+  ],
+  "key_dependencies": [
+    "de.cuioss:cui-java-tools"
+  ],
+  "key_dependencies_reasoning": "Builds on the commons transport base shipped in token-sheriff-validation, with cui-java-tools utilities",
+  "key_packages": {
+    "de.cuioss.sheriff.token.client": {
+      "description": "Client engine package (skeleton) for outbound OIDC/OAuth flows built on the validation transport base."
+    }
+  },
+  "purpose": "library",
+  "purpose_reasoning": "jar packaging, pure-Java framework-agnostic client engine",
+  "responsibility": "Framework-agnostic OIDC/OAuth client engine \u2014 the outbound counterpart to token-sheriff-validation. Intended to add client-side flows (token retrieval, userinfo, revocation, introspection, end-session, PAR) on the commons transport base. Currently a wired, building skeleton with no functional flows yet (Plan 05).",
+  "responsibility_reasoning": "README.adoc + pom.xml description; single de.cuioss.sheriff.token.client package, status=empty skeleton",
   "skills_by_profile": {
     "implementation": {
       "defaults": [

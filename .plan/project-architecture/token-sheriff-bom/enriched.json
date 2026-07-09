@@ -6,9 +6,9 @@
   "key_dependencies_reasoning": "",
   "key_packages": {},
   "purpose": "bom",
-  "purpose_reasoning": "Bill of Materials POM under bom/",
-  "responsibility": "Bill of Materials (BOM) POM that publishes a curated, version-aligned set of Token-Sheriff artifact coordinates so downstream consumers can import consistent module versions via dependencyManagement.",
-  "responsibility_reasoning": "source: bom/pom.xml description 'Bill of Materials (BOM) for Token-Sheriff modules', packaging=pom",
+  "purpose_reasoning": "packaging=pom acting as a dependencyManagement BOM",
+  "responsibility": "Bill of Materials (BOM) that centralizes and aligns dependency versions for all Token-Sheriff modules so consumers import a single managed version set.",
+  "responsibility_reasoning": "pom.xml description 'Bill of Materials (BOM) for Token-Sheriff modules'",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -72,8 +72,17 @@
         },
         "pm-dev-java-cui:cui-logging"
       ]
+    },
+    "security": {
+      "defaults": [
+        "pm-dev-java-cui:cui-logging",
+        {
+          "description": "CUI HTTP request-sanitization security surface",
+          "skill": "pm-dev-java-cui:cui-http"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }

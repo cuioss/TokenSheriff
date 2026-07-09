@@ -4,19 +4,17 @@
   "internal_dependencies": [
     "token-sheriff-validation-quarkus"
   ],
-  "key_dependencies": [
-    "io.quarkus:quarkus-core-deployment"
-  ],
-  "key_dependencies_reasoning": "Deployment module augments the runtime extension at build time via Quarkus deployment API",
+  "key_dependencies": [],
+  "key_dependencies_reasoning": "Build-time deployment counterpart of the validation runtime extension",
   "key_packages": {
     "de.cuioss.sheriff.token.quarkus.deployment": {
-      "description": "TokenSheriffProcessor build steps registering beans, native/reflection config and Dev-UI integration."
+      "description": "Build-time processor/build-steps registering the validation extension and its Dev-UI."
     }
   },
   "purpose": "deployment",
-  "purpose_reasoning": "Quarkus build-time deployment processor (jar) paired with the runtime extension",
-  "responsibility": "The Quarkus build-time deployment companion to the runtime extension. Its TokenSheriffProcessor defines the @BuildStep wiring (bean registration, reflection/native config, Dev-UI card and JWT debugger/status pages) that Quarkus executes during augmentation.",
-  "responsibility_reasoning": "source: pom description 'Deployment module for Quarkus integration', TokenSheriffProcessor + dev-ui qwc-* resources",
+  "purpose_reasoning": "Quarkus build-time deployment/processor module with Dev-UI assets",
+  "responsibility": "Build-time deployment module of the Quarkus validation extension. Provides the extension processor/build steps and ships the Dev-UI web components (JWT debugger and status/config views) that surface validation state during development.",
+  "responsibility_reasoning": "pom.xml description + de.cuioss.sheriff.token.quarkus.deployment package + dev-ui qwc-*.js resources",
   "skills_by_profile": {
     "implementation": {
       "defaults": [
@@ -80,8 +78,17 @@
         },
         "pm-dev-java-cui:cui-logging"
       ]
+    },
+    "security": {
+      "defaults": [
+        "pm-dev-java-cui:cui-logging",
+        {
+          "description": "CUI HTTP request-sanitization security surface",
+          "skill": "pm-dev-java-cui:cui-http"
+        }
+      ]
     }
   },
-  "skills_by_profile_reasoning": "",
+  "skills_by_profile_reasoning": "wizard re-run: batch-populate skills_by_profile from extension signals",
   "tips": []
 }
