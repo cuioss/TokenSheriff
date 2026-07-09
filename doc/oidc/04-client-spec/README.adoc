@@ -116,6 +116,7 @@ doc/client/
     retrieval-flow.adoc        # auth-code+PKCE, grants, client auth, state/nonce, mix-up, PAR
     step-up-and-logout.adoc    # RFC 9470 step-up; RP-initiated logout
     token-handling.adoc        # token lifecycle delta (references the validation module)
+    test-strategy.adoc         # two-layer test model + CLIENT-N→threat→test traceability (feeds Plan 06)
 ----
 
 (Discovery/JWKS/userinfo transport specs live under `doc/commons/`, not here.)

@@ -149,6 +149,15 @@ client cites them; it does not re-enumerate them.
 | `cui-portal-core` — `modules/authentication/portal-authentication-oauth`
 | Real-world confidential server-side OIDC client (CDI + MicroProfile Config + RESTEasy); the
   design reference and eventual replacement target (future work beyond Plans 01–06)
+
+| https://github.com/cuioss/cui-test-mockwebserver-junit5[cui-test-mockwebserver-junit5]
+| The CUI MockWebServer JUnit 5 framework (`@EnableMockWebServer`, `@ModuleDispatcher`,
+  `assertCallsAnswered`) used for the unit-layer OP simulation
+  (xref:specification/test-strategy.adoc[Test strategy])
+
+| `de.cuioss.http.security.database` attack databases
+| Curated OWASP / CVE / ModSecurity-CRS corpora driving adversarial input tests of the engine's
+  untrusted-input parsing (xref:specification/test-strategy.adoc[Test strategy])
 |===
 
 == See also

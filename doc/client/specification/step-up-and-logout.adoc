@@ -92,10 +92,12 @@ The commons `EndSessionDispatcher` *adversarial* mode returns open-redirect / mi
 `post_logout_redirect_uri` responses, which the engine rejects; revocation of held tokens is
 asserted after logout (xref:../requirements.adoc#CLIENT-22[CLIENT-22], `COMMONS-7`). Step-up
 is exercised by driving an `insufficient_user_authentication` challenge and asserting the
-re-driven `acr` / `auth_time` verification.
+re-driven `acr` / `auth_time` verification. The full unit + integration coverage and the
+`CLIENT-N` → threat → test traceability are specified in xref:test-strategy.adoc[Test strategy].
 
 == See also
 
 * xref:retrieval-flow.adoc[Retrieval & flow specification]
 * xref:token-handling.adoc[Token-handling specification]
+* xref:test-strategy.adoc[Test-strategy specification]
 * xref:../architecture.adoc[Architecture]
