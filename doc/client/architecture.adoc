@@ -28,7 +28,7 @@ documented only as the *consumers the design must keep viable*
 
 == Position in the module architecture
 
-image::../resources/diagrams/module-architecture.svg[Token-Sheriff module architecture — the commons base layer and the validation layer ship in one token-sheriff-validation artifact (ArchUnit-enforced boundary); this client engine is a separate Maven module depending on validation; token-sheriff-client-quarkus is the HTTP edge, align=center]
+image::../resources/diagrams/module-architecture.svg["Token-Sheriff module architecture — the commons base layer and the validation layer ship in one token-sheriff-validation artifact (ArchUnit-enforced boundary); this client engine is a separate Maven module depending on validation; token-sheriff-client-quarkus is the HTTP edge", align=center]
 
 * The engine is *pure Java* (xref:requirements.adoc#CLIENT-21[CLIENT-21]) — no CDI /
   MicroProfile / JAX-RS inside it. It depends on `token-sheriff-validation`, which

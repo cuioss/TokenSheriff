@@ -37,7 +37,7 @@ The question is **where** this code lives: a separate Git project (the original 
 
 Keep everything in **this multi-module repository** (no separate Git project) and split into **two Maven modules** — with the shared base as an *ArchUnit-enforced package layer*, not a third artifact:
 
-image::../resources/diagrams/module-architecture.svg[Token-Sheriff module architecture — the commons base layer and the validation layer ship in one token-sheriff-validation artifact (ArchUnit-enforced boundary); token-sheriff-client is a separate Maven module depending on validation; token-sheriff-client-quarkus is the HTTP edge, align=center]
+image::../resources/diagrams/module-architecture.svg["Token-Sheriff module architecture — the commons base layer and the validation layer ship in one token-sheriff-validation artifact (ArchUnit-enforced boundary); token-sheriff-client is a separate Maven module depending on validation; token-sheriff-client-quarkus is the HTTP edge", align=center]
 
 * **`commons` — a package layer inside `token-sheriff-validation`** (`de.cuioss.sheriff.token.commons.*`): the shared base — *transport* (discovery, JWKS, token, userinfo, revocation, introspection, end-session, PAR; TLS, SSRF defence, resilience, IdP-error normalization), the *error model* (typed exceptions the HTTP edges map to RFC 9457), *security events*, and *metrics*. Depends on `cui-http` and `cui-tooling` only; ArchUnit forbids it depending "up" on `…validation..`.
 * **`token-sheriff-validation`** — the artifact; ships the `commons` base packages + the validation packages. Today's `wellknown`/`jwks.http`/`SecurityEventCounter`/metric identifiers are re-packaged into the `commons` layer (xref:03-commons/README.adoc[Plan 03]).

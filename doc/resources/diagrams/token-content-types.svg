@@ -30,8 +30,8 @@
   <line class="edge" x1="300" y1="150" x2="300" y2="102" marker-end="url(#arrow)"/>
   <!-- TokenContent -> Minimal -->
   <line class="edge" x1="272" y1="278" x2="296" y2="216" marker-end="url(#arrow)"/>
-  <!-- RefreshTokenContent -> Minimal -->
-  <line class="edge" x1="600" y1="290" x2="332" y2="208" marker-end="url(#arrow)"/>
+  <!-- RefreshTokenContent -> Minimal (terminates on Minimal's bottom edge, y=216) -->
+  <line class="edge" x1="600" y1="290" x2="358" y2="216" marker-end="url(#arrow)"/>
   <text x="470" y="234" class="edge-lbl">implements minimal surface</text>
   <!-- BaseTokenContent -> TokenContent -->
   <line class="edge" x1="270" y1="406" x2="270" y2="344" marker-end="url(#arrow)"/>
@@ -39,8 +39,8 @@
   <line class="edge" x1="175" y1="534" x2="252" y2="474" marker-end="url(#arrow)"/>
   <!-- IdTokenContent -> Base -->
   <line class="edge" x1="405" y1="534" x2="290" y2="474" marker-end="url(#arrow)"/>
-  <!-- TokenType referenced by Minimal.getTokenType() -->
-  <line class="edge-dash" x1="600" y1="120" x2="408" y2="172"/>
+  <!-- TokenType referenced by Minimal.getTokenType() (flush: TokenType left edge x=595, Minimal right edge x=405) -->
+  <line class="edge-dash" x1="595" y1="121" x2="405" y2="173"/>
   <text x="512" y="138" class="edge-lbl">getTokenType()</text>
 
   <!-- ===================== NODES ===================== -->

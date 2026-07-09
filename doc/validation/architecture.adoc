@@ -8,7 +8,7 @@
 
 Token-Sheriff validates JWT tokens through a multi-stage pipeline. This document describes the core components, their interactions, and key design decisions.
 
-image::../resources/diagrams/validation-components.svg[Token validation component map — one entry point routing to three pipelines that draw on shared supporting services, align=center]
+image::../resources/diagrams/validation-components.svg["Token validation component map — one entry point routing to three pipelines that draw on shared supporting services", align=center]
 
 [[token-validation-pipeline]]
 == Token Validation Pipeline
@@ -17,7 +17,7 @@ _See Requirement xref:requirements.adoc#VALIDATION-1[VALIDATION-1: Token Parsing
 
 The `TokenValidator` is the primary entry point. It processes tokens through an ordered pipeline:
 
-image::../resources/diagrams/validation-pipeline.svg[The ordered validation pipeline — a raw JWT string flows through format, parse, header, signature, build, claims and optional DPoP stages into typed token content, align=center]
+image::../resources/diagrams/validation-pipeline.svg["The ordered validation pipeline — a raw JWT string flows through format, parse, header, signature, build, claims and optional DPoP stages into typed token content", align=center]
 
 0. **TokenStringValidator** - Pre-pipeline validation (null/blank checks, size limits)
 1. **NonValidatingJwtParser** - Decodes token structure without cryptographic validation
@@ -53,7 +53,7 @@ The `TokenValidator` manages multiple `IssuerConfig` instances, selects the appr
 
 _See Requirement xref:requirements.adoc#VALIDATION-1.2[VALIDATION-1.2: Token Types]_
 
-image::../resources/diagrams/token-content-types.svg[Token-content type hierarchy — Serializable, MinimalTokenContent, TokenContent, the abstract BaseTokenContent, and the concrete Access, Id and Refresh token types, align=center]
+image::../resources/diagrams/token-content-types.svg["Token-content type hierarchy — Serializable, MinimalTokenContent, TokenContent, the abstract BaseTokenContent, and the concrete Access, Id and Refresh token types", align=center]
 
 * **TokenContent** / **BaseTokenContent** - Core interface and abstract base for JWT tokens
 * **AccessTokenContent** - OAuth2 access token with scope and role support
