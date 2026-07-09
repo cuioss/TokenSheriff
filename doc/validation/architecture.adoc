@@ -65,7 +65,7 @@ image::../resources/diagrams/token-content-types.svg["Token-content type hierarc
 
 _See Requirement xref:requirements.adoc#VALIDATION-3[VALIDATION-3: Multi-Issuer Support]_
 
-image::../plantuml/multi-issuer-support.png[Multi-Issuer Support]
+image::../resources/diagrams/multi-issuer-resolution.svg["Multi-issuer token validation — the validator extracts the token's iss claim, resolves the matching config from the IssuerConfigCache, and uses that issuer's JwksLoader to obtain the signing key", align=center]
 
 Each `IssuerConfig` holds everything needed to validate tokens from one issuer:
 
@@ -81,7 +81,7 @@ Configuration validation happens at `build()` time (fail-fast). JwksLoader initi
 
 _See Requirement xref:requirements.adoc#VALIDATION-4[VALIDATION-4: Key Management]_
 
-image::../plantuml/key-management.png[Key Management]
+image::../resources/diagrams/key-management-rotation.svg["JWKS key management — initialise and fetch keys into the current set, retrieve by kid with a grace-period fallback to retired keys, and rotate on a periodic refresh keeping retired keys valid during the grace period", align=center]
 
 The `JwksLoader` interface handles retrieval, caching, and rotation of cryptographic keys. Implementations:
 

@@ -27,80 +27,7 @@ This document describes the JWE (JSON Web Encryption, https://datatracker.ietf.o
 
 The Authorization Server signs a JWT with its private key, then encrypts it using the Resource Server's public key. The Resource Server decrypts with its private key, then validates the inner JWS through the existing pipeline.
 
-[listing]
-....
-AUTHORIZATION SERVER (e.g., Keycloak)
-======================================
-
-Key Material:
-  +-------------------------+   +----------------------------------+
-  | AS Signing Private Key  |   | Resource Server's Public Key     |
-  | (RSA/EC private key)    |   | (RSA/EC public key, from JWKS    |
-  | Used to SIGN the JWT    |   |  or pre-configured)              |
-  +------------+------------+   | Used to ENCRYPT the signed JWT   |
-               |                +----------------+-----------------+
-               v                                 |
-  +------------------------+                     |
-  | Step 1: CREATE JWS     |                     |
-  | Sign claims with AS's  |                     |
-  | private key --> JWS    |                     |
-  | (header.payload.sig)   |                     |
-  +------------+-----------+                     |
-               |                                 |
-               v                                 v
-  +--------------------------------------------------+
-  | Step 2: ENCRYPT JWS --> JWE                       |
-  |                                                   |
-  | 1. Generate random CEK (Content Encryption Key)   |
-  | 2. Encrypt CEK with RS's public key (RSA-OAEP)    |
-  | 3. Encrypt JWS payload with CEK (AES-GCM)         |
-  | 4. Produce JWE: Header.EncKey.IV.Cipher.AuthTag   |
-  +------------------------+--------------------------+
-                           |
-  =========================|============================
-                           |
-                           |  JWE token sent via HTTP
-                           |  (Authorization: Bearer <JWE>)
-                           |
-                           v
-
-RESOURCE SERVER (TokenSheriff library)
-======================================
-
-Key Material:
-  +------------------------------+   +-------------------------------+
-  | RS Decryption Private Key    |   | AS Signing Public Key         |
-  | (RSA/EC private key)         |   | (from AS's JWKS endpoint)     |
-  | LOCAL to Resource Server     |   | Loaded by JwksLoader          |
-  | Configured in                |   | Used to VERIFY JWS signature  |
-  | JweDecryptionConfig          |   |                               |
-  | Used to DECRYPT the JWE      |   |                               |
-  +---------------+--------------+   +---------------+---------------+
-                  |                                   |
-                  v                                   |
-  +-----------------------------------+               |
-  | Step 3: DETECT & DECRYPT JWE      |               |
-  |                                   |               |
-  | 1. Split token --> 5 parts = JWE  |               |
-  | 2. Decode JWE header (alg, enc)   |               |
-  | 3. Decrypt CEK with RS's private  |               |
-  |    key (RSA-OAEP)                 |               |
-  | 4. Decrypt ciphertext with CEK    |               |
-  |    (AES-GCM) --> inner JWS string |               |
-  +---------------+-------------------+               |
-                  |                                   |
-                  v                                   v
-  +---------------------------------------------------------+
-  | Step 4: VALIDATE inner JWS (existing pipeline)          |
-  |                                                         |
-  | 1. Parse inner JWS --> DecodedJwt                       |
-  | 2. Resolve issuer config                                |
-  | 3. Validate header (alg, kid)                           |
-  | 4. Verify signature with AS's public key from JWKS      |
-  | 5. Build token content (AccessTokenContent)             |
-  | 6. Validate claims (exp, aud, iss, ...)                 |
-  +---------------------------------------------------------+
-....
+image::../../resources/diagrams/jwe-end-to-end.svg["OAuth JWE end-to-end — the AS signs claims into a JWS then encrypts it with the RS public key into a JWE; the RS decrypts with its private key and validates the inner JWS", align=center]
 
 == Key Material Locations
 
@@ -133,65 +60,13 @@ Key Material:
 
 The decryption private key belongs to *this* Resource Server — it is the same key regardless of which Authorization Server encrypted the token. Multiple issuers may encrypt with different `kid` values referencing different public keys, but the corresponding private keys are all local to the Resource Server. This is fundamentally different from signing keys (which are per-issuer, loaded from each issuer's JWKS endpoint).
 
-[listing]
-....
-Per-Issuer (from JWKS):           Global (local to RS):
-
-+------------------------+        +----------------------------+
-| Issuer A               |        | JweDecryptionConfig        |
-|  JwksLoader --> PubA   |        |  kid-1 --> PrivateKey-1    |
-|  SignaturePrefs        |        |  kid-2 --> PrivateKey-2    |
-+------------------------+        |  default --> PrivateKey-1  |
-| Issuer B               |        +----------------------------+
-|  JwksLoader --> PubB   |        Set once on TokenValidator
-|  SignaturePrefs        |        Shared across all issuers
-+------------------------+
-....
+image::../../resources/diagrams/jwe-key-locations.svg["JWE key locations — signing keys are per-issuer, fetched from each JWKS; decryption keys are one global set held locally on the Resource Server", align=center]
 
 == OIDC Key Exchange
 
 In a production OIDC deployment, the Resource Server publishes its encryption public key via a JWKS endpoint (with `use: "enc"`). The Authorization Server fetches this key and uses it to encrypt tokens.
 
-[listing]
-....
-KEY EXCHANGE FLOW (OIDC Standard)
-==================================
-
-+---------------------+                     +------------------------+
-| Resource Server /   |    1. Register      | Authorization Server   |
-| Relying Party       |-------------------->| (e.g., Keycloak)       |
-|                     |    with jwks_uri    |                        |
-| Publishes JWKS at:  |    or inline jwks   | Stores client config:  |
-| https://rs.example  |                     |  - jwks_uri            |
-| /.well-known/jwks   |                     |  - id_token_encrypted  |
-|                     |                     |    _response_alg       |
-| Contains:           |                     |  - id_token_encrypted  |
-| {                   |                     |    _response_enc       |
-|   "keys": [         |                     |                        |
-|     {               |                     |                        |
-|       "use":"sig",  |                     |                        |
-|       "kid":"s1",   |<-- signing key      |                        |
-|       ...           |                     |                        |
-|     },              |                     |                        |
-|     {               |    2. AS fetches    |                        |
-|       "use":"enc",  |<--- RS's JWKS-------| Filters for            |
-|       "kid":"e1",   |    to get enc key   | use: "enc" keys        |
-|       ...           |                     |                        |
-|     }               |                     |                        |
-|   ]                 |                     |                        |
-| }                   |                     |                        |
-+---------------------+                     +-----------+------------+
-                                                        |
-                                             3. AS encrypts token
-                                                with RS's enc key
-                                                        |
-                                                        v
-                                             +----------------------+
-                                             | JWE(JWS(claims))     |
-                                             | Signed with AS key   |
-                                             | Encrypted with RS key|
-                                             +----------------------+
-....
+image::../../resources/diagrams/jwe-key-exchange.svg["OIDC encryption-key exchange — the RS publishes a JWKS with a use:enc key, registers its jwks_uri, and the AS fetches that key to encrypt tokens", align=center]
 
 === Key Discovery Mechanisms
 
@@ -216,149 +91,17 @@ No new JWKS fetching is needed for decryption keys — the library only needs th
 
 == Core vs Quarkus Responsibility Split
 
-[listing]
-....
-RESPONSIBILITY SPLIT
-=====================
-
-token-sheriff-validation (library)            token-sheriff-validation-quarkus (runtime)
---------------------------------        ----------------------------------
-
-+-----------------------------+         +------------------------------+
-| JweDecryptionConfig         |         | DecryptionKeyLoader          |
-|                             |         |  - Load from PEM file        |
-| Minimal interface:          |<--------|  - Load from KeyStore/P12    |
-|  - Map<kid, PrivateKey>     | passes  |  - Clear passwords after     |
-|  - default PrivateKey       | loaded  |  - Validate key types        |
-|  - JweAlgorithmPreferences  | keys    |                              |
-+-----------------------------+         +------------------------------+
-
-+-----------------------------+         +------------------------------+
-| JweDecryptor                |         | JWKS Endpoint (enc keys)     |
-|  - Pure JDK crypto          |         |  - Publish RS's public key   |
-|  - Decrypt CEK              |         |    with use: "enc"           |
-|  - Decrypt content          |         |  - Serve at /jwks or         |
-|  - Memory clearing of CEK   |         |    /.well-known/jwks.json    |
-+-----------------------------+         +------------------------------+
-
-+-----------------------------+         +------------------------------+
-| NonValidatingJwtParser      |         | Key Rotation Manager         |
-|  - Detect 5-part JWE        |         |  - Grace period for old keys |
-|  - Delegate to JweDecryptor |         |  - Rebuild config on change  |
-|  - Return inner JWS         |         |  - Config properties         |
-+-----------------------------+         +------------------------------+
-
-Does NOT know about:                    Handles:
- - File paths                            - PEM / KeyStore / PKCS#12
- - Keystores or passwords                - Config property mapping
- - Key loading mechanisms                - JWKS endpoint for enc keys
- - JWKS endpoints                        - Key rotation lifecycle
- - Key rotation scheduling               - Password management
-....
+image::../../resources/diagrams/jwe-responsibility-split.svg["JWE responsibility split — the library owns the crypto (config, decryptor, JWE detection) and the Quarkus runtime owns key loading, the encryption-key JWKS endpoint, and rotation", align=center]
 
 == Internal Pipeline Architecture
 
 JWE decryption is transparent — it happens inside `NonValidatingJwtParser` and produces a standard `DecodedJwt`. All downstream validators work on the inner JWS unchanged.
 
-[listing]
-....
-                         +---------------------+
-                         |  Raw Token String   |
-                         +----------+----------+
-                                    |
-                         +----------v----------+
-                         | TokenStringValidator|
-                         | (null/blank/size)   |
-                         +----------+----------+
-                                    |
-                         +----------v--------------+
-                         | NonValidatingJwtParser  |
-                         | split on '.'            |
-                         +----------+--------------+
-                                    |
-                       +------------+------------+
-                       | 3 parts    |            | 5 parts
-                       | (JWS)      |            | (JWE)
-                       v            |            v
-                 +----------+       |    +------------------+
-                 | Existing  |       |    | Decode JWE Header|
-                 | JWS path  |       |    | (check 'enc')    |
-                 +-----+----+       |    +--------+---------+
-                       |            |             |
-                       |            |    +--------v---------+
-                       |            |    | JweDecryptor      |
-                       |            |    |  - Resolve key    |
-                       |            |    |  - Decrypt CEK    |
-                       |            |    |  - Decrypt payload|
-                       |            |    |  - Decompress     |
-                       |            |    +--------+---------+
-                       |            |             |
-                       |            |    +--------v---------+
-                       |            |    | Inner JWS string  |
-                       |            |    | --> decode(inner) |
-                       |            |    +--------+---------+
-                       |            |             |
-                       v            v             v
-                 +------------------------------------+
-                 |           DecodedJwt               |
-                 |   (same type for both paths)       |
-                 +-----------------+------------------+
-                                   |
-             +---------------------v---------------------+
-             |   Existing pipeline (UNCHANGED)            |
-             |   IssuerConfigCache --> HeaderValidator |
-             |   --> SignatureValidator --> TokenBuilder  |
-             |   --> ClaimValidator --> Cache             |
-             +--------------------------------------------+
-....
+image::../../resources/diagrams/jwe-internal-pipeline.svg["Transparent JWE handling — the parser routes 3-part tokens down the JWS path and 5-part tokens through JWE decryption, both converging on the same DecodedJwt for the unchanged validation pipeline", align=center]
 
 == Detailed JWE Decryption Flow
 
-[listing]
-....
-              +--------------------------------------+
-              | JWE Compact Serialization            |
-              | Header.EncKey.IV.Cipher.AuthTag      |
-              | (5 Base64URL parts)                  |
-              +-----------------+--------------------+
-                                |
-              +-----------------v--------------------+
-              | 1. Decode Header (part[0])           |
-              |    --> JwtHeader with 'enc' field    |
-              |    --> Validate alg + enc allowed    |
-              +-----------------+--------------------+
-                                |
-              +-----------------v--------------------+
-              | 2. Resolve Decryption Key            |
-              |    --> By kid from header            |
-              |    --> Or default key                |
-              +-----------------+--------------------+
-                                |
-              +-----------------v--------------------+
-              | 3. Decrypt CEK                       |
-              |    RSA-OAEP: JDK Cipher OAEP         |
-              |    RSA-OAEP-256: Cipher + OAEPSpec   |
-              |    ECDH-ES: KeyAgreement + KDF       |
-              +-----------------+--------------------+
-                                |
-              +-----------------v--------------------+
-              | 4. Decrypt Content                   |
-              |    A128GCM/A256GCM: AES/GCM          |
-              |    A128CBC-HS256: AES/CBC + HMAC     |
-              |    A256CBC-HS512: AES/CBC + HMAC     |
-              +-----------------+--------------------+
-                                |
-              +-----------------v--------------------+
-              | 5. Decompress (if zip="DEF")         |
-              |    --> Inflate with size limit       |
-              +-----------------+--------------------+
-                                |
-              +-----------------v--------------------+
-              | 6. Inner JWS string                  |
-              |    --> Pass to decode() recursively  |
-              |    --> Returns DecodedJwt            |
-              +--------------------------------------+
-....
+image::../../resources/diagrams/jwe-decryption-steps.svg["Detailed JWE decryption steps — decode header, resolve key, decrypt the CEK, decrypt content, decompress, and recover the inner JWS string", align=center]
 
 == Supported Algorithms
 
