@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- theme-handling: A (theme-neutral) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 300"
+     role="img" aria-labelledby="title desc"
+     font-family="ui-sans-serif, -apple-system, system-ui, 'Segoe UI', sans-serif">
+  <title id="title">The token validation pipeline stages</title>
+  <desc  id="desc">A raw JWT string flows left to right through the ordered validation stages — string-format check, structural parse, header validation, cryptographic signature verification, typed-content build, claim validation, and an optional DPoP proof check for access tokens — emerging as a typed token-content object. The signature and claim stages are the cryptographic and semantic gates.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" class="arrow-fill"/>
+    </marker>
+    <style>
+      .stage-header { font-size: 12px; font-weight: 600; fill: #6e7681; text-anchor: middle; }
+      .stage-sub    { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .endpoint     { font-size: 12px; fill: #6e7681; text-anchor: middle; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .endpoint-sub { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .stage        { stroke: #6e7681; stroke-width: 1.2; fill: none; }
+      .stage-opt    { stroke: #6e7681; stroke-width: 1.2; fill: none; stroke-dasharray: 5 3; }
+      .track        { stroke: #6e7681; stroke-width: 1.5; fill: none; }
+      .arrow-fill   { fill: #6e7681; }
+      .caption      { font-size: 12px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+    </style>
+  </defs>
+
+  <!-- input endpoint -->
+  <text x="66" y="146" class="endpoint">raw JWT</text>
+  <text x="66" y="163" class="endpoint-sub">string</text>
+
+  <!-- track line (passes through the transparent stage boxes) -->
+  <line class="track" x1="120" y1="150" x2="1180" y2="150"/>
+  <line class="track" x1="1180" y1="150" x2="1214" y2="150" marker-end="url(#arrow)"/>
+
+  <!-- stage 1: format check (event) -->
+  <rect class="stage" x="136" y="128" width="108" height="44" rx="6" ry="6"/>
+  <text x="190" y="116" class="stage-header">format</text>
+  <text x="190" y="190" class="stage-sub">size · null</text>
+
+  <!-- stage 2: parse (process) -->
+  <rect class="stage" x="291" y="124" width="108" height="52" rx="6" ry="6"/>
+  <text x="345" y="112" class="stage-header">parse</text>
+  <text x="345" y="192" class="stage-sub">decode JWS</text>
+
+  <!-- stage 3: header (process) -->
+  <rect class="stage" x="446" y="124" width="108" height="52" rx="6" ry="6"/>
+  <text x="500" y="112" class="stage-header">header</text>
+  <text x="500" y="192" class="stage-sub">alg · kid · typ</text>
+
+  <!-- stage 4: signature (process) -->
+  <rect class="stage" x="601" y="124" width="108" height="52" rx="6" ry="6"/>
+  <text x="655" y="112" class="stage-header">signature</text>
+  <text x="655" y="192" class="stage-sub">verify via JWKS</text>
+
+  <!-- stage 5: build (event) -->
+  <rect class="stage" x="756" y="128" width="108" height="44" rx="6" ry="6"/>
+  <text x="810" y="116" class="stage-header">build</text>
+  <text x="810" y="190" class="stage-sub">typed content</text>
+
+  <!-- stage 6: claims (process) -->
+  <rect class="stage" x="911" y="124" width="108" height="52" rx="6" ry="6"/>
+  <text x="965" y="112" class="stage-header">claims</text>
+  <text x="965" y="192" class="stage-sub">exp · aud · iss</text>
+
+  <!-- stage 7: DPoP (optional, dashed) -->
+  <rect class="stage-opt" x="1066" y="124" width="108" height="52" rx="6" ry="6"/>
+  <text x="1120" y="112" class="stage-header">DPoP</text>
+  <text x="1120" y="192" class="stage-sub">optional · RFC 9449</text>
+
+  <!-- output endpoint -->
+  <text x="1252" y="146" class="endpoint">typed</text>
+  <text x="1252" y="163" class="endpoint-sub">content</text>
+
+  <!-- Footer caption -->
+  <text x="650" y="248" class="caption">Ordered pipeline: signature is the cryptographic gate, claims the semantic gate; DPoP is an optional per-issuer check for access tokens.</text>
+</svg>

@@ -15,24 +15,7 @@ This specification covers the architecture, provider selection, and usage of the
 
 The multi-IDP testing approach extends the existing Docker Compose infrastructure with additional OIDC providers behind a Docker Compose **profile**, keeping the default Keycloak-only workflow unchanged.
 
-[source]
-----
-┌──────────────────────────────────────────────────────────────────────┐
-│ Docker Compose Network: jwt-integration                               │
-│                                                                       │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐  │
-│  │ Keycloak │  │   Dex    │  │ Zitadel  │  │ TokenSheriff          │  │
-│  │ :8443    │  │  :5556   │  │  :8080   │  │ Integration Tests     │  │
-│  │ (always) │  │ (profile)│  │ (profile)│  │ :8443                 │  │
-│  └──────────┘  └──────────┘  └────┬─────┘  └──────────────────────┘  │
-│                                    │                                  │
-│                               ┌────┴─────┐                           │
-│                               │ Postgres │                           │
-│                               │  :5432   │                           │
-│                               │ (profile)│                           │
-│                               └──────────┘                           │
-└──────────────────────────────────────────────────────────────────────┘
-----
+image::../../resources/diagrams/multi-idp-test-topology.svg[Multi-IdP integration-test container topology — the integration tests validate tokens from Keycloak (always-on) plus Dex and Zitadel behind Compose profiles, with Postgres backing Zitadel, all in the jwt-integration network, align=center]
 
 === Design Principles
 
