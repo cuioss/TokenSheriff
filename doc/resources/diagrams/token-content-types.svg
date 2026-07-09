@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- theme-handling: A (theme-neutral) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 660"
+     role="img" aria-labelledby="title desc"
+     font-family="ui-sans-serif, -apple-system, system-ui, 'Segoe UI', sans-serif">
+  <title id="title">Token-content type hierarchy</title>
+  <desc  id="desc">The token-content types form an inheritance tree. Serializable is the root; MinimalTokenContent adds the raw token and token type; TokenContent adds the claim surface; BaseTokenContent is the abstract shared claim storage that AccessTokenContent and IdTokenContent extend; RefreshTokenContent implements the minimal surface directly. TokenType is the enum of token kinds. Arrows point from a subtype to the type it extends or implements.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" class="arrow-fill"/>
+    </marker>
+    <style>
+      .type-name { font-size: 13px; font-weight: 700; fill: #6e7681; text-anchor: middle; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .stereo    { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .role      { font-size: 11px; fill: #6e7681; text-anchor: middle; }
+      .node      { stroke: #6e7681; stroke-width: 1.2; fill: none; }
+      .node-abs  { stroke: #6e7681; stroke-width: 1.2; fill: none; stroke-dasharray: 5 3; }
+      .edge      { stroke: #6e7681; stroke-width: 1.5; fill: none; }
+      .edge-dash { stroke: #6e7681; stroke-width: 1; fill: none; stroke-dasharray: 3 3; }
+      .edge-lbl  { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .arrow-fill{ fill: #6e7681; }
+      .caption   { font-size: 12px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+    </style>
+  </defs>
+
+  <!-- ===================== EDGES (drawn first, under boxes) ===================== -->
+  <!-- Minimal -> Serializable -->
+  <line class="edge" x1="300" y1="150" x2="300" y2="102" marker-end="url(#arrow)"/>
+  <!-- TokenContent -> Minimal -->
+  <line class="edge" x1="272" y1="278" x2="296" y2="216" marker-end="url(#arrow)"/>
+  <!-- RefreshTokenContent -> Minimal (terminates on Minimal's bottom edge, y=216) -->
+  <line class="edge" x1="600" y1="290" x2="358" y2="216" marker-end="url(#arrow)"/>
+  <text x="470" y="234" class="edge-lbl">implements minimal surface</text>
+  <!-- BaseTokenContent -> TokenContent -->
+  <line class="edge" x1="270" y1="406" x2="270" y2="344" marker-end="url(#arrow)"/>
+  <!-- AccessTokenContent -> Base -->
+  <line class="edge" x1="175" y1="534" x2="252" y2="474" marker-end="url(#arrow)"/>
+  <!-- IdTokenContent -> Base -->
+  <line class="edge" x1="405" y1="534" x2="290" y2="474" marker-end="url(#arrow)"/>
+  <!-- TokenType referenced by Minimal.getTokenType() (flush: TokenType left edge x=595, Minimal right edge x=405) -->
+  <line class="edge-dash" x1="595" y1="121" x2="405" y2="173"/>
+  <text x="512" y="138" class="edge-lbl">getTokenType()</text>
+
+  <!-- ===================== NODES ===================== -->
+  <!-- Serializable (root interface) -->
+  <rect class="node" x="195" y="46" width="210" height="56" rx="6" ry="6"/>
+  <text x="300" y="70" class="stereo">«interface»</text>
+  <text x="300" y="90" class="type-name">Serializable</text>
+
+  <!-- MinimalTokenContent -->
+  <rect class="node" x="195" y="150" width="210" height="66" rx="6" ry="6"/>
+  <text x="300" y="172" class="stereo">«interface»</text>
+  <text x="300" y="190" class="type-name">MinimalTokenContent</text>
+  <text x="300" y="208" class="role">raw token + token type</text>
+
+  <!-- TokenContent -->
+  <rect class="node" x="165" y="278" width="210" height="66" rx="6" ry="6"/>
+  <text x="270" y="300" class="stereo">«interface»</text>
+  <text x="270" y="318" class="type-name">TokenContent</text>
+  <text x="270" y="336" class="role">claims · iss / sub / exp / iat</text>
+
+  <!-- RefreshTokenContent -->
+  <rect class="node" x="555" y="290" width="210" height="66" rx="6" ry="6"/>
+  <text x="660" y="312" class="stereo">«class»</text>
+  <text x="660" y="330" class="type-name">RefreshTokenContent</text>
+  <text x="660" y="348" class="role">opaque · minimal surface</text>
+
+  <!-- BaseTokenContent (abstract, dashed) -->
+  <rect class="node-abs" x="165" y="406" width="210" height="66" rx="6" ry="6"/>
+  <text x="270" y="428" class="stereo">«abstract»</text>
+  <text x="270" y="446" class="type-name">BaseTokenContent</text>
+  <text x="270" y="464" class="role">shared claim storage</text>
+
+  <!-- AccessTokenContent -->
+  <rect class="node" x="65" y="534" width="210" height="76" rx="6" ry="6"/>
+  <text x="170" y="556" class="stereo">«class»</text>
+  <text x="170" y="574" class="type-name">AccessTokenContent</text>
+  <text x="170" y="592" class="role">scopes / roles / groups</text>
+
+  <!-- IdTokenContent -->
+  <rect class="node" x="305" y="534" width="210" height="76" rx="6" ry="6"/>
+  <text x="410" y="556" class="stereo">«class»</text>
+  <text x="410" y="574" class="type-name">IdTokenContent</text>
+  <text x="410" y="592" class="role">audience / displayName</text>
+
+  <!-- TokenType enum (standalone, top-right) -->
+  <rect class="node" x="595" y="46" width="230" height="88" rx="6" ry="6"/>
+  <text x="710" y="68" class="stereo">«enum»</text>
+  <text x="710" y="86" class="type-name">TokenType</text>
+  <text x="710" y="106" class="role">ACCESS_TOKEN · ID_TOKEN</text>
+  <text x="710" y="124" class="role">REFRESH_TOKEN · UNKNOWN</text>
+
+  <!-- Footer caption -->
+  <text x="460" y="644" class="caption">Arrows point from a subtype to the type it extends or implements.</text>
+</svg>

@@ -167,7 +167,7 @@ AccessTokenContent accessToken = validator.createAccessToken(AccessTokenRequest.
 For detailed architectural information, see:
 
 - [Architecture Reference](doc/validation/architecture.adoc) - Validation pipeline, components, and design
-- [Component Diagram](doc/plantuml/component-overview.png) - Visual architecture overview
+- [Component map](doc/resources/diagrams/validation-components.svg) - Visual architecture overview
 
 ### Modules
 

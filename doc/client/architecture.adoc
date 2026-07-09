@@ -28,19 +28,7 @@ documented only as the *consumers the design must keep viable*
 
 == Position in the module architecture
 
-[source]
-----
-token-sheriff-validation                       (one artifact, two ArchUnit-enforced layers)
-  de.cuioss.sheriff.token.commons.              base: transport / error / events / metrics
-    transport/  error/  events/  metrics/         (deps: cui-http, cui-tooling)
-        ▲   ArchUnit: commons must NOT depend on …validation..
-  de.cuioss.sheriff.token.validation.           token validation (signatures, claims, pipeline)
-        ▲   Maven: client → validation, never the reverse
-token-sheriff-client                            THIS capability — flows / retrieval / lifecycle
-  de.cuioss.sheriff.token.client.               pure Java; deps: token-sheriff-validation
-        ▲
-token-sheriff-client-quarkus                    HTTP edge — RFC 9457 problem+json, CDI wiring
-----
+image::../resources/diagrams/module-architecture.svg["Token-Sheriff module architecture — the commons base layer and the validation layer ship in one token-sheriff-validation artifact (ArchUnit-enforced boundary); this client engine is a separate Maven module depending on validation; token-sheriff-client-quarkus is the HTTP edge", align=center]
 
 * The engine is *pure Java* (xref:requirements.adoc#CLIENT-21[CLIENT-21]) — no CDI /
   MicroProfile / JAX-RS inside it. It depends on `token-sheriff-validation`, which
@@ -94,30 +82,7 @@ is the *trust* layer.
 The core in-scope flow (xref:requirements.adoc#CLIENT-1[CLIENT-1], server-side, no tokens in
 the browser):
 
-[source]
-----
-Browser            Client engine (backend)        commons transport        Authorization Server
-   |  start login        |                                |                          |
-   |-------------------->|  build auth request:           |                          |
-   |                     |   PKCE S256, state, nonce,     |                          |
-   |                     |   exact redirect_uri,          |                          |
-   |                     |   [acr_values/max_age]         |                          |
-   |                     |  [PAR: push params]----------->|-- POST /par ------------>|
-   |                     |                                |<- request_uri -----------|
-   |<-- 302 to AS -------|  (authorize?request_uri=… or full params)                 |
-   |------------------------------- user authenticates at AS ---------------------->|
-   |<== form_post callback: code, state, iss =============================(no token in URL)
-   |-------------------->|  verify state (session-bound)  |                          |
-   |                     |  verify iss (mix-up defence)   |                          |
-   |                     |  exchange code --------------->|-- POST /token ---------->|
-   |                     |   client auth (private_key_jwt |   grant=authorization_code
-   |                     |    / mTLS / secret),           |   + code_verifier        |
-   |                     |   [DPoP proof]                 |<- tokens (+ id_token) ----|
-   |                     |  validate tokens (VALIDATION)  |                          |
-   |                     |  verify nonce, at_hash, sub    |                          |
-   |                     |  store server-side (BFF binding)                          |
-   |<-- session cookie --|  (opaque session-id  OR  encrypted token cookie)          |
-----
+image::../resources/diagrams/client-auth-code-pkce.svg["Confidential authorization-code + PKCE flow — the client builds a PKCE-protected request (optionally via PAR), the user authenticates at the AS, the form_post callback returns the code with no token in the URL, and the client verifies state/iss, exchanges the code over the back channel through commons, validates the tokens, stores them server-side, and returns only a session cookie", align=center]
 
 The *browser never receives a usable token*. What the browser holds is the BFF's own
 session artifact — see <<_bff_binding_shapes>>.

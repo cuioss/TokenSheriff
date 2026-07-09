@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- theme-handling: A (theme-neutral) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 740 500"
+     role="img" aria-labelledby="title desc"
+     font-family="ui-sans-serif, -apple-system, system-ui, 'Segoe UI', sans-serif">
+  <title id="title">OAuth JWE end-to-end — sign then encrypt, decrypt then validate</title>
+  <desc  id="desc">The authorization server signs the claims with its private key to make a JWS, then encrypts that JWS with the resource server's public key to make a JWE, which it transmits as a bearer token. The resource server (the TokenSheriff library) decrypts the JWE with its local private key to recover the inner JWS, then validates that JWS through the existing pipeline using the AS's public key.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" class="arrow-fill"/>
+    </marker>
+    <style>
+      .zone       { font-size: 13px; font-weight: 600; fill: #6e7681; text-anchor: start; }
+      .stage      { stroke: #6e7681; stroke-width: 1.2; fill: none; }
+      .name       { font-size: 12px; font-weight: 600; fill: #6e7681; text-anchor: middle; }
+      .sub        { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .arrow      { stroke: #6e7681; stroke-width: 1.5; fill: none; }
+      .arrow-fill { fill: #6e7681; }
+      .xmit       { font-size: 11px; fill: #6e7681; text-anchor: start; font-style: italic; }
+      .caption    { font-size: 12px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+    </style>
+  </defs>
+
+  <!-- ===== Authorization Server zone ===== -->
+  <text x="140" y="26" class="zone">AUTHORIZATION SERVER</text>
+
+  <rect class="stage" x="140" y="40" width="460" height="56" rx="6" ry="6"/>
+  <text x="370" y="63" class="name">Step 1 · create JWS</text>
+  <text x="370" y="83" class="sub">sign claims with AS private key → header.payload.sig</text>
+
+  <rect class="stage" x="140" y="112" width="460" height="74" rx="6" ry="6"/>
+  <text x="370" y="134" class="name">Step 2 · encrypt JWS → JWE</text>
+  <text x="370" y="154" class="sub">generate CEK · encrypt CEK with RS public key (RSA-OAEP)</text>
+  <text x="370" y="172" class="sub">encrypt payload with CEK (AES-GCM) → 5-part JWE</text>
+
+  <!-- transmit arrow -->
+  <line class="arrow" x1="370" y1="186" x2="370" y2="256" marker-end="url(#arrow)"/>
+  <text x="388" y="210" class="xmit">JWE via HTTP · Authorization: Bearer &lt;JWE&gt;</text>
+
+  <!-- ===== Resource Server zone ===== -->
+  <text x="140" y="244" class="zone">RESOURCE SERVER (TokenSheriff)</text>
+
+  <rect class="stage" x="140" y="258" width="460" height="74" rx="6" ry="6"/>
+  <text x="370" y="280" class="name">Step 3 · detect &amp; decrypt JWE</text>
+  <text x="370" y="300" class="sub">5 parts · decode header · decrypt CEK with RS private key</text>
+  <text x="370" y="318" class="sub">decrypt ciphertext (AES-GCM) → inner JWS string</text>
+
+  <line class="arrow" x1="370" y1="332" x2="370" y2="358" marker-end="url(#arrow)"/>
+
+  <rect class="stage" x="140" y="358" width="460" height="74" rx="6" ry="6"/>
+  <text x="370" y="380" class="name">Step 4 · validate inner JWS (existing pipeline)</text>
+  <text x="370" y="400" class="sub">parse → DecodedJwt · resolve issuer · validate header</text>
+  <text x="370" y="418" class="sub">verify signature with AS public key · build content · validate claims</text>
+
+  <text x="370" y="466" class="caption">Sign then encrypt at the AS; decrypt then validate at the RS — the inner JWS is verified unchanged.</text>
+</svg>

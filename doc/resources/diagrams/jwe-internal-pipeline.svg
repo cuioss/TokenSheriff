@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- theme-handling: A (theme-neutral) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 690"
+     role="img" aria-labelledby="title desc"
+     font-family="ui-sans-serif, -apple-system, system-ui, 'Segoe UI', sans-serif">
+  <title id="title">Transparent JWE handling inside the parser</title>
+  <desc  id="desc">A raw token flows through the string validator into the NonValidatingJwtParser, which splits on the dot. A three-part token takes the existing JWS path; a five-part token is a JWE, whose header is decoded and payload decrypted by JweDecryptor to recover the inner JWS. Both paths converge on the same DecodedJwt, which the existing validation pipeline then processes unchanged.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" class="arrow-fill"/>
+    </marker>
+    <style>
+      .stage      { stroke: #6e7681; stroke-width: 1.2; fill: none; }
+      .name       { font-size: 12px; font-weight: 600; fill: #6e7681; text-anchor: middle; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .sub        { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .arrow      { stroke: #6e7681; stroke-width: 1.5; fill: none; }
+      .arrow-fill { fill: #6e7681; }
+      .branch-lbl { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .caption    { font-size: 12px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+    </style>
+  </defs>
+
+  <!-- 1 raw token -->
+  <rect class="stage" x="360" y="40" width="180" height="42" rx="6" ry="6"/>
+  <text x="450" y="66" class="name">raw token string</text>
+
+  <!-- 2 string validator -->
+  <rect class="stage" x="350" y="106" width="200" height="50" rx="6" ry="6"/>
+  <text x="450" y="128" class="name">TokenStringValidator</text>
+  <text x="450" y="146" class="sub">null / blank / size</text>
+
+  <!-- 3 parser (branch point) -->
+  <rect class="stage" x="336" y="180" width="228" height="50" rx="6" ry="6"/>
+  <text x="450" y="202" class="name">NonValidatingJwtParser</text>
+  <text x="450" y="220" class="sub">split on '.'</text>
+
+  <!-- 4 existing JWS path (left) -->
+  <rect class="stage" x="140" y="300" width="180" height="50" rx="6" ry="6"/>
+  <text x="230" y="322" class="name">existing JWS path</text>
+  <text x="230" y="340" class="sub">3-part token</text>
+
+  <!-- 5 decode JWE header (right) -->
+  <rect class="stage" x="580" y="300" width="200" height="50" rx="6" ry="6"/>
+  <text x="680" y="322" class="name">decode JWE header</text>
+  <text x="680" y="340" class="sub">check 'enc' · alg allowed</text>
+
+  <!-- 6 JweDecryptor -->
+  <rect class="stage" x="580" y="374" width="200" height="52" rx="6" ry="6"/>
+  <text x="680" y="397" class="name">JweDecryptor</text>
+  <text x="680" y="415" class="sub">decrypt CEK + content</text>
+
+  <!-- 7 inner JWS -->
+  <rect class="stage" x="580" y="450" width="200" height="44" rx="6" ry="6"/>
+  <text x="680" y="477" class="name">inner JWS string</text>
+
+  <!-- 8 DecodedJwt (converge) -->
+  <rect class="stage" x="350" y="524" width="200" height="50" rx="6" ry="6"/>
+  <text x="450" y="546" class="name">DecodedJwt</text>
+  <text x="450" y="564" class="sub">same type, both paths</text>
+
+  <!-- 9 existing pipeline -->
+  <rect class="stage" x="300" y="600" width="300" height="50" rx="6" ry="6"/>
+  <text x="450" y="622" class="name">existing pipeline</text>
+  <text x="450" y="640" class="sub">issuer · header · signature · claims — UNCHANGED</text>
+
+  <!-- arrows -->
+  <line class="arrow" x1="450" y1="82"  x2="450" y2="104" marker-end="url(#arrow)"/>
+  <line class="arrow" x1="450" y1="156" x2="450" y2="178" marker-end="url(#arrow)"/>
+  <!-- branch left / right -->
+  <line class="arrow" x1="402" y1="230" x2="246" y2="298" marker-end="url(#arrow)"/>
+  <text x="300" y="258" class="branch-lbl">3 parts · JWS</text>
+  <line class="arrow" x1="498" y1="230" x2="662" y2="298" marker-end="url(#arrow)"/>
+  <text x="602" y="258" class="branch-lbl">5 parts · JWE</text>
+  <!-- right chain -->
+  <line class="arrow" x1="680" y1="350" x2="680" y2="374" marker-end="url(#arrow)"/>
+  <line class="arrow" x1="680" y1="426" x2="680" y2="450" marker-end="url(#arrow)"/>
+  <!-- converge -->
+  <line class="arrow" x1="248" y1="350" x2="404" y2="524" marker-end="url(#arrow)"/>
+  <line class="arrow" x1="662" y1="494" x2="500" y2="524" marker-end="url(#arrow)"/>
+  <!-- to pipeline -->
+  <line class="arrow" x1="450" y1="574" x2="450" y2="600" marker-end="url(#arrow)"/>
+
+  <text x="460" y="680" class="caption">Encrypted tokens are decrypted transparently; the validation pipeline sees only a DecodedJwt, unchanged.</text>
+</svg>

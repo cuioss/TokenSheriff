@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- theme-handling: A (theme-neutral) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 620"
+     role="img" aria-labelledby="title desc"
+     font-family="ui-sans-serif, -apple-system, system-ui, 'Segoe UI', sans-serif">
+  <title id="title">Detailed JWE decryption steps</title>
+  <desc  id="desc">A five-part JWE compact serialization is decrypted in order: decode the header and check the enc/alg are allowed, resolve the decryption key by kid or default, decrypt the content-encryption key, decrypt the content, decompress if the zip header is set, and recover the inner JWS string, which is decoded recursively into a DecodedJwt.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" class="arrow-fill"/>
+    </marker>
+    <style>
+      .stage      { stroke: #6e7681; stroke-width: 1.2; fill: none; }
+      .name       { font-size: 12px; font-weight: 600; fill: #6e7681; text-anchor: middle; }
+      .mono       { font-size: 12px; fill: #6e7681; text-anchor: middle; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .sub        { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .arrow      { stroke: #6e7681; stroke-width: 1.5; fill: none; }
+      .arrow-fill { fill: #6e7681; }
+      .caption    { font-size: 12px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+    </style>
+  </defs>
+
+  <!-- input: JWE 5 parts -->
+  <rect class="stage" x="170" y="34" width="300" height="46" rx="6" ry="6"/>
+  <text x="320" y="53" class="name">JWE — 5-part compact serialization</text>
+  <text x="320" y="71" class="mono">Header.EncKey.IV.Cipher.AuthTag</text>
+
+  <!-- 1 -->
+  <rect class="stage" x="170" y="110" width="300" height="50" rx="6" ry="6"/>
+  <text x="320" y="132" class="name">1 · decode header</text>
+  <text x="320" y="150" class="sub">check 'enc' · validate alg + enc allowed</text>
+
+  <!-- 2 -->
+  <rect class="stage" x="170" y="186" width="300" height="50" rx="6" ry="6"/>
+  <text x="320" y="208" class="name">2 · resolve decryption key</text>
+  <text x="320" y="226" class="sub">by kid, else default key</text>
+
+  <!-- 3 -->
+  <rect class="stage" x="170" y="262" width="300" height="50" rx="6" ry="6"/>
+  <text x="320" y="284" class="name">3 · decrypt CEK</text>
+  <text x="320" y="302" class="sub">RSA-OAEP / RSA-OAEP-256 / ECDH-ES</text>
+
+  <!-- 4 -->
+  <rect class="stage" x="170" y="338" width="300" height="50" rx="6" ry="6"/>
+  <text x="320" y="360" class="name">4 · decrypt content</text>
+  <text x="320" y="378" class="sub">A128/256GCM · A128CBC-HS256 · A256CBC-HS512</text>
+
+  <!-- 5 -->
+  <rect class="stage" x="170" y="414" width="300" height="50" rx="6" ry="6"/>
+  <text x="320" y="436" class="name">5 · decompress (if zip=DEF)</text>
+  <text x="320" y="454" class="sub">inflate with size limit</text>
+
+  <!-- 6 -->
+  <rect class="stage" x="170" y="490" width="300" height="50" rx="6" ry="6"/>
+  <text x="320" y="512" class="name">6 · inner JWS string</text>
+  <text x="320" y="530" class="sub">→ decode() recursively → DecodedJwt</text>
+
+  <!-- arrows -->
+  <line class="arrow" x1="320" y1="80"  x2="320" y2="110" marker-end="url(#arrow)"/>
+  <line class="arrow" x1="320" y1="160" x2="320" y2="186" marker-end="url(#arrow)"/>
+  <line class="arrow" x1="320" y1="236" x2="320" y2="262" marker-end="url(#arrow)"/>
+  <line class="arrow" x1="320" y1="312" x2="320" y2="338" marker-end="url(#arrow)"/>
+  <line class="arrow" x1="320" y1="388" x2="320" y2="414" marker-end="url(#arrow)"/>
+  <line class="arrow" x1="320" y1="464" x2="320" y2="490" marker-end="url(#arrow)"/>
+
+  <text x="320" y="580" class="caption">Ordered decrypt: header → key → CEK → content → decompress → inner JWS.</text>
+</svg>

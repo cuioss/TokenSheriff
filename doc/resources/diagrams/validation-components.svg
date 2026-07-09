@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- theme-handling: A (theme-neutral) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 430"
+     role="img" aria-labelledby="title desc"
+     font-family="ui-sans-serif, -apple-system, system-ui, 'Segoe UI', sans-serif">
+  <title id="title">Token validation component map</title>
+  <desc  id="desc">The TokenValidator entry point routes each token to one of three validation pipelines (access, id, refresh), which run the ordered validation stages and draw on the supporting services: configuration, key management, observability, and the typed token-content model.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" class="arrow-fill"/>
+    </marker>
+    <style>
+      .col-header { font-size: 15px; font-weight: 600; fill: #6e7681; text-anchor: middle; }
+      .col-sub    { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .group      { font-size: 13px; font-weight: 600; fill: #6e7681; }
+      .item       { font-size: 12px; fill: #6e7681; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .item-sub   { font-size: 11px; fill: #6e7681; font-style: italic; }
+      .stroke     { stroke: #6e7681; stroke-width: 1.2; fill: none; }
+      .arrow      { stroke: #6e7681; stroke-width: 1.5; fill: none; }
+      .arrow-fill { fill: #6e7681; }
+      .arrow-lbl  { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .caption    { font-size: 12px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+    </style>
+  </defs>
+
+  <!-- ================= COL 1 — ENTRY POINT ================= -->
+  <text x="145" y="32" class="col-header">ENTRY POINT</text>
+  <rect class="stroke" x="30" y="48" width="230" height="336" rx="6" ry="6"/>
+  <text x="46" y="98"  class="item" font-weight="700">TokenValidator</text>
+  <text x="60" y="122" class="item-sub">routes by token type</text>
+  <text x="60" y="144" class="item-sub">manages IssuerConfigs</text>
+  <text x="60" y="166" class="item-sub">immutable · thread-safe</text>
+
+  <!-- ================= COL 2 — PIPELINES ================= -->
+  <text x="485" y="32" class="col-header">VALIDATION PIPELINES</text>
+  <rect class="stroke" x="370" y="48" width="230" height="336" rx="6" ry="6"/>
+  <text x="386" y="104" class="item" font-weight="700">Access-token pipeline</text>
+  <text x="386" y="148" class="item" font-weight="700">Id-token pipeline</text>
+  <text x="386" y="192" class="item" font-weight="700">Refresh-token pipeline</text>
+  <text x="485" y="360" class="col-sub">each runs the ordered validation stages</text>
+
+  <!-- ================= COL 3 — SUPPORTING SERVICES ================= -->
+  <text x="830" y="32" class="col-header">SUPPORTING SERVICES</text>
+  <rect class="stroke" x="710" y="48" width="240" height="336" rx="6" ry="6"/>
+
+  <text x="726" y="96"  class="group">Configuration</text>
+  <text x="740" y="116" class="item">IssuerConfig · ParserConfig</text>
+
+  <text x="726" y="156" class="group">Key management</text>
+  <text x="740" y="176" class="item">JwksLoader · HttpJwksLoader</text>
+  <text x="740" y="196" class="item">HttpWellKnownResolver</text>
+
+  <text x="726" y="236" class="group">Observability</text>
+  <text x="740" y="256" class="item">SecurityEventCounter</text>
+  <text x="740" y="276" class="item">TokenValidatorMonitor</text>
+
+  <text x="726" y="316" class="group">Token content</text>
+  <text x="740" y="336" class="item">Access / Id / Refresh</text>
+
+  <!-- ================= ARROWS ================= -->
+  <line class="arrow" x1="260" y1="150" x2="368" y2="150" marker-end="url(#arrow)"/>
+  <text x="314" y="142" class="arrow-lbl">routes</text>
+
+  <line class="arrow" x1="600" y1="150" x2="708" y2="150" marker-end="url(#arrow)"/>
+  <text x="654" y="142" class="arrow-lbl">uses</text>
+
+  <!-- Footer caption -->
+  <text x="490" y="414" class="caption">One entry point · three pipelines · shared supporting services.</text>
+</svg>

@@ -20,16 +20,7 @@ would give is instead enforced by *ArchUnit*.
 
 == The base layer
 
-[source]
-----
-token-sheriff-validation                       (one artifact)
-  de.cuioss.sheriff.token.commons.              base layer — deps: cui-http, cui-tooling
-    transport/   error/   events/   metrics/
-        ▲   ArchUnit: commons must NOT depend on …validation..
-  de.cuioss.sheriff.token.validation.           token validation (signatures, claims, pipeline)
-        ▲   Maven
-token-sheriff-client                            separate module → deps: token-sheriff-validation
-----
+image::../resources/diagrams/module-architecture.svg["Token-Sheriff module architecture — the commons base layer and the validation layer ship in one token-sheriff-validation artifact (ArchUnit-enforced boundary); token-sheriff-client is a separate Maven module depending on validation; token-sheriff-client-quarkus is the HTTP edge", align=center]
 
 The seam is sharp: *commons moves bytes, raises typed errors, counts events and exposes
 metrics; it never interprets a token's trust.*

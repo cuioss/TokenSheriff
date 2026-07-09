@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- theme-handling: A (theme-neutral) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 310"
+     role="img" aria-labelledby="title desc"
+     font-family="ui-sans-serif, -apple-system, system-ui, 'Segoe UI', sans-serif">
+  <title id="title">JWE key locations — per-issuer signing vs global decryption</title>
+  <desc  id="desc">Signing keys are per issuer: each issuer's JwksLoader fetches that issuer's public key and signature preferences from its JWKS endpoint. Decryption keys are global: a single JweDecryptionConfig maps kid to the Resource Server's local private keys, set once on the TokenValidator and shared across all issuers.</desc>
+
+  <defs>
+    <style>
+      .col-header { font-size: 14px; font-weight: 600; fill: #6e7681; text-anchor: middle; }
+      .col-sub    { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .name       { font-size: 12px; font-weight: 600; fill: #6e7681; }
+      .mono       { font-size: 12px; fill: #6e7681; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .name-mono  { font-size: 12px; font-weight: 700; fill: #6e7681; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .stroke     { stroke: #6e7681; stroke-width: 1.2; fill: none; }
+      .caption    { font-size: 12px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+    </style>
+  </defs>
+
+  <!-- ===== PER-ISSUER (signing) ===== -->
+  <text x="210" y="30" class="col-header">PER-ISSUER</text>
+  <text x="210" y="48" class="col-sub">signing keys · fetched from each JWKS</text>
+
+  <rect class="stroke" x="40" y="66" width="340" height="72" rx="6" ry="6"/>
+  <text x="58" y="90"  class="name">Issuer A</text>
+  <text x="58" y="112" class="mono">JwksLoader → PubA</text>
+  <text x="58" y="130" class="mono">SignaturePrefs</text>
+
+  <rect class="stroke" x="40" y="154" width="340" height="72" rx="6" ry="6"/>
+  <text x="58" y="178" class="name">Issuer B</text>
+  <text x="58" y="200" class="mono">JwksLoader → PubB</text>
+  <text x="58" y="218" class="mono">SignaturePrefs</text>
+
+  <!-- ===== GLOBAL (decryption) ===== -->
+  <text x="650" y="30" class="col-header">GLOBAL</text>
+  <text x="650" y="48" class="col-sub">decryption keys · local to the Resource Server</text>
+
+  <rect class="stroke" x="480" y="66" width="340" height="124" rx="6" ry="6"/>
+  <text x="498" y="90"  class="name-mono">JweDecryptionConfig</text>
+  <text x="498" y="114" class="mono">kid-1 → PrivateKey-1</text>
+  <text x="498" y="136" class="mono">kid-2 → PrivateKey-2</text>
+  <text x="498" y="158" class="mono">default → PrivateKey-1</text>
+  <text x="650" y="180" class="col-sub">set once on TokenValidator · shared across issuers</text>
+
+  <!-- caption -->
+  <text x="430" y="286" class="caption">Signing keys are per-issuer (fetched); decryption keys are one global set, local to the Resource Server.</text>
+</svg>

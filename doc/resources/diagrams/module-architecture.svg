@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- theme-handling: A (theme-neutral) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560"
+     role="img" aria-labelledby="title desc"
+     font-family="ui-sans-serif, -apple-system, system-ui, 'Segoe UI', sans-serif">
+  <title id="title">Token-Sheriff module architecture and its enforced boundaries</title>
+  <desc  id="desc">Four stacked layers, built foundation-up: the commons base layer (transport, error, events, metrics) and the validation layer both ship inside the one token-sheriff-validation artifact, with an ArchUnit rule forbidding commons from depending on validation; the token-sheriff-client engine is a separate Maven module depending on validation and never the reverse; token-sheriff-client-quarkus is the HTTP edge on top. Two enforced boundaries: Maven between modules and ArchUnit within the validation artifact.</desc>
+
+  <defs>
+    <style>
+      .layer-header  { font-size: 14px; font-weight: 600; fill: #6e7681; text-anchor: start; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .layer-sub     { font-size: 11px; fill: #6e7681; text-anchor: start; font-style: italic; }
+      .item          { font-size: 12px; fill: #6e7681; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .item-sub      { font-size: 11px; fill: #6e7681; font-style: italic; }
+      .slab          { stroke: #6e7681; stroke-width: 1.2; fill: none; }
+      .gutter-sep    { stroke: #6e7681; stroke-width: 0.6; stroke-dasharray: 2 3; }
+      .divider       { stroke: #6e7681; stroke-width: 0.6; stroke-dasharray: 3 3; }
+      .boundary-lbl  { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .bracket       { stroke: #6e7681; stroke-width: 1.2; fill: none; }
+      .bracket-lbl   { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; font-weight: 600; }
+      .caption       { font-size: 12px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+    </style>
+  </defs>
+
+  <!-- ============ SLAB 1 (top) — client-quarkus ============ -->
+  <rect class="slab" x="80" y="44" width="840" height="92" rx="6" ry="6"/>
+  <line class="gutter-sep" x1="400" y1="52" x2="400" y2="128"/>
+  <text x="100" y="82"  class="layer-header">token-sheriff-client-quarkus</text>
+  <text x="100" y="102" class="layer-sub">HTTP edge — separate module</text>
+  <text x="420" y="80"  class="item">RFC 9457 problem+json · CDI wiring</text>
+  <text x="420" y="104" class="item-sub">depends on client + validation-quarkus</text>
+
+  <!-- divider 1 : extension wiring -->
+  <line class="divider" x1="80"  y1="150" x2="430" y2="150"/>
+  <line class="divider" x1="570" y1="150" x2="920" y2="150"/>
+  <text x="500" y="154" class="boundary-lbl">extension wiring</text>
+
+  <!-- ============ SLAB 2 — client ============ -->
+  <rect class="slab" x="80" y="164" width="840" height="96" rx="6" ry="6"/>
+  <line class="gutter-sep" x1="400" y1="172" x2="400" y2="252"/>
+  <text x="100" y="202" class="layer-header">token-sheriff-client</text>
+  <text x="100" y="222" class="layer-sub">engine — separate module · pure Java</text>
+  <text x="420" y="200" class="item">de.cuioss.sheriff.token.client</text>
+  <text x="420" y="224" class="item-sub">flows / retrieval / lifecycle</text>
+
+  <!-- divider 2 : Maven boundary -->
+  <line class="divider" x1="80"  y1="274" x2="360" y2="274"/>
+  <line class="divider" x1="640" y1="274" x2="920" y2="274"/>
+  <text x="500" y="278" class="boundary-lbl">Maven — client depends on validation, never the reverse</text>
+
+  <!-- ============ SLAB 3 — validation ============ -->
+  <rect class="slab" x="80" y="288" width="840" height="84" rx="6" ry="6"/>
+  <line class="gutter-sep" x1="400" y1="296" x2="400" y2="364"/>
+  <text x="100" y="322" class="layer-header">…sheriff.token.validation</text>
+  <text x="100" y="342" class="layer-sub">layer in token-sheriff-validation</text>
+  <text x="420" y="334" class="item">token validation — signatures, claims, pipeline</text>
+
+  <!-- divider 3 : ArchUnit boundary -->
+  <line class="divider" x1="80"  y1="384" x2="360" y2="384"/>
+  <line class="divider" x1="640" y1="384" x2="920" y2="384"/>
+  <text x="500" y="388" class="boundary-lbl">ArchUnit — commons must not depend on …validation..</text>
+
+  <!-- ============ SLAB 4 (bottom) — commons ============ -->
+  <rect class="slab" x="80" y="398" width="840" height="96" rx="6" ry="6"/>
+  <line class="gutter-sep" x1="400" y1="406" x2="400" y2="486"/>
+  <text x="100" y="436" class="layer-header">…sheriff.token.commons</text>
+  <text x="100" y="456" class="layer-sub">base layer in token-sheriff-validation</text>
+  <text x="420" y="434" class="item">transport / error / events / metrics</text>
+  <text x="420" y="458" class="item-sub">deps: cui-http, cui-tooling</text>
+
+  <!-- ============ artifact bracket (slabs 3+4) ============ -->
+  <path class="bracket" d="M 58 288 L 48 288 L 48 494 L 58 494"/>
+  <text x="30" y="391" class="bracket-lbl" transform="rotate(-90 30 391)">one artifact: token-sheriff-validation</text>
+
+  <!-- Footer caption -->
+  <text x="500" y="528" class="caption">Foundation-up: client → validation → commons. Two enforced boundaries — Maven between modules, ArchUnit within the validation artifact.</text>
+</svg>
