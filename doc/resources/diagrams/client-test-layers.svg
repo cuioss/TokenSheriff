@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- theme-handling: A (theme-neutral) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 476"
+     role="img" aria-labelledby="title desc"
+     font-family="ui-sans-serif, -apple-system, system-ui, 'Segoe UI', sans-serif">
+  <title id="title">Client engine two-layer test strategy</title>
+  <desc  id="desc">The token-sheriff-client engine (the CLIENT-N subject under test) is exercised from two sides. On the left, a unit layer built on CUI MockWebServer drives the engine against a controllable mock OpenID Provider through the adversarial dispatchers and attack databases, verifying both the request the engine sends and its rejection of malicious responses. On the right, an integration layer runs the Quarkus-packaged engine against real OpenID Providers — Keycloak always-on, Dex and Zitadel profile-gated — through Failsafe IT tests split into happy, corner/edge and attack case classes. MockWebServer proves the mechanics and the attacks; Keycloak proves it really works.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" class="arrow-fill"/>
+    </marker>
+    <style>
+      .col-header { font-size: 15px; font-weight: 600; fill: #6e7681; text-anchor: middle; }
+      .node-sub   { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .item-bold  { font-size: 12px; font-weight: 700; fill: #6e7681;
+                    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .item       { font-size: 11px; fill: #6e7681;
+                    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .item-c     { font-size: 12px; fill: #6e7681; text-anchor: middle;
+                    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .box        { stroke: #6e7681; stroke-width: 1.2; fill: none; }
+      .box-mid    { stroke: #6e7681; stroke-width: 1.6; fill: none; }
+      .sep        { stroke: #6e7681; stroke-width: 0.6; stroke-dasharray: 3 3; fill: none; }
+      .arrow      { stroke: #6e7681; stroke-width: 1.5; fill: none; }
+      .arrow-fill { fill: #6e7681; }
+      .edge-lbl   { font-size: 11px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+      .caption    { font-size: 12px; fill: #6e7681; text-anchor: middle; font-style: italic; }
+    </style>
+  </defs>
+
+  <!-- ===== Column headers ===== -->
+  <text x="150" y="30" class="col-header">Unit layer</text>
+  <text x="150" y="46" class="node-sub">CUI MockWebServer · mock OP</text>
+
+  <text x="450" y="30" class="col-header">Subject under test</text>
+  <text x="450" y="46" class="node-sub">token-sheriff-client</text>
+
+  <text x="750" y="30" class="col-header">Integration layer</text>
+  <text x="750" y="46" class="node-sub">Quarkus packaging · real OP</text>
+
+  <!-- ===== Left column box: unit ===== -->
+  <rect class="box" x="20" y="62" width="260" height="360" rx="6" ry="6"/>
+
+  <text x="36" y="94"  class="item-bold">Dispatchers (adversarial)</text>
+  <text x="50" y="114" class="item">Token · UserInfo · EndSession</text>
+  <text x="50" y="132" class="item">Par · WellKnown · Jwks</text>
+
+  <text x="36" y="166" class="item-bold">Attack databases</text>
+  <text x="50" y="186" class="item">OWASP · CVE · ModSecurity CRS</text>
+
+  <text x="36" y="220" class="item-bold">Request verification</text>
+  <text x="50" y="240" class="item">PKCE S256 · exact redirect_uri</text>
+  <text x="50" y="258" class="item">client-auth · DPoP proof sent</text>
+
+  <text x="36" y="292" class="item-bold">Thread-safety &amp; logging</text>
+  <text x="50" y="312" class="item">concurrent flows · LogAsserts</text>
+
+  <text x="150" y="398" class="caption">mechanics + attacks — fail-closed</text>
+
+  <!-- ===== Middle column box: engine ===== -->
+  <rect class="box-mid" x="320" y="62" width="260" height="360" rx="6" ry="6"/>
+
+  <text x="450" y="100" class="node-sub">pure-Java engine · CLIENT-21</text>
+  <line class="sep" x1="360" y1="120" x2="540" y2="120"/>
+
+  <text x="450" y="156" class="item-c">CLIENT-1..11,14</text>
+  <text x="450" y="174" class="node-sub">retrieval &amp; flow</text>
+
+  <text x="450" y="212" class="item-c">CLIENT-12..13</text>
+  <text x="450" y="230" class="node-sub">step-up &amp; logout</text>
+
+  <text x="450" y="268" class="item-c">CLIENT-15..20</text>
+  <text x="450" y="286" class="node-sub">token lifecycle</text>
+
+  <line class="sep" x1="360" y1="316" x2="540" y2="316"/>
+  <text x="450" y="398" class="caption">one protocol increment at a time</text>
+
+  <!-- ===== Right column box: integration ===== -->
+  <rect class="box" x="620" y="62" width="260" height="360" rx="6" ry="6"/>
+
+  <text x="636" y="94"  class="item-bold">Quarkus packaging</text>
+  <text x="650" y="114" class="item">*IT (Failsafe) · RestAssured</text>
+
+  <text x="636" y="148" class="item-bold">Real OPs (Docker Compose)</text>
+  <text x="650" y="168" class="item">Keycloak · Dex · Zitadel</text>
+
+  <text x="636" y="202" class="item-bold">Case classes</text>
+  <text x="650" y="222" class="item">happy · corner/edge · attack</text>
+
+  <text x="636" y="256" class="item-bold">Reused harness</text>
+  <text x="650" y="276" class="item">BaseIntegrationTest · TestRealm</text>
+
+  <text x="750" y="398" class="caption">proves interoperability</text>
+
+  <!-- ===== Convergent arrows: both layers drive the engine ===== -->
+  <line class="arrow" x1="282" y1="250" x2="318" y2="250" marker-end="url(#arrow)"/>
+  <text x="300" y="242" class="edge-lbl">mock OP</text>
+
+  <line class="arrow" x1="618" y1="250" x2="582" y2="250" marker-end="url(#arrow)"/>
+  <text x="600" y="242" class="edge-lbl">real OP</text>
+
+  <!-- Footer caption -->
+  <text x="450" y="458" class="caption">MockWebServer proves the mechanics and the attacks; Keycloak proves it really works — both required per protocol increment.</text>
+</svg>

@@ -31,6 +31,7 @@ no signature policy (the seam is detailed in xref:architecture.adoc[Architecture
 . xref:threat-model.adoc[Threat Model] — the attack catalog each requirement answers.
 . xref:architecture.adoc[Architecture] — where the engine sits and what it delegates.
 . The <<_document_map,specifications>> — how each requirement is realized.
+. xref:specification/test-strategy.adoc[Test Strategy] — how each requirement and threat is verified (unit + integration).
 
 == [[_document_map]] Document map
 
@@ -61,6 +62,9 @@ no signature policy (the seam is detailed in xref:architecture.adoc[Architecture
 
 | xref:specification/token-handling.adoc[Spec — Token handling]
 | The server-side lifecycle delta — validation, storage, refresh, revocation, sender-constraint preservation (`CLIENT-15`–`CLIENT-20`).
+
+| xref:specification/test-strategy.adoc[Spec — Test strategy]
+| The two-layer verification model (MockWebServer unit + real-Keycloak integration), the adversarial coverage, and the `CLIENT-N` → threat → test traceability matrix (`CLIENT-22`). Executed by xref:../oidc/06-implement/README.adoc[Plan 06].
 |===
 
 == See also

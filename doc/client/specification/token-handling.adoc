@@ -116,11 +116,14 @@ claims, `sub` mismatches, and reused rotated refresh tokens
 (xref:../../commons/specification/transport.adoc#adversarial_dispatchers[commons transport
 spec], `COMMONS-7`); the client tests assert the validation pipeline rejects tampered tokens,
 the userinfo `sub` binding is enforced, rotation triggers family revocation on reuse, and the
-sender-constraint survives a refresh (xref:../requirements.adoc#CLIENT-22[CLIENT-22]).
+sender-constraint survives a refresh (xref:../requirements.adoc#CLIENT-22[CLIENT-22]). The full
+unit + integration coverage and the `CLIENT-N` → threat → test traceability are specified in
+xref:test-strategy.adoc[Test strategy].
 
 == See also
 
 * xref:retrieval-flow.adoc[Retrieval & flow specification]
 * xref:step-up-and-logout.adoc[Step-up & logout specification]
+* xref:test-strategy.adoc[Test-strategy specification]
 * xref:../../validation/requirements.adoc[Validation Requirements] — the inherited token-trust pipeline
 * xref:../../commons/specification/error-model.adoc[Commons error-model specification]

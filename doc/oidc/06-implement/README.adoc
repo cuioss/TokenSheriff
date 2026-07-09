@@ -7,7 +7,7 @@
 [cols="1,3"]
 |===
 | Status     | *Ready to execute — next plan.* Dependencies satisfied (Plans 03–05, all done — see the xref:../README.adoc[status roll-up]); execution begins with Increment 1 (client config + discovery). Not yet started.
-| Depends on | Plan 03 (the `commons` base layer + `COMMONS-N` spec + the extended MockWebServer dispatchers), Plan 04 (`CLIENT-N` requirements + threat model), Plan 05 (`token-sheriff-client` module/extension/assembly)
+| Depends on | Plan 03 (the `commons` base layer + `COMMONS-N` spec + the extended MockWebServer dispatchers), Plan 04 (`CLIENT-N` requirements + threat model + xref:../../client/specification/test-strategy.adoc[test strategy]), Plan 05 (`token-sheriff-client` module/extension/assembly)
 | Approach   | Vertical *protocol-by-protocol* increments, dependency-ordered. Each ships unit tests (MockWebServer) *and* integration tests against a *real Keycloak*. Security-driven.
 |===
 
@@ -23,6 +23,17 @@ Implement one *protocol/flow at a time* as a vertical slice — production code 
 
 == Testing model: MockWebServer (unit) + real Keycloak (integration)
 
+[NOTE]
+====
+The *authoritative test specification* for this plan is
+xref:../../client/specification/test-strategy.adoc[Client — Test strategy] (under the
+capability doc set). It owns the two-layer model, the dispatcher / attack-database adversarial
+coverage, the *happy / corner-edge / attack* integration case classes, and the full
+`CLIENT-N` → threat → unit → integration *traceability matrix*. This plan *executes* that
+specification increment by increment; the summary below is the execution view — the spec is
+the contract.
+====
+
 Two distinct layers — do not conflate them:
 
 * *Unit tests* — in `token-sheriff-client` `src/test`, using *MockWebServer* to simulate the OP (discovery/JWKS/token/userinfo/…), driven by the dispatcher artifact *extended in xref:../03-commons/README.adoc[Plan 03]* (`TokenDispatcher`, `UserInfoDispatcher`, … alongside the existing `WellKnownDispatcher`/`JwksResolveDispatcher`). Vital, but *unit*: this is where the *adversarial* coverage lives — malicious metadata, SSRF, wrong `iss`, code injection, PKCE downgrade, tampered/replayed tokens — because only a controllable mock can emit those. Use the CUI MockWebServer standards (`@ModuleDispatcher`, HTTPS/TLS, generator-driven *attack-database*).
@@ -31,6 +42,9 @@ Two distinct layers — do not conflate them:
 The user-facing rule: *MockWebServer proves the mechanics and the attacks; Keycloak proves it really works.* Both are required per increment.
 
 == Per-increment definition of done
+
+_The test-side rows below trace to the per-increment definition of done in
+xref:../../client/specification/test-strategy.adoc[Test strategy]._
 
 * Production code in `token-sheriff-client`, reusing the `commons` transport and the validation pipeline.
 * *Unit tests* (MockWebServer): protocol mechanics + every adversarial case the increment's threats demand.
@@ -94,7 +108,7 @@ Increments 1–2 prove the whole retrieve→validate loop; 5 is the BFF core; 11
 
 == Verification
 
-* [ ] Every `CLIENT-N` requirement is implemented and traced to code + tests
+* [ ] Every `CLIENT-N` requirement is implemented and traced to code + tests per the xref:../../client/specification/test-strategy.adoc#_traceability[test-strategy traceability matrix]
 * [ ] Every threat in Plan 04's model has an adversarial *unit* test (MockWebServer) that fails closed
 * [ ] Every protocol has a *real-Keycloak integration* test proving interoperability
 * [ ] Each increment merged independently with its tests; build green at every step

@@ -373,7 +373,9 @@ The engine MUST be thread-safe (shared per-issuer configuration, concurrent flow
 `CLIENT-N` flow / token requirement MUST be exercised by unit tests driving the commons
 `generators` dispatchers in both default and *adversarial* modes (the token / userinfo /
 end-session / PAR dispatchers, `COMMONS-7`), plus real-IdP integration tests
-(xref:../oidc/06-implement/README.adoc[Plan 06]).
+(xref:../oidc/06-implement/README.adoc[Plan 06]). The two-layer verification model, the
+adversarial coverage, and the full `CLIENT-N` → threat → test traceability are specified in
+xref:specification/test-strategy.adoc[Test strategy].
 
 * Source: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/05-Authorization_Testing/05-Testing_for_OAuth_Weaknesses[OWASP WSTG — Testing for OAuth Weaknesses], xref:../commons/requirements.adoc#COMMONS-7[COMMONS-7].
 
@@ -406,5 +408,5 @@ sourced xref:best-practices.adoc[best-practices] checklist, and realized in a sp
 | CLIENT-18 | T-CONSTRAINT-LOSS | token-handling
 | CLIENT-19 | (BFF groundwork — non-preclusion) | xref:architecture.adoc[architecture], token-handling
 | CLIENT-20 | xref:../commons/threat-model.adoc#T-LEAK[commons T-LEAK] (delegated) | token-handling
-| CLIENT-21..22 | (cross-cutting: engine boundary + adversarial coverage) | architecture, all specs
+| CLIENT-21..22 | (cross-cutting: engine boundary + adversarial coverage) | architecture, xref:specification/test-strategy.adoc[test-strategy], all specs
 |===

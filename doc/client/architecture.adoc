@@ -152,4 +152,5 @@ captured as sourced `CLIENT-N` requirements above.
 * xref:specification/retrieval-flow.adoc[Retrieval & flow specification]
 * xref:specification/step-up-and-logout.adoc[Step-up & logout specification]
 * xref:specification/token-handling.adoc[Token-handling specification]
+* xref:specification/test-strategy.adoc[Test-strategy specification]
 * xref:../oidc/04-client-spec/README.adoc[Plan 04 — Client Spec]
