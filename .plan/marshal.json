@@ -72,6 +72,16 @@
       "qgate": "auto",
       "checks_wait_timeout_seconds": 600,
       "steps": {
+        "default:finalize-step-sync-baseline": {
+          "auto_rebase_threshold": "no_overlap_only"
+        },
+        "default:pre-push-quality-gate": {},
+        "default:finalize-step-simplify": {
+          "simplify": "auto"
+        },
+        "default:finalize-step-security-audit": {
+          "security_audit": "auto"
+        },
         "default:push": {},
         "default:create-pr": {},
         "default:ci-verify": {},

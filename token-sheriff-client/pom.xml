@@ -18,8 +18,9 @@
 
     <properties>
         <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.token.client</maven.jar.plugin.automatic.module.name>
-        <!-- Wired, empty skeleton (Plan 05): only package-info.java, so Javadoc has no public
-             classes to document and would fail. Re-enable once client flows land (Plan 06). -->
+        <version.lombok>1.18.46</version.lombok>
+        <!-- Client flows land incrementally (Plan 06). Javadoc generation is re-enabled once the
+             public client surface has stabilised; kept skipped while the engine is under construction. -->
         <maven.javadoc.skip>true</maven.javadoc.skip>
     </properties>
 
@@ -47,6 +48,30 @@
             <groupId>de.cuioss</groupId>
             <artifactId>cui-java-tools</artifactId>
         </dependency>
+        <!-- HTTP transport primitive: the client composes cui-http HttpHandler for outbound OIDC
+             back-channel calls (discovery, token, userinfo, revocation, PAR, end-session), reusing the
+             same TLS/SSRF-hardened handler commons uses — it adds no new transport control of its own. -->
+        <dependency>
+            <groupId>de.cuioss</groupId>
+            <artifactId>cui-http</artifactId>
+        </dependency>
+        <!-- Lombok for immutable value objects (@Value/@Builder). -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+        <!-- DSL-JSON for secure, compile-time, native-friendly parsing of the OIDC discovery document,
+             mirroring the WellKnownResult mapping in commons.transport. -->
+        <dependency>
+            <groupId>com.dslplatform</groupId>
+            <artifactId>dsl-json</artifactId>
+            <version>2.0.2</version>
+        </dependency>
+        <!-- JSpecify nullability annotations (transitive from validation; declared for direct use). -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
 
         <!-- Unit testing -->
         <dependency>
@@ -54,6 +79,75 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- MockWebServer harness for unit-level OIDC dispatcher tests. -->
+        <dependency>
+            <groupId>de.cuioss.test</groupId>
+            <artifactId>cui-test-mockwebserver-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Value-object contract tests. -->
+        <dependency>
+            <groupId>de.cuioss.test</groupId>
+            <artifactId>cui-test-value-objects</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Test data generators. -->
+        <dependency>
+            <groupId>de.cuioss.test</groupId>
+            <artifactId>cui-test-generator</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- JUL log assertions for LogRecord coverage. -->
+        <dependency>
+            <groupId>de.cuioss.test</groupId>
+            <artifactId>cui-test-juli-logger</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Reuse the validation OP-endpoint dispatchers and adversarial utilities (test-jar). -->
+        <dependency>
+            <groupId>de.cuioss.sheriff.token</groupId>
+            <artifactId>token-sheriff-validation</artifactId>
+            <version>${project.version}</version>
+            <classifier>generators</classifier>
+            <scope>test</scope>
+        </dependency>
+        <!-- ArchUnit: enforce the client engine boundary (no CDI/MicroProfile/JAX-RS; client → validation only). -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>1.3.0</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Run the Lombok and DSL-JSON annotation processors together. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${version.lombok}</version>
+                        </path>
+                        <path>
+                            <groupId>com.dslplatform</groupId>
+                            <artifactId>dsl-json</artifactId>
+                            <version>2.0.2</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <release>21</release>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

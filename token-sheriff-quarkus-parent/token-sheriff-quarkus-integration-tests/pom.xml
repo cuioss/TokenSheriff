@@ -36,6 +36,12 @@
             <artifactId>token-sheriff-validation-quarkus</artifactId>
         </dependency>
 
+        <!-- Client Quarkus Extension: exposes the OIDC/OAuth client engine to the client *IT classes -->
+        <dependency>
+            <groupId>de.cuioss.sheriff.token</groupId>
+            <artifactId>token-sheriff-client-quarkus</artifactId>
+        </dependency>
+
         <!-- JWT Deployment Module for Quarkus Extension -->
         <dependency>
             <groupId>de.cuioss.sheriff.token</groupId>
