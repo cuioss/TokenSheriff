@@ -20,10 +20,8 @@ xref:threat-model.adoc[threat model]; they are not sequential across groups.
 
 === Document Navigation
 
-* xref:architecture.adoc[Architecture] — the base layer and its ArchUnit boundary
-* xref:threat-model.adoc[Threat Model] — SSRF / TLS / response-DoS / error-detail leakage
-* xref:references.adoc[References] — bibliography
-* xref:specification/transport.adoc[Transport spec] · xref:specification/error-model.adoc[Error-model spec] · xref:specification/observability.adoc[Observability spec]
+The xref:README.adoc[capability README] is the entry point — it carries the full document map
+and the recommended reading order for this set.
 
 === Referenced Standards
 

@@ -1,0 +1,71 @@
+= Token Validation Capability
+:source-highlighter: highlight.js
+
+The *passive* core of Token-Sheriff: a multi-issuer *JWT validation library* for resource
+servers. It *validates tokens, never acquires them* — signature, algorithm policy, and the
+`iss` / `aud` / `exp` / `iat` claim set, across multiple configured issuers. Token
+acquisition and the OAuth / OpenID Connect flows are the xref:../client/README.adoc[client]
+capability's job; this library only decides a presented token's trust.
+
+The `token-sheriff-validation` artifact also *carries the* xref:../commons/README.adoc[commons]
+*base layer* (transport / error / events / metrics) as an ArchUnit-enforced package layer — so
+a consumer that needs only validation (e.g. `nifi-extensions`) pulls a single artifact.
+
+== Scope at a glance
+
+* *Owns* — the validation pipeline: signature verification (asymmetric only; `alg=none` /
+  HMAC / weak keys rejected per RFC 8725), mandatory `iss` / `exp` / audience checks,
+  multi-issuer configuration, RFC 9068 access-token and OIDC ID-token validation, and optional
+  RFC 9449 DPoP sender-constraint validation.
+* *Delegates* — all outbound IdP HTTP (discovery, JWKS), TLS / SSRF defence and the error
+  model to xref:../commons/README.adoc[commons]; token *acquisition* and the flows to
+  xref:../client/README.adoc[client].
+* *Is a resource-server validator* — it handles no authorization flows, token issuance,
+  redirect URIs or HTTP transport (see the OAuth 2.1 compatibility note in
+  xref:requirements.adoc#_oauth_2_1_compatibility[Requirements]).
+
+== Start here
+
+. xref:requirements.adoc[Requirements] — the `VALIDATION-N` contract and the OAuth 2.1 compatibility statement.
+. xref:architecture.adoc[Architecture] — the multi-stage validation pipeline and its components.
+. xref:threat-model.adoc[Threat Model] & xref:security-reference.adoc[Security Reference] — the STRIDE analysis and the consolidated attack-mitigation controls.
+. The <<_document_map,specifications>> and the module xref:../../token-sheriff-validation/doc/usage-guide.adoc[usage guide].
+
+== [[_document_map]] Document map
+
+[cols="1,3", options="header"]
+|===
+| Document | Purpose
+
+| xref:requirements.adoc[Requirements]
+| `VALIDATION-N` functional and non-functional requirements, plus the OAuth 2.1 resource-server compatibility statement.
+
+| xref:architecture.adoc[Architecture]
+| The multi-stage validation pipeline, its components and key design decisions.
+
+| xref:threat-model.adoc[Threat Model]
+| STRIDE threat analysis with per-threat mitigations, implementation references and coverage status.
+
+| xref:security-reference.adoc[Security Reference]
+| Consolidated JWT attack mitigations, security controls and best practices.
+
+| xref:specification/microprofile-jwt-compatibility.adoc[Spec — MicroProfile JWT]
+| MP-JWT 2.1 integration and rationale.
+
+| xref:specification/token-decryption.adoc[Spec — Token decryption]
+| Future JWE / encrypted-token support.
+
+| xref:specification/multi-idp-testing.adoc[Spec — Multi-IdP testing]
+| Testing against multiple OIDC providers.
+
+| xref:faq/keycloak.adoc[FAQ — Keycloak]
+| Keycloak integration questions.
+|===
+
+== See also
+
+* xref:../README.adoc[Documentation Hub]
+* xref:../commons/README.adoc[Commons] — the transport / error / events / metrics base layer this artifact carries
+* xref:../client/README.adoc[Client] — the active capability that retrieves the tokens this library validates
+* xref:../oidc/decision-oidc-module.adoc[Module Architecture decision] — the validation + client split
+* Module docs: xref:../../token-sheriff-validation/doc/usage-guide.adoc[Usage Guide] · xref:../../token-sheriff-validation/doc/api-reference.adoc[API Reference] · xref:../LogMessages.adoc[Log Messages] · link:../../README.md[Project README]

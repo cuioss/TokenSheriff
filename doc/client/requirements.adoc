@@ -30,11 +30,8 @@ mitigates or is the secure way to perform a needed operation.
 
 === Document Navigation
 
-* xref:architecture.adoc[Architecture] — the client/BFF engine seam and its boundaries
-* xref:threat-model.adoc[Threat Model] — attack catalog per aspect, each entry sourced
-* xref:best-practices.adoc[Best Practices] — the normative, sourced checklist
-* xref:references.adoc[References] — bibliography
-* xref:specification/retrieval-flow.adoc[Retrieval & flow spec] · xref:specification/step-up-and-logout.adoc[Step-up & logout spec] · xref:specification/token-handling.adoc[Token-handling spec]
+The xref:README.adoc[capability README] is the entry point — it carries the full document map
+and the recommended reading order for this set.
 
 === Referenced Standards
 
