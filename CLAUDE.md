@@ -25,7 +25,7 @@ All cuioss repositories have branch protection on `main`. Direct pushes to `main
 5. Wait for CI + AI Reviewer(s) (waits until checks complete): `gh pr checks --watch`
 6. **Handle AI Reviewer comments** (whichever bots are configured — e.g. Sourcery, CodeRabbit, Gemini) — fetch with `gh api repos/cuioss/TokenSheriff/pulls/<pr-number>/comments` and for each:
    - If clearly valid and fixable: fix it, commit, push, then reply explaining the fix and resolve the comment
-   - If disagree or out of scope: reply explaining why, then resolve the comment
+   - If you disagree or the comment is out of scope: reply explaining why, then resolve the comment
    - If uncertain (not 100% confident): **ask the user** before acting
    - Every comment MUST get a reply (reason for fix or reason for not fixing) and MUST be resolved
 7. Do **NOT** enable auto-merge unless explicitly instructed. Wait for user approval.
