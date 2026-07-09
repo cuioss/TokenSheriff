@@ -44,8 +44,9 @@ The engine constructs a single authorization request as a confidential client
 Where the AS advertises `pushed_authorization_request_endpoint`, the parameters are *pushed
 via PAR* over the back channel (authenticated per <<_client_authentication>>) and the
 front-channel redirect carries only the returned `request_uri`
-(xref:../requirements.adoc#CLIENT-10[CLIENT-10]) — keeping the authorization parameters off
-the browser and tamper-proof. PAR is mandatory under FAPI 2.0.
+(xref:../requirements.adoc#CLIENT-10[CLIENT-10],
+xref:../threat-model.adoc#T-PARAM-INTEGRITY[T-PARAM-INTEGRITY]) — keeping the authorization
+parameters off the browser and tamper-proof. PAR is mandatory under FAPI 2.0.
 
 == The callback and code exchange
 

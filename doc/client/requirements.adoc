@@ -398,7 +398,7 @@ sourced xref:best-practices.adoc[best-practices] checklist, and realized in a sp
 | CLIENT-7 | T-REDIRECT | retrieval-flow
 | CLIENT-8 | T-MIXUP | retrieval-flow
 | CLIENT-9 | T-CODE-INJECTION | retrieval-flow
-| CLIENT-10 | T-CODE-INJECTION (parameter integrity) | retrieval-flow
+| CLIENT-10 | T-PARAM-INTEGRITY | retrieval-flow
 | CLIENT-11 | T-TOKEN-REPLAY | retrieval-flow
 | CLIENT-12 | T-STEPUP | xref:specification/step-up-and-logout.adoc[step-up-and-logout]
 | CLIENT-13 | T-LOGOUT | step-up-and-logout
@@ -408,6 +408,6 @@ sourced xref:best-practices.adoc[best-practices] checklist, and realized in a sp
 | CLIENT-17 | T-REFRESH-THEFT, T-LOGOUT | token-handling
 | CLIENT-18 | T-CONSTRAINT-LOSS | token-handling
 | CLIENT-19 | (BFF groundwork — non-preclusion) | xref:architecture.adoc[architecture], token-handling
-| CLIENT-20 | T-LEAK (delegated to commons) | token-handling
+| CLIENT-20 | xref:../commons/threat-model.adoc#T-LEAK[commons T-LEAK] (delegated) | token-handling
 | CLIENT-21..22 | (cross-cutting: engine boundary + adversarial coverage) | architecture, all specs
 |===
