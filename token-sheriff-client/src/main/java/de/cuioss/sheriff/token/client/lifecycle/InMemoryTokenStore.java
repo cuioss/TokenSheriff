@@ -19,7 +19,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /**
  * The default in-memory {@link TokenStore} — a thread-safe, single-instance store keyed by session id.
@@ -54,7 +54,7 @@ public class InMemoryTokenStore implements TokenStore {
     }
 
     @Override
-    public Optional<StoredToken> update(String sessionId, Function<StoredToken, StoredToken> updater) {
+    public Optional<StoredToken> update(String sessionId, UnaryOperator<StoredToken> updater) {
         Objects.requireNonNull(updater, "updater must not be null");
         // computeIfPresent performs the read-modify-write atomically per key, so a concurrent remove
         // (logout) cannot interleave between the read and the write and resurrect a revoked session.

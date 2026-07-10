@@ -67,7 +67,7 @@ class ParClientTest {
     }
 
     private static Map<String, String> authorizationParameters() {
-        Map<String, String> params = new HashMap<>(Map.of(
+        return new HashMap<>(Map.of(
                 "response_type", "code",
                 "redirect_uri", "https://rp.example.com/callback",
                 "scope", "openid",
@@ -75,7 +75,6 @@ class ParClientTest {
                 "nonce", Generators.nonBlankStrings().next(),
                 "code_challenge", Generators.nonBlankStrings().next(),
                 "code_challenge_method", "S256"));
-        return params;
     }
 
     private static String parEndpoint(URIBuilder uriBuilder) {

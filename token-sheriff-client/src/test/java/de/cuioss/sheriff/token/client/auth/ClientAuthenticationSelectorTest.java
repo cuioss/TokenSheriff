@@ -104,8 +104,9 @@ class ClientAuthenticationSelectorTest {
     void shouldFailClosedWhenNoConfiguredMethodAdvertised() {
         ClientAuthentication privateKeyJwt = auth(ClientAuthMethod.PRIVATE_KEY_JWT);
         var metadata = metadataAdvertising(List.of("client_secret_post"));
+        var configured = List.of(privateKeyJwt);
 
-        assertThrows(IllegalStateException.class, () -> selector.select(List.of(privateKeyJwt), metadata),
+        assertThrows(IllegalStateException.class, () -> selector.select(configured, metadata),
                 "selection must fail closed rather than pick an unadvertised method");
     }
 
@@ -123,7 +124,8 @@ class ClientAuthenticationSelectorTest {
     void shouldRejectNullArguments() {
         ClientAuthentication basic = auth(ClientAuthMethod.CLIENT_SECRET_BASIC);
         var metadata = metadataAdvertising(List.of("client_secret_basic"));
+        var configured = List.of(basic);
         assertThrows(NullPointerException.class, () -> selector.select(null, metadata));
-        assertThrows(NullPointerException.class, () -> selector.select(List.of(basic), null));
+        assertThrows(NullPointerException.class, () -> selector.select(configured, null));
     }
 }

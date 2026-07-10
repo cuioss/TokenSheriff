@@ -16,7 +16,7 @@
 package de.cuioss.sheriff.token.client.lifecycle;
 
 import java.util.Optional;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /**
  * Service-provider interface for the server-side token store ({@code CLIENT-19}, design fork 2).
@@ -79,5 +79,5 @@ public interface TokenStore {
      *                  must not be {@code null} and must not return {@code null}
      * @return the updated (stored) bundle, or {@link Optional#empty()} when no bundle was held
      */
-    Optional<StoredToken> update(String sessionId, Function<StoredToken, StoredToken> updater);
+    Optional<StoredToken> update(String sessionId, UnaryOperator<StoredToken> updater);
 }

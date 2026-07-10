@@ -109,10 +109,11 @@ class SenderConstraintTest {
     @Test
     @DisplayName("Should reject null generator, null headers, and blank/null binding confirmation")
     void shouldRejectInvalidInputs() {
+        var constraint = SenderConstraint.dpop(new DpopProofGenerator(keyPair, "RS256"));
         assertAll("input guards",
                 () -> assertThrows(NullPointerException.class, () -> SenderConstraint.dpop(null)),
                 () -> assertThrows(NullPointerException.class,
-                        () -> SenderConstraint.dpop(new DpopProofGenerator(keyPair, "RS256")).apply(HTM, HTU, null)),
+                        () -> constraint.apply(HTM, HTU, null)),
                 () -> assertThrows(NullPointerException.class, () -> ConstraintBinding.mtls(null)),
                 () -> assertThrows(IllegalArgumentException.class, () -> ConstraintBinding.dpop("  ")));
     }

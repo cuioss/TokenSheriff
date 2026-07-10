@@ -171,9 +171,10 @@ class RefreshFlowTest {
     void shouldRejectInvalidArguments(URIBuilder uriBuilder) {
         var flow = flow(config());
         var metadata = metadata(uriBuilder);
+        var refreshToken = Generators.letterStrings(20, 40).next();
         assertAll("argument validation",
                 () -> assertThrows(NullPointerException.class,
-                        () -> flow.refresh(null, Generators.letterStrings(20, 40).next())),
+                        () -> flow.refresh(null, refreshToken)),
                 () -> assertThrows(NullPointerException.class, () -> flow.refresh(metadata, null)),
                 () -> assertThrows(IllegalArgumentException.class, () -> flow.refresh(metadata, "   ")));
     }

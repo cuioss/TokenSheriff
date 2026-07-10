@@ -66,8 +66,9 @@ class DiscoveryAdversarialTest {
     @DisplayName("Should reject a non-TLS issuer when cleartext is not permitted")
     void shouldRejectNonTlsIssuer() {
         var config = configFor("http://internal.example.com", false);
+        var resolver = new DiscoveryResolver(config);
 
-        assertThrows(TransportException.class, () -> new DiscoveryResolver(config).resolve());
+        assertThrows(TransportException.class, resolver::resolve);
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "Rejecting non-TLS issuer");
     }
 
@@ -76,8 +77,9 @@ class DiscoveryAdversarialTest {
     void shouldRejectServerError(URIBuilder uriBuilder) {
         moduleDispatcher.returnError();
         var config = configFor(uriBuilder.buildAsString(), true);
+        var resolver = new DiscoveryResolver(config);
 
-        assertThrows(TransportException.class, () -> new DiscoveryResolver(config).resolve());
+        assertThrows(TransportException.class, resolver::resolve);
     }
 
     @Test
@@ -85,8 +87,9 @@ class DiscoveryAdversarialTest {
     void shouldRejectInvalidJson(URIBuilder uriBuilder) {
         moduleDispatcher.returnInvalidJson();
         var config = configFor(uriBuilder.buildAsString(), true);
+        var resolver = new DiscoveryResolver(config);
 
-        assertThrows(TransportException.class, () -> new DiscoveryResolver(config).resolve());
+        assertThrows(TransportException.class, resolver::resolve);
     }
 
     @Test
@@ -94,8 +97,9 @@ class DiscoveryAdversarialTest {
     void shouldRejectIssuerMismatch(URIBuilder uriBuilder) {
         moduleDispatcher.returnInvalidIssuer();
         var config = configFor(uriBuilder.buildAsString(), true);
+        var resolver = new DiscoveryResolver(config);
 
-        assertThrows(TransportException.class, () -> new DiscoveryResolver(config).resolve());
+        assertThrows(TransportException.class, resolver::resolve);
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "does not match configured issuer");
     }
 }

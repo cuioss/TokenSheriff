@@ -68,29 +68,32 @@ class SubBindingValidatorTest {
         @DisplayName("Should reject a userinfo response that carries no sub")
         void shouldRejectAbsentSub() {
             var userInfo = userInfoWithSub(null);
+            var subject = Generators.nonBlankStrings().next();
 
             assertThrows(IllegalStateException.class,
-                    () -> validator.validate(Generators.nonBlankStrings().next(), userInfo));
+                    () -> validator.validate(subject, userInfo));
         }
 
         @Test
         @DisplayName("Should reject a sub that differs only in trailing length")
         void shouldRejectLengthMismatch() {
             String subject = Generators.letterStrings(8, 16).next();
+            var mismatchedUserInfo = userInfoWithSub(subject + "x");
 
             assertThrows(IllegalStateException.class,
-                    () -> validator.validate(subject, userInfoWithSub(subject + "x")));
+                    () -> validator.validate(subject, mismatchedUserInfo));
         }
 
         @Test
         @DisplayName("Should reject null arguments")
         void shouldRejectNullArguments() {
             var userInfo = userInfoWithSub(Generators.nonBlankStrings().next());
+            var subject = Generators.nonBlankStrings().next();
 
             assertAll("null-guards",
                     () -> assertThrows(NullPointerException.class, () -> validator.validate(null, userInfo)),
                     () -> assertThrows(NullPointerException.class,
-                            () -> validator.validate(Generators.nonBlankStrings().next(), null)));
+                            () -> validator.validate(subject, null)));
         }
     }
 }
