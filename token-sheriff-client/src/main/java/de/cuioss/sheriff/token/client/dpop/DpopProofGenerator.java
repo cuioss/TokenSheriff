@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.client.dpop;
 
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
+import de.cuioss.sheriff.token.client.internal.JsonEscaper;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.math.BigInteger;
@@ -129,8 +130,10 @@ public class DpopProofGenerator {
         }
         long now = Instant.now().getEpochSecond();
         String header = "{\"typ\":\"" + DPOP_TYP + "\",\"alg\":\"" + jwtAlgorithm + "\",\"jwk\":" + jwkJson + "}";
-        String payload = "{\"jti\":\"" + jti + "\",\"htm\":\"" + escape(htm) + "\",\"htu\":\"" + escape(htu)
-                + "\",\"iat\":" + now + "}";
+        // htu is the request URI, sourced from the AS's own discovery metadata (the token endpoint
+        // URL); escape every JSON control character per RFC 8259, not only quote/backslash.
+        String payload = "{\"jti\":\"" + JsonEscaper.escape(jti) + "\",\"htm\":\"" + JsonEscaper.escape(htm)
+                + "\",\"htu\":\"" + JsonEscaper.escape(htu) + "\",\"iat\":" + now + "}";
         String signingInput = encode(header) + "." + encode(payload);
         return signingInput + "." + sign(signingInput);
     }
@@ -180,10 +183,6 @@ public class DpopProofGenerator {
 
     private static String encode(String json) {
         return BASE64_URL.encodeToString(json.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static String escape(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private static String toJcaAlgorithm(String jwtAlgorithm) {

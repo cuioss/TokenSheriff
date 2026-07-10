@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.client.auth;
 
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
+import de.cuioss.sheriff.token.client.internal.JsonEscaper;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -87,9 +88,13 @@ public class PrivateKeyJwtAuth implements ClientAuthentication {
 
     private String buildAssertion() {
         long now = Instant.now().getEpochSecond();
-        String header = "{\"alg\":\"" + jwtAlgorithm + "\",\"typ\":\"JWT\",\"kid\":\"" + escape(keyId) + "\"}";
-        String payload = "{\"iss\":\"" + escape(clientId) + "\",\"sub\":\"" + escape(clientId) + "\",\"aud\":\""
-                + escape(audience) + "\",\"jti\":\"" + UUID.randomUUID() + "\",\"iat\":" + now
+        String header = "{\"alg\":\"" + jwtAlgorithm + "\",\"typ\":\"JWT\",\"kid\":\""
+                + JsonEscaper.escape(keyId) + "\"}";
+        // audience is sourced from the AS's own discovery metadata (token endpoint URL); escape
+        // every JSON control character per RFC 8259, not only quote/backslash.
+        String payload = "{\"iss\":\"" + JsonEscaper.escape(clientId) + "\",\"sub\":\""
+                + JsonEscaper.escape(clientId) + "\",\"aud\":\"" + JsonEscaper.escape(audience)
+                + "\",\"jti\":\"" + UUID.randomUUID() + "\",\"iat\":" + now
                 + ",\"exp\":" + (now + ASSERTION_LIFETIME_SECONDS) + "}";
 
         String signingInput = encode(header) + "." + encode(payload);
@@ -109,10 +114,6 @@ public class PrivateKeyJwtAuth implements ClientAuthentication {
 
     private static String encode(String json) {
         return BASE64_URL.encodeToString(json.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static String escape(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private static String toJcaAlgorithm(String jwtAlgorithm) {

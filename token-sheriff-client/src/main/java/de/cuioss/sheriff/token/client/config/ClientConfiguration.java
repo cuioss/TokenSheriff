@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.client.config;
 import lombok.Builder;
 import lombok.NonNull;
 import lombok.Singular;
+import lombok.ToString;
 import lombok.Value;
 import org.jspecify.annotations.Nullable;
 
@@ -63,9 +64,12 @@ public class ClientConfiguration {
      * ({@link ClientAuthMethod#CLIENT_SECRET_BASIC} / {@link ClientAuthMethod#CLIENT_SECRET_POST}).
      * {@code null} for the key-based methods ({@link ClientAuthMethod#PRIVATE_KEY_JWT} /
      * {@link ClientAuthMethod#TLS_CLIENT_AUTH}), where no shared secret exists. The secret is
-     * never placed in a URL and never logged.
+     * never placed in a URL and never logged — excluded from the Lombok-generated
+     * {@code toString()} so an incidental {@code toString()} of the whole configuration (a debug
+     * log, an assertion failure message) can never leak it.
      */
     @Nullable
+    @ToString.Exclude
     String clientSecret;
 
     /**

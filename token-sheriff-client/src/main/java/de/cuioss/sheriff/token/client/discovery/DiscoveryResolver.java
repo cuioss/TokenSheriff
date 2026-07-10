@@ -20,6 +20,7 @@ import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
+import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.tools.logging.CuiLogger;
@@ -181,7 +182,9 @@ public class DiscoveryResolver {
     private void validateIssuer(ProviderMetadata metadata, String issuer) {
         String documentIssuer = metadata.issuer;
         if (documentIssuer == null || !documentIssuer.equals(issuer)) {
-            LOGGER.warn(ClientLogMessages.WARN.ISSUER_MISMATCH, documentIssuer, issuer);
+            // documentIssuer is taken from the AS discovery response body (OP-controlled, not
+            // fully trusted); sanitize before logging so it cannot forge a log entry (CWE-117).
+            LOGGER.warn(ClientLogMessages.WARN.ISSUER_MISMATCH, LogSanitizer.sanitize(documentIssuer), issuer);
             throw new TransportException(ClientLogMessages.WARN.ISSUER_MISMATCH.format(documentIssuer, issuer));
         }
     }

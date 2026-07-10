@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.client.flow;
 
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
+import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.nio.charset.StandardCharsets;
@@ -68,7 +69,9 @@ public class IssValidator {
             return;
         }
         if (!issuersMatch(expectedIssuer, actualIssuer)) {
-            LOGGER.warn(ClientLogMessages.WARN.ISS_MISMATCH, actualIssuer, expectedIssuer);
+            // actualIssuer is the attacker-controllable RFC 9207 'iss' callback parameter; sanitize
+            // before logging so it cannot forge a log entry (CWE-117).
+            LOGGER.warn(ClientLogMessages.WARN.ISS_MISMATCH, LogSanitizer.sanitize(actualIssuer), expectedIssuer);
             throw new IllegalStateException(
                     "authorization response 'iss' does not match the initiating issuer (mix-up defence)");
         }

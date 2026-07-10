@@ -19,7 +19,11 @@ import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -118,8 +122,25 @@ public class TokenLifecycleManager {
     public Optional<StoredToken> revokeAndClear(String sessionId) {
         Optional<StoredToken> removed = tokenStore.remove(sessionId);
         if (removed.isPresent()) {
-            LOGGER.info(ClientLogMessages.INFO.LOGOUT_TOKENS_REVOKED, sessionId);
+            LOGGER.info(ClientLogMessages.INFO.LOGOUT_TOKENS_REVOKED, maskSessionId(sessionId));
         }
         return removed;
+    }
+
+    /**
+     * Masks a session identifier for logging: session identification values must never appear in
+     * logs unmasked, so this logs a stable, non-reversible correlation hash instead of the raw
+     * identifier.
+     *
+     * @param sessionId the raw session identifier; must not be {@code null}
+     * @return the first 8 hex characters of the SHA-256 digest of {@code sessionId}
+     */
+    private static String maskSessionId(String sessionId) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(sessionId.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest, 0, 4);
+        } catch (NoSuchAlgorithmException e) {
+            return "********";
+        }
     }
 }

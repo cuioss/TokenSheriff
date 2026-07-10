@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.client.logout;
 
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
+import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.util.Objects;
@@ -81,7 +82,9 @@ public class PostLogoutRedirectValidator {
             throw new IllegalArgumentException("post_logout_redirect_uri must not be blank");
         }
         if (!registeredUris.contains(candidate)) {
-            LOGGER.warn(ClientLogMessages.WARN.POST_LOGOUT_REDIRECT_MISMATCH, candidate);
+            // candidate is caller-supplied and unvalidated at this point; sanitize before logging so
+            // it cannot forge a log entry (CWE-117).
+            LOGGER.warn(ClientLogMessages.WARN.POST_LOGOUT_REDIRECT_MISMATCH, LogSanitizer.sanitize(candidate));
             throw new IllegalStateException(
                     "post_logout_redirect_uri does not exactly match a registered URI; refusing RP-initiated logout");
         }
