@@ -1,0 +1,160 @@
+/*
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package de.cuioss.sheriff.token.client.flow;
+
+import com.dslplatform.json.DslJson;
+import de.cuioss.http.client.handler.HttpHandler;
+import de.cuioss.http.client.handler.HttpStatusFamily;
+import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
+import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.commons.error.TransportException;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
+import de.cuioss.tools.logging.CuiLogger;
+
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.StringJoiner;
+
+/**
+ * Pushes an authorization request to the RFC 9126 pushed-authorization-request (PAR) endpoint over
+ * the authenticated back channel and returns the opaque {@code request_uri} to carry on the
+ * front-channel redirect ({@code CLIENT-10}).
+ * <p>
+ * Rather than placing the authorization parameters (including PKCE, {@code state}, {@code nonce}) on
+ * the front-channel URL where a user agent or network attacker can observe or tamper with them, PAR
+ * sends them directly to the AS over TLS with client authentication, and the AS returns a single-use
+ * {@code request_uri}. The front-channel redirect then carries only {@code client_id} and that
+ * {@code request_uri}, so the raw authorization parameters never traverse the browser
+ * ({@code T-PARAM-INTEGRITY}). The transport reuses the commons-blessed cui-http {@link HttpHandler};
+ * it adds no transport hardening of its own.
+ *
+ * @since 1.0
+ * @author Oliver Wolff
+ * @see <a href="https://datatracker.ietf.org/doc/html/rfc9126">RFC 9126 - OAuth 2.0 Pushed Authorization Requests</a>
+ */
+public class ParClient {
+
+    private static final CuiLogger LOGGER = new CuiLogger(ParClient.class);
+
+    private static final String CONTENT_TYPE = "Content-Type";
+    private static final String FORM_URLENCODED = "application/x-www-form-urlencoded";
+    private static final int CONNECT_TIMEOUT_SECONDS = 5;
+    private static final int READ_TIMEOUT_SECONDS = 10;
+
+    private final ClientConfiguration configuration;
+    private final DslJson<Object> dslJson;
+    private final int maxContentSize;
+
+    /**
+     * @param configuration the client configuration carrying the TLS policy; must not be {@code null}
+     */
+    public ParClient(ClientConfiguration configuration) {
+        this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
+        ParserConfig parserConfig = ParserConfig.builder().build();
+        this.dslJson = parserConfig.getDslJson();
+        this.maxContentSize = parserConfig.getMaxPayloadSize();
+    }
+
+    /**
+     * Pushes the given authorization parameters and returns the AS-issued {@code request_uri}.
+     *
+     * @param parEndpoint            the absolute PAR endpoint URL (from discovery); must be TLS unless
+     *                               {@link ClientConfiguration#isAllowInsecureHttp()} is set
+     * @param authorizationParameters the authorization request parameters to push (for example
+     *                                {@code response_type}, {@code redirect_uri}, PKCE, {@code state})
+     * @param clientAuthentication    the client authentication strategy to present; must not be
+     *                                {@code null}
+     * @return the normalized PAR response carrying the {@code request_uri}
+     * @throws TransportException if the request fails, the response is not successful, the body cannot
+     *         be parsed, or the response omits the {@code request_uri}
+     */
+    public ParResponse pushAuthorizationRequest(String parEndpoint,
+            Map<String, String> authorizationParameters,
+            ClientAuthentication clientAuthentication) {
+        Objects.requireNonNull(parEndpoint, "parEndpoint must not be null");
+        Objects.requireNonNull(authorizationParameters, "authorizationParameters must not be null");
+        Objects.requireNonNull(clientAuthentication, "clientAuthentication must not be null");
+
+        HttpHandler handler = HttpHandler.builder()
+                .url(parEndpoint)
+                .connectionTimeoutSeconds(CONNECT_TIMEOUT_SECONDS)
+                .readTimeoutSeconds(READ_TIMEOUT_SECONDS)
+                .allowInsecureHttp(configuration.isAllowInsecureHttp())
+                .build();
+
+        Map<String, String> form = new HashMap<>(authorizationParameters);
+        Map<String, String> headers = new HashMap<>();
+        clientAuthentication.decorate(form, headers);
+
+        HttpRequest.Builder requestBuilder = handler.requestBuilder()
+                .header(CONTENT_TYPE, FORM_URLENCODED)
+                .POST(HttpRequest.BodyPublishers.ofString(encodeForm(form)));
+        headers.forEach(requestBuilder::header);
+
+        HttpClient client = handler.createHttpClient();
+        try {
+            HttpResponse<String> response = client.send(requestBuilder.build(),
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (!HttpStatusFamily.isSuccess(response.statusCode())) {
+                throw new TransportException(
+                        "PAR endpoint returned unexpected HTTP status " + response.statusCode());
+            }
+            return parse(response.body());
+        } catch (IOException e) {
+            LOGGER.debug(e, "PAR request failed: %s", e.getMessage());
+            throw new TransportException("PAR request failed: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new TransportException("PAR request interrupted", e);
+        }
+    }
+
+    private ParResponse parse(String body) {
+        if (body == null || body.isBlank()) {
+            throw new TransportException("Empty PAR endpoint response");
+        }
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > maxContentSize) {
+            throw new TransportException("PAR endpoint response exceeds maximum allowed size");
+        }
+        try {
+            ParResponse parResponse = dslJson.deserialize(ParResponse.class, bytes, bytes.length);
+            if (parResponse == null || parResponse.requestUri == null || parResponse.requestUri.isBlank()) {
+                throw new TransportException("PAR endpoint response is missing the request_uri");
+            }
+            return parResponse;
+        } catch (IOException e) {
+            LOGGER.debug(e, "Failed to parse PAR endpoint response: %s", e.getMessage());
+            throw new TransportException("Failed to parse PAR endpoint response: " + e.getMessage(), e);
+        }
+    }
+
+    private static String encodeForm(Map<String, String> form) {
+        StringJoiner joiner = new StringJoiner("&");
+        for (Map.Entry<String, String> entry : form.entrySet()) {
+            joiner.add(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8)
+                    + "=" + URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
+        }
+        return joiner.toString();
+    }
+}

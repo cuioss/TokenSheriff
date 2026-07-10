@@ -88,6 +88,13 @@ public final class ClientLogMessages {
                 .identifier(104)
                 .template("Refresh token reuse detected; the refresh token family has been revoked")
                 .build();
+
+        /** The RFC 9207 authorization-response {@code iss} does not match the initiating issuer (mix-up). */
+        public static final LogRecord ISS_MISMATCH = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(105)
+                .template("Authorization response 'iss' '%s' does not match the initiating issuer '%s'; rejecting the callback (mix-up defence)")
+                .build();
     }
 
     /**
