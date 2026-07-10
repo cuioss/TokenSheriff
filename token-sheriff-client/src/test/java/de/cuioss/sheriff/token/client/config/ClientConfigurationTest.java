@@ -85,13 +85,16 @@ class ClientConfigurationTest {
     @DisplayName("Should reject a null issuer, client id or auth method")
     void shouldRejectNullRequiredFields() {
         var clientId = Generators.nonBlankStrings().next();
+        var missingIssuer = ClientConfiguration.builder()
+                .clientId(clientId).authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC);
+        var missingClientId = ClientConfiguration.builder()
+                .issuer(issuer()).authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC);
+        var missingAuthMethod = ClientConfiguration.builder()
+                .issuer(issuer()).clientId(clientId);
         assertAll(
-                () -> assertThrows(NullPointerException.class, () -> ClientConfiguration.builder()
-                        .clientId(clientId).authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC).build()),
-                () -> assertThrows(NullPointerException.class, () -> ClientConfiguration.builder()
-                        .issuer(issuer()).authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC).build()),
-                () -> assertThrows(NullPointerException.class, () -> ClientConfiguration.builder()
-                        .issuer(issuer()).clientId(clientId).build()));
+                () -> assertThrows(NullPointerException.class, missingIssuer::build),
+                () -> assertThrows(NullPointerException.class, missingClientId::build),
+                () -> assertThrows(NullPointerException.class, missingAuthMethod::build));
     }
 
     @Test
@@ -104,7 +107,8 @@ class ClientConfigurationTest {
                 .scope("openid")
                 .build();
 
-        assertThrows(UnsupportedOperationException.class, () -> config.getScopes().add("extra"));
+        var scopes = config.getScopes();
+        assertThrows(UnsupportedOperationException.class, () -> scopes.add("extra"));
     }
 
     @Test

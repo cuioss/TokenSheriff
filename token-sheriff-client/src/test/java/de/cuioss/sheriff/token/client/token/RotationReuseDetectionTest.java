@@ -75,12 +75,13 @@ class RotationReuseDetectionTest {
 
         assertThrows(IllegalStateException.class, () -> family.rotate(initial, attackerNext),
                 "replaying the superseded token must fail closed");
+        String furtherSuccessor = Generators.letterStrings(20, 40).next();
         assertAll("post-reuse state",
                 () -> assertTrue(family.isRevoked(), "reuse must revoke the family"),
                 () -> assertThrows(IllegalStateException.class, family::currentToken,
                         "a revoked family must not expose a current token"),
                 () -> assertThrows(IllegalStateException.class,
-                        () -> family.rotate(next, Generators.letterStrings(20, 40).next()),
+                        () -> family.rotate(next, furtherSuccessor),
                         "a revoked family must reject all further rotations"));
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "Refresh token reuse detected");
     }
@@ -111,14 +112,16 @@ class RotationReuseDetectionTest {
     @Test
     @DisplayName("Should reject null or blank tokens")
     void shouldRejectInvalidTokens() {
+        var familyForNullRotation = new RefreshTokenFamily(Generators.letterStrings(20, 40).next());
+        var successor = Generators.letterStrings(20, 40).next();
+        var familyForBlankSuccessor = new RefreshTokenFamily(Generators.letterStrings(20, 40).next());
+        var presented = Generators.letterStrings(20, 40).next();
         assertAll("token validation",
                 () -> assertThrows(NullPointerException.class, () -> new RefreshTokenFamily(null)),
                 () -> assertThrows(IllegalArgumentException.class, () -> new RefreshTokenFamily("  ")),
                 () -> assertThrows(NullPointerException.class,
-                        () -> new RefreshTokenFamily(Generators.letterStrings(20, 40).next())
-                                .rotate(null, Generators.letterStrings(20, 40).next())),
+                        () -> familyForNullRotation.rotate(null, successor)),
                 () -> assertThrows(IllegalArgumentException.class,
-                        () -> new RefreshTokenFamily(Generators.letterStrings(20, 40).next())
-                                .rotate(Generators.letterStrings(20, 40).next(), "  ")));
+                        () -> familyForBlankSuccessor.rotate(presented, "  ")));
     }
 }

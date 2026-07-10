@@ -161,12 +161,15 @@ class TokenStoreTest {
     @DisplayName("Should reject a null token, blank session id, and negative refresh lead")
     void shouldRejectInvalidInputs() {
         var store = new InMemoryTokenStore();
+        var sessionId = Generators.letterStrings(10, 20).next();
+        var token = bearerToken();
+        var negativeLead = Duration.ofSeconds(-1);
 
         assertAll("input guards",
                 () -> assertThrows(NullPointerException.class,
-                        () -> store.store(Generators.letterStrings(10, 20).next(), null)),
-                () -> assertThrows(IllegalArgumentException.class, () -> store.store("  ", bearerToken())),
+                        () -> store.store(sessionId, null)),
+                () -> assertThrows(IllegalArgumentException.class, () -> store.store("  ", token)),
                 () -> assertThrows(IllegalArgumentException.class,
-                        () -> new RefreshScheduler(Duration.ofSeconds(-1))));
+                        () -> new RefreshScheduler(negativeLead)));
     }
 }

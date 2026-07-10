@@ -93,8 +93,9 @@ class WeakAuthRefusedTest {
     void shouldFailClosedRatherThanUseUnadvertisedSecret() {
         ClientAuthentication basic = auth(ClientAuthMethod.CLIENT_SECRET_BASIC);
         var metadata = advertising(List.of("tls_client_auth"));
+        var configured = List.of(basic);
 
-        assertThrows(IllegalStateException.class, () -> selector.select(List.of(basic), metadata),
+        assertThrows(IllegalStateException.class, () -> selector.select(configured, metadata),
                 "a configured secret that the AS does not advertise must not be silently used");
     }
 

@@ -78,8 +78,8 @@ public class EndSessionFlow {
     public String buildLogoutRedirect(String endSessionEndpoint, String idTokenHint,
             String postLogoutRedirectUri, String state) {
         requireNonBlank(endSessionEndpoint, "endSessionEndpoint");
-        requireNonBlank(idTokenHint, "id_token_hint");
-        requireNonBlank(state, "state");
+        requireNonBlank(idTokenHint, PARAM_ID_TOKEN_HINT);
+        requireNonBlank(state, PARAM_STATE);
         String validatedRedirect = redirectValidator.validate(postLogoutRedirectUri);
 
         Map<String, String> params = new HashMap<>(Map.of(

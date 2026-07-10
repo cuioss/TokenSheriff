@@ -89,9 +89,11 @@ class FetchPathAttackDatabaseTest {
         var config = config();
         var client = new TokenEndpointClient(config);
         String tokenEndpoint = uriBuilder.addPathSegment("token").buildAsString();
+        Map<String, String> formParameters = Map.of("grant_type", "client_credentials");
+        Map<String, String> requestHeaders = Map.of();
 
         assertThrows(TransportException.class,
-                () -> client.requestToken(tokenEndpoint, Map.of("grant_type", "client_credentials"), Map.of()),
+                () -> client.requestToken(tokenEndpoint, formParameters, requestHeaders),
                 "an adversarial token response body must never yield a trusted token");
     }
 
