@@ -107,6 +107,22 @@ class DpopProofGeneratorTest {
     }
 
     @Test
+    @DisplayName("Should still detect jti reuse after many distinct proofs have been tracked")
+    void shouldDetectReuseWithinBoundedWindow() {
+        String[] state = {"first-jti"};
+        var proofGenerator = new DpopProofGenerator(keyPair, "RS256", () -> state[0]);
+        proofGenerator.generateProof(HTM, HTU);
+        for (int i = 0; i < 50; i++) {
+            state[0] = "distinct-jti-" + i;
+            proofGenerator.generateProof(HTM, HTU);
+        }
+
+        state[0] = "distinct-jti-49";
+        assertThrows(IllegalStateException.class, () -> proofGenerator.generateProof(HTM, HTU),
+                "a jti still tracked in the bounded LRU window is detected as reuse and fails closed");
+    }
+
+    @Test
     @DisplayName("Should expose a stable RFC 7638 jkt thumbprint tied to the proof key")
     void shouldExposeStableJkt() {
         var first = new DpopProofGenerator(keyPair, "RS256");

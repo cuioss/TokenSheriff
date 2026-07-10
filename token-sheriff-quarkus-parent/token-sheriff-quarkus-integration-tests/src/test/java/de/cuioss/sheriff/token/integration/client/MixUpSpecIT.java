@@ -81,7 +81,7 @@ class MixUpSpecIT extends BaseIntegrationTest {
         String integration = discoveredIssuer(INTEGRATION_ISSUER);
         String foreign = discoveredIssuer(FOREIGN_ISSUER);
 
-        assertTrue(integration != null && !integration.equals(foreign),
+        assertTrue(integration != null && foreign != null && !integration.equals(foreign),
                 "the integration and benchmark realms must present distinct issuer identifiers");
     }
 

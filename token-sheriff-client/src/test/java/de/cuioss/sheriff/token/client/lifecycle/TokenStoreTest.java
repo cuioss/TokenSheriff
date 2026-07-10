@@ -95,6 +95,48 @@ class TokenStoreTest {
     }
 
     @Test
+    @DisplayName("Should atomically update a present session and skip an absent one")
+    void shouldUpdatePresentSessionOnly() {
+        var store = new InMemoryTokenStore();
+        String presentSession = Generators.letterStrings(10, 20).next();
+        String absentSession = Generators.letterStrings(10, 20).next();
+        StoredToken original = bearerToken();
+        store.store(presentSession, original);
+        String rotatedAccess = Generators.letterStrings(20, 40).next();
+
+        var updated = store.update(presentSession, current -> current.refreshed(rotatedAccess, null, null));
+        var skipped = store.update(absentSession, current -> current.refreshed(rotatedAccess, null, null));
+
+        assertAll("atomic update",
+                () -> assertEquals(rotatedAccess, updated.orElseThrow().accessToken(),
+                        "a present session is transformed and returned"),
+                () -> assertEquals(rotatedAccess, store.retrieve(presentSession).orElseThrow().accessToken(),
+                        "the updated bundle replaces the stored one"),
+                () -> assertTrue(skipped.isEmpty(), "an absent session yields empty"),
+                () -> assertTrue(store.retrieve(absentSession).isEmpty(),
+                        "an absent-session update never creates an entry"),
+                () -> assertThrows(NullPointerException.class,
+                        () -> store.update(presentSession, null), "a null updater is rejected"));
+    }
+
+    @Test
+    @DisplayName("Should make applyRefresh a no-op once the session has been revoked (no stale write)")
+    void shouldNotResurrectRevokedSessionOnRefresh() {
+        var manager = new TokenLifecycleManager(new InMemoryTokenStore(), new RefreshScheduler());
+        String sessionId = Generators.letterStrings(10, 20).next();
+        manager.store(sessionId, bearerToken());
+        manager.revokeAndClear(sessionId);
+
+        var refreshed = manager.applyRefresh(sessionId, Generators.letterStrings(20, 40).next(), null, null);
+
+        assertAll("refresh after logout is a no-op",
+                () -> assertTrue(refreshed.isEmpty(),
+                        "applying a refresh to a revoked session writes nothing back"),
+                () -> assertTrue(manager.get(sessionId).isEmpty(),
+                        "the revoked session stays empty — no token is resurrected"));
+    }
+
+    @Test
     @DisplayName("Should report proactive-refresh need based on the access-token expiry window")
     void shouldReportRefreshNeed() {
         var scheduler = new RefreshScheduler(Duration.ofSeconds(30));

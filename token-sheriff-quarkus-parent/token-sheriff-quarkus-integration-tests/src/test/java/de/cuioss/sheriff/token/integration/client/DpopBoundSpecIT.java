@@ -149,7 +149,7 @@ class DpopBoundSpecIT extends BaseIntegrationTest {
                 return new X509Certificate[0];
             }
         }};
-        SSLContext context = SSLContext.getInstance("TLS");
+        SSLContext context = SSLContext.getInstance("TLSv1.3");
         context.init(null, trustAll, new java.security.SecureRandom());
         return context;
     }

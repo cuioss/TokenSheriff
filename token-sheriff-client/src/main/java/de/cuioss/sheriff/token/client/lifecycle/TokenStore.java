@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.client.lifecycle;
 
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * Service-provider interface for the server-side token store ({@code CLIENT-19}, design fork 2).
@@ -60,4 +61,23 @@ public interface TokenStore {
      * @return the removed bundle, or {@link Optional#empty()} when none was held
      */
     Optional<StoredToken> remove(String sessionId);
+
+    /**
+     * Atomically applies {@code updater} to the token bundle held for a session, storing the result.
+     * <p>
+     * The retrieve-transform-store cycle happens as a single atomic operation with respect to
+     * concurrent {@link #store(String, StoredToken)} / {@link #remove(String)} / {@code update} calls
+     * for the same session, closing the read-modify-write race a naive
+     * {@code retrieve} → transform → {@code store} sequence leaves open: a concurrent
+     * {@link #remove(String)} (logout) between the read and the write could otherwise resurrect a
+     * just-revoked session by writing a refreshed token back into it, violating the
+     * no-stale-read-after-logout guarantee ({@code CLIENT-22}). When no bundle is held the updater is
+     * never invoked and the store is left untouched.
+     *
+     * @param sessionId the opaque session identifier; must not be {@code null} or blank
+     * @param updater   the transform applied to the currently-held bundle to produce its successor;
+     *                  must not be {@code null} and must not return {@code null}
+     * @return the updated (stored) bundle, or {@link Optional#empty()} when no bundle was held
+     */
+    Optional<StoredToken> update(String sessionId, Function<StoredToken, StoredToken> updater);
 }

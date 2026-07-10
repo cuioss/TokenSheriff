@@ -80,6 +80,18 @@ class CallbackParametersTest {
     }
 
     @Test
+    @DisplayName("Should reject a duplicated parameter rather than silently letting the last one win")
+    void shouldRejectDuplicateParameter() {
+        assertAll("duplicate rejection (RFC 9700 §4.7.3)",
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> CallbackParameters.parse("state=good&code=abc&state=evil"),
+                        "a smuggled second state must be rejected, not override the first"),
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> CallbackParameters.parse("code=abc&code=def"),
+                        "a duplicated code must be rejected"));
+    }
+
+    @Test
     @DisplayName("Should reject a null query string")
     void shouldRejectNullQuery() {
         assertThrows(NullPointerException.class, () -> CallbackParameters.parse(null));

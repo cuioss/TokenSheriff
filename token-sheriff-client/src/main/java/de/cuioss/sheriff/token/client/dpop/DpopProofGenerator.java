@@ -29,10 +29,11 @@ import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
@@ -67,13 +68,29 @@ public class DpopProofGenerator {
     static final String DPOP_TYP = "dpop+jwt";
     private static final Base64.Encoder BASE64_URL = Base64.getUrlEncoder().withoutPadding();
 
+    /**
+     * Upper bound on the number of recently-issued {@code jti} values tracked for reuse detection.
+     * The set is a bounded LRU rather than an unbounded set so a long-lived generator cannot leak
+     * memory; reuse is still detected fail-closed within this most-recent window.
+     */
+    private static final int MAX_TRACKED_JTIS = 10_000;
+
     private final KeyPair keyPair;
     private final String jwtAlgorithm;
     private final String jcaAlgorithm;
     private final String jwkJson;
     private final String jkt;
     private final Supplier<String> jtiSource;
-    private final Set<String> issuedJtis = ConcurrentHashMap.newKeySet();
+    // Bounded, thread-safe LRU of recently-issued jti values: access-ordered LinkedHashMap that evicts
+    // its eldest entry once it exceeds MAX_TRACKED_JTIS, wrapped in a synchronized view for concurrent
+    // use. Explicit java.util imports keep the construction stable under OpenRewrite.
+    private final Map<String, Boolean> issuedJtis = Collections.synchronizedMap(
+            new LinkedHashMap<String, Boolean>(16, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
+                    return size() > MAX_TRACKED_JTIS;
+                }
+            });
 
     /**
      * Creates a generator that mints a random {@code jti} for every proof.
@@ -123,7 +140,7 @@ public class DpopProofGenerator {
             throw new IllegalArgumentException("htm and htu must not be blank");
         }
         String jti = jtiSource.get();
-        if (!issuedJtis.add(jti)) {
+        if (issuedJtis.put(jti, Boolean.TRUE) != null) {
             LOGGER.warn(ClientLogMessages.WARN.DPOP_JTI_REUSE);
             throw new IllegalStateException(
                     "DPoP proof 'jti' reuse detected; refusing to emit a replayable proof");

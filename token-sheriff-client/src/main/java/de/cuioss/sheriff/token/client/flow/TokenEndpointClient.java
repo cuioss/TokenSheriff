@@ -83,6 +83,8 @@ public class TokenEndpointClient {
             Map<String, String> formParameters,
             Map<String, String> requestHeaders) {
         Objects.requireNonNull(tokenEndpoint, "tokenEndpoint must not be null");
+        Objects.requireNonNull(formParameters, "formParameters must not be null");
+        Objects.requireNonNull(requestHeaders, "requestHeaders must not be null");
 
         HttpHandler handler = HttpHandler.builder()
                 .url(tokenEndpoint)

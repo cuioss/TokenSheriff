@@ -102,13 +102,11 @@ public class TokenLifecycleManager {
      */
     public Optional<StoredToken> applyRefresh(String sessionId, String newAccessToken,
             @Nullable String newRefreshToken, @Nullable Instant newExpiresAt) {
-        Optional<StoredToken> current = tokenStore.retrieve(sessionId);
-        if (current.isEmpty()) {
-            return Optional.empty();
-        }
-        StoredToken refreshed = current.get().refreshed(newAccessToken, newRefreshToken, newExpiresAt);
-        tokenStore.store(sessionId, refreshed);
-        return Optional.of(refreshed);
+        // Atomic retrieve-transform-store: a concurrent revokeAndClear (logout) can no longer slip
+        // between the read and the write and resurrect a just-revoked session, so a refresh applied
+        // after logout is a no-op rather than a stale-token write (CLIENT-22).
+        return tokenStore.update(sessionId,
+                current -> current.refreshed(newAccessToken, newRefreshToken, newExpiresAt));
     }
 
     /**

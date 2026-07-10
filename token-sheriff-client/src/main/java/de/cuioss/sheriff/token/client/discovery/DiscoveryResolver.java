@@ -183,9 +183,11 @@ public class DiscoveryResolver {
         String documentIssuer = metadata.issuer;
         if (documentIssuer == null || !documentIssuer.equals(issuer)) {
             // documentIssuer is taken from the AS discovery response body (OP-controlled, not
-            // fully trusted); sanitize before logging so it cannot forge a log entry (CWE-117).
-            LOGGER.warn(ClientLogMessages.WARN.ISSUER_MISMATCH, LogSanitizer.sanitize(documentIssuer), issuer);
-            throw new TransportException(ClientLogMessages.WARN.ISSUER_MISMATCH.format(documentIssuer, issuer));
+            // fully trusted); sanitize before it reaches either the log or the exception message so it
+            // cannot forge a log entry (CWE-117) via a plain-text appender on the exception path.
+            String sanitized = LogSanitizer.sanitize(documentIssuer);
+            LOGGER.warn(ClientLogMessages.WARN.ISSUER_MISMATCH, sanitized, issuer);
+            throw new TransportException(ClientLogMessages.WARN.ISSUER_MISMATCH.format(sanitized, issuer));
         }
     }
 

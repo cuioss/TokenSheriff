@@ -61,6 +61,9 @@ String errorDescription, @Nullable
      * @param rawQuery the callback query string (without a leading {@code ?}); must not be
      *                 {@code null}
      * @return the parsed callback parameters
+     * @throws IllegalArgumentException if the query repeats a parameter name; a duplicate key is
+     *         rejected rather than silently last-wins, so a smuggled second {@code state}/{@code code}
+     *         cannot override the first (RFC 9700 §4.7.3 parameter-injection defence-in-depth)
      */
     public static CallbackParameters parse(String rawQuery) {
         Objects.requireNonNull(rawQuery, "rawQuery must not be null");
@@ -72,7 +75,10 @@ String errorDescription, @Nullable
             int eq = pair.indexOf('=');
             String key = eq < 0 ? pair : pair.substring(0, eq);
             String value = eq < 0 ? "" : pair.substring(eq + 1);
-            params.put(decode(key), decode(value));
+            if (params.put(decode(key), decode(value)) != null) {
+                throw new IllegalArgumentException(
+                        "duplicate callback parameter rejected (RFC 9700 §4.7.3 parameter injection)");
+            }
         }
         return of(params);
     }
