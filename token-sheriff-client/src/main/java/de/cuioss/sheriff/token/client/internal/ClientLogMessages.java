@@ -46,6 +46,13 @@ public final class ClientLogMessages {
                 .identifier(1)
                 .template("Resolved OIDC provider metadata for issuer '%s'")
                 .build();
+
+        /** Held tokens for a session were cleared as part of RP-initiated logout. */
+        public static final LogRecord LOGOUT_TOKENS_REVOKED = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(2)
+                .template("Cleared held tokens for session '%s' as part of RP-initiated logout")
+                .build();
     }
 
     /**
@@ -108,13 +115,6 @@ public final class ClientLogMessages {
                 .prefix(PREFIX)
                 .identifier(107)
                 .template("Post-logout redirect URI '%s' does not exactly match any registered URI; refusing RP-initiated logout (open-redirect defence)")
-                .build();
-
-        /** A refresh-token family was revoked as part of RP-initiated logout. */
-        public static final LogRecord LOGOUT_TOKENS_REVOKED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(108)
-                .template("Revoked held tokens for session '%s' as part of RP-initiated logout")
                 .build();
     }
 

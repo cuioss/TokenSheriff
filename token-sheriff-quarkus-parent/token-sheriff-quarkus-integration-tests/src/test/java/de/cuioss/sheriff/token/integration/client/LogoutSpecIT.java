@@ -1,0 +1,144 @@
+/*
+ * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package de.cuioss.sheriff.token.integration.client;
+
+import de.cuioss.sheriff.token.client.logout.EndSessionFlow;
+import de.cuioss.sheriff.token.client.logout.PostLogoutRedirectValidator;
+import de.cuioss.sheriff.token.integration.BaseIntegrationTest;
+import de.cuioss.tools.logging.CuiLogger;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.cert.X509Certificate;
+import java.time.Duration;
+import java.util.Set;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Increment-9 RP-initiated logout spec against the real Keycloak container ({@code CLIENT-13}).
+ * <p>
+ * Obtains an ID token via the direct-access grant, builds the end-session request through the
+ * production {@link EndSessionFlow} with an exact-matched {@code post_logout_redirect_uri},
+ * {@code id_token_hint}, and session-bound {@code state}, and confirms Keycloak accepts the RP-initiated
+ * logout. The container uses a self-signed certificate, so the request runs against a trust-all TLS
+ * context (integration-test scope only), mirroring {@link BaseIntegrationTest}.
+ */
+@DisplayName("RP-initiated logout against real Keycloak")
+class LogoutSpecIT extends BaseIntegrationTest {
+
+    private static final CuiLogger LOGGER = new CuiLogger(LogoutSpecIT.class);
+
+    private static final String TOKEN_ENDPOINT =
+            "https://localhost:1443/realms/integration/protocol/openid-connect/token";
+    private static final String END_SESSION_ENDPOINT =
+            "https://localhost:1443/realms/integration/protocol/openid-connect/logout";
+    private static final String POST_LOGOUT_REDIRECT_URI = "https://localhost/callback";
+    private static final String CLIENT_ID = "integration-client";
+    private static final String CLIENT_SECRET = "integration-secret";
+    private static final String USERNAME = "integration-user";
+    private static final String PASSWORD = "integration-password";
+
+    @Test
+    @DisplayName("Should accept an RP-initiated logout with id_token_hint, exact redirect, and state")
+    void shouldPerformRpInitiatedLogout() throws Exception {
+        String idToken = obtainIdToken();
+        assertNotNull(idToken, "Keycloak must issue an id_token for the openid-scoped grant");
+
+        var flow = new EndSessionFlow(new PostLogoutRedirectValidator(Set.of(POST_LOGOUT_REDIRECT_URI)));
+        String state = UUID.randomUUID().toString();
+        String logoutUrl = flow.buildLogoutRedirect(END_SESSION_ENDPOINT, idToken, POST_LOGOUT_REDIRECT_URI, state);
+
+        HttpClient client = HttpClient.newBuilder()
+                .sslContext(trustAllContext())
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+        HttpResponse<String> response = client.send(
+                HttpRequest.newBuilder().uri(URI.create(logoutUrl)).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        LOGGER.debug("logout response status=%s", response.statusCode());
+
+        assertTrue(response.statusCode() == 200 || response.statusCode() == 302,
+                "Keycloak must accept the RP-initiated logout (200 confirmation or 302 to the redirect), got "
+                        + response.statusCode());
+    }
+
+    private static String obtainIdToken() throws Exception {
+        String form = param("grant_type", "password")
+                + "&" + param("client_id", CLIENT_ID)
+                + "&" + param("client_secret", CLIENT_SECRET)
+                + "&" + param("username", USERNAME)
+                + "&" + param("password", PASSWORD)
+                + "&" + param("scope", "openid");
+
+        HttpClient client = HttpClient.newBuilder()
+                .sslContext(trustAllContext())
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+        HttpResponse<String> response = client.send(HttpRequest.newBuilder()
+                .uri(URI.create(TOKEN_ENDPOINT))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(form))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        String marker = "\"id_token\":\"";
+        int start = response.body().indexOf(marker);
+        if (start < 0) {
+            return null;
+        }
+        start += marker.length();
+        return response.body().substring(start, response.body().indexOf('"', start));
+    }
+
+    private static String param(String key, String value) {
+        return URLEncoder.encode(key, StandardCharsets.UTF_8) + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private static SSLContext trustAllContext() throws Exception {
+        TrustManager[] trustAll = {new X509TrustManager() {
+            @Override
+            public void checkClientTrusted(X509Certificate[] chain, String authType) {
+                // integration-test trust-all
+            }
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] chain, String authType) {
+                // integration-test trust-all
+            }
+
+            @Override
+            public X509Certificate[] getAcceptedIssuers() {
+                return new X509Certificate[0];
+            }
+        }};
+        SSLContext context = SSLContext.getInstance("TLS");
+        context.init(null, trustAll, new java.security.SecureRandom());
+        return context;
+    }
+}

@@ -24,6 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.Signature;
@@ -148,7 +149,7 @@ class DpopProofGeneratorTest {
             verifier.initVerify(keyPair.getPublic());
             verifier.update((segments[0] + "." + segments[1]).getBytes(StandardCharsets.UTF_8));
             return verifier.verify(Base64.getUrlDecoder().decode(segments[2]));
-        } /*~~(TODO: Catch specific not Exception. Suppress: // cui-rewrite:disable InvalidExceptionUsageRecipe)~~>*/catch (Exception e) {
+        } catch (GeneralSecurityException | IllegalArgumentException e) {
             return false;
         }
     }
