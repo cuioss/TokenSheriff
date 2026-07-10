@@ -95,6 +95,27 @@ public final class ClientLogMessages {
                 .identifier(105)
                 .template("Authorization response 'iss' '%s' does not match the initiating issuer '%s'; rejecting the callback (mix-up defence)")
                 .build();
+
+        /** A DPoP proof {@code jti} was reused; the proof would be replayable and is refused. */
+        public static final LogRecord DPOP_JTI_REUSE = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(106)
+                .template("DPoP proof 'jti' reuse detected; refusing to emit a replayable proof (RFC 9449 token-replay defence)")
+                .build();
+
+        /** A post-logout redirect URI did not exactly match a registered URI; the logout is refused. */
+        public static final LogRecord POST_LOGOUT_REDIRECT_MISMATCH = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(107)
+                .template("Post-logout redirect URI '%s' does not exactly match any registered URI; refusing RP-initiated logout (open-redirect defence)")
+                .build();
+
+        /** A refresh-token family was revoked as part of RP-initiated logout. */
+        public static final LogRecord LOGOUT_TOKENS_REVOKED = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(108)
+                .template("Revoked held tokens for session '%s' as part of RP-initiated logout")
+                .build();
     }
 
     /**
