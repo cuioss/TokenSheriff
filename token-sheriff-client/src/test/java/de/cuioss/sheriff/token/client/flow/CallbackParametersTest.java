@@ -1,0 +1,87 @@
+/*
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package de.cuioss.sheriff.token.client.flow;
+
+import de.cuioss.test.generator.junit.EnableGeneratorController;
+import de.cuioss.test.juli.junit5.EnableTestLogger;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@EnableTestLogger
+@EnableGeneratorController
+@DisplayName("CallbackParameters redirect query-string parsing")
+class CallbackParametersTest {
+
+    @Test
+    @DisplayName("Should parse a successful callback query into code, state, and issuer")
+    void shouldParseSuccessCallback() {
+        CallbackParameters parameters =
+                CallbackParameters.parse("code=abc123&state=xyz789&iss=https%3A%2F%2Fissuer.example.com");
+
+        assertAll("parsed success callback",
+                () -> assertEquals(Optional.of("abc123"), parameters.getCode(), "the authorization code must be parsed"),
+                () -> assertEquals("xyz789", parameters.state(), "the state must be parsed"),
+                () -> assertEquals(Optional.of("https://issuer.example.com"), parameters.getIssuer(),
+                        "the RFC 9207 iss must be percent-decoded"),
+                () -> assertFalse(parameters.hasError(), "a success callback must not signal an error"));
+    }
+
+    @Test
+    @DisplayName("Should parse an error callback and surface the error signal")
+    void shouldParseErrorCallback() {
+        CallbackParameters parameters =
+                CallbackParameters.parse("error=access_denied&error_description=user%20cancelled");
+
+        assertAll("parsed error callback",
+                () -> assertTrue(parameters.hasError(), "an error callback must be recognised"),
+                () -> assertEquals("access_denied", parameters.error(), "the error code must be parsed"),
+                () -> assertEquals("user cancelled", parameters.errorDescription(),
+                        "the error description must be percent-decoded"),
+                () -> assertTrue(parameters.getCode().isEmpty(), "an error callback carries no authorization code"));
+    }
+
+    @Test
+    @DisplayName("Should percent-decode both keys and values and tolerate a valueless parameter")
+    void shouldDecodeAndTolerateValuelessPair() {
+        CallbackParameters parameters = CallbackParameters.parse("code=a%2Bb&state=&iss");
+
+        assertAll("decoding",
+                () -> assertEquals(Optional.of("a+b"), parameters.getCode(), "a percent-encoded value must be decoded"),
+                () -> assertEquals("", parameters.state(), "an empty value must be preserved as empty"));
+    }
+
+    @Test
+    @DisplayName("Should ignore empty segments produced by leading or doubled separators")
+    void shouldIgnoreEmptySegments() {
+        CallbackParameters parameters = CallbackParameters.parse("&code=only&&");
+
+        assertEquals(Optional.of("only"), parameters.getCode(), "the single real parameter must survive empty segments");
+    }
+
+    @Test
+    @DisplayName("Should reject a null query string")
+    void shouldRejectNullQuery() {
+        assertThrows(NullPointerException.class, () -> CallbackParameters.parse(null));
+    }
+}
