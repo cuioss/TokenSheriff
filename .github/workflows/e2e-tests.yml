@@ -7,6 +7,9 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  # Required for the GitHub merge queue: without it the queued checks never
+  # report and the queue times out (see cuioss-organization v0.8.0).
+  merge_group:
 
 permissions:
   contents: read
