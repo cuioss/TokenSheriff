@@ -18,14 +18,12 @@ package de.cuioss.sheriff.token.client.flow;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
+import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.tools.logging.CuiLogger;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.StringJoiner;
 
 /**
  * Builds the front-channel {@code authorization_code} request URL (RFC 6749 §4.1.1) with PKCE
@@ -98,13 +96,6 @@ public class AuthorizationRequestBuilder {
         params.put(PARAM_CODE_CHALLENGE_METHOD, context.pkceChallenge().method());
         context.acrValues().ifPresent(acr -> params.put(PARAM_ACR_VALUES, acr));
 
-        return authorizationEndpoint + (authorizationEndpoint.indexOf('?') < 0 ? '?' : '&') + encode(params);
-    }
-
-    private static String encode(Map<String, String> params) {
-        StringJoiner joiner = new StringJoiner("&");
-        params.forEach((key, value) -> joiner.add(URLEncoder.encode(key, StandardCharsets.UTF_8)
-                + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8)));
-        return joiner.toString();
+        return authorizationEndpoint + (authorizationEndpoint.indexOf('?') < 0 ? '?' : '&') + FormEncoder.encode(params);
     }
 }

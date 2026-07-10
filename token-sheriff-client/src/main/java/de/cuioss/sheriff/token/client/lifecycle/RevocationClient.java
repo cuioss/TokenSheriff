@@ -19,11 +19,11 @@ import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.io.IOException;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -31,7 +31,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.StringJoiner;
 
 /**
  * Revokes a token at the RFC 7009 revocation endpoint over the authenticated back channel
@@ -105,7 +104,7 @@ public class RevocationClient {
 
         HttpRequest.Builder requestBuilder = handler.requestBuilder()
                 .header(CONTENT_TYPE, FORM_URLENCODED)
-                .POST(HttpRequest.BodyPublishers.ofString(encodeForm(form)));
+                .POST(HttpRequest.BodyPublishers.ofString(FormEncoder.encode(form)));
         headers.forEach(requestBuilder::header);
 
         HttpClient client = handler.createHttpClient();
@@ -125,12 +124,4 @@ public class RevocationClient {
         }
     }
 
-    private static String encodeForm(Map<String, String> form) {
-        StringJoiner joiner = new StringJoiner("&");
-        for (Map.Entry<String, String> entry : form.entrySet()) {
-            joiner.add(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8)
-                    + "=" + URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
-        }
-        return joiner.toString();
-    }
 }

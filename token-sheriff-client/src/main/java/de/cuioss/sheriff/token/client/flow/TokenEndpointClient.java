@@ -19,20 +19,19 @@ import com.dslplatform.json.DslJson;
 import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.io.IOException;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Objects;
-import java.util.StringJoiner;
 
 /**
  * Thin transport wrapper for the OAuth 2.0 back-channel token endpoint.
@@ -94,7 +93,7 @@ public class TokenEndpointClient {
 
         HttpRequest.Builder requestBuilder = handler.requestBuilder()
                 .header(CONTENT_TYPE, FORM_URLENCODED)
-                .POST(HttpRequest.BodyPublishers.ofString(encodeForm(formParameters)));
+                .POST(HttpRequest.BodyPublishers.ofString(FormEncoder.encode(formParameters)));
         requestHeaders.forEach(requestBuilder::header);
 
         HttpClient client = handler.createHttpClient();
@@ -135,12 +134,4 @@ public class TokenEndpointClient {
         }
     }
 
-    private static String encodeForm(Map<String, String> formParameters) {
-        StringJoiner joiner = new StringJoiner("&");
-        for (Map.Entry<String, String> entry : formParameters.entrySet()) {
-            joiner.add(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8)
-                    + "=" + URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
-        }
-        return joiner.toString();
-    }
 }

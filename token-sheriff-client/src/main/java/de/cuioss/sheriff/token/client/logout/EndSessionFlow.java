@@ -15,12 +15,11 @@
  */
 package de.cuioss.sheriff.token.client.logout;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
+import de.cuioss.sheriff.token.client.internal.FormEncoder;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.StringJoiner;
 
 /**
  * Builds the front-channel RP-initiated logout request to the OpenID Connect
@@ -88,7 +87,7 @@ public class EndSessionFlow {
                 PARAM_POST_LOGOUT_REDIRECT_URI, validatedRedirect,
                 PARAM_STATE, state));
 
-        return endSessionEndpoint + (endSessionEndpoint.indexOf('?') < 0 ? '?' : '&') + encode(params);
+        return endSessionEndpoint + (endSessionEndpoint.indexOf('?') < 0 ? '?' : '&') + FormEncoder.encode(params);
     }
 
     private static void requireNonBlank(String value, String name) {
@@ -96,12 +95,5 @@ public class EndSessionFlow {
         if (value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be blank");
         }
-    }
-
-    private static String encode(Map<String, String> params) {
-        StringJoiner joiner = new StringJoiner("&");
-        params.forEach((key, value) -> joiner.add(URLEncoder.encode(key, StandardCharsets.UTF_8)
-                + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8)));
-        return joiner.toString();
     }
 }
