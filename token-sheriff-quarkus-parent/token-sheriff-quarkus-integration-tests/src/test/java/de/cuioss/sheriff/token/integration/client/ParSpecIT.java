@@ -67,10 +67,13 @@ class ParSpecIT extends BaseIntegrationTest {
     @DisplayName("Should push an authorization request and receive an opaque request_uri")
     void shouldPushAuthorizationRequest() throws Exception {
         String discovery = discoveryDocument();
-        String parEndpoint = extractStringField(discovery, "pushed_authorization_request_endpoint");
-        assumeTrue(parEndpoint != null,
+        String advertisedParEndpoint = extractStringField(discovery, "pushed_authorization_request_endpoint");
+        assumeTrue(advertisedParEndpoint != null,
                 "Keycloak realm does not advertise a PAR endpoint — skipping capability-gated PAR spec");
-        LOGGER.debug("Keycloak PAR endpoint: %s", parEndpoint);
+        // Keycloak advertises the PAR endpoint under its realm frontendUrl (https://keycloak:8443),
+        // which is unreachable from the CI runner. Rewrite it to the host-mapped external base.
+        String parEndpoint = KeycloakUrlSupport.toExternal(advertisedParEndpoint);
+        LOGGER.debug("Keycloak PAR endpoint: advertised=%s, reachable=%s", advertisedParEndpoint, parEndpoint);
 
         String basic = Base64.getEncoder().encodeToString(
                 (CLIENT_ID + ":" + CLIENT_SECRET).getBytes(StandardCharsets.UTF_8));

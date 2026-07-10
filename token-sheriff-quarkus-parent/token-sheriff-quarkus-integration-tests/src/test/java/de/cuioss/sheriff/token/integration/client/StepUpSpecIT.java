@@ -131,7 +131,11 @@ class StepUpSpecIT extends BaseIntegrationTest {
 
         Matcher matcher = FORM_ACTION.matcher(loginPage.body());
         assertTrue(matcher.find(), "the Keycloak login page must expose a form action URL");
-        String actionUrl = matcher.group(1).replace("&amp;", "&");
+        // Keycloak builds the login-actions action URL from the realm frontendUrl
+        // (https://keycloak:8443), which is unreachable from the CI runner. Rewrite it to the
+        // host-mapped external base so the login POST reaches Keycloak (and keeps the localhost
+        // session cookies valid).
+        String actionUrl = KeycloakUrlSupport.toExternal(matcher.group(1).replace("&amp;", "&"));
 
         String form = param("username", USERNAME) + "&" + param("password", PASSWORD);
         HttpRequest loginRequest = HttpRequest.newBuilder().uri(URI.create(actionUrl))
