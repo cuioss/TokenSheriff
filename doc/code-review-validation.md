@@ -33,10 +33,13 @@ grace period, custom validation rules, and the metrics monitor are all invoked f
 path**: `alg=none` and HMAC are rejected in depth (no RS256↔HS256 key-confusion route exists), the
 signature is verified before any claim is trusted, `alg` is bound to the key type, multi-issuer
 routing is correctly key-bound (choosing `iss` only selects the *correct* verifying key set),
-mandatory `exp`/`iat`/`sub` are enforced with correct clock-skew signs, the token cache never
+mandatory `exp`/`iat` claims are enforced with correct clock-skew signs (`sub` is likewise
+mandatory unless `claimSubOptional` is enabled — see DOC-3), the token cache never
 returns a result that outlives `exp`, and JWE does verify-then-decrypt with a constant-time MAC, a
 256 KB decompression cap, and CEK zeroing. Test hygiene is clean (no `Thread.sleep`, no unseeded
-randomness, no real network) and much of the public entry point *is* exercised adversarially.
+randomness, no real network — with one exception: a real 2s wall-clock wait in the cache-expiry
+test despite an injectable clock, see L13) and much of the public entry point *is* exercised
+adversarially.
 
 **The real defects cluster in two places:**
 
@@ -45,7 +48,8 @@ randomness, no real network) and much of the public entry point *is* exercised a
    response bodies are **buffered unbounded** before the size check, and the JWKS path has no size
    bound at all (COMMONS-4). These are the highest-severity items and they degrade the whole
    system's transport posture — including the client engine that delegates SSRF here.
-2. **Test honesty regresses at ~6 load-bearing security points** — the same *isolated-green-while-
+2. **Test honesty regresses at seven load-bearing security points** (the psychic-signature
+   defense, H3, plus the six further defenses tabulated in H4) — the same *isolated-green-while-
    the-wired-path-never-reaches-the-attack* blind spot the client review named, in a narrower but
    still serious form. The flagship one: the psychic-signature (CVE-2022-21449) test passes for an
    unrelated reason, so that defense is effectively untested — while the threat-model coverage
@@ -58,7 +62,7 @@ defects where the docs and code disagree in *both* directions.
 ### Severity tally
 
 - **Critical: 1** — SSRF defense entirely absent (COMMONS-3), and it is the delegation target the client module relies on.
-- **High: 4** — cleartext HTTP by default; unbounded response buffering (+ JWKS unbounded); psychic-signature defense untested; systemic isolated-vs-wired test blind spot across ~6 defenses.
+- **High: 4** — cleartext HTTP by default; unbounded response buffering (+ JWKS unbounded); psychic-signature defense untested; systemic isolated-vs-wired test blind spot across six further defenses (seven total including H3).
 - **Medium: ~8** — weak-RSA keys accepted; discovery cached forever + permanent negative cache; DPoP replay window; DPoP header-casing bearer bypass; custom rules skipped on cache hit; dishonest/missing tests (HMAC-confusion, decompression-bomb, concurrency); issuer not a pre-fetch gate; inconsistent transport timeouts.
 - **Low/info: many** — DPoP parser-bound divergence, JSON depth unbounded (+ false javadoc), replay-cache flood eviction, thumbprint JSON escaping, `azp→aud` fallback, COMMONS-11 unimplemented, and three doc-vs-code accuracy defects.
 
@@ -142,7 +146,7 @@ nothing exercises it. **Fix:** configure a matching EC JWKS under the same `kid`
 signature reaches the verifier and assert `SIGNATURE_VALIDATION_FAILED`; consider an explicit
 component-range check so the defense is in code, not just the platform.
 
-### H4 — Systemic: ~6 security defenses are green in isolation while the wired path never reaches the attack
+### H4 — Systemic: six further security defenses are green in isolation while the wired path never reaches the attack
 *VALIDATION-12.1; threat-model coverage table (claims Spoofing/Tampering/EoP/DPoP = 100%)*
 
 The isolated-vs-wired blind spot the client review named recurs here — narrower (the defenses are

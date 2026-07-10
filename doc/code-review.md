@@ -8,8 +8,10 @@
 
 **Lenses:** correctness, completeness, consistency; full semantic review against the project's
 own requirements and specifications (`doc/client/**`) and the RFCs those documents make
-normative (RFC 6749/7636/7523/8705/9126/9207/9449/9470, OIDC Core & RP-Initiated Logout,
-RFC 7009). Security-first bar, as requested.
+normative, including RFC 6749/7636/7523/8705/9126/9207/9449/9470, OIDC Core & RP-Initiated
+Logout, RFC 7009, and — where individual findings rely on them — RFC 7638 (JWK thumbprint),
+RFC 8259 (JSON), RFC 9457 (problem details), and RFC 9700 (OAuth security BCP).
+Security-first bar, as requested.
 
 **Method:** five independent deep reviews (spec conformance, auth/flow security, token-lifecycle
 security, cross-cutting consistency, test completeness), each reading the real code, then
@@ -70,7 +72,7 @@ was decided in an archived plan ("design fork 1") and never reflected back into 
 
 - **Systemic (root cause): S0** — the verification strategy tests components in isolation, not the wired flow; it must gain a mandatory wired-flow / negative-path tier before any of CLIENT-8/10/11/12/17 can be marked covered.
 - **Critical: 2** — `form_post` missing (code in URL); `iss` mix-up defense unwired.
-- **High: 8** — step-up verification missing; DPoP unwired + no `ath`/nonce; mTLS non-functional & mis-ranked; refresh-reuse detection orphaned; no single-flight refresh; `client_credentials` capped at shared secret; token `toString()` leaks; architecture "no HTTP" boundary contradicted.
+- **High: 9** — step-up verification missing (H1) and `max_age` parsed-then-discarded (H2); DPoP unwired + no `ath`/nonce (H3); mTLS non-functional & mis-ranked (H4); refresh-reuse detection orphaned (H5); no single-flight refresh (H6); `client_credentials` capped at shared secret (H7); token `toString()` leaks (H8); architecture "no HTTP" boundary contradicted (H9).
 - **Medium: ~14** — token_type unvalidated, no-`state`-return-verification on logout, signed userinfo unsupported, `at_hash` unvalidatable, JDK exceptions instead of typed hierarchy, refresh ID-token/sub consistency skipped, response buffered before size cap, inconsistent sanitization/timeouts/exception-types, and their test counterparts.
 - **Low/info: many** — doc rot, traceability ID errors, `@NullMarked` gap, header-append vs set, config validation gaps.
 
@@ -360,18 +362,18 @@ control.
 ## Verified-good defenses (regression anchors — keep these)
 
 - **PKCE S256** — 32-byte `SecureRandom` verifier → 43-char base64url (valid RFC 7636 length/charset); challenge = `B64URL(SHA-256(ASCII(verifier)))`; `plain` not implementable; builder fails closed when the AS doesn't advertise `S256`.
-- **`state`/`nonce`** — 256-bit `SecureRandom` each; constant-time compare (`MessageDigest.isEqual`) in `CallbackHandler`, `IdTokenValidationBridge`, `IssValidator`, `SubBindingValidator`; callback order error → state → code, all before redemption.
+- **`state`/`nonce`** — 256-bit `SecureRandom` each; constant-time compare (`MessageDigest.isEqual`) in `CallbackHandler`, `IdTokenValidationBridge`, `SubBindingValidator` (and internally in `IssValidator`, though that class is unwired — C2); callback order error → state → code before redemption. The `iss` check is **not** part of the executed pre-redemption sequence until C2 is fixed.
 - **Basic auth** — client id + secret form-urlencoded *before* base64 (RFC 6749 §2.3.1) in both `ClientSecretBasicAuth` and `ClientCredentialsFlow`.
 - **`private_key_jwt`** — fresh `jti` (`UUID.randomUUID`), 60s lifetime, full `aud`/`iss`/`sub`/`iat`/`exp`, RFC 8259-complete JSON escaping, strict allow-list (no `none`/HMAC).
-- **DPoP proof construction** — RFC 7638 lexicographic JWK thumbprint (`e`,`kty`,`n`), correct unsigned big-endian encoding, `typ: dpop+jwt`, RS256/384/512-only, per-call `Signature` instances, bounded fail-closed `jti`-reuse LRU. (Construction is correct; wiring is the gap — see H3.)
+- **DPoP proof construction** — RFC 7638 lexicographic JWK thumbprint (`e`,`kty`,`n`), correct unsigned big-endian encoding, `typ: dpop+jwt`, RS256/384/512-only, per-call `Signature` instances, bounded fail-closed `jti`-reuse LRU. (This anchor covers *only* the verified thumbprint/`jti` mechanics; wiring, the `ath` claim, DPoP-Nonce handling, and `htu` normalization are all gaps — see H3. Wiring the existing generator alone is not sufficient.)
 - **RFC 7009 revocation** — any 2xx = success (unknown token = success per §2.2), optional `token_type_hint`, client auth applied, TLS enforced.
 - **Token store race** — `InMemoryTokenStore.update` uses `computeIfPresent`, `remove` is atomic take-and-clear; a refresh landing after logout is a no-op, not a resurrection — and the contract is documented on the SPI for custom stores.
 - **Post-logout open-redirect** — `PostLogoutRedirectValidator` exact whole-string match against an immutable copied allow-list, no normalization/prefix/wildcard, fail-closed, CWE-117 sanitized.
 - **Validation-pipeline monopoly** — access and ID tokens always pass through the bridges into the multi-issuer pipeline; no local signature/algorithm logic exists in the client (CLIENT-15).
 - **Duplicate callback-parameter rejection** (`CallbackParameters.parse`, post-decode, RFC 9700 §4.7.3); `FormEncoder` is the single UTF-8 form-encoding path; `JsonEscaper` covers all mandatory control-char escapes.
 - **`ClientLogMessages`** — unique identifiers, correct levels, no template interpolates a token/secret; session id SHA-256-masked before the INFO log.
-- **ArchUnit boundaries** — `ClientArchitectureTest` (no CDI/MP/JAX-RS) and `CommonsTransportReuseTest` (no bespoke `HttpClient`) actually enforce the stated architecture.
-- **Weak-auth refusal** — `WeakAuthRefusedTest` + `ClientAuthenticationSelector` genuinely fail closed when the AS advertises none of the configured methods and never downgrade below the strongest advertised method.
+- **ArchUnit boundaries** — `ClientArchitectureTest` (no CDI/MP/JAX-RS) actually enforces the stated layering. `CommonsTransportReuseTest` is narrower than its "no bespoke `HttpClient`" name suggests: the five endpoint clients do construct their own `HttpHandler`/`java.net.http` request paths (H9, L16) — the test constrains transport *construction* idioms, not HTTP orchestration or SSRF ownership, which remain the H9 gap.
+- **Weak-auth refusal** — `WeakAuthRefusedTest` + `ClientAuthenticationSelector` genuinely fail closed when the AS advertises none of the configured methods and never downgrade below the strongest advertised method. *Scope: selector-backed flows only* — `ClientCredentialsFlow` bypasses the selector entirely and remains uncovered until H7 is fixed.
 - **Rotation reuse race** — `RefreshConcurrencyTest` correctly proves exactly-one-winner across 16 threads on the family object (the object works; it's just not wired into the flow — H5).
 
 ---
