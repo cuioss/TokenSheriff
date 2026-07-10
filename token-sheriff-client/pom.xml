@@ -116,6 +116,15 @@
             <classifier>generators</classifier>
             <scope>test</scope>
         </dependency>
+        <!-- Curated http.security attack databases (OWASP/CVE/ModSecurity corpora) for the fail-closed
+             adversarial callback/step-up tests. Version is BOM-managed alongside the main cui-http jar. -->
+        <dependency>
+            <groupId>de.cuioss</groupId>
+            <artifactId>cui-http</artifactId>
+            <version>${version.cui.http}</version>
+            <classifier>generators</classifier>
+            <scope>test</scope>
+        </dependency>
         <!-- JJWT: the validation test utilities (TestTokenHolder) sign test tokens with JJWT. -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
