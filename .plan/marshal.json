@@ -94,7 +94,11 @@
           "review_rate_window_await": false,
           "review_rate_window_timeout_seconds": 3600
         },
-        "default:sonar-roundtrip": {},
+        "default:sonar-roundtrip": {
+          "touched_file_cleanup": "new_code_only",
+          "do_transition": false,
+          "ce_wait_timeout_seconds": 600
+        },
         "default:lessons-capture": {},
         "default:branch-cleanup": {
           "pr_merge_strategy": "squash",
@@ -107,7 +111,12 @@
           "admin_merge_on_stuck_state": false
         },
         "default:record-metrics": {},
-        "default:archive-plan": {}
+        "default:archive-plan": {},
+        "default:architecture-refresh": {},
+        "default:finalize-step-preference-emitter": {
+          "preference_min_recurrence": 2
+        },
+        "default:finalize-step-print-phase-breakdown": {}
       },
       "effort": {
         "default": "level-3",
@@ -121,6 +130,47 @@
       "max_slots": 5,
       "max_retries": 10,
       "upper_limit_seconds": 600
+    },
+    "map": {
+      "java": [
+        {
+          "glob": "*/src/main/*.java",
+          "role": "production",
+          "build_class": "compile"
+        },
+        {
+          "glob": "*/src/test/*.java",
+          "role": "test",
+          "build_class": "module-tests"
+        },
+        {
+          "glob": "pom.xml",
+          "role": "config",
+          "build_class": "verify"
+        }
+      ],
+      "javascript": [
+        {
+          "glob": "*.js",
+          "role": "production",
+          "build_class": "compile"
+        },
+        {
+          "glob": "*.spec.js",
+          "role": "test",
+          "build_class": "module-tests"
+        },
+        {
+          "glob": "*.test.js",
+          "role": "test",
+          "build_class": "module-tests"
+        },
+        {
+          "glob": "package.json",
+          "role": "config",
+          "build_class": "verify"
+        }
+      ]
     }
   },
   "project": {
@@ -195,7 +245,7 @@
       "lessons_superseded_days": 0,
       "temp_on_maintenance": true
     },
-    "provisioned_version": "0.1.1075",
-    "config_seed_fingerprint": "9f5161c2"
+    "provisioned_version": "0.1.1082",
+    "config_seed_fingerprint": "0acf5eb5"
   }
 }
