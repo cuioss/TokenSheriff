@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +15,22 @@
  */
 package de.cuioss.sheriff.token.client.quarkus.deployment;
 
+import de.cuioss.sheriff.token.client.quarkus.TokenSheriffClientProducer;
 import de.cuioss.tools.logging.CuiLogger;
 import de.cuioss.tools.logging.LogRecord;
 import de.cuioss.tools.logging.LogRecordModel;
+import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 
 /**
  * Build-time processor for the Token-Sheriff client Quarkus extension.
  * <p>
- * In this wired, empty skeleton (Plan 05) it registers the {@code token-sheriff-client} feature so the
- * extension assembles against the reactor. Build steps for the client flows (reflection, CDI beans,
- * native-image resources, DevUI) are added alongside those flows in later increments (Plan 06).
+ * At augmentation it registers the {@code token-sheriff-client} feature and contributes the
+ * {@link TokenSheriffClientProducer} to the CDI bean archive so the framework-agnostic client engine
+ * is exposed as {@link jakarta.enterprise.context.ApplicationScoped} beans. The extension runtime jar
+ * is not part of the application's bean-discovery archive by default, so the producer is registered
+ * explicitly here ({@code CLIENT-21}).
  */
 public class TokenSheriffClientProcessor {
 
@@ -58,5 +62,19 @@ public class TokenSheriffClientProcessor {
     public FeatureBuildItem feature() {
         LOGGER.info(TOKEN_SHERIFF_CLIENT_FEATURE_REGISTERED);
         return new FeatureBuildItem(FEATURE);
+    }
+
+    /**
+     * Register the client engine's CDI producer as an additional bean. The extension's runtime jar is
+     * not part of the application's bean-discovery archive, so the {@link TokenSheriffClientProducer}
+     * — and the engine beans it produces — must be contributed explicitly during augmentation.
+     *
+     * @return the {@link AdditionalBeanBuildItem} carrying the producer bean class
+     */
+    @BuildStep
+    public AdditionalBeanBuildItem additionalBeans() {
+        return AdditionalBeanBuildItem.builder()
+                .addBeanClass(TokenSheriffClientProducer.class)
+                .build();
     }
 }

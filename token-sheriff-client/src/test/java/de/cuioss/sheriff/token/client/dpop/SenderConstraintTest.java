@@ -1,0 +1,119 @@
+/*
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package de.cuioss.sheriff.token.client.dpop;
+
+import de.cuioss.test.generator.Generators;
+import de.cuioss.test.generator.junit.EnableGeneratorController;
+import de.cuioss.test.juli.junit5.EnableTestLogger;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Applies-DPoP / applies-mTLS and binding-recording tests for {@link SenderConstraint} and
+ * {@link ConstraintBinding} ({@code CLIENT-11}) — deliverable 8.
+ */
+@EnableTestLogger
+@EnableGeneratorController
+@DisplayName("SenderConstraint DPoP / mTLS application and binding")
+class SenderConstraintTest {
+
+    private static final String HTM = "POST";
+    private static final String HTU = "https://as.example.com/realms/demo/protocol/openid-connect/token";
+    private static final String DPOP_HEADER = "DPoP";
+
+    private KeyPair keyPair;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        keyPair = generator.generateKeyPair();
+    }
+
+    @Test
+    @DisplayName("Should add a DPoP proof header and record the jkt binding for a DPoP constraint")
+    void shouldApplyDpopHeaderAndBinding() {
+        var proofGenerator = new DpopProofGenerator(keyPair, "RS256");
+        var constraint = SenderConstraint.dpop(proofGenerator);
+        Map<String, String> headers = new HashMap<>();
+
+        constraint.apply(HTM, HTU, headers);
+
+        assertAll("dpop constraint",
+                () -> assertTrue(headers.containsKey(DPOP_HEADER), "a DPoP proof header is added"),
+                () -> assertEquals(3, headers.get(DPOP_HEADER).split("\\.").length,
+                        "the header value is a compact DPoP proof JWT"),
+                () -> assertEquals(ConstraintBinding.Method.DPOP, constraint.method(), "method is DPoP"),
+                () -> assertEquals(proofGenerator.jkt(), constraint.binding().confirmation(),
+                        "the binding confirms the proof-key jkt"),
+                () -> assertEquals("jkt", constraint.binding().method().confirmationMember(),
+                        "DPoP binds via cnf.jkt"));
+    }
+
+    @Test
+    @DisplayName("Should add no request header for mTLS but record the certificate-thumbprint binding")
+    void shouldApplyMtlsBindingWithoutHeader() {
+        String thumbprint = Generators.letterStrings(20, 40).next();
+        var constraint = SenderConstraint.mtls(thumbprint);
+        Map<String, String> headers = new HashMap<>();
+
+        constraint.apply(HTM, HTU, headers);
+
+        assertAll("mtls constraint",
+                () -> assertTrue(headers.isEmpty(), "mTLS binds at the TLS layer — no request header is added"),
+                () -> assertEquals(ConstraintBinding.Method.MTLS, constraint.method(), "method is mTLS"),
+                () -> assertEquals(thumbprint, constraint.binding().confirmation(),
+                        "the binding confirms the certificate thumbprint"),
+                () -> assertEquals("x5t#S256", constraint.binding().method().confirmationMember(),
+                        "mTLS binds via cnf.x5t#S256"));
+    }
+
+    @Test
+    @DisplayName("Should mint a fresh proof header on each application")
+    void shouldMintFreshProofPerApplication() {
+        var constraint = SenderConstraint.dpop(new DpopProofGenerator(keyPair, "RS256"));
+        Map<String, String> first = new HashMap<>();
+        Map<String, String> second = new HashMap<>();
+
+        constraint.apply(HTM, HTU, first);
+        constraint.apply(HTM, HTU, second);
+
+        assertNotEquals(first.get(DPOP_HEADER), second.get(DPOP_HEADER), "each application must produce a distinct, single-use proof");
+    }
+
+    @Test
+    @DisplayName("Should reject null generator, null headers, and blank/null binding confirmation")
+    void shouldRejectInvalidInputs() {
+        assertAll("input guards",
+                () -> assertThrows(NullPointerException.class, () -> SenderConstraint.dpop(null)),
+                () -> assertThrows(NullPointerException.class,
+                        () -> SenderConstraint.dpop(new DpopProofGenerator(keyPair, "RS256")).apply(HTM, HTU, null)),
+                () -> assertThrows(NullPointerException.class, () -> ConstraintBinding.mtls(null)),
+                () -> assertThrows(IllegalArgumentException.class, () -> ConstraintBinding.dpop("  ")));
+    }
+}

@@ -36,6 +36,22 @@
             <artifactId>token-sheriff-validation-quarkus</artifactId>
         </dependency>
 
+        <!-- Client Quarkus Extension: exposes the OIDC/OAuth client engine to the client *IT classes -->
+        <dependency>
+            <groupId>de.cuioss.sheriff.token</groupId>
+            <artifactId>token-sheriff-client-quarkus</artifactId>
+        </dependency>
+
+        <!-- Client engine (direct): the client *IT classes import de.cuioss.sheriff.token.client.*
+             (config, discovery, flow, auth, dpop, logout, token) directly. Declared explicitly so the
+             engine classes resolve on the test-compile classpath in CI's isolated integration-tests job,
+             rather than relying on the transitive path through the Quarkus extension runtime artifact.
+             Version is managed by token-sheriff-bom (imported in the parent), mirroring the deps above. -->
+        <dependency>
+            <groupId>de.cuioss.sheriff.token</groupId>
+            <artifactId>token-sheriff-client</artifactId>
+        </dependency>
+
         <!-- JWT Deployment Module for Quarkus Extension -->
         <dependency>
             <groupId>de.cuioss.sheriff.token</groupId>

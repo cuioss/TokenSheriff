@@ -1,0 +1,203 @@
+/*
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package de.cuioss.sheriff.token.client.flow;
+
+import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
+import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.client.flow.StepUpChallengeParser.StepUpChallenge;
+import de.cuioss.test.generator.Generators;
+import de.cuioss.test.generator.junit.EnableGeneratorController;
+import de.cuioss.test.juli.junit5.EnableTestLogger;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@EnableTestLogger
+@EnableGeneratorController
+@DisplayName("StepUpHandler + StepUpChallengeParser (RFC 9470)")
+class StepUpHandlerTest {
+
+    private static final String REDIRECT_URI = "https://rp.example.com/callback";
+    private static final String AUTH_ENDPOINT = "https://issuer.example.com/authorize";
+    private static final String ACR = "urn:mace:incommon:iap:silver";
+
+    private final StepUpHandler stepUpHandler = new StepUpHandler();
+    private final StepUpChallengeParser parser = new StepUpChallengeParser();
+
+    private static ClientConfiguration config(String redirectUri) {
+        return ClientConfiguration.builder()
+                .issuer("https://issuer.example.com")
+                .clientId(Generators.nonBlankStrings().next())
+                .clientSecret(Generators.nonBlankStrings().next())
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                .scope("openid")
+                .redirectUri(redirectUri)
+                .build();
+    }
+
+    private static ProviderMetadata metadata() {
+        var metadata = new ProviderMetadata();
+        metadata.issuer = "https://issuer.example.com";
+        metadata.authorizationEndpoint = AUTH_ENDPOINT;
+        metadata.codeChallengeMethodsSupported = List.of("S256");
+        return metadata;
+    }
+
+    @Nested
+    @DisplayName("initiate")
+    class Initiate {
+
+        @Test
+        @DisplayName("Should mint an elevated authorization request carrying the challenge acr_values")
+        void shouldCarryChallengeAcrValues() {
+            var challenge = new StepUpChallenge(ACR, null);
+
+            StepUpHandler.StepUpRequest request = stepUpHandler.initiate(config(REDIRECT_URI), metadata(), challenge);
+
+            assertAll("elevated request",
+                    () -> assertNotNull(request.authorizationUrl(), "an authorization URL is produced"),
+                    () -> assertTrue(request.authorizationUrl().contains("acr_values="),
+                            "the elevated request carries acr_values"),
+                    () -> assertEquals(Optional.of(ACR), request.context().acrValues(),
+                            "the fresh context requests the challenge acr_values"),
+                    () -> assertEquals(REDIRECT_URI, request.context().redirectUri(),
+                            "the fresh context keeps the configured redirect URI"));
+        }
+
+        @Test
+        @DisplayName("Should mint a fresh non-replayable context (new state, nonce, PKCE) per step-up")
+        void shouldMintFreshContext() {
+            var challenge = new StepUpChallenge(ACR, 300);
+
+            var first = stepUpHandler.initiate(config(REDIRECT_URI), metadata(), challenge).context();
+            var second = stepUpHandler.initiate(config(REDIRECT_URI), metadata(), challenge).context();
+
+            assertAll("fresh per step-up",
+                    () -> assertNotEquals(first.state(), second.state(), "each step-up mints a new state"),
+                    () -> assertNotEquals(first.nonce(), second.nonce(), "each step-up mints a new nonce"),
+                    () -> assertNotEquals(first.pkceChallenge().codeVerifier(),
+                            second.pkceChallenge().codeVerifier(), "each step-up mints a new PKCE verifier"));
+        }
+
+        @Test
+        @DisplayName("Should fail closed when the client declares no redirect URI")
+        void shouldFailWithoutRedirectUri() {
+            var configuration = config(null);
+            var metadata = metadata();
+            var challenge = new StepUpChallenge(ACR, null);
+
+            assertThrows(NullPointerException.class,
+                    () -> stepUpHandler.initiate(configuration, metadata, challenge));
+        }
+
+        @Test
+        @DisplayName("Should reject null arguments")
+        void shouldRejectNullArguments() {
+            var configuration = config(REDIRECT_URI);
+            var metadata = metadata();
+            var challenge = new StepUpChallenge(ACR, null);
+
+            assertAll("null-guards",
+                    () -> assertThrows(NullPointerException.class,
+                            () -> stepUpHandler.initiate(null, metadata, challenge)),
+                    () -> assertThrows(NullPointerException.class,
+                            () -> stepUpHandler.initiate(configuration, null, challenge)),
+                    () -> assertThrows(NullPointerException.class,
+                            () -> stepUpHandler.initiate(configuration, metadata, null)));
+        }
+
+        @Test
+        @DisplayName("Should reject a null authorization-request-builder collaborator")
+        void shouldRejectNullBuilder() {
+            assertThrows(NullPointerException.class, () -> new StepUpHandler(null));
+        }
+    }
+
+    @Nested
+    @DisplayName("parse")
+    class Parse {
+
+        @Test
+        @DisplayName("Should parse an insufficient_user_authentication challenge with acr_values")
+        void shouldParseAcrChallenge() {
+            String header = "Bearer error=\"insufficient_user_authentication\", acr_values=\"" + ACR + "\"";
+
+            Optional<StepUpChallenge> challenge = parser.parse(header);
+
+            assertTrue(challenge.isPresent(), "a valid step-up challenge is parsed");
+            assertEquals(Optional.of(ACR), challenge.get().getAcrValues(), "acr_values are extracted and unquoted");
+        }
+
+        @Test
+        @DisplayName("Should parse an insufficient_user_authentication challenge with max_age")
+        void shouldParseMaxAgeChallenge() {
+            String header = "Bearer error=\"insufficient_user_authentication\", max_age=\"300\"";
+
+            Optional<StepUpChallenge> challenge = parser.parse(header);
+
+            assertTrue(challenge.isPresent(), "a max_age-only challenge is parsed");
+            assertEquals(Optional.of(300), challenge.get().getMaxAge(), "max_age is extracted as an integer");
+        }
+
+        @Test
+        @DisplayName("Should ignore a non-Bearer challenge")
+        void shouldIgnoreNonBearer() {
+            assertTrue(parser.parse("Basic realm=\"x\"").isEmpty(), "a non-Bearer scheme is ignored");
+        }
+
+        @Test
+        @DisplayName("Should ignore a Bearer challenge whose error is not insufficient_user_authentication")
+        void shouldIgnoreOtherError() {
+            assertTrue(parser.parse("Bearer error=\"invalid_token\", acr_values=\"" + ACR + "\"").isEmpty(),
+                    "only insufficient_user_authentication triggers a step-up");
+        }
+
+        @Test
+        @DisplayName("Should ignore an insufficient_user_authentication challenge with neither acr_values nor max_age")
+        void shouldIgnoreEmptyChallenge() {
+            assertTrue(parser.parse("Bearer error=\"insufficient_user_authentication\"").isEmpty(),
+                    "a challenge that constrains nothing is not actionable");
+        }
+
+        @Test
+        @DisplayName("Should ignore null and blank headers")
+        void shouldIgnoreNullAndBlank() {
+            assertAll("absent headers",
+                    () -> assertTrue(parser.parse(null).isEmpty(), "null header yields empty"),
+                    () -> assertTrue(parser.parse("   ").isEmpty(), "blank header yields empty"));
+        }
+
+        @Test
+        @DisplayName("Should ignore a non-numeric max_age rather than fail")
+        void shouldIgnoreNonNumericMaxAge() {
+            String header = "Bearer error=\"insufficient_user_authentication\", max_age=\"soon\"";
+
+            assertTrue(parser.parse(header).isEmpty(),
+                    "a non-numeric max_age is dropped, leaving no actionable constraint");
+        }
+    }
+}

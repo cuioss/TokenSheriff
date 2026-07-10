@@ -1,0 +1,86 @@
+/*
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package de.cuioss.sheriff.token.client.auth;
+
+import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+
+/**
+ * Selects the strongest client-authentication method the authorization server advertises.
+ * <p>
+ * Given the client's configured authentication strategies and the AS
+ * {@code token_endpoint_auth_methods_supported} metadata (RFC 8414), the selector picks the strategy
+ * with the highest {@link de.cuioss.sheriff.token.client.config.ClientAuthMethod#getStrength()
+ * strength} that the AS supports — preferring {@code private_key_jwt} / {@code tls_client_auth} over
+ * a shared secret, and never silently downgrading to a shared secret where a stronger method is both
+ * configured and advertised. When the AS advertises no configured method, selection fails closed.
+ *
+ * @since 1.0
+ * @author Oliver Wolff
+ */
+public class ClientAuthenticationSelector {
+
+    private static final String DEFAULT_ADVERTISED_METHOD = "client_secret_basic";
+
+    /**
+     * Selects the strongest mutually-supported client authentication strategy.
+     *
+     * @param available the client's configured authentication strategies; must not be {@code null}
+     *                  or empty
+     * @param metadata  the resolved provider metadata; must not be {@code null}
+     * @return the strongest strategy the AS advertises
+     * @throws IllegalArgumentException if {@code available} is empty
+     * @throws IllegalStateException    if the AS advertises none of the configured methods
+     */
+    public ClientAuthentication select(Collection<ClientAuthentication> available, ProviderMetadata metadata) {
+        Objects.requireNonNull(available, "available must not be null");
+        Objects.requireNonNull(metadata, "metadata must not be null");
+        if (available.isEmpty()) {
+            throw new IllegalArgumentException("at least one client authentication strategy must be configured");
+        }
+
+        Set<String> advertised = advertisedMethods(metadata);
+
+        ClientAuthentication strongest = null;
+        for (ClientAuthentication candidate : available) {
+            if (advertised.contains(candidate.method().getMetadataValue())
+                    && (strongest == null
+                    || candidate.method().getStrength() > strongest.method().getStrength())) {
+                strongest = candidate;
+            }
+        }
+
+        if (strongest == null) {
+            throw new IllegalStateException(
+                    "no configured client authentication method is advertised by the authorization server; advertised="
+                            + advertised);
+        }
+        return strongest;
+    }
+
+    private static Set<String> advertisedMethods(ProviderMetadata metadata) {
+        List<String> advertised = metadata.tokenEndpointAuthMethodsSupported;
+        if (advertised == null || advertised.isEmpty()) {
+            // RFC 8414: client_secret_basic is the default when the AS omits the metadata.
+            return Set.of(DEFAULT_ADVERTISED_METHOD);
+        }
+        return Set.copyOf(advertised);
+    }
+}
