@@ -37,9 +37,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * ({@code CLIENT-4}) — deliverable 3.
  * <p>
  * The security invariant under test: the selector must never downgrade to a shared secret when a
- * stronger method ({@code private_key_jwt} / {@code tls_client_auth}) is <em>both</em> configured
- * and advertised, and must fail closed rather than fall back to a configured secret the AS does not
- * advertise.
+ * stronger method ({@code private_key_jwt}) is <em>both</em> configured and advertised, and must
+ * fail closed rather than fall back to a configured secret the AS does not advertise. Mutual-TLS
+ * ({@code tls_client_auth}) is a separate case: the transport cannot honor it, so a working shared
+ * secret is preferred over it rather than treated as a downgrade (H4).
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -71,9 +72,7 @@ class WeakAuthRefusedTest {
     static Stream<Arguments> strongOverWeakCombinations() {
         return Stream.of(
                 Arguments.of(ClientAuthMethod.PRIVATE_KEY_JWT, ClientAuthMethod.CLIENT_SECRET_BASIC),
-                Arguments.of(ClientAuthMethod.PRIVATE_KEY_JWT, ClientAuthMethod.CLIENT_SECRET_POST),
-                Arguments.of(ClientAuthMethod.TLS_CLIENT_AUTH, ClientAuthMethod.CLIENT_SECRET_BASIC),
-                Arguments.of(ClientAuthMethod.TLS_CLIENT_AUTH, ClientAuthMethod.CLIENT_SECRET_POST));
+                Arguments.of(ClientAuthMethod.PRIVATE_KEY_JWT, ClientAuthMethod.CLIENT_SECRET_POST));
     }
 
     @ParameterizedTest
@@ -86,6 +85,20 @@ class WeakAuthRefusedTest {
 
         assertEquals(strong, selected.method(),
                 "the selector must pick the stronger advertised method, never the shared secret");
+    }
+
+    @Test
+    @DisplayName("Should prefer a working client_secret_basic over a non-functional tls_client_auth (H4)")
+    void shouldPreferWorkingSecretOverNonFunctionalMtls() {
+        var metadata = advertising(List.of("client_secret_basic", "tls_client_auth"));
+
+        ClientAuthentication selected = selector.select(
+                List.of(auth(ClientAuthMethod.CLIENT_SECRET_BASIC), auth(ClientAuthMethod.TLS_CLIENT_AUTH)),
+                metadata);
+
+        assertEquals(ClientAuthMethod.CLIENT_SECRET_BASIC, selected.method(),
+                "tls_client_auth cannot be honored by the transport, so the working shared secret is used "
+                        + "rather than producing an unauthenticated request");
     }
 
     @Test

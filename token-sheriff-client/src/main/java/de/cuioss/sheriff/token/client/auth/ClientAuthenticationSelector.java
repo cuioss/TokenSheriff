@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.auth;
 
+import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 
 import java.util.Collection;
@@ -28,9 +29,15 @@ import java.util.Set;
  * Given the client's configured authentication strategies and the AS
  * {@code token_endpoint_auth_methods_supported} metadata (RFC 8414), the selector picks the strategy
  * with the highest {@link de.cuioss.sheriff.token.client.config.ClientAuthMethod#getStrength()
- * strength} that the AS supports — preferring {@code private_key_jwt} / {@code tls_client_auth} over
- * a shared secret, and never silently downgrading to a shared secret where a stronger method is both
- * configured and advertised. When the AS advertises no configured method, selection fails closed.
+ * strength} that the AS supports — preferring {@code private_key_jwt} over a shared secret, and
+ * never silently downgrading to a shared secret where a stronger method is both configured and
+ * advertised. When the AS advertises no configured method, selection fails closed.
+ * <p>
+ * {@code tls_client_auth} is <strong>never selected</strong>: mutual-TLS is a transport-layer
+ * binding that the current transport cannot honor (no {@code SSLContext} client key material is
+ * plumbed), so selecting it would produce an unauthenticated request. The selector skips it even
+ * when the AS advertises it, so a working {@code client_secret_basic} is preferred rather than
+ * silently downgraded to a non-functional mTLS method (H4).
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -60,6 +67,12 @@ public class ClientAuthenticationSelector {
 
         ClientAuthentication strongest = null;
         for (ClientAuthentication candidate : available) {
+            if (candidate.method() == ClientAuthMethod.TLS_CLIENT_AUTH) {
+                // Transport cannot honor mutual-TLS (no SSLContext client key material is plumbed),
+                // so selecting tls_client_auth would produce an unauthenticated request. Skip it even
+                // when advertised, preferring a working method rather than downgrading silently (H4).
+                continue;
+            }
             if (advertised.contains(candidate.method().getMetadataValue())
                     && (strongest == null
                     || candidate.method().getStrength() > strongest.method().getStrength())) {

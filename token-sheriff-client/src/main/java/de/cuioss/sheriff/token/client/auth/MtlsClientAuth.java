@@ -18,15 +18,18 @@ package de.cuioss.sheriff.token.client.auth;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Mutual-TLS certificate-bound client authentication (RFC 8705, {@code tls_client_auth}).
  * <p>
- * The client is authenticated by the TLS client certificate presented during the handshake — a
- * transport-layer binding configured on the {@code HttpHandler} SSL context, not a request
- * credential. This strategy therefore only identifies the client in the request body ({@code
- * client_id}); it carries no secret.
+ * Mutual-TLS authenticates the client by the TLS client certificate presented during the
+ * handshake — a transport-layer binding that must be configured as an {@code SSLContext} carrying
+ * the client key material on the {@code HttpHandler}. No code path currently plumbs such an
+ * {@code SSLContext} into the transport, so a {@code tls_client_auth} request would leave the
+ * client without a bound certificate — an <em>unauthenticated</em> request. Rather than silently
+ * producing that request (or leaning on a process-global default {@code SSLContext}), this strategy
+ * <strong>fails fast at construction</strong> until the transport can honor mTLS (H4). No
+ * {@code SSLContext} plumbing is added speculatively.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -34,15 +37,18 @@ import java.util.Objects;
  */
 public class MtlsClientAuth implements ClientAuthentication {
 
-    private static final String PARAM_CLIENT_ID = "client_id";
-
-    private final String clientId;
-
     /**
-     * @param clientId the OAuth 2.0 client id; must not be {@code null}
+     * Always throws — mutual-TLS is not supported until the transport can carry client key material.
+     *
+     * @param clientId the OAuth 2.0 client id (unused; the strategy is not constructible yet)
+     * @throws UnsupportedOperationException always, because no {@code SSLContext} client key
+     *         material is plumbed into the transport, so {@code tls_client_auth} cannot be honored
      */
     public MtlsClientAuth(String clientId) {
-        this.clientId = Objects.requireNonNull(clientId, "clientId must not be null");
+        throw new UnsupportedOperationException(
+                "tls_client_auth is not supported: no SSLContext client key material is plumbed into "
+                        + "the transport, so mutual-TLS cannot be honored — refusing to construct a "
+                        + "strategy that would produce an unauthenticated request");
     }
 
     @Override
@@ -52,6 +58,6 @@ public class MtlsClientAuth implements ClientAuthentication {
 
     @Override
     public void decorate(Map<String, String> formParameters, Map<String, String> requestHeaders) {
-        formParameters.put(PARAM_CLIENT_ID, clientId);
+        throw new UnsupportedOperationException("tls_client_auth is not supported");
     }
 }

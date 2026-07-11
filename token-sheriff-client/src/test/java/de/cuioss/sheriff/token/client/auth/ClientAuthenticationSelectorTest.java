@@ -87,6 +87,31 @@ class ClientAuthenticationSelectorTest {
     }
 
     @Test
+    @DisplayName("Should never select tls_client_auth over a working client_secret_basic (H4)")
+    void shouldNeverSelectTlsClientAuthOverWorkingSecret() {
+        ClientAuthentication basic = auth(ClientAuthMethod.CLIENT_SECRET_BASIC);
+        ClientAuthentication mtls = auth(ClientAuthMethod.TLS_CLIENT_AUTH);
+        var metadata = metadataAdvertising(List.of("client_secret_basic", "tls_client_auth"));
+
+        ClientAuthentication selected = selector.select(List.of(basic, mtls), metadata);
+
+        assertSame(basic, selected,
+                "tls_client_auth cannot be honored by the transport, so it must not be selected over "
+                        + "a working client_secret_basic");
+    }
+
+    @Test
+    @DisplayName("Should fail closed when the AS advertises only tls_client_auth — never a non-functional method")
+    void shouldFailClosedWhenOnlyTlsClientAuthAdvertised() {
+        ClientAuthentication mtls = auth(ClientAuthMethod.TLS_CLIENT_AUTH);
+        var metadata = metadataAdvertising(List.of("tls_client_auth"));
+        var configured = List.of(mtls);
+
+        assertThrows(IllegalStateException.class, () -> selector.select(configured, metadata),
+                "selection must fail closed rather than pick the transport-unsupported tls_client_auth");
+    }
+
+    @Test
     @DisplayName("Should apply the RFC 8414 client_secret_basic default when the AS omits the advertised methods")
     void shouldApplyClientSecretBasicDefault() {
         ClientAuthentication basic = auth(ClientAuthMethod.CLIENT_SECRET_BASIC);
