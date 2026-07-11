@@ -15,9 +15,14 @@
  */
 package de.cuioss.sheriff.token.client.quarkus;
 
+import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
+import de.cuioss.sheriff.token.client.auth.ClientSecretBasicAuth;
+import de.cuioss.sheriff.token.client.auth.ClientSecretPostAuth;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.DiscoveryResolver;
+import de.cuioss.sheriff.token.client.flow.IssValidator;
+import de.cuioss.sheriff.token.client.flow.ParClient;
 import de.cuioss.sheriff.token.client.flow.TokenEndpointClient;
 import de.cuioss.sheriff.token.client.lifecycle.InMemoryTokenStore;
 import de.cuioss.sheriff.token.client.lifecycle.RefreshScheduler;
@@ -204,6 +209,109 @@ class TokenSheriffClientProducerTest {
 
             assertThrows(IllegalStateException.class, () -> ClientConfigMapper.map(config),
                     "mapping without a clientId must fail loud");
+        }
+    }
+
+    /**
+     * Asserts the guarded-exchange flow graph is complete ({@code S0}): every flow-graph bean the
+     * engine needs to run a guarded exchange is produced and injectable, and the validator-dependent
+     * beans are wired through their collaborators' null-guards.
+     * <p>
+     * The end-to-end guarded exchange itself (redeeming a callback against a recording token endpoint
+     * and asserting the token endpoint is not called on a refusal) is driven in the framework-agnostic
+     * engine module by {@code WiredFlowNegativePathIT} over {@code WiredFlowTestSupport}, using the
+     * identical assembly recipe these producers perform — that tier owns MockWebServer and the token
+     * generators this Quarkus test module deliberately does not depend on.
+     */
+    @Nested
+    @DisplayName("Flow-graph bean production (S0)")
+    class FlowGraphBeanProduction {
+
+        private Config clientConfig(ClientAuthMethod method, boolean withSecret) {
+            Map<String, String> properties = new HashMap<>(Map.of(
+                    ClientRuntimeConfig.ISSUER, ISSUER,
+                    ClientRuntimeConfig.CLIENT_ID, CLIENT_ID,
+                    ClientRuntimeConfig.AUTH_METHOD, method.getMetadataValue()));
+            if (withSecret) {
+                properties.put(ClientRuntimeConfig.CLIENT_SECRET, CLIENT_SECRET);
+            }
+            return configOf(properties);
+        }
+
+        private TokenSheriffClientProducer producerFor(ClientAuthMethod method, boolean withSecret) {
+            return new TokenSheriffClientProducer(clientConfig(method, withSecret));
+        }
+
+        @Test
+        @DisplayName("Should produce the configuration-only flow defences (iss validator, PAR client)")
+        void shouldProduceFlowDefences() {
+            TokenSheriffClientProducer producer = producerFor(ClientAuthMethod.CLIENT_SECRET_BASIC, true);
+            ClientConfiguration configuration = producer.clientConfiguration();
+
+            assertAll("flow defences",
+                    () -> assertInstanceOf(IssValidator.class, producer.issValidator(),
+                            "the RFC 9207 iss mix-up defence is produced"),
+                    () -> assertInstanceOf(ParClient.class, producer.parClient(configuration),
+                            "the RFC 9126 PAR client is produced"));
+        }
+
+        @Test
+        @DisplayName("Should derive the default client authentication from the shared-secret method")
+        void shouldProduceSharedSecretClientAuthentication() {
+            ClientAuthentication basic =
+                    producerFor(ClientAuthMethod.CLIENT_SECRET_BASIC, true).clientAuthentication(
+                            producerFor(ClientAuthMethod.CLIENT_SECRET_BASIC, true).clientConfiguration());
+            ClientAuthentication post =
+                    producerFor(ClientAuthMethod.CLIENT_SECRET_POST, true).clientAuthentication(
+                            producerFor(ClientAuthMethod.CLIENT_SECRET_POST, true).clientConfiguration());
+
+            assertAll("shared-secret client authentication",
+                    () -> assertInstanceOf(ClientSecretBasicAuth.class, basic,
+                            "client_secret_basic derives a Basic-auth strategy"),
+                    () -> assertEquals(ClientAuthMethod.CLIENT_SECRET_BASIC, basic.method(),
+                            "the produced strategy reports its method"),
+                    () -> assertInstanceOf(ClientSecretPostAuth.class, post,
+                            "client_secret_post derives a form-post strategy"),
+                    () -> assertEquals(ClientAuthMethod.CLIENT_SECRET_POST, post.method(),
+                            "the produced strategy reports its method"));
+        }
+
+        @Test
+        @DisplayName("Should fail closed rather than downgrade when the method is key-based or the secret is absent")
+        void shouldFailClosedForUnsupportedClientAuthentication() {
+            TokenSheriffClientProducer keyBased = producerFor(ClientAuthMethod.PRIVATE_KEY_JWT, false);
+            ClientConfiguration keyBasedConfig = keyBased.clientConfiguration();
+            TokenSheriffClientProducer secretless = producerFor(ClientAuthMethod.CLIENT_SECRET_BASIC, false);
+            ClientConfiguration secretlessConfig = secretless.clientConfiguration();
+
+            assertAll("fail-closed client authentication",
+                    () -> assertThrows(IllegalStateException.class,
+                            () -> keyBased.clientAuthentication(keyBasedConfig),
+                            "a key-based method that is not yet plumbed must fail closed, never downgrade"),
+                    () -> assertThrows(IllegalStateException.class,
+                            () -> secretless.clientAuthentication(secretlessConfig),
+                            "a shared-secret method without a secret must fail loud"));
+        }
+
+        @Test
+        @DisplayName("Should wire the validation bridges and flow orchestrators through their null-guards")
+        void shouldWireValidatorDependentBeans() {
+            TokenSheriffClientProducer producer = producerFor(ClientAuthMethod.CLIENT_SECRET_BASIC, true);
+            ClientConfiguration configuration = producer.clientConfiguration();
+            TokenEndpointClient tokenEndpointClient = producer.tokenEndpointClient(configuration);
+            ClientAuthentication clientAuthentication = producer.clientAuthentication(configuration);
+
+            assertAll("validator-dependent flow-graph wiring",
+                    () -> assertThrows(NullPointerException.class, () -> producer.tokenValidationBridge(null),
+                            "the access-token bridge rejects a null validator"),
+                    () -> assertThrows(NullPointerException.class, () -> producer.idTokenValidationBridge(null),
+                            "the ID-token bridge rejects a null validator"),
+                    () -> assertThrows(NullPointerException.class,
+                            () -> producer.authorizationCodeFlow(configuration, tokenEndpointClient, null, null),
+                            "the authorization-code flow rejects a null access-token bridge"),
+                    () -> assertThrows(NullPointerException.class,
+                            () -> producer.refreshFlow(configuration, tokenEndpointClient, null, clientAuthentication),
+                            "the refresh flow rejects a null validation bridge"));
         }
     }
 }
