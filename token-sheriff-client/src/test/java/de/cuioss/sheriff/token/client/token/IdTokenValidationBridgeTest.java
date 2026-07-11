@@ -20,6 +20,7 @@ import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.test.JwtTokenTamperingUtil;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.Generators;
@@ -28,6 +29,8 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -96,14 +99,26 @@ class IdTokenValidationBridgeTest {
     }
 
     @Test
-    @DisplayName("Should reject an ID token that fails pipeline validation")
-    void shouldRejectTamperedToken() {
+    @DisplayName("Should reject an ID token minted for a foreign issuer")
+    void shouldRejectForeignIssuer() {
         String nonce = Generators.letterStrings(20, 40).next();
         holder.withClaim(NONCE_CLAIM, ClaimValue.forPlainString(nonce));
         holder.withClaim(ClaimName.ISSUER.getName(), ClaimValue.forPlainString("https://attacker.example.com"));
         String rawToken = holder.getRawToken();
 
         assertThrows(TokenValidationException.class, () -> bridge.validateIdToken(rawToken, nonce));
+    }
+
+    @ParameterizedTest
+    @EnumSource(JwtTokenTamperingUtil.TamperingStrategy.class)
+    @DisplayName("Should reject an ID token whose JWS integrity was tampered (TEST-7)")
+    void shouldRejectSignatureTampering(JwtTokenTamperingUtil.TamperingStrategy strategy) {
+        String nonce = Generators.letterStrings(20, 40).next();
+        holder.withClaim(NONCE_CLAIM, ClaimValue.forPlainString(nonce));
+        String tampered = JwtTokenTamperingUtil.applyTamperingStrategy(holder.getRawToken(), strategy);
+
+        assertThrows(TokenValidationException.class, () -> bridge.validateIdToken(tampered, nonce),
+                "signature tampering via " + strategy + " must fail pipeline validation, never reach the nonce check");
     }
 
     @Test

@@ -73,9 +73,10 @@ class PostLogoutRedirectAttackDatabaseTest {
     private void assertRejected(String attackPayload) {
         assertFalse(validator.isRegistered(attackPayload),
                 "an attack payload can never exactly match a registered post_logout_redirect_uri");
-        if (attackPayload != null && !attackPayload.isBlank()) {
-            assertThrows(IllegalStateException.class, () -> validator.validate(attackPayload),
-                    "validating an attack-payload redirect URI must fail closed");
-        }
+        // validate() must fail closed for every attack payload — no silent skip on a blank/null
+        // payload: a blank is rejected with IllegalArgumentException, an unregistered non-blank with
+        // IllegalStateException, and a null with NullPointerException. All are fail-closed rejections.
+        assertThrows(RuntimeException.class, () -> validator.validate(attackPayload),
+                "validating an attack-payload redirect URI must always fail closed");
     }
 }

@@ -26,12 +26,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
-import java.util.Map;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Drives the curated {@code http.security} attack corpora through the authorization-code callback
@@ -83,18 +83,32 @@ class CallbackParametersAttackDatabaseTest {
 
     @ParameterizedTest
     @ArgumentsSource(OWASPTop10AttackDatabase.ArgumentsProvider.class)
-    @DisplayName("Should treat an attack payload as inert data, never trusting or executing it")
+    @DisplayName("Should decode an attack payload through the real parse(rawQuery) path as inert data (TEST-8)")
     void treatsAttackPayloadAsInertData(AttackTestCase testCase) {
         String payload = testCase.attackString();
-        var parameters = CallbackParameters.of(Map.of("code", payload, "state", payload, "iss", payload));
+        String encoded = URLEncoder.encode(payload, StandardCharsets.UTF_8);
+        String rawQuery = "code=" + encoded + "&state=" + encoded + "&iss=" + encoded;
 
-        assertAll("inert payload",
+        var parameters = CallbackParameters.parse(rawQuery);
+
+        assertAll("inert payload URL-decoded verbatim on the real parse path",
                 () -> assertEquals(payload, parameters.getCode().orElseThrow(),
-                        "the code is captured verbatim as opaque data"),
+                        "the code round-trips through URL-decoding as opaque data"),
                 () -> assertEquals(payload, parameters.getIssuer().orElseThrow(),
-                        "the iss is captured verbatim as opaque data"),
-                () -> assertTrue(parameters.getCode().isPresent(),
-                        "capturing the payload never throws or mutates control flow"));
+                        "the iss round-trips through URL-decoding as opaque data"),
+                () -> assertEquals(payload, parameters.state(),
+                        "the state round-trips through URL-decoding as opaque data"));
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(OWASPTop10AttackDatabase.ArgumentsProvider.class)
+    @DisplayName("Should reject a smuggled duplicate state on the real parse path (RFC 9700 §4.7.3, TEST-8)")
+    void rejectsSmuggledDuplicateState(AttackTestCase testCase) {
+        String encoded = URLEncoder.encode(testCase.attackString(), StandardCharsets.UTF_8);
+        String rawQuery = "state=" + encoded + "&state=" + encoded;
+
+        assertThrows(IllegalArgumentException.class, () -> CallbackParameters.parse(rawQuery),
+                "a smuggled second state must be rejected by parse, never silently last-wins");
     }
 
     private void assertRejectedAsForgedState(String attackState) {

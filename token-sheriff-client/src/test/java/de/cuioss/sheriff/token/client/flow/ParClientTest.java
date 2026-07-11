@@ -86,16 +86,24 @@ class ParClientTest {
     }
 
     @Test
-    @DisplayName("Should push the request and return only the opaque request_uri")
+    @DisplayName("Should push the request and return an opaque request_uri that leaks none of the pushed parameters (TEST-9)")
     void shouldReturnRequestUri(URIBuilder uriBuilder) {
         var auth = new ClientSecretBasicAuth(Generators.nonBlankStrings().next(), Generators.nonBlankStrings().next());
+        var params = authorizationParameters();
 
         ParResponse response = parClient().pushAuthorizationRequest(
-                parEndpoint(uriBuilder), authorizationParameters(), auth);
+                parEndpoint(uriBuilder), params, auth);
 
-        assertAll("PAR response",
-                () -> assertEquals("urn:ietf:params:oauth:request_uri:mock-par-reference",
-                        response.getRequestUri().orElseThrow(), "the AS-issued request_uri is returned"),
+        String requestUri = response.getRequestUri().orElseThrow();
+        assertAll("PAR response is an opaque reference",
+                () -> assertFalse(requestUri.isBlank(),
+                        "the AS-issued request_uri must be present and non-blank"),
+                () -> assertFalse(requestUri.contains(params.get("state")),
+                        "the opaque request_uri must not leak the pushed state"),
+                () -> assertFalse(requestUri.contains(params.get("nonce")),
+                        "the opaque request_uri must not leak the pushed nonce"),
+                () -> assertFalse(requestUri.contains(params.get("code_challenge")),
+                        "the opaque request_uri must not leak the pushed PKCE challenge"),
                 () -> assertEquals(90, response.getExpiresIn(), "the request_uri lifetime is captured"));
     }
 

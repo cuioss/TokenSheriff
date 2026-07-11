@@ -87,20 +87,16 @@ class StepUpChallengeAttackDatabaseTest {
 
     @ParameterizedTest
     @ArgumentsSource(OWASPTop10AttackDatabase.ArgumentsProvider.class)
-    @DisplayName("Should URL-encode an attack-payload acr_values into exactly one request parameter")
+    @DisplayName("Should URL-encode an attack-payload acr_values into exactly one request parameter (TEST-10)")
     void injectedAcrValueIsSafelyEncoded(AttackTestCase testCase) {
-        String header = "Bearer error=\"insufficient_user_authentication\", acr_values=\""
-                + testCase.attackString() + "\"";
+        // Drive the raw attack payload straight into the acr_values the handler encodes — no silent
+        // skip on a header that fails to parse; the encoding safety must hold for every payload.
+        var challenge = new StepUpChallenge(testCase.attackString(), null);
 
-        Optional<StepUpChallenge> challenge = parser.parse(header);
-        if (challenge.isEmpty() || challenge.get().getAcrValues().isEmpty()) {
-            return;
-        }
-
-        String url = stepUpHandler.initiate(config(), metadata(), challenge.get()).authorizationUrl();
+        String url = stepUpHandler.initiate(config(), metadata(), challenge).authorizationUrl();
 
         assertEquals(1, countOccurrences(url, "acr_values="),
-                "the encoded payload must not inject a second acr_values parameter");
+                "the attack payload must be encoded into exactly one acr_values parameter, never injecting a second");
         assertTrue(url.startsWith(AUTH_ENDPOINT + "?"),
                 "the payload must not break the authorization endpoint prefix");
     }
