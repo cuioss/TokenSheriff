@@ -63,11 +63,13 @@ public class AuthorizationCodeFlow {
     private final TokenEndpointClient tokenEndpointClient;
     private final TokenValidationBridge accessTokenBridge;
     private final IdTokenValidationBridge idTokenBridge;
+    private final IssValidator issValidator;
     private final AuthorizationRequestBuilder authorizationRequestBuilder;
     private final CallbackHandler callbackHandler;
 
     /**
-     * Creates a flow with default {@link AuthorizationRequestBuilder} and {@link CallbackHandler}.
+     * Creates a flow with a default {@link IssValidator}, {@link AuthorizationRequestBuilder}, and
+     * {@link CallbackHandler}.
      *
      * @param configuration       the client configuration; must not be {@code null}
      * @param tokenEndpointClient the token-endpoint transport; must not be {@code null}
@@ -76,7 +78,24 @@ public class AuthorizationCodeFlow {
      */
     public AuthorizationCodeFlow(ClientConfiguration configuration, TokenEndpointClient tokenEndpointClient,
             TokenValidationBridge accessTokenBridge, IdTokenValidationBridge idTokenBridge) {
-        this(configuration, tokenEndpointClient, accessTokenBridge, idTokenBridge,
+        this(configuration, tokenEndpointClient, accessTokenBridge, idTokenBridge, new IssValidator(),
+                new AuthorizationRequestBuilder(), new CallbackHandler());
+    }
+
+    /**
+     * Creates a flow with an explicit {@link IssValidator} and default {@link AuthorizationRequestBuilder}
+     * / {@link CallbackHandler}.
+     *
+     * @param configuration       the client configuration; must not be {@code null}
+     * @param tokenEndpointClient the token-endpoint transport; must not be {@code null}
+     * @param accessTokenBridge   the access-token validation bridge; must not be {@code null}
+     * @param idTokenBridge       the ID-token validation bridge; must not be {@code null}
+     * @param issValidator        the RFC 9207 issuer mix-up validator; must not be {@code null}
+     */
+    public AuthorizationCodeFlow(ClientConfiguration configuration, TokenEndpointClient tokenEndpointClient,
+            TokenValidationBridge accessTokenBridge, IdTokenValidationBridge idTokenBridge,
+            IssValidator issValidator) {
+        this(configuration, tokenEndpointClient, accessTokenBridge, idTokenBridge, issValidator,
                 new AuthorizationRequestBuilder(), new CallbackHandler());
     }
 
@@ -87,16 +106,19 @@ public class AuthorizationCodeFlow {
      * @param tokenEndpointClient         the token-endpoint transport; must not be {@code null}
      * @param accessTokenBridge           the access-token validation bridge; must not be {@code null}
      * @param idTokenBridge               the ID-token validation bridge; must not be {@code null}
+     * @param issValidator                the RFC 9207 issuer mix-up validator; must not be {@code null}
      * @param authorizationRequestBuilder the authorization-request builder; must not be {@code null}
      * @param callbackHandler             the callback handler; must not be {@code null}
      */
     public AuthorizationCodeFlow(ClientConfiguration configuration, TokenEndpointClient tokenEndpointClient,
             TokenValidationBridge accessTokenBridge, IdTokenValidationBridge idTokenBridge,
-            AuthorizationRequestBuilder authorizationRequestBuilder, CallbackHandler callbackHandler) {
+            IssValidator issValidator, AuthorizationRequestBuilder authorizationRequestBuilder,
+            CallbackHandler callbackHandler) {
         this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
         this.tokenEndpointClient = Objects.requireNonNull(tokenEndpointClient, "tokenEndpointClient must not be null");
         this.accessTokenBridge = Objects.requireNonNull(accessTokenBridge, "accessTokenBridge must not be null");
         this.idTokenBridge = Objects.requireNonNull(idTokenBridge, "idTokenBridge must not be null");
+        this.issValidator = Objects.requireNonNull(issValidator, "issValidator must not be null");
         this.authorizationRequestBuilder = Objects.requireNonNull(authorizationRequestBuilder,
                 "authorizationRequestBuilder must not be null");
         this.callbackHandler = Objects.requireNonNull(callbackHandler, "callbackHandler must not be null");
@@ -141,6 +163,14 @@ public class AuthorizationCodeFlow {
         Objects.requireNonNull(clientAuthentication, "clientAuthentication must not be null");
 
         String code = callbackHandler.handle(context, callback);
+
+        // RFC 9207 mix-up defence (CLIENT-8): after the state check and BEFORE redeeming the code,
+        // reject the callback when the returned 'iss' does not match the issuer this flow was started
+        // with. When the AS advertises authorization_response_iss_parameter_supported, an absent 'iss'
+        // is itself a mix-up signal, so the issuer is required — closing the omit-iss bypass.
+        boolean requireIssuer = metadata.supportsAuthorizationResponseIssParameter();
+        issValidator.validate(configuration.getIssuer(), callback, requireIssuer);
+
         String tokenEndpoint = metadata.getTokenEndpoint()
                 .orElseThrow(() -> new IllegalStateException("provider metadata is missing the token endpoint"));
 

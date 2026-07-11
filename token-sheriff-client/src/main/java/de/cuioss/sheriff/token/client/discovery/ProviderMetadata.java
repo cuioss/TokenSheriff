@@ -95,6 +95,14 @@ public class ProviderMetadata {
     public List<String> dpopSigningAlgValuesSupported;
 
     /**
+     * Whether the AS stamps the authorization response with its own {@code iss} (RFC 9207). When
+     * {@code true}, the client requires the {@code iss} on the callback and rejects its absence as a
+     * mix-up signal.
+     */
+    @JsonAttribute(name = "authorization_response_iss_parameter_supported")
+    public boolean authorizationResponseIssParameterSupported;
+
+    /**
      * @return the issuer identifier, or {@link Optional#empty()} if absent
      */
     public Optional<String> getIssuer() {
@@ -184,6 +192,17 @@ public class ProviderMetadata {
      */
     public boolean supportsDpop() {
         return dpopSigningAlgValuesSupported != null && !dpopSigningAlgValuesSupported.isEmpty();
+    }
+
+    /**
+     * Whether the AS advertises the RFC 9207 {@code iss} authorization-response parameter. When
+     * {@code true}, the {@code authorization_code} flow requires the {@code iss} on the callback and
+     * treats its absence as a mix-up ({@code CLIENT-8}).
+     *
+     * @return {@code true} if {@code authorization_response_iss_parameter_supported} is advertised
+     */
+    public boolean supportsAuthorizationResponseIssParameter() {
+        return authorizationResponseIssParameterSupported;
     }
 
     /**

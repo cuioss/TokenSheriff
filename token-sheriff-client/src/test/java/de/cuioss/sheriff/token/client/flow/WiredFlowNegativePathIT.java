@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.client.flow;
 
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -91,5 +92,38 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
 
         assertRefusedBeforeTokenEndpoint(IllegalStateException.class,
                 () -> flow.exchange(metadata, context, forgedCallback, clientAuth));
+    }
+
+    @Test
+    @DisplayName("Should refuse to redeem the code when the callback iss is another AS (RFC 9207 mix-up, T-MIXUP)")
+    void shouldRefuseIssMismatchBeforeTokenCall(URIBuilder uriBuilder) {
+        ClientConfiguration config = config();
+        FlowContext context = FlowContext.create(REDIRECT_URI);
+        getModuleDispatcher().success(accessHolder.getRawToken(), idHolder.getRawToken(), null, 300);
+        var mixedUpCallback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(),
+                null, null, "https://attacker.example.com");
+        var flow = authorizationCodeFlow(config);
+        var metadata = metadataWithTokenEndpoint(uriBuilder);
+        var clientAuth = clientAuth(config);
+
+        assertRefusedBeforeTokenEndpoint(IllegalStateException.class,
+                () -> flow.exchange(metadata, context, mixedUpCallback, clientAuth));
+    }
+
+    @Test
+    @DisplayName("Should refuse redemption when the AS advertises iss support but the callback omits it")
+    void shouldRefuseMissingRequiredIssBeforeTokenCall(URIBuilder uriBuilder) {
+        ClientConfiguration config = config();
+        FlowContext context = FlowContext.create(REDIRECT_URI);
+        getModuleDispatcher().success(accessHolder.getRawToken(), idHolder.getRawToken(), null, 300);
+        ProviderMetadata metadata = metadataWithTokenEndpoint(uriBuilder);
+        metadata.authorizationResponseIssParameterSupported = true;
+        var callbackWithoutIss = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(),
+                null, null, null);
+        var flow = authorizationCodeFlow(config);
+        var clientAuth = clientAuth(config);
+
+        assertRefusedBeforeTokenEndpoint(IllegalStateException.class,
+                () -> flow.exchange(metadata, context, callbackWithoutIss, clientAuth));
     }
 }
