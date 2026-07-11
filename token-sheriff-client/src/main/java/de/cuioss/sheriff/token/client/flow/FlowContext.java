@@ -52,14 +52,16 @@ public final class FlowContext {
     private final String redirectUri;
     private final PkceChallenge pkceChallenge;
     private final @Nullable String acrValues;
+    private final @Nullable Integer maxAge;
 
     private FlowContext(String state, String nonce, String redirectUri, PkceChallenge pkceChallenge,
-            @Nullable String acrValues) {
+            @Nullable String acrValues, @Nullable Integer maxAge) {
         this.state = state;
         this.nonce = nonce;
         this.redirectUri = redirectUri;
         this.pkceChallenge = pkceChallenge;
         this.acrValues = acrValues;
+        this.maxAge = maxAge;
     }
 
     /**
@@ -70,7 +72,7 @@ public final class FlowContext {
      * @return a new flow context
      */
     public static FlowContext create(String redirectUri) {
-        return create(redirectUri, null);
+        return create(redirectUri, null, null);
     }
 
     /**
@@ -81,11 +83,24 @@ public final class FlowContext {
      * @return a new flow context
      */
     public static FlowContext create(String redirectUri, @Nullable String acrValues) {
+        return create(redirectUri, acrValues, null);
+    }
+
+    /**
+     * Creates a context that requests the given {@code acr_values} and {@code max_age} freshness
+     * constraint (RFC 9470 step-up).
+     *
+     * @param redirectUri the exact registered redirect URI; must not be {@code null} or blank
+     * @param acrValues   the requested authentication context class values, or {@code null} for none
+     * @param maxAge      the maximum authentication age in seconds, or {@code null} for none
+     * @return a new flow context
+     */
+    public static FlowContext create(String redirectUri, @Nullable String acrValues, @Nullable Integer maxAge) {
         Objects.requireNonNull(redirectUri, "redirectUri must not be null");
         if (redirectUri.isBlank()) {
             throw new IllegalArgumentException("redirectUri must not be blank");
         }
-        return new FlowContext(randomToken(), randomToken(), redirectUri, PkceChallenge.generate(), acrValues);
+        return new FlowContext(randomToken(), randomToken(), redirectUri, PkceChallenge.generate(), acrValues, maxAge);
     }
 
     /**
@@ -121,6 +136,13 @@ public final class FlowContext {
      */
     public Optional<String> acrValues() {
         return Optional.ofNullable(acrValues);
+    }
+
+    /**
+     * @return the requested {@code max_age} freshness constraint in seconds, if step-up requested it
+     */
+    public Optional<Integer> maxAge() {
+        return Optional.ofNullable(maxAge);
     }
 
     private static String randomToken() {

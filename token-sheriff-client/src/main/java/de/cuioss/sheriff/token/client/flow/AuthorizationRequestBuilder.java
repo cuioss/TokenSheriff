@@ -36,9 +36,10 @@ import java.util.Objects;
  * {@code code}, {@code state}, and the RFC 9207 {@code iss} — is delivered in the body of a POST to
  * the redirect URI rather than as query parameters on a redirect URL, where it would leak into
  * browser history, server logs, and the {@code Referer} header ({@code CLIENT-1} / {@code CLIENT-14},
- * {@code T-URL-LEAK}). When the flow context requests {@code acr_values} (step-up), they are appended.
- * The builder fails closed when the authorization server does not advertise PKCE {@code S256}, so a
- * downgrade to a non-PKCE (or {@code plain}) request can never be issued ({@code CLIENT-2}).
+ * {@code T-URL-LEAK}). When the flow context requests {@code acr_values} and/or a {@code max_age}
+ * freshness constraint (RFC 9470 step-up), they are appended. The builder fails closed when the
+ * authorization server does not advertise PKCE {@code S256}, so a downgrade to a non-PKCE (or
+ * {@code plain}) request can never be issued ({@code CLIENT-2}).
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -59,6 +60,7 @@ public class AuthorizationRequestBuilder {
     private static final String PARAM_CODE_CHALLENGE = "code_challenge";
     private static final String PARAM_CODE_CHALLENGE_METHOD = "code_challenge_method";
     private static final String PARAM_ACR_VALUES = "acr_values";
+    private static final String PARAM_MAX_AGE = "max_age";
     private static final String PARAM_RESPONSE_MODE = "response_mode";
     private static final String RESPONSE_MODE_FORM_POST = "form_post";
 
@@ -102,6 +104,7 @@ public class AuthorizationRequestBuilder {
         params.put(PARAM_CODE_CHALLENGE_METHOD, context.pkceChallenge().method());
         params.put(PARAM_RESPONSE_MODE, RESPONSE_MODE_FORM_POST);
         context.acrValues().ifPresent(acr -> params.put(PARAM_ACR_VALUES, acr));
+        context.maxAge().ifPresent(maxAge -> params.put(PARAM_MAX_AGE, Integer.toString(maxAge)));
 
         return authorizationEndpoint + (authorizationEndpoint.indexOf('?') < 0 ? '?' : '&') + FormEncoder.encode(params);
     }

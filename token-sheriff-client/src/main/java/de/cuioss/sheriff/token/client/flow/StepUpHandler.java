@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.client.flow;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.flow.StepUpChallengeParser.StepUpChallenge;
+import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 
 import java.util.Objects;
 
@@ -37,21 +38,38 @@ import java.util.Objects;
 public class StepUpHandler {
 
     private final AuthorizationRequestBuilder authorizationRequestBuilder;
+    private final StepUpResultVerifier resultVerifier;
 
     /**
-     * Creates a handler with a default {@link AuthorizationRequestBuilder}.
+     * Creates a handler with a default {@link AuthorizationRequestBuilder} and
+     * {@link StepUpResultVerifier}.
      */
     public StepUpHandler() {
-        this(new AuthorizationRequestBuilder());
+        this(new AuthorizationRequestBuilder(), new StepUpResultVerifier());
+    }
+
+    /**
+     * Creates a handler with an explicit {@link AuthorizationRequestBuilder} and a default
+     * {@link StepUpResultVerifier}.
+     *
+     * @param authorizationRequestBuilder the builder used to compose the elevated authorization
+     *                                    request; must not be {@code null}
+     */
+    public StepUpHandler(AuthorizationRequestBuilder authorizationRequestBuilder) {
+        this(authorizationRequestBuilder, new StepUpResultVerifier());
     }
 
     /**
      * @param authorizationRequestBuilder the builder used to compose the elevated authorization
      *                                    request; must not be {@code null}
+     * @param resultVerifier              the post-exchange {@code acr} / {@code auth_time} verifier;
+     *                                    must not be {@code null}
      */
-    public StepUpHandler(AuthorizationRequestBuilder authorizationRequestBuilder) {
+    public StepUpHandler(AuthorizationRequestBuilder authorizationRequestBuilder,
+            StepUpResultVerifier resultVerifier) {
         this.authorizationRequestBuilder = Objects.requireNonNull(authorizationRequestBuilder,
                 "authorizationRequestBuilder must not be null");
+        this.resultVerifier = Objects.requireNonNull(resultVerifier, "resultVerifier must not be null");
     }
 
     /**
@@ -72,9 +90,27 @@ public class StepUpHandler {
         Objects.requireNonNull(metadata, "metadata must not be null");
         Objects.requireNonNull(challenge, "challenge must not be null");
 
-        FlowContext context = FlowContext.create(configuration.getRedirectUri(), challenge.getAcrValues().orElse(null));
+        FlowContext context = FlowContext.create(configuration.getRedirectUri(),
+                challenge.getAcrValues().orElse(null), challenge.getMaxAge().orElse(null));
         String authorizationUrl = authorizationRequestBuilder.build(configuration, metadata, context);
         return new StepUpRequest(authorizationUrl, context);
+    }
+
+    /**
+     * Verifies that a completed step-up actually satisfied the challenge: the returned ID token's
+     * {@code acr} is one the challenge required and its {@code auth_time} is within the challenge's
+     * {@code max_age}. Fails closed — a step-up the IdP silently ignored is rejected rather than
+     * treated as success ({@code CLIENT-12}, {@code H1} / {@code H2}).
+     *
+     * @param challenge the step-up challenge that drove the re-authentication; must not be
+     *                  {@code null}
+     * @param idToken   the validated ID token returned by the elevated exchange; must not be
+     *                  {@code null}
+     * @throws IllegalStateException if the {@code acr} is not among the required values or the
+     *                               authentication is older than {@code max_age}
+     */
+    public void verifyResult(StepUpChallenge challenge, IdTokenContent idToken) {
+        resultVerifier.verify(challenge, idToken);
     }
 
     /**
