@@ -124,8 +124,11 @@ public class DiscoveryResolver {
     }
 
     private String toWellKnownUrl(String issuer) {
-        String normalized = issuer.endsWith("/") ? issuer.substring(0, issuer.length() - 1) : issuer;
-        return normalized + WELL_KNOWN_SUFFIX;
+        return stripTrailingSlash(issuer) + WELL_KNOWN_SUFFIX;
+    }
+
+    private static String stripTrailingSlash(String value) {
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
     private String fetch(String wellKnownUrl, String issuer) {
@@ -177,8 +180,12 @@ public class DiscoveryResolver {
     }
 
     private void validateIssuer(ProviderMetadata metadata, String issuer) {
+        // OpenID Connect Discovery §4.3 requires the document issuer to equal the issuer used as the
+        // .well-known URL prefix, which strips a trailing slash. Normalize both sides symmetrically so
+        // a spec-compliant issuer configured with a trailing slash (e.g. .../realms/x/) still matches
+        // the AS-reported .../realms/x (M10), rather than failing every discovery.
         String documentIssuer = metadata.issuer;
-        if (documentIssuer == null || !documentIssuer.equals(issuer)) {
+        if (documentIssuer == null || !stripTrailingSlash(documentIssuer).equals(stripTrailingSlash(issuer))) {
             // documentIssuer is taken from the AS discovery response body (OP-controlled, not
             // fully trusted); sanitize before it reaches either the log or the exception message so it
             // cannot forge a log entry (CWE-117) via a plain-text appender on the exception path.

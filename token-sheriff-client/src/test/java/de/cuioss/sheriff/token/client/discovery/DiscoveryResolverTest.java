@@ -97,6 +97,24 @@ class DiscoveryResolverTest {
     }
 
     @Test
+    @DisplayName("Should accept a spec-compliant issuer configured with a trailing slash (M10)")
+    void shouldAcceptTrailingSlashIssuer(URIBuilder uriBuilder) {
+        // A configured issuer with a trailing slash (e.g. .../realms/x/) has its slash stripped when
+        // the .well-known URL is built, so a spec-compliant AS echoes the stripped issuer (OIDC
+        // Discovery §4.3). Discovery must normalize both sides symmetrically rather than fail every
+        // such realm with an issuer mismatch (M10).
+        var base = uriBuilder.buildAsString();
+        var issuerWithSlash = base.endsWith("/") ? base : base + "/";
+
+        var metadata = new DiscoveryResolver(configFor(issuerWithSlash)).resolve();
+
+        assertAll("trailing-slash issuer accepted",
+                () -> assertTrue(metadata.getIssuer().isPresent(), "issuer resolved"),
+                () -> assertTrue(metadata.getTokenEndpoint().isPresent(), "token endpoint"));
+        assertEquals(1, moduleDispatcher.getCallCounter(), "well-known endpoint should be called once");
+    }
+
+    @Test
     @DisplayName("Should warn but not fail when the AS does not advertise PKCE S256")
     void shouldWarnWhenS256NotAdvertised(URIBuilder uriBuilder) {
         var metadata = new DiscoveryResolver(configFor(uriBuilder.buildAsString())).resolve();

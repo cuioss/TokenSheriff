@@ -23,6 +23,7 @@ import de.cuioss.sheriff.token.client.dpop.ConstraintBinding;
 import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
+import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
@@ -200,6 +201,13 @@ public class TokenEndpointClient {
             TokenResponse tokenResponse = dslJson.deserialize(TokenResponse.class, bytes, bytes.length);
             if (tokenResponse == null || tokenResponse.accessToken == null) {
                 throw new TransportException("Token endpoint response is missing the access_token");
+            }
+            if (!tokenResponse.hasRecognizedTokenType()) {
+                // RFC 6749 §5.1 makes token_type REQUIRED; a missing or unrecognized type must not be
+                // silently consumed as Bearer. tokenType is AS-controlled, so sanitize it (CWE-117)
+                // before it reaches the exception message on a plain-text appender path.
+                throw new TransportException("Token endpoint response has an unsupported token_type: "
+                        + LogSanitizer.sanitize(tokenResponse.tokenType));
             }
             return tokenResponse;
         } catch (IOException e) {

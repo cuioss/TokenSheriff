@@ -149,4 +149,96 @@ class TokenResponseTest {
                             "the mandatory refresh token is always redacted"));
         }
     }
+
+    /**
+     * M1: RFC 6749 §5.1 makes {@code token_type} REQUIRED, and §5.1 declares its value
+     * case-insensitive. A missing or unrecognized {@code token_type} must not be silently consumed
+     * as {@code Bearer}, so {@link TokenResponse#hasRecognizedTokenType()} accepts only a
+     * case-insensitive {@code Bearer} (RFC 6749) or {@code DPoP} (RFC 9449) and rejects everything
+     * else.
+     */
+    @Nested
+    @DisplayName("token_type recognition (M1)")
+    class TokenTypeRecognition {
+
+        @Test
+        @DisplayName("Should accept Bearer and DPoP case-insensitively")
+        void shouldAcceptRecognizedTypes() {
+            assertAll("recognized token types",
+                    () -> assertTrue(withTokenType("Bearer").hasRecognizedTokenType()),
+                    () -> assertTrue(withTokenType("bearer").hasRecognizedTokenType()),
+                    () -> assertTrue(withTokenType("BEARER").hasRecognizedTokenType()),
+                    () -> assertTrue(withTokenType("DPoP").hasRecognizedTokenType()),
+                    () -> assertTrue(withTokenType("dpop").hasRecognizedTokenType()));
+        }
+
+        @Test
+        @DisplayName("Should reject an absent, blank, or garbage token_type")
+        void shouldRejectUnrecognizedTypes() {
+            assertAll("unrecognized token types",
+                    () -> assertFalse(withTokenType(null).hasRecognizedTokenType(),
+                            "an absent token_type must not pass as Bearer"),
+                    () -> assertFalse(withTokenType("").hasRecognizedTokenType()),
+                    () -> assertFalse(withTokenType("   ").hasRecognizedTokenType()),
+                    () -> assertFalse(withTokenType("mac").hasRecognizedTokenType()),
+                    () -> assertFalse(withTokenType(Generators.letterStrings(3, 12).next() + "-garbage")
+                            .hasRecognizedTokenType()));
+        }
+
+        private TokenResponse withTokenType(String tokenType) {
+            var response = new TokenResponse();
+            response.accessToken = "access-token";
+            response.tokenType = tokenType;
+            return response;
+        }
+    }
+
+    /**
+     * L11: {@code expires_in} is a primitive {@code long}, so an absent field is indistinguishable
+     * from a literal {@code 0}. {@link TokenResponse#getExpiresInSeconds()} normalizes it into a
+     * nullable view: a positive, plausible lifetime is present, while an absent ({@code 0}),
+     * non-positive, or absurd value is empty so it is neither trusted as a real lifetime nor left to
+     * make a token effectively immortal.
+     */
+    @Nested
+    @DisplayName("Nullable lifetime normalization (L11)")
+    class LifetimeNormalization {
+
+        @Test
+        @DisplayName("Should expose a positive, plausible lifetime as present")
+        void shouldExposeKnownLifetime() {
+            var response = new TokenResponse();
+            response.expiresIn = 300L;
+
+            assertAll("known lifetime",
+                    () -> assertTrue(response.getExpiresInSeconds().isPresent()),
+                    () -> assertEquals(300L, response.getExpiresInSeconds().orElseThrow()));
+        }
+
+        @Test
+        @DisplayName("Should treat absent (0), negative, and absurd lifetimes as unknown")
+        void shouldTreatAbsentNegativeAndAbsurdAsUnknown() {
+            assertAll("unknown lifetimes",
+                    () -> assertTrue(withExpiresIn(0L).getExpiresInSeconds().isEmpty(),
+                            "an absent expires_in (primitive 0) is unknown"),
+                    () -> assertTrue(withExpiresIn(-1L).getExpiresInSeconds().isEmpty(),
+                            "a negative expires_in is rejected"),
+                    () -> assertTrue(withExpiresIn(Long.MIN_VALUE).getExpiresInSeconds().isEmpty()),
+                    () -> assertTrue(withExpiresIn(315_360_001L).getExpiresInSeconds().isEmpty(),
+                            "an absurd expires_in beyond the plausible bound is rejected"),
+                    () -> assertTrue(withExpiresIn(Long.MAX_VALUE).getExpiresInSeconds().isEmpty()));
+        }
+
+        @Test
+        @DisplayName("Should accept the maximum plausible lifetime at the boundary")
+        void shouldAcceptMaximumPlausibleLifetime() {
+            assertEquals(315_360_000L, withExpiresIn(315_360_000L).getExpiresInSeconds().orElseThrow());
+        }
+
+        private TokenResponse withExpiresIn(long expiresIn) {
+            var response = new TokenResponse();
+            response.expiresIn = expiresIn;
+            return response;
+        }
+    }
 }

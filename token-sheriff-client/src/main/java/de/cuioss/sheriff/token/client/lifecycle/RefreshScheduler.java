@@ -27,8 +27,10 @@ import java.util.Objects;
  * it computes <em>whether</em> a bundle is inside its refresh window; performing the refresh (and
  * preserving the sender-constraint across it) is {@link TokenLifecycleManager}'s job.
  * <p>
- * A token whose expiry is unknown ({@link StoredToken#expiresAt()} is {@code null}) is never
- * proactively refreshed — there is no basis to schedule it.
+ * A token whose expiry is unknown ({@link StoredToken#expiresAt()} is {@code null}) is treated as
+ * immediately refresh-eligible: with no basis to trust its remaining lifetime, the scheduler
+ * refreshes it proactively rather than let an unknown-lifetime token live forever and risk
+ * presenting a silently-expired token ({@code CLIENT-17}, L11).
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -61,14 +63,17 @@ public class RefreshScheduler {
     /**
      * @param token the stored bundle; must not be {@code null}
      * @param now   the reference instant; must not be {@code null}
-     * @return whether the access token is at or inside its refresh window at {@code now}
+     * @return whether the access token is at or inside its refresh window at {@code now}; an unknown
+     *         expiry ({@link StoredToken#expiresAt()} is {@code null}) is always refresh-eligible
      */
     public boolean needsRefresh(StoredToken token, Instant now) {
         Objects.requireNonNull(token, "token must not be null");
         Objects.requireNonNull(now, "now must not be null");
         Instant expiresAt = token.expiresAt();
         if (expiresAt == null) {
-            return false;
+            // Unknown lifetime: with no basis to trust the remaining lifetime, refresh proactively
+            // rather than let the token live forever and risk presenting a silently-expired one (L11).
+            return true;
         }
         return !now.isBefore(expiresAt.minus(refreshLead));
     }

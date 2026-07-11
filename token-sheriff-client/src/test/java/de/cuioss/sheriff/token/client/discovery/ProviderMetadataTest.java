@@ -18,9 +18,13 @@ package de.cuioss.sheriff.token.client.discovery;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -77,6 +81,38 @@ class ProviderMetadataTest {
                 () -> assertTrue(withEndSession.supportsEndSession()),
                 () -> assertTrue(withEndSession.getEndSessionEndpoint().isPresent()),
                 () -> assertFalse(new ProviderMetadata().supportsEndSession()));
+    }
+
+    @Test
+    @DisplayName("Should filter JSON null elements from advertised auth methods so Set.copyOf cannot NPE (L6)")
+    void shouldFilterNullAuthMethodElements() {
+        var metadata = new ProviderMetadata();
+        // DSL-JSON maps a JSON null array element to a null list entry; Arrays.asList admits nulls.
+        metadata.tokenEndpointAuthMethodsSupported =
+                Arrays.asList("client_secret_basic", null, "private_key_jwt");
+
+        List<String> methods = metadata.getTokenEndpointAuthMethods();
+
+        assertAll("null-element-free advertised methods",
+                () -> assertEquals(List.of("client_secret_basic", "private_key_jwt"), methods),
+                () -> assertDoesNotThrow(() -> Set.copyOf(methods),
+                        "the filtered list must be copyable into a Set without a NullPointerException"));
+    }
+
+    @Test
+    @DisplayName("Should return an empty list when advertised auth methods are absent")
+    void shouldReturnEmptyWhenAuthMethodsAbsent() {
+        assertTrue(new ProviderMetadata().getTokenEndpointAuthMethods().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Should tolerate a JSON null element when checking S256 support (L6)")
+    void shouldTolerateNullElementInS256Check() {
+        var metadata = new ProviderMetadata();
+        metadata.codeChallengeMethodsSupported = Arrays.asList("plain", null, "S256");
+
+        assertTrue(assertDoesNotThrow(metadata::supportsS256),
+                "S256 detection must not NPE on a null array element");
     }
 
     @Test

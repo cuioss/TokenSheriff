@@ -19,6 +19,7 @@ import com.dslplatform.json.CompiledJson;
 import com.dslplatform.json.JsonAttribute;
 
 import java.util.Optional;
+import java.util.OptionalLong;
 
 /**
  * The normalized OAuth 2.0 token endpoint response (RFC 6749 §5.1).
@@ -41,6 +42,19 @@ import java.util.Optional;
 @SuppressWarnings("java:S1104") // Public fields required by DSL-JSON @CompiledJson for class-based deserialization
 public class TokenResponse {
 
+    /** The {@code Bearer} token type (RFC 6749 §7.1). */
+    public static final String TOKEN_TYPE_BEARER = "Bearer";
+
+    /** The {@code DPoP} sender-constrained token type (RFC 9449). */
+    public static final String TOKEN_TYPE_DPOP = "DPoP";
+
+    /**
+     * Upper bound for a plausible access-token lifetime (10 years in seconds). A larger
+     * {@code expires_in} is treated as absent/unknown rather than trusted, so an absurd value
+     * cannot make a token effectively immortal.
+     */
+    private static final long MAX_PLAUSIBLE_LIFETIME_SECONDS = 315_360_000L;
+
     /** The issued access token. */
     @JsonAttribute(name = "access_token")
     public String accessToken;
@@ -49,7 +63,12 @@ public class TokenResponse {
     @JsonAttribute(name = "token_type")
     public String tokenType;
 
-    /** The access token lifetime in seconds, or {@code 0} when the AS omits it. */
+    /**
+     * The access token lifetime in seconds. {@code 0} (the primitive default) is indistinguishable
+     * from a literal {@code expires_in: 0} and means the AS omitted the field; use
+     * {@link #getExpiresInSeconds()} for the normalized, nullable view that rejects absent,
+     * non-positive, and absurd values.
+     */
     @JsonAttribute(name = "expires_in")
     public long expiresIn;
 
@@ -79,10 +98,42 @@ public class TokenResponse {
     }
 
     /**
-     * @return the access token lifetime in seconds ({@code 0} when omitted)
+     * Whether the {@code token_type} is present and one of the types this client can consume — a
+     * {@code Bearer} token (RFC 6749 §7.1) or a {@code DPoP} sender-constrained token (RFC 9449).
+     * The comparison is case-insensitive, as RFC 6749 §5.1 declares {@code token_type} values
+     * case-insensitive. An absent, blank, or unrecognized type returns {@code false} so a garbage
+     * or downgraded {@code token_type} is not silently consumed as {@code Bearer}.
+     *
+     * @return {@code true} if the token type is present and recognized
+     */
+    public boolean hasRecognizedTokenType() {
+        return tokenType != null
+                && (TOKEN_TYPE_BEARER.equalsIgnoreCase(tokenType)
+                || TOKEN_TYPE_DPOP.equalsIgnoreCase(tokenType));
+    }
+
+    /**
+     * @return the raw access token lifetime in seconds ({@code 0} when omitted); prefer
+     *         {@link #getExpiresInSeconds()} for the normalized, nullable view
      */
     public long getExpiresIn() {
         return expiresIn;
+    }
+
+    /**
+     * The normalized, nullable access-token lifetime. Returns {@link OptionalLong#empty()} when the
+     * AS omitted {@code expires_in} (primitive default {@code 0}), returned a non-positive value, or
+     * returned an absurd value beyond {@link #MAX_PLAUSIBLE_LIFETIME_SECONDS} — so an unknown
+     * lifetime is distinguishable from a known one and a negative/absurd value is rejected rather
+     * than trusted.
+     *
+     * @return the access-token lifetime in seconds when known and plausible, otherwise empty
+     */
+    public OptionalLong getExpiresInSeconds() {
+        if (expiresIn <= 0 || expiresIn > MAX_PLAUSIBLE_LIFETIME_SECONDS) {
+            return OptionalLong.empty();
+        }
+        return OptionalLong.of(expiresIn);
     }
 
     /**

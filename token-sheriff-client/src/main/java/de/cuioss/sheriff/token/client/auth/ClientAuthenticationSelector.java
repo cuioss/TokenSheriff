@@ -90,8 +90,10 @@ public class ClientAuthenticationSelector {
     }
 
     private static Set<String> advertisedMethods(ProviderMetadata metadata) {
-        List<String> advertised = metadata.tokenEndpointAuthMethodsSupported;
-        if (advertised == null || advertised.isEmpty()) {
+        // getTokenEndpointAuthMethods() returns a null-element-free list, so Set.copyOf cannot NPE on
+        // a JSON null array element in token_endpoint_auth_methods_supported (L6).
+        List<String> advertised = metadata.getTokenEndpointAuthMethods();
+        if (advertised.isEmpty()) {
             // RFC 8414: client_secret_basic is the default when the AS omits the metadata.
             return Set.of(DEFAULT_ADVERTISED_METHOD);
         }
