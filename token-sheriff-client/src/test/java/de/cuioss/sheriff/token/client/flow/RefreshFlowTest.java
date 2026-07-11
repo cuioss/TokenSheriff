@@ -51,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -126,6 +127,30 @@ class RefreshFlowTest {
     }
 
     @Test
+    @DisplayName("Should carry the refreshed ID token through the rotation result for the §12.2 consistency check")
+    void shouldCarryRefreshedIdToken(URIBuilder uriBuilder) {
+        String refreshedIdToken = Generators.letterStrings(20, 40).next();
+        moduleDispatcher.success(holder.getRawToken(), Generators.letterStrings(20, 40).next(), refreshedIdToken, 300);
+        String presented = Generators.letterStrings(20, 40).next();
+
+        RotationResult result = flow(config()).refresh(metadata(uriBuilder), presented);
+
+        assertEquals(refreshedIdToken, result.idToken(),
+                "a refreshed ID token must be surfaced for the lifecycle §12.2 consistency check");
+    }
+
+    @Test
+    @DisplayName("Should surface a null ID token when the AS omits one on refresh")
+    void shouldReportNoIdTokenWhenServerOmitsIt(URIBuilder uriBuilder) {
+        moduleDispatcher.success(holder.getRawToken(), Generators.letterStrings(20, 40).next(), 300);
+        String presented = Generators.letterStrings(20, 40).next();
+
+        RotationResult result = flow(config()).refresh(metadata(uriBuilder), presented);
+
+        assertNull(result.idToken(), "an omitted ID token must be surfaced as null (OIDC Core §12.2 permits it)");
+    }
+
+    @Test
     @DisplayName("Should send a refresh_token grant carrying the presented token and client authentication")
     void shouldSendRefreshTokenGrantOnTheWire(URIBuilder uriBuilder, MockWebServer server) throws Exception {
         moduleDispatcher.success(holder.getRawToken(), Generators.letterStrings(20, 40).next(), 300);
@@ -197,11 +222,18 @@ class RefreshFlowTest {
         }
 
         void success(String accessToken, String refreshToken, long expiresIn) {
+            success(accessToken, refreshToken, null, expiresIn);
+        }
+
+        void success(String accessToken, String refreshToken, String idToken, long expiresIn) {
             this.status = HTTP_OK;
             StringBuilder json = new StringBuilder("{\"access_token\":\"").append(accessToken)
                     .append("\",\"token_type\":\"Bearer\",\"expires_in\":").append(expiresIn);
             if (refreshToken != null) {
                 json.append(",\"refresh_token\":\"").append(refreshToken).append('"');
+            }
+            if (idToken != null) {
+                json.append(",\"id_token\":\"").append(idToken).append('"');
             }
             json.append('}');
             this.body = json.toString();

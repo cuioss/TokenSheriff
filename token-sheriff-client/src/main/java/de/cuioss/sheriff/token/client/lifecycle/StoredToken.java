@@ -87,27 +87,59 @@ ConstraintBinding constraintBinding, @Nullable
     }
 
     /**
-     * Produces the successor bundle after a refresh, carrying the ID token forward and recording the
+     * Produces the successor bundle after a refresh, keeping the current ID token and recording the
      * sender-constraint the <em>refreshed</em> token was actually issued under.
      * <p>
-     * When this bundle was sender-constrained, the refresh is refused unless {@code refreshedBinding}
-     * still confirms the same key: a {@code null} {@code refreshedBinding} (the AS issued a plain
-     * bearer token) or a binding to a different key is a downgrade and fails closed with an
-     * {@link IllegalStateException}, rather than the previous behaviour of copying the stale binding
-     * onto a token that no longer carries it. When this bundle was an unconstrained bearer token, the
-     * successor simply records whatever binding the refreshed token carries.
+     * This overload preserves the stored ID token; it is the correct call when the AS omitted an ID
+     * token on the refresh (OIDC Core §12.2 makes it optional). When the AS <em>did</em> return a
+     * refreshed ID token, use
+     * {@link #refreshed(String, String, Instant, ConstraintBinding, String)} so the successor carries
+     * the new, consistency-checked ID token rather than the stale one.
      *
      * @param newAccessToken   the refreshed access token; must not be {@code null} or blank
      * @param newRefreshToken  the refreshed refresh token, or {@code null} to keep the current one
      * @param newExpiresAt     the refreshed access-token expiry, or {@code null} when unknown
      * @param refreshedBinding the {@code cnf} sender-constraint confirmed on the refreshed token, or
      *                         {@code null} when the refreshed token is a plain bearer token
-     * @return the refreshed bundle recording the verified binding and carrying the ID token forward
+     * @return the refreshed bundle recording the verified binding and keeping the current ID token
      * @throws IllegalStateException if this bundle was sender-constrained but {@code refreshedBinding}
      *         no longer confirms the same key (a downgrade or re-binding)
      */
     public StoredToken refreshed(String newAccessToken, @Nullable String newRefreshToken,
             @Nullable Instant newExpiresAt, @Nullable ConstraintBinding refreshedBinding) {
+        return refreshed(newAccessToken, newRefreshToken, newExpiresAt, refreshedBinding, null);
+    }
+
+    /**
+     * Produces the successor bundle after a refresh, recording the sender-constraint the
+     * <em>refreshed</em> token was actually issued under and carrying the supplied ID token.
+     * <p>
+     * When this bundle was sender-constrained, the refresh is refused unless {@code refreshedBinding}
+     * still confirms the same key: a {@code null} {@code refreshedBinding} (the AS issued a plain
+     * bearer token) or a binding to a different key is a downgrade and fails closed with an
+     * {@link IllegalStateException}, rather than copying the stale binding onto a token that no longer
+     * carries it. When this bundle was an unconstrained bearer token, the successor simply records
+     * whatever binding the refreshed token carries.
+     * <p>
+     * {@code newIdToken} carries the ID token the AS actually returned on the refresh, already checked
+     * for {@code iss}/{@code sub} consistency by the caller (OIDC Core §12.2). A {@code null}
+     * {@code newIdToken} means the AS omitted an ID token on the refresh, so the current ID token is
+     * kept.
+     *
+     * @param newAccessToken   the refreshed access token; must not be {@code null} or blank
+     * @param newRefreshToken  the refreshed refresh token, or {@code null} to keep the current one
+     * @param newExpiresAt     the refreshed access-token expiry, or {@code null} when unknown
+     * @param refreshedBinding the {@code cnf} sender-constraint confirmed on the refreshed token, or
+     *                         {@code null} when the refreshed token is a plain bearer token
+     * @param newIdToken       the refreshed, consistency-checked ID token, or {@code null} to keep the
+     *                         current one when the AS omitted it on the refresh
+     * @return the refreshed bundle recording the verified binding and the effective ID token
+     * @throws IllegalStateException if this bundle was sender-constrained but {@code refreshedBinding}
+     *         no longer confirms the same key (a downgrade or re-binding)
+     */
+    public StoredToken refreshed(String newAccessToken, @Nullable String newRefreshToken,
+            @Nullable Instant newExpiresAt, @Nullable ConstraintBinding refreshedBinding,
+            @Nullable String newIdToken) {
         if (constraintBinding != null && !constraintBinding.equals(refreshedBinding)) {
             throw new IllegalStateException(
                     "refreshed token is no longer bound to the stored sender-constraint key; "
@@ -115,6 +147,6 @@ ConstraintBinding constraintBinding, @Nullable
         }
         return new StoredToken(newAccessToken,
                 newRefreshToken != null ? newRefreshToken : refreshToken,
-                idToken, refreshedBinding, newExpiresAt);
+                newIdToken != null ? newIdToken : idToken, refreshedBinding, newExpiresAt);
     }
 }

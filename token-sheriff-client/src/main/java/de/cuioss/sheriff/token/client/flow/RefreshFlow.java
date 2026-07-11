@@ -112,8 +112,9 @@ public class RefreshFlow {
      * @param metadata     the resolved provider metadata carrying the token endpoint; must not be
      *                     {@code null}
      * @param refreshToken the refresh token to redeem; must not be {@code null} or blank
-     * @return the rotation result carrying the validated access token and the refresh token to use
-     *         next
+     * @return the rotation result carrying the validated access token, the refresh token to use
+     *         next, and the raw refreshed ID token (when the AS issued one) for the lifecycle
+     *         consistency check (OIDC Core §12.2)
      * @throws de.cuioss.sheriff.token.commons.error.TransportException if the token request fails
      * @throws de.cuioss.sheriff.token.validation.exception.TokenValidationException if the returned
      *         token fails validation
@@ -145,7 +146,8 @@ public class RefreshFlow {
         boolean rotated = !rotatedRefreshToken.equals(refreshToken);
         LOGGER.debug("Refreshed access token for client '%s' (rotated=%s)", configuration.getClientId(), rotated);
 
-        return new RotationResult(accessToken, rotatedRefreshToken, tokenResponse.expiresIn, rotated);
+        return new RotationResult(accessToken, rotatedRefreshToken, tokenResponse.idToken,
+                tokenResponse.expiresIn, rotated);
     }
 
     /**

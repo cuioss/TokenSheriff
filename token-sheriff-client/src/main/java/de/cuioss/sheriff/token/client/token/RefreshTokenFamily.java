@@ -18,9 +18,7 @@ package de.cuioss.sheriff.token.client.token;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.tools.logging.CuiLogger;
 
-import java.util.HashSet;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -45,7 +43,6 @@ public class RefreshTokenFamily {
     private static final CuiLogger LOGGER = new CuiLogger(RefreshTokenFamily.class);
 
     private final ReentrantLock lock = new ReentrantLock();
-    private final Set<String> supersededTokens = new HashSet<>();
 
     private String currentToken;
     private boolean revoked;
@@ -82,7 +79,6 @@ public class RefreshTokenFamily {
         lock.lock();
         try {
             assertRedeemable(presentedToken);
-            supersededTokens.add(currentToken);
             currentToken = rotatedToken;
         } finally {
             lock.unlock();

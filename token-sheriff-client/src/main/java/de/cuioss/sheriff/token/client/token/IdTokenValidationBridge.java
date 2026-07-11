@@ -76,6 +76,27 @@ public class IdTokenValidationBridge {
         return content;
     }
 
+    /**
+     * Validates an ID token returned on a {@code refresh_token} exchange, without a {@code nonce}
+     * check (OIDC Core §12.2).
+     * <p>
+     * A refreshed ID token is validated through the same multi-issuer pipeline (signature,
+     * {@code iss}, {@code aud}, {@code exp} / {@code iat}) as an authorization-code ID token, but the
+     * {@code nonce} is deliberately not asserted: §12.2 states the ID token issued on a refresh
+     * SHOULD NOT carry a {@code nonce}, and no fresh flow {@code nonce} exists to compare against. The
+     * caller instead enforces the §12.2 {@code iss}/{@code sub} consistency against the refreshed
+     * access token.
+     *
+     * @param idToken the raw refreshed ID token string; must not be {@code null}
+     * @return the validated ID token content
+     * @throws de.cuioss.sheriff.token.validation.exception.TokenValidationException if the token
+     *         fails pipeline validation
+     */
+    public IdTokenContent validateRefreshedIdToken(String idToken) {
+        Objects.requireNonNull(idToken, "idToken must not be null");
+        return tokenValidator.createIdToken(IdTokenRequest.of(idToken));
+    }
+
     private static boolean noncesMatch(String expected, String actual) {
         if (actual == null) {
             return false;

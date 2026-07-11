@@ -15,10 +15,16 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
+import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.dpop.DpopProofGenerator;
 import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
+import de.cuioss.sheriff.token.client.lifecycle.InMemoryTokenStore;
+import de.cuioss.sheriff.token.client.lifecycle.RefreshScheduler;
+import de.cuioss.sheriff.token.client.lifecycle.RevocationClient;
+import de.cuioss.sheriff.token.client.lifecycle.StoredToken;
+import de.cuioss.sheriff.token.client.lifecycle.TokenLifecycleManager;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -32,11 +38,15 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -189,6 +199,60 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
                 () -> assertNotNull(retriedProof, "the retried request carries a fresh DPoP proof"),
                 () -> assertTrue(decodePayload(retriedProof).contains("\"nonce\":\"" + nonce + "\""),
                         "the retried proof echoes the challenged DPoP-Nonce"));
+    }
+
+    @Test
+    @DisplayName("Should refuse a wired refresh that replays a superseded token and revoke the family at the AS")
+    void shouldRefuseRotatedTokenReuseOnWiredRefresh(URIBuilder uriBuilder) {
+        ClientConfiguration config = config();
+        ProviderMetadata metadata = metadataWithTokenEndpoint(uriBuilder);
+        metadata.revocationEndpoint = uriBuilder.addPathSegment("revoke").buildAsString();
+        RefreshFlow flow = refreshFlow(config);
+        var revocationClient = new RecordingRevocationClient(config);
+        var manager = new TokenLifecycleManager(new InMemoryTokenStore(), new RefreshScheduler());
+        String session = Generators.letterStrings(10, 20).next();
+        String rt1 = Generators.letterStrings(20, 40).next();
+        String rt2 = Generators.letterStrings(20, 40).next();
+
+        manager.store(session, new StoredToken(Generators.letterStrings(20, 40).next(), rt1, null, null, null));
+        getModuleDispatcher().success(accessHolder.getRawToken(), null, rt2, 300);
+        manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth(config));
+
+        // Replay the superseded token: roll the store back to rt1 while the family stays at rt2.
+        manager.store(session, new StoredToken(Generators.letterStrings(20, 40).next(), rt1, null, null, null));
+        getModuleDispatcher().success(accessHolder.getRawToken(), null, Generators.letterStrings(20, 40).next(), 300);
+
+        assertThrows(IllegalStateException.class,
+                () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth(config)));
+
+        assertAll("wired reuse refusal",
+                () -> assertTrue(revocationClient.revoked(rt1),
+                        "the wired refresh revokes the reused token at the AS (RFC 7009)"),
+                () -> assertTrue(manager.get(session).isEmpty(),
+                        "the wired refresh clears the store fail-closed on detected reuse"));
+    }
+
+    /**
+     * Records the tokens passed to {@link RevocationClient#revoke} without issuing HTTP, so the wired
+     * reuse case asserts the RFC 7009 revocation was driven without a second live endpoint.
+     */
+    static final class RecordingRevocationClient extends RevocationClient {
+
+        private final List<String> revokedTokens = Collections.synchronizedList(new ArrayList<>());
+
+        RecordingRevocationClient(ClientConfiguration configuration) {
+            super(configuration);
+        }
+
+        @Override
+        public void revoke(String revocationEndpoint, String token, String tokenTypeHint,
+                ClientAuthentication clientAuthentication) {
+            revokedTokens.add(token);
+        }
+
+        boolean revoked(String token) {
+            return revokedTokens.contains(token);
+        }
     }
 
     /**
