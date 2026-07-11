@@ -20,6 +20,7 @@ import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
+import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.tools.logging.CuiLogger;
@@ -57,21 +58,21 @@ public class UserInfoClient {
     private static final String APPLICATION_JSON = "application/json";
     private static final String HTTP_GET = "GET";
     private static final String BEARER_SCHEME = "Bearer";
-    private static final int CONNECT_TIMEOUT_SECONDS = 5;
-    private static final int READ_TIMEOUT_SECONDS = 10;
+    private static final String FAILURE_CONTEXT = "userinfo request failed";
 
-    private final ClientConfiguration configuration;
     private final DslJson<Object> dslJson;
     private final int maxContentSize;
+    private final BackChannelHttp backChannel;
 
     /**
      * @param configuration the client configuration carrying the TLS policy; must not be {@code null}
      */
     public UserInfoClient(ClientConfiguration configuration) {
-        this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
+        Objects.requireNonNull(configuration, "configuration must not be null");
         ParserConfig parserConfig = ParserConfig.builder().build();
         this.dslJson = parserConfig.getDslJson();
         this.maxContentSize = parserConfig.getMaxPayloadSize();
+        this.backChannel = new BackChannelHttp(configuration, maxContentSize);
     }
 
     /**
@@ -114,23 +115,17 @@ public class UserInfoClient {
         Objects.requireNonNull(userInfoEndpoint, "userInfoEndpoint must not be null");
         Objects.requireNonNull(accessToken, "accessToken must not be null");
 
-        HttpHandler handler = HttpHandler.builder()
-                .url(userInfoEndpoint)
-                .connectionTimeoutSeconds(CONNECT_TIMEOUT_SECONDS)
-                .readTimeoutSeconds(READ_TIMEOUT_SECONDS)
-                .allowInsecureHttp(configuration.isAllowInsecureHttp())
-                .build();
+        HttpHandler handler = backChannel.validatedHandler(userInfoEndpoint, FAILURE_CONTEXT);
 
         HttpRequest.Builder requestBuilder = handler.requestBuilder()
-                .header(ACCEPT, APPLICATION_JSON)
+                .setHeader(ACCEPT, APPLICATION_JSON)
                 .GET();
         authorize(requestBuilder, userInfoEndpoint, accessToken, senderConstraint);
         HttpRequest request = requestBuilder.build();
 
-        HttpClient client = handler.createHttpClient();
+        HttpClient client = backChannel.sharedClient(handler);
         try {
-            HttpResponse<String> response = client.send(request,
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = client.send(request, backChannel.bodyHandler());
             if (!HttpStatusFamily.isSuccess(response.statusCode())) {
                 throw new TransportException(
                         "userinfo endpoint returned unexpected HTTP status " + response.statusCode());
@@ -152,11 +147,11 @@ public class UserInfoClient {
     private static void authorize(HttpRequest.Builder requestBuilder, String userInfoEndpoint,
             String accessToken, @Nullable SenderConstraint senderConstraint) {
         String scheme = senderConstraint == null ? BEARER_SCHEME : senderConstraint.authorizationScheme();
-        requestBuilder.header(AUTHORIZATION, scheme + " " + accessToken);
+        requestBuilder.setHeader(AUTHORIZATION, scheme + " " + accessToken);
         if (senderConstraint != null) {
             Map<String, String> proofHeaders = new HashMap<>();
             senderConstraint.applyProtectedResource(HTTP_GET, userInfoEndpoint, accessToken, null, proofHeaders);
-            proofHeaders.forEach(requestBuilder::header);
+            proofHeaders.forEach(requestBuilder::setHeader);
         }
     }
 

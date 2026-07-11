@@ -19,15 +19,16 @@ import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.commons.error.TransportException;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -54,16 +55,16 @@ public class RevocationClient {
     private static final String FORM_URLENCODED = "application/x-www-form-urlencoded";
     private static final String PARAM_TOKEN = "token";
     private static final String PARAM_TOKEN_TYPE_HINT = "token_type_hint";
-    private static final int CONNECT_TIMEOUT_SECONDS = 5;
-    private static final int READ_TIMEOUT_SECONDS = 10;
+    private static final String FAILURE_CONTEXT = "Revocation request failed";
 
-    private final ClientConfiguration configuration;
+    private final BackChannelHttp backChannel;
 
     /**
      * @param configuration the client configuration carrying the TLS policy; must not be {@code null}
      */
     public RevocationClient(ClientConfiguration configuration) {
-        this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
+        Objects.requireNonNull(configuration, "configuration must not be null");
+        this.backChannel = new BackChannelHttp(configuration, ParserConfig.builder().build().getMaxPayloadSize());
     }
 
     /**
@@ -87,12 +88,7 @@ public class RevocationClient {
             throw new IllegalArgumentException("token must not be blank");
         }
 
-        HttpHandler handler = HttpHandler.builder()
-                .url(revocationEndpoint)
-                .connectionTimeoutSeconds(CONNECT_TIMEOUT_SECONDS)
-                .readTimeoutSeconds(READ_TIMEOUT_SECONDS)
-                .allowInsecureHttp(configuration.isAllowInsecureHttp())
-                .build();
+        HttpHandler handler = backChannel.validatedHandler(revocationEndpoint, FAILURE_CONTEXT);
 
         Map<String, String> form = new HashMap<>();
         form.put(PARAM_TOKEN, token);
@@ -103,14 +99,13 @@ public class RevocationClient {
         clientAuthentication.decorate(form, headers);
 
         HttpRequest.Builder requestBuilder = handler.requestBuilder()
-                .header(CONTENT_TYPE, FORM_URLENCODED)
+                .setHeader(CONTENT_TYPE, FORM_URLENCODED)
                 .POST(HttpRequest.BodyPublishers.ofString(FormEncoder.encode(form)));
-        headers.forEach(requestBuilder::header);
+        headers.forEach(requestBuilder::setHeader);
 
-        HttpClient client = handler.createHttpClient();
+        HttpClient client = backChannel.sharedClient(handler);
         try {
-            HttpResponse<String> response = client.send(requestBuilder.build(),
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = client.send(requestBuilder.build(), backChannel.bodyHandler());
             if (!HttpStatusFamily.isSuccess(response.statusCode())) {
                 throw new TransportException(
                         "Revocation endpoint returned unexpected HTTP status " + response.statusCode());

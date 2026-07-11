@@ -21,6 +21,7 @@ import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.tools.logging.CuiLogger;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -63,6 +64,7 @@ public class AuthorizationRequestBuilder {
     private static final String PARAM_MAX_AGE = "max_age";
     private static final String PARAM_RESPONSE_MODE = "response_mode";
     private static final String RESPONSE_MODE_FORM_POST = "form_post";
+    private static final String SCHEME_HTTPS = "https";
 
     /**
      * Builds the authorization request URL for the given flow context.
@@ -84,6 +86,7 @@ public class AuthorizationRequestBuilder {
         String authorizationEndpoint = metadata.getAuthorizationEndpoint()
                 .orElseThrow(() -> new IllegalStateException(
                         "provider metadata is missing the authorization endpoint"));
+        enforceEndpointScheme(authorizationEndpoint, configuration);
         if (!metadata.supportsS256()) {
             LOGGER.warn(ClientLogMessages.WARN.S256_NOT_ADVERTISED, metadata.getIssuer().orElse(authorizationEndpoint));
             throw new IllegalStateException(
@@ -107,5 +110,27 @@ public class AuthorizationRequestBuilder {
         context.maxAge().ifPresent(maxAge -> params.put(PARAM_MAX_AGE, Integer.toString(maxAge)));
 
         return authorizationEndpoint + (authorizationEndpoint.indexOf('?') < 0 ? '?' : '&') + FormEncoder.encode(params);
+    }
+
+    /**
+     * Refuses a non-TLS authorization endpoint (L5). The authorization request URL is the front-channel
+     * redirect the user agent follows, so a cleartext {@code http://} endpoint would expose the
+     * {@code state}/{@code nonce}/PKCE parameters — and the resulting authorization code — to a network
+     * observer. A non-TLS endpoint is rejected unless {@link ClientConfiguration#isAllowInsecureHttp()}
+     * is set for a local test setup, mirroring the discovery/back-channel TLS policy.
+     */
+    private static void enforceEndpointScheme(String authorizationEndpoint, ClientConfiguration configuration) {
+        String scheme;
+        try {
+            scheme = URI.create(authorizationEndpoint).getScheme();
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(
+                    "authorization endpoint is not a valid URL: " + authorizationEndpoint, e);
+        }
+        if (!SCHEME_HTTPS.equalsIgnoreCase(scheme) && !configuration.isAllowInsecureHttp()) {
+            throw new IllegalStateException(
+                    "authorization endpoint is not a TLS (https) URL; refusing to start the authorization_code"
+                            + " flow over an insecure channel");
+        }
     }
 }

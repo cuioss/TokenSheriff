@@ -21,6 +21,7 @@ import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.dpop.ConstraintBinding;
 import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
+import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
 import de.cuioss.sheriff.token.commons.error.TransportException;
@@ -58,21 +59,21 @@ public class TokenEndpointClient {
     private static final String FORM_URLENCODED = "application/x-www-form-urlencoded";
     private static final String HTTP_POST = "POST";
     private static final String DPOP_NONCE_HEADER = "DPoP-Nonce";
-    private static final int CONNECT_TIMEOUT_SECONDS = 5;
-    private static final int READ_TIMEOUT_SECONDS = 10;
+    private static final String FAILURE_CONTEXT = "Token endpoint request failed";
 
-    private final ClientConfiguration configuration;
     private final DslJson<Object> dslJson;
     private final int maxContentSize;
+    private final BackChannelHttp backChannel;
 
     /**
      * @param configuration the client configuration carrying the TLS policy; must not be {@code null}
      */
     public TokenEndpointClient(ClientConfiguration configuration) {
-        this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
+        Objects.requireNonNull(configuration, "configuration must not be null");
         ParserConfig parserConfig = ParserConfig.builder().build();
         this.dslJson = parserConfig.getDslJson();
         this.maxContentSize = parserConfig.getMaxPayloadSize();
+        this.backChannel = new BackChannelHttp(configuration, maxContentSize);
     }
 
     /**
@@ -122,13 +123,8 @@ public class TokenEndpointClient {
         Objects.requireNonNull(formParameters, "formParameters must not be null");
         Objects.requireNonNull(requestHeaders, "requestHeaders must not be null");
 
-        HttpHandler handler = HttpHandler.builder()
-                .url(tokenEndpoint)
-                .connectionTimeoutSeconds(CONNECT_TIMEOUT_SECONDS)
-                .readTimeoutSeconds(READ_TIMEOUT_SECONDS)
-                .allowInsecureHttp(configuration.isAllowInsecureHttp())
-                .build();
-        HttpClient client = handler.createHttpClient();
+        HttpHandler handler = backChannel.validatedHandler(tokenEndpoint, FAILURE_CONTEXT);
+        HttpClient client = backChannel.sharedClient(handler);
         String body = FormEncoder.encode(formParameters);
 
         HttpResponse<String> response = send(handler, client, body,
@@ -178,12 +174,11 @@ public class TokenEndpointClient {
     private HttpResponse<String> send(HttpHandler handler, HttpClient client, String body,
             Map<String, String> requestHeaders) {
         HttpRequest.Builder requestBuilder = handler.requestBuilder()
-                .header(CONTENT_TYPE, FORM_URLENCODED)
+                .setHeader(CONTENT_TYPE, FORM_URLENCODED)
                 .POST(HttpRequest.BodyPublishers.ofString(body));
-        requestHeaders.forEach(requestBuilder::header);
+        requestHeaders.forEach(requestBuilder::setHeader);
         try {
-            return client.send(requestBuilder.build(),
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            return client.send(requestBuilder.build(), backChannel.bodyHandler());
         } catch (IOException e) {
             LOGGER.debug(e, "Token endpoint request failed: %s", e.getMessage());
             throw new TransportException("Token endpoint request failed: " + e.getMessage(), e);

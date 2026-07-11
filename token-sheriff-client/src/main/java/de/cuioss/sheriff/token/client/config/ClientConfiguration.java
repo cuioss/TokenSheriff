@@ -45,6 +45,12 @@ import java.util.List;
 @Builder
 public class ClientConfiguration {
 
+    /** Default TCP connect timeout, in seconds, when the caller does not override it. */
+    public static final int DEFAULT_CONNECT_TIMEOUT_SECONDS = 5;
+
+    /** Default response read timeout, in seconds, when the caller does not override it. */
+    public static final int DEFAULT_READ_TIMEOUT_SECONDS = 10;
+
     /**
      * The authorization server's issuer identifier URL (for example
      * {@code https://issuer.example.com/realms/demo}). Discovery is performed against
@@ -101,4 +107,21 @@ public class ClientConfiguration {
      * for local test setups against a cleartext authorization server.
      */
     boolean allowInsecureHttp;
+
+    /**
+     * The TCP connect timeout, in seconds, applied to every outbound discovery and back-channel call.
+     * Defaults to {@value #DEFAULT_CONNECT_TIMEOUT_SECONDS} seconds. Configurable so deployments behind
+     * slow networks or in latency-sensitive paths can tune the transport rather than relying on a
+     * hardcoded default (L15).
+     */
+    @Builder.Default
+    int connectTimeoutSeconds = DEFAULT_CONNECT_TIMEOUT_SECONDS;
+
+    /**
+     * The response read timeout, in seconds, applied to every outbound discovery and back-channel call.
+     * Defaults to {@value #DEFAULT_READ_TIMEOUT_SECONDS} seconds. Configurable for the same reason as
+     * {@link #connectTimeoutSeconds} (L15).
+     */
+    @Builder.Default
+    int readTimeoutSeconds = DEFAULT_READ_TIMEOUT_SECONDS;
 }

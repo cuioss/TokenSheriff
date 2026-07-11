@@ -19,6 +19,7 @@ import com.dslplatform.json.DslJson;
 import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
@@ -63,12 +64,11 @@ public class DiscoveryResolver {
 
     private static final String WELL_KNOWN_SUFFIX = "/.well-known/openid-configuration";
     private static final String SCHEME_HTTPS = "https";
-    private static final int CONNECT_TIMEOUT_SECONDS = 2;
-    private static final int READ_TIMEOUT_SECONDS = 3;
 
     private final ClientConfiguration configuration;
     private final DslJson<Object> dslJson;
     private final int maxContentSize;
+    private final BackChannelHttp backChannel;
 
     /**
      * Creates a resolver for the authorization server described by the given client configuration.
@@ -81,6 +81,7 @@ public class DiscoveryResolver {
         ParserConfig parserConfig = ParserConfig.builder().build();
         this.dslJson = parserConfig.getDslJson();
         this.maxContentSize = parserConfig.getMaxPayloadSize();
+        this.backChannel = new BackChannelHttp(configuration, maxContentSize);
     }
 
     /**
@@ -128,20 +129,16 @@ public class DiscoveryResolver {
     }
 
     private String fetch(String wellKnownUrl, String issuer) {
-        HttpHandler handler = HttpHandler.builder()
-                .url(wellKnownUrl)
-                .connectionTimeoutSeconds(CONNECT_TIMEOUT_SECONDS)
-                .readTimeoutSeconds(READ_TIMEOUT_SECONDS)
-                .allowInsecureHttp(configuration.isAllowInsecureHttp())
-                .build();
+        String failureContext = ClientLogMessages.ERROR.DISCOVERY_FAILED.format(issuer, "discovery request failed");
+        HttpHandler handler = backChannel.validatedHandler(wellKnownUrl, failureContext);
 
-        HttpClient client = handler.createHttpClient();
+        HttpClient client = backChannel.sharedClient(handler);
         HttpRequest request = handler.requestBuilder()
                 .GET()
-                .header("Accept", "application/json")
+                .setHeader("Accept", "application/json")
                 .build();
         try {
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = client.send(request, backChannel.bodyHandler());
             if (!HttpStatusFamily.isSuccess(response.statusCode())) {
                 LOGGER.warn(ClientLogMessages.WARN.DISCOVERY_STATUS, issuer, response.statusCode());
                 throw new TransportException(ClientLogMessages.ERROR.DISCOVERY_FAILED.format(
