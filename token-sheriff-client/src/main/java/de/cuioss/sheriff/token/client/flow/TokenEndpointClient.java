@@ -19,19 +19,24 @@ import com.dslplatform.json.DslJson;
 import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.dpop.ConstraintBinding;
+import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Thin transport wrapper for the OAuth 2.0 back-channel token endpoint.
@@ -51,6 +56,8 @@ public class TokenEndpointClient {
 
     private static final String CONTENT_TYPE = "Content-Type";
     private static final String FORM_URLENCODED = "application/x-www-form-urlencoded";
+    private static final String HTTP_POST = "POST";
+    private static final String DPOP_NONCE_HEADER = "DPoP-Nonce";
     private static final int CONNECT_TIMEOUT_SECONDS = 5;
     private static final int READ_TIMEOUT_SECONDS = 10;
 
@@ -69,7 +76,8 @@ public class TokenEndpointClient {
     }
 
     /**
-     * Performs a form-encoded {@code POST} to the token endpoint and normalizes the response.
+     * Performs a form-encoded {@code POST} to the token endpoint with no sender-constraint and
+     * normalizes the response.
      *
      * @param tokenEndpoint    the absolute token endpoint URL (from discovery); must be TLS unless
      *                         {@link ClientConfiguration#isAllowInsecureHttp()} is set
@@ -82,6 +90,34 @@ public class TokenEndpointClient {
     public TokenResponse requestToken(String tokenEndpoint,
             Map<String, String> formParameters,
             Map<String, String> requestHeaders) {
+        return requestToken(tokenEndpoint, formParameters, requestHeaders, null);
+    }
+
+    /**
+     * Performs a form-encoded {@code POST} to the token endpoint, attaching a DPoP proof when a
+     * sender-constraint is supplied, and normalizes the response.
+     * <p>
+     * When {@code senderConstraint} is a DPoP constraint, a proof is generated for the token endpoint
+     * and added as the {@code DPoP} header. If the authorization server rejects the first attempt with
+     * a {@code use_dpop_nonce} challenge — a non-success status carrying a {@code DPoP-Nonce} response
+     * header (RFC 9449 §8) — the nonce is echoed into a fresh proof and the request is retried once,
+     * rather than surfacing the recoverable challenge as an opaque transport failure. mTLS constraints
+     * add no header (the binding is transport-level) and never trigger a nonce retry.
+     *
+     * @param tokenEndpoint    the absolute token endpoint URL (from discovery); must be TLS unless
+     *                         {@link ClientConfiguration#isAllowInsecureHttp()} is set
+     * @param formParameters   the form-encoded request body parameters (e.g. {@code grant_type})
+     * @param requestHeaders   additional request headers (e.g. an {@code Authorization} header)
+     * @param senderConstraint the DPoP/mTLS sender-constraint to apply, or {@code null} for a plain
+     *                         bearer-token request
+     * @return the normalized token response
+     * @throws TransportException if the request fails, the response is not successful (after a nonce
+     *         retry where applicable), or the body cannot be parsed
+     */
+    public TokenResponse requestToken(String tokenEndpoint,
+            Map<String, String> formParameters,
+            Map<String, String> requestHeaders,
+            @Nullable SenderConstraint senderConstraint) {
         Objects.requireNonNull(tokenEndpoint, "tokenEndpoint must not be null");
         Objects.requireNonNull(formParameters, "formParameters must not be null");
         Objects.requireNonNull(requestHeaders, "requestHeaders must not be null");
@@ -92,21 +128,62 @@ public class TokenEndpointClient {
                 .readTimeoutSeconds(READ_TIMEOUT_SECONDS)
                 .allowInsecureHttp(configuration.isAllowInsecureHttp())
                 .build();
+        HttpClient client = handler.createHttpClient();
+        String body = FormEncoder.encode(formParameters);
 
+        HttpResponse<String> response = send(handler, client, body,
+                proofHeaders(tokenEndpoint, requestHeaders, senderConstraint, null));
+        if (!HttpStatusFamily.isSuccess(response.statusCode())) {
+            Optional<String> nonce = dpopNonceChallenge(response, senderConstraint);
+            if (nonce.isPresent()) {
+                response = send(handler, client, body,
+                        proofHeaders(tokenEndpoint, requestHeaders, senderConstraint, nonce.get()));
+            }
+        }
+        if (!HttpStatusFamily.isSuccess(response.statusCode())) {
+            throw new TransportException(
+                    "Token endpoint returned unexpected HTTP status " + response.statusCode());
+        }
+        return parse(response.body());
+    }
+
+    /**
+     * Composes the request headers for one attempt: the caller-supplied headers plus, when a DPoP
+     * constraint is present, a fresh single-use {@code DPoP} proof for the token endpoint (optionally
+     * echoing a challenged {@code nonce}). A fresh map is returned per attempt so the caller's header
+     * map is never mutated and each retry carries its own single-use proof.
+     */
+    private static Map<String, String> proofHeaders(String tokenEndpoint, Map<String, String> requestHeaders,
+            @Nullable SenderConstraint senderConstraint, @Nullable String nonce) {
+        Map<String, String> headers = new HashMap<>(requestHeaders);
+        if (senderConstraint != null) {
+            senderConstraint.apply(HTTP_POST, tokenEndpoint, nonce, headers);
+        }
+        return headers;
+    }
+
+    /**
+     * @return the {@code DPoP-Nonce} value when the failed response is a recoverable
+     *         {@code use_dpop_nonce} challenge against a DPoP constraint, otherwise empty
+     */
+    private static Optional<String> dpopNonceChallenge(HttpResponse<String> response,
+            @Nullable SenderConstraint senderConstraint) {
+        if (senderConstraint == null || senderConstraint.method() != ConstraintBinding.Method.DPOP) {
+            return Optional.empty();
+        }
+        return response.headers().firstValue(DPOP_NONCE_HEADER)
+                .filter(nonce -> !nonce.isBlank());
+    }
+
+    private HttpResponse<String> send(HttpHandler handler, HttpClient client, String body,
+            Map<String, String> requestHeaders) {
         HttpRequest.Builder requestBuilder = handler.requestBuilder()
                 .header(CONTENT_TYPE, FORM_URLENCODED)
-                .POST(HttpRequest.BodyPublishers.ofString(FormEncoder.encode(formParameters)));
+                .POST(HttpRequest.BodyPublishers.ofString(body));
         requestHeaders.forEach(requestBuilder::header);
-
-        HttpClient client = handler.createHttpClient();
         try {
-            HttpResponse<String> response = client.send(requestBuilder.build(),
+            return client.send(requestBuilder.build(),
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (!HttpStatusFamily.isSuccess(response.statusCode())) {
-                throw new TransportException(
-                        "Token endpoint returned unexpected HTTP status " + response.statusCode());
-            }
-            return parse(response.body());
         } catch (IOException e) {
             LOGGER.debug(e, "Token endpoint request failed: %s", e.getMessage());
             throw new TransportException("Token endpoint request failed: " + e.getMessage(), e);

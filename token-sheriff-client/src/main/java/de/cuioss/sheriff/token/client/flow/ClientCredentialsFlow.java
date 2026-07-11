@@ -18,10 +18,12 @@ package de.cuioss.sheriff.token.client.flow;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
 import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -62,8 +64,12 @@ public class ClientCredentialsFlow {
     private final ClientConfiguration configuration;
     private final TokenEndpointClient tokenEndpointClient;
     private final TokenValidationBridge validationBridge;
+    @Nullable
+    private final SenderConstraint senderConstraint;
 
     /**
+     * Creates an unconstrained client-credentials flow (plain bearer token, no DPoP/mTLS).
+     *
      * @param configuration       the client configuration; must not be {@code null}
      * @param tokenEndpointClient the token-endpoint transport; must not be {@code null}
      * @param validationBridge    the validation bridge; must not be {@code null}
@@ -71,9 +77,28 @@ public class ClientCredentialsFlow {
     public ClientCredentialsFlow(ClientConfiguration configuration,
             TokenEndpointClient tokenEndpointClient,
             TokenValidationBridge validationBridge) {
+        this(configuration, tokenEndpointClient, validationBridge, null);
+    }
+
+    /**
+     * Creates a client-credentials flow that, when a sender-constraint is supplied, attaches a DPoP
+     * proof to the token request so the issued access token is bound to the proof key
+     * ({@code CLIENT-11}).
+     *
+     * @param configuration       the client configuration; must not be {@code null}
+     * @param tokenEndpointClient the token-endpoint transport; must not be {@code null}
+     * @param validationBridge    the validation bridge; must not be {@code null}
+     * @param senderConstraint    the DPoP/mTLS sender-constraint to attach, or {@code null} for a
+     *                            plain bearer request
+     */
+    public ClientCredentialsFlow(ClientConfiguration configuration,
+            TokenEndpointClient tokenEndpointClient,
+            TokenValidationBridge validationBridge,
+            @Nullable SenderConstraint senderConstraint) {
         this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
         this.tokenEndpointClient = Objects.requireNonNull(tokenEndpointClient, "tokenEndpointClient must not be null");
         this.validationBridge = Objects.requireNonNull(validationBridge, "validationBridge must not be null");
+        this.senderConstraint = senderConstraint;
     }
 
     /**
@@ -100,7 +125,8 @@ public class ClientCredentialsFlow {
         Map<String, String> headers = new HashMap<>();
         applyClientAuthentication(form, headers);
 
-        TokenResponse tokenResponse = tokenEndpointClient.requestToken(tokenEndpoint, form, headers);
+        TokenResponse tokenResponse = tokenEndpointClient.requestToken(tokenEndpoint, form, headers,
+                senderConstraint);
         LOGGER.debug("Obtained client_credentials token for client '%s'", configuration.getClientId());
 
         return validationBridge.validateAccessToken(tokenResponse.accessToken);

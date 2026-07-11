@@ -34,6 +34,8 @@ import mockwebserver3.RecordedRequest;
 import okhttp3.Headers;
 import org.junit.jupiter.api.function.Executable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -187,9 +189,21 @@ abstract class WiredFlowTestSupport {
 
         private static final int HTTP_OK = 200;
         private static final int HTTP_BAD_REQUEST = 400;
+        private static final String DPOP_HEADER = "DPoP";
+        private static final String DPOP_NONCE_HEADER = "DPoP-Nonce";
 
         private int status = HTTP_OK;
         private String body = "";
+
+        /** The {@code DPoP} proof header recorded for each token-endpoint call, in call order. */
+        private final List<String> recordedDpopHeaders = new ArrayList<>();
+
+        /**
+         * When non-{@code null}, the next call is answered with a {@code use_dpop_nonce} challenge
+         * (HTTP 400 carrying this {@code DPoP-Nonce}) exactly once; the challenge is then consumed and
+         * subsequent calls serve the configured success/error body (RFC 9449 §8).
+         */
+        private String pendingNonceChallenge;
 
         @Getter
         private int callCount;
@@ -198,6 +212,27 @@ abstract class WiredFlowTestSupport {
             this.status = HTTP_OK;
             this.body = "";
             this.callCount = 0;
+            this.recordedDpopHeaders.clear();
+            this.pendingNonceChallenge = null;
+        }
+
+        /**
+         * Arms a one-shot {@code use_dpop_nonce} challenge: the first token-endpoint call is refused
+         * with HTTP 400 and the given {@code DPoP-Nonce}, so the DPoP-aware transport must retry with a
+         * nonce-bound proof. Configure the eventual success body via {@link #success} first.
+         *
+         * @param nonce the {@code DPoP-Nonce} to challenge with; echoed by a compliant client's retry
+         */
+        void challengeWithNonceOnce(String nonce) {
+            this.pendingNonceChallenge = nonce;
+        }
+
+        /**
+         * @return the {@code DPoP} proof header recorded on the most recent token-endpoint call, or
+         *         {@code null} when the last call carried no DPoP header
+         */
+        String lastRecordedDpopHeader() {
+            return recordedDpopHeaders.isEmpty() ? null : recordedDpopHeaders.get(recordedDpopHeaders.size() - 1);
         }
 
         void success(String accessToken, String idToken, String refreshToken, long expiresIn) {
@@ -232,6 +267,14 @@ abstract class WiredFlowTestSupport {
         @Override
         public Optional<MockResponse> handlePost(RecordedRequest request) {
             callCount++;
+            recordedDpopHeaders.add(request.getHeaders().get(DPOP_HEADER));
+            if (pendingNonceChallenge != null) {
+                String challenge = pendingNonceChallenge;
+                pendingNonceChallenge = null;
+                return Optional.of(new MockResponse(HTTP_BAD_REQUEST,
+                        Headers.of("Content-Type", "application/json", DPOP_NONCE_HEADER, challenge),
+                        "{\"error\":\"use_dpop_nonce\"}"));
+            }
             return Optional.of(new MockResponse(status, Headers.of("Content-Type", "application/json"), body));
         }
 

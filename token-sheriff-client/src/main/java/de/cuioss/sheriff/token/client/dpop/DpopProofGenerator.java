@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.client.dpop;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.client.internal.JsonEscaper;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -125,7 +126,8 @@ public class DpopProofGenerator {
     }
 
     /**
-     * Builds a fresh, single-use DPoP proof for a request.
+     * Builds a fresh, single-use DPoP proof for a token-endpoint request (no {@code ath}, no
+     * {@code nonce}).
      *
      * @param htm the request HTTP method (e.g. {@code POST}); must not be {@code null} or blank
      * @param htu the request URI (e.g. the token endpoint); must not be {@code null} or blank
@@ -134,6 +136,27 @@ public class DpopProofGenerator {
      *         (a proof with a reused {@code jti} would be replayable and is refused)
      */
     public String generateProof(String htm, String htu) {
+        return generateProof(htm, htu, null, null);
+    }
+
+    /**
+     * Builds a fresh, single-use DPoP proof, optionally carrying a server-supplied {@code nonce}
+     * (RFC 9449 §8) and an access-token hash {@code ath} for a protected-resource proof
+     * (RFC 9449 §4.3).
+     * <p>
+     * The {@code htu} is normalized per RFC 9449 §4.2 — its query and fragment components are stripped
+     * so the proof binds only the scheme, authority and path of the target URI.
+     *
+     * @param htm         the request HTTP method (e.g. {@code POST}); must not be {@code null} or blank
+     * @param htu         the request URI; must not be {@code null} or blank. Query/fragment are stripped
+     * @param nonce       the server-provided DPoP nonce to echo, or {@code null} when none was challenged
+     * @param accessToken the access token whose {@code ath} hash binds a protected-resource proof, or
+     *                    {@code null} for a token-endpoint proof (which carries no {@code ath})
+     * @return the compact-serialized, signed DPoP proof JWT
+     * @throws IllegalStateException if the {@code jti} source repeats a previously issued identifier
+     *         (a proof with a reused {@code jti} would be replayable and is refused)
+     */
+    public String generateProof(String htm, String htu, @Nullable String nonce, @Nullable String accessToken) {
         Objects.requireNonNull(htm, "htm must not be null");
         Objects.requireNonNull(htu, "htu must not be null");
         if (htm.isBlank() || htu.isBlank()) {
@@ -147,12 +170,52 @@ public class DpopProofGenerator {
         }
         long now = Instant.now().getEpochSecond();
         String header = "{\"typ\":\"" + DPOP_TYP + "\",\"alg\":\"" + jwtAlgorithm + "\",\"jwk\":" + jwkJson + "}";
-        // htu is the request URI, sourced from the AS's own discovery metadata (the token endpoint
-        // URL); escape every JSON control character per RFC 8259, not only quote/backslash.
-        String payload = "{\"jti\":\"" + JsonEscaper.escape(jti) + "\",\"htm\":\"" + JsonEscaper.escape(htm)
-                + "\",\"htu\":\"" + JsonEscaper.escape(htu) + "\",\"iat\":" + now + "}";
-        String signingInput = encode(header) + "." + encode(payload);
+        // htu is the request URI, sourced from the AS's own discovery metadata; strip its query and
+        // fragment (RFC 9449 §4.2) then escape every JSON control character per RFC 8259.
+        StringBuilder payload = new StringBuilder("{\"jti\":\"").append(JsonEscaper.escape(jti))
+                .append("\",\"htm\":\"").append(JsonEscaper.escape(htm))
+                .append("\",\"htu\":\"").append(JsonEscaper.escape(normalizeHtu(htu)))
+                .append("\",\"iat\":").append(now);
+        if (accessToken != null) {
+            payload.append(",\"ath\":\"").append(JsonEscaper.escape(computeAth(accessToken))).append('"');
+        }
+        if (nonce != null) {
+            payload.append(",\"nonce\":\"").append(JsonEscaper.escape(nonce)).append('"');
+        }
+        payload.append('}');
+        String signingInput = encode(header) + "." + encode(payload.toString());
         return signingInput + "." + sign(signingInput);
+    }
+
+    /**
+     * Strips the query and fragment from a request URI so the {@code htu} claim binds only the
+     * scheme, authority and path (RFC 9449 §4.2).
+     */
+    private static String normalizeHtu(String htu) {
+        int cut = htu.length();
+        int query = htu.indexOf('?');
+        if (query >= 0) {
+            cut = query;
+        }
+        int fragment = htu.indexOf('#');
+        if (fragment >= 0 && fragment < cut) {
+            cut = fragment;
+        }
+        return htu.substring(0, cut);
+    }
+
+    /**
+     * Computes the RFC 9449 §4.3 {@code ath} claim — the base64url-encoded SHA-256 hash of the ASCII
+     * encoding of the access-token value — binding a protected-resource proof to the token it presents.
+     */
+    private static String computeAth(String accessToken) {
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256")
+                    .digest(accessToken.getBytes(StandardCharsets.US_ASCII));
+            return BASE64_URL.encodeToString(hash);
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("SHA-256 not available for DPoP ath claim", e);
+        }
     }
 
     /**

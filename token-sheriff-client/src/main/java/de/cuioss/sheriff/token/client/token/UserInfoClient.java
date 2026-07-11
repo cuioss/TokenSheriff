@@ -19,15 +19,19 @@ import com.dslplatform.json.DslJson;
 import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -51,6 +55,8 @@ public class UserInfoClient {
     private static final String AUTHORIZATION = "Authorization";
     private static final String ACCEPT = "Accept";
     private static final String APPLICATION_JSON = "application/json";
+    private static final String HTTP_GET = "GET";
+    private static final String BEARER_SCHEME = "Bearer";
     private static final int CONNECT_TIMEOUT_SECONDS = 5;
     private static final int READ_TIMEOUT_SECONDS = 10;
 
@@ -69,7 +75,8 @@ public class UserInfoClient {
     }
 
     /**
-     * Fetches the userinfo document for the given access token.
+     * Fetches the userinfo document, presenting the access token as a plain RFC 6750 {@code Bearer}
+     * credential.
      *
      * @param userInfoEndpoint the absolute userinfo endpoint URL (from discovery); must be TLS unless
      *                         {@link ClientConfiguration#isAllowInsecureHttp()} is set
@@ -80,6 +87,30 @@ public class UserInfoClient {
      *         be parsed, or the response omits the {@code sub}
      */
     public UserInfoResponse fetchUserInfo(String userInfoEndpoint, String accessToken) {
+        return fetchUserInfo(userInfoEndpoint, accessToken, null);
+    }
+
+    /**
+     * Fetches the userinfo document, presenting the access token under the scheme its sender-constraint
+     * requires.
+     * <p>
+     * When {@code senderConstraint} is a DPoP constraint, the token is presented as an
+     * {@code Authorization: DPoP <token>} credential (RFC 9449 §7.1) accompanied by a fresh
+     * protected-resource DPoP proof whose {@code ath} claim binds the proof to this exact token
+     * (RFC 9449 §4.3). Otherwise — no constraint, or an mTLS constraint that binds at the TLS layer —
+     * the token is presented as a plain {@code Bearer} credential.
+     *
+     * @param userInfoEndpoint the absolute userinfo endpoint URL (from discovery); must be TLS unless
+     *                         {@link ClientConfiguration#isAllowInsecureHttp()} is set
+     * @param accessToken      the validated access token to present; must not be {@code null}
+     * @param senderConstraint the DPoP/mTLS sender-constraint the token was bound under, or
+     *                         {@code null} for a plain bearer token
+     * @return the normalized userinfo response
+     * @throws TransportException if the request fails, the response is not successful, the body cannot
+     *         be parsed, or the response omits the {@code sub}
+     */
+    public UserInfoResponse fetchUserInfo(String userInfoEndpoint, String accessToken,
+            @Nullable SenderConstraint senderConstraint) {
         Objects.requireNonNull(userInfoEndpoint, "userInfoEndpoint must not be null");
         Objects.requireNonNull(accessToken, "accessToken must not be null");
 
@@ -90,11 +121,11 @@ public class UserInfoClient {
                 .allowInsecureHttp(configuration.isAllowInsecureHttp())
                 .build();
 
-        HttpRequest request = handler.requestBuilder()
-                .header(AUTHORIZATION, "Bearer " + accessToken)
+        HttpRequest.Builder requestBuilder = handler.requestBuilder()
                 .header(ACCEPT, APPLICATION_JSON)
-                .GET()
-                .build();
+                .GET();
+        authorize(requestBuilder, userInfoEndpoint, accessToken, senderConstraint);
+        HttpRequest request = requestBuilder.build();
 
         HttpClient client = handler.createHttpClient();
         try {
@@ -111,6 +142,21 @@ public class UserInfoClient {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new TransportException("userinfo request interrupted", e);
+        }
+    }
+
+    /**
+     * Sets the {@code Authorization} header under the scheme the sender-constraint requires, and — for
+     * a DPoP constraint — adds the accompanying {@code ath}-bound protected-resource proof header.
+     */
+    private static void authorize(HttpRequest.Builder requestBuilder, String userInfoEndpoint,
+            String accessToken, @Nullable SenderConstraint senderConstraint) {
+        String scheme = senderConstraint == null ? BEARER_SCHEME : senderConstraint.authorizationScheme();
+        requestBuilder.header(AUTHORIZATION, scheme + " " + accessToken);
+        if (senderConstraint != null) {
+            Map<String, String> proofHeaders = new HashMap<>();
+            senderConstraint.applyProtectedResource(HTTP_GET, userInfoEndpoint, accessToken, null, proofHeaders);
+            proofHeaders.forEach(requestBuilder::header);
         }
     }
 

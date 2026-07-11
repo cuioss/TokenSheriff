@@ -17,6 +17,8 @@ package de.cuioss.sheriff.token.client.flow;
 
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.client.dpop.DpopProofGenerator;
+import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -27,35 +29,60 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.util.Base64;
+
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Wired-flow scaffold ({@code S0}): proves the {@link WiredFlowTestSupport} harness compiles and can
- * drive the real {@link AuthorizationCodeFlow} orchestrator end to end through the recording
- * dispatcher, exactly as the CDI-produced bean graph would.
+ * Wired-flow scaffold ({@code S0}) plus the DPoP wiring negative/positive path cases ({@code H3}):
+ * proves the {@link WiredFlowTestSupport} harness drives the real flow orchestrators end to end
+ * through the recording dispatcher, exactly as the CDI-produced bean graph would.
  * <p>
- * It carries the two shapes the per-defence wiring deliverables (mix-up, DPoP, refresh-reuse) build
- * on:
+ * It carries the shapes the per-defence wiring deliverables build on:
  * <ul>
  *   <li>a <strong>guarded exchange</strong> that redeems a valid callback and returns validated,
  *       nonce-bound tokens — the token endpoint is called exactly once;</li>
  *   <li>a <strong>negative path</strong> where a tampered callback is refused <em>before</em> the
  *       token endpoint is ever called ({@link WiredFlowTestSupport#assertRefusedBeforeTokenEndpoint}),
- *       so a defence deleted from the wired path would fail here.</li>
+ *       so a defence deleted from the wired path would fail here;</li>
+ *   <li>the <strong>DPoP wiring</strong> ({@code H3}) that attaches a proof to the token request on the
+ *       executable refresh path and retries a {@code use_dpop_nonce} challenge — so a DPoP binding
+ *       deleted from the wired transport, or a nonce challenge surfaced as an opaque failure, fails
+ *       here.</li>
  * </ul>
- * Named {@code *IT} so it runs in the integration-test phase; the per-defence negative cases are added
- * inside their corresponding wiring deliverables.
+ * Named {@code *IT} so it runs in the integration-test phase.
  */
 @EnableTestLogger
 @EnableGeneratorController
 @EnableMockWebServer
-@DisplayName("Wired-flow scaffold: real AuthorizationCodeFlow driven end to end")
+@DisplayName("Wired-flow scaffold: real flows driven end to end, incl. DPoP wiring")
 class WiredFlowNegativePathIT extends WiredFlowTestSupport {
+
+    private static final String DPOP_HEADER = "DPoP";
 
     @BeforeEach
     void setUp() {
         initWiredFlow();
+    }
+
+    /**
+     * Redeclares the recording dispatcher accessor on this concrete test class so
+     * {@code @EnableMockWebServer} discovers it — the framework resolves {@code getModuleDispatcher()}
+     * from the test class's own declared methods and does not walk up to the abstract
+     * {@link WiredFlowTestSupport} base, so the inherited accessor alone would leave the mock server
+     * dispatcher unregistered (every {@code /token} call would return HTTP 418).
+     *
+     * @return the shared recording token-endpoint dispatcher
+     */
+    @Override
+    public RecordingTokenEndpointDispatcher getModuleDispatcher() {
+        return super.getModuleDispatcher();
     }
 
     @Test
@@ -125,5 +152,66 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
 
         assertRefusedBeforeTokenEndpoint(IllegalStateException.class,
                 () -> flow.exchange(metadata, context, callbackWithoutIss, clientAuth));
+    }
+
+    @Test
+    @DisplayName("Should attach a DPoP proof to the wired refresh request so a deleted binding is observable")
+    void shouldAttachDpopProofToWiredRefresh(URIBuilder uriBuilder) throws Exception {
+        ClientConfiguration config = config();
+        getModuleDispatcher().success(accessHolder.getRawToken(), null,
+                Generators.letterStrings(20, 40).next(), 300);
+        RefreshFlow flow = dpopRefreshFlow(config);
+
+        flow.refresh(metadataWithTokenEndpoint(uriBuilder), Generators.letterStrings(20, 40).next());
+
+        String proof = getModuleDispatcher().lastRecordedDpopHeader();
+        assertAll("wired DPoP refresh",
+                () -> getModuleDispatcher().assertCalled(1),
+                () -> assertNotNull(proof, "the wired refresh request carries a DPoP proof header"),
+                () -> assertEquals(3, proof.split("\\.").length, "the DPoP header is a compact proof JWT"));
+    }
+
+    @Test
+    @DisplayName("Should retry the wired token request with the DPoP-Nonce echoed on a use_dpop_nonce challenge")
+    void shouldRetryWiredRefreshWithChallengedNonce(URIBuilder uriBuilder) {
+        ClientConfiguration config = config();
+        String nonce = Generators.letterStrings(20, 40).next();
+        getModuleDispatcher().success(accessHolder.getRawToken(), null,
+                Generators.letterStrings(20, 40).next(), 300);
+        getModuleDispatcher().challengeWithNonceOnce(nonce);
+        RefreshFlow flow = dpopRefreshFlow(config);
+
+        flow.refresh(metadataWithTokenEndpoint(uriBuilder), Generators.letterStrings(20, 40).next());
+
+        String retriedProof = getModuleDispatcher().lastRecordedDpopHeader();
+        assertAll("nonce-challenged retry",
+                () -> getModuleDispatcher().assertCalled(2),
+                () -> assertNotNull(retriedProof, "the retried request carries a fresh DPoP proof"),
+                () -> assertTrue(decodePayload(retriedProof).contains("\"nonce\":\"" + nonce + "\""),
+                        "the retried proof echoes the challenged DPoP-Nonce"));
+    }
+
+    /**
+     * Assembles a DPoP-constrained refresh flow, exactly as the CDI producer does when the client is
+     * configured for sender-constrained tokens.
+     */
+    private RefreshFlow dpopRefreshFlow(ClientConfiguration config) {
+        SenderConstraint constraint = SenderConstraint.dpop(new DpopProofGenerator(rsaKeyPair(), "RS256"));
+        return new RefreshFlow(config, new TokenEndpointClient(config), accessBridge, clientAuth(config), constraint);
+    }
+
+    private static KeyPair rsaKeyPair() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair();
+        } catch (Exception e) {
+            throw new IllegalStateException("RSA key pair generation failed", e);
+        }
+    }
+
+    private static String decodePayload(String proof) {
+        String[] segments = proof.split("\\.");
+        return new String(Base64.getUrlDecoder().decode(segments[1]), StandardCharsets.UTF_8);
     }
 }

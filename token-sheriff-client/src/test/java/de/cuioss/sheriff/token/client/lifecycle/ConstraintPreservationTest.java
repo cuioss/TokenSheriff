@@ -68,14 +68,15 @@ class ConstraintPreservationTest {
         String refreshedAccess = Generators.letterStrings(20, 40).next();
         String refreshedRefresh = Generators.letterStrings(20, 40).next();
         Instant refreshedExpiry = Instant.now().plusSeconds(300);
-        StoredToken refreshed = manager.applyRefresh(sessionId, refreshedAccess, refreshedRefresh, refreshedExpiry)
+        StoredToken refreshed = manager.applyRefresh(sessionId, refreshedAccess, refreshedRefresh, refreshedExpiry,
+                        binding)
                 .orElseThrow();
 
         assertAll("refresh preserves constraint",
                 () -> assertEquals(refreshedAccess, refreshed.accessToken(), "the access token is rotated"),
                 () -> assertEquals(refreshedRefresh, refreshed.refreshToken(), "the refresh token is rotated"),
                 () -> assertEquals(binding, refreshed.binding().orElseThrow(),
-                        "the sender-constraint binding survives the refresh"),
+                        "the binding survives the refresh because the refreshed token re-confirms the same key"),
                 () -> assertEquals(idToken, refreshed.idToken(), "the ID token is carried forward"),
                 () -> assertEquals(refreshed, manager.get(sessionId).orElseThrow(),
                         "the refreshed bundle replaces the stored one"));
@@ -89,7 +90,7 @@ class ConstraintPreservationTest {
         StoredToken token = new StoredToken(Generators.letterStrings(20, 40).next(), currentRefresh, null, binding,
                 null);
 
-        StoredToken refreshed = token.refreshed(Generators.letterStrings(20, 40).next(), null, null);
+        StoredToken refreshed = token.refreshed(Generators.letterStrings(20, 40).next(), null, null, binding);
 
         assertAll("non-rotating refresh",
                 () -> assertEquals(currentRefresh, refreshed.refreshToken(),

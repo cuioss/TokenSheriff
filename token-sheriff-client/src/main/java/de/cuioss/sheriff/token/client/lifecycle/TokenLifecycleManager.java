@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.lifecycle;
 
+import de.cuioss.sheriff.token.client.dpop.ConstraintBinding;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
@@ -31,9 +32,11 @@ import java.util.Optional;
  * Orchestrates the server-side token lifecycle over a {@link TokenStore}: store, retrieve, proactive
  * refresh, and revoke-and-clear on logout ({@code CLIENT-17} / {@code CLIENT-18} / {@code CLIENT-19}).
  * <p>
- * Refresh preserves the sender-constraint: {@link #applyRefresh} carries the stored
- * {@link StoredToken#binding() ConstraintBinding} forward so a proactively-refreshed token stays
- * bound to the same key ({@code CLIENT-18}).
+ * Refresh is sender-constraint aware but proof-driven, not metadata-only: {@link #applyRefresh} takes
+ * the {@code cnf} binding actually confirmed on the refreshed token and verifies it against the stored
+ * {@link StoredToken#binding() ConstraintBinding} (via {@link StoredToken#refreshed}), so a
+ * proactively-refreshed token that came back as a plain bearer — or bound to a different key — is
+ * rejected as a downgrade rather than silently keeping the stale binding ({@code CLIENT-18}).
  * <p>
  * <strong>Logout is fail-closed with no stale-read window.</strong> {@link #revokeAndClear} performs a
  * single atomic take-and-clear via {@link TokenStore#remove(String)}: after it returns, the session's
@@ -91,22 +94,29 @@ public class TokenLifecycleManager {
     }
 
     /**
-     * Applies refreshed token material to a stored session, preserving the sender-constraint and ID
-     * token ({@code CLIENT-18}). Does nothing and returns empty when no bundle is held.
+     * Applies refreshed token material to a stored session, carrying the ID token forward and
+     * verifying the refreshed token's sender-constraint against the stored one ({@code CLIENT-18}).
+     * Does nothing and returns empty when no bundle is held. When the stored bundle was
+     * sender-constrained but {@code refreshedBinding} no longer confirms the same key, the transform
+     * throws {@link IllegalStateException} (a rejected downgrade) rather than writing a mismatched
+     * bundle.
      *
-     * @param sessionId       the opaque session identifier; must not be {@code null} or blank
-     * @param newAccessToken  the refreshed access token; must not be {@code null} or blank
-     * @param newRefreshToken the refreshed refresh token, or {@code null} to keep the current one
-     * @param newExpiresAt    the refreshed access-token expiry, or {@code null} when unknown
+     * @param sessionId        the opaque session identifier; must not be {@code null} or blank
+     * @param newAccessToken   the refreshed access token; must not be {@code null} or blank
+     * @param newRefreshToken  the refreshed refresh token, or {@code null} to keep the current one
+     * @param newExpiresAt     the refreshed access-token expiry, or {@code null} when unknown
+     * @param refreshedBinding the {@code cnf} binding confirmed on the refreshed token, or {@code null}
+     *                         when the refreshed token is a plain bearer token
      * @return the updated stored bundle, or {@link Optional#empty()} when no bundle was held
      */
     public Optional<StoredToken> applyRefresh(String sessionId, String newAccessToken,
-            @Nullable String newRefreshToken, @Nullable Instant newExpiresAt) {
+            @Nullable String newRefreshToken, @Nullable Instant newExpiresAt,
+            @Nullable ConstraintBinding refreshedBinding) {
         // Atomic retrieve-transform-store: a concurrent revokeAndClear (logout) can no longer slip
         // between the read and the write and resurrect a just-revoked session, so a refresh applied
         // after logout is a no-op rather than a stale-token write (CLIENT-22).
         return tokenStore.update(sessionId,
-                current -> current.refreshed(newAccessToken, newRefreshToken, newExpiresAt));
+                current -> current.refreshed(newAccessToken, newRefreshToken, newExpiresAt, refreshedBinding));
     }
 
     /**
