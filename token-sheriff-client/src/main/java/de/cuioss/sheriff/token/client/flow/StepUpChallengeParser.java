@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
+import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
 
@@ -94,7 +95,7 @@ public class StepUpChallengeParser {
         try {
             return Integer.valueOf(value.strip());
         } catch (NumberFormatException e) {
-            LOGGER.debug("Ignoring non-numeric step-up max_age '%s'", value);
+            LOGGER.debug("Ignoring non-numeric step-up max_age '%s'", LogSanitizer.sanitize(value));
             return null;
         }
     }

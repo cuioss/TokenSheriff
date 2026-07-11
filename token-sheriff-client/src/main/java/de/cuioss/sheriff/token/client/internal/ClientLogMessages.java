@@ -47,8 +47,13 @@ public final class ClientLogMessages {
                 .template("Resolved OIDC provider metadata for issuer '%s'")
                 .build();
 
-        /** Held tokens for a session were cleared as part of RP-initiated logout. */
-        public static final LogRecord LOGOUT_TOKENS_REVOKED = LogRecordModel.builder()
+        /**
+         * Held tokens for a session were cleared from the local store as part of RP-initiated logout.
+         * This records the client-side store clear only; revocation at the authorization server (RFC
+         * 7009) is performed separately by the relying party on the returned bundle, so this event must
+         * not claim the tokens were revoked (L17).
+         */
+        public static final LogRecord LOGOUT_TOKENS_CLEARED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(2)
                 .template("Cleared held tokens for session '%s' as part of RP-initiated logout")

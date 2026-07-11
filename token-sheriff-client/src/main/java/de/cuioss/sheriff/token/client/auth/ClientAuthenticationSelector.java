@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.client.auth;
 
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 
 import java.util.Collection;
 import java.util.List;
@@ -83,7 +84,7 @@ public class ClientAuthenticationSelector {
         if (strongest == null) {
             throw new IllegalStateException(
                     "no configured client authentication method is advertised by the authorization server; advertised="
-                            + advertised);
+                            + LogSanitizer.sanitize(String.valueOf(advertised)));
         }
         return strongest;
     }

@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
+import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.nio.charset.StandardCharsets;
@@ -56,7 +57,8 @@ public class CallbackHandler {
 
         if (parameters.hasError()) {
             throw new IllegalStateException(
-                    "authorization server returned an error callback: " + parameters.error());
+                    "authorization server returned an error callback: "
+                            + LogSanitizer.sanitize(parameters.error()));
         }
         if (!statesMatch(context.state(), parameters.state())) {
             LOGGER.debug("Rejecting authorization callback: state mismatch");

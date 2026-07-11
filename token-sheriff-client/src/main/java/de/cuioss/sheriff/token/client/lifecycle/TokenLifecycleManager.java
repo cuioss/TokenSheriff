@@ -368,7 +368,7 @@ public class TokenLifecycleManager {
         Optional<StoredToken> removed = tokenStore.remove(sessionId);
         families.remove(sessionId);
         if (removed.isPresent()) {
-            LOGGER.info(ClientLogMessages.INFO.LOGOUT_TOKENS_REVOKED, maskSessionId(sessionId));
+            LOGGER.info(ClientLogMessages.INFO.LOGOUT_TOKENS_CLEARED, maskSessionId(sessionId));
         }
         return removed;
     }

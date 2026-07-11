@@ -64,4 +64,20 @@ public record RotationResult(AccessTokenContent accessToken, String refreshToken
             throw new IllegalArgumentException("refreshToken must not be blank");
         }
     }
+
+    /**
+     * Renders the result without exposing live token material: the validated access token, the
+     * refresh token, and the refreshed ID token are redacted so a stray {@code toString()} — a log
+     * statement, an exception message, or a debugger dump — never leaks a usable credential (H8). Only
+     * credential presence and the non-secret fields are shown.
+     *
+     * @return a redacted string representation carrying no live token material
+     */
+    @Override
+    public String toString() {
+        return "RotationResult[accessToken=<redacted>, refreshToken=<redacted>, idToken="
+                + (idToken == null ? "null" : "<redacted>")
+                + ", accessTokenExpiresInSeconds=" + accessTokenExpiresInSeconds
+                + ", rotated=" + rotated + "]";
+    }
 }

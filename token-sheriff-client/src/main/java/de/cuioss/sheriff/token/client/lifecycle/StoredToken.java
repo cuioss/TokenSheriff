@@ -149,4 +149,23 @@ ConstraintBinding constraintBinding, @Nullable
                 newRefreshToken != null ? newRefreshToken : refreshToken,
                 newIdToken != null ? newIdToken : idToken, refreshedBinding, newExpiresAt);
     }
+
+    /**
+     * Renders the bundle without exposing live token material: the access, refresh, and ID tokens are
+     * redacted so a stray {@code toString()} — a log statement, an exception message, or a debugger
+     * dump — never leaks a usable credential (H8). Only credential presence and the non-secret fields
+     * are shown.
+     *
+     * @return a redacted string representation carrying no live token material
+     */
+    @Override
+    public String toString() {
+        return "StoredToken[accessToken=<redacted>, refreshToken=" + redact(refreshToken)
+                + ", idToken=" + redact(idToken) + ", constraintBinding=" + constraintBinding
+                + ", expiresAt=" + expiresAt + "]";
+    }
+
+    private static String redact(@Nullable String secret) {
+        return secret == null ? "null" : "<redacted>";
+    }
 }

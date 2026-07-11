@@ -29,6 +29,10 @@ import org.jspecify.annotations.Nullable;
  * attacker who embeds {@code %0d%0a} can forge a new, seemingly legitimate log entry. This sanitizer
  * escapes (rather than drops) {@code CR}, {@code LF}, tab, and the remaining ASCII control characters,
  * preserving the value's investigative content while making it impossible to inject a line break.
+ * <p>
+ * The value is also truncated to {@value #MAX_LENGTH} characters before escaping, so an attacker
+ * cannot flood the log with an arbitrarily long value (L18). When truncation occurs the marker
+ * {@value #TRUNCATION_MARKER} is appended so the elision is visible in the log.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -36,24 +40,34 @@ import org.jspecify.annotations.Nullable;
  */
 public final class LogSanitizer {
 
+    /** Maximum number of source characters retained; longer values are truncated to bound flooding. */
+    private static final int MAX_LENGTH = 256;
+
+    /** Appended when a value is truncated, so the elision is visible in the log. */
+    private static final String TRUNCATION_MARKER = "...[truncated]";
+
     private LogSanitizer() {
         // utility class — never instantiated
     }
 
     /**
      * Escapes {@code CR}, {@code LF} and every other ASCII control character in {@code value} so it
-     * cannot forge a new log line when substituted into a log template.
+     * cannot forge a new log line when substituted into a log template, and truncates the value to
+     * {@value #MAX_LENGTH} characters to bound log flooding.
      *
      * @param value the untrusted value to sanitize; may be {@code null}
-     * @return the sanitized value, or {@code null} when {@code value} is {@code null}
+     * @return the sanitized (and, when over-long, truncated) value, or {@code null} when {@code value}
+     *         is {@code null}
      */
     public static @Nullable String sanitize(@Nullable String value) {
         if (value == null) {
             return null;
         }
-        StringBuilder sanitized = new StringBuilder(value.length());
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
+        boolean truncated = value.length() > MAX_LENGTH;
+        String bounded = truncated ? value.substring(0, MAX_LENGTH) : value;
+        StringBuilder sanitized = new StringBuilder(bounded.length());
+        for (int i = 0; i < bounded.length(); i++) {
+            char c = bounded.charAt(i);
             switch (c) {
                 case '\r' -> sanitized.append("\\r");
                 case '\n' -> sanitized.append("\\n");
@@ -66,6 +80,9 @@ public final class LogSanitizer {
                     }
                 }
             }
+        }
+        if (truncated) {
+            sanitized.append(TRUNCATION_MARKER);
         }
         return sanitized.toString();
     }
