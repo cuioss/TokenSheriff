@@ -33,6 +33,7 @@ import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
@@ -259,15 +260,12 @@ class AccessTokenCacheTest {
                         AccessTokenContent result;
                         if (cached.isEmpty()) {
                             validationCount.incrementAndGet();
-                            // Simulate some work to increase race window. atMost must be generous:
-                            // under parallel surefire forks / JaCoCo instrumentation the poll cycle
-                            // can exceed a tight ceiling and throw ConditionTimeoutException, which
-                            // would spuriously fail unrelated threads. until(() -> true) returns
-                            // immediately after pollDelay, so the ceiling only guards against hangs.
-                            await()
-                                    .pollDelay(1, TimeUnit.MILLISECONDS)
-                                    .atMost(5, TimeUnit.SECONDS)
-                                    .until(() -> true);
+                            // Simulate some work to widen the race window. Use a lightweight park
+                            // rather than Awaitility (which is for async assertions): across 50
+                            // concurrent threads under parallel CPU contention its polling machinery
+                            // adds overhead and can throw ConditionTimeoutException, spuriously
+                            // failing unrelated threads.
+                            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(1));
                             result = content;
                             cache.put(token, result, performanceMonitor);
                         } else {

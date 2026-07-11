@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.locks.LockSupport;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -174,11 +175,9 @@ class HttpJwksLoaderKeyRotationTest {
                     return newKey.isPresent();
                 });
 
-        // Wait for grace period to expire
-        await("Grace period to expire")
-                .atMost(10, SECONDS)
-                .pollDelay(200, MILLISECONDS) // Wait longer than grace period
-                .until(() -> true);
+        // Wait (longer than the grace period) for the retired key to expire. A lightweight park
+        // rather than Awaitility, whose polling machinery is unnecessary for a fixed pause.
+        LockSupport.parkNanos(MILLISECONDS.toNanos(200));
 
         // Original key should no longer be accessible
         Optional<KeyInfo> expiredKey = loader.getKeyInfo(ORIGINAL_KEY_ID);
