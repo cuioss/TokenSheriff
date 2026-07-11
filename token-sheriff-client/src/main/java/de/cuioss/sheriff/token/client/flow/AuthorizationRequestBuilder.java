@@ -31,10 +31,14 @@ import java.util.Objects;
  * <p>
  * The URL always carries {@code response_type=code}, the {@code client_id}, the exact
  * {@code redirect_uri}, the requested {@code scope}, the anti-CSRF {@code state}, the {@code nonce},
- * and the PKCE {@code code_challenge} / {@code code_challenge_method=S256}. When the flow context
- * requests {@code acr_values} (step-up), they are appended. The builder fails closed when the
- * authorization server does not advertise PKCE {@code S256}, so a downgrade to a non-PKCE (or
- * {@code plain}) request can never be issued ({@code CLIENT-2}).
+ * and the PKCE {@code code_challenge} / {@code code_challenge_method=S256}. It also always requests
+ * {@code response_mode=form_post} (OAuth 2.0 Form Post Response Mode) so the authorization response —
+ * {@code code}, {@code state}, and the RFC 9207 {@code iss} — is delivered in the body of a POST to
+ * the redirect URI rather than as query parameters on a redirect URL, where it would leak into
+ * browser history, server logs, and the {@code Referer} header ({@code CLIENT-1} / {@code CLIENT-14},
+ * {@code T-URL-LEAK}). When the flow context requests {@code acr_values} (step-up), they are appended.
+ * The builder fails closed when the authorization server does not advertise PKCE {@code S256}, so a
+ * downgrade to a non-PKCE (or {@code plain}) request can never be issued ({@code CLIENT-2}).
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -55,6 +59,8 @@ public class AuthorizationRequestBuilder {
     private static final String PARAM_CODE_CHALLENGE = "code_challenge";
     private static final String PARAM_CODE_CHALLENGE_METHOD = "code_challenge_method";
     private static final String PARAM_ACR_VALUES = "acr_values";
+    private static final String PARAM_RESPONSE_MODE = "response_mode";
+    private static final String RESPONSE_MODE_FORM_POST = "form_post";
 
     /**
      * Builds the authorization request URL for the given flow context.
@@ -94,6 +100,7 @@ public class AuthorizationRequestBuilder {
         params.put(PARAM_NONCE, context.nonce());
         params.put(PARAM_CODE_CHALLENGE, context.pkceChallenge().codeChallenge());
         params.put(PARAM_CODE_CHALLENGE_METHOD, context.pkceChallenge().method());
+        params.put(PARAM_RESPONSE_MODE, RESPONSE_MODE_FORM_POST);
         context.acrValues().ifPresent(acr -> params.put(PARAM_ACR_VALUES, acr));
 
         return authorizationEndpoint + (authorizationEndpoint.indexOf('?') < 0 ? '?' : '&') + FormEncoder.encode(params);
