@@ -24,15 +24,24 @@ import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
+import de.cuioss.test.mockwebserver.dispatcher.HttpMethodMapper;
+import de.cuioss.test.mockwebserver.dispatcher.ModuleDispatcherElement;
 import lombok.Getter;
+import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
+import okhttp3.Headers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -42,8 +51,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("UserInfoClient userinfo fetch (OIDC Core §5.3)")
 class UserInfoClientTest {
 
+    private static final String APPLICATION_JWT = "application/jwt";
+
     @Getter
-    private final UserInfoDispatcher moduleDispatcher = new UserInfoDispatcher();
+    private final UserInfoTestDispatcher moduleDispatcher = new UserInfoTestDispatcher();
 
     @BeforeEach
     void resetDispatcher() {
@@ -126,5 +137,139 @@ class UserInfoClientTest {
 
         assertEquals("other-subject", userInfo.getSub().orElseThrow(),
                 "the transport returns the raw sub; SubBindingValidator is what rejects the mismatch");
+    }
+
+    @Test
+    @DisplayName("Should advertise both application/json and application/jwt on the Accept header (M3)")
+    void shouldAdvertiseJsonAndJwtAccept(URIBuilder uriBuilder, MockWebServer server) throws Exception {
+        userInfoClient().fetchUserInfo(userInfoEndpoint(uriBuilder), Generators.nonBlankStrings().next());
+
+        RecordedRequest request = server.takeRequest();
+        String accept = request.getHeaders().get("Accept");
+        assertAll("accept header",
+                () -> assertNotNull(accept, "the request must advertise an Accept header"),
+                () -> assertTrue(accept.contains("application/json"), "plain JSON userinfo must still be accepted"),
+                () -> assertTrue(accept.contains(APPLICATION_JWT),
+                        "a signed JWT userinfo response must be advertised as acceptable"));
+    }
+
+    @Test
+    @DisplayName("Should validate a signed JWT userinfo response through the supplied validator (M3)")
+    void shouldValidateSignedUserInfo(URIBuilder uriBuilder) {
+        String signedJwt = "eyJhbGciOiJSUzI1NiJ9." + Generators.letterStrings(20, 40).next() + ".signature";
+        moduleDispatcher.returnSigned(APPLICATION_JWT, signedJwt);
+        String subject = Generators.nonBlankStrings().next();
+        AtomicReference<String> received = new AtomicReference<>();
+
+        UserInfoResponse userInfo = userInfoClient().fetchUserInfo(
+                userInfoEndpoint(uriBuilder), Generators.nonBlankStrings().next(), null,
+                body -> {
+                    received.set(body);
+                    UserInfoResponse validated = new UserInfoResponse();
+                    validated.sub = subject;
+                    return validated;
+                });
+
+        assertAll("signed userinfo",
+                () -> assertEquals(signedJwt, received.get(),
+                        "the raw signed JWT body must be handed to the validator, not parsed as JSON"),
+                () -> assertEquals(subject, userInfo.getSub().orElseThrow(),
+                        "the validated signed userinfo claims must be returned"));
+    }
+
+    @Test
+    @DisplayName("Should fail closed on a signed userinfo response when no validator is configured (M3)")
+    void shouldRejectSignedUserInfoWithoutValidator(URIBuilder uriBuilder) {
+        moduleDispatcher.returnSigned(APPLICATION_JWT,
+                "eyJhbGciOiJSUzI1NiJ9." + Generators.letterStrings(20, 40).next() + ".signature");
+        var client = userInfoClient();
+        var endpoint = userInfoEndpoint(uriBuilder);
+        var token = Generators.nonBlankStrings().next();
+
+        assertThrows(TransportException.class, () -> client.fetchUserInfo(endpoint, token, null, null));
+    }
+
+    @Test
+    @DisplayName("Should reject a signed userinfo response whose validated claims omit the sub (M3)")
+    void shouldRejectSignedUserInfoMissingSub(URIBuilder uriBuilder) {
+        moduleDispatcher.returnSigned(APPLICATION_JWT,
+                "eyJhbGciOiJSUzI1NiJ9." + Generators.letterStrings(20, 40).next() + ".signature");
+        var client = userInfoClient();
+        var endpoint = userInfoEndpoint(uriBuilder);
+        var token = Generators.nonBlankStrings().next();
+
+        assertThrows(TransportException.class,
+                () -> client.fetchUserInfo(endpoint, token, null, body -> new UserInfoResponse()));
+    }
+
+    /**
+     * Userinfo dispatcher that serves the {@link UserInfoDispatcher} JSON strategies by default and,
+     * on demand, a signed JWT response (an {@code application/jwt} {@code Content-Type} with a JWT body)
+     * so the signed-userinfo path (OIDC Core §5.3.2, M3) can be exercised end-to-end.
+     */
+    static final class UserInfoTestDispatcher implements ModuleDispatcherElement {
+
+        private final UserInfoDispatcher json = new UserInfoDispatcher();
+        private boolean signed;
+        private String signedContentType = APPLICATION_JWT;
+        private String signedBody = "";
+
+        UserInfoTestDispatcher returnDefault() {
+            signed = false;
+            json.returnDefault();
+            return this;
+        }
+
+        UserInfoTestDispatcher returnError() {
+            signed = false;
+            json.returnError();
+            return this;
+        }
+
+        UserInfoTestDispatcher returnOversizedBody() {
+            signed = false;
+            json.returnOversizedBody();
+            return this;
+        }
+
+        UserInfoTestDispatcher returnSubMismatch() {
+            signed = false;
+            json.returnSubMismatch();
+            return this;
+        }
+
+        UserInfoTestDispatcher returnSigned(String contentType, String body) {
+            signed = true;
+            signedContentType = contentType;
+            signedBody = body;
+            return this;
+        }
+
+        void setCallCounter(int callCounter) {
+            json.setCallCounter(callCounter);
+        }
+
+        @Override
+        public String getBaseUrl() {
+            return json.getBaseUrl();
+        }
+
+        @Override
+        public Set<HttpMethodMapper> supportedMethods() {
+            return json.supportedMethods();
+        }
+
+        @Override
+        public Optional<MockResponse> handleGet(RecordedRequest request) {
+            if (signed) {
+                return Optional.of(new MockResponse(200, Headers.of("Content-Type", signedContentType), signedBody));
+            }
+            return json.handleGet(request);
+        }
+
+        @Override
+        public Optional<MockResponse> handlePost(RecordedRequest request) {
+            return handleGet(request);
+        }
     }
 }

@@ -32,6 +32,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -55,10 +56,31 @@ public class UserInfoClient {
 
     private static final String AUTHORIZATION = "Authorization";
     private static final String ACCEPT = "Accept";
+    private static final String CONTENT_TYPE = "Content-Type";
     private static final String APPLICATION_JSON = "application/json";
+    private static final String APPLICATION_JWT = "application/jwt";
+    private static final String ACCEPT_JSON_OR_JWT = APPLICATION_JSON + ", " + APPLICATION_JWT;
     private static final String HTTP_GET = "GET";
     private static final String BEARER_SCHEME = "Bearer";
     private static final String FAILURE_CONTEXT = "userinfo request failed";
+
+    /**
+     * Validation seam for a signed userinfo response (OIDC Core §5.3.2,
+     * {@code userinfo_signed_response_alg}, M3). The relying party supplies the implementation that
+     * runs the signed JWT through the existing token-validation pipeline (signature via JWKS,
+     * {@code iss}, {@code aud}) and returns the normalized claims. Keeping it a seam lets the transport
+     * support the signed path without coupling to the validation module or changing the wiring of
+     * callers that only ever see plain JSON userinfo.
+     */
+    @FunctionalInterface
+    public interface SignedUserInfoValidator {
+
+        /**
+         * @param signedJwt the raw signed userinfo JWT (the response body); never {@code null} or blank
+         * @return the validated, normalized userinfo claims
+         */
+        UserInfoResponse validate(String signedJwt);
+    }
 
     private final DslJson<Object> dslJson;
     private final int maxContentSize;
@@ -112,13 +134,41 @@ public class UserInfoClient {
      */
     public UserInfoResponse fetchUserInfo(String userInfoEndpoint, String accessToken,
             @Nullable SenderConstraint senderConstraint) {
+        return fetchUserInfo(userInfoEndpoint, accessToken, senderConstraint, null);
+    }
+
+    /**
+     * Fetches the userinfo document, supporting both a plain JSON response and a signed JWT response
+     * (OIDC Core §5.3.2, {@code userinfo_signed_response_alg}, M3).
+     * <p>
+     * The request advertises {@code Accept: application/json, application/jwt}. When the response is a
+     * signed JWT (its {@code Content-Type} is {@code application/jwt}), the body is validated through
+     * the supplied {@code signedResponseValidator} — which runs it through the existing token-validation
+     * pipeline — rather than parsed as JSON. A signed response with no validator supplied fails closed
+     * rather than being mis-parsed. A plain JSON response is parsed exactly as before.
+     *
+     * @param userInfoEndpoint         the absolute userinfo endpoint URL (from discovery); must be TLS
+     *                                 unless {@link ClientConfiguration#isAllowInsecureHttp()} is set
+     * @param accessToken              the validated access token to present; must not be {@code null}
+     * @param senderConstraint         the DPoP/mTLS sender-constraint the token was bound under, or
+     *                                 {@code null} for a plain bearer token
+     * @param signedResponseValidator  the validator for a signed JWT userinfo response, or {@code null}
+     *                                 when only a plain JSON response is expected
+     * @return the normalized userinfo response
+     * @throws TransportException if the request fails, the response is not successful, the body cannot
+     *         be parsed or validated, the response is a signed JWT but no validator was supplied, or the
+     *         response omits the {@code sub}
+     */
+    public UserInfoResponse fetchUserInfo(String userInfoEndpoint, String accessToken,
+            @Nullable SenderConstraint senderConstraint,
+            @Nullable SignedUserInfoValidator signedResponseValidator) {
         Objects.requireNonNull(userInfoEndpoint, "userInfoEndpoint must not be null");
         Objects.requireNonNull(accessToken, "accessToken must not be null");
 
         HttpHandler handler = backChannel.validatedHandler(userInfoEndpoint, FAILURE_CONTEXT);
 
         HttpRequest.Builder requestBuilder = handler.requestBuilder()
-                .setHeader(ACCEPT, APPLICATION_JSON)
+                .setHeader(ACCEPT, ACCEPT_JSON_OR_JWT)
                 .GET();
         authorize(requestBuilder, userInfoEndpoint, accessToken, senderConstraint);
         HttpRequest request = requestBuilder.build();
@@ -130,7 +180,7 @@ public class UserInfoClient {
                 throw new TransportException(
                         "userinfo endpoint returned unexpected HTTP status " + response.statusCode());
             }
-            return parse(response.body());
+            return handleResponse(response, signedResponseValidator);
         } catch (IOException e) {
             LOGGER.debug(e, "userinfo request failed: %s", e.getMessage());
             throw new TransportException("userinfo request failed: " + e.getMessage(), e);
@@ -138,6 +188,29 @@ public class UserInfoClient {
             Thread.currentThread().interrupt();
             throw new TransportException("userinfo request interrupted", e);
         }
+    }
+
+    private UserInfoResponse handleResponse(HttpResponse<String> response,
+            @Nullable SignedUserInfoValidator signedResponseValidator) {
+        boolean signed = response.headers().firstValue(CONTENT_TYPE)
+                .map(contentType -> contentType.toLowerCase(Locale.ROOT).contains(APPLICATION_JWT))
+                .orElse(false);
+        if (!signed) {
+            return parse(response.body());
+        }
+        if (signedResponseValidator == null) {
+            throw new TransportException("userinfo endpoint returned a signed JWT "
+                    + "(userinfo_signed_response_alg) but no signed-response validator is configured");
+        }
+        String body = response.body();
+        if (body == null || body.isBlank()) {
+            throw new TransportException("Empty userinfo endpoint response");
+        }
+        UserInfoResponse userInfo = signedResponseValidator.validate(body);
+        if (userInfo == null || userInfo.sub == null || userInfo.sub.isBlank()) {
+            throw new TransportException("signed userinfo response is missing the 'sub' claim");
+        }
+        return userInfo;
     }
 
     /**
