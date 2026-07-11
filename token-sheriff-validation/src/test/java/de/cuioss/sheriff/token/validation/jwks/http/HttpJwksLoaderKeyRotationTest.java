@@ -86,7 +86,7 @@ class HttpJwksLoaderKeyRotationTest {
 
         // Force refresh by triggering background refresh or wait for it
         await("Key rotation to complete")
-                .atMost(3, SECONDS)
+                .atMost(10, SECONDS)
                 .until(() -> {
                     Optional<KeyInfo> newKey = loader.getKeyInfo(ROTATED_KEY_ID);
                     return newKey.isPresent();
@@ -124,7 +124,7 @@ class HttpJwksLoaderKeyRotationTest {
 
         // Wait for rotation to complete
         await("Key rotation to complete")
-                .atMost(3, SECONDS)
+                .atMost(10, SECONDS)
                 .until(() -> {
                     Optional<KeyInfo> newKey = loader.getKeyInfo(ROTATED_KEY_ID);
                     return newKey.isPresent();
@@ -168,7 +168,7 @@ class HttpJwksLoaderKeyRotationTest {
 
         // Wait for rotation
         await("Key rotation to complete")
-                .atMost(3, SECONDS)
+                .atMost(10, SECONDS)
                 .until(() -> {
                     Optional<KeyInfo> newKey = loader.getKeyInfo(ROTATED_KEY_ID);
                     return newKey.isPresent();
@@ -176,7 +176,7 @@ class HttpJwksLoaderKeyRotationTest {
 
         // Wait for grace period to expire
         await("Grace period to expire")
-                .atMost(3, SECONDS)
+                .atMost(10, SECONDS)
                 .pollDelay(200, MILLISECONDS) // Wait longer than grace period
                 .until(() -> true);
 
@@ -239,7 +239,7 @@ class HttpJwksLoaderKeyRotationTest {
 
         // Wait for rotation
         await("Key rotation to complete")
-                .atMost(3, SECONDS)
+                .atMost(10, SECONDS)
                 .until(() -> {
                     Optional<KeyInfo> newKey = loader.getKeyInfo(ROTATED_KEY_ID);
                     return newKey.isPresent();

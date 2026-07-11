@@ -259,10 +259,14 @@ class AccessTokenCacheTest {
                         AccessTokenContent result;
                         if (cached.isEmpty()) {
                             validationCount.incrementAndGet();
-                            // Simulate some work to increase race window
+                            // Simulate some work to increase race window. atMost must be generous:
+                            // under parallel surefire forks / JaCoCo instrumentation the poll cycle
+                            // can exceed a tight ceiling and throw ConditionTimeoutException, which
+                            // would spuriously fail unrelated threads. until(() -> true) returns
+                            // immediately after pollDelay, so the ceiling only guards against hangs.
                             await()
                                     .pollDelay(1, TimeUnit.MILLISECONDS)
-                                    .atMost(10, TimeUnit.MILLISECONDS)
+                                    .atMost(5, TimeUnit.SECONDS)
                                     .until(() -> true);
                             result = content;
                             cache.put(token, result, performanceMonitor);

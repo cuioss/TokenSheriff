@@ -52,8 +52,10 @@ class HttpJwksLoaderWellKnownAsyncTest {
         try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
             long constructorDurationNanos = System.nanoTime() - startTime;
 
-            // Constructor should be fast (< 10ms) even with well-known URL
-            assertTrue(constructorDurationNanos < TimeUnit.MILLISECONDS.toNanos(10),
+            // Constructor must not perform well-known discovery (blocking I/O). The 200ms bound is
+            // a proxy (real discovery of an invalid host would take seconds) that tolerates a GC
+            // pause under parallel surefire forks; the UNDEFINED status below is the precise check.
+            assertTrue(constructorDurationNanos < TimeUnit.MILLISECONDS.toNanos(200),
                     "Constructor should complete quickly without well-known discovery");
 
             assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus(),

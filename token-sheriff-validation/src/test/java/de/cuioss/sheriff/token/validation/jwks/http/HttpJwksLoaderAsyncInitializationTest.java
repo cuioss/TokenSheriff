@@ -67,10 +67,13 @@ class HttpJwksLoaderAsyncInitializationTest {
         try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
             long constructorDurationNanos = System.nanoTime() - startTime;
 
-            // Constructor should complete in < 10ms (no I/O operations)
-            long maxAllowedNanos = TimeUnit.MILLISECONDS.toNanos(10);
+            // Constructor must not perform blocking I/O. The 200ms bound is a proxy for that
+            // (a real network call would take seconds via DNS/connect timeouts) and is loose
+            // enough to survive a GC pause under parallel surefire forks; the "no I/O" contract is
+            // asserted precisely below via the call counter and UNDEFINED status.
+            long maxAllowedNanos = TimeUnit.MILLISECONDS.toNanos(200);
             assertTrue(constructorDurationNanos < maxAllowedNanos,
-                    "Constructor took %d ns (%.2f ms), should be < %d ns (10 ms)".formatted(
+                    "Constructor took %d ns (%.2f ms), should be < %d ns (200 ms)".formatted(
                             constructorDurationNanos,
                             constructorDurationNanos / 1_000_000.0,
                             maxAllowedNanos));
