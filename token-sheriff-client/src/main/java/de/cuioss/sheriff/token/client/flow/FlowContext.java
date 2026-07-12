@@ -24,7 +24,8 @@ import java.util.Optional;
 
 /**
  * The per-flow secret state that binds an interactive {@code authorization_code} request to its
- * callback ({@code CLIENT-2}).
+ * callback: the {@code state} CSRF binding ({@code CLIENT-5}) and the {@code nonce} ID-token
+ * binding ({@code CLIENT-6}).
  * <p>
  * A context is created when the authorization request is built and must be retained by the
  * relying party (bound to the user's session) until the callback returns. It carries:
@@ -37,6 +38,14 @@ import java.util.Optional;
  * </ul>
  * The context is immutable; {@code state}, {@code nonce}, and the PKCE verifier are secrets and are
  * never logged.
+ * <p>
+ * <strong>One-time-use discard contract (L7):</strong> a context is single-use. The relying party
+ * MUST bind exactly one context to the request it was created for, and MUST discard it — remove it
+ * from the session store — as soon as the callback has been processed (whether the exchange succeeded
+ * or {@link CallbackHandler} rejected it). Because the type carries no consumed flag, re-presenting a
+ * retained context against a second callback would re-run the {@code state}/{@code nonce} checks
+ * against the same secrets and defeat the anti-CSRF/anti-replay guarantees; the class stays immutable
+ * and the one-time-use invariant is enforced by the caller's discard, not by internal mutation.
  *
  * @since 1.0
  * @author Oliver Wolff

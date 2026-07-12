@@ -42,7 +42,7 @@ import java.util.Objects;
  * When the authorization server issues a new refresh token (rotation, per the OAuth 2.0 Security
  * BCP), the {@link RotationResult} reports the rotated token and flags the rotation; the caller
  * feeds that transition into its {@link de.cuioss.sheriff.token.client.token.RefreshTokenFamily} so
- * a later replay of a superseded token is detected and the family revoked ({@code CLIENT-5}).
+ * a later replay of a superseded token is detected and the family revoked ({@code CLIENT-17}).
  *
  * @since 1.0
  * @author Oliver Wolff

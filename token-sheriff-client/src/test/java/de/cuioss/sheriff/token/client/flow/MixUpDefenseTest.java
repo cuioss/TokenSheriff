@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -51,7 +52,7 @@ class MixUpDefenseTest {
     void shouldRejectMixedUpIssuer() {
         var attackerCallback = callbackFrom(ATTACKER_ISSUER);
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(ClientProtocolException.class,
                 () -> validator.validate(HONEST_ISSUER, attackerCallback, false),
                 "a callback from a different AS must be rejected before the code is redeemed");
     }
@@ -70,7 +71,7 @@ class MixUpDefenseTest {
     void shouldRejectDroppedIssuerWhenRequired() {
         var strippedCallback = callbackFrom(null);
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(ClientProtocolException.class,
                 () -> validator.validate(HONEST_ISSUER, strippedCallback, true),
                 "an attacker stripping the iss must not bypass the mix-up check when iss is required");
     }
@@ -80,7 +81,7 @@ class MixUpDefenseTest {
     void shouldRejectRandomForgedIssuers() {
         var forgedCallback = callbackFrom("https://" + Generators.letterStrings(4, 12).next() + ".example.org");
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(ClientProtocolException.class,
                 () -> validator.validate(HONEST_ISSUER, forgedCallback, false),
                 "no forged issuer may pass the mix-up check");
     }

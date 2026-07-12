@@ -23,6 +23,7 @@ import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.client.token.IdTokenValidationBridge;
 import de.cuioss.sheriff.token.client.token.RefreshTokenFamily;
 import de.cuioss.sheriff.token.client.token.RotationResult;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.tools.logging.CuiLogger;
@@ -226,9 +227,10 @@ public class TokenLifecycleManager {
      *                                {@code null}
      * @return the refreshed stored bundle, or {@link Optional#empty()} when no refreshable bundle is
      *         held
-     * @throws IllegalStateException if refresh-token reuse is detected (the family is revoked and the
-     *                               store cleared first), or the refreshed ID token is inconsistent
-     *                               with the refreshed access token
+     * @throws de.cuioss.sheriff.token.commons.error.ClientProtocolException if refresh-token reuse is
+     *                               detected (the family is revoked and the store cleared first)
+     * @throws IllegalStateException if the refreshed ID token is inconsistent with the refreshed
+     *                               access token
      */
     public Optional<StoredToken> refresh(String sessionId, ProviderMetadata metadata,
             RefreshFlow refreshFlow, RevocationClient revocationClient,
@@ -282,7 +284,7 @@ public class TokenLifecycleManager {
                     key -> new RefreshTokenFamily(presentedRefreshToken));
             try {
                 family.rotate(presentedRefreshToken, rotation.refreshToken());
-            } catch (IllegalStateException reuse) {
+            } catch (ClientProtocolException reuse) {
                 revokeReusedFamily(sessionId, metadata, presentedRefreshToken, revocationClient,
                         clientAuthentication);
                 throw reuse;

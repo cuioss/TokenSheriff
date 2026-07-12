@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.token;
 
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.context.IdTokenRequest;
@@ -31,7 +32,7 @@ import java.util.regex.Pattern;
 
 /**
  * Bridges an OpenID Connect ID token into the {@code token-sheriff-validation} pipeline and binds it
- * to the flow {@code nonce} ({@code CLIENT-2} / {@code CLIENT-15}).
+ * to the flow {@code nonce} ({@code CLIENT-6} / {@code CLIENT-16}).
  * <p>
  * The ID token is validated through the same multi-issuer pipeline that guards inbound tokens
  * (signature, {@code iss}, {@code aud}, {@code exp} / {@code iat}), and the {@code nonce} claim is
@@ -67,7 +68,7 @@ public class IdTokenValidationBridge {
      * @return the validated ID token content
      * @throws de.cuioss.sheriff.token.validation.exception.TokenValidationException if the token
      *         fails pipeline validation
-     * @throws IllegalStateException if the ID token carries no {@code nonce} or it does not match
+     * @throws ClientProtocolException if the ID token carries no {@code nonce} or it does not match
      */
     public IdTokenContent validateIdToken(String idToken, String expectedNonce) {
         Objects.requireNonNull(idToken, "idToken must not be null");
@@ -78,7 +79,7 @@ public class IdTokenValidationBridge {
         ClaimValue nonceClaim = content.getClaims().get(NONCE_CLAIM);
         String actualNonce = nonceClaim == null ? null : nonceClaim.getOriginalString();
         if (!noncesMatch(expectedNonce, actualNonce)) {
-            throw new IllegalStateException("ID token 'nonce' does not match the flow nonce");
+            throw new ClientProtocolException("ID token 'nonce' does not match the flow nonce");
         }
         return content;
     }
@@ -102,7 +103,7 @@ public class IdTokenValidationBridge {
      * @return the validated ID token content
      * @throws de.cuioss.sheriff.token.validation.exception.TokenValidationException if the token
      *         fails pipeline validation
-     * @throws IllegalStateException if the {@code nonce} does not match, or the ID token asserts an
+     * @throws ClientProtocolException if the {@code nonce} does not match, or the ID token asserts an
      *         {@code at_hash} that does not bind the supplied access token
      */
     public IdTokenContent validateIdToken(String idToken, String expectedNonce, String accessToken) {
@@ -123,7 +124,7 @@ public class IdTokenValidationBridge {
         String computed = computeAccessTokenHash(idToken, accessToken);
         if (expected == null || !MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8),
                 computed.getBytes(StandardCharsets.UTF_8))) {
-            throw new IllegalStateException("ID token 'at_hash' does not bind the access token");
+            throw new ClientProtocolException("ID token 'at_hash' does not bind the access token");
         }
     }
 

@@ -19,6 +19,7 @@ import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.net.URI;
@@ -75,7 +76,7 @@ public class AuthorizationRequestBuilder {
      * @param context       the flow context carrying {@code state}, {@code nonce}, PKCE, and the
      *                      redirect URI; must not be {@code null}
      * @return the fully-formed authorization request URL
-     * @throws IllegalStateException if the AS advertises no authorization endpoint or does not
+     * @throws ClientProtocolException if the AS advertises no authorization endpoint or does not
      *                               advertise PKCE {@code S256}
      */
     public String build(ClientConfiguration configuration, ProviderMetadata metadata, FlowContext context) {
@@ -84,12 +85,12 @@ public class AuthorizationRequestBuilder {
         Objects.requireNonNull(context, "context must not be null");
 
         String authorizationEndpoint = metadata.getAuthorizationEndpoint()
-                .orElseThrow(() -> new IllegalStateException(
+                .orElseThrow(() -> new ClientProtocolException(
                         "provider metadata is missing the authorization endpoint"));
         enforceEndpointScheme(authorizationEndpoint, configuration);
         if (!metadata.supportsS256()) {
             LOGGER.warn(ClientLogMessages.WARN.S256_NOT_ADVERTISED, metadata.getIssuer().orElse(authorizationEndpoint));
-            throw new IllegalStateException(
+            throw new ClientProtocolException(
                     "authorization server does not advertise PKCE 'S256'; refusing to start the authorization_code"
                             + " flow");
         }
@@ -124,11 +125,11 @@ public class AuthorizationRequestBuilder {
         try {
             scheme = URI.create(authorizationEndpoint).getScheme();
         } catch (IllegalArgumentException e) {
-            throw new IllegalStateException(
+            throw new ClientProtocolException(
                     "authorization endpoint is not a valid URL: " + authorizationEndpoint, e);
         }
         if (!SCHEME_HTTPS.equalsIgnoreCase(scheme) && !configuration.isAllowInsecureHttp()) {
-            throw new IllegalStateException(
+            throw new ClientProtocolException(
                     "authorization endpoint is not a TLS (https) URL; refusing to start the authorization_code"
                             + " flow over an insecure channel");
         }

@@ -66,6 +66,20 @@ Retrieved tokens are held *server-side* and never returned to the browser in usa
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700#section-4.14[RFC 9700 §4.14] (refresh-token protection / rotation), https://www.rfc-editor.org/rfc/rfc7009[RFC 7009] (revocation).
 
+[NOTE]
+====
+*In-memory token material is held as immutable `String`.* Access, refresh and ID tokens — and the
+`client_secret` — are carried as Java `String` instances (`StoredToken`, `RefreshTokenFamily`,
+`TokenResponse`, `ClientConfiguration.clientSecret`), so they cannot be zeroed on clear or logout and
+remain in the heap until the garbage collector reclaims and overwrites them. This is an accepted Java
+trade-off: a `char[]`/`byte[]` custody model would let callers wipe the buffer eagerly, but the JOSE,
+JSON and HTTP layers the engine builds on exchange `String`s throughout, so a byte-array custody model
+cannot be maintained end-to-end without copying the secret back into a `String` at every boundary. The
+residual exposure is bounded by the "protect the at-rest store" posture above — storage is minimal,
+server-side, and short-lived (short access-token TTLs, revoke-and-clear on logout) so the window in
+which reclaimable material lives in the heap is kept small.
+====
+
 == Preserving the sender-constraint
 
 Where a retrieved token is sender-constrained — DPoP (`cnf.jkt`) or mTLS-bound — the engine

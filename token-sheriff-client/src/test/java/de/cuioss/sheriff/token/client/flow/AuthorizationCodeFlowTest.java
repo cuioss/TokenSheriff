@@ -21,6 +21,7 @@ import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.token.IdTokenValidationBridge;
 import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
@@ -174,7 +175,7 @@ class AuthorizationCodeFlowTest {
         var flow = flow(config);
         var clientAuth = auth(config);
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(ClientProtocolException.class,
                 () -> flow.exchange(metadata, context, callback, clientAuth));
     }
 
@@ -205,7 +206,7 @@ class AuthorizationCodeFlowTest {
         var flow = flow(config);
         var clientAuth = auth(config);
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(ClientProtocolException.class,
                 () -> flow.exchange(metadata, context, callback, clientAuth));
     }
 

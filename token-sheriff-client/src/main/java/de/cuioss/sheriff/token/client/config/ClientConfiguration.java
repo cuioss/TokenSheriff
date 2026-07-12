@@ -22,7 +22,10 @@ import lombok.ToString;
 import lombok.Value;
 import org.jspecify.annotations.Nullable;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Immutable configuration describing how this confidential client talks to a single
@@ -124,4 +127,63 @@ public class ClientConfiguration {
      */
     @Builder.Default
     int readTimeoutSeconds = DEFAULT_READ_TIMEOUT_SECONDS;
+
+    /**
+     * All-args constructor invoked by the Lombok-generated builder. It validates the configuration at
+     * construction so a malformed client can never be built and later fail obscurely on the wire:
+     * {@code issuer} and {@code clientId} must be non-blank, {@code issuer} must be a well-formed
+     * absolute {@code http}/{@code https} URL with a host, and every {@code scope} must be non-blank
+     * (a {@code null}/blank scope would otherwise serialise as the literal {@code "null"} in the
+     * {@code scope} request parameter). This mirrors {@code PostLogoutRedirectValidator}, which
+     * validates every entry it accepts (L14).
+     *
+     * @throws IllegalArgumentException if any field is blank, malformed, or otherwise invalid
+     */
+    ClientConfiguration(@NonNull String issuer, @NonNull String clientId, @Nullable String clientSecret,
+            @NonNull ClientAuthMethod authMethod, List<String> scopes, @Nullable String redirectUri,
+            boolean allowInsecureHttp, int connectTimeoutSeconds, int readTimeoutSeconds) {
+        this.issuer = requireNonBlank(issuer, "issuer");
+        validateIssuerUrl(this.issuer);
+        this.clientId = requireNonBlank(clientId, "clientId");
+        this.clientSecret = clientSecret;
+        this.authMethod = Objects.requireNonNull(authMethod, "authMethod must not be null");
+        this.scopes = validateScopes(scopes);
+        this.redirectUri = redirectUri;
+        this.allowInsecureHttp = allowInsecureHttp;
+        this.connectTimeoutSeconds = connectTimeoutSeconds;
+        this.readTimeoutSeconds = readTimeoutSeconds;
+    }
+
+    private static String requireNonBlank(String value, String field) {
+        Objects.requireNonNull(value, field + " must not be null");
+        if (value.isBlank()) {
+            throw new IllegalArgumentException(field + " must not be blank");
+        }
+        return value;
+    }
+
+    private static void validateIssuerUrl(String issuer) {
+        final URI uri;
+        try {
+            uri = new URI(issuer);
+        } catch (URISyntaxException e) {
+            throw new IllegalArgumentException("issuer must be a valid absolute URL, but was: " + issuer, e);
+        }
+        String scheme = uri.getScheme();
+        if (!uri.isAbsolute() || uri.getHost() == null
+                || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
+            throw new IllegalArgumentException(
+                    "issuer must be an absolute http(s) URL with a host, but was: " + issuer);
+        }
+    }
+
+    private static List<String> validateScopes(List<String> scopes) {
+        Objects.requireNonNull(scopes, "scopes must not be null");
+        for (String scope : scopes) {
+            if (scope == null || scope.isBlank()) {
+                throw new IllegalArgumentException("scopes must not contain null or blank entries");
+            }
+        }
+        return List.copyOf(scopes);
+    }
 }

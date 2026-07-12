@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -70,7 +71,7 @@ class CallbackHandlerTest {
             var context = context();
             var parameters = new CallbackParameters(null, context.state(), "access_denied", "user said no", null);
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -80,7 +81,7 @@ class CallbackHandlerTest {
             var parameters = new CallbackParameters(Generators.nonBlankStrings().next(),
                     context.state(), "invalid_request", null, null);
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -89,7 +90,7 @@ class CallbackHandlerTest {
             var context = context();
             var parameters = success(Generators.nonBlankStrings().next(), Generators.nonBlankStrings().next());
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -98,7 +99,7 @@ class CallbackHandlerTest {
             var context = context();
             var parameters = success(Generators.nonBlankStrings().next(), null);
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -107,7 +108,7 @@ class CallbackHandlerTest {
             var context = context();
             var parameters = success(Generators.nonBlankStrings().next(), context.state() + "x");
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -116,7 +117,7 @@ class CallbackHandlerTest {
             var context = context();
             var parameters = success(null, context.state());
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -125,7 +126,7 @@ class CallbackHandlerTest {
             var context = context();
             var parameters = success("   ", context.state());
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -199,7 +200,7 @@ class CallbackHandlerTest {
             var parameters = new CallbackParameters(null, context.state(),
                     "access_denied\r\nWARN forged log line", "desc", null);
 
-            var thrown = assertThrows(IllegalStateException.class,
+            var thrown = assertThrows(ClientProtocolException.class,
                     () -> handler.handle(context, parameters));
 
             assertAll("sanitized exception message",
@@ -218,7 +219,7 @@ class CallbackHandlerTest {
             String overlong = "a".repeat(300);
             var parameters = new CallbackParameters(null, context.state(), overlong, null, null);
 
-            var thrown = assertThrows(IllegalStateException.class,
+            var thrown = assertThrows(ClientProtocolException.class,
                     () -> handler.handle(context, parameters));
 
             assertAll("bounded exception message",

@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -50,7 +51,7 @@ class CodeInjectionTest {
         String forgedState = Generators.nonBlankStrings().next();
         var injected = new CallbackParameters(attackerCode, forgedState, null, null, null);
 
-        assertThrows(IllegalStateException.class, () -> handler.handle(victimContext, injected),
+        assertThrows(ClientProtocolException.class, () -> handler.handle(victimContext, injected),
                 "an injected code with a state the attacker cannot forge must be rejected");
     }
 
@@ -62,7 +63,7 @@ class CodeInjectionTest {
         var injected = new CallbackParameters(Generators.nonBlankStrings().next(),
                 attackerContext.state(), null, null, null);
 
-        assertThrows(IllegalStateException.class, () -> handler.handle(victimContext, injected),
+        assertThrows(ClientProtocolException.class, () -> handler.handle(victimContext, injected),
                 "a code bound to the attacker's own flow state cannot be replayed onto the victim's context");
     }
 
@@ -72,7 +73,7 @@ class CodeInjectionTest {
         var victimContext = FlowContext.create(REDIRECT_URI);
         var injected = new CallbackParameters(Generators.nonBlankStrings().next(), null, null, null, null);
 
-        assertThrows(IllegalStateException.class, () -> handler.handle(victimContext, injected),
+        assertThrows(ClientProtocolException.class, () -> handler.handle(victimContext, injected),
                 "a code injection that drops the state must fail closed");
     }
 

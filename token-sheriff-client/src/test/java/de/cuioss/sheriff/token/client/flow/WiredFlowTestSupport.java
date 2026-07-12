@@ -232,7 +232,7 @@ abstract class WiredFlowTestSupport {
          *         {@code null} when the last call carried no DPoP header
          */
         String lastRecordedDpopHeader() {
-            return recordedDpopHeaders.isEmpty() ? null : recordedDpopHeaders.get(recordedDpopHeaders.size() - 1);
+            return recordedDpopHeaders.isEmpty() ? null : recordedDpopHeaders.getLast();
         }
 
         void success(String accessToken, String idToken, String refreshToken, long expiresIn) {

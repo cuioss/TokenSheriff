@@ -76,7 +76,8 @@ public class EndSessionFlow {
      * @param state                   the session-bound CSRF state; must not be {@code null} or blank
      * @return the fully-formed end-session redirect URL
      * @throws IllegalArgumentException if any required parameter is {@code null} or blank
-     * @throws IllegalStateException    if the post-logout redirect URI is not exactly registered
+     * @throws de.cuioss.sheriff.token.commons.error.ClientProtocolException if the post-logout redirect
+     *                                  URI is not exactly registered
      */
     public String buildLogoutRedirect(String endSessionEndpoint, String idTokenHint,
             String postLogoutRedirectUri, String state) {

@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.token;
 
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
@@ -82,7 +83,7 @@ class IdTokenValidationBridgeTest {
         String rawToken = holder.getRawToken();
         String expectedNonce = Generators.letterStrings(20, 40).next();
 
-        var thrown = assertThrows(IllegalStateException.class,
+        var thrown = assertThrows(ClientProtocolException.class,
                 () -> bridge.validateIdToken(rawToken, expectedNonce));
         assertNotNull(thrown.getMessage(), "the fail-closed rejection must carry a message");
     }
@@ -94,7 +95,7 @@ class IdTokenValidationBridgeTest {
         String rawToken = holder.getRawToken();
         String expectedNonce = Generators.letterStrings(20, 40).next();
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(ClientProtocolException.class,
                 () -> bridge.validateIdToken(rawToken, expectedNonce));
     }
 
@@ -158,7 +159,7 @@ class IdTokenValidationBridgeTest {
         holder.withClaim(AT_HASH_CLAIM, ClaimValue.forPlainString(atHash(holder.getRawToken(), otherAccessToken)));
         String rawToken = holder.getRawToken();
 
-        var thrown = assertThrows(IllegalStateException.class,
+        var thrown = assertThrows(ClientProtocolException.class,
                 () -> bridge.validateIdToken(rawToken, nonce, accessToken));
         assertNotNull(thrown.getMessage(), "the fail-closed at_hash rejection must carry a message");
     }

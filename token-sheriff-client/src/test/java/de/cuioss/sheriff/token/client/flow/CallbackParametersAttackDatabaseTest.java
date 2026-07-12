@@ -19,6 +19,7 @@ import de.cuioss.http.security.database.ApacheCVEAttackDatabase;
 import de.cuioss.http.security.database.AttackTestCase;
 import de.cuioss.http.security.database.ModSecurityCRSAttackDatabase;
 import de.cuioss.http.security.database.OWASPTop10AttackDatabase;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -77,7 +78,7 @@ class CallbackParametersAttackDatabaseTest {
         var parameters = new CallbackParameters(Generators.nonBlankStrings().next(),
                 context.state(), testCase.attackString(), null, null);
 
-        assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters),
+        assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters),
                 "an attack payload delivered as an error callback must be rejected");
     }
 
@@ -115,7 +116,7 @@ class CallbackParametersAttackDatabaseTest {
         var context = FlowContext.create(REDIRECT_URI);
         var injected = new CallbackParameters(Generators.nonBlankStrings().next(), attackState, null, null, null);
 
-        assertThrows(IllegalStateException.class, () -> handler.handle(context, injected),
+        assertThrows(ClientProtocolException.class, () -> handler.handle(context, injected),
                 "an attack-payload state can never match the flow context, so the code is rejected");
     }
 }

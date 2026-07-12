@@ -27,6 +27,7 @@ import de.cuioss.sheriff.token.client.lifecycle.RefreshScheduler;
 import de.cuioss.sheriff.token.client.lifecycle.RevocationClient;
 import de.cuioss.sheriff.token.client.lifecycle.StoredToken;
 import de.cuioss.sheriff.token.client.lifecycle.TokenLifecycleManager;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
@@ -158,7 +159,7 @@ class RotationReuseDetectionTest {
         manager.store(session, bearerBundle(rt1, null));
         moduleDispatcher.success(accessHolder.getRawToken(), Generators.letterStrings(20, 40).next(), null, 300);
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(ClientProtocolException.class,
                 () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth(config)));
 
         assertAll("reuse response",
@@ -293,11 +294,11 @@ class RotationReuseDetectionTest {
         var family = new RefreshTokenFamily(initial);
         family.rotate(initial, next);
 
-        assertThrows(IllegalStateException.class, () -> family.rotate(initial, attackerNext),
+        assertThrows(ClientProtocolException.class, () -> family.rotate(initial, attackerNext),
                 "replaying the superseded token must fail closed");
         assertAll("post-reuse state",
                 () -> assertTrue(family.isRevoked(), "reuse must revoke the family"),
-                () -> assertThrows(IllegalStateException.class, family::currentToken,
+                () -> assertThrows(ClientProtocolException.class, family::currentToken,
                         "a revoked family must not expose a current token"));
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "Refresh token reuse detected");
     }

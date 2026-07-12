@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.client.flow;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -193,7 +194,7 @@ class AuthorizationRequestBuilderTest {
             var context = FlowContext.create(REDIRECT_URI);
             var configuration = config();
 
-            assertThrows(IllegalStateException.class,
+            assertThrows(ClientProtocolException.class,
                     () -> builder.build(configuration, metadata, context));
         }
 

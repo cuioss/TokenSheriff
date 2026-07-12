@@ -25,6 +25,7 @@ import de.cuioss.sheriff.token.client.lifecycle.RefreshScheduler;
 import de.cuioss.sheriff.token.client.lifecycle.RevocationClient;
 import de.cuioss.sheriff.token.client.lifecycle.StoredToken;
 import de.cuioss.sheriff.token.client.lifecycle.TokenLifecycleManager;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -222,7 +223,7 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
         manager.store(session, new StoredToken(Generators.letterStrings(20, 40).next(), rt1, null, null, null));
         getModuleDispatcher().success(accessHolder.getRawToken(), null, Generators.letterStrings(20, 40).next(), 300);
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(ClientProtocolException.class,
                 () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth(config)));
 
         assertAll("wired reuse refusal",

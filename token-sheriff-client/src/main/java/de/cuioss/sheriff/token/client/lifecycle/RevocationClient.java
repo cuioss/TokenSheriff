@@ -35,7 +35,7 @@ import java.util.Objects;
 
 /**
  * Revokes a token at the RFC 7009 revocation endpoint over the authenticated back channel
- * ({@code CLIENT-13}).
+ * ({@code CLIENT-17}).
  * <p>
  * A revocation POST carries the {@code token} and an optional {@code token_type_hint}, authenticated
  * with the configured {@link ClientAuthentication}. Per RFC 7009 §2.2 the AS returns {@code 200} for

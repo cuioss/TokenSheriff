@@ -48,7 +48,8 @@ import java.util.Objects;
  * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse">OIDC Core §12.2</a>
  */
 public record RotationResult(AccessTokenContent accessToken, String refreshToken,
-@Nullable String idToken, long accessTokenExpiresInSeconds, boolean rotated) {
+@Nullable
+    String idToken, long accessTokenExpiresInSeconds, boolean rotated) {
 
     /**
      * @param accessToken               the validated access token content; must not be {@code null}

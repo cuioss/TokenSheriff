@@ -69,7 +69,7 @@ class ConstraintPreservationTest {
         String refreshedRefresh = Generators.letterStrings(20, 40).next();
         Instant refreshedExpiry = Instant.now().plusSeconds(300);
         StoredToken refreshed = manager.applyRefresh(sessionId, refreshedAccess, refreshedRefresh, refreshedExpiry,
-                        binding)
+                binding)
                 .orElseThrow();
 
         assertAll("refresh preserves constraint",

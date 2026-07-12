@@ -22,6 +22,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.Signature;
+import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.PSSParameterSpec;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Map;
@@ -33,7 +35,11 @@ import java.util.UUID;
  * a short-lived JWT assertion signed by its private key, so no shared secret ever leaves the client.
  * <p>
  * The assertion is signed with a JDK {@link Signature} — the engine adds no cryptographic library of
- * its own. RSA signing algorithms ({@code RS256} / {@code RS384} / {@code RS512}) are supported.
+ * its own. The supported JOSE signing algorithms are the RSA PKCS#1 v1.5 family
+ * ({@code RS256} / {@code RS384} / {@code RS512}), the RSASSA-PSS family
+ * ({@code PS256} / {@code PS384} / {@code PS512}), and the ECDSA family
+ * ({@code ES256} / {@code ES384} / {@code ES512}, emitted in the JOSE-required IEEE P1363
+ * {@code R||S} format). The signing key must match the chosen algorithm family.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -63,7 +69,8 @@ public class PrivateKeyJwtAuth implements ClientAuthentication {
      *                   {@code null}
      * @param privateKey the client's signing private key; must not be {@code null}
      * @param keyId      the {@code kid} identifying the public key at the AS; must not be {@code null}
-     * @param algorithm  the JWT signing algorithm ({@code RS256} / {@code RS384} / {@code RS512})
+     * @param algorithm  the JWT signing algorithm — one of {@code RS256}/{@code RS384}/{@code RS512},
+     *                   {@code PS256}/{@code PS384}/{@code PS512}, or {@code ES256}/{@code ES384}/{@code ES512}
      */
     public PrivateKeyJwtAuth(String clientId, String audience, PrivateKey privateKey, String keyId,
             String algorithm) {
@@ -104,6 +111,11 @@ public class PrivateKeyJwtAuth implements ClientAuthentication {
     private String sign(String signingInput) {
         try {
             Signature signature = Signature.getInstance(jcaAlgorithm);
+            if (jwtAlgorithm.startsWith("PS")) {
+                // RSASSA-PSS requires explicit parameters: MGF1 over the same hash and a salt length
+                // equal to the digest length, per RFC 7518 §3.5.
+                signature.setParameter(pssParameterSpec(jwtAlgorithm));
+            }
             signature.initSign(privateKey);
             signature.update(signingInput.getBytes(StandardCharsets.UTF_8));
             return BASE64_URL.encodeToString(signature.sign());
@@ -121,8 +133,24 @@ public class PrivateKeyJwtAuth implements ClientAuthentication {
             case "RS256" -> "SHA256withRSA";
             case "RS384" -> "SHA384withRSA";
             case "RS512" -> "SHA512withRSA";
+            case "PS256", "PS384", "PS512" -> "RSASSA-PSS";
+            // JOSE ECDSA signatures are the raw R||S concatenation (IEEE P1363), not the JCA-default
+            // DER encoding, so the in-P1363-format variants are required (RFC 7518 §3.4).
+            case "ES256" -> "SHA256withECDSAinP1363Format";
+            case "ES384" -> "SHA384withECDSAinP1363Format";
+            case "ES512" -> "SHA512withECDSAinP1363Format";
             default -> throw new IllegalArgumentException(
                     "unsupported private_key_jwt signing algorithm: " + jwtAlgorithm);
+        };
+    }
+
+    private static PSSParameterSpec pssParameterSpec(String jwtAlgorithm) {
+        return switch (jwtAlgorithm) {
+            case "PS256" -> new PSSParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, 32, 1);
+            case "PS384" -> new PSSParameterSpec("SHA-384", "MGF1", MGF1ParameterSpec.SHA384, 48, 1);
+            case "PS512" -> new PSSParameterSpec("SHA-512", "MGF1", MGF1ParameterSpec.SHA512, 64, 1);
+            default -> throw new IllegalArgumentException(
+                    "unsupported RSASSA-PSS signing algorithm: " + jwtAlgorithm);
         };
     }
 }
