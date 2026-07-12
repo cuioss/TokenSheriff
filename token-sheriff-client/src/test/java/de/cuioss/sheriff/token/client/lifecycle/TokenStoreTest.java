@@ -144,15 +144,20 @@ class TokenStoreTest {
         Instant now = Instant.now();
         String freshSession = Generators.letterStrings(10, 20).next();
         String expiringSession = Generators.letterStrings(10, 20).next();
+        String unknownExpirySession = Generators.letterStrings(10, 20).next();
         manager.store(freshSession, new StoredToken(Generators.letterStrings(20, 40).next(), null, null, null,
                 now.plusSeconds(300)));
         manager.store(expiringSession, new StoredToken(Generators.letterStrings(20, 40).next(), null, null, null,
                 now.plusSeconds(10)));
+        manager.store(unknownExpirySession, new StoredToken(Generators.letterStrings(20, 40).next(), null, null, null,
+                null));
 
         assertAll("refresh scheduling",
                 () -> assertFalse(manager.needsRefresh(freshSession, now), "a token far from expiry is not refreshed"),
                 () -> assertTrue(manager.needsRefresh(expiringSession, now),
                         "a token inside the refresh window is refreshed"),
+                () -> assertTrue(manager.needsRefresh(unknownExpirySession, now),
+                        "a token with unknown (null) expiry is treated as refresh-eligible"),
                 () -> assertFalse(manager.needsRefresh(Generators.letterStrings(10, 20).next(), now),
                         "an absent session never needs refresh"));
     }

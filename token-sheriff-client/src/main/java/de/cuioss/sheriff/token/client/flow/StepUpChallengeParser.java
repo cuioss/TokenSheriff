@@ -101,7 +101,8 @@ public class StepUpChallengeParser {
             String key = pair.substring(0, eq).strip().toLowerCase(Locale.ROOT);
             String value = unquote(pair.substring(eq + 1).strip());
             if (params.putIfAbsent(key, value) != null) {
-                LOGGER.debug("Ignoring step-up challenge with duplicate auth-param '%s'", key);
+                LOGGER.debug("Ignoring step-up challenge with duplicate auth-param '%s'",
+                        LogSanitizer.sanitize(key));
                 return Optional.empty();
             }
         }

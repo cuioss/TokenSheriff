@@ -150,13 +150,34 @@ public class ClientConfiguration {
         this.issuer = requireNonBlank(issuer, "issuer");
         validateIssuerUrl(this.issuer);
         this.clientId = requireNonBlank(clientId, "clientId");
-        this.clientSecret = clientSecret;
+        this.clientSecret = validateClientSecret(clientSecret);
         this.authMethod = Objects.requireNonNull(authMethod, "authMethod must not be null");
         this.scopes = validateScopes(scopes);
         this.redirectUri = redirectUri;
         this.allowInsecureHttp = allowInsecureHttp;
-        this.connectTimeoutSeconds = connectTimeoutSeconds;
-        this.readTimeoutSeconds = readTimeoutSeconds;
+        this.connectTimeoutSeconds = requirePositive(connectTimeoutSeconds, "connectTimeoutSeconds");
+        this.readTimeoutSeconds = requirePositive(readTimeoutSeconds, "readTimeoutSeconds");
+    }
+
+    /**
+     * A client secret is optional (it is {@code null} for the key-based methods), but a
+     * <em>provided</em> secret must carry an actual value: a blank/whitespace-only secret is a
+     * misconfiguration that would otherwise be wired through the shared-secret auth strategies and
+     * fail only later at the token endpoint. A blank secret is rejected; an absent ({@code null})
+     * secret is preserved.
+     */
+    private static @Nullable String validateClientSecret(@Nullable String clientSecret) {
+        if (clientSecret != null && clientSecret.isBlank()) {
+            throw new IllegalArgumentException("clientSecret must not be blank when provided");
+        }
+        return clientSecret;
+    }
+
+    private static int requirePositive(int value, String field) {
+        if (value <= 0) {
+            throw new IllegalArgumentException(field + " must be positive, but was: " + value);
+        }
+        return value;
     }
 
     private static String requireNonBlank(String value, String field) {
