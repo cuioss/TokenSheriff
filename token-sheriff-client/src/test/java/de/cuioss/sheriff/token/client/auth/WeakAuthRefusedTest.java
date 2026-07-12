@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.client.auth;
 
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
@@ -108,7 +109,7 @@ class WeakAuthRefusedTest {
         var metadata = advertising(List.of("tls_client_auth"));
         var configured = List.of(basic);
 
-        assertThrows(IllegalStateException.class, () -> selector.select(configured, metadata),
+        assertThrows(ClientProtocolException.class, () -> selector.select(configured, metadata),
                 "a configured secret that the AS does not advertise must not be silently used");
     }
 

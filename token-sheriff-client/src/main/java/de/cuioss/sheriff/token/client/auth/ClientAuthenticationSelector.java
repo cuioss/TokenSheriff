@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.client.auth;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 
 import java.util.Collection;
 import java.util.List;
@@ -55,7 +56,7 @@ public class ClientAuthenticationSelector {
      * @param metadata  the resolved provider metadata; must not be {@code null}
      * @return the strongest strategy the AS advertises
      * @throws IllegalArgumentException if {@code available} is empty
-     * @throws IllegalStateException    if the AS advertises none of the configured methods
+     * @throws ClientProtocolException  if the AS advertises none of the configured methods
      */
     public ClientAuthentication select(Collection<ClientAuthentication> available, ProviderMetadata metadata) {
         Objects.requireNonNull(available, "available must not be null");
@@ -82,7 +83,7 @@ public class ClientAuthenticationSelector {
         }
 
         if (strongest == null) {
-            throw new IllegalStateException(
+            throw new ClientProtocolException(
                     "no configured client authentication method is advertised by the authorization server; advertised="
                             + LogSanitizer.sanitize(String.valueOf(advertised)));
         }

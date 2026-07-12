@@ -19,6 +19,7 @@ import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.flow.StepUpChallengeParser.StepUpChallenge;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
@@ -250,7 +251,7 @@ class StepUpHandlerTest {
             var challenge = new StepUpChallenge(ACR, null);
             var idToken = idToken(WEAK_ACR, Instant.now().getEpochSecond());
 
-            assertThrows(IllegalStateException.class, () -> stepUpHandler.verifyResult(challenge, idToken),
+            assertThrows(ClientProtocolException.class, () -> stepUpHandler.verifyResult(challenge, idToken),
                     "an acr weaker than required must not be treated as a satisfied step-up");
         }
 
@@ -260,7 +261,7 @@ class StepUpHandlerTest {
             var challenge = new StepUpChallenge(null, 300);
             var idToken = idToken(ACR, Instant.now().getEpochSecond() - 1000);
 
-            assertThrows(IllegalStateException.class, () -> stepUpHandler.verifyResult(challenge, idToken),
+            assertThrows(ClientProtocolException.class, () -> stepUpHandler.verifyResult(challenge, idToken),
                     "an authentication older than max_age must be rejected as stale");
         }
     }

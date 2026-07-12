@@ -29,11 +29,15 @@ import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
 
+import java.io.Serial;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -84,6 +88,17 @@ public class TokenLifecycleManager {
 
     private static final String REFRESH_TOKEN_TYPE_HINT = "refresh_token";
 
+    /**
+     * Upper bound on the number of tracked rotation families. A session that expires without an
+     * explicit logout (e.g. {@link TokenStore} eviction or timeout) never reaches
+     * {@link #revokeAndClear}, so its family entry is not removed on the logout path; the bounded
+     * LRU below evicts the least-recently-used family once this cap is exceeded, so {@link #families}
+     * cannot grow without limit. The cap is deliberately generous (well above any realistic
+     * concurrent-session count for an in-memory posture) so eviction only ever reclaims families
+     * whose sessions are long dead.
+     */
+    private static final int MAX_TRACKED_FAMILIES = 10_000;
+
     private final TokenStore tokenStore;
     private final RefreshScheduler refreshScheduler;
 
@@ -91,8 +106,24 @@ public class TokenLifecycleManager {
      * Per-session refresh-token rotation families. Seeded on {@link #store} when a refresh token is
      * present and removed on {@link #revokeAndClear}, so a superseded-token replay against a
      * still-live session is detected as reuse.
+     * <p>
+     * Backed by an access-ordered, size-capped LRU (a {@link LinkedHashMap} in {@code accessOrder}
+     * mode wrapped for thread-safety) rather than an unbounded map: a session that expires without an
+     * explicit logout never removes its family via {@link #revokeAndClear}, so an unbounded map would
+     * leak those entries forever. Capping at {@link #MAX_TRACKED_FAMILIES} evicts the least-recently
+     * used family — one whose session has been idle longest — without touching the reuse-detection or
+     * single-flight semantics, which continue to key off the per-session entry while it is live.
      */
-    private final ConcurrentMap<String, RefreshTokenFamily> families = new ConcurrentHashMap<>();
+    private final Map<String, RefreshTokenFamily> families = Collections.synchronizedMap(
+            new LinkedHashMap<>(16, 0.75f, true) {
+                @Serial
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, RefreshTokenFamily> eldest) {
+                    return size() > MAX_TRACKED_FAMILIES;
+                }
+            });
 
     /**
      * Per-session in-flight rotations. The first caller to start a refresh for a session installs its

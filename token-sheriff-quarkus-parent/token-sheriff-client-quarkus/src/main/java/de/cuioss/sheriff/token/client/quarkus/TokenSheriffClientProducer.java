@@ -266,15 +266,16 @@ public class TokenSheriffClientProducer {
      * @param tokenEndpointClient   the token-endpoint transport
      * @param tokenValidationBridge the access-token validation bridge
      * @param idTokenValidationBridge the ID-token validation bridge
+     * @param issValidator          the container-managed RFC 9207 {@code iss} mix-up validator
      * @return the wired authorization-code flow
      */
     @Produces
     @ApplicationScoped
     public AuthorizationCodeFlow authorizationCodeFlow(ClientConfiguration clientConfiguration,
             TokenEndpointClient tokenEndpointClient, TokenValidationBridge tokenValidationBridge,
-            IdTokenValidationBridge idTokenValidationBridge) {
+            IdTokenValidationBridge idTokenValidationBridge, IssValidator issValidator) {
         return new AuthorizationCodeFlow(clientConfiguration, tokenEndpointClient, tokenValidationBridge,
-                idTokenValidationBridge);
+                idTokenValidationBridge, issValidator);
     }
 
     /**

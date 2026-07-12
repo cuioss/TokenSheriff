@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.client.flow;
 
 import de.cuioss.sheriff.token.client.flow.StepUpChallengeParser.StepUpChallenge;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 
@@ -53,7 +54,7 @@ public class StepUpResultVerifier {
      * @param challenge the step-up challenge; must not be {@code null}
      * @param idToken   the validated ID token returned by the elevated exchange; must not be
      *                  {@code null}
-     * @throws IllegalStateException if the {@code acr} is absent or not among the required values, or
+     * @throws ClientProtocolException if the {@code acr} is absent or not among the required values, or
      *                               the {@code auth_time} is absent, unparseable, or older than the
      *                               required {@code max_age}
      */
@@ -74,11 +75,11 @@ public class StepUpResultVerifier {
         ClaimValue acrClaim = idToken.getClaims().get(CLAIM_ACR);
         String actualAcr = acrClaim == null ? null : acrClaim.getOriginalString();
         if (actualAcr == null || actualAcr.isBlank()) {
-            throw new IllegalStateException(
+            throw new ClientProtocolException(
                     "step-up ID token carries no 'acr' claim; the required step-up was not satisfied");
         }
         if (!required.contains(actualAcr)) {
-            throw new IllegalStateException(
+            throw new ClientProtocolException(
                     "step-up 'acr' does not satisfy the challenge; the required step-up was not satisfied");
         }
     }
@@ -86,13 +87,13 @@ public class StepUpResultVerifier {
     private static void verifyAuthTime(IdTokenContent idToken, int maxAgeSeconds) {
         ClaimValue authTimeClaim = idToken.getClaims().get(CLAIM_AUTH_TIME);
         if (authTimeClaim == null) {
-            throw new IllegalStateException(
+            throw new ClientProtocolException(
                     "step-up ID token carries no 'auth_time' claim; freshness cannot be verified");
         }
         long authTimeEpochSeconds = resolveAuthTimeEpochSeconds(authTimeClaim);
         long ageSeconds = Instant.now().getEpochSecond() - authTimeEpochSeconds;
         if (ageSeconds > maxAgeSeconds) {
-            throw new IllegalStateException(
+            throw new ClientProtocolException(
                     "step-up authentication is stale: auth_time is older than the required max_age");
         }
     }
@@ -104,13 +105,13 @@ public class StepUpResultVerifier {
         }
         String raw = authTimeClaim.getOriginalString();
         if (raw == null || raw.isBlank()) {
-            throw new IllegalStateException(
+            throw new ClientProtocolException(
                     "step-up ID token 'auth_time' is empty; freshness cannot be verified");
         }
         try {
             return Long.parseLong(raw.strip());
         } catch (NumberFormatException e) {
-            throw new IllegalStateException("step-up ID token 'auth_time' is not a numeric date", e);
+            throw new ClientProtocolException("step-up ID token 'auth_time' is not a numeric date", e);
         }
     }
 }

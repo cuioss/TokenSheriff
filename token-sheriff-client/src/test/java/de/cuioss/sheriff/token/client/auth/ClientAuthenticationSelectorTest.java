@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.client.auth;
 
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
@@ -107,7 +108,7 @@ class ClientAuthenticationSelectorTest {
         var metadata = metadataAdvertising(List.of("tls_client_auth"));
         var configured = List.of(mtls);
 
-        assertThrows(IllegalStateException.class, () -> selector.select(configured, metadata),
+        assertThrows(ClientProtocolException.class, () -> selector.select(configured, metadata),
                 "selection must fail closed rather than pick the transport-unsupported tls_client_auth");
     }
 
@@ -131,7 +132,7 @@ class ClientAuthenticationSelectorTest {
         var metadata = metadataAdvertising(List.of("client_secret_post"));
         var configured = List.of(privateKeyJwt);
 
-        assertThrows(IllegalStateException.class, () -> selector.select(configured, metadata),
+        assertThrows(ClientProtocolException.class, () -> selector.select(configured, metadata),
                 "selection must fail closed rather than pick an unadvertised method");
     }
 
