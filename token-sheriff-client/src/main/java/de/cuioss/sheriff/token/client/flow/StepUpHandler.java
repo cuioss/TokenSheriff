@@ -81,7 +81,7 @@ public class StepUpHandler {
      * @param challenge     the parsed step-up challenge; must not be {@code null}
      * @return the elevated authorization request (URL + fresh flow context)
      * @throws IllegalArgumentException if the client declares no redirect URI
-     * @throws IllegalStateException    if the AS advertises no authorization endpoint or no PKCE
+     * @throws ClientProtocolException  if the AS advertises no authorization endpoint or no PKCE
      *                                  {@code S256}
      */
     public StepUpRequest initiate(ClientConfiguration configuration, ProviderMetadata metadata,
@@ -106,8 +106,9 @@ public class StepUpHandler {
      *                  {@code null}
      * @param idToken   the validated ID token returned by the elevated exchange; must not be
      *                  {@code null}
-     * @throws IllegalStateException if the {@code acr} is not among the required values or the
-     *                               authentication is older than {@code max_age}
+     * @throws de.cuioss.sheriff.token.commons.error.ClientProtocolException if the {@code acr} is not
+     *                               among the required values or the authentication is older than
+     *                               {@code max_age}
      */
     public void verifyResult(StepUpChallenge challenge, IdTokenContent idToken) {
         resultVerifier.verify(challenge, idToken);

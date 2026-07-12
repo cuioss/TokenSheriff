@@ -214,4 +214,87 @@ class AuthorizationRequestBuilderTest {
                             () -> builder.build(configuration, metadata, null)));
         }
     }
+
+    @Nested
+    @DisplayName("Endpoint-scheme enforcement (L5)")
+    class SchemeEnforcement {
+
+        private static final String HTTP_ENDPOINT = "http://issuer.example.com/authorize";
+
+        private static ClientConfiguration config(boolean allowInsecureHttp) {
+            return ClientConfiguration.builder()
+                    .issuer("https://issuer.example.com")
+                    .clientId(Generators.nonBlankStrings().next())
+                    .clientSecret(Generators.nonBlankStrings().next())
+                    .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                    .scope("openid")
+                    .redirectUri(REDIRECT_URI)
+                    .allowInsecureHttp(allowInsecureHttp)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("Should always accept an https endpoint, whether or not insecure http is allowed")
+        void shouldAcceptHttpsRegardlessOfInsecureFlag() {
+            var context = FlowContext.create(REDIRECT_URI);
+
+            assertAll("https always allowed",
+                    () -> assertTrue(builder.build(config(false), metadataWithS256(AUTH_ENDPOINT), context)
+                            .startsWith(AUTH_ENDPOINT + "?"), "https accepted when insecure http is not allowed"),
+                    () -> assertTrue(builder.build(config(true), metadataWithS256(AUTH_ENDPOINT), context)
+                            .startsWith(AUTH_ENDPOINT + "?"), "https accepted when insecure http is allowed"));
+        }
+
+        @Test
+        @DisplayName("Should accept a cleartext http endpoint only when insecure http is explicitly allowed")
+        void shouldAcceptHttpOnlyWhenAllowed() {
+            var context = FlowContext.create(REDIRECT_URI);
+
+            String url = builder.build(config(true), metadataWithS256(HTTP_ENDPOINT), context);
+
+            assertTrue(url.startsWith(HTTP_ENDPOINT + "?"),
+                    "a cleartext http endpoint is permitted for a local test setup when allowInsecureHttp is set");
+        }
+
+        @Test
+        @DisplayName("Should reject a cleartext http endpoint when insecure http is not allowed")
+        void shouldRejectHttpWhenNotAllowed() {
+            var configuration = config(false);
+            var metadata = metadataWithS256(HTTP_ENDPOINT);
+            var context = FlowContext.create(REDIRECT_URI);
+
+            assertThrows(ClientProtocolException.class,
+                    () -> builder.build(configuration, metadata, context),
+                    "a non-TLS endpoint must be refused unless insecure http is explicitly allowed");
+        }
+
+        @Test
+        @DisplayName("Should reject a non-http(s) scheme even when insecure http is allowed")
+        void shouldRejectForeignSchemeEvenWhenInsecureAllowed() {
+            var configuration = config(true);
+            var context = FlowContext.create(REDIRECT_URI);
+            var ftp = metadataWithS256("ftp://issuer.example.com/authorize");
+            var file = metadataWithS256("file:///etc/passwd");
+
+            assertAll("only literal http is tolerated under allowInsecureHttp",
+                    () -> assertThrows(ClientProtocolException.class,
+                            () -> builder.build(configuration, ftp, context),
+                            "an ftp endpoint is never a valid authorization endpoint"),
+                    () -> assertThrows(ClientProtocolException.class,
+                            () -> builder.build(configuration, file, context),
+                            "a file endpoint is never a valid authorization endpoint"));
+        }
+
+        @Test
+        @DisplayName("Should reject an endpoint with no scheme (relative URL) even when insecure http is allowed")
+        void shouldRejectSchemelessEndpoint() {
+            var configuration = config(true);
+            var metadata = metadataWithS256("/authorize");
+            var context = FlowContext.create(REDIRECT_URI);
+
+            assertThrows(ClientProtocolException.class,
+                    () -> builder.build(configuration, metadata, context),
+                    "a schemeless (relative) authorization endpoint must be rejected");
+        }
+    }
 }

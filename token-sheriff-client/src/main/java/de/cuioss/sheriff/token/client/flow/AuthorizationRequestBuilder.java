@@ -66,6 +66,7 @@ public class AuthorizationRequestBuilder {
     private static final String PARAM_RESPONSE_MODE = "response_mode";
     private static final String RESPONSE_MODE_FORM_POST = "form_post";
     private static final String SCHEME_HTTPS = "https";
+    private static final String SCHEME_HTTP = "http";
 
     /**
      * Builds the authorization request URL for the given flow context.
@@ -128,10 +129,17 @@ public class AuthorizationRequestBuilder {
             throw new ClientProtocolException(
                     "authorization endpoint is not a valid URL: " + authorizationEndpoint, e);
         }
-        if (!SCHEME_HTTPS.equalsIgnoreCase(scheme) && !configuration.isAllowInsecureHttp()) {
-            throw new ClientProtocolException(
-                    "authorization endpoint is not a TLS (https) URL; refusing to start the authorization_code"
-                            + " flow over an insecure channel");
+        if (SCHEME_HTTPS.equalsIgnoreCase(scheme)) {
+            return;
         }
+        // Only literal cleartext http is tolerated, and only when explicitly allowed for a local test
+        // setup. Any other scheme (ftp/file/javascript/…) and an absent/blank scheme are rejected, so a
+        // non-http(s) authorization endpoint can never be issued.
+        if (configuration.isAllowInsecureHttp() && SCHEME_HTTP.equalsIgnoreCase(scheme)) {
+            return;
+        }
+        throw new ClientProtocolException(
+                "authorization endpoint is not a TLS (https) URL; refusing to start the authorization_code"
+                        + " flow over an insecure channel");
     }
 }

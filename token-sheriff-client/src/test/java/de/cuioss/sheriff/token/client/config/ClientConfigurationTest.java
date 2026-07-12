@@ -82,6 +82,77 @@ class ClientConfigurationTest {
     }
 
     @Test
+    @DisplayName("Should reject a blank client secret while still permitting an absent (null) one — blank != absent")
+    void shouldRejectBlankSecretButPermitAbsentSecret() {
+        var blankSecret = ClientConfiguration.builder()
+                .issuer(issuer()).clientId(Generators.nonBlankStrings().next())
+                .clientSecret("   ").authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC);
+        var emptySecret = ClientConfiguration.builder()
+                .issuer(issuer()).clientId(Generators.nonBlankStrings().next())
+                .clientSecret("").authMethod(ClientAuthMethod.CLIENT_SECRET_POST);
+        // A key-based method carries no shared secret: an absent (null) secret must remain valid.
+        var absentSecret = ClientConfiguration.builder()
+                .issuer(issuer()).clientId(Generators.nonBlankStrings().next())
+                .authMethod(ClientAuthMethod.PRIVATE_KEY_JWT).build();
+
+        assertAll("blank-secret rejection, null-secret acceptance",
+                () -> assertThrows(IllegalArgumentException.class, blankSecret::build,
+                        "a whitespace-only client secret is a misconfiguration and must be rejected at construction"),
+                () -> assertThrows(IllegalArgumentException.class, emptySecret::build,
+                        "an empty client secret must be rejected at construction"),
+                () -> assertNull(absentSecret.getClientSecret(),
+                        "an absent (null) secret stays valid for a key-based auth method"));
+    }
+
+    @Test
+    @DisplayName("Should reject a non-positive connect or read timeout at construction")
+    void shouldRejectNonPositiveTimeouts() {
+        var zeroConnect = ClientConfiguration.builder()
+                .issuer(issuer()).clientId(Generators.nonBlankStrings().next())
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC).connectTimeoutSeconds(0);
+        var negativeConnect = ClientConfiguration.builder()
+                .issuer(issuer()).clientId(Generators.nonBlankStrings().next())
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC).connectTimeoutSeconds(-1);
+        var zeroRead = ClientConfiguration.builder()
+                .issuer(issuer()).clientId(Generators.nonBlankStrings().next())
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC).readTimeoutSeconds(0);
+        var negativeRead = ClientConfiguration.builder()
+                .issuer(issuer()).clientId(Generators.nonBlankStrings().next())
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC).readTimeoutSeconds(-5);
+
+        assertAll("timeout guards",
+                () -> assertThrows(IllegalArgumentException.class, zeroConnect::build,
+                        "a zero connect timeout is invalid"),
+                () -> assertThrows(IllegalArgumentException.class, negativeConnect::build,
+                        "a negative connect timeout is invalid"),
+                () -> assertThrows(IllegalArgumentException.class, zeroRead::build,
+                        "a zero read timeout is invalid"),
+                () -> assertThrows(IllegalArgumentException.class, negativeRead::build,
+                        "a negative read timeout is invalid"));
+    }
+
+    @Test
+    @DisplayName("Should build with explicit positive timeouts and a valid secret, and default the timeouts otherwise")
+    void shouldBuildWithValidTimeoutsAndSecret() {
+        var explicit = ClientConfiguration.builder()
+                .issuer(issuer()).clientId(Generators.nonBlankStrings().next())
+                .clientSecret(Generators.nonBlankStrings().next())
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                .connectTimeoutSeconds(7).readTimeoutSeconds(11).build();
+        var defaulted = ClientConfiguration.builder()
+                .issuer(issuer()).clientId(Generators.nonBlankStrings().next())
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC).build();
+
+        assertAll("valid timeout configuration",
+                () -> assertEquals(7, explicit.getConnectTimeoutSeconds()),
+                () -> assertEquals(11, explicit.getReadTimeoutSeconds()),
+                () -> assertEquals(ClientConfiguration.DEFAULT_CONNECT_TIMEOUT_SECONDS,
+                        defaulted.getConnectTimeoutSeconds()),
+                () -> assertEquals(ClientConfiguration.DEFAULT_READ_TIMEOUT_SECONDS,
+                        defaulted.getReadTimeoutSeconds()));
+    }
+
+    @Test
     @DisplayName("Should reject a null issuer, client id or auth method")
     void shouldRejectNullRequiredFields() {
         var clientId = Generators.nonBlankStrings().next();

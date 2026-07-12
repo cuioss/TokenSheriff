@@ -26,6 +26,7 @@ import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
@@ -99,6 +100,20 @@ class StepUpChallengeAttackDatabaseTest {
                 "the attack payload must be encoded into exactly one acr_values parameter, never injecting a second");
         assertTrue(url.startsWith(AUTH_ENDPOINT + "?"),
                 "the payload must not break the authorization endpoint prefix");
+    }
+
+    @Test
+    @DisplayName("Should reject and log a challenge carrying a duplicate auth-param, sanitizing the key (RFC 9110 §11.2)")
+    void shouldRejectDuplicateAuthParamFailClosed() {
+        // A duplicate auth-param is malformed per RFC 9110 §11.2; the parser fails closed rather than
+        // taking a last-wins value an attacker could inject, and the offending key is log-sanitized.
+        String duplicated = "Bearer error=\"insufficient_user_authentication\", "
+                + "acr_values=\"gold\", acr_values=\"silver\"";
+
+        Optional<StepUpChallenge> challenge = parser.parse(duplicated);
+
+        assertTrue(challenge.isEmpty(),
+                "a challenge with a duplicate auth-param must be rejected fail-closed");
     }
 
     private void assertForgedHeaderRejected(String attackHeader) {

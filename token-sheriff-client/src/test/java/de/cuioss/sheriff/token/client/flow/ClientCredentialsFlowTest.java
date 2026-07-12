@@ -133,11 +133,14 @@ class ClientCredentialsFlowTest {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
         KeyPair keyPair = generator.generateKeyPair();
+        // URIBuilder is mutable, so metadata(uriBuilder) must be resolved once: a second call would
+        // append another "/token" segment and point the request at the wrong path.
+        ProviderMetadata metadata = metadata(uriBuilder);
         var privateKeyJwt = new PrivateKeyJwtAuth(config.getClientId(),
-                metadata(uriBuilder).getTokenEndpoint().orElseThrow(), keyPair.getPrivate(),
+                metadata.getTokenEndpoint().orElseThrow(), keyPair.getPrivate(),
                 Generators.letterStrings(3, 8).next(), "RS256");
 
-        AccessTokenContent content = flow(config, privateKeyJwt).obtainToken(metadata(uriBuilder));
+        AccessTokenContent content = flow(config, privateKeyJwt).obtainToken(metadata);
 
         assertNotNull(content, "key-based client_credentials acquisition must return a validated token");
         RecordedRequest request = server.takeRequest();

@@ -126,7 +126,7 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
         var metadata = metadataWithTokenEndpoint(uriBuilder);
         var clientAuth = clientAuth(config);
 
-        assertRefusedBeforeTokenEndpoint(IllegalStateException.class,
+        assertRefusedBeforeTokenEndpoint(ClientProtocolException.class,
                 () -> flow.exchange(metadata, context, forgedCallback, clientAuth));
     }
 
@@ -142,7 +142,7 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
         var metadata = metadataWithTokenEndpoint(uriBuilder);
         var clientAuth = clientAuth(config);
 
-        assertRefusedBeforeTokenEndpoint(IllegalStateException.class,
+        assertRefusedBeforeTokenEndpoint(ClientProtocolException.class,
                 () -> flow.exchange(metadata, context, mixedUpCallback, clientAuth));
     }
 
@@ -159,7 +159,7 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
         var flow = authorizationCodeFlow(config);
         var clientAuth = clientAuth(config);
 
-        assertRefusedBeforeTokenEndpoint(IllegalStateException.class,
+        assertRefusedBeforeTokenEndpoint(ClientProtocolException.class,
                 () -> flow.exchange(metadata, context, callbackWithoutIss, clientAuth));
     }
 
