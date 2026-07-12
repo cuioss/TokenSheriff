@@ -18,9 +18,12 @@ requesting sender-constrained tokens. Step-up and RP-initiated logout are specif
 separately (xref:step-up-and-logout.adoc[Step-up & logout]); the token lifecycle is
 xref:token-handling.adoc[Token handling].
 
-All outbound HTTP in every step below is performed by the
-xref:../../commons/specification/transport.adoc[commons transport] (`COMMONS-1`); the engine
-supplies parameters and interprets responses, and issues no HTTP of its own.
+The engine performs its *own* outbound OIDC/OAuth back-channel HTTP for every step below
+(discovery, PAR, code exchange) — it builds `cui-http` handlers directly and applies its
+in-module egress / path-validation and TLS-scheme control before each fetch
+(xref:../architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]), rather than
+delegating to a commons transport service. It reuses the `cui-http` transport *primitives*
+(`COMMONS-1`), not a commons transport façade.
 
 == The authorization request
 
@@ -128,10 +131,13 @@ Before any token is used (xref:../requirements.adoc#CLIENT-14[CLIENT-14]):
 * every token is then validated through the validation pipeline
   (xref:token-handling.adoc[token handling], xref:../requirements.adoc#CLIENT-15[CLIENT-15]).
 
-Tokens and codes are never transmitted in URL query or fragment components — the
-authorization response uses `form_post` and the code is exchanged at the token endpoint
-(xref:../threat-model.adoc#T-URL-LEAK[T-URL-LEAK]). All token-endpoint traffic relies on the
-commons TLS enforcement (xref:../threat-model.adoc#T-TLS-TOKEN[T-TLS-TOKEN], `COMMONS-2`).
+Tokens and codes are never transmitted in URL query or fragment components — the engine emits
+`response_mode=form_post` on the authorization request and the code is exchanged at the token
+endpoint (xref:../threat-model.adoc#T-URL-LEAK[T-URL-LEAK]). All token-endpoint traffic is TLS
+(non-TLS endpoints are refused by the engine's own back-channel transport, which uses the
+`cui-http` TLS primitive; xref:../threat-model.adoc#T-TLS-TOKEN[T-TLS-TOKEN], `COMMONS-2`) and
+passes the in-module egress / path control before the fetch
+(xref:../architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]).
 
 == Adversarial coverage
 

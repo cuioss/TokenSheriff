@@ -17,8 +17,10 @@ package de.cuioss.sheriff.token.client.discovery;
 
 import com.dslplatform.json.CompiledJson;
 import com.dslplatform.json.JsonAttribute;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -95,6 +97,14 @@ public class ProviderMetadata {
     public List<String> dpopSigningAlgValuesSupported;
 
     /**
+     * Whether the AS stamps the authorization response with its own {@code iss} (RFC 9207). When
+     * {@code true}, the client requires the {@code iss} on the callback and rejects its absence as a
+     * mix-up signal.
+     */
+    @JsonAttribute(name = "authorization_response_iss_parameter_supported")
+    public boolean authorizationResponseIssParameterSupported;
+
+    /**
      * @return the issuer identifier, or {@link Optional#empty()} if absent
      */
     public Optional<String> getIssuer() {
@@ -158,14 +168,36 @@ public class ProviderMetadata {
     }
 
     /**
+     * The advertised token-endpoint client-authentication methods with any JSON {@code null} array
+     * elements removed. DSL-JSON maps a {@code null} element in
+     * {@code token_endpoint_auth_methods_supported} to a {@code null} list entry; returning a
+     * null-element-free list lets consumers copy it into a {@link java.util.Set} without a
+     * {@link NullPointerException} (L6).
+     *
+     * @return the advertised auth methods, never {@code null} and never containing {@code null}
+     *         elements (empty when the AS omitted the field)
+     */
+    public List<String> getTokenEndpointAuthMethods() {
+        return nonNullElements(tokenEndpointAuthMethodsSupported);
+    }
+
+    /**
      * Whether the AS advertises the PKCE {@code S256} code-challenge method — a precondition for
-     * the interactive {@code authorization_code} flow ({@code CLIENT-2}).
+     * the interactive {@code authorization_code} flow ({@code CLIENT-2}). A {@code null} array
+     * element is tolerated (it is never the {@code S256} marker).
      *
      * @return {@code true} if {@code S256} is advertised
      */
     public boolean supportsS256() {
         return codeChallengeMethodsSupported != null
                 && codeChallengeMethodsSupported.contains(CODE_CHALLENGE_METHOD_S256);
+    }
+
+    private static List<String> nonNullElements(@Nullable List<String> values) {
+        if (values == null) {
+            return List.of();
+        }
+        return values.stream().filter(Objects::nonNull).toList();
     }
 
     /**
@@ -184,6 +216,17 @@ public class ProviderMetadata {
      */
     public boolean supportsDpop() {
         return dpopSigningAlgValuesSupported != null && !dpopSigningAlgValuesSupported.isEmpty();
+    }
+
+    /**
+     * Whether the AS advertises the RFC 9207 {@code iss} authorization-response parameter. When
+     * {@code true}, the {@code authorization_code} flow requires the {@code iss} on the callback and
+     * treats its absence as a mix-up ({@code CLIENT-8}).
+     *
+     * @return {@code true} if {@code authorization_response_iss_parameter_supported} is advertised
+     */
+    public boolean supportsAuthorizationResponseIssParameter() {
+        return authorizationResponseIssParameterSupported;
     }
 
     /**

@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -89,6 +90,51 @@ class EndSessionFlowTest {
     @DisplayName("Should reject a null redirect validator at construction")
     void shouldRejectNullValidator() {
         assertThrows(NullPointerException.class, () -> new EndSessionFlow(null));
+    }
+
+    @Test
+    @DisplayName("Should accept a post-logout state that matches the session-bound state (M2)")
+    void shouldAcceptMatchingPostLogoutState() {
+        String state = Generators.letterStrings(20, 40).next();
+
+        assertDoesNotThrow(() -> flow.verifyPostLogoutState(state, state),
+                "a matching echoed state closes the RP-initiated-logout CSRF check");
+    }
+
+    @Test
+    @DisplayName("Should reject a post-logout state that does not match the session-bound state (M2)")
+    void shouldRejectMismatchedPostLogoutState() {
+        String expectedState = Generators.letterStrings(20, 40).next();
+        String returnedState = Generators.letterStrings(41, 60).next();
+
+        var thrown = assertThrows(IllegalStateException.class,
+                () -> flow.verifyPostLogoutState(expectedState, returnedState));
+        assertTrue(thrown.getMessage().contains("state"),
+                "the fail-closed rejection must name the mismatched state");
+    }
+
+    @Test
+    @DisplayName("Should reject an absent or blank echoed post-logout state (M2)")
+    void shouldRejectMissingReturnedState() {
+        String expectedState = Generators.letterStrings(20, 40).next();
+
+        assertAll("echoed state required",
+                () -> assertThrows(IllegalStateException.class,
+                        () -> flow.verifyPostLogoutState(expectedState, null)),
+                () -> assertThrows(IllegalStateException.class,
+                        () -> flow.verifyPostLogoutState(expectedState, "   ")));
+    }
+
+    @Test
+    @DisplayName("Should reject a null or blank expected post-logout state (M2)")
+    void shouldRejectInvalidExpectedState() {
+        String returnedState = Generators.letterStrings(20, 40).next();
+
+        assertAll("expected state required",
+                () -> assertThrows(NullPointerException.class,
+                        () -> flow.verifyPostLogoutState(null, returnedState)),
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> flow.verifyPostLogoutState("   ", returnedState)));
     }
 
     private static String urlEncode(String value) {

@@ -190,13 +190,21 @@ class AuthCodePkceSpecIT extends BaseIntegrationTest {
         HttpRequest loginRequest = HttpRequest.newBuilder().uri(URI.create(actionUrl))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(form)).build();
-        HttpResponse<String> redirect = client.send(loginRequest, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> loginResult = client.send(loginRequest, HttpResponse.BodyHandlers.ofString());
 
-        assertEquals(302, redirect.statusCode(), "a successful login must redirect back to the client callback");
-        String location = redirect.headers().firstValue("Location")
-                .orElseThrow(() -> new AssertionError("the login redirect must carry a Location header"));
-        assertTrue(location.startsWith(REDIRECT_URI), "the redirect must target the exact registered redirect_uri");
-        return URI.create(location).getRawQuery();
+        // C1 emits response_mode=form_post on the authorization request, so a successful login no
+        // longer 302-redirects with the code in the Location query. Keycloak instead returns HTTP 200
+        // with an auto-submitting HTML form whose action is the registered redirect_uri and whose
+        // hidden inputs carry the authorization-response parameters (code, state, and the RFC 9207
+        // iss). Reduce that form back to the callback query string the caller expects.
+        assertEquals(200, loginResult.statusCode(),
+                "a successful login must return the form_post auto-submit document");
+        FormPostSupport.FormPost callback = FormPostSupport.parse(loginResult.body());
+        assertTrue(callback.action().startsWith(REDIRECT_URI),
+                "the form_post target must be the exact registered redirect_uri");
+        assertTrue(callback.query().contains("code="),
+                "the form_post document must carry the authorization code");
+        return callback.query();
     }
 
     private HttpResponse<String> redeem(HttpClient client, String code, String codeVerifier) throws Exception {

@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.LogAsserts;
@@ -72,7 +73,7 @@ class IssValidatorTest {
         void shouldRejectMismatchedIssuer() {
             var callback = callbackWithIssuer("https://attacker.example.com/realms/evil");
 
-            assertThrows(IllegalStateException.class, () -> validator.validate(EXPECTED_ISSUER, callback, false));
+            assertThrows(ClientProtocolException.class, () -> validator.validate(EXPECTED_ISSUER, callback, false));
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "does not match the initiating issuer");
         }
 
@@ -81,7 +82,7 @@ class IssValidatorTest {
         void shouldRejectAbsentIssuerWhenRequired() {
             var callback = callbackWithIssuer(null);
 
-            assertThrows(IllegalStateException.class, () -> validator.validate(EXPECTED_ISSUER, callback, true));
+            assertThrows(ClientProtocolException.class, () -> validator.validate(EXPECTED_ISSUER, callback, true));
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "<absent>");
         }
 
@@ -90,7 +91,7 @@ class IssValidatorTest {
         void shouldRejectLengthMismatch() {
             var callback = callbackWithIssuer(EXPECTED_ISSUER + "/extra");
 
-            assertThrows(IllegalStateException.class, () -> validator.validate(EXPECTED_ISSUER, callback, false));
+            assertThrows(ClientProtocolException.class, () -> validator.validate(EXPECTED_ISSUER, callback, false));
         }
 
         @Test

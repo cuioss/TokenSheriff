@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.logout;
 
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.LogAsserts;
@@ -62,16 +63,16 @@ class LogoutOpenRedirectTest {
     @DisplayName("Should reject look-alike, prefix, sub-path, and appended-parameter redirect URIs")
     void shouldRejectNonExactMatches() {
         assertAll("open-redirect variants",
-                () -> assertThrows(IllegalStateException.class,
+                () -> assertThrows(ClientProtocolException.class,
                         () -> validator.validate("https://rp.example.com.evil.test/postlogout"),
                         "a look-alike host is rejected"),
-                () -> assertThrows(IllegalStateException.class,
+                () -> assertThrows(ClientProtocolException.class,
                         () -> validator.validate("https://rp.example.com/postlogout/extra"),
                         "a sub-path is rejected"),
-                () -> assertThrows(IllegalStateException.class,
+                () -> assertThrows(ClientProtocolException.class,
                         () -> validator.validate(REGISTERED + "?next=https://evil.test"),
                         "an appended query string is rejected"),
-                () -> assertThrows(IllegalStateException.class,
+                () -> assertThrows(ClientProtocolException.class,
                         () -> validator.validate("https://rp.example.com/"),
                         "a prefix is rejected"));
     }
@@ -83,7 +84,7 @@ class LogoutOpenRedirectTest {
         String idTokenHint = Generators.letterStrings(30, 60).next();
         String state = Generators.letterStrings(20, 40).next();
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(ClientProtocolException.class,
                 () -> flow.buildLogoutRedirect(END_SESSION_ENDPOINT, idTokenHint,
                         "https://evil.test/postlogout", state),
                 "an unregistered redirect URI must abort the logout build");

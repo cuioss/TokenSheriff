@@ -21,6 +21,7 @@ import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.token.IdTokenValidationBridge;
 import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
@@ -46,9 +47,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,6 +73,8 @@ class AuthorizationCodeFlowTest {
 
     private static final String REDIRECT_URI = "https://rp.example.com/callback";
     private static final String AUTH_ENDPOINT = "https://issuer.example.com/authorize";
+    private static final String AT_HASH_CLAIM = "at_hash";
+    private static final Pattern JWS_ALG_PATTERN = Pattern.compile("\"alg\"\\s*:\\s*\"([^\"]+)\"");
 
     @Getter
     private final TokenEndpointDispatcher moduleDispatcher = new TokenEndpointDispatcher();
@@ -174,7 +184,7 @@ class AuthorizationCodeFlowTest {
         var flow = flow(config);
         var clientAuth = auth(config);
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(ClientProtocolException.class,
                 () -> flow.exchange(metadata, context, callback, clientAuth));
     }
 
@@ -205,7 +215,7 @@ class AuthorizationCodeFlowTest {
         var flow = flow(config);
         var clientAuth = auth(config);
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(ClientProtocolException.class,
                 () -> flow.exchange(metadata, context, callback, clientAuth));
     }
 
@@ -256,6 +266,63 @@ class AuthorizationCodeFlowTest {
 
         assertThrows(TokenValidationException.class,
                 () -> flow.exchange(metadata, context, callback, clientAuth));
+    }
+
+    @Test
+    @DisplayName("exchange() should reject an ID token whose at_hash does not bind the returned access token (M4)")
+    void shouldRejectMismatchedAtHash(URIBuilder uriBuilder) {
+        var config = config();
+        var context = FlowContext.create(REDIRECT_URI);
+        String otherAccessToken = Generators.letterStrings(20, 40).next();
+        idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
+        idHolder.withClaim(AT_HASH_CLAIM, ClaimValue.forPlainString(atHash(idHolder.getRawToken(), otherAccessToken)));
+        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        var metadata = metadataWithTokenEndpoint(uriBuilder);
+        var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
+        var flow = flow(config);
+        var clientAuth = auth(config);
+
+        assertThrows(ClientProtocolException.class,
+                () -> flow.exchange(metadata, context, callback, clientAuth),
+                "the token exchange must reject an ID token whose at_hash does not bind the access token"
+                        + " returned in the same response");
+    }
+
+    /**
+     * Computes the OIDC {@code at_hash} for {@code accessToken} using the digest the raw ID token's JWS
+     * {@code alg} selects — mirroring the binding the production seam asserts (OIDC Core §3.1.3.6).
+     */
+    private static String atHash(String rawIdToken, String accessToken) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance(shaAlgorithm(rawIdToken));
+            byte[] hash = digest.digest(accessToken.getBytes(StandardCharsets.US_ASCII));
+            byte[] leftHalf = Arrays.copyOf(hash, hash.length / 2);
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(leftHalf);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static String shaAlgorithm(String rawIdToken) {
+        String alg = jwsAlgorithm(rawIdToken);
+        if (alg.endsWith("384")) {
+            return "SHA-384";
+        }
+        if (alg.endsWith("512")) {
+            return "SHA-512";
+        }
+        return "SHA-256";
+    }
+
+    private static String jwsAlgorithm(String rawIdToken) {
+        int dot = rawIdToken.indexOf('.');
+        if (dot <= 0) {
+            return "";
+        }
+        String header = new String(Base64.getUrlDecoder().decode(rawIdToken.substring(0, dot)),
+                StandardCharsets.UTF_8);
+        Matcher matcher = JWS_ALG_PATTERN.matcher(header);
+        return matcher.find() ? matcher.group(1) : "";
     }
 
     @Test

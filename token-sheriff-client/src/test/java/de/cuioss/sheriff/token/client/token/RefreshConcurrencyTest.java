@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.token;
 
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -32,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Concurrency contract for {@link RefreshTokenFamily} ({@code CLIENT-5} / {@code CLIENT-22}) —
+ * Concurrency contract for {@link RefreshTokenFamily} ({@code CLIENT-17} / {@code CLIENT-22}) —
  * deliverable 4.
  * <p>
  * When many threads race to redeem the same current refresh token, the family must serialize the
@@ -66,7 +67,7 @@ class RefreshConcurrencyTest {
                         startGate.await();
                         family.rotate(initial, candidate);
                         successes.incrementAndGet();
-                    } catch (IllegalStateException reuse) {
+                    } catch (ClientProtocolException reuse) {
                         reuseRejections.incrementAndGet();
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();

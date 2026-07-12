@@ -22,24 +22,33 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Applies-DPoP / applies-mTLS and binding-recording tests for {@link SenderConstraint} and
- * {@link ConstraintBinding} ({@code CLIENT-11}) — deliverable 8.
+ * DPoP / mTLS application and binding tests for {@link SenderConstraint} ({@code CLIENT-11}).
+ * <p>
+ * Beyond the metadata-level binding assertions, these tests pin the <em>proof-driven</em> contract
+ * the DPoP-wiring deliverable (H3) added: the emitted proof is decoded and its claims are asserted, so
+ * a regression that stopped normalizing {@code htu}, stopped echoing the {@code DPoP-Nonce}, or stopped
+ * binding a protected-resource proof to its token via {@code ath} would fail here rather than silently
+ * degrade the sender-constraint.
  */
 @EnableTestLogger
 @EnableGeneratorController
-@DisplayName("SenderConstraint DPoP / mTLS application and binding")
+@DisplayName("SenderConstraint DPoP / mTLS application and proof claims")
 class SenderConstraintTest {
 
     private static final String HTM = "POST";
@@ -103,18 +112,114 @@ class SenderConstraintTest {
         constraint.apply(HTM, HTU, first);
         constraint.apply(HTM, HTU, second);
 
-        assertNotEquals(first.get(DPOP_HEADER), second.get(DPOP_HEADER), "each application must produce a distinct, single-use proof");
+        assertNotEquals(first.get(DPOP_HEADER), second.get(DPOP_HEADER),
+                "each application must produce a distinct, single-use proof");
     }
 
     @Test
-    @DisplayName("Should reject null generator, null headers, and blank/null binding confirmation")
+    @DisplayName("Should carry no ath and no nonce on a plain token-endpoint proof")
+    void shouldEmitTokenEndpointProofWithoutAthOrNonce() {
+        var constraint = SenderConstraint.dpop(new DpopProofGenerator(keyPair, "RS256"));
+        Map<String, String> headers = new HashMap<>();
+
+        constraint.apply(HTM, HTU, headers);
+
+        String payload = decodePayload(headers.get(DPOP_HEADER));
+        assertAll("token-endpoint proof",
+                () -> assertTrue(payload.contains("\"htm\":\"POST\""), "the request method is bound"),
+                () -> assertFalse(payload.contains("\"ath\""), "a token-endpoint proof carries no ath"),
+                () -> assertFalse(payload.contains("\"nonce\""), "no nonce is echoed when none was challenged"));
+    }
+
+    @Test
+    @DisplayName("Should echo a server-supplied DPoP-Nonce into the proof (RFC 9449 §8)")
+    void shouldEchoNonceIntoProof() {
+        var constraint = SenderConstraint.dpop(new DpopProofGenerator(keyPair, "RS256"));
+        String nonce = Generators.letterStrings(20, 40).next();
+        Map<String, String> headers = new HashMap<>();
+
+        constraint.apply(HTM, HTU, nonce, headers);
+
+        String payload = decodePayload(headers.get(DPOP_HEADER));
+        assertTrue(payload.contains("\"nonce\":\"" + nonce + "\""),
+                "the challenged nonce is echoed into the retried proof");
+    }
+
+    @Test
+    @DisplayName("Should normalize htu by stripping query and fragment (RFC 9449 §4.2)")
+    void shouldNormalizeHtuStrippingQueryAndFragment() {
+        var constraint = SenderConstraint.dpop(new DpopProofGenerator(keyPair, "RS256"));
+        Map<String, String> headers = new HashMap<>();
+
+        constraint.apply(HTM, HTU + "?foo=bar&baz=qux#section", headers);
+
+        String payload = decodePayload(headers.get(DPOP_HEADER));
+        assertAll("htu normalization",
+                () -> assertTrue(payload.contains("\"htu\":\"" + HTU + "\""),
+                        "htu binds only scheme, authority and path"),
+                () -> assertFalse(payload.contains("foo=bar"), "the query component is stripped"),
+                () -> assertFalse(payload.contains("section"), "the fragment component is stripped"));
+    }
+
+    @Test
+    @DisplayName("Should bind a protected-resource proof to its access token via the ath claim (RFC 9449 §4.3)")
+    void shouldBindProtectedResourceProofViaAth() throws Exception {
+        var constraint = SenderConstraint.dpop(new DpopProofGenerator(keyPair, "RS256"));
+        String accessToken = Generators.letterStrings(30, 60).next();
+        Map<String, String> headers = new HashMap<>();
+
+        constraint.applyProtectedResource("GET", HTU, accessToken, null, headers);
+
+        String payload = decodePayload(headers.get(DPOP_HEADER));
+        assertTrue(payload.contains("\"ath\":\"" + expectedAth(accessToken) + "\""),
+                "ath is the base64url SHA-256 of the presented access token");
+    }
+
+    @Test
+    @DisplayName("Should report the DPoP scheme for a DPoP token and Bearer for an mTLS token")
+    void shouldReportAuthorizationScheme() {
+        var dpop = SenderConstraint.dpop(new DpopProofGenerator(keyPair, "RS256"));
+        var mtls = SenderConstraint.mtls(Generators.letterStrings(20, 40).next());
+
+        assertAll("authorization scheme",
+                () -> assertEquals("DPoP", dpop.authorizationScheme(),
+                        "a DPoP-bound token is presented under the DPoP scheme (RFC 9449 §7.1)"),
+                () -> assertEquals("Bearer", mtls.authorizationScheme(),
+                        "an mTLS-bound token presents as a Bearer credential — mTLS binds at the TLS layer"));
+    }
+
+    @Test
+    @DisplayName("Should reject null generator, null headers, and a null/blank protected-resource token")
     void shouldRejectInvalidInputs() {
         var constraint = SenderConstraint.dpop(new DpopProofGenerator(keyPair, "RS256"));
+        Map<String, String> headers = new HashMap<>();
         assertAll("input guards",
                 () -> assertThrows(NullPointerException.class, () -> SenderConstraint.dpop(null)),
                 () -> assertThrows(NullPointerException.class,
                         () -> constraint.apply(HTM, HTU, null)),
+                () -> assertThrows(NullPointerException.class,
+                        () -> constraint.applyProtectedResource("GET", HTU, null, null, headers)),
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> constraint.applyProtectedResource("GET", HTU, "  ", null, headers)),
                 () -> assertThrows(NullPointerException.class, () -> ConstraintBinding.mtls(null)),
                 () -> assertThrows(IllegalArgumentException.class, () -> ConstraintBinding.dpop("  ")));
+    }
+
+    /**
+     * Decodes the payload (middle) segment of a compact DPoP proof JWT into its raw JSON string.
+     */
+    private static String decodePayload(String proof) {
+        String[] segments = proof.split("\\.");
+        return new String(Base64.getUrlDecoder().decode(segments[1]), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * @return the RFC 9449 §4.3 {@code ath} value the proof must carry for {@code accessToken} — the
+     *         base64url (unpadded) SHA-256 hash of its US-ASCII encoding.
+     */
+    private static String expectedAth(String accessToken) throws Exception {
+        byte[] hash = MessageDigest.getInstance("SHA-256")
+                .digest(accessToken.getBytes(StandardCharsets.US_ASCII));
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
     }
 }

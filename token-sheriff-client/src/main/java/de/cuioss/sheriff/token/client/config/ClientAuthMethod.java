@@ -28,7 +28,7 @@ import java.util.Optional;
  * <ul>
  *   <li>its {@link #getMetadataValue() metadata value} — the exact string the AS advertises in
  *       {@code token_endpoint_auth_methods_supported} (RFC 8414);</li>
- *   <li>its {@link #getStrength() strength} — a relative ordering used by the increment-3
+ *   <li>its {@link #getStrength() strength} — a relative ordering used by the
  *       {@code ClientAuthenticationSelector} to prefer the strongest method the AS supports.
  *       Key-based methods ({@code private_key_jwt}, {@code tls_client_auth}) rank above the
  *       shared-secret methods, so the selector never downgrades to a shared secret where a

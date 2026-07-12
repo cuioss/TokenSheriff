@@ -46,11 +46,14 @@ not restated here.
 |===
 | Not owned here | Where it lives
 
-| *Outbound IdP HTTP* — discovery, JWKS, token, userinfo, revocation, introspection,
-  end-session, PAR transport; TLS, SSRF defence, timeouts / size-limits, resilience.
-| xref:../commons/requirements.adoc[commons] (`COMMONS-1`–`COMMONS-8`). The client *uses*
-  the transport and cites `COMMONS-N`; it issues no outbound IdP HTTP of its own and adds no
-  SSRF/TLS controls.
+| *Low-level HTTP transport primitives* — the `cui-http` `HttpHandler`, TLS context, and the
+  `de.cuioss.http.security` validation pipeline; plus JWKS retrieval and token-signature
+  transport, driven by the validation pipeline.
+| xref:../commons/requirements.adoc[commons] (`COMMONS-1`–`COMMONS-8`) / validation. The client
+  *builds on* these primitives but drives its *own* OIDC/OAuth back-channel HTTP (discovery,
+  token, userinfo, revocation, PAR) and *owns* the in-module egress control it applies to
+  advertised URLs — see xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP].
+  It is *not* true that the client "issues no HTTP of its own."
 
 | *Token-signature / algorithm policy* — rejecting `alg=none`, HMAC and weak/short-key
   algorithms; asymmetric signature verification; DPoP *proof* validation.
@@ -339,12 +342,20 @@ surface.
 | *Weak client auth where `private_key_jwt`/mTLS is available; secrets over non-TLS*
 | Shared secrets are the weakest link; strong auth is available.
 | https://www.rfc-editor.org/rfc/rfc9700[RFC 9700], https://www.rfc-editor.org/rfc/rfc7523[RFC 7523], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705]
-
-| *Unvalidated `jwks_uri` / metadata URLs* (SSRF)
-| Excluded here by *delegation*: SSRF defence on advertised URLs is owned by commons
-  (`COMMONS-3`); the client performs no outbound IdP HTTP of its own.
-| https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180], xref:../commons/requirements.adoc#COMMONS-3[COMMONS-3]
 |===
+
+NOTE: *Egress / SSRF control is an owned in-module responsibility, not a delegated exclusion.* An
+earlier revision of this table listed unvalidated `jwks_uri` / metadata URLs as "excluded by
+delegation to commons," on the premise that the client "performs no outbound IdP HTTP of its own."
+That premise is false: the client drives its own OIDC/OAuth back-channel HTTP and now *owns* an
+in-module egress control — each discovery-advertised endpoint URL is run through the
+`de.cuioss.http.security` URL-path validation pipeline, and a non-TLS endpoint is refused, *before*
+the fetch (xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP],
+xref:threat-model.adoc#T-SSRF-ADVERTISED[T-SSRF-ADVERTISED]). The scope of that control is
+*path-structure and scheme*, not host-address reachability; host-address SSRF filtering
+(link-local / internal-address blocking) remains a network- / deployment-level concern, not an
+engine control.
+* Source: https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180], https://www.rfc-editor.org/rfc/rfc9700#section-2.6[RFC 9700 §2.6].
 
 NOTE: *Token-signature exclusions are not restated here.* Rejecting `alg=none`, HMAC and
 weak/short-key algorithms, and requiring asymmetric signature verification, is already

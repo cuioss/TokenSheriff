@@ -18,11 +18,13 @@ package de.cuioss.sheriff.token.client.flow;
 import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.token.RotationResult;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
 import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -40,7 +42,7 @@ import java.util.Objects;
  * When the authorization server issues a new refresh token (rotation, per the OAuth 2.0 Security
  * BCP), the {@link RotationResult} reports the rotated token and flags the rotation; the caller
  * feeds that transition into its {@link de.cuioss.sheriff.token.client.token.RefreshTokenFamily} so
- * a later replay of a superseded token is detected and the family revoked ({@code CLIENT-5}).
+ * a later replay of a superseded token is detected and the family revoked ({@code CLIENT-17}).
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -60,8 +62,12 @@ public class RefreshFlow {
     private final TokenEndpointClient tokenEndpointClient;
     private final TokenValidationBridge validationBridge;
     private final ClientAuthentication clientAuthentication;
+    @Nullable
+    private final SenderConstraint senderConstraint;
 
     /**
+     * Creates an unconstrained refresh flow (plain bearer token, no DPoP/mTLS).
+     *
      * @param configuration        the client configuration; must not be {@code null}
      * @param tokenEndpointClient  the token-endpoint transport; must not be {@code null}
      * @param validationBridge     the validation bridge; must not be {@code null}
@@ -72,11 +78,32 @@ public class RefreshFlow {
             TokenEndpointClient tokenEndpointClient,
             TokenValidationBridge validationBridge,
             ClientAuthentication clientAuthentication) {
+        this(configuration, tokenEndpointClient, validationBridge, clientAuthentication, null);
+    }
+
+    /**
+     * Creates a refresh flow that, when a sender-constraint is supplied, attaches a DPoP proof to the
+     * refresh request so the rotated access token is issued bound to the proof key ({@code CLIENT-11}).
+     *
+     * @param configuration        the client configuration; must not be {@code null}
+     * @param tokenEndpointClient  the token-endpoint transport; must not be {@code null}
+     * @param validationBridge     the validation bridge; must not be {@code null}
+     * @param clientAuthentication the client authentication strategy to present; must not be
+     *                             {@code null}
+     * @param senderConstraint     the DPoP/mTLS sender-constraint to attach, or {@code null} for a
+     *                             plain bearer refresh
+     */
+    public RefreshFlow(ClientConfiguration configuration,
+            TokenEndpointClient tokenEndpointClient,
+            TokenValidationBridge validationBridge,
+            ClientAuthentication clientAuthentication,
+            @Nullable SenderConstraint senderConstraint) {
         this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
         this.tokenEndpointClient = Objects.requireNonNull(tokenEndpointClient, "tokenEndpointClient must not be null");
         this.validationBridge = Objects.requireNonNull(validationBridge, "validationBridge must not be null");
         this.clientAuthentication = Objects.requireNonNull(clientAuthentication,
                 "clientAuthentication must not be null");
+        this.senderConstraint = senderConstraint;
     }
 
     /**
@@ -85,8 +112,9 @@ public class RefreshFlow {
      * @param metadata     the resolved provider metadata carrying the token endpoint; must not be
      *                     {@code null}
      * @param refreshToken the refresh token to redeem; must not be {@code null} or blank
-     * @return the rotation result carrying the validated access token and the refresh token to use
-     *         next
+     * @return the rotation result carrying the validated access token, the refresh token to use
+     *         next, and the raw refreshed ID token (when the AS issued one) for the lifecycle
+     *         consistency check (OIDC Core §12.2)
      * @throws de.cuioss.sheriff.token.commons.error.TransportException if the token request fails
      * @throws de.cuioss.sheriff.token.validation.exception.TokenValidationException if the returned
      *         token fails validation
@@ -110,14 +138,16 @@ public class RefreshFlow {
         Map<String, String> headers = new HashMap<>();
         clientAuthentication.decorate(form, headers);
 
-        TokenResponse tokenResponse = tokenEndpointClient.requestToken(tokenEndpoint, form, headers);
+        TokenResponse tokenResponse = tokenEndpointClient.requestToken(tokenEndpoint, form, headers,
+                senderConstraint);
         AccessTokenContent accessToken = validationBridge.validateAccessToken(tokenResponse.accessToken);
 
         String rotatedRefreshToken = resolveRefreshToken(refreshToken, tokenResponse.refreshToken);
         boolean rotated = !rotatedRefreshToken.equals(refreshToken);
         LOGGER.debug("Refreshed access token for client '%s' (rotated=%s)", configuration.getClientId(), rotated);
 
-        return new RotationResult(accessToken, rotatedRefreshToken, tokenResponse.expiresIn, rotated);
+        return new RotationResult(accessToken, rotatedRefreshToken, tokenResponse.idToken,
+                tokenResponse.expiresIn, rotated);
     }
 
     /**

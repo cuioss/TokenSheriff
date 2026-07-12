@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.client.flow;
 
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.nio.charset.StandardCharsets;
@@ -53,7 +54,7 @@ public class IssValidator {
      * @param expectedIssuer the issuer the flow was initiated with; must not be {@code null}
      * @param callback       the parsed callback parameters; must not be {@code null}
      * @param requireIssuer  whether a missing {@code iss} must be rejected
-     * @throws IllegalStateException if the {@code iss} does not match, or is absent while required
+     * @throws ClientProtocolException if the {@code iss} does not match, or is absent while required
      */
     public void validate(String expectedIssuer, CallbackParameters callback, boolean requireIssuer) {
         Objects.requireNonNull(expectedIssuer, "expectedIssuer must not be null");
@@ -63,7 +64,7 @@ public class IssValidator {
         if (actualIssuer == null) {
             if (requireIssuer) {
                 LOGGER.warn(ClientLogMessages.WARN.ISS_MISMATCH, "<absent>", expectedIssuer);
-                throw new IllegalStateException(
+                throw new ClientProtocolException(
                         "authorization response is missing the required RFC 9207 'iss' parameter");
             }
             return;
@@ -72,7 +73,7 @@ public class IssValidator {
             // actualIssuer is the attacker-controllable RFC 9207 'iss' callback parameter; sanitize
             // before logging so it cannot forge a log entry (CWE-117).
             LOGGER.warn(ClientLogMessages.WARN.ISS_MISMATCH, LogSanitizer.sanitize(actualIssuer), expectedIssuer);
-            throw new IllegalStateException(
+            throw new ClientProtocolException(
                     "authorization response 'iss' does not match the initiating issuer (mix-up defence)");
         }
     }

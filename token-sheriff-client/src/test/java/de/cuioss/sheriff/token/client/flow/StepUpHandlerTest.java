@@ -19,6 +19,11 @@ import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.flow.StepUpChallengeParser.StepUpChallenge;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
+import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
+import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
+import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
+import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -26,10 +31,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -86,6 +93,20 @@ class StepUpHandlerTest {
                             "the fresh context requests the challenge acr_values"),
                     () -> assertEquals(REDIRECT_URI, request.context().redirectUri(),
                             "the fresh context keeps the configured redirect URI"));
+        }
+
+        @Test
+        @DisplayName("Should emit the max_age freshness constraint on the elevated request (H2)")
+        void shouldEmitMaxAge() {
+            var challenge = new StepUpChallenge(ACR, 300);
+
+            StepUpHandler.StepUpRequest request = stepUpHandler.initiate(config(REDIRECT_URI), metadata(), challenge);
+
+            assertAll("max_age carried",
+                    () -> assertTrue(request.authorizationUrl().contains("max_age=300"),
+                            "the elevated request carries the max_age freshness constraint"),
+                    () -> assertEquals(Optional.of(300), request.context().maxAge(),
+                            "the fresh context models the requested max_age"));
         }
 
         @Test
@@ -198,6 +219,50 @@ class StepUpHandlerTest {
 
             assertTrue(parser.parse(header).isEmpty(),
                     "a non-numeric max_age is dropped, leaving no actionable constraint");
+        }
+    }
+
+    @Nested
+    @DisplayName("verifyResult (H1 / H2 post-exchange step-up verification)")
+    class VerifyResult {
+
+        private static final String WEAK_ACR = "urn:mace:incommon:iap:bronze";
+
+        private IdTokenContent idToken(String acr, long authTimeEpochSeconds) {
+            TestTokenHolder holder = TestTokenGenerators.idTokens().next();
+            holder.withClaim("acr", ClaimValue.forPlainString(acr));
+            holder.withClaim("auth_time", ClaimValue.forPlainString(Long.toString(authTimeEpochSeconds)));
+            return holder.asIdTokenContent();
+        }
+
+        @Test
+        @DisplayName("Should accept a step-up satisfying both the required acr and max_age")
+        void shouldAcceptSatisfiedStepUp() {
+            var challenge = new StepUpChallenge(ACR, 300);
+            var idToken = idToken(ACR, Instant.now().getEpochSecond() - 10);
+
+            assertDoesNotThrow(() -> stepUpHandler.verifyResult(challenge, idToken),
+                    "a step-up whose acr and auth_time satisfy the challenge is accepted");
+        }
+
+        @Test
+        @DisplayName("Should reject a step-up whose acr is weaker than required (H1)")
+        void shouldRejectLowAcr() {
+            var challenge = new StepUpChallenge(ACR, null);
+            var idToken = idToken(WEAK_ACR, Instant.now().getEpochSecond());
+
+            assertThrows(ClientProtocolException.class, () -> stepUpHandler.verifyResult(challenge, idToken),
+                    "an acr weaker than required must not be treated as a satisfied step-up");
+        }
+
+        @Test
+        @DisplayName("Should reject a step-up whose auth_time is older than the required max_age (H2)")
+        void shouldRejectStaleAuthTime() {
+            var challenge = new StepUpChallenge(null, 300);
+            var idToken = idToken(ACR, Instant.now().getEpochSecond() - 1000);
+
+            assertThrows(ClientProtocolException.class, () -> stepUpHandler.verifyResult(challenge, idToken),
+                    "an authentication older than max_age must be rejected as stale");
         }
     }
 }

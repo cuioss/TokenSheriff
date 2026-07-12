@@ -85,6 +85,15 @@ String errorDescription, @Nullable
 
     /**
      * Builds callback parameters from an already-decoded parameter map.
+     * <p>
+     * <strong>Duplicate-parameter defense (L8):</strong> unlike {@link #parse(String)}, this factory
+     * cannot re-apply the RFC 9700 §4.7.3 duplicate-key rejection — a {@link Map} key is unique by
+     * construction, so any duplicate {@code state}/{@code code} in the original wire representation has
+     * already been collapsed (silently last-wins) before it reaches this method. Callers that build the
+     * map from a raw callback query are therefore responsible for rejecting duplicate parameter names
+     * themselves; {@link #parse(String)} does this and is the safe entry point for untrusted wire input.
+     * Use {@code of(Map)} only when the map is known to have been assembled with that defense already
+     * applied.
      *
      * @param params the decoded callback parameters; must not be {@code null}
      * @return the callback parameters
@@ -118,5 +127,24 @@ String errorDescription, @Nullable
 
     private static String decode(String value) {
         return URLDecoder.decode(value, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Renders the parameters without exposing the secret-carrying fields: the authorization
+     * {@code code} and the CSRF {@code state} are redacted so a stray {@code toString()} — a log
+     * statement, an exception message, or a debugger dump — never leaks a usable authorization code or
+     * the anti-CSRF token (H8). The non-secret error and issuer fields are shown for diagnostics.
+     *
+     * @return a redacted string representation carrying no authorization code or state
+     */
+    @Override
+    public String toString() {
+        return "CallbackParameters[code=" + redact(code) + ", state=" + redact(state)
+                + ", error=" + error + ", errorDescription=" + errorDescription
+                + ", issuer=" + issuer + "]";
+    }
+
+    private static String redact(@Nullable String secret) {
+        return secret == null ? "null" : "<redacted>";
     }
 }

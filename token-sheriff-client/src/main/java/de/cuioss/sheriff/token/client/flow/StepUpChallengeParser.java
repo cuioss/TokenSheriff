@@ -15,10 +15,13 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
+import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -60,7 +63,11 @@ public class StepUpChallengeParser {
         if (!trimmed.toLowerCase(Locale.ROOT).startsWith(BEARER_PREFIX)) {
             return Optional.empty();
         }
-        Map<String, String> params = parseParams(trimmed.substring(BEARER_PREFIX.length()));
+        Optional<Map<String, String>> parsed = parseParams(trimmed.substring(BEARER_PREFIX.length()));
+        if (parsed.isEmpty()) {
+            return Optional.empty();
+        }
+        Map<String, String> params = parsed.get();
         if (!INSUFFICIENT_USER_AUTHENTICATION.equals(params.get("error"))) {
             return Optional.empty();
         }
@@ -73,18 +80,64 @@ public class StepUpChallengeParser {
         return Optional.of(new StepUpChallenge(acrValues, maxAge));
     }
 
-    private static Map<String, String> parseParams(String paramList) {
+    /**
+     * Parses the RFC 9110 {@code auth-param} list of a Bearer challenge into a case-insensitive map.
+     * The list is split on commas that sit <em>outside</em> a quoted-string, so a quoted value may
+     * itself contain commas and backslash-escaped quotes without being torn apart. A duplicate
+     * {@code auth-param} name is malformed per RFC 9110 §11.2, so the whole challenge is rejected
+     * (fail-closed) rather than silently taking a last-wins value an attacker could inject.
+     *
+     * @param paramList the comma-separated {@code auth-param} list following the {@code Bearer} scheme
+     * @return the parsed parameters, or {@link Optional#empty()} if a duplicate parameter is present
+     */
+    private static Optional<Map<String, String>> parseParams(String paramList) {
         Map<String, String> params = new HashMap<>();
-        for (String segment : paramList.split(",")) {
+        for (String segment : splitTopLevel(paramList)) {
             String pair = segment.strip();
             int eq = pair.indexOf('=');
             if (eq <= 0) {
                 continue;
             }
             String key = pair.substring(0, eq).strip().toLowerCase(Locale.ROOT);
-            params.put(key, unquote(pair.substring(eq + 1).strip()));
+            String value = unquote(pair.substring(eq + 1).strip());
+            if (params.putIfAbsent(key, value) != null) {
+                LOGGER.debug("Ignoring step-up challenge with duplicate auth-param '%s'", key);
+                return Optional.empty();
+            }
         }
-        return params;
+        return Optional.of(params);
+    }
+
+    /**
+     * Splits {@code input} on top-level commas — commas that are not inside a double-quoted string.
+     * Backslash escapes are honoured inside quotes so {@code \"} does not prematurely close the
+     * quoted-string and a comma inside the quotes stays with its value.
+     */
+    private static List<String> splitTopLevel(String input) {
+        List<String> parts = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+        boolean escaped = false;
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            if (escaped) {
+                current.append(c);
+                escaped = false;
+            } else if (c == '\\' && inQuotes) {
+                current.append(c);
+                escaped = true;
+            } else if (c == '"') {
+                inQuotes = !inQuotes;
+                current.append(c);
+            } else if (c == ',' && !inQuotes) {
+                parts.add(current.toString());
+                current.setLength(0);
+            } else {
+                current.append(c);
+            }
+        }
+        parts.add(current.toString());
+        return parts;
     }
 
     private static @Nullable Integer parseMaxAge(@Nullable String value) {
@@ -94,16 +147,35 @@ public class StepUpChallengeParser {
         try {
             return Integer.valueOf(value.strip());
         } catch (NumberFormatException e) {
-            LOGGER.debug("Ignoring non-numeric step-up max_age '%s'", value);
+            LOGGER.debug("Ignoring non-numeric step-up max_age '%s'", LogSanitizer.sanitize(value));
             return null;
         }
     }
 
+    /**
+     * Strips the surrounding double-quotes from a {@code quoted-string} value and unescapes its
+     * backslash escapes ({@code \"} → {@code "}, {@code \\} → {@code \}), per RFC 9110 §5.6.4.
+     * An unquoted {@code token} value is returned unchanged.
+     */
     private static String unquote(String value) {
-        if (value.length() >= 2 && value.charAt(0) == '"' && value.charAt(value.length() - 1) == '"') {
-            return value.substring(1, value.length() - 1);
+        if (value.length() < 2 || value.charAt(0) != '"' || value.charAt(value.length() - 1) != '"') {
+            return value;
         }
-        return value;
+        String inner = value.substring(1, value.length() - 1);
+        StringBuilder sb = new StringBuilder(inner.length());
+        boolean escaped = false;
+        for (int i = 0; i < inner.length(); i++) {
+            char c = inner.charAt(i);
+            if (escaped) {
+                sb.append(c);
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     /**

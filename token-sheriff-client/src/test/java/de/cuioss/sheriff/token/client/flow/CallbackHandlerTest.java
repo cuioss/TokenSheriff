@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -24,7 +25,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @EnableTestLogger
 @EnableGeneratorController
@@ -68,7 +71,7 @@ class CallbackHandlerTest {
             var context = context();
             var parameters = new CallbackParameters(null, context.state(), "access_denied", "user said no", null);
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -78,7 +81,7 @@ class CallbackHandlerTest {
             var parameters = new CallbackParameters(Generators.nonBlankStrings().next(),
                     context.state(), "invalid_request", null, null);
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -87,7 +90,7 @@ class CallbackHandlerTest {
             var context = context();
             var parameters = success(Generators.nonBlankStrings().next(), Generators.nonBlankStrings().next());
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -96,7 +99,7 @@ class CallbackHandlerTest {
             var context = context();
             var parameters = success(Generators.nonBlankStrings().next(), null);
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -105,7 +108,7 @@ class CallbackHandlerTest {
             var context = context();
             var parameters = success(Generators.nonBlankStrings().next(), context.state() + "x");
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -114,7 +117,7 @@ class CallbackHandlerTest {
             var context = context();
             var parameters = success(null, context.state());
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -123,7 +126,7 @@ class CallbackHandlerTest {
             var context = context();
             var parameters = success("   ", context.state());
 
-            assertThrows(IllegalStateException.class, () -> handler.handle(context, parameters));
+            assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
         }
 
         @Test
@@ -135,6 +138,95 @@ class CallbackHandlerTest {
             assertAll("null-guards",
                     () -> assertThrows(NullPointerException.class, () -> handler.handle(null, parameters)),
                     () -> assertThrows(NullPointerException.class, () -> handler.handle(context, null)));
+        }
+    }
+
+    /**
+     * H8: the callback parameters carry the authorization {@code code} and the anti-CSRF {@code state};
+     * a stray {@code toString()} must never leak either. The secret-bearing fields are asserted absent
+     * and the non-secret diagnostics fields asserted present.
+     */
+    @Nested
+    @DisplayName("Secret redaction in toString() (H8)")
+    class SecretRedaction {
+
+        @Test
+        @DisplayName("Should redact the authorization code and CSRF state in CallbackParameters.toString()")
+        void shouldRedactCodeAndState() {
+            String code = Generators.letterStrings(20, 40).next();
+            String state = Generators.letterStrings(20, 40).next();
+            var parameters = new CallbackParameters(code, state, "access_denied", "user said no",
+                    "https://issuer.example.com");
+
+            String rendered = parameters.toString();
+
+            assertAll("redacted CallbackParameters rendering",
+                    () -> assertFalse(rendered.contains(code),
+                            "the authorization code must not appear in toString()"),
+                    () -> assertFalse(rendered.contains(state), "the CSRF state must not appear in toString()"),
+                    () -> assertTrue(rendered.contains("<redacted>"), "the secret-carrying fields are redacted"),
+                    () -> assertTrue(rendered.contains("access_denied"),
+                            "the non-secret error is shown for diagnostics"),
+                    () -> assertTrue(rendered.contains("https://issuer.example.com"),
+                            "the non-secret issuer is shown for diagnostics"));
+        }
+
+        @Test
+        @DisplayName("Should render absent code and state as null rather than a redacted marker")
+        void shouldRenderAbsentSecretsAsNull() {
+            var parameters = new CallbackParameters(null, null, "server_error", null, null);
+
+            String rendered = parameters.toString();
+
+            assertAll("absent optional secrets",
+                    () -> assertTrue(rendered.contains("code=null"), "an absent code reads as null"),
+                    () -> assertTrue(rendered.contains("state=null"), "an absent state reads as null"));
+        }
+    }
+
+    /**
+     * M8 / L18: browser-controlled callback input reaches an exception message on the fail-closed path.
+     * That message must be neutralized against CRLF log-forging (M8) and bounded in length so an
+     * attacker cannot flood the log with an arbitrarily long value (L18).
+     */
+    @Nested
+    @DisplayName("External-input sanitization in exception messages (M8, L18)")
+    class ExternalInputSanitization {
+
+        @Test
+        @DisplayName("Should escape CR/LF in the error-callback exception message to prevent log forging")
+        void shouldEscapeCrlfInErrorMessage() {
+            var context = context();
+            var parameters = new CallbackParameters(null, context.state(),
+                    "access_denied\r\nWARN forged log line", "desc", null);
+
+            var thrown = assertThrows(ClientProtocolException.class,
+                    () -> handler.handle(context, parameters));
+
+            assertAll("sanitized exception message",
+                    () -> assertFalse(thrown.getMessage().contains("\n"),
+                            "no raw newline survives to forge a log line"),
+                    () -> assertFalse(thrown.getMessage().contains("\r"),
+                            "no raw carriage return survives to forge a log line"),
+                    () -> assertTrue(thrown.getMessage().contains("\\r\\n"),
+                            "CR/LF are escaped, preserving the investigative content"));
+        }
+
+        @Test
+        @DisplayName("Should truncate an over-long error value in the exception message to bound log flooding")
+        void shouldTruncateOverlongError() {
+            var context = context();
+            String overlong = "a".repeat(300);
+            var parameters = new CallbackParameters(null, context.state(), overlong, null, null);
+
+            var thrown = assertThrows(ClientProtocolException.class,
+                    () -> handler.handle(context, parameters));
+
+            assertAll("bounded exception message",
+                    () -> assertTrue(thrown.getMessage().contains("...[truncated]"),
+                            "an over-long value is marked truncated"),
+                    () -> assertFalse(thrown.getMessage().contains(overlong),
+                            "the full over-long value is not carried into the message"));
         }
     }
 }

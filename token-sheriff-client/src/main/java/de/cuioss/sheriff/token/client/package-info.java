@@ -30,10 +30,13 @@
  * validates the tokens it retrieves, it depends on {@code token-sheriff-validation} and gets the
  * {@code commons} base layer transitively.
  * <p>
- * <strong>Status:</strong> wired, buildable skeleton (Plan 05). Functional content is added per
- * {@code doc/client/} and {@code doc/oidc/04-client-spec/} in later increments (Plan 06); no client
- * behaviour lives here yet.
+ * The client-side flows — token retrieval, userinfo, revocation, introspection, RP-initiated
+ * end-session and PAR — are implemented here; the requirements and specification live under
+ * {@code doc/client/}. See {@code doc/client/architecture.adoc} for the module map.
  *
  * @author Oliver Wolff
  */
+@NullMarked
 package de.cuioss.sheriff.token.client;
+
+import org.jspecify.annotations.NullMarked;

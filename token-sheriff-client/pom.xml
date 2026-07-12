@@ -20,10 +20,7 @@
         <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.token.client</maven.jar.plugin.automatic.module.name>
         <version.lombok>1.18.46</version.lombok>
         <version.dsl.json>2.0.2</version.dsl.json>
-        <version.archunit>1.3.0</version.archunit>
-        <!-- Client flows land incrementally (Plan 06). Javadoc generation is re-enabled once the
-             public client surface has stabilised; kept skipped while the engine is under construction. -->
-        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <version.archunit>1.4.2</version.archunit>
     </properties>
 
     <dependencyManagement>

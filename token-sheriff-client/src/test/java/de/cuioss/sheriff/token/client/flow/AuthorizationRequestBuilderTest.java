@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.client.flow;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -45,6 +46,7 @@ class AuthorizationRequestBuilderTest {
 
     private static final String REDIRECT_URI = "https://rp.example.com/callback";
     private static final String AUTH_ENDPOINT = "https://issuer.example.com/authorize";
+    private static final String RESPONSE_MODE_FORM_POST = "form_post";
 
     private final AuthorizationRequestBuilder builder = new AuthorizationRequestBuilder();
 
@@ -105,6 +107,17 @@ class AuthorizationRequestBuilderTest {
                             "PKCE code_challenge is carried"),
                     () -> assertEquals("S256", params.get("code_challenge_method"),
                             "PKCE method is always S256"));
+        }
+
+        @Test
+        @DisplayName("Should request response_mode=form_post so the response is not leaked in the redirect URL")
+        void shouldRequestFormPostResponseMode() {
+            var context = FlowContext.create(REDIRECT_URI);
+
+            String url = builder.build(config(), metadataWithS256(AUTH_ENDPOINT), context);
+
+            assertEquals(RESPONSE_MODE_FORM_POST, queryParams(url).get("response_mode"),
+                    "response_mode=form_post keeps code/state/iss out of the redirect URL (T-URL-LEAK)");
         }
 
         @Test
@@ -181,7 +194,7 @@ class AuthorizationRequestBuilderTest {
             var context = FlowContext.create(REDIRECT_URI);
             var configuration = config();
 
-            assertThrows(IllegalStateException.class,
+            assertThrows(ClientProtocolException.class,
                     () -> builder.build(configuration, metadata, context));
         }
 

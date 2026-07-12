@@ -13,8 +13,10 @@ xref:../architecture.adoc[Architecture]._
 Two flows layered on the confidential authorization-code engine
 (xref:retrieval-flow.adoc[Retrieval & flow]): *step-up authentication* — raising the
 authentication assurance for a sensitive operation — and *RP-initiated logout* — ending the
-session at the IdP and revoking held tokens. Both drive the commons transport
-(`COMMONS-1`); the engine issues no HTTP of its own.
+session at the IdP and revoking held tokens. Both drive the engine's *own* hardened
+back-channel HTTP (on the `cui-http` transport primitives, `COMMONS-1`), which applies the
+in-module egress / path and TLS-scheme control before each fetch
+(xref:../architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]).
 
 == Step-up authentication (RFC 9470)
 
@@ -73,8 +75,9 @@ The engine drives the `end_session_endpoint` with:
 === Revoking held tokens
 
 Logout is not complete until the tokens the engine holds are revoked, so a logout does not
-leave live tokens behind. The engine revokes the access and refresh tokens via the commons
-revocation transport (RFC 7009, `COMMONS-7`) and clears them from the server-side lifecycle
+leave live tokens behind. The engine revokes the access and refresh tokens through its *own*
+`RevocationClient` back-channel call (RFC 7009, on the `cui-http` transport, `COMMONS-7`) and
+clears them from the server-side lifecycle
 (xref:token-handling.adoc[token handling], xref:../requirements.adoc#CLIENT-17[CLIENT-17]).
 
 === Boundary: receivers are the BFF's concern

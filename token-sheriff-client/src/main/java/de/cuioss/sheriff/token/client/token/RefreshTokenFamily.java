@@ -16,15 +16,14 @@
 package de.cuioss.sheriff.token.client.token;
 
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.tools.logging.CuiLogger;
 
-import java.util.HashSet;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Tracks a single refresh-token rotation family and enforces revoke-on-reuse ({@code CLIENT-5}).
+ * Tracks a single refresh-token rotation family and enforces revoke-on-reuse ({@code CLIENT-17}).
  * <p>
  * Each redemption of a refresh token rotates it to a new value (OAuth 2.0 Security BCP): the
  * superseded token is retired and only the current token may be redeemed next. Presenting a
@@ -45,7 +44,6 @@ public class RefreshTokenFamily {
     private static final CuiLogger LOGGER = new CuiLogger(RefreshTokenFamily.class);
 
     private final ReentrantLock lock = new ReentrantLock();
-    private final Set<String> supersededTokens = new HashSet<>();
 
     private String currentToken;
     private boolean revoked;
@@ -63,13 +61,13 @@ public class RefreshTokenFamily {
      * successor.
      * <p>
      * The presented token must be the current active token. Presenting a superseded token — or any
-     * token that is not current — is treated as reuse: the family is revoked and an
-     * {@link IllegalStateException} is thrown. Once revoked, every subsequent call fails closed.
+     * token that is not current — is treated as reuse: the family is revoked and a
+     * {@link ClientProtocolException} is thrown. Once revoked, every subsequent call fails closed.
      *
      * @param presentedToken the refresh token being redeemed; must not be {@code null} or blank
      * @param rotatedToken   the successor refresh token the AS issued; must not be {@code null} or
      *                       blank, and must differ from {@code presentedToken}
-     * @throws IllegalStateException    if the family is already revoked, or reuse is detected (which
+     * @throws ClientProtocolException  if the family is already revoked, or reuse is detected (which
      *                                  also revokes the family)
      * @throws IllegalArgumentException if {@code rotatedToken} equals {@code presentedToken}
      */
@@ -82,7 +80,6 @@ public class RefreshTokenFamily {
         lock.lock();
         try {
             assertRedeemable(presentedToken);
-            supersededTokens.add(currentToken);
             currentToken = rotatedToken;
         } finally {
             lock.unlock();
@@ -103,13 +100,13 @@ public class RefreshTokenFamily {
 
     /**
      * @return the current active refresh token
-     * @throws IllegalStateException if the family has been revoked
+     * @throws ClientProtocolException if the family has been revoked
      */
     public String currentToken() {
         lock.lock();
         try {
             if (revoked) {
-                throw new IllegalStateException("refresh token family is revoked");
+                throw new ClientProtocolException("refresh token family is revoked");
             }
             return currentToken;
         } finally {
@@ -119,12 +116,12 @@ public class RefreshTokenFamily {
 
     private void assertRedeemable(String presentedToken) {
         if (revoked) {
-            throw new IllegalStateException("refresh token family is revoked");
+            throw new ClientProtocolException("refresh token family is revoked");
         }
         if (!currentToken.equals(presentedToken)) {
             revoked = true;
             LOGGER.warn(ClientLogMessages.WARN.REFRESH_TOKEN_REUSE);
-            throw new IllegalStateException(
+            throw new ClientProtocolException(
                     "refresh token reuse detected; the refresh token family has been revoked");
         }
     }

@@ -31,6 +31,9 @@ import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.security.spec.ECGenParameterSpec;
+import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.PSSParameterSpec;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -145,6 +148,48 @@ class PrivateKeyJwtAuthTest {
                 "the assertion signature must verify against the client public key");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"PS256", "PS384", "PS512"})
+    @DisplayName("Should produce a verifiable RSASSA-PSS signature for each PS algorithm (L9)")
+    void shouldProduceVerifiablePssSignature(String algorithm) {
+        var auth = auth(Generators.letterStrings(5, 12).next(), "https://as.example.com/token",
+                Generators.letterStrings(3, 8).next(), algorithm);
+        Map<String, String> form = new HashMap<>();
+        auth.decorate(form, new HashMap<>());
+
+        String[] parts = form.get("client_assertion").split("\\.");
+        String signingInput = parts[0] + "." + parts[1];
+        byte[] signature = BASE64_URL.decode(parts[2]);
+
+        assertAll("PS assertion",
+                () -> assertTrue(decode(parts[0]).contains("\"alg\":\"" + algorithm + "\""),
+                        "header must declare the PS algorithm"),
+                () -> assertTrue(verifyPss(algorithm, keyPair.getPublic(), signingInput, signature),
+                        "the RSASSA-PSS assertion signature must verify against the client public key"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ES256", "ES384", "ES512"})
+    @DisplayName("Should produce a verifiable ECDSA (P1363) signature for each ES algorithm (L9)")
+    void shouldProduceVerifiableEcdsaSignature(String algorithm) throws Exception {
+        KeyPair ecKeyPair = ecKeyPair(algorithm);
+        var auth = new PrivateKeyJwtAuth(Generators.letterStrings(5, 12).next(),
+                "https://as.example.com/token", ecKeyPair.getPrivate(),
+                Generators.letterStrings(3, 8).next(), algorithm);
+        Map<String, String> form = new HashMap<>();
+        auth.decorate(form, new HashMap<>());
+
+        String[] parts = form.get("client_assertion").split("\\.");
+        String signingInput = parts[0] + "." + parts[1];
+        byte[] signature = BASE64_URL.decode(parts[2]);
+
+        assertAll("ES assertion",
+                () -> assertTrue(decode(parts[0]).contains("\"alg\":\"" + algorithm + "\""),
+                        "header must declare the ES algorithm"),
+                () -> assertTrue(verifyEcdsa(algorithm, ecKeyPair.getPublic(), signingInput, signature),
+                        "the ECDSA (P1363) assertion signature must verify against the client public key"));
+    }
+
     @Test
     @DisplayName("Should reject an unsupported signing algorithm")
     void shouldRejectUnsupportedAlgorithm() {
@@ -188,5 +233,49 @@ class PrivateKeyJwtAuthTest {
         verifier.initVerify(publicKey);
         verifier.update(signingInput.getBytes(StandardCharsets.UTF_8));
         return verifier.verify(signature);
+    }
+
+    private static boolean verifyPss(String jwtAlgorithm, PublicKey publicKey, String signingInput, byte[] signature)
+            throws Exception {
+        Signature verifier = Signature.getInstance("RSASSA-PSS");
+        verifier.setParameter(pssSpec(jwtAlgorithm));
+        verifier.initVerify(publicKey);
+        verifier.update(signingInput.getBytes(StandardCharsets.UTF_8));
+        return verifier.verify(signature);
+    }
+
+    private static boolean verifyEcdsa(String jwtAlgorithm, PublicKey publicKey, String signingInput, byte[] signature)
+            throws Exception {
+        String jca = switch (jwtAlgorithm) {
+            case "ES256" -> "SHA256withECDSAinP1363Format";
+            case "ES384" -> "SHA384withECDSAinP1363Format";
+            case "ES512" -> "SHA512withECDSAinP1363Format";
+            default -> throw new IllegalArgumentException("unexpected algorithm: " + jwtAlgorithm);
+        };
+        Signature verifier = Signature.getInstance(jca);
+        verifier.initVerify(publicKey);
+        verifier.update(signingInput.getBytes(StandardCharsets.UTF_8));
+        return verifier.verify(signature);
+    }
+
+    private static PSSParameterSpec pssSpec(String jwtAlgorithm) {
+        return switch (jwtAlgorithm) {
+            case "PS256" -> new PSSParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, 32, 1);
+            case "PS384" -> new PSSParameterSpec("SHA-384", "MGF1", MGF1ParameterSpec.SHA384, 48, 1);
+            case "PS512" -> new PSSParameterSpec("SHA-512", "MGF1", MGF1ParameterSpec.SHA512, 64, 1);
+            default -> throw new IllegalArgumentException("unexpected algorithm: " + jwtAlgorithm);
+        };
+    }
+
+    private static KeyPair ecKeyPair(String jwtAlgorithm) throws Exception {
+        String curve = switch (jwtAlgorithm) {
+            case "ES256" -> "secp256r1";
+            case "ES384" -> "secp384r1";
+            case "ES512" -> "secp521r1";
+            default -> throw new IllegalArgumentException("unexpected algorithm: " + jwtAlgorithm);
+        };
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
+        generator.initialize(new ECGenParameterSpec(curve));
+        return generator.generateKeyPair();
     }
 }

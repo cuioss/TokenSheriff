@@ -24,7 +24,8 @@ import java.util.Optional;
 
 /**
  * The per-flow secret state that binds an interactive {@code authorization_code} request to its
- * callback ({@code CLIENT-2}).
+ * callback: the {@code state} CSRF binding ({@code CLIENT-5}) and the {@code nonce} ID-token
+ * binding ({@code CLIENT-6}).
  * <p>
  * A context is created when the authorization request is built and must be retained by the
  * relying party (bound to the user's session) until the callback returns. It carries:
@@ -37,6 +38,14 @@ import java.util.Optional;
  * </ul>
  * The context is immutable; {@code state}, {@code nonce}, and the PKCE verifier are secrets and are
  * never logged.
+ * <p>
+ * <strong>One-time-use discard contract (L7):</strong> a context is single-use. The relying party
+ * MUST bind exactly one context to the request it was created for, and MUST discard it — remove it
+ * from the session store — as soon as the callback has been processed (whether the exchange succeeded
+ * or {@link CallbackHandler} rejected it). Because the type carries no consumed flag, re-presenting a
+ * retained context against a second callback would re-run the {@code state}/{@code nonce} checks
+ * against the same secrets and defeat the anti-CSRF/anti-replay guarantees; the class stays immutable
+ * and the one-time-use invariant is enforced by the caller's discard, not by internal mutation.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -52,14 +61,16 @@ public final class FlowContext {
     private final String redirectUri;
     private final PkceChallenge pkceChallenge;
     private final @Nullable String acrValues;
+    private final @Nullable Integer maxAge;
 
     private FlowContext(String state, String nonce, String redirectUri, PkceChallenge pkceChallenge,
-            @Nullable String acrValues) {
+            @Nullable String acrValues, @Nullable Integer maxAge) {
         this.state = state;
         this.nonce = nonce;
         this.redirectUri = redirectUri;
         this.pkceChallenge = pkceChallenge;
         this.acrValues = acrValues;
+        this.maxAge = maxAge;
     }
 
     /**
@@ -70,7 +81,7 @@ public final class FlowContext {
      * @return a new flow context
      */
     public static FlowContext create(String redirectUri) {
-        return create(redirectUri, null);
+        return create(redirectUri, null, null);
     }
 
     /**
@@ -81,11 +92,24 @@ public final class FlowContext {
      * @return a new flow context
      */
     public static FlowContext create(String redirectUri, @Nullable String acrValues) {
+        return create(redirectUri, acrValues, null);
+    }
+
+    /**
+     * Creates a context that requests the given {@code acr_values} and {@code max_age} freshness
+     * constraint (RFC 9470 step-up).
+     *
+     * @param redirectUri the exact registered redirect URI; must not be {@code null} or blank
+     * @param acrValues   the requested authentication context class values, or {@code null} for none
+     * @param maxAge      the maximum authentication age in seconds, or {@code null} for none
+     * @return a new flow context
+     */
+    public static FlowContext create(String redirectUri, @Nullable String acrValues, @Nullable Integer maxAge) {
         Objects.requireNonNull(redirectUri, "redirectUri must not be null");
         if (redirectUri.isBlank()) {
             throw new IllegalArgumentException("redirectUri must not be blank");
         }
-        return new FlowContext(randomToken(), randomToken(), redirectUri, PkceChallenge.generate(), acrValues);
+        return new FlowContext(randomToken(), randomToken(), redirectUri, PkceChallenge.generate(), acrValues, maxAge);
     }
 
     /**
@@ -121,6 +145,13 @@ public final class FlowContext {
      */
     public Optional<String> acrValues() {
         return Optional.ofNullable(acrValues);
+    }
+
+    /**
+     * @return the requested {@code max_age} freshness constraint in seconds, if step-up requested it
+     */
+    public Optional<Integer> maxAge() {
+        return Optional.ofNullable(maxAge);
     }
 
     private static String randomToken() {

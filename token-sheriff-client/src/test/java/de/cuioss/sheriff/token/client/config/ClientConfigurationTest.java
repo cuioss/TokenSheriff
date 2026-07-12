@@ -130,6 +130,29 @@ class ClientConfigurationTest {
                 () -> assertNotEquals(first, different));
     }
 
+    @Test
+    @DisplayName("Should exclude the client secret from toString so an incidental dump cannot leak it (TEST-16, H8)")
+    void shouldExcludeSecretFromToString() {
+        var secret = Generators.letterStrings(20, 40).next();
+        var clientId = Generators.nonBlankStrings().next();
+        var config = ClientConfiguration.builder()
+                .issuer(issuer())
+                .clientId(clientId)
+                .clientSecret(secret)
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                .build();
+
+        String rendered = config.toString();
+
+        assertAll("secret never leaks through toString",
+                () -> assertFalse(rendered.contains(secret),
+                        "the client secret value must never appear in the string representation"),
+                () -> assertFalse(rendered.contains("clientSecret"),
+                        "the excluded field is not even named in the string representation"),
+                () -> assertTrue(rendered.contains(clientId),
+                        "non-secret fields remain visible for diagnostics"));
+    }
+
     @Nested
     @DisplayName("ClientAuthMethod metadata")
     class ClientAuthMethodTest {

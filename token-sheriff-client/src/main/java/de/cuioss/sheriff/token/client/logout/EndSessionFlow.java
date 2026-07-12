@@ -16,7 +16,10 @@
 package de.cuioss.sheriff.token.client.logout;
 
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
+import org.jspecify.annotations.Nullable;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -73,7 +76,8 @@ public class EndSessionFlow {
      * @param state                   the session-bound CSRF state; must not be {@code null} or blank
      * @return the fully-formed end-session redirect URL
      * @throws IllegalArgumentException if any required parameter is {@code null} or blank
-     * @throws IllegalStateException    if the post-logout redirect URI is not exactly registered
+     * @throws de.cuioss.sheriff.token.commons.error.ClientProtocolException if the post-logout redirect
+     *                                  URI is not exactly registered
      */
     public String buildLogoutRedirect(String endSessionEndpoint, String idTokenHint,
             String postLogoutRedirectUri, String state) {
@@ -88,6 +92,31 @@ public class EndSessionFlow {
                 PARAM_STATE, state));
 
         return endSessionEndpoint + (endSessionEndpoint.indexOf('?') < 0 ? '?' : '&') + FormEncoder.encode(params);
+    }
+
+    /**
+     * Verifies the {@code state} echoed on the post-logout redirect against the session-bound state
+     * the client sent on the end-session request — the RP-initiated-logout CSRF check (M2).
+     * <p>
+     * {@link #buildLogoutRedirect} sends a {@code state}, but a state that is never checked on the way
+     * back provides no protection: an attacker-forged post-logout redirect could drive the relying
+     * party's post-logout cleanup. This seam closes that gap. A blank or mismatched echoed state fails
+     * closed; the comparison is constant-time so it does not leak the expected state through timing.
+     *
+     * @param expectedState the session-bound {@code state} the client sent on the logout request; must
+     *                      not be {@code null} or blank
+     * @param returnedState the {@code state} echoed on the post-logout redirect; a {@code null}, blank,
+     *                      or non-matching value is rejected
+     * @throws IllegalArgumentException if {@code expectedState} is {@code null} or blank
+     * @throws IllegalStateException    if the echoed state is absent, blank, or does not match
+     */
+    public void verifyPostLogoutState(String expectedState, @Nullable String returnedState) {
+        requireNonBlank(expectedState, PARAM_STATE);
+        if (returnedState == null || returnedState.isBlank()
+                || !MessageDigest.isEqual(expectedState.getBytes(StandardCharsets.UTF_8),
+                returnedState.getBytes(StandardCharsets.UTF_8))) {
+            throw new IllegalStateException("post-logout 'state' does not match the session state");
+        }
     }
 
     private static void requireNonBlank(String value, String name) {

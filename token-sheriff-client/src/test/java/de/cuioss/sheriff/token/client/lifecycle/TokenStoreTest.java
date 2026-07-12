@@ -104,8 +104,8 @@ class TokenStoreTest {
         store.store(presentSession, original);
         String rotatedAccess = Generators.letterStrings(20, 40).next();
 
-        var updated = store.update(presentSession, current -> current.refreshed(rotatedAccess, null, null));
-        var skipped = store.update(absentSession, current -> current.refreshed(rotatedAccess, null, null));
+        var updated = store.update(presentSession, current -> current.refreshed(rotatedAccess, null, null, null));
+        var skipped = store.update(absentSession, current -> current.refreshed(rotatedAccess, null, null, null));
 
         assertAll("atomic update",
                 () -> assertEquals(rotatedAccess, updated.orElseThrow().accessToken(),
@@ -127,7 +127,7 @@ class TokenStoreTest {
         manager.store(sessionId, bearerToken());
         manager.revokeAndClear(sessionId);
 
-        var refreshed = manager.applyRefresh(sessionId, Generators.letterStrings(20, 40).next(), null, null);
+        var refreshed = manager.applyRefresh(sessionId, Generators.letterStrings(20, 40).next(), null, null, null);
 
         assertAll("refresh after logout is a no-op",
                 () -> assertTrue(refreshed.isEmpty(),

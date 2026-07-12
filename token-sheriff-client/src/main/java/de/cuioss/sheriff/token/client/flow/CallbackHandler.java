@@ -15,6 +15,8 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
+import de.cuioss.sheriff.token.client.internal.LogSanitizer;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.nio.charset.StandardCharsets;
@@ -47,7 +49,7 @@ public class CallbackHandler {
      * @param context    the flow context that issued the request; must not be {@code null}
      * @param parameters the parsed callback parameters; must not be {@code null}
      * @return the validated authorization code
-     * @throws IllegalStateException if the callback signals an error, the {@code state} is missing or
+     * @throws ClientProtocolException if the callback signals an error, the {@code state} is missing or
      *                               does not match, or the authorization code is absent
      */
     public String handle(FlowContext context, CallbackParameters parameters) {
@@ -55,16 +57,17 @@ public class CallbackHandler {
         Objects.requireNonNull(parameters, "parameters must not be null");
 
         if (parameters.hasError()) {
-            throw new IllegalStateException(
-                    "authorization server returned an error callback: " + parameters.error());
+            throw new ClientProtocolException(
+                    "authorization server returned an error callback: "
+                            + LogSanitizer.sanitize(parameters.error()));
         }
         if (!statesMatch(context.state(), parameters.state())) {
             LOGGER.debug("Rejecting authorization callback: state mismatch");
-            throw new IllegalStateException("authorization callback 'state' does not match the flow context");
+            throw new ClientProtocolException("authorization callback 'state' does not match the flow context");
         }
         return parameters.getCode()
                 .filter(code -> !code.isBlank())
-                .orElseThrow(() -> new IllegalStateException("authorization callback is missing the authorization code"));
+                .orElseThrow(() -> new ClientProtocolException("authorization callback is missing the authorization code"));
     }
 
     private static boolean statesMatch(String expected, String actual) {

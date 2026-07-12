@@ -20,6 +20,7 @@ import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
@@ -57,21 +58,21 @@ public class ParClient {
 
     private static final String CONTENT_TYPE = "Content-Type";
     private static final String FORM_URLENCODED = "application/x-www-form-urlencoded";
-    private static final int CONNECT_TIMEOUT_SECONDS = 5;
-    private static final int READ_TIMEOUT_SECONDS = 10;
+    private static final String FAILURE_CONTEXT = "PAR request failed";
 
-    private final ClientConfiguration configuration;
     private final DslJson<Object> dslJson;
     private final int maxContentSize;
+    private final BackChannelHttp backChannel;
 
     /**
      * @param configuration the client configuration carrying the TLS policy; must not be {@code null}
      */
     public ParClient(ClientConfiguration configuration) {
-        this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
+        Objects.requireNonNull(configuration, "configuration must not be null");
         ParserConfig parserConfig = ParserConfig.builder().build();
         this.dslJson = parserConfig.getDslJson();
         this.maxContentSize = parserConfig.getMaxPayloadSize();
+        this.backChannel = new BackChannelHttp(configuration, maxContentSize);
     }
 
     /**
@@ -94,26 +95,20 @@ public class ParClient {
         Objects.requireNonNull(authorizationParameters, "authorizationParameters must not be null");
         Objects.requireNonNull(clientAuthentication, "clientAuthentication must not be null");
 
-        HttpHandler handler = HttpHandler.builder()
-                .url(parEndpoint)
-                .connectionTimeoutSeconds(CONNECT_TIMEOUT_SECONDS)
-                .readTimeoutSeconds(READ_TIMEOUT_SECONDS)
-                .allowInsecureHttp(configuration.isAllowInsecureHttp())
-                .build();
+        HttpHandler handler = backChannel.validatedHandler(parEndpoint, FAILURE_CONTEXT);
 
         Map<String, String> form = new HashMap<>(authorizationParameters);
         Map<String, String> headers = new HashMap<>();
         clientAuthentication.decorate(form, headers);
 
         HttpRequest.Builder requestBuilder = handler.requestBuilder()
-                .header(CONTENT_TYPE, FORM_URLENCODED)
+                .setHeader(CONTENT_TYPE, FORM_URLENCODED)
                 .POST(HttpRequest.BodyPublishers.ofString(FormEncoder.encode(form)));
-        headers.forEach(requestBuilder::header);
+        headers.forEach(requestBuilder::setHeader);
 
-        HttpClient client = handler.createHttpClient();
+        HttpClient client = backChannel.sharedClient(handler);
         try {
-            HttpResponse<String> response = client.send(requestBuilder.build(),
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = client.send(requestBuilder.build(), backChannel.bodyHandler());
             if (!HttpStatusFamily.isSuccess(response.statusCode())) {
                 throw new TransportException(
                         "PAR endpoint returned unexpected HTTP status " + response.statusCode());

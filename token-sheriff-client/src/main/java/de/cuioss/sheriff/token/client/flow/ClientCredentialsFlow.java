@@ -15,17 +15,16 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
-import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
+import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
 import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -35,14 +34,17 @@ import java.util.Objects;
  * Drives the OAuth 2.0 {@code client_credentials} grant (RFC 6749 §4.4).
  * <p>
  * The flow builds the {@code grant_type=client_credentials} request, applies the configured
- * shared-secret client authentication, exchanges it at the token endpoint through
+ * {@link ClientAuthentication} strategy, exchanges it at the token endpoint through
  * {@link TokenEndpointClient}, and validates the returned access token through the
  * {@link TokenValidationBridge} ({@code CLIENT-15}). It returns only a validated token — a
  * successful HTTP exchange alone is never trusted.
  * <p>
- * Increment 2 supports the shared-secret authentication methods
- * ({@link ClientAuthMethod#CLIENT_SECRET_BASIC} / {@link ClientAuthMethod#CLIENT_SECRET_POST}); the
- * key-based methods are generalized by the increment-3 {@code ClientAuthentication} strategy.
+ * The strategy is resolved by the caller through
+ * {@link de.cuioss.sheriff.token.client.auth.ClientAuthenticationSelector}, so the flow honors the
+ * strongest client-authentication method the authorization server advertises — including the
+ * key-based methods ({@code private_key_jwt}) — rather than capping at a shared secret. The
+ * shared-secret {@code Authorization} encoding is delegated to
+ * {@link de.cuioss.sheriff.token.client.auth.ClientSecretBasicAuth} and never duplicated here.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -55,25 +57,54 @@ public class ClientCredentialsFlow {
     private static final String PARAM_GRANT_TYPE = "grant_type";
     private static final String GRANT_CLIENT_CREDENTIALS = "client_credentials";
     private static final String PARAM_SCOPE = "scope";
-    private static final String PARAM_CLIENT_ID = "client_id";
-    private static final String PARAM_CLIENT_SECRET = "client_secret";
-    private static final String HEADER_AUTHORIZATION = "Authorization";
 
     private final ClientConfiguration configuration;
     private final TokenEndpointClient tokenEndpointClient;
     private final TokenValidationBridge validationBridge;
+    private final ClientAuthentication clientAuthentication;
+    @Nullable
+    private final SenderConstraint senderConstraint;
 
     /**
-     * @param configuration       the client configuration; must not be {@code null}
-     * @param tokenEndpointClient the token-endpoint transport; must not be {@code null}
-     * @param validationBridge    the validation bridge; must not be {@code null}
+     * Creates an unconstrained client-credentials flow (plain bearer token, no DPoP/mTLS).
+     *
+     * @param configuration        the client configuration; must not be {@code null}
+     * @param tokenEndpointClient  the token-endpoint transport; must not be {@code null}
+     * @param validationBridge     the validation bridge; must not be {@code null}
+     * @param clientAuthentication the client authentication strategy to present; must not be
+     *                             {@code null}
      */
     public ClientCredentialsFlow(ClientConfiguration configuration,
             TokenEndpointClient tokenEndpointClient,
-            TokenValidationBridge validationBridge) {
+            TokenValidationBridge validationBridge,
+            ClientAuthentication clientAuthentication) {
+        this(configuration, tokenEndpointClient, validationBridge, clientAuthentication, null);
+    }
+
+    /**
+     * Creates a client-credentials flow that, when a sender-constraint is supplied, attaches a DPoP
+     * proof to the token request so the issued access token is bound to the proof key
+     * ({@code CLIENT-11}).
+     *
+     * @param configuration        the client configuration; must not be {@code null}
+     * @param tokenEndpointClient  the token-endpoint transport; must not be {@code null}
+     * @param validationBridge     the validation bridge; must not be {@code null}
+     * @param clientAuthentication the client authentication strategy to present; must not be
+     *                             {@code null}
+     * @param senderConstraint     the DPoP/mTLS sender-constraint to attach, or {@code null} for a
+     *                             plain bearer request
+     */
+    public ClientCredentialsFlow(ClientConfiguration configuration,
+            TokenEndpointClient tokenEndpointClient,
+            TokenValidationBridge validationBridge,
+            ClientAuthentication clientAuthentication,
+            @Nullable SenderConstraint senderConstraint) {
         this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
         this.tokenEndpointClient = Objects.requireNonNull(tokenEndpointClient, "tokenEndpointClient must not be null");
         this.validationBridge = Objects.requireNonNull(validationBridge, "validationBridge must not be null");
+        this.clientAuthentication = Objects.requireNonNull(clientAuthentication,
+                "clientAuthentication must not be null");
+        this.senderConstraint = senderConstraint;
     }
 
     /**
@@ -98,41 +129,12 @@ public class ClientCredentialsFlow {
         }
 
         Map<String, String> headers = new HashMap<>();
-        applyClientAuthentication(form, headers);
+        clientAuthentication.decorate(form, headers);
 
-        TokenResponse tokenResponse = tokenEndpointClient.requestToken(tokenEndpoint, form, headers);
+        TokenResponse tokenResponse = tokenEndpointClient.requestToken(tokenEndpoint, form, headers,
+                senderConstraint);
         LOGGER.debug("Obtained client_credentials token for client '%s'", configuration.getClientId());
 
         return validationBridge.validateAccessToken(tokenResponse.accessToken);
-    }
-
-    private void applyClientAuthentication(Map<String, String> form, Map<String, String> headers) {
-        ClientAuthMethod method = configuration.getAuthMethod();
-        String secret = requireSecret(method);
-        switch (method) {
-            case CLIENT_SECRET_BASIC -> headers.put(HEADER_AUTHORIZATION, basicAuthHeader(secret));
-            case CLIENT_SECRET_POST -> {
-                form.put(PARAM_CLIENT_ID, configuration.getClientId());
-                form.put(PARAM_CLIENT_SECRET, secret);
-            }
-            default -> throw new IllegalStateException(
-                    "client authentication method " + method + " is not supported by the client_credentials"
-                            + " flow before increment 3");
-        }
-    }
-
-    private String requireSecret(ClientAuthMethod method) {
-        String secret = configuration.getClientSecret();
-        if ((method == ClientAuthMethod.CLIENT_SECRET_BASIC || method == ClientAuthMethod.CLIENT_SECRET_POST)
-                && secret == null) {
-            throw new IllegalStateException("client authentication method " + method + " requires a client secret");
-        }
-        return secret;
-    }
-
-    private String basicAuthHeader(String secret) {
-        String credentials = URLEncoder.encode(configuration.getClientId(), StandardCharsets.UTF_8)
-                + ":" + URLEncoder.encode(secret, StandardCharsets.UTF_8);
-        return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
     }
 }

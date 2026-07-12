@@ -47,8 +47,13 @@ public final class ClientLogMessages {
                 .template("Resolved OIDC provider metadata for issuer '%s'")
                 .build();
 
-        /** Held tokens for a session were cleared as part of RP-initiated logout. */
-        public static final LogRecord LOGOUT_TOKENS_REVOKED = LogRecordModel.builder()
+        /**
+         * Held tokens for a session were cleared from the local store as part of RP-initiated logout.
+         * This records the client-side store clear only; revocation at the authorization server (RFC
+         * 7009) is performed separately by the relying party on the returned bundle, so this event must
+         * not claim the tokens were revoked (L17).
+         */
+        public static final LogRecord LOGOUT_TOKENS_CLEARED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(2)
                 .template("Cleared held tokens for session '%s' as part of RP-initiated logout")
@@ -115,6 +120,20 @@ public final class ClientLogMessages {
                 .prefix(PREFIX)
                 .identifier(107)
                 .template("Post-logout redirect URI '%s' does not exactly match any registered URI; refusing RP-initiated logout (open-redirect defence)")
+                .build();
+
+        /** Refresh-token reuse was detected on a stored session; the family is revoked at the AS and the store cleared. */
+        public static final LogRecord REFRESH_REUSE_REVOCATION = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(108)
+                .template("Refresh token reuse detected for session '%s'; revoking the family at the authorization server (RFC 7009) and clearing the store")
+                .build();
+
+        /** A refreshed ID token was inconsistent with the refreshed access token; the refresh is refused. */
+        public static final LogRecord REFRESHED_ID_TOKEN_INCONSISTENT = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(109)
+                .template("Refreshed ID token is inconsistent with the refreshed access token (OIDC Core §12.2 'iss'/'sub'); refusing to apply the refresh")
                 .build();
     }
 

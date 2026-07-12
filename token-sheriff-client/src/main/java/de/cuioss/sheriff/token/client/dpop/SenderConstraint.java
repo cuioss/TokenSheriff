@@ -15,6 +15,8 @@
  */
 package de.cuioss.sheriff.token.client.dpop;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Map;
 import java.util.Objects;
 
@@ -76,18 +78,65 @@ public final class SenderConstraint {
     }
 
     /**
-     * Applies the sender-constraint to a request. For DPoP this adds the {@code DPoP} proof header;
-     * for mTLS the binding is transport-level and no header is added.
+     * Applies the sender-constraint to a token-endpoint request. For DPoP this adds the {@code DPoP}
+     * proof header; for mTLS the binding is transport-level and no header is added.
      *
      * @param htm            the request HTTP method (e.g. {@code POST}); must not be {@code null} or blank
      * @param htu            the request URI (e.g. the token endpoint); must not be {@code null} or blank
      * @param requestHeaders the mutable request headers to decorate; must not be {@code null}
      */
     public void apply(String htm, String htu, Map<String, String> requestHeaders) {
+        apply(htm, htu, null, requestHeaders);
+    }
+
+    /**
+     * Applies the sender-constraint to a token-endpoint request, echoing a server-supplied
+     * {@code DPoP-Nonce} when the authorization server challenged the previous attempt with
+     * {@code use_dpop_nonce} (RFC 9449 §8). For mTLS no header is added and the nonce is irrelevant.
+     *
+     * @param htm            the request HTTP method; must not be {@code null} or blank
+     * @param htu            the request URI; must not be {@code null} or blank
+     * @param nonce          the server-provided DPoP nonce to echo, or {@code null} when none was challenged
+     * @param requestHeaders the mutable request headers to decorate; must not be {@code null}
+     */
+    public void apply(String htm, String htu, @Nullable String nonce, Map<String, String> requestHeaders) {
         Objects.requireNonNull(requestHeaders, "requestHeaders must not be null");
         if (dpopGenerator != null) {
-            requestHeaders.put(DPOP_HEADER, dpopGenerator.generateProof(htm, htu));
+            requestHeaders.put(DPOP_HEADER, dpopGenerator.generateProof(htm, htu, nonce, null));
         }
+    }
+
+    /**
+     * Applies the sender-constraint to a protected-resource request (e.g. userinfo), binding the proof
+     * to the presented access token via the {@code ath} claim (RFC 9449 §4.3). For mTLS no header is
+     * added and the binding is transport-level.
+     *
+     * @param htm            the request HTTP method; must not be {@code null} or blank
+     * @param htu            the request URI; must not be {@code null} or blank
+     * @param accessToken    the access token whose {@code ath} hash the proof carries; must not be
+     *                       {@code null} or blank
+     * @param nonce          the server-provided DPoP nonce to echo, or {@code null} when none was challenged
+     * @param requestHeaders the mutable request headers to decorate; must not be {@code null}
+     */
+    public void applyProtectedResource(String htm, String htu, String accessToken, @Nullable String nonce,
+            Map<String, String> requestHeaders) {
+        Objects.requireNonNull(accessToken, "accessToken must not be null");
+        Objects.requireNonNull(requestHeaders, "requestHeaders must not be null");
+        if (accessToken.isBlank()) {
+            throw new IllegalArgumentException("accessToken must not be blank");
+        }
+        if (dpopGenerator != null) {
+            requestHeaders.put(DPOP_HEADER, dpopGenerator.generateProof(htm, htu, nonce, accessToken));
+        }
+    }
+
+    /**
+     * @return the HTTP {@code Authorization} scheme a protected-resource request must present when
+     *         carrying a token bound by this constraint: {@code DPoP} for a DPoP-bound token, otherwise
+     *         {@code Bearer} (mTLS binds at the TLS layer and presents the token as a Bearer credential)
+     */
+    public String authorizationScheme() {
+        return binding.method() == ConstraintBinding.Method.DPOP ? "DPoP" : "Bearer";
     }
 
     /**
