@@ -40,7 +40,8 @@ import java.util.Objects;
  *   <li>{@link #exchange(ProviderMetadata, FlowContext, CallbackParameters, ClientAuthentication)}
  *       validates the callback, redeems the code at the token endpoint with the PKCE verifier and
  *       client authentication, and validates the returned access token and ID token (binding the ID
- *       token's {@code nonce} to the flow).</li>
+ *       token's {@code nonce} to the flow and, per OIDC Core §3.1.3.6, its {@code at_hash} to the
+ *       returned access token).</li>
  * </ol>
  * Only validated tokens are returned — a successful HTTP exchange alone is never trusted
  * ({@code CLIENT-15}).
@@ -189,7 +190,12 @@ public class AuthorizationCodeFlow {
         if (tokenResponse.idToken == null || tokenResponse.idToken.isBlank()) {
             throw new IllegalStateException("authorization_code response is missing the ID token");
         }
-        IdTokenContent idToken = idTokenBridge.validateIdToken(tokenResponse.idToken, context.nonce());
+        // Bind the ID token to the access token issued in the same response via 'at_hash' (OIDC Core
+        // §3.1.3.6, M4): both tokens were requested and validated together here, so this is the call
+        // site where the at_hash check the validation bridge exposes must actually be exercised;
+        // the two-arg overload (nonce only) would silently skip it.
+        IdTokenContent idToken = idTokenBridge.validateIdToken(tokenResponse.idToken, context.nonce(),
+                tokenResponse.accessToken);
         LOGGER.debug("Completed authorization_code exchange for client '%s'", configuration.getClientId());
 
         return new AuthenticationResult(accessToken, idToken);
