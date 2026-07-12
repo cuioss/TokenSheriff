@@ -75,8 +75,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("Wired-flow scaffold: real flows driven end to end, incl. DPoP wiring")
 class WiredFlowNegativePathIT extends WiredFlowTestSupport {
 
-    private static final String DPOP_HEADER = "DPoP";
-
     @BeforeEach
     void setUp() {
         initWiredFlow();
@@ -167,7 +165,7 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
 
     @Test
     @DisplayName("Should attach a DPoP proof to the wired refresh request so a deleted binding is observable")
-    void shouldAttachDpopProofToWiredRefresh(URIBuilder uriBuilder) throws Exception {
+    void shouldAttachDpopProofToWiredRefresh(URIBuilder uriBuilder) {
         ClientConfiguration config = config();
         getModuleDispatcher().success(accessHolder.getRawToken(), null,
                 Generators.letterStrings(20, 40).next(), 300);
@@ -222,9 +220,10 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
         // Replay the superseded token: roll the store back to rt1 while the family stays at rt2.
         manager.store(session, new StoredToken(Generators.letterStrings(20, 40).next(), rt1, null, null, null));
         getModuleDispatcher().success(accessHolder.getRawToken(), null, Generators.letterStrings(20, 40).next(), 300);
+        var clientAuth = clientAuth(config);
 
         assertThrows(ClientProtocolException.class,
-                () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth(config)));
+                () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth));
 
         assertAll("wired reuse refusal",
                 () -> assertTrue(revocationClient.revoked(rt1),

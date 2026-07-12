@@ -163,9 +163,11 @@ class TokenEndpointTransportControlTest {
                 .build();
         var client = new TokenEndpointClient(config);
         String httpEndpoint = uriBuilder.addPathSegment("token").buildAsString();
+        Map<String, String> params = Map.of("grant_type", "client_credentials");
+        Map<String, String> headers = Map.of();
 
         assertThrows(TransportException.class,
-                () -> client.requestToken(httpEndpoint, Map.of("grant_type", "client_credentials"), Map.of()),
+                () -> client.requestToken(httpEndpoint, params, headers),
                 "a cleartext token endpoint must be refused as a TransportException, not an IllegalArgumentException");
     }
 

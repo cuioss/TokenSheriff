@@ -139,6 +139,11 @@ public class ClientConfiguration {
      *
      * @throws IllegalArgumentException if any field is blank, malformed, or otherwise invalid
      */
+    // S107 (too many parameters) is unavoidable here: Lombok's @Builder generates a call to this
+    // all-args constructor with one argument per field, so its arity is fixed by the field count.
+    // Collapsing the fields into a parameter object would break that generated call; this constructor
+    // exists solely to add construction-time validation (L14) to the builder path.
+    @SuppressWarnings("java:S107")
     ClientConfiguration(@NonNull String issuer, @NonNull String clientId, @Nullable String clientSecret,
             @NonNull ClientAuthMethod authMethod, List<String> scopes, @Nullable String redirectUri,
             boolean allowInsecureHttp, int connectTimeoutSeconds, int readTimeoutSeconds) {

@@ -158,9 +158,10 @@ class RotationReuseDetectionTest {
         // Roll the store back to the now-superseded token while the family stays at rt2, then present it.
         manager.store(session, bearerBundle(rt1, null));
         moduleDispatcher.success(accessHolder.getRawToken(), Generators.letterStrings(20, 40).next(), null, 300);
+        var clientAuth = clientAuth(config);
 
         assertThrows(ClientProtocolException.class,
-                () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth(config)));
+                () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth));
 
         assertAll("reuse response",
                 () -> assertTrue(revocationClient.revoked(rt1),
@@ -233,9 +234,10 @@ class RotationReuseDetectionTest {
         manager.store(session, bearerBundle(rt1, originalIdToken));
         moduleDispatcher.success(accessHolder.getRawToken(), Generators.letterStrings(20, 40).next(),
                 idHolder.getRawToken(), 300);
+        var clientAuth = clientAuth(config);
 
         assertThrows(IllegalStateException.class,
-                () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth(config)));
+                () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth));
 
         assertAll("rejected refresh keeps the pre-refresh state",
                 () -> assertEquals(rt1, manager.get(session).orElseThrow().refreshToken(),
@@ -309,11 +311,12 @@ class RotationReuseDetectionTest {
         var family = new RefreshTokenFamily(Generators.letterStrings(20, 40).next());
         var presented = Generators.letterStrings(20, 40).next();
         var freshFamily = new RefreshTokenFamily(presented);
+        var rotationSuccessor = Generators.letterStrings(20, 40).next();
         assertAll("token validation",
                 () -> assertThrows(NullPointerException.class, () -> new RefreshTokenFamily(null)),
                 () -> assertThrows(IllegalArgumentException.class, () -> new RefreshTokenFamily("  ")),
                 () -> assertThrows(NullPointerException.class,
-                        () -> family.rotate(null, Generators.letterStrings(20, 40).next())),
+                        () -> family.rotate(null, rotationSuccessor)),
                 () -> assertThrows(IllegalArgumentException.class,
                         () -> freshFamily.rotate(presented, presented)));
     }

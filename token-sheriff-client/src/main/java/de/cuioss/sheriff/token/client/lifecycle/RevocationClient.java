@@ -24,6 +24,7 @@ import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.net.http.HttpClient;
@@ -79,7 +80,7 @@ public class RevocationClient {
      *                             {@code null}
      * @throws TransportException if the request fails or the response is not successful
      */
-    public void revoke(String revocationEndpoint, String token, String tokenTypeHint,
+    public void revoke(String revocationEndpoint, String token, @Nullable String tokenTypeHint,
             ClientAuthentication clientAuthentication) {
         Objects.requireNonNull(revocationEndpoint, "revocationEndpoint must not be null");
         Objects.requireNonNull(token, "token must not be null");

@@ -151,7 +151,7 @@ class PrivateKeyJwtAuthTest {
     @ParameterizedTest
     @ValueSource(strings = {"PS256", "PS384", "PS512"})
     @DisplayName("Should produce a verifiable RSASSA-PSS signature for each PS algorithm (L9)")
-    void shouldProduceVerifiablePssSignature(String algorithm) throws Exception {
+    void shouldProduceVerifiablePssSignature(String algorithm) {
         var auth = auth(Generators.letterStrings(5, 12).next(), "https://as.example.com/token",
                 Generators.letterStrings(3, 8).next(), algorithm);
         Map<String, String> form = new HashMap<>();

@@ -29,6 +29,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Shared back-channel transport control for the OIDC/OAuth endpoint clients.
@@ -70,7 +71,7 @@ public final class BackChannelHttp {
     private final ClientConfiguration configuration;
     private final HttpSecurityValidator egressValidator;
     private final int maxContentSize;
-    private volatile HttpClient sharedClient;
+    private final AtomicReference<HttpClient> sharedClient = new AtomicReference<>();
 
     /**
      * @param configuration  the client configuration carrying the TLS policy and timeout knobs; must
@@ -142,13 +143,13 @@ public final class BackChannelHttp {
      * @return the shared, reused {@link HttpClient}
      */
     public HttpClient sharedClient(HttpHandler handler) {
-        HttpClient client = sharedClient;
+        HttpClient client = sharedClient.get();
         if (client == null) {
             synchronized (this) {
-                client = sharedClient;
+                client = sharedClient.get();
                 if (client == null) {
                     client = handler.createHttpClient();
-                    sharedClient = client;
+                    sharedClient.set(client);
                 }
             }
         }
