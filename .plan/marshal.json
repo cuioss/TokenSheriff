@@ -116,7 +116,11 @@
         "default:finalize-step-preference-emitter": {
           "preference_min_recurrence": 2
         },
-        "default:finalize-step-print-phase-breakdown": {}
+        "default:finalize-step-print-phase-breakdown": {},
+        "default:pre-submission-self-review": {
+          "self_review": "auto",
+          "drop_review_on_scope_gate": false
+        }
       },
       "effort": {
         "default": "level-3",
@@ -245,7 +249,7 @@
       "lessons_superseded_days": 0,
       "temp_on_maintenance": true
     },
-    "provisioned_version": "0.1.1082",
-    "config_seed_fingerprint": "0acf5eb5"
+    "provisioned_version": "0.1.1090",
+    "config_seed_fingerprint": "dde4bc0c"
   }
 }
