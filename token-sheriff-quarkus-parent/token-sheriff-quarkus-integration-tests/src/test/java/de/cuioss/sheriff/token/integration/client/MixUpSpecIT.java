@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.integration.client;
 
 import de.cuioss.sheriff.token.client.flow.CallbackParameters;
 import de.cuioss.sheriff.token.client.flow.IssValidator;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.integration.BaseIntegrationTest;
 import de.cuioss.tools.logging.CuiLogger;
 import org.junit.jupiter.api.DisplayName;
@@ -70,7 +71,7 @@ class MixUpSpecIT extends BaseIntegrationTest {
 
         assertDoesNotThrow(() -> validator.validate(advertisedIssuer, honestCallback, true),
                 "a callback stamped with the initiating realm's iss is accepted");
-        assertThrows(IllegalStateException.class,
+        assertThrows(ClientProtocolException.class,
                 () -> validator.validate(advertisedIssuer, mixedUpCallback, true),
                 "a callback stamped with a foreign realm's iss is rejected (mix-up defence)");
     }
