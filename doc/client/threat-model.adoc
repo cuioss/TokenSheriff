@@ -35,9 +35,11 @@ The client engine:
 * Holds retrieved tokens *server-side*, refreshes and revokes them, and validates them
   through the validation pipeline.
 * Triggers RP-initiated logout and honours step-up challenges.
-* Issues *no outbound IdP HTTP of its own* — all fetching is done by
-  xref:../commons/threat-model.adoc[commons], whose transport threats (SSRF, TLS downgrade,
-  response-DoS) the flow *inherits* and does not restate.
+* Drives its *own* outbound OIDC/OAuth back-channel HTTP (discovery, token, userinfo, revocation,
+  PAR) on the `cui-http` transport primitives, and applies an *in-module egress / path + scheme
+  control* before each fetch (<<T-SSRF-ADVERTISED>>). It inherits only the low-level transport
+  primitives (the `cui-http` TLS enforcement) and the validation pipeline's own JWKS retrieval;
+  it does not delegate the back-channel fetches themselves.
 
 == Retrieval & flow aspect
 
@@ -143,6 +145,19 @@ The client engine:
   (`COMMONS-2`); the flow relies on it and adds no transport of its own.
 | https://www.rfc-editor.org/rfc/rfc9700#section-2.6[RFC 9700 §2.6], xref:../commons/threat-model.adoc#T-TLS[commons T-TLS]
 | xref:requirements.adoc#CLIENT-14[CLIENT-14] (relies on xref:../commons/requirements.adoc#COMMONS-2[COMMONS-2])
+
+| [[T-SSRF-ADVERTISED]]T-SSRF-ADVERTISED
+| *Back-channel request steered by a hostile discovery document (SSRF / egress).* A hostile or
+  mix-up-controlled AS advertises a `token_endpoint` / `userinfo_endpoint` / `revocation_endpoint`
+  / PAR URL crafted to steer a credential-bearing back-channel `POST` at an unintended target, or
+  carrying a traversal / injection / encoding-evasion path.
+| The engine drives its *own* back-channel HTTP and applies an *in-module egress control*: each
+  advertised endpoint URL is run through the `de.cuioss.http.security` URL-path validation pipeline
+  and refused if it fails; a non-TLS endpoint is refused; response reads are size-bounded. Scope is
+  *path-structure and scheme* — host-address reachability filtering stays a network / deployment
+  concern.
+| https://www.rfc-editor.org/rfc/rfc9700#section-2.6[RFC 9700 §2.6], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180]
+| xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]
 |===
 
 == Token aspect
@@ -206,15 +221,19 @@ xref:../oidc/06-implement/README.adoc[Plan 06] integration suite:
 | T-LOGOUT | `EndSessionDispatcher` adversarial mode returns open-redirect / mismatched `post_logout_redirect_uri`, which are rejected; revocation of held tokens asserted.
 | T-REFRESH-THEFT | `TokenDispatcher` refresh mode drives rotation; a reused rotated token triggers family revocation.
 | T-IDTOKEN-INTEGRITY / T-AUD-CONFUSION | `TokenDispatcher` / `UserInfoDispatcher` emit tampered claims and `sub` mismatches; validation pipeline rejects; userinfo `sub` binding enforced.
+| T-SSRF-ADVERTISED | The `de.cuioss.http.security` attack-database corpora are driven through the back-channel egress-path validation; traversal / injection / encoding-evasion advertised paths are refused before any fetch, and a non-TLS endpoint is refused per client.
 |===
 
 == [[_out_of_scope_delegated]] Out of scope (delegated)
 
-* *Transport threats* — SSRF via IdP-advertised URLs, TLS downgrade / MITM on any fetch, and
-  response-DoS on discovery / JWKS / token / userinfo — belong to the
-  xref:../commons/threat-model.adoc[commons threat model] (`T-SSRF`, `T-TLS`, `T-DOS`,
-  `T-DISCOVERY`). The flow *inherits* them; it does not restate them. `T-TLS-TOKEN` above is
-  listed only to record the flow's reliance on the commons TLS control.
+* *Transport threats* — TLS downgrade / MITM on any fetch belongs to the
+  xref:../commons/threat-model.adoc[commons threat model] (`T-TLS`); the flow *inherits* the
+  `cui-http` TLS primitive and does not restate it (`T-TLS-TOKEN` above records that reliance).
+  *SSRF / egress on advertised back-channel URLs is no longer delegated* — the engine owns an
+  in-module path/scheme egress control and size-bounded reads on its own fetches
+  (<<T-SSRF-ADVERTISED>>); only host-address reachability filtering (link-local / internal-address
+  blocking) and response-DoS on the *validation pipeline's own JWKS retrieval* stay
+  commons / validation concerns (`T-DOS`, `T-DISCOVERY`).
 * *Token-trust threats* — forged signatures, `alg` confusion, claim tampering, expiry / replay
   at validation time — belong to the xref:../validation/threat-model.adoc[validation threat
   model]. The client retrieves tokens; validation decides their trust (`CLIENT-15`).

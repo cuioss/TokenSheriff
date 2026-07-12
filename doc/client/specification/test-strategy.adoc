@@ -68,6 +68,44 @@ The layers are complementary, not redundant:
 | *Primary home* — parameterized across Keycloak / Dex / Zitadel.
 |===
 
+== [[_wired_flow_tier]] Mandatory wired-flow / negative-path tier
+
+The two layers above answer *does the component work?* and *does the protocol interoperate?*
+They do *not*, on their own, answer the question a security review most needs: *does the
+engine's own flow orchestrator — driven exactly as an application drives it — actually run the
+defence before any side effect?* A defence can pass its isolated-component unit test and its
+server-capability integration test while being *unreachable* from the executable path — the
+suite stays green while the control never runs. This tier closes that gap and is *mandatory*.
+
+*Contract.* For every requirement whose defence lives in flow orchestration (not purely in a
+leaf validator), a wired-flow test MUST drive the *real orchestrator* —
+`AuthorizationCodeFlow`, `RefreshFlow`, `StepUpHandler`, or the produced
+`token-sheriff-client-quarkus` bean graph — as an application would, and assert the attack is
+*refused before any side effect*:
+
+* on an `iss` mismatch, the token endpoint is *never called* (dispatcher call-count == 0) —
+  xref:../requirements.adoc#CLIENT-8[CLIENT-8];
+* on PAR, the front-channel redirect carries *only* the returned `request_uri`, produced by the
+  engine's `ParClient` — xref:../requirements.adoc#CLIENT-10[CLIENT-10];
+* on a sender-constrained flow, a `DPoP` header actually *reaches the recorded* token / refresh /
+  userinfo request — xref:../requirements.adoc#CLIENT-11[CLIENT-11];
+* on a step-up, the re-driven ID token's `acr` / `auth_time` are *verified*, and a non-satisfying
+  response is *not* treated as a successful elevation — xref:../requirements.adoc#CLIENT-12[CLIENT-12];
+* on rotated-token reuse, the `RefreshFlow` / `TokenLifecycleManager` path routes through the
+  token family and drives RFC 7009 revocation — xref:../requirements.adoc#CLIENT-17[CLIENT-17].
+
+This tier also asserts the *produced Quarkus bean graph* can perform a *guarded* exchange — the
+edge wiring, not only the engine's constructors.
+
+[IMPORTANT]
+====
+*Coverage rule (binding).* A requirement MUST NOT be marked *covered* in the
+<<_traceability>> matrix on the strength of an isolated-component or server-capability test
+alone. Where the defence lives in flow orchestration, its matrix entry MUST be backed by a
+wired-flow negative test of the shape above. Isolated-component green does not, by itself, imply
+the requirement is met.
+====
+
 == Unit layer — MockWebServer
 
 === Placement and reuse
@@ -203,11 +241,14 @@ comparison). Rather than a handful of hand-picked payloads, drive the curated
 each encoding-evasion / injection variant. This keeps the adversarial corpus comprehensive and
 maintained upstream.
 
-NOTE: The unit layer does *not* re-test what other modules own. Signature / algorithm policy
+NOTE: The unit layer does *not* re-test what other modules own — signature / algorithm policy
 and claim trust are the xref:../../validation/requirements.adoc[validation] pipeline's
-(`VALIDATION-*`); TLS / SSRF / size-limit transport hardening is `commons`'s
-(`COMMONS-1`–`COMMONS-8`). The client tests assert it *invokes* those controls and reacts
-correctly — they do not duplicate their internal tests.
+(`VALIDATION-*`), and the low-level TLS / transport *primitives* are `cui-http`'s
+(`COMMONS-1`–`COMMONS-8`); the client tests assert it *invokes* those and reacts correctly. The
+engine's *own* back-channel egress control, however — advertised-URL path validation, scheme /
+TLS refusal, and the bounded response read (xref:../architecture.adoc#_owned_back_channel_http[owned
+back-channel HTTP]) — is in-module and *is* tested here (an attack-database drive of the
+egress-path validation, plus non-TLS-endpoint refusal per client), not delegated away.
 
 == Integration layer — real Keycloak
 
@@ -275,6 +316,14 @@ protections a real OP naturally enforces.
 
 Each `CLIENT-N` requirement maps to its threat(s), its unit coverage, its integration
 coverage, and the xref:../../oidc/06-implement/README.adoc[Plan 06] increment that delivers it.
+For a requirement whose defence lives in flow orchestration
+(xref:../requirements.adoc#CLIENT-8[CLIENT-8],
+xref:../requirements.adoc#CLIENT-10[CLIENT-10],
+xref:../requirements.adoc#CLIENT-11[CLIENT-11],
+xref:../requirements.adoc#CLIENT-12[CLIENT-12],
+xref:../requirements.adoc#CLIENT-17[CLIENT-17]), the Unit column names the *wired-flow* negative
+test that drives the real orchestrator — per the binding coverage rule in <<_wired_flow_tier>>,
+an isolated-component or server-capability test alone does not qualify the row as covered.
 
 [cols="1,1,2,2,1", options="header"]
 |===
@@ -310,7 +359,8 @@ coverage, and the xref:../../oidc/06-implement/README.adoc[Plan 06] increment th
 | Exact-match against KC | 5
 
 | xref:../requirements.adoc#CLIENT-8[CLIENT-8] | T-MIXUP
-| Mismatched `issuer` / `iss` response parameter rejected before exchange
+| *Wired-flow:* `AuthorizationCodeFlow.exchange()` refuses on `iss` mismatch — token endpoint
+  never called (dispatcher call-count == 0)
 | Cross-provider `iss` check (KC vs Dex) | 6
 
 | xref:../requirements.adoc#CLIENT-9[CLIENT-9] | T-CODE-INJECTION
@@ -318,15 +368,18 @@ coverage, and the xref:../../oidc/06-implement/README.adoc[Plan 06] increment th
 | (covered by the PKCE login) | 5
 
 | xref:../requirements.adoc#CLIENT-10[CLIENT-10] | T-PARAM-INTEGRITY
-| `ParDispatcher` `request_uri`; redirect carries only `request_uri`
+| *Wired-flow:* the engine's `ParClient` pushes the params; the front-channel redirect carries
+  *only* the returned `request_uri`
 | PAR against KC (capability-gated) | 6
 
 | xref:../requirements.adoc#CLIENT-11[CLIENT-11] | T-TOKEN-REPLAY
-| DPoP proof / mTLS binding present on the token request
+| *Wired-flow:* a `DPoP` header (with `ath` on resource requests) reaches the recorded token /
+  refresh / userinfo request
 | DPoP-bound token from KC (`createDpopRealm`) | 8
 
 | xref:../requirements.adoc#CLIENT-12[CLIENT-12] | T-STEPUP
-| Challenge parsed; re-driven; forged `acr` / `auth_time` not accepted
+| *Wired-flow:* challenge parsed and re-driven (carrying `max_age`); the re-driven ID token's
+  `acr` / `auth_time` are verified — a non-satisfying response is not treated as a step-up
 | KC: assert `insufficient_user_authentication`, retry with `acr_values` / `max_age`, verify
   `acr` / `auth_time` | 5
 
@@ -348,7 +401,8 @@ coverage, and the xref:../../oidc/06-implement/README.adoc[Plan 06] increment th
 | Userinfo from KC, `sub` bound to the ID token | 7
 
 | xref:../requirements.adoc#CLIENT-17[CLIENT-17] | T-REFRESH-THEFT, T-LOGOUT
-| Rotation; reused rotated token → family revocation; storage isolation
+| *Wired-flow:* `RefreshFlow` / `TokenLifecycleManager` route through the token family; a reused
+  rotated token drives RFC 7009 revocation; single-flight refresh; storage isolation
 | Refresh cycle + revocation against KC | 4, 9
 
 | xref:../requirements.adoc#CLIENT-18[CLIENT-18] | T-CONSTRAINT-LOSS

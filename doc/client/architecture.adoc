@@ -65,17 +65,24 @@ The engine owns three responsibilities and *delegates the rest*:
 | *Token trust* — signature, algorithm policy, `iss`/`aud`/`exp`/`iat`, DPoP proof.
 | *validation* module (inherited; `CLIENT-15` calls it, never re-implements it).
 
-| *Outbound IdP HTTP* — discovery, JWKS, token, userinfo, revocation, introspection,
-  end-session, PAR; TLS, SSRF, timeouts, resilience, caching.
-| *commons* transport (`COMMONS-1`–`COMMONS-8`); the engine issues *no* HTTP of its own.
+| *Outbound OIDC/OAuth back-channel HTTP* — discovery, token, userinfo, revocation, PAR;
+  TLS-scheme enforcement, in-module egress/path validation, bounded reads, timeouts.
+| *This engine* (`client`) — it performs its *own* hardened HTTP, building `cui-http`
+  `HttpHandler`s directly and applying an in-module egress control uniformly through the
+  shared `BackChannelHttp` helper; it does *not* route these fetches through a commons
+  transport façade. JWKS retrieval and the token-signature transport stay with the
+  xref:../commons/architecture.adoc[commons]-backed *validation* pipeline.
 
 | *Error rendering* — typed exceptions → `application/problem+json`.
 | Engine *throws* (`COMMONS-9`); the *HTTP edge renders* (`COMMONS-10`).
 |===
 
 The seam is deliberately narrow: the engine is the *policy* layer (which parameters, which
-order, which checks); commons is the *transport* layer (bytes over hardened HTTP); validation
-is the *trust* layer.
+order, which checks) and *drives its own hardened OIDC/OAuth back-channel HTTP* on top of the
+`cui-http` transport primitives (`HttpHandler`, TLS, the `de.cuioss.http.security` egress
+pipeline); validation is the *trust* layer. The engine reuses commons' transport *library*,
+but it no longer delegates the OIDC/OAuth back-channel fetches to a commons transport service —
+see <<_owned_back_channel_http>>.
 
 == Confidential authorization-code + PKCE sequence
 
@@ -115,12 +122,51 @@ choice*; it implements neither.
 
 * *Engine → validation* (Maven): the engine validates every retrieved token via the
   validation pipeline (`CLIENT-15`); it never re-implements signature/claim checks.
-* *Engine → commons* (transitive): all outbound IdP HTTP goes through commons transport; the
-  engine adds no HTTP, no SSRF/TLS logic (`COMMONS-1`–`COMMONS-8`).
+* *Engine owns its back-channel HTTP*: the engine drives its *own* outbound OIDC/OAuth
+  back-channel HTTP (discovery, token, userinfo, revocation, PAR) on the `cui-http` transport
+  library, and applies its own in-module egress control before each fetch
+  (<<_owned_back_channel_http>>). It reuses commons' transport *primitives* (`HttpHandler`, TLS,
+  the `de.cuioss.http.security` pipeline), not a commons transport *service*.
 * *Engine throws, edge renders*: the pure-Java engine throws commons typed exceptions
   (`COMMONS-9`); only the HTTP edge produces problem+json (`CLIENT-20`, `COMMONS-10`).
 * *Engine ≠ BFF*: the browser session / cookie layer is out of the engine entirely
   (`CLIENT-19`).
+
+== [[_owned_back_channel_http]] Owned back-channel HTTP and its egress control
+
+The five OIDC/OAuth back-channel clients — `DiscoveryResolver`, `TokenEndpointClient`,
+`ParClient`, `UserInfoClient`, `RevocationClient` — construct and drive their *own* `cui-http`
+`HttpHandler` calls rather than delegating to a commons transport service. This is a deliberate
+design choice (the archived *"design fork 1"* recorded in the class javadoc) that was previously
+*not* reflected in this document; an earlier revision claimed the engine "issues no HTTP of its
+own." That claim was false and is corrected here.
+
+Because a discovery document is only transport-authenticated — not fully trusted — a hostile or
+mix-up-controlled AS could point a credential-bearing back-channel `POST` at an unintended
+target. The engine therefore *owns* an in-module egress control, applied uniformly by the shared
+`BackChannelHttp` helper before every fetch:
+
+[cols="1,3", options="header"]
+|===
+| Control | What it does
+
+| *Egress / path validation* | Each discovery-advertised endpoint URL is run through the
+  `de.cuioss.http.security` URL-path validation pipeline, so a traversal / injection /
+  encoding-evasion / malformed advertised path is *rejected before it is fetched*, surfacing as
+  a `TransportException`.
+| *Scheme / TLS enforcement* | A non-TLS (`http://`) endpoint is refused unless cleartext is
+  explicitly enabled, via the `HttpHandler` builder's TLS enforcement.
+| *Bounded reads & timeouts* | Response bodies are size-capped *during* the read
+  (`BoundedContentBodyHandler`); connect / read timeouts come from `ClientConfiguration`.
+|===
+
+[IMPORTANT]
+====
+*Scope of the egress control.* It validates the advertised URL's *path structure and scheme* —
+it is *not* a host-address SSRF allow-list and does not block internal / link-local addresses by
+IP. Host-address reachability filtering, if required by a deployment, remains a network- or
+commons-level concern. This document states the control the client actually applies, and no more.
+====
 
 == Reference & replacement target: portal-authentication-oauth
 
@@ -140,8 +186,8 @@ would supersede it via a thin portal adapter preserving the portal contract (`Oa
 adapter and its integration tests — is *future work beyond Plans 01–06*; no current plan
 touches it. The modernization deltas it motivates (cryptographic ID-token validation via the
 validation module, `iss` mix-up defence, `private_key_jwt`/mTLS, PAR, DPoP/mTLS
-sender-constraining, stronger `nonce`, commons-hardened HTTP with SSRF defence) are each
-captured as sourced `CLIENT-N` requirements above.
+sender-constraining, stronger `nonce`, in-module hardened back-channel HTTP with an egress/path
+control) are each captured as sourced `CLIENT-N` requirements above.
 ====
 
 == See also

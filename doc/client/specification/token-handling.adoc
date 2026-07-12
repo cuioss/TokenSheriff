@@ -60,7 +60,7 @@ Retrieved tokens are held *server-side* and never returned to the browser in usa
 
 | *Store* | Held server-side; the BFF binding shape (server-side store or encrypted cookie) is the application's choice (<<_bff_groundwork_non_preclusion>>). Storage is minimal and protected at rest.
 | *Refresh* | Access tokens are refreshed with `refresh_token`; *refresh-token rotation* is applied, and a detected reuse of a rotated token triggers *revocation of the token family* (xref:../threat-model.adoc#T-REFRESH-THEFT[T-REFRESH-THEFT]).
-| *Revoke* | Tokens are revoked via the commons revocation transport (RFC 7009, `COMMONS-7`) on logout (xref:step-up-and-logout.adoc[step-up & logout]) and on detected misuse.
+| *Revoke* | Tokens are revoked through the engine's own `RevocationClient` back-channel call (RFC 7009, on the `cui-http` transport, `COMMONS-7`) on logout (xref:step-up-and-logout.adoc[step-up & logout]) and on detected refresh-token reuse (family revocation, xref:../threat-model.adoc#T-REFRESH-THEFT[T-REFRESH-THEFT]).
 | *Expiry* | Short-lived access tokens are preferred; refresh drives renewal.
 |===
 
