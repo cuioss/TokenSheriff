@@ -177,7 +177,7 @@ public class DpopProofValidator {
         // silently downgraded to bearer mode by a case mismatch (M4). AccessTokenRequest already stores
         // headers in a case-insensitive map; this lookup is defense-in-depth for maps built elsewhere.
         List<String> dpopHeaders = getHeaderIgnoreCase(request.httpHeaders(), DPOP_HEADER_NAME);
-        if (dpopHeaders == null || dpopHeaders.isEmpty()) {
+        if (dpopHeaders.isEmpty()) {
             return null;
         }
         if (dpopHeaders.size() > 1) {
@@ -197,7 +197,7 @@ public class DpopProofValidator {
      *
      * @param headers the HTTP header map
      * @param name    the canonical header name to resolve
-     * @return the header values, or {@code null} if no matching header is present
+     * @return the header values, or an empty list if no matching header is present
      */
     private static List<String> getHeaderIgnoreCase(Map<String, List<String>> headers, String name) {
         List<String> direct = headers.get(name);
@@ -209,7 +209,7 @@ public class DpopProofValidator {
                 return entry.getValue();
             }
         }
-        return null;
+        return List.of();
     }
 
     /**

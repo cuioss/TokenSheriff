@@ -33,7 +33,6 @@ import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.sheriff.token.validation.jwks.parser.KeyProcessor;
 import de.cuioss.sheriff.token.validation.pipeline.DecodedJwt;
 import de.cuioss.sheriff.token.validation.pipeline.SignatureTemplateManager;
-import de.cuioss.sheriff.token.validation.security.JwkAlgorithmPreferences;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;

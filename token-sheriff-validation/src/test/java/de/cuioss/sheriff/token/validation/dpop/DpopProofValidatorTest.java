@@ -658,8 +658,7 @@ class DpopProofValidatorTest {
         @Test
         @DisplayName("L3: in-window jtis survive flood eviction and are still detected as replays")
         void shouldNotEvictInWindowJtisUnderFlood() {
-            DpopReplayProtection floodProtection = new DpopReplayProtection(300, 2);
-            try {
+            try (DpopReplayProtection floodProtection = new DpopReplayProtection(300, 2)) {
                 assertTrue(floodProtection.checkAndStore("first-jti"), "A fresh jti is accepted");
                 for (int i = 0; i < 20; i++) {
                     assertTrue(floodProtection.checkAndStore("flood-jti-" + i),
@@ -667,8 +666,6 @@ class DpopProofValidatorTest {
                 }
                 assertFalse(floodProtection.checkAndStore("first-jti"),
                         "An in-window jti must survive flood eviction and still be detected as a replay");
-            } finally {
-                floodProtection.close();
             }
         }
     }

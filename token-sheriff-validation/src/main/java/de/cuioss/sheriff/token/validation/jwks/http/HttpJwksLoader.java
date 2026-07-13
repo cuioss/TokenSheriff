@@ -371,6 +371,23 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     }
 
     /**
+     * Re-validates SSRF egress against the supplied fetch URI for one background refresh cycle.
+     *
+     * @param fetchUri the resolved JWKS fetch URI to re-check
+     * @return {@code true} if the egress check passed and the caller should proceed with the fetch;
+     *         {@code false} if the check failed (already logged) and the caller should return early
+     */
+    private boolean egressCheckPassed(URI fetchUri) {
+        try {
+            egressPolicy.check(fetchUri);
+            return true;
+        } catch (TransportException e) {
+            LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Executes one background refresh cycle: re-validates SSRF egress against the resolved JWKS URI,
      * fetches the JWKS, and rotates keys on success.
      * <p>
@@ -393,13 +410,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
             // Re-validate egress on every refresh (C1 follow-up): reject a rebound host before fetching.
             URI fetchUri = jwksFetchUri.get();
-            if (fetchUri != null) {
-                try {
-                    egressPolicy.check(fetchUri);
-                } catch (TransportException e) {
-                    LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
-                    return;
-                }
+            if (fetchUri != null && !egressCheckPassed(fetchUri)) {
+                return;
             }
 
             // Blocking load in background thread
@@ -416,9 +428,6 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         } catch (IllegalArgumentException e) {
             // JSON parsing or validation errors
             LOGGER.warn(WARN.BACKGROUND_REFRESH_PARSE_ERROR, e.getMessage(), getResolvedIssuer());
-        } catch (CompletionException e) {
-            // CompletableFuture.join() failures from getBlocking() (I/O, network errors)
-            LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
         } catch (IllegalStateException e) {
             // State errors (e.g., from orElseThrow when issuer not resolved), includes CancellationException
             LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
