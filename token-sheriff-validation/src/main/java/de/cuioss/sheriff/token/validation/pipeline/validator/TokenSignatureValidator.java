@@ -31,6 +31,7 @@ import java.security.InvalidKeyException;
 import java.security.PublicKey;
 import java.security.SignatureException;
 import java.security.interfaces.ECPublicKey;
+import java.security.spec.ECParameterSpec;
 import java.util.Arrays;
 import java.util.Set;
 
@@ -251,7 +252,11 @@ public class TokenSignatureValidator {
         int componentLength = signatureBytes.length / 2;
         BigInteger r = new BigInteger(1, Arrays.copyOfRange(signatureBytes, 0, componentLength));
         BigInteger s = new BigInteger(1, Arrays.copyOfRange(signatureBytes, componentLength, signatureBytes.length));
-        BigInteger n = publicKey.getParams().getOrder();
+        ECParameterSpec params = publicKey.getParams();
+        if (params == null) {
+            rejectSignature("Invalid EC public key: missing domain parameters");
+        }
+        BigInteger n = params.getOrder();
         if (r.signum() <= 0 || s.signum() <= 0 || r.compareTo(n) >= 0 || s.compareTo(n) >= 0) {
             rejectSignature("ECDSA signature component out of range: r and s must satisfy 0 < r,s < n");
         }
