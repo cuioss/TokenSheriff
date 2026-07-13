@@ -25,10 +25,13 @@ import de.cuioss.sheriff.token.validation.pipeline.SignatureVerificationUtil;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.Getter;
 
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.PublicKey;
 import java.security.SignatureException;
+import java.security.interfaces.ECPublicKey;
+import java.util.Arrays;
 import java.util.Set;
 
 /**
@@ -189,6 +192,13 @@ public class TokenSignatureValidator {
 
         byte[] dataBytes = dataToVerify.getBytes(StandardCharsets.UTF_8);
 
+        // H3: explicitly reject out-of-range ECDSA signature components (r == 0, s == 0, or r,s >= n)
+        // before verification. This keeps the "psychic signature" defense (CVE-2022-21449) in our own
+        // code rather than relying solely on the JDK provider to reject a degenerate (0,0) signature.
+        if (algorithm.startsWith("ES") && publicKey instanceof ECPublicKey ecPublicKey) {
+            checkEcdsaComponentRange(signatureBytes, ecPublicKey);
+        }
+
         // Verify signature using shared utility (handles ECDSA format conversion)
         try {
             boolean isValid = SignatureVerificationUtil.verifySignature(
@@ -220,6 +230,43 @@ public class TokenSignatureValidator {
                     e
             );
         }
+    }
+
+    /**
+     * Rejects an ECDSA signature whose {@code r} or {@code s} component is out of range (H3).
+     * <p>
+     * A JWS ECDSA signature is the fixed-width concatenation {@code r || s} (RFC 7515). A valid
+     * signature requires {@code 0 < r < n} and {@code 0 < s < n}, where {@code n} is the curve
+     * order. The all-zero {@code (0, 0)} signature at the heart of the "psychic signature" attack
+     * (CVE-2022-21449) violates this and is rejected here before it reaches the platform verifier.
+     *
+     * @param signatureBytes the raw JWS ECDSA signature ({@code r || s})
+     * @param publicKey      the EC public key, used to obtain the curve order {@code n}
+     * @throws TokenValidationException if a component is zero, negative, or not less than {@code n}
+     */
+    private void checkEcdsaComponentRange(byte[] signatureBytes, ECPublicKey publicKey) {
+        if (signatureBytes.length == 0 || signatureBytes.length % 2 != 0) {
+            rejectSignature("Malformed ECDSA signature: expected an even-length r||s encoding");
+        }
+        int componentLength = signatureBytes.length / 2;
+        BigInteger r = new BigInteger(1, Arrays.copyOfRange(signatureBytes, 0, componentLength));
+        BigInteger s = new BigInteger(1, Arrays.copyOfRange(signatureBytes, componentLength, signatureBytes.length));
+        BigInteger n = publicKey.getParams().getOrder();
+        if (r.signum() <= 0 || s.signum() <= 0 || r.compareTo(n) >= 0 || s.compareTo(n) >= 0) {
+            rejectSignature("ECDSA signature component out of range: r and s must satisfy 0 < r,s < n");
+        }
+    }
+
+    /**
+     * Logs, counts, and throws a {@link TokenValidationException} for an invalid signature.
+     *
+     * @param message the human-readable rejection reason
+     * @throws TokenValidationException always
+     */
+    private void rejectSignature(String message) {
+        LOGGER.warn(JWTValidationLogMessages.ERROR.SIGNATURE_VALIDATION_FAILED, message);
+        securityEventCounter.increment(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED);
+        throw new TokenValidationException(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED, message);
     }
 
     /**

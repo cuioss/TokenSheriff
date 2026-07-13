@@ -21,136 +21,90 @@ import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
-import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
+import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Base64;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests for validating protection against the "Psychic Signature" vulnerability (CVE-2022-21449).
  * <p>
- * This vulnerability allowed attackers to bypass ECDSA signature verification by using all-zero signatures.
+ * This vulnerability allowed attackers to bypass ECDSA signature verification by using all-zero
+ * signatures. The library defends against it with an explicit {@code r,s} component-range check in
+ * {@code TokenSignatureValidator} (H3), independent of the underlying JCA provider.
  * <p>
- * This test verifies that the library correctly rejects tokens with ECDSA signatures containing all zeros.
+ * Each test configures the issuer with the <em>matching</em> EC public key under the same {@code kid}
+ * used to sign the token, so the tampered all-zero signature actually reaches the signature verifier.
+ * The rejection is therefore asserted as {@code SIGNATURE_VALIDATION_FAILED} — the verifier rejecting
+ * the degenerate signature — rather than {@code UNSUPPORTED_ALGORITHM}, which would mean the attack was
+ * short-circuited against a mismatched (RSA) key before ever exercising the psychic-signature defense.
  */
 @EnableTestLogger
+@EnableGeneratorController
 @DisplayName("Tests for ECDSA Psychic Signature Attack Protection")
 class PsychicSignatureAttackTest {
 
-    private TokenValidator tokenValidator;
+    @Test
+    @DisplayName("Should reject an ES256 all-zero signature at the verifier with SIGNATURE_VALIDATION_FAILED")
+    void shouldRejectTokenWithES256ZeroSignature() {
+        // ES256 signature is 64 bytes (32 bytes for r, 32 bytes for s)
+        assertZeroEcdsaSignatureReachesAndFailsVerifier(InMemoryKeyMaterialHandler.Algorithm.ES256, 64);
+    }
 
-    @BeforeEach
-    void setUp() {
-        // Create issuer config with JWKS content
-        IssuerConfig issuerConfig = IssuerConfig.builder()
-                .issuerIdentifier(TestTokenHolder.TEST_ISSUER)
-                .expectedAudience("test-client")
-                .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
+    @Test
+    @DisplayName("Should reject an ES384 all-zero signature at the verifier with SIGNATURE_VALIDATION_FAILED")
+    void shouldRejectTokenWithES384ZeroSignature() {
+        // ES384 signature is 96 bytes (48 bytes for r, 48 bytes for s)
+        assertZeroEcdsaSignatureReachesAndFailsVerifier(InMemoryKeyMaterialHandler.Algorithm.ES384, 96);
+    }
+
+    @Test
+    @DisplayName("Should reject an ES512 all-zero signature at the verifier with SIGNATURE_VALIDATION_FAILED")
+    void shouldRejectTokenWithES512ZeroSignature() {
+        // ES512 signature is 132 bytes (66 bytes for r, 66 bytes for s)
+        assertZeroEcdsaSignatureReachesAndFailsVerifier(InMemoryKeyMaterialHandler.Algorithm.ES512, 132);
+    }
+
+    /**
+     * Signs a token with the given EC algorithm, configures the issuer with the matching EC JWKS under
+     * the same {@code kid}, tampers the signature to all zeros, and asserts the verifier rejects it.
+     *
+     * @param algorithm       the EC signing algorithm (ES256/ES384/ES512)
+     * @param signatureLength the fixed-width JWS {@code r || s} signature length in bytes for the curve
+     */
+    private void assertZeroEcdsaSignatureReachesAndFailsVerifier(
+            InMemoryKeyMaterialHandler.Algorithm algorithm, int signatureLength) {
+
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next()
+                .withSigningAlgorithm(algorithm);
+        IssuerConfig issuerConfig = tokenHolder.getIssuerConfig();
+        TokenValidator tokenValidator = TokenValidator.builder()
+                .parserConfig(ParserConfig.builder().build())
+                .issuerConfig(issuerConfig)
                 .build();
 
-        // Create validation factory
-        tokenValidator = TokenValidator.builder().parserConfig(ParserConfig.builder().build()).issuerConfig(issuerConfig).build();
-    }
-
-    @Test
-    @DisplayName("Should reject tokens with ES256 all-zero signature")
-    void shouldRejectTokenWithES256ZeroSignature() {
-
-        // Generate a token with ES256 algorithm
-        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next()
-                .withSigningAlgorithm(InMemoryKeyMaterialHandler.Algorithm.ES256);
-        String validToken = tokenHolder.getRawToken();
-
-        // Split the token into its parts
-        String[] parts = validToken.split("\\.");
-
-        // Create an all-zero signature (r=0, s=0)
-        // ES256 signature is 64 bytes (32 bytes for r, 32 bytes for s)
-        byte[] zeroSignature = new byte[64];
+        String[] parts = tokenHolder.getRawToken().split("\\.");
+        byte[] zeroSignature = new byte[signatureLength];
         String zeroSignatureBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(zeroSignature);
-
-        // Reconstruct the token with the zero signature
         String tamperedToken = parts[0] + "." + parts[1] + "." + zeroSignatureBase64;
+        AccessTokenRequest request = AccessTokenRequest.of(tamperedToken);
 
-        // Verify that the token is rejected
-        var request256 = AccessTokenRequest.of(tamperedToken);
-        assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(request256));
+        assertThrows(TokenValidationException.class, () -> tokenValidator.createAccessToken(request));
 
-        // Verify that the security event counter was incremented
-        // The logs show that ES256 is an unsupported algorithm, so we should check for that event
-        assertEquals(1, tokenValidator.getSecurityEventCounter().getCount(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM),
-                "Security event counter should be incremented for ES256 zero signature attack");
-    }
-
-    @Test
-    @DisplayName("Should reject tokens with ES384 all-zero signature")
-    void shouldRejectTokenWithES384ZeroSignature() {
-
-        // Generate a token with ES384 algorithm
-        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next()
-                .withSigningAlgorithm(InMemoryKeyMaterialHandler.Algorithm.ES384);
-        String validToken = tokenHolder.getRawToken();
-
-        // Split the token into its parts
-        String[] parts = validToken.split("\\.");
-
-        // Create an all-zero signature (r=0, s=0)
-        // ES384 signature is 96 bytes (48 bytes for r, 48 bytes for s)
-        byte[] zeroSignature = new byte[96];
-        String zeroSignatureBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(zeroSignature);
-
-        // Reconstruct the token with the zero signature
-        String tamperedToken = parts[0] + "." + parts[1] + "." + zeroSignatureBase64;
-
-        // Verify that the token is rejected
-        var request384 = AccessTokenRequest.of(tamperedToken);
-        assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(request384));
-
-        // Verify that the security event counter was incremented
-        // The logs show that ES384 is an unsupported algorithm, so we should check for that event
-        assertEquals(1, tokenValidator.getSecurityEventCounter().getCount(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM),
-                "Security event counter should be incremented for ES384 zero signature attack");
-    }
-
-    @Test
-    @DisplayName("Should reject tokens with ES512 all-zero signature")
-    void shouldRejectTokenWithES512ZeroSignature() {
-
-        // Generate a token with ES512 algorithm
-        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next()
-                .withSigningAlgorithm(InMemoryKeyMaterialHandler.Algorithm.ES512);
-        String validToken = tokenHolder.getRawToken();
-
-        // Split the token into its parts
-        String[] parts = validToken.split("\\.");
-
-        // Create an all-zero signature (r=0, s=0)
-        // ES512 signature is 132 bytes (66 bytes for r, 66 bytes for s)
-        byte[] zeroSignature = new byte[132];
-        String zeroSignatureBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(zeroSignature);
-
-        // Reconstruct the token with the zero signature
-        String tamperedToken = parts[0] + "." + parts[1] + "." + zeroSignatureBase64;
-
-        // Verify that the token is rejected
-        var request512 = AccessTokenRequest.of(tamperedToken);
-        assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(request512));
-
-        // Verify that the security event counter was incremented
-        // The logs show that ES512 is an unsupported algorithm, so we should check for that event
-        assertEquals(1, tokenValidator.getSecurityEventCounter().getCount(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM),
-                "Security event counter should be incremented for ES512 zero signature attack");
+        SecurityEventCounter counter = tokenValidator.getSecurityEventCounter();
+        assertAll("Psychic signature must be rejected by the signature verifier",
+                () -> assertEquals(1, counter.getCount(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED),
+                        "All-zero ECDSA signature must be rejected with SIGNATURE_VALIDATION_FAILED"),
+                () -> assertEquals(0, counter.getCount(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM),
+                        "Attack must reach the verifier, not be short-circuited as UNSUPPORTED_ALGORITHM"));
     }
 }
