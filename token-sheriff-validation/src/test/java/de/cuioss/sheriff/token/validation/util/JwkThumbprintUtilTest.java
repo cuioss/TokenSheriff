@@ -17,11 +17,16 @@ package de.cuioss.sheriff.token.validation.util;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class JwkThumbprintUtilTest {
+
+    private static final String EC_X = "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU";
+    private static final String EC_Y = "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0";
 
     /**
      * Test vector from RFC 7638 Section 3.1.
@@ -84,6 +89,32 @@ class JwkThumbprintUtilTest {
                 JwkThumbprintUtil.computeThumbprint(jwk1),
                 JwkThumbprintUtil.computeThumbprint(jwk2)
         );
+    }
+
+    @Test
+    void shouldEscapeJsonStringMembersPerRfc8259() {
+        // A member value containing a quotation mark, reverse solidus and a control
+        // character must be escaped in the canonical JSON per RFC 8259 (RFC 7638 Section 3).
+        String rawCrv = "a\"b\\c\td";
+        Map<String, Object> ecJwk = Map.of(
+                "kty", "EC",
+                "crv", rawCrv,
+                "x", EC_X,
+                "y", EC_Y
+        );
+
+        // Independently build the expected canonical JSON with the value escaped by hand.
+        String escapedCrv = "a\\\"b\\\\c\\td";
+        String canonicalJson = "{"
+                + "\"crv\":\"" + escapedCrv + "\","
+                + "\"kty\":\"EC\","
+                + "\"x\":\"" + EC_X + "\","
+                + "\"y\":\"" + EC_Y + "\"}";
+        byte[] expectedHash = Sha256Util.digest(canonicalJson.getBytes(StandardCharsets.UTF_8));
+        String expectedThumbprint = Base64.getUrlEncoder().withoutPadding().encodeToString(expectedHash);
+
+        assertEquals(expectedThumbprint, JwkThumbprintUtil.computeThumbprint(ecJwk),
+                "Thumbprint must be computed over RFC 8259-escaped canonical JSON");
     }
 
     @Test
