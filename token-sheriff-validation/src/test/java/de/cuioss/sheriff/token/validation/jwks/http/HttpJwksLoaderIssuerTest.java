@@ -57,7 +57,7 @@ class HttpJwksLoaderIssuerTest {
         moduleDispatcher.returnDefault();
 
         // Create HttpJwksLoader with well-known config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
                 .build();
 
@@ -76,7 +76,7 @@ class HttpJwksLoaderIssuerTest {
     @DisplayName("Should require issuer identifier for direct JWKS configuration")
     void shouldRequireIssuerForDirectJwks(URIBuilder uriBuilder) {
         // Attempt to create HttpJwksLoader with direct JWKS URL but no issuer - should fail
-        HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder jwks = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder jwks = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .jwksUrl(uriBuilder.addPathSegment("jwks").buildAsString());
 
         assertThrows(IllegalArgumentException.class, jwks::build, "Should throw exception when issuer is missing for direct JWKS configuration");
@@ -89,7 +89,7 @@ class HttpJwksLoaderIssuerTest {
         moduleDispatcher.returnError();
 
         // Create HttpJwksLoader with well-known config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
                 .build();
 
@@ -113,7 +113,7 @@ class HttpJwksLoaderIssuerTest {
         moduleDispatcher.returnMissingIssuer();
 
         // Create HttpJwksLoader with well-known config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
                 .build();
 
@@ -133,7 +133,7 @@ class HttpJwksLoaderIssuerTest {
         moduleDispatcher.returnDefault();
 
         // Create HttpJwksLoader with well-known config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
                 .build();
 
@@ -163,7 +163,7 @@ class HttpJwksLoaderIssuerTest {
         moduleDispatcher.returnDefault();
 
         // Create HttpJwksLoader with well-known config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
                 .build();
 
@@ -206,7 +206,7 @@ class HttpJwksLoaderIssuerTest {
     void shouldReturnEmptyWhenConfigReturnsEmptyIssuer() {
         // Create HttpJwksLoader with an invalid well-known URL
         // This will cause the config to fail and return empty issuer
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .wellKnownUrl("https://invalid.example.com/.well-known/openid-configuration")
                 .build();
 

@@ -59,7 +59,7 @@ class HttpJwksLoaderTest {
         // Initialize the SecurityEventCounter
         securityEventCounter = new SecurityEventCounter();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .build();
@@ -152,7 +152,7 @@ class HttpJwksLoaderTest {
     @DisplayName("Should create new loader with simplified config")
     void shouldCreateNewLoaderWithSimplifiedConfig(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .build();
@@ -176,7 +176,7 @@ class HttpJwksLoaderTest {
 
         // Create a new loader instance with the same configuration
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .build();
@@ -242,7 +242,7 @@ class HttpJwksLoaderTest {
         // Create a custom ParserConfig (pre-initialized on caller's thread)
         ParserConfig customParserConfig = ParserConfig.builder().build();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .parserConfig(customParserConfig)

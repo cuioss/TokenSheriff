@@ -75,10 +75,19 @@ public class WellKnownConfig {
     @Getter
     private final ParserConfig parserConfig;
 
-    private WellKnownConfig(HttpHandler httpHandler, RetryConfig retryConfig, ParserConfig parserConfig) {
+    /**
+     * The SSRF egress policy applied to the discovery endpoint before it is fetched.
+     * Defaults to {@link EgressPolicy#secureDefault()}; relaxed only via the explicit
+     * {@link WellKnownConfigBuilder#allowLoopbackEgress(boolean)} knob.
+     */
+    @Getter
+    private final EgressPolicy egressPolicy;
+
+    private WellKnownConfig(HttpHandler httpHandler, RetryConfig retryConfig, ParserConfig parserConfig, EgressPolicy egressPolicy) {
         this.httpHandler = httpHandler;
         this.retryConfig = retryConfig;
         this.parserConfig = parserConfig;
+        this.egressPolicy = egressPolicy;
     }
 
     /**
@@ -108,6 +117,7 @@ public class WellKnownConfig {
         private RetryConfig retryConfig = RetryConfig.defaults();
         private ParserConfig parserConfig;
         private boolean allowInsecureHttp = true;
+        private boolean allowLoopbackEgress = false;
 
         /**
          * Constructor initializing the HttpHandlerBuilder with sensible defaults.
@@ -132,6 +142,26 @@ public class WellKnownConfig {
          */
         public WellKnownConfigBuilder allowInsecureHttp(boolean allowInsecureHttp) {
             this.allowInsecureHttp = allowInsecureHttp;
+            return this;
+        }
+
+        /**
+         * Permits the SSRF egress guard to resolve the discovery endpoint to a loopback
+         * address.
+         * <p>
+         * Defaults to {@code false}: the secure-by-default {@link EgressPolicy} rejects
+         * loopback, link-local, site-local, ULA, and cloud-metadata addresses so an
+         * attacker-controlled discovery URL cannot reach internal endpoints. Set to
+         * {@code true} to fetch discovery from {@code localhost} — required by
+         * MockWebServer-based tests and local/dev callers, which must opt in deliberately.
+         * This is an explicit, discoverable knob, never an implicit test-mode; all other
+         * blocked ranges still apply.
+         *
+         * @param allowLoopbackEgress {@code true} to allow loopback discovery fetches, {@code false} (default) to reject them
+         * @return this builder instance
+         */
+        public WellKnownConfigBuilder allowLoopbackEgress(boolean allowLoopbackEgress) {
+            this.allowLoopbackEgress = allowLoopbackEgress;
             return this;
         }
 
@@ -246,7 +276,10 @@ public class WellKnownConfig {
                 }
 
                 ParserConfig finalParserConfig = parserConfig != null ? parserConfig : ParserConfig.builder().build();
-                return new WellKnownConfig(httpHandler, retryConfig, finalParserConfig);
+                EgressPolicy egressPolicy = EgressPolicy.builder()
+                        .allowLoopback(allowLoopbackEgress)
+                        .build();
+                return new WellKnownConfig(httpHandler, retryConfig, finalParserConfig, egressPolicy);
             } catch (IllegalArgumentException | IllegalStateException e) {
                 throw new IllegalArgumentException("Invalid well-known endpoint configuration", e);
             }

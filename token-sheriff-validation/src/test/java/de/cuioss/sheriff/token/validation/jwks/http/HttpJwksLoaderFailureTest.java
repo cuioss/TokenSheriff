@@ -59,7 +59,7 @@ class HttpJwksLoaderFailureTest {
     @DisplayName("Should log JWKS_LOAD_FAILED when HTTP connection cannot be established")
     void shouldLogJwksLoadFailedWhenHttpConnectionFails() {
         // Create loader with invalid URL to simulate connection failure
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .jwksUrl("http://invalid-host-that-does-not-exist:9999/jwks")
                 .issuerIdentifier("test-issuer")
                 .build();
@@ -90,7 +90,7 @@ class HttpJwksLoaderFailureTest {
         // Using an invalid well-known endpoint that returns 404
         String invalidWellKnownUrl = uriBuilder.addPathSegment("invalid-well-known").buildAsString();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                 .wellKnownUrl(invalidWellKnownUrl)
                 .build();
 
@@ -129,7 +129,7 @@ class HttpJwksLoaderFailureTest {
                     """);
 
             String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
                     .jwksUrl(jwksEndpoint)
                     .issuerIdentifier("test-issuer")
                     .build();

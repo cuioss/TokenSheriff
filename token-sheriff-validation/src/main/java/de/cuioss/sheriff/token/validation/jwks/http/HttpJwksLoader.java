@@ -21,6 +21,7 @@ import de.cuioss.http.client.adapter.HttpAdapter;
 import de.cuioss.http.client.adapter.ResilientHttpAdapter;
 import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.result.HttpResult;
+import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.HttpWellKnownResolver;
@@ -206,6 +207,17 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             // Direct HTTP configuration - use existing handler from config
             handler = config.getHttpHandler();
             resolvedIssuerIdentifier.set(config.getIssuerIdentifier());
+        }
+
+        // SSRF egress guard (C1): resolve the advertised/configured JWKS URL and reject it
+        // if it lands on an internal/loopback/metadata address BEFORE any fetch is issued.
+        // Resolving here — immediately before the fetch — also closes the DNS-rebinding window.
+        try {
+            config.getEgressPolicy().check(handler.getUri());
+        } catch (TransportException e) {
+            LOGGER.error(e, ERROR.JWKS_INITIALIZATION_FAILED, e.getMessage(),
+                    getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
+            return Optional.empty();
         }
 
         // Create base adapter with ETag caching

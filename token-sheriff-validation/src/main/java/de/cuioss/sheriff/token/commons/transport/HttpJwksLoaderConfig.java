@@ -149,6 +149,16 @@ public class HttpJwksLoaderConfig {
     @EqualsAndHashCode.Exclude
     private final ParserConfig parserConfig;
 
+    /**
+     * The SSRF egress policy applied to the advertised/configured JWKS URL immediately
+     * before it is fetched. Defaults to {@link EgressPolicy#secureDefault()} (loopback and
+     * all internal ranges rejected); relaxed only via the explicit
+     * {@link HttpJwksLoaderConfigBuilder#allowLoopbackEgress(boolean)} knob.
+     */
+    @Getter
+    @EqualsAndHashCode.Exclude
+    private final EgressPolicy egressPolicy;
+
     @SuppressWarnings("java:S107") // ok for builder
     private HttpJwksLoaderConfig(int refreshIntervalSeconds,
             HttpHandler httpHandler,
@@ -159,7 +169,8 @@ public class HttpJwksLoaderConfig {
             String issuerIdentifier,
             Duration keyRotationGracePeriod,
             int maxRetiredKeySets,
-            ParserConfig parserConfig) {
+            ParserConfig parserConfig,
+            EgressPolicy egressPolicy) {
         this.refreshIntervalSeconds = refreshIntervalSeconds;
         this.httpHandler = httpHandler;
         this.wellKnownConfig = wellKnownConfig;
@@ -170,6 +181,7 @@ public class HttpJwksLoaderConfig {
         this.keyRotationGracePeriod = keyRotationGracePeriod;
         this.maxRetiredKeySets = maxRetiredKeySets;
         this.parserConfig = parserConfig;
+        this.egressPolicy = egressPolicy;
     }
 
     /**
@@ -283,6 +295,7 @@ public class HttpJwksLoaderConfig {
         private int maxRetiredKeySets = DEFAULT_MAX_RETIRED_KEY_SETS;
         private ParserConfig parserConfig;
         private boolean allowInsecureHttp = true;
+        private boolean allowLoopbackEgress = false;
 
         // Pending well-known values — WellKnownConfig creation is deferred to build()
         private String pendingWellKnownUrl;
@@ -313,6 +326,24 @@ public class HttpJwksLoaderConfig {
          */
         public HttpJwksLoaderConfigBuilder allowInsecureHttp(boolean allowInsecureHttp) {
             this.allowInsecureHttp = allowInsecureHttp;
+            return this;
+        }
+
+        /**
+         * Permits the SSRF egress guard to resolve the JWKS URL to a loopback address.
+         * <p>
+         * Defaults to {@code false}: the secure-by-default {@link EgressPolicy} rejects
+         * loopback, link-local, site-local, ULA, and cloud-metadata addresses so an
+         * attacker-advertised {@code jwks_uri} cannot reach internal endpoints. Set to
+         * {@code true} to fetch JWKS from {@code localhost} — required by MockWebServer-based
+         * tests and local/dev callers, which must opt in deliberately. This is an explicit,
+         * discoverable knob, never an implicit test-mode; all other blocked ranges still apply.
+         *
+         * @param allowLoopbackEgress {@code true} to allow loopback JWKS fetches, {@code false} (default) to reject them
+         * @return this builder instance
+         */
+        public HttpJwksLoaderConfigBuilder allowLoopbackEgress(boolean allowLoopbackEgress) {
+            this.allowLoopbackEgress = allowLoopbackEgress;
             return this;
         }
 
@@ -600,7 +631,8 @@ public class HttpJwksLoaderConfig {
                 var wkBuilder = WellKnownConfig.builder()
                         .retryConfig(RetryConfig.defaults())
                         .parserConfig(resolvedParserConfig)
-                        .allowInsecureHttp(allowInsecureHttp);
+                        .allowInsecureHttp(allowInsecureHttp)
+                        .allowLoopbackEgress(allowLoopbackEgress);
                 if (pendingWellKnownUrl != null) {
                     wkBuilder.wellKnownUrl(pendingWellKnownUrl);
                 } else {
@@ -644,6 +676,10 @@ public class HttpJwksLoaderConfig {
 
             // For well-known, issuer will be discovered dynamically during resolution (optional in config)
 
+            EgressPolicy resolvedEgressPolicy = EgressPolicy.builder()
+                    .allowLoopback(allowLoopbackEgress)
+                    .build();
+
             return new HttpJwksLoaderConfig(
                     refreshIntervalSeconds,
                     jwksHttpHandler,
@@ -654,7 +690,8 @@ public class HttpJwksLoaderConfig {
                     issuerIdentifier,
                     keyRotationGracePeriod,
                     maxRetiredKeySets,
-                    resolvedParserConfig);
+                    resolvedParserConfig,
+                    resolvedEgressPolicy);
         }
 
     }
