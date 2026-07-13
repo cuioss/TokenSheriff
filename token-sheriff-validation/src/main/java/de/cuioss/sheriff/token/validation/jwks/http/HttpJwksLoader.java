@@ -402,17 +402,20 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * Resolves the issuer identifier from discovered and configured sources.
      * Implements the issuer resolution logic with precedence rules.
      *
-     * Design Decision: The configured issuer always takes precedence over the discovered
-     * issuer. This is intentional — the configured value acts as the operator's trust anchor.
-     * A mismatch is audited (WARN log + ISSUER_MISMATCH security counter) but does not fail
-     * initialization, because trailing-slash or scheme-case differences between configured and
-     * discovered values are common in real deployments (e.g., Keycloak). Rogue-IdP tokens
-     * still fail validation because the JWT {@code iss} claim is checked against the configured
-     * (not discovered) value at token validation time.
+     * Design Decision (M7): The configured issuer is the operator's trust anchor. When a configured
+     * issuer is present, an advertised (discovered) issuer that does not match it is a <em>hard
+     * discovery failure</em> — this method returns empty, {@link #resolveJWKSAdapter()} aborts, and
+     * the advertised {@code jwks_uri} is never fetched. Gating here, before the advertised URL is
+     * fetched, closes the SSRF-relevant window (COMMONS-5): a tampered discovery document cannot
+     * steer the loader to fetch key material from an attacker-chosen endpoint under the authority of
+     * an issuer we do not trust. The mismatch is also audited (WARN log + ISSUER_MISMATCH counter).
+     * Comparison tolerates a trailing-slash difference, which is a common, benign formatting variance
+     * in real IdP deployments (e.g., Keycloak) and not a genuine issuer mismatch.
      *
      * @param discoveredIssuer the issuer from well-known discovery (nullable)
      * @param configuredIssuer the configured issuer from configuration (nullable)
-     * @return Optional containing the resolved issuer, or empty if no issuer available
+     * @return Optional containing the resolved issuer, or empty if no issuer is available or the
+     *         advertised issuer does not match the configured trust anchor
      */
     private Optional<String> resolveIssuer(String discoveredIssuer, String configuredIssuer) {
         // Case 1: No issuer at all - fail
@@ -421,17 +424,46 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             return Optional.empty();
         }
 
-        // Case 2: Configured issuer takes precedence
+        // Case 2: Configured issuer is the trust anchor — an advertised mismatch is a hard failure (M7)
         if (configuredIssuer != null) {
-            if (discoveredIssuer != null && !configuredIssuer.equals(discoveredIssuer)) {
+            if (discoveredIssuer != null && !issuersMatch(configuredIssuer, discoveredIssuer)) {
                 LOGGER.warn(WARN.ISSUER_MISMATCH, configuredIssuer, discoveredIssuer);
                 securityEventCounter.increment(SecurityEventCounter.EventType.ISSUER_MISMATCH);
+                return Optional.empty();
             }
             return Optional.of(configuredIssuer);
         }
 
         // Case 3: Use discovered issuer
         return Optional.of(discoveredIssuer);
+    }
+
+    /**
+     * Compares a configured and an advertised issuer, tolerating only a benign trailing-slash
+     * difference. Any other difference is treated as a genuine mismatch (M7).
+     *
+     * @param configuredIssuer the configured trust-anchor issuer, never null
+     * @param discoveredIssuer the advertised issuer from discovery, never null
+     * @return true if the two issuers are equivalent after trailing-slash normalization
+     */
+    private static boolean issuersMatch(String configuredIssuer, String discoveredIssuer) {
+        return normalizeIssuer(configuredIssuer).equals(normalizeIssuer(discoveredIssuer));
+    }
+
+    /**
+     * Normalizes an issuer for comparison by trimming surrounding whitespace and removing a single
+     * trailing slash. Deliberately conservative: it does not lowercase or otherwise rewrite the
+     * value, so distinct issuers are never collapsed into a false match.
+     *
+     * @param issuer the issuer string, never null
+     * @return the normalized issuer string
+     */
+    private static String normalizeIssuer(String issuer) {
+        String trimmed = issuer.strip();
+        if (trimmed.endsWith("/")) {
+            return trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 
     /**
