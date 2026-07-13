@@ -35,17 +35,20 @@ class DpopConfigTest {
 
     @Test
     void shouldBuildWithCustomValues() {
+        // TTL (1200) already covers the replay-window invariant proofMaxAge(600) + clockSkew(60),
+        // so the custom value is preserved unchanged (M3). The derivation of a too-small TTL is
+        // covered by DpopProofValidatorTest#shouldEnforceReplayWindowInvariantOnBuild.
         DpopConfig config = DpopConfig.builder()
                 .required(true)
                 .proofMaxAgeSeconds(600)
                 .nonceCacheSize(5000)
-                .nonceCacheTtlSeconds(120)
+                .nonceCacheTtlSeconds(1200)
                 .build();
 
         assertTrue(config.isRequired());
         assertEquals(600, config.getProofMaxAgeSeconds());
         assertEquals(5000, config.getNonceCacheSize());
-        assertEquals(120, config.getNonceCacheTtlSeconds());
+        assertEquals(1200, config.getNonceCacheTtlSeconds());
     }
 
     @Test

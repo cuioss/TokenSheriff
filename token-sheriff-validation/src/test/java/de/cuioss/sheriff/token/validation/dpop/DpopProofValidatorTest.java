@@ -214,6 +214,33 @@ class DpopProofValidatorTest {
     }
 
     @Test
+    @DisplayName("DpopConfig build should enforce the replay-window invariant ttl >= proofMaxAge + clockSkew (M3)")
+    void shouldEnforceReplayWindowInvariantOnBuild() {
+        // Under defaults the effective replay TTL must cover the full proof freshness window
+        // (proofMaxAge + clock skew), so a jti cannot expire while its proof is still fresh.
+        DpopConfig defaults = DpopConfig.builder().build();
+        assertTrue(
+                defaults.getNonceCacheTtlSeconds() >= defaults.getProofMaxAgeSeconds() + DpopConfig.DEFAULT_CLOCK_SKEW_SECONDS,
+                "Default replay TTL must cover proofMaxAge + clock skew");
+
+        // A configured TTL smaller than the freshness window is widened up to it, closing the window.
+        DpopConfig widened = DpopConfig.builder()
+                .proofMaxAgeSeconds(600)
+                .nonceCacheTtlSeconds(120)
+                .build();
+        assertEquals(600 + DpopConfig.DEFAULT_CLOCK_SKEW_SECONDS, widened.getNonceCacheTtlSeconds(),
+                "A TTL shorter than proofMaxAge + clock skew must be widened to the freshness window");
+
+        // A configured TTL that already covers the freshness window is preserved unchanged.
+        DpopConfig preserved = DpopConfig.builder()
+                .proofMaxAgeSeconds(300)
+                .nonceCacheTtlSeconds(1000)
+                .build();
+        assertEquals(1000, preserved.getNonceCacheTtlSeconds(),
+                "A TTL that already covers the freshness window must be preserved");
+    }
+
+    @Test
     void shouldRejectExpiredIat() {
         KeyPair keyPair = generateRsaKeyPair();
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
