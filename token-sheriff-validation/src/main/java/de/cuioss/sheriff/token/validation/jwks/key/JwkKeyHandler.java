@@ -56,6 +56,15 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class JwkKeyHandler {
 
     private static final String MESSAGE = "Invalid Base64 URL encoded value for '%s'";
+
+    /**
+     * Minimum accepted RSA key size in bits (M1). RSA moduli shorter than 2048 bits are
+     * cryptographically too weak to trust for signature verification and are rejected on every
+     * key-parsing path (JWKS and DPoP embedded JWK). Shared with {@code KeyProcessor} and
+     * {@code DpopProofValidator} so the threshold is defined exactly once.
+     */
+    public static final int MIN_RSA_KEY_SIZE_BITS = 2048;
+
     private static final String RSA_KEY_TYPE = "RSA";
     private static final String EC_KEY_TYPE = "EC";
     private static final String OKP_KEY_TYPE = "OKP";
@@ -79,6 +88,14 @@ public final class JwkKeyHandler {
                 .orElseThrow(() -> new InvalidKeySpecException(MESSAGE.formatted("e")));
         BigInteger modulus = jwk.getModulusAsBigInteger()
                 .orElseThrow(() -> new InvalidKeySpecException(MESSAGE.formatted("n")));
+
+        // Reject RSA keys weaker than 2048 bits (M1): sub-2048 moduli are cryptographically too
+        // weak to trust for signature verification.
+        if (modulus.bitLength() < MIN_RSA_KEY_SIZE_BITS) {
+            throw new InvalidKeySpecException(
+                    "RSA key modulus is %d bits; minimum accepted is %d bits".formatted(
+                            modulus.bitLength(), MIN_RSA_KEY_SIZE_BITS));
+        }
 
         // Create RSA public key
         RSAPublicKeySpec spec = new RSAPublicKeySpec(modulus, exponent);

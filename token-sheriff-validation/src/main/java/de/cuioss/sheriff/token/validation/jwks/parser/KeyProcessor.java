@@ -24,6 +24,7 @@ import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.sheriff.token.validation.security.JwkAlgorithmPreferences;
 import de.cuioss.tools.logging.CuiLogger;
 
+import java.math.BigInteger;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Optional;
 
@@ -144,6 +145,15 @@ public class KeyProcessor {
      * @return the KeyInfo object or null if processing failed
      */
     private KeyInfo processRsaKey(JwkKey jwk, String kid) {
+        // Reject sub-2048-bit RSA keys before parsing (M1), with a clear, typed rejection event.
+        Optional<BigInteger> modulus = jwk.getModulusAsBigInteger();
+        if (modulus.isPresent() && modulus.get().bitLength() < JwkKeyHandler.MIN_RSA_KEY_SIZE_BITS) {
+            LOGGER.warn(WARN.RSA_KEY_PARSE_FAILED, kid,
+                    "RSA key modulus is %d bits; minimum accepted is %d bits".formatted(
+                            modulus.get().bitLength(), JwkKeyHandler.MIN_RSA_KEY_SIZE_BITS));
+            securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
+            return null;
+        }
         try {
             var publicKey = JwkKeyHandler.parseRsaKey(jwk);
             // Determine algorithm if not specified
