@@ -221,12 +221,27 @@ public class JweTestTokenFactory {
      */
     public static String createCompressedJwe(PrivateKey signingKey, PublicKey encryptionKey,
             String alg, String enc, String issuer) {
-        try {
-            String innerJws = createSignedJws(signingKey, "RS256", issuer);
-            byte[] plaintextBytes = innerJws.getBytes(StandardCharsets.UTF_8);
+        String innerJws = createSignedJws(signingKey, "RS256", issuer);
+        return createCompressedJweFromPlaintext(innerJws.getBytes(StandardCharsets.UTF_8),
+                encryptionKey, alg, enc);
+    }
 
+    /**
+     * Creates a JWE (zip=DEF) wrapping an arbitrary plaintext. Used to build a decompression-bomb
+     * token whose compact form stays small while its decompressed content exceeds the decryptor's
+     * decompressed-size ceiling.
+     *
+     * @param plaintext     the raw bytes to compress and encrypt
+     * @param encryptionKey the public key to encrypt the CEK (RSA)
+     * @param alg           the JWE key-management algorithm (e.g., "RSA-OAEP")
+     * @param enc           the JWE content-encryption algorithm (e.g., "A256GCM")
+     * @return the JWE compact serialization string
+     */
+    public static String createCompressedJweFromPlaintext(byte[] plaintext, PublicKey encryptionKey,
+            String alg, String enc) {
+        try {
             // Compress
-            byte[] compressed = deflateCompress(plaintextBytes);
+            byte[] compressed = deflateCompress(plaintext);
 
             // Build header with zip
             Map<String, String> headerMap = new LinkedHashMap<>();
