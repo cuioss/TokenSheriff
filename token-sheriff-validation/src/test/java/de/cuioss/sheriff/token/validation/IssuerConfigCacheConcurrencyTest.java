@@ -35,9 +35,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * Concurrency tests for IssuerConfigCache focusing on race conditions
  * during the transition from ConcurrentHashMap to immutable map.
  *
- * This test reproduces the UnsupportedOperationException that occurs when:
- * 1. Thread A optimizes the cache to read-only (Map.copyOf)
- * 2. Thread B tries to put() into the now-immutable map
+ * The transition from the mutable ConcurrentHashMap to the optimized immutable map
+ * (Map.copyOf) must be race-free: no concurrent {@code put()} may ever hit the
+ * now-immutable map. These tests therefore assert the {@code UnsupportedOperationException}
+ * that such a race would raise is <em>absent</em> — any thread observing it fails the test,
+ * rather than swallowing it as "expected".
  */
 class IssuerConfigCacheConcurrencyTest {
 
@@ -89,10 +91,10 @@ class IssuerConfigCacheConcurrencyTest {
                     assertEquals(targetIssuer, result.getIssuerIdentifier());
                     totalOperations.incrementAndGet();
 
-                } catch (UnsupportedOperationException e) {
-                    // Expected during race condition - don't fail the test
-                    LOGGER.info("Caught expected UnsupportedOperationException: %s", e.getMessage());
-                } catch (IllegalArgumentException | IllegalStateException e) {
+                } catch (UnsupportedOperationException | IllegalArgumentException | IllegalStateException e) {
+                    // A UnsupportedOperationException here means a thread wrote to the map after it
+                    // was optimized to immutable — the exact race this cache must prevent. Capture it
+                    // so the assertion below fails the test rather than silently tolerating the race.
                     unexpectedException.compareAndSet(null, e);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();

@@ -177,6 +177,12 @@ public final class JWTValidationLogMessages {
                 .template("Decoded part exceeds maximum size limit of %s bytes")
                 .build();
 
+        public static final LogRecord JSON_STRUCTURE_BOUNDS_EXCEEDED = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(108)
+                .template("JSON structure bounds exceeded: %s")
+                .build();
+
         public static final LogRecord UNSUPPORTED_ALGORITHM = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(106)

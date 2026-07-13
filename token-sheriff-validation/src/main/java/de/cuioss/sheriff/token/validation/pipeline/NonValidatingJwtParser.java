@@ -88,11 +88,11 @@ import java.util.Objects;
  * <pre>
  * // Create a parser with custom security settings using ParserConfig
  * ParserConfig config = ParserConfig.builder()
- *     .maxTokenSize(1024)  // 1KB max token size
- *     .maxPayloadSize(512)  // 512 bytes max payload size
- *     .maxStringSize(256)   // 256 bytes max string size
- *     .maxArraySize(10)     // 10 elements max array size
- *     .maxDepth(5)          // 5 levels max JSON depth
+ *     .maxTokenSize(1024)      // 1KB max token size
+ *     .maxPayloadSize(512)     // 512 bytes max payload size
+ *     .maxStringLength(256)    // 256 bytes max string size
+ *     .maxArraySize(10)        // 10 elements max array size
+ *     .maxNestingDepth(5)      // 5 levels max JSON nesting depth
  *     .build();
  *
  * NonValidatingJwtParser customParser = NonValidatingJwtParser.builder()
@@ -515,6 +515,11 @@ public class NonValidatingJwtParser {
                 );
             }
 
+            // Enforce structural bounds (nesting depth / array size) before handing the bytes to
+            // DSL-JSON, so a deeply-nested or oversized-array payload fails closed with a typed
+            // exception rather than risking a StackOverflowError during recursive parsing.
+            enforceStructuralBounds(decodedBytes);
+
             return decodedBytes;
         } catch (IllegalArgumentException e) {
             throw new TokenValidationException(
@@ -525,5 +530,80 @@ public class NonValidatingJwtParser {
         }
     }
 
+    /**
+     * Scans decoded JSON bytes and enforces the configured nesting-depth and array-size bounds.
+     * <p>
+     * The scan is a single linear pass that tracks string state (so braces/brackets inside string
+     * literals are ignored) and, for every object/array frame, its depth and — for arrays — its
+     * element count. Exceeding {@link ParserConfig#getMaxNestingDepth()} or
+     * {@link ParserConfig#getMaxArraySize()} fails closed with a typed
+     * {@link TokenValidationException}.
+     *
+     * @param jsonBytes the decoded (UTF-8) JSON bytes of a single JWT part
+     */
+    private void enforceStructuralBounds(byte[] jsonBytes) {
+        final int maxDepth = config.getMaxNestingDepth();
+        final int maxArraySize = config.getMaxArraySize();
+        final boolean[] frameIsArray = new boolean[maxDepth + 1];
+        final int[] frameElementCount = new int[maxDepth + 1];
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+
+        for (byte rawByte : jsonBytes) {
+            char c = (char) rawByte;
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            switch (c) {
+                case '"' -> inString = true;
+                case '{', '[' -> {
+                    depth++;
+                    if (depth > maxDepth) {
+                        rejectStructuralBounds("nesting depth exceeds the configured maximum of " + maxDepth);
+                    }
+                    frameIsArray[depth] = c == '[';
+                    frameElementCount[depth] = 0;
+                }
+                case '}', ']' -> {
+                    if (depth > 0) {
+                        depth--;
+                    }
+                }
+                case ',' -> {
+                    if (depth > 0 && frameIsArray[depth]) {
+                        frameElementCount[depth]++;
+                        if (frameElementCount[depth] >= maxArraySize) {
+                            rejectStructuralBounds("array size exceeds the configured maximum of " + maxArraySize);
+                        }
+                    }
+                }
+                default -> {
+                    // structural scan ignores all other characters
+                }
+            }
+        }
+    }
+
+    /**
+     * Rejects a JWT part that violates the configured JSON structural bounds.
+     *
+     * @param reason a human-readable description of the violated bound
+     */
+    private void rejectStructuralBounds(String reason) {
+        LOGGER.warn(JWTValidationLogMessages.WARN.JSON_STRUCTURE_BOUNDS_EXCEEDED, reason);
+        securityEventCounter.increment(SecurityEventCounter.EventType.DECODED_PART_SIZE_EXCEEDED);
+        throw new TokenValidationException(
+                SecurityEventCounter.EventType.DECODED_PART_SIZE_EXCEEDED,
+                "JSON structure bounds exceeded: " + reason
+        );
+    }
 
 }

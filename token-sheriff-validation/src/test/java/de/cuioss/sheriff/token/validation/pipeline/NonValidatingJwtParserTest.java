@@ -375,6 +375,86 @@ class NonValidatingJwtParserTest {
         }
 
         @Test
+        @DisplayName("Should reject a mapped JSON string value longer than maxStringLength")
+        void shouldRejectOverLimitJsonString() {
+            // A mapped string value (kid) one byte past the DSL-JSON maxStringLength (4 KB) must be
+            // rejected. The value goes in a mapped field so DSL-JSON reads it into the string buffer
+            // (unmapped fields are skipped without buffering); maxPayloadSize is raised well above the
+            // string so the string-length limit — not the payload-size limit — is the check that fires.
+            SecurityEventCounter counter = new SecurityEventCounter();
+            ParserConfig config = ParserConfig.builder()
+                    .maxStringLength(ParserConfig.DEFAULT_MAX_STRING_LENGTH)
+                    .maxPayloadSize(ParserConfig.DEFAULT_MAX_STRING_LENGTH * 4)
+                    .maxTokenSize(ParserConfig.DEFAULT_MAX_STRING_LENGTH * 8)
+                    .build();
+            NonValidatingJwtParser overLimitParser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .config(config)
+                    .build();
+
+            String overLimitKid = "a".repeat(ParserConfig.DEFAULT_MAX_STRING_LENGTH + 1);
+            String overLimitJson = "{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"" + overLimitKid + "\"}";
+            String encodedOverLimit = Base64.getUrlEncoder().encodeToString(overLimitJson.getBytes(StandardCharsets.UTF_8));
+            String tokenWithOverLimitString = encodedOverLimit + "." + ENCODED_PAYLOAD + "." + ENCODED_SIGNATURE;
+
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> overLimitParser.decode(tokenWithOverLimitString),
+                    "A JSON string exceeding maxStringLength must be rejected");
+            assertEquals(EventType.FAILED_TO_DECODE_JWT, exception.getEventType(),
+                    "An over-limit string must be rejected as a decode failure");
+            assertEquals(1, counter.getCount(EventType.FAILED_TO_DECODE_JWT),
+                    "Should count the FAILED_TO_DECODE_JWT event exactly once");
+        }
+
+        @Test
+        @DisplayName("Should reject a payload whose nesting depth exceeds maxNestingDepth")
+        void shouldRejectJsonExceedingMaxNestingDepth() {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            ParserConfig config = ParserConfig.builder().maxNestingDepth(3).build();
+            NonValidatingJwtParser boundedParser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .config(config)
+                    .build();
+
+            // Five levels of object nesting — two past the configured max of 3.
+            String deepJson = "{\"a\":{\"b\":{\"c\":{\"d\":{\"e\":1}}}}}";
+            String encodedDeep = Base64.getUrlEncoder().encodeToString(deepJson.getBytes(StandardCharsets.UTF_8));
+            String tokenWithDeepHeader = encodedDeep + "." + ENCODED_PAYLOAD + "." + ENCODED_SIGNATURE;
+
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> boundedParser.decode(tokenWithDeepHeader),
+                    "A payload nested deeper than maxNestingDepth must be rejected");
+            assertEquals(EventType.DECODED_PART_SIZE_EXCEEDED, exception.getEventType(),
+                    "Over-depth nesting must fail closed with a typed structural-bounds rejection");
+            assertEquals(1, counter.getCount(EventType.DECODED_PART_SIZE_EXCEEDED),
+                    "Should count the structural-bounds rejection exactly once");
+        }
+
+        @Test
+        @DisplayName("Should reject a payload whose array size exceeds maxArraySize")
+        void shouldRejectJsonArrayExceedingMaxArraySize() {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            ParserConfig config = ParserConfig.builder().maxArraySize(5).build();
+            NonValidatingJwtParser boundedParser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .config(config)
+                    .build();
+
+            // A ten-element array — twice the configured max of 5.
+            String arrayJson = "{\"arr\":[1,2,3,4,5,6,7,8,9,10]}";
+            String encodedArray = Base64.getUrlEncoder().encodeToString(arrayJson.getBytes(StandardCharsets.UTF_8));
+            String tokenWithLargeArrayHeader = encodedArray + "." + ENCODED_PAYLOAD + "." + ENCODED_SIGNATURE;
+
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> boundedParser.decode(tokenWithLargeArrayHeader),
+                    "A payload with an array larger than maxArraySize must be rejected");
+            assertEquals(EventType.DECODED_PART_SIZE_EXCEEDED, exception.getEventType(),
+                    "Over-size arrays must fail closed with a typed structural-bounds rejection");
+            assertEquals(1, counter.getCount(EventType.DECODED_PART_SIZE_EXCEEDED),
+                    "Should count the structural-bounds rejection exactly once");
+        }
+
+        @Test
         @DisplayName("Should use cached JsonReaderFactory")
         void shouldUseCachedJsonReaderFactory() {
             // This test verifies that the JsonReaderFactory is cached and reused
