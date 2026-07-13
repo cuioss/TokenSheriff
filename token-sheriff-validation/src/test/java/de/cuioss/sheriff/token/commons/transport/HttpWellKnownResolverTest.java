@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -221,5 +222,73 @@ class HttpWellKnownResolverTest {
         var wellKnown = result.get();
         assertNotNull(wellKnown.getIssuer(), "Issuer should be present in result");
         assertNotNull(wellKnown.getJwksUri(), "JWKS URI should be present in result");
+    }
+
+    @Test
+    @DisplayName("Should reuse a cached successful discovery within the bounded TTL (M2)")
+    void shouldReuseCachedSuccessWithinTtl(URIBuilder uriBuilder) {
+        moduleDispatcher.returnDefault();
+        String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
+                .addPathSegment("openid-configuration").buildAsString();
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowLoopbackEgress(true)
+                .allowInsecureHttp(true)
+                .wellKnownUrl(wellKnownUrl)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        resolver = config.createResolver(new SecurityEventCounter());
+
+        assertTrue(resolver.getJwksUri().isPresent(), "First discovery should succeed");
+        assertTrue(resolver.getIssuer().isPresent(), "Second lookup should be served from cache");
+        assertTrue(resolver.getWellKnownResult().isPresent(), "Third lookup should be served from cache");
+
+        assertEquals(1, moduleDispatcher.getCallCounter(),
+                "A successful discovery must be cached within its bounded TTL — only one network call");
+    }
+
+    @Test
+    @DisplayName("Should revalidate a successful discovery once the bounded TTL elapses (M2)")
+    void shouldRevalidateAfterTtlElapses(URIBuilder uriBuilder) {
+        moduleDispatcher.returnDefault();
+        String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
+                .addPathSegment("openid-configuration").buildAsString();
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowLoopbackEgress(true)
+                .allowInsecureHttp(true)
+                .wellKnownUrl(wellKnownUrl)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        // A zero TTL makes every cached success immediately stale, so each lookup revalidates.
+        resolver = new HttpWellKnownResolver(config, new SecurityEventCounter(), Duration.ZERO);
+
+        assertTrue(resolver.getJwksUri().isPresent(), "First discovery should succeed");
+        assertTrue(resolver.getJwksUri().isPresent(), "Second discovery should succeed after revalidation");
+
+        assertEquals(2, moduleDispatcher.getCallCounter(),
+                "An elapsed bounded TTL must trigger revalidation — the endpoint is fetched again");
+    }
+
+    @Test
+    @DisplayName("Should not pin a failed discovery — recovers on the next call (M2)")
+    void shouldNotPinFailedDiscovery(URIBuilder uriBuilder) {
+        moduleDispatcher.returnError();
+        String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
+                .addPathSegment("openid-configuration").buildAsString();
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowLoopbackEgress(true)
+                .allowInsecureHttp(true)
+                .wellKnownUrl(wellKnownUrl)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        resolver = config.createResolver(new SecurityEventCounter());
+
+        assertFalse(resolver.getJwksUri().isPresent(), "Discovery should fail while the endpoint returns errors");
+        assertEquals(LoaderStatus.ERROR, resolver.getLoaderStatus(), "Status should reflect the failure");
+
+        // The endpoint recovers; a previously failed discovery must not be pinned.
+        moduleDispatcher.returnDefault();
+        assertTrue(resolver.getJwksUri().isPresent(),
+                "A previously failed discovery must not be cached — it recovers once the endpoint is healthy");
+        assertEquals(LoaderStatus.OK, resolver.getLoaderStatus(), "Status should recover to OK");
     }
 }

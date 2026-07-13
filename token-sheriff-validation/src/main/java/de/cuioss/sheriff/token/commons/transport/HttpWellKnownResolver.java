@@ -22,6 +22,7 @@ import de.cuioss.http.client.result.HttpResult;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 
+import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -38,6 +39,12 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * <strong>Thread Safety:</strong> This class uses AtomicReference for lock-free thread-safe caching.
  * The compareAndSet pattern prevents duplicate loads while allowing concurrent access.
+ * <p>
+ * <strong>Caching semantics (M2):</strong> only <em>successful</em> discovery results are cached,
+ * and each cached success carries a bounded time-to-live ({@link #DISCOVERY_SUCCESS_TTL}). Once the
+ * TTL elapses the next lookup revalidates against the endpoint, so discovery metadata cannot be
+ * pinned indefinitely. A <em>failed</em> discovery is never cached — it is retried on the next call
+ * rather than being pinned as a permanent negative result.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -46,9 +53,31 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
 
     private static final CuiLogger LOGGER = new CuiLogger(HttpWellKnownResolver.class);
 
+    /**
+     * Bounded time-to-live for a cached <em>successful</em> discovery result before it is
+     * revalidated (M2). Keeps a stale discovery document from being served indefinitely while
+     * still avoiding a network round-trip on every lookup.
+     */
+    private static final Duration DISCOVERY_SUCCESS_TTL = Duration.ofMinutes(15);
+
     private final HttpAdapter<WellKnownResult> wellKnownAdapter;
-    private final AtomicReference<HttpResult<WellKnownResult>> cachedResult = new AtomicReference<>();
+    private final long successTtlNanos;
+    private final AtomicReference<CachedDiscovery> cachedResult = new AtomicReference<>();
     private final AtomicReference<LoaderStatus> status = new AtomicReference<>(LoaderStatus.UNDEFINED);
+
+    /**
+     * Holds a cached successful discovery result together with the {@link System#nanoTime()}
+     * instant at which it expires and must be revalidated.
+     *
+     * @param result       the successful discovery result
+     * @param expiresAtNanos the {@link System#nanoTime()} deadline after which {@code result} is stale
+     */
+    private record CachedDiscovery(HttpResult<WellKnownResult> result, long expiresAtNanos) {
+
+        boolean isFresh() {
+            return System.nanoTime() - expiresAtNanos < 0;
+        }
+    }
 
     /**
      * Creates a new HttpWellKnownResolver with the specified configuration.
@@ -63,6 +92,20 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
      * @param securityEventCounter the shared security event counter for tracking violations
      */
     public HttpWellKnownResolver(WellKnownConfig config, SecurityEventCounter securityEventCounter) {
+        this(config, securityEventCounter, DISCOVERY_SUCCESS_TTL);
+    }
+
+    /**
+     * Creates a new HttpWellKnownResolver with an explicit success TTL.
+     * <p>
+     * Package-private overload used by tests to exercise the bounded-TTL revalidation path (M2)
+     * deterministically without waiting out the production {@link #DISCOVERY_SUCCESS_TTL}.
+     *
+     * @param config the well-known configuration containing HTTP handler and parser settings
+     * @param securityEventCounter the shared security event counter for tracking violations
+     * @param successTtl the bounded time-to-live for a cached successful discovery result
+     */
+    HttpWellKnownResolver(WellKnownConfig config, SecurityEventCounter securityEventCounter, Duration successTtl) {
         var converter = new WellKnownConfigurationConverter(
                 config.getParserConfig().getDslJson(),
                 securityEventCounter,
@@ -76,6 +119,7 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
 
         // Wrap with retry behavior
         this.wellKnownAdapter = ResilientHttpAdapter.wrap(baseAdapter, config.getRetryConfig());
+        this.successTtlNanos = successTtl.toNanos();
 
         LOGGER.debug("Created HttpWellKnownResolver for well-known endpoint discovery");
     }
@@ -89,17 +133,26 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
      * @return Optional containing the WellKnownResult if available and valid, empty otherwise
      */
     private Optional<WellKnownResult> ensureLoaded() {
-        HttpResult<WellKnownResult> result = cachedResult.updateAndGet(current -> {
-            if (current == null) {
-                status.set(LoaderStatus.LOADING);
-                HttpResult<WellKnownResult> loaded = wellKnownAdapter.getBlocking();
-                status.set(loaded.isSuccess() ? LoaderStatus.OK : LoaderStatus.ERROR);
-                return loaded;
+        CachedDiscovery cached = cachedResult.updateAndGet(current -> {
+            // Reuse a cached success only while it is still within its bounded TTL (M2).
+            if (current != null && current.isFresh()) {
+                return current;
             }
-            return current;
+            // No cache yet, or an expired success: (re)load. A previously failed load was never
+            // cached (see below), so a failure never reaches this branch as a pinned negative result.
+            status.set(LoaderStatus.LOADING);
+            HttpResult<WellKnownResult> loaded = wellKnownAdapter.getBlocking();
+            if (loaded.isSuccess()) {
+                status.set(LoaderStatus.OK);
+                return new CachedDiscovery(loaded, System.nanoTime() + successTtlNanos);
+            }
+            // Do not cache failures (M2): clearing the cache lets the next call retry discovery
+            // instead of pinning a permanent negative result.
+            status.set(LoaderStatus.ERROR);
+            return null;
         });
 
-        return result.isSuccess() ? result.getContent() : Optional.empty();
+        return cached != null && cached.result().isSuccess() ? cached.result().getContent() : Optional.empty();
     }
 
     /**
