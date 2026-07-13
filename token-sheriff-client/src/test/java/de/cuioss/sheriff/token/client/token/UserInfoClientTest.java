@@ -96,7 +96,10 @@ class UserInfoClientTest {
     @Test
     @DisplayName("Should present the access token as an RFC 6750 Bearer credential")
     void shouldPresentBearerToken(URIBuilder uriBuilder, MockWebServer server) throws Exception {
-        String accessToken = Generators.nonBlankStrings().next();
+        // A realistic access token: header-safe characters only. nonBlankStrings() may include
+        // leading/trailing whitespace, which HTTP header canonicalization trims on the round-trip,
+        // making the exact-equality assertion below flaky.
+        String accessToken = Generators.letterStrings(20, 40).next();
 
         userInfoClient().fetchUserInfo(userInfoEndpoint(uriBuilder), accessToken);
 

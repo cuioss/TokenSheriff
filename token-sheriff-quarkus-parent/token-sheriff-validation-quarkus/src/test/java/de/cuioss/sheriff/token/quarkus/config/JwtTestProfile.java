@@ -47,8 +47,11 @@ public class JwtTestProfile implements QuarkusTestProfile {
         config.put(JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("default"), "https://example.com/auth");
         config.put(JwtPropertyKeys.ISSUERS.ENABLED.formatted("default"), "true");
         config.put(JwtPropertyKeys.ISSUERS.JWKS_FILE_PATH.formatted("default"), ""); // Clear file path
+        // A valid 2048-bit RSA public key (RFC 7638 example). The previous test key was 1904-bit,
+        // which the module now rejects (weak-RSA hardening: minimum 2048 bits). The health check only
+        // needs a parseable key for loader status — no test signs tokens against this JWKS.
         config.put(JwtPropertyKeys.ISSUERS.JWKS_CONTENT.formatted("default"),
-                "{\"keys\":[{\"kty\":\"RSA\",\"use\":\"sig\",\"kid\":\"default-key-1\",\"alg\":\"RS256\",\"n\":\"nzyis1ZjfNB0bBgKFMSvvkTtwlvBsaJq7S5wA-kzeVOVpVWwkWdVha4s38XM_pa_yr47av7-z3VTmvDRyAHcaT92whREFpLv9cj5lTeJSibyr_Mrm_YtjCZVWgaOYIhwrXwKLqPr_11inWsAkfIytvHWTxZYEcXLgAXFuUuaS3uF9gEiNQwzGTU1v0FqkqTBr4B8nW3HCN47XUu0t8Y0e3zvAIhySnxIZi9aDaPvSlAeZ7VVl5ivy_43QvTRpM3eBFs9A1Y9a9aCtHSP8KXRTYhH2TvPxLOOFg0Lu-pwrps6CqvbeZjQlqCh9cGowQ\",\"e\":\"AQAB\"}]}");
+                "{\"keys\":[{\"kty\":\"RSA\",\"use\":\"sig\",\"kid\":\"default-key-1\",\"alg\":\"RS256\",\"n\":\"0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw\",\"e\":\"AQAB\"}]}");
 
         // Disable audience validation for test (no real audience in tests)
         config.put(JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted("default"), "true");
