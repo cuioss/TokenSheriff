@@ -165,9 +165,22 @@ public class AccessTokenValidationPipeline {
         Optional<AccessTokenContent> cached = cache.get(tokenString, performanceMonitor, now);
         if (cached.isPresent()) {
             LOGGER.debug("Access token retrieved from cache");
+            AccessTokenContent cachedToken = cached.get();
             // Still validate DPoP proof even for cached tokens (proofs must be fresh per request)
-            runDpopValidation(request, cached.get().getIssuer(), tokenString);
-            return cached.get();
+            runDpopValidation(request, cachedToken.getIssuer(), tokenString);
+            // Re-run custom validation rules on every cache hit (M5): a stateful custom rule
+            // (revocation, dynamic policy, rate limit) must be honored on each request and must not
+            // be bypassed by the cache. Without this, a token that passed once would be served
+            // indefinitely even after a rule flips to reject it.
+            if (!customValidationRules.isEmpty()) {
+                IssuerConfig cachedIssuerConfig = issuerConfigCache.resolveConfig(cachedToken.getIssuer());
+                ValidationContext cacheHitContext = new ValidationContext(now,
+                        cachedIssuerConfig.getClockSkewSeconds(), cachedIssuerConfig.getMaxTokenAgeSeconds());
+                for (TokenValidationRule rule : customValidationRules) {
+                    rule.validate(cachedToken, cacheHitContext);
+                }
+            }
+            return cachedToken;
         }
 
         // 2. Parse token (with TOKEN_PARSING metrics)
