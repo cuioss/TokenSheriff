@@ -17,16 +17,21 @@ package de.cuioss.sheriff.token.validation.domain.context;
 
 import org.jspecify.annotations.Nullable;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 /**
  * Request object for access token validation, carrying the token string, HTTP headers,
  * and optionally the HTTP request URI and method for DPoP htu/htm validation (RFC 9449).
  * <p>
  * This record is immutable and thread-safe. The HTTP headers map is defensively copied
- * at construction time.
+ * at construction time into a <strong>case-insensitive</strong> map: HTTP header names are
+ * case-insensitive (RFC 9110), so a lookup by canonical name (e.g. {@code "dpop"}) resolves a
+ * header supplied with any casing ({@code "DPoP"}, {@code "DPOP"}). This closes the DPoP
+ * bearer-mode downgrade where a canonically-cased {@code DPoP} header would otherwise be missed (M4).
  * <p>
  * Usage:
  * <pre>
@@ -63,7 +68,12 @@ String requestUri, @Nullable
     public AccessTokenRequest {
         Objects.requireNonNull(tokenString, "tokenString must not be null");
         Objects.requireNonNull(httpHeaders, "httpHeaders must not be null");
-        httpHeaders = Map.copyOf(httpHeaders);
+        // Normalize into a case-insensitive, immutable header map so lookups by canonical header
+        // name resolve regardless of the incoming casing (RFC 9110). A case-sensitive map would
+        // silently drop a canonically-cased DPoP header and downgrade the request to bearer mode (M4).
+        Map<String, List<String>> normalizedHeaders = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        httpHeaders.forEach((headerName, values) -> normalizedHeaders.put(headerName, List.copyOf(values)));
+        httpHeaders = Collections.unmodifiableMap(normalizedHeaders);
     }
 
     /**

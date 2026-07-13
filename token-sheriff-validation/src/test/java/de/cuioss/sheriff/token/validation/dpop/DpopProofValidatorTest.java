@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -238,6 +239,30 @@ class DpopProofValidatorTest {
                 .build();
         assertEquals(1000, preserved.getNonceCacheTtlSeconds(),
                 "A TTL that already covers the freshness window must be preserved");
+    }
+
+    @ParameterizedTest(name = "Should honor a DPoP proof supplied under the \"{0}\" header (M4)")
+    @ValueSource(strings = {"DPoP", "DPOP", "dpop", "Dpop"})
+    @DisplayName("Should honor a DPoP proof regardless of header-name casing (M4)")
+    void shouldHonorDpopHeaderRegardlessOfCasing(String headerName) {
+        KeyPair keyPair = generateRsaKeyPair();
+        Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+        String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+
+        String rawAccessToken = "some.access.token";
+        DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+        String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken,
+                "GET", "https://resource.example.org/protectedresource");
+
+        // Supply the proof under a non-canonical header casing; case-insensitive lookup must still
+        // resolve it so DPoP is enforced rather than being silently downgraded to bearer mode (M4).
+        AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                Map.of(headerName, List.of(dpopProof)),
+                "https://resource.example.org/protectedresource", "GET");
+
+        assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken),
+                "A DPoP proof under the '" + headerName + "' header must be honored, not downgraded to bearer mode");
     }
 
     @Test

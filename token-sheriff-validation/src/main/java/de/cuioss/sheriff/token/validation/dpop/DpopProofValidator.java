@@ -169,7 +169,11 @@ public class DpopProofValidator {
      * @throws TokenValidationException if multiple DPoP headers are present or the proof exceeds the size limit
      */
     private String extractDpopHeader(AccessTokenRequest request) {
-        List<String> dpopHeaders = request.httpHeaders().get(DPOP_HEADER_NAME);
+        // HTTP header names are case-insensitive (RFC 9110). Look the DPoP header up case-insensitively
+        // so a client that sends "DPoP" (the canonical RFC 9449 casing) is honored and cannot be
+        // silently downgraded to bearer mode by a case mismatch (M4). AccessTokenRequest already stores
+        // headers in a case-insensitive map; this lookup is defense-in-depth for maps built elsewhere.
+        List<String> dpopHeaders = getHeaderIgnoreCase(request.httpHeaders(), DPOP_HEADER_NAME);
         if (dpopHeaders == null || dpopHeaders.isEmpty()) {
             return null;
         }
@@ -183,6 +187,26 @@ public class DpopProofValidator {
                     "DPoP proof exceeds maximum size of %s bytes".formatted(MAX_DPOP_PROOF_SIZE));
         }
         return dpopProofString;
+    }
+
+    /**
+     * Looks a header up case-insensitively, tolerating any header-name casing (RFC 9110).
+     *
+     * @param headers the HTTP header map
+     * @param name    the canonical header name to resolve
+     * @return the header values, or {@code null} if no matching header is present
+     */
+    private static List<String> getHeaderIgnoreCase(Map<String, List<String>> headers, String name) {
+        List<String> direct = headers.get(name);
+        if (direct != null) {
+            return direct;
+        }
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            if (name.equalsIgnoreCase(entry.getKey())) {
+                return entry.getValue();
+            }
+        }
+        return null;
     }
 
     /**
