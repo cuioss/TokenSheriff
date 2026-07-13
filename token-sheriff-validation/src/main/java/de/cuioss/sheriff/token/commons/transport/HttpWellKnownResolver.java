@@ -19,9 +19,11 @@ import de.cuioss.http.client.adapter.ETagAwareHttpAdapter;
 import de.cuioss.http.client.adapter.HttpAdapter;
 import de.cuioss.http.client.adapter.ResilientHttpAdapter;
 import de.cuioss.http.client.result.HttpResult;
+import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 
+import java.net.URI;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -62,6 +64,20 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
 
     private final HttpAdapter<WellKnownResult> wellKnownAdapter;
     private final long successTtlNanos;
+
+    /**
+     * SSRF egress guard applied to the discovery endpoint immediately before it is fetched (C1).
+     * Resolving the discovery host fresh at each fetch — rather than trusting an earlier
+     * resolution — also closes the DNS-rebinding window for the well-known document itself,
+     * mirroring the guard {@code HttpJwksLoader} applies to the advertised {@code jwks_uri}.
+     */
+    private final EgressPolicy egressPolicy;
+
+    /**
+     * The discovery endpoint URI the egress guard resolves and validates before every fetch.
+     */
+    private final URI discoveryUri;
+
     private final AtomicReference<CachedDiscovery> cachedResult = new AtomicReference<>();
     private final AtomicReference<LoaderStatus> status = new AtomicReference<>(LoaderStatus.UNDEFINED);
 
@@ -120,6 +136,8 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
         // Wrap with retry behavior
         this.wellKnownAdapter = ResilientHttpAdapter.wrap(baseAdapter, config.getRetryConfig());
         this.successTtlNanos = successTtl.toNanos();
+        this.egressPolicy = config.getEgressPolicy();
+        this.discoveryUri = config.getHttpHandler().getUri();
 
         LOGGER.debug("Created HttpWellKnownResolver for well-known endpoint discovery");
     }
@@ -141,6 +159,17 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
             // No cache yet, or an expired success: (re)load. A previously failed load was never
             // cached (see below), so a failure never reaches this branch as a pinned negative result.
             status.set(LoaderStatus.LOADING);
+            // SSRF egress guard (C1): resolve the discovery endpoint and reject it if it lands on an
+            // internal/loopback/link-local/metadata address BEFORE any fetch is issued. Because each
+            // (re)load re-runs this fresh resolution, a DNS rebind that flips the discovery host into a
+            // blocked range after an earlier fetch is caught on the next revalidation, not trusted.
+            try {
+                egressPolicy.check(discoveryUri);
+            } catch (TransportException e) {
+                LOGGER.warn(e, TransportLogMessages.WARN.SSRF_EGRESS_BLOCKED_DISCOVERY, e.getMessage());
+                status.set(LoaderStatus.ERROR);
+                return null;
+            }
             HttpResult<WellKnownResult> loaded = wellKnownAdapter.getBlocking();
             if (loaded.isSuccess()) {
                 status.set(LoaderStatus.OK);

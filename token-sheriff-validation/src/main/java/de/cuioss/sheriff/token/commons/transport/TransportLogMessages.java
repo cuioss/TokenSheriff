@@ -84,6 +84,12 @@ public final class TransportLogMessages {
                 .identifier(141)
                 .template("Failed to parse JWKS content: %s")
                 .build();
+
+        public static final LogRecord SSRF_EGRESS_BLOCKED_DISCOVERY = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(168)
+                .template("SSRF egress guard blocked well-known discovery fetch: %s")
+                .build();
     }
 
     /**

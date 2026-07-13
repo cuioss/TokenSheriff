@@ -23,6 +23,7 @@ import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.result.HttpResult;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.EgressPolicy;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.HttpWellKnownResolver;
 import de.cuioss.sheriff.token.commons.transport.Jwks;
@@ -35,6 +36,7 @@ import de.cuioss.sheriff.token.validation.jwks.key.JWKSKeyLoader;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.tools.logging.CuiLogger;
 
+import java.net.URI;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.*;
@@ -74,6 +76,22 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     private static final String ISSUER_NOT_CONFIGURED = "not-configured";
 
     private final HttpJwksLoaderConfig config;
+
+    /**
+     * SSRF egress guard applied to the resolved JWKS fetch URL. Normally sourced from the config;
+     * a package-private constructor lets tests inject a policy with a deterministic (rebinding)
+     * {@link EgressPolicy.HostResolver} to exercise the per-refresh re-validation (C1 follow-up).
+     */
+    private final EgressPolicy egressPolicy;
+
+    /**
+     * The resolved JWKS fetch URI captured at adapter resolution. The egress guard re-resolves and
+     * re-checks this URI on <em>every</em> fetch — initial and each scheduled background refresh — so
+     * a DNS rebind that flips the host into a blocked range after the initial fetch is rejected
+     * rather than silently trusted by the reused adapter.
+     */
+    private final AtomicReference<URI> jwksFetchUri = new AtomicReference<>();
+
     private final AtomicReference<LoaderStatus> status = new AtomicReference<>(LoaderStatus.UNDEFINED);
     private final AtomicReference<JWKSKeyLoader> currentKeys = new AtomicReference<>();
     private final ConcurrentLinkedDeque<RetiredKeySet> retiredKeys = new ConcurrentLinkedDeque<>();
@@ -91,7 +109,23 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * @param config the configuration for this loader
      */
     public HttpJwksLoader(HttpJwksLoaderConfig config) {
+        this(config, config.getEgressPolicy());
+    }
+
+    /**
+     * Constructor allowing an explicit {@link EgressPolicy} override.
+     * <p>
+     * Package-private test seam: production callers use {@link #HttpJwksLoader(HttpJwksLoaderConfig)},
+     * which delegates here with the config's policy. Tests inject a policy backed by a deterministic
+     * {@link EgressPolicy.HostResolver} to drive the per-refresh DNS-rebinding re-check (C1 follow-up)
+     * without depending on real DNS.
+     *
+     * @param config the configuration for this loader
+     * @param egressPolicy the SSRF egress guard to apply on every JWKS fetch
+     */
+    HttpJwksLoader(HttpJwksLoaderConfig config, EgressPolicy egressPolicy) {
         this.config = config;
+        this.egressPolicy = egressPolicy;
     }
 
     @Override
@@ -212,8 +246,12 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         // SSRF egress guard (C1): resolve the advertised/configured JWKS URL and reject it
         // if it lands on an internal/loopback/metadata address BEFORE any fetch is issued.
         // Resolving here — immediately before the fetch — also closes the DNS-rebinding window.
+        // The URI is retained so the guard can be re-applied on every scheduled background
+        // refresh (C1 follow-up), not just this initial resolution.
+        URI fetchUri = handler.getUri();
+        jwksFetchUri.set(fetchUri);
         try {
-            config.getEgressPolicy().check(handler.getUri());
+            egressPolicy.check(fetchUri);
         } catch (TransportException e) {
             LOGGER.error(e, ERROR.JWKS_INITIALIZATION_FAILED, e.getMessage(),
                     getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
@@ -323,49 +361,76 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     }
 
     private void startBackgroundRefresh() {
-        refreshTask.set(config.getScheduledExecutorService().scheduleAtFixedRate(() -> {
-                    try {
-                        HttpAdapter<Jwks> adapter = httpAdapter.get();
-                        if (adapter == null) {
-                            LOGGER.warn(WARN.BACKGROUND_REFRESH_NO_HANDLER);
-                            return;
-                        }
-
-                        // Blocking load in background thread
-                        HttpResult<Jwks> result = adapter.getBlocking();
-
-                        if (result.isSuccess()) {
-                            result.getContent().ifPresent(this::updateKeys);
-                        } else {
-                            // Handle error (network, server, etc.)
-                            String statusDesc = result.getErrorMessage()
-                                    .orElseGet(() -> "HTTP status: " + result.getHttpStatus().map(String::valueOf).orElse("N/A"));
-                            LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, statusDesc);
-                        }
-                    } catch (IllegalArgumentException e) {
-                        // JSON parsing or validation errors
-                        LOGGER.warn(WARN.BACKGROUND_REFRESH_PARSE_ERROR, e.getMessage(), getResolvedIssuer());
-                    } catch (CompletionException e) {
-                        // CompletableFuture.join() failures from getBlocking() (I/O, network errors)
-                        LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
-                    } catch (IllegalStateException e) {
-                        // State errors (e.g., from orElseThrow when issuer not resolved), includes CancellationException
-                        LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
-                    }
-                    // cui-rewrite:disable InvalidExceptionUsageRecipe
-                    // Intentional catch-all safety net: ScheduledExecutorService silently cancels the task
-                    // on ANY uncaught exception (including NPE, ClassCastException, etc.) with no recovery.
-                    // Without this, a single unexpected failure permanently kills JWKS background refresh,
-                    // causing keys to never rotate — a silent availability degradation.
-                    catch (Exception e) {
-                        LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
-                    }
-                },
+        refreshTask.set(config.getScheduledExecutorService().scheduleAtFixedRate(
+                this::performBackgroundRefresh,
                 config.getRefreshIntervalSeconds(),
                 config.getRefreshIntervalSeconds(),
                 TimeUnit.SECONDS));
 
         LOGGER.info(INFO.JWKS_BACKGROUND_REFRESH_STARTED, config.getRefreshIntervalSeconds());
+    }
+
+    /**
+     * Executes one background refresh cycle: re-validates SSRF egress against the resolved JWKS URI,
+     * fetches the JWKS, and rotates keys on success.
+     * <p>
+     * The egress re-check (C1 follow-up) is the crux: the cached {@link HttpAdapter} is reused across
+     * every scheduled refresh, so without re-resolving and re-checking the fetch URI here, a DNS answer
+     * that rebinds an initially-public host into an internal/loopback/metadata range after the first
+     * fetch would be silently trusted. Re-running {@link EgressPolicy#check(URI)} on each cycle resolves
+     * the host fresh and blocks the rebound target before any bytes are fetched.
+     * <p>
+     * Package-private so the per-refresh re-validation can be driven deterministically in tests without
+     * relying on the {@link java.util.concurrent.ScheduledExecutorService} timing.
+     */
+    void performBackgroundRefresh() {
+        try {
+            HttpAdapter<Jwks> adapter = httpAdapter.get();
+            if (adapter == null) {
+                LOGGER.warn(WARN.BACKGROUND_REFRESH_NO_HANDLER);
+                return;
+            }
+
+            // Re-validate egress on every refresh (C1 follow-up): reject a rebound host before fetching.
+            URI fetchUri = jwksFetchUri.get();
+            if (fetchUri != null) {
+                try {
+                    egressPolicy.check(fetchUri);
+                } catch (TransportException e) {
+                    LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+                    return;
+                }
+            }
+
+            // Blocking load in background thread
+            HttpResult<Jwks> result = adapter.getBlocking();
+
+            if (result.isSuccess()) {
+                result.getContent().ifPresent(this::updateKeys);
+            } else {
+                // Handle error (network, server, etc.)
+                String statusDesc = result.getErrorMessage()
+                        .orElseGet(() -> "HTTP status: " + result.getHttpStatus().map(String::valueOf).orElse("N/A"));
+                LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, statusDesc);
+            }
+        } catch (IllegalArgumentException e) {
+            // JSON parsing or validation errors
+            LOGGER.warn(WARN.BACKGROUND_REFRESH_PARSE_ERROR, e.getMessage(), getResolvedIssuer());
+        } catch (CompletionException e) {
+            // CompletableFuture.join() failures from getBlocking() (I/O, network errors)
+            LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+        } catch (IllegalStateException e) {
+            // State errors (e.g., from orElseThrow when issuer not resolved), includes CancellationException
+            LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+        }
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
+        // Intentional catch-all safety net: ScheduledExecutorService silently cancels the task
+        // on ANY uncaught exception (including NPE, ClassCastException, etc.) with no recovery.
+        // Without this, a single unexpected failure permanently kills JWKS background refresh,
+        // causing keys to never rotate — a silent availability degradation.
+        catch (Exception e) {
+            LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+        }
     }
 
     @Override
@@ -380,6 +445,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         currentKeys.set(null);
         retiredKeys.clear();
         httpAdapter.set(null);
+        jwksFetchUri.set(null);
         currentJwksContent.set(null);
         initFuture.set(null);
         status.set(LoaderStatus.UNDEFINED);

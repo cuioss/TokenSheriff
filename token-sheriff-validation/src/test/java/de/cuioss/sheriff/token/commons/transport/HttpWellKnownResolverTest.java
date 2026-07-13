@@ -18,6 +18,8 @@ package de.cuioss.sheriff.token.commons.transport;
 import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.test.dispatcher.WellKnownDispatcher;
+import de.cuioss.test.juli.LogAsserts;
+import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
@@ -290,5 +292,49 @@ class HttpWellKnownResolverTest {
         assertTrue(resolver.getJwksUri().isPresent(),
                 "A previously failed discovery must not be cached — it recovers once the endpoint is healthy");
         assertEquals(LoaderStatus.OK, resolver.getLoaderStatus(), "Status should recover to OK");
+    }
+
+    @Test
+    @DisplayName("Should reject a loopback discovery endpoint before any fetch when egress is not opted in (C1)")
+    void shouldRejectLoopbackDiscoveryBeforeFetch(URIBuilder uriBuilder) {
+        moduleDispatcher.returnDefault();
+        String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
+                .addPathSegment("openid-configuration").buildAsString();
+        // allowInsecureHttp(true) only permits the cleartext MockWebServer URL; allowLoopbackEgress
+        // is deliberately left at its secure default (false) so the egress guard rejects loopback.
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowInsecureHttp(true)
+                .wellKnownUrl(wellKnownUrl)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        resolver = config.createResolver(new SecurityEventCounter());
+
+        assertFalse(resolver.getJwksUri().isPresent(),
+                "Discovery must be blocked when its host resolves to a loopback address");
+        assertEquals(LoaderStatus.ERROR, resolver.getLoaderStatus(),
+                "A blocked discovery must surface as ERROR");
+        assertEquals(0, moduleDispatcher.getCallCounter(),
+                "The egress guard must reject the discovery endpoint BEFORE any fetch is issued");
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "SSRF egress guard blocked");
+    }
+
+    @Test
+    @DisplayName("Should fetch the discovery endpoint when loopback egress is explicitly opted in (C1)")
+    void shouldFetchLoopbackDiscoveryWhenOptedIn(URIBuilder uriBuilder) {
+        moduleDispatcher.returnDefault();
+        String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
+                .addPathSegment("openid-configuration").buildAsString();
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
+                .wellKnownUrl(wellKnownUrl)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        resolver = config.createResolver(new SecurityEventCounter());
+
+        assertTrue(resolver.getJwksUri().isPresent(),
+                "The explicit loopback opt-in must permit the discovery fetch");
+        assertEquals(1, moduleDispatcher.getCallCounter(),
+                "With the opt-in the discovery endpoint is fetched exactly once");
     }
 }
