@@ -132,7 +132,7 @@ class KeyInjectionAttackTest {
                 .build();
         dpopValidator = new DpopProofValidator(dpopIssuerConfig, new SecurityEventCounter(), replayProtection,
                 new SignatureTemplateManager(dpopIssuerConfig.getAlgorithmPreferences()),
-                new DslJson<>(new DslJson.Settings<>()));
+                ParserConfig.builder().build(), new DslJson<>(new DslJson.Settings<>()));
     }
 
     @AfterEach
