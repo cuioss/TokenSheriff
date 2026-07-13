@@ -21,6 +21,7 @@ import de.cuioss.http.client.converter.StringContentConverter;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.io.IOException;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
@@ -35,6 +36,10 @@ import java.util.Optional;
  * The converter is thread-safe and reusable across multiple HTTP requests.
  * It follows the CUI converter pattern by extending StringContentConverter
  * and provides proper empty value semantics for error cases.
+ * <p>
+ * A byte ceiling ({@link ParserConfig#getMaxPayloadSize()}) is enforced on the JWKS body while it
+ * streams (see {@link BoundedBodyHandlers}), so an oversized key set is rejected before it is fully
+ * buffered rather than being read unbounded into memory (H2).
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -44,6 +49,7 @@ public class JwksHttpContentConverter extends StringContentConverter<Jwks> {
     private static final CuiLogger LOGGER = new CuiLogger(JwksHttpContentConverter.class);
 
     private final DslJson<Object> dslJson;
+    private final int maxContentSize;
 
     /**
      * Creates a new JWKS content converter with specified parser configuration.
@@ -53,6 +59,14 @@ public class JwksHttpContentConverter extends StringContentConverter<Jwks> {
     public JwksHttpContentConverter(ParserConfig parserConfig) {
         super(StandardCharsets.UTF_8);
         this.dslJson = parserConfig.getDslJson();
+        this.maxContentSize = parserConfig.getMaxPayloadSize();
+    }
+
+    @Override
+    public HttpResponse.BodyHandler<?> getBodyHandler() {
+        // Bound the JWKS body during streaming so an oversized response fails closed before it is
+        // fully materialized. The size check in convertString(...) remains as defense in depth.
+        return BoundedBodyHandlers.ofBoundedString(StandardCharsets.UTF_8, maxContentSize);
     }
 
     @Override
@@ -62,8 +76,13 @@ public class JwksHttpContentConverter extends StringContentConverter<Jwks> {
             return Optional.empty();
         }
 
+        byte[] bodyBytes = rawContent.getBytes(StandardCharsets.UTF_8);
+        if (bodyBytes.length > maxContentSize) {
+            LOGGER.warn(TransportLogMessages.WARN.JWKS_JSON_PARSE_FAILED, "JWKS response size exceeds maximum allowed size");
+            return Optional.empty();
+        }
+
         try {
-            byte[] bodyBytes = rawContent.getBytes(StandardCharsets.UTF_8);
             Jwks jwks = dslJson.deserialize(Jwks.class, bodyBytes, bodyBytes.length);
 
             if (jwks == null) {
