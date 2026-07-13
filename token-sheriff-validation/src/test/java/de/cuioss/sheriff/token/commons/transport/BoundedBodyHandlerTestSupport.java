@@ -78,7 +78,15 @@ final class BoundedBodyHandlerTestSupport {
         }
     }
 
-    private static HttpResponse.ResponseInfo responseInfo(Long advertisedContentLength) {
+    /**
+     * Builds a minimal {@link HttpResponse.ResponseInfo} for a 200 response, optionally advertising
+     * {@code Content-Length}. Package-visible so other tests in this package (e.g. tests asserting a
+     * bounded body handler produces a subscriber for a successful response) can reuse it instead of
+     * duplicating the same anonymous implementation.
+     *
+     * @param advertisedContentLength the {@code Content-Length} to advertise, or {@code null} for none
+     */
+    static HttpResponse.ResponseInfo responseInfo(Long advertisedContentLength) {
         Map<String, List<String>> headerMap = advertisedContentLength == null
                 ? Map.of()
                 : Map.of("Content-Length", List.of(Long.toString(advertisedContentLength)));
