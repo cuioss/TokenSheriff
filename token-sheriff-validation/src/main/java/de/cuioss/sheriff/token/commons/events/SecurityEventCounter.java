@@ -70,6 +70,7 @@ public class SecurityEventCounter {
         FAILED_TO_DECODE_JWT(EventCategory.INVALID_STRUCTURE),
         INVALID_JWT_FORMAT(EventCategory.INVALID_STRUCTURE),
         DECODED_PART_SIZE_EXCEEDED(EventCategory.INVALID_STRUCTURE),
+        JSON_STRUCTURE_BOUNDS_EXCEEDED(EventCategory.INVALID_STRUCTURE),
 
         // Missing claims
         MISSING_CLAIM(EventCategory.SEMANTIC_ISSUES),
@@ -115,6 +116,7 @@ public class SecurityEventCounter {
 
         // JWKS issues
         JWKS_JSON_PARSE_FAILED(EventCategory.INVALID_SIGNATURE),
+        DUPLICATE_JWKS_KID(EventCategory.INVALID_STRUCTURE),
 
         // Design Decision: success events use a null category per CUI logging standards.
         // Only INVALID_* semantic failures need a category. Success events are metric

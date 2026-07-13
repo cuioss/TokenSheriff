@@ -248,6 +248,7 @@ public class TokenSignatureValidator {
     private void checkEcdsaComponentRange(byte[] signatureBytes, ECPublicKey publicKey) {
         if (signatureBytes.length == 0 || signatureBytes.length % 2 != 0) {
             rejectSignature("Malformed ECDSA signature: expected an even-length r||s encoding");
+            return; // defensive: do not proceed if rejectSignature is ever refactored to not throw
         }
         int componentLength = signatureBytes.length / 2;
         BigInteger r = new BigInteger(1, Arrays.copyOfRange(signatureBytes, 0, componentLength));
@@ -255,6 +256,7 @@ public class TokenSignatureValidator {
         ECParameterSpec params = publicKey.getParams();
         if (params == null) {
             rejectSignature("Invalid EC public key: missing domain parameters");
+            return; // defensive: do not dereference null domain parameters below
         }
         BigInteger n = params.getOrder();
         if (r.signum() <= 0 || s.signum() <= 0 || r.compareTo(n) >= 0 || s.compareTo(n) >= 0) {

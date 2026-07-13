@@ -35,7 +35,6 @@ import de.cuioss.tools.logging.CuiLogger;
 import de.cuioss.tools.logging.LogRecord;
 
 import java.io.IOException;
-import java.math.BigInteger;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -479,16 +478,11 @@ public class DpopProofValidator {
             );
 
             return switch (kty) {
-                case "RSA" -> {
-                    // Reject sub-2048-bit RSA keys on the DPoP embedded-JWK path (M1).
-                    Optional<BigInteger> modulus = jwkKey.getModulusAsBigInteger();
-                    if (modulus.isPresent() && modulus.get().bitLength() < JwkKeyHandler.MIN_RSA_KEY_SIZE_BITS) {
-                        rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
-                                "DPoP proof RSA key modulus is %d bits; minimum accepted is %d bits".formatted(
-                                        modulus.get().bitLength(), JwkKeyHandler.MIN_RSA_KEY_SIZE_BITS));
-                    }
-                    yield JwkKeyHandler.parseRsaKey(jwkKey);
-                }
+                // Sub-2048-bit RSA keys (M1) are rejected inside JwkKeyHandler.parseRsaKey, which throws
+                // InvalidKeySpecException ("RSA key modulus is %d bits; minimum accepted is %d bits"); the
+                // catch block below converts that into the same DPOP_PROOF_INVALID rejection, so no
+                // duplicate pre-check is needed here.
+                case "RSA" -> JwkKeyHandler.parseRsaKey(jwkKey);
                 case "EC" -> JwkKeyHandler.parseEcKey(jwkKey);
                 case "OKP" -> JwkKeyHandler.parseOkpKey(jwkKey);
                 default -> {

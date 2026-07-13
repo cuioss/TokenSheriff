@@ -424,9 +424,9 @@ class NonValidatingJwtParserTest {
             TokenValidationException exception = assertThrows(TokenValidationException.class,
                     () -> boundedParser.decode(tokenWithDeepHeader),
                     "A payload nested deeper than maxNestingDepth must be rejected");
-            assertEquals(EventType.DECODED_PART_SIZE_EXCEEDED, exception.getEventType(),
+            assertEquals(EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED, exception.getEventType(),
                     "Over-depth nesting must fail closed with a typed structural-bounds rejection");
-            assertEquals(1, counter.getCount(EventType.DECODED_PART_SIZE_EXCEEDED),
+            assertEquals(1, counter.getCount(EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED),
                     "Should count the structural-bounds rejection exactly once");
         }
 
@@ -448,9 +448,9 @@ class NonValidatingJwtParserTest {
             TokenValidationException exception = assertThrows(TokenValidationException.class,
                     () -> boundedParser.decode(tokenWithLargeArrayHeader),
                     "A payload with an array larger than maxArraySize must be rejected");
-            assertEquals(EventType.DECODED_PART_SIZE_EXCEEDED, exception.getEventType(),
+            assertEquals(EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED, exception.getEventType(),
                     "Over-size arrays must fail closed with a typed structural-bounds rejection");
-            assertEquals(1, counter.getCount(EventType.DECODED_PART_SIZE_EXCEEDED),
+            assertEquals(1, counter.getCount(EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED),
                     "Should count the structural-bounds rejection exactly once");
         }
 

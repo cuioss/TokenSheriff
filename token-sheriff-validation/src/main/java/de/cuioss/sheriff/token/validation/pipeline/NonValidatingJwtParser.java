@@ -599,9 +599,9 @@ public class NonValidatingJwtParser {
      */
     private void rejectStructuralBounds(String reason) {
         LOGGER.warn(JWTValidationLogMessages.WARN.JSON_STRUCTURE_BOUNDS_EXCEEDED, reason);
-        securityEventCounter.increment(SecurityEventCounter.EventType.DECODED_PART_SIZE_EXCEEDED);
+        securityEventCounter.increment(SecurityEventCounter.EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED);
         throw new TokenValidationException(
-                SecurityEventCounter.EventType.DECODED_PART_SIZE_EXCEEDED,
+                SecurityEventCounter.EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED,
                 "JSON structure bounds exceeded: " + reason
         );
     }

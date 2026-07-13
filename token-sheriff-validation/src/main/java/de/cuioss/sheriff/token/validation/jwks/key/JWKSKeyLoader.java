@@ -393,8 +393,12 @@ public class JWKSKeyLoader implements JwksLoader {
                 KeyInfo previous = keyMap.put(keyInfo.keyId(), keyInfo);
                 if (previous != null) {
                     // A duplicate kid means a later key silently shadowed an earlier one; warn so the
-                    // ambiguous JWKS is visible rather than resolving to whichever key parsed last.
+                    // ambiguous JWKS is visible rather than resolving to whichever key parsed last, and
+                    // count it so the ambiguity surfaces in the security-event metrics like other warnings.
                     LOGGER.warn(WARN.DUPLICATE_JWKS_KID, keyInfo.keyId());
+                    if (securityEventCounter != null) {
+                        securityEventCounter.increment(SecurityEventCounter.EventType.DUPLICATE_JWKS_KID);
+                    }
                 }
             });
         }
