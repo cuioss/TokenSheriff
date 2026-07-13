@@ -207,6 +207,30 @@ public class IssuerConfig implements LoadingStatusProvider {
     @Getter
     private final boolean accessTokenAudienceOptional;
 
+    /**
+     * Whether the azp→audience fallback is enabled for this issuer.
+     * <p>
+     * The fallback accepts a token that omits the audience ("aud") claim when its authorized-party
+     * ("azp") claim matches an expected audience — conflating client identity with audience. Default is
+     * {@code true} (fallback enabled) for backward compatibility. Set to {@code false} to require a genuine
+     * audience claim and never accept an azp match as a substitute.
+     * </p>
+     */
+    @Getter
+    private final boolean azpAudienceFallbackEnabled;
+
+    /**
+     * Whether the RFC 9068 {@code client_id}→{@code azp} fallback is enabled for this issuer.
+     * <p>
+     * The fallback accepts a token that omits the {@code azp} claim when its {@code client_id} claim
+     * matches an expected client ID. Default is {@code true} (fallback enabled) for backward compatibility.
+     * Set to {@code false} to require a genuine {@code azp} claim and never accept a {@code client_id} match
+     * as a substitute.
+     * </p>
+     */
+    @Getter
+    private final boolean clientIdFallbackEnabled;
+
     // Design Decision: expectedTokenType defaults to null (no token type validation).
     //
     // RFC 9068 Section 2.1 requires typ: at+jwt for JWT access tokens, and validating this
@@ -402,6 +426,8 @@ public class IssuerConfig implements LoadingStatusProvider {
         private @Nullable Set<String> expectedClientId;
         private boolean claimSubOptional = false;
         private boolean accessTokenAudienceOptional = false;
+        private boolean azpAudienceFallbackEnabled = true;
+        private boolean clientIdFallbackEnabled = true;
         private @Nullable String expectedTokenType;
         private @Nullable DpopConfig dpopConfig;
         private int clockSkewSeconds = DEFAULT_CLOCK_SKEW_SECONDS;
@@ -597,6 +623,38 @@ public class IssuerConfig implements LoadingStatusProvider {
          */
         public IssuerConfigBuilder accessTokenAudienceOptional(boolean accessTokenAudienceOptional) {
             this.accessTokenAudienceOptional = accessTokenAudienceOptional;
+            return this;
+        }
+
+        /**
+         * Sets whether the azp→audience fallback is enabled for this issuer.
+         * <p>
+         * When {@code false}, a token that omits the audience ("aud") claim is never accepted on the
+         * strength of a matching authorized-party ("azp") claim. Default is {@code true}.
+         * </p>
+         *
+         * @param azpAudienceFallbackEnabled {@code true} to allow azp to substitute for a missing audience,
+         *                                   {@code false} to require a genuine audience claim
+         * @return this builder instance for method chaining
+         */
+        public IssuerConfigBuilder azpAudienceFallbackEnabled(boolean azpAudienceFallbackEnabled) {
+            this.azpAudienceFallbackEnabled = azpAudienceFallbackEnabled;
+            return this;
+        }
+
+        /**
+         * Sets whether the RFC 9068 {@code client_id}→{@code azp} fallback is enabled for this issuer.
+         * <p>
+         * When {@code false}, a token that omits the {@code azp} claim is never accepted on the strength
+         * of a matching {@code client_id} claim. Default is {@code true}.
+         * </p>
+         *
+         * @param clientIdFallbackEnabled {@code true} to allow client_id to substitute for a missing azp,
+         *                                {@code false} to require a genuine azp claim
+         * @return this builder instance for method chaining
+         */
+        public IssuerConfigBuilder clientIdFallbackEnabled(boolean clientIdFallbackEnabled) {
+            this.clientIdFallbackEnabled = clientIdFallbackEnabled;
             return this;
         }
 
@@ -955,7 +1013,8 @@ public class IssuerConfig implements LoadingStatusProvider {
                     expectedAudience != null ? expectedAudience : Set.of(),
                     audienceValidationDisabled,
                     expectedClientId != null ? expectedClientId : Set.of(),
-                    claimSubOptional, accessTokenAudienceOptional, expectedTokenType,
+                    claimSubOptional, accessTokenAudienceOptional,
+                    azpAudienceFallbackEnabled, clientIdFallbackEnabled, expectedTokenType,
                     dpopConfig, clockSkewSeconds, maxTokenAgeSeconds, algorithmPreferences,
                     claimMappers != null ? claimMappers : Map.of(), jwksLoader);
         }
@@ -1002,7 +1061,8 @@ public class IssuerConfig implements LoadingStatusProvider {
     @SuppressWarnings("java:S107") // ok for private constructor
     private IssuerConfig(boolean enabled, @Nullable String issuerIdentifier, Set<String> expectedAudience,
             boolean audienceValidationDisabled, Set<String> expectedClientId,
-            boolean claimSubOptional, boolean accessTokenAudienceOptional, @Nullable String expectedTokenType,
+            boolean claimSubOptional, boolean accessTokenAudienceOptional,
+            boolean azpAudienceFallbackEnabled, boolean clientIdFallbackEnabled, @Nullable String expectedTokenType,
             @Nullable DpopConfig dpopConfig, int clockSkewSeconds, @Nullable Integer maxTokenAgeSeconds,
             SignatureAlgorithmPreferences algorithmPreferences,
             Map<String, ClaimMapper> claimMappers, @Nullable JwksLoader jwksLoader) {
@@ -1013,6 +1073,8 @@ public class IssuerConfig implements LoadingStatusProvider {
         this.expectedClientId = Set.copyOf(Objects.requireNonNull(expectedClientId, "expectedClientId must not be null (use Set.of() for empty)"));
         this.claimSubOptional = claimSubOptional;
         this.accessTokenAudienceOptional = accessTokenAudienceOptional;
+        this.azpAudienceFallbackEnabled = azpAudienceFallbackEnabled;
+        this.clientIdFallbackEnabled = clientIdFallbackEnabled;
         this.expectedTokenType = expectedTokenType;
         this.dpopConfig = dpopConfig;
         this.clockSkewSeconds = clockSkewSeconds;

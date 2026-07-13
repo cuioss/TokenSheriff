@@ -60,13 +60,13 @@ class AudienceValidatorTest {
     @BeforeEach
     void setup() {
         securityEventCounter = new SecurityEventCounter();
-        validator = new AudienceValidator(EXPECTED_AUDIENCES, securityEventCounter, false);
+        validator = new AudienceValidator(EXPECTED_AUDIENCES, securityEventCounter, false, true);
     }
 
     @Test
     @DisplayName("Should skip validation when no expected audience configured")
     void shouldSkipValidationWhenNoExpectedAudienceConfigured() {
-        AudienceValidator emptyValidator = new AudienceValidator(Set.of(), securityEventCounter, false);
+        AudienceValidator emptyValidator = new AudienceValidator(Set.of(), securityEventCounter, false, true);
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
@@ -186,7 +186,7 @@ class AudienceValidatorTest {
     @Test
     @DisplayName("Should pass for missing audience in access token when accessTokenAudienceOptional=true")
     void shouldPassForMissingAudienceInAccessTokenWhenOptional() {
-        AudienceValidator lenientValidator = new AudienceValidator(EXPECTED_AUDIENCES, securityEventCounter, true);
+        AudienceValidator lenientValidator = new AudienceValidator(EXPECTED_AUDIENCES, securityEventCounter, true, true);
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
         claims.remove(ClaimName.AUDIENCE.getName());
@@ -208,6 +208,22 @@ class AudienceValidatorTest {
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateAudience(token));
         assertEquals(SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING, exception.getEventType());
+    }
+
+    @Test
+    @DisplayName("Should reject azp fallback for missing audience when azpAudienceFallbackEnabled=false")
+    void shouldRejectAzpFallbackWhenFallbackDisabled() {
+        AudienceValidator strictValidator = new AudienceValidator(EXPECTED_AUDIENCES, securityEventCounter, false, false);
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
+        claims.remove(ClaimName.AUDIENCE.getName());
+        claims.put(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(EXPECTED_AUDIENCE_1));
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken());
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> strictValidator.validateAudience(token));
+        assertEquals(SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING, exception.getEventType());
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING));
     }
 
     @Test

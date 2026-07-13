@@ -59,13 +59,13 @@ class AuthorizedPartyValidatorTest {
     @BeforeEach
     void setup() {
         securityEventCounter = new SecurityEventCounter();
-        validator = new AuthorizedPartyValidator(EXPECTED_CLIENT_IDS, securityEventCounter);
+        validator = new AuthorizedPartyValidator(EXPECTED_CLIENT_IDS, securityEventCounter, true);
     }
 
     @Test
     @DisplayName("Should skip validation when no expected client ID configured")
     void shouldSkipValidationWhenNoExpectedClientIdConfigured() {
-        AuthorizedPartyValidator emptyValidator = new AuthorizedPartyValidator(Set.of(), securityEventCounter);
+        AuthorizedPartyValidator emptyValidator = new AuthorizedPartyValidator(Set.of(), securityEventCounter, true);
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
 
@@ -165,6 +165,36 @@ class AuthorizedPartyValidatorTest {
         assertTrue(errorMessage.contains(EXPECTED_CLIENT_ID_1));
         assertTrue(errorMessage.contains(EXPECTED_CLIENT_ID_2));
         assertTrue(errorMessage.contains("does not match any expected client ID"));
+    }
+
+    @Test
+    @DisplayName("Should accept client_id fallback when azp absent and fallback enabled")
+    void shouldAcceptClientIdFallbackWhenEnabled() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
+        claims.remove(ClaimName.AUTHORIZED_PARTY.getName());
+        claims.put(ClaimName.CLIENT_ID.getName(), ClaimValue.forPlainString(EXPECTED_CLIENT_ID_1));
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken());
+
+        assertDoesNotThrow(() -> validator.validateAuthorizedParty(token));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+    }
+
+    @Test
+    @DisplayName("Should reject client_id fallback when azp absent and clientIdFallbackEnabled=false")
+    void shouldRejectClientIdFallbackWhenDisabled() {
+        AuthorizedPartyValidator strictValidator = new AuthorizedPartyValidator(EXPECTED_CLIENT_IDS, securityEventCounter, false);
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
+        claims.remove(ClaimName.AUTHORIZED_PARTY.getName());
+        claims.put(ClaimName.CLIENT_ID.getName(), ClaimValue.forPlainString(EXPECTED_CLIENT_ID_1));
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken());
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> strictValidator.validateAuthorizedParty(token));
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
+        assertTrue(exception.getMessage().contains("Missing required authorized party claim (azp or client_id)"));
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
     }
 
     @Test

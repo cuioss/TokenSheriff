@@ -39,9 +39,13 @@ import java.util.Set;
  * <ul>
  *   <li>ID tokens require an audience claim</li>
  *   <li>Access tokens can have optional audience claims</li>
- *   <li>If audience is missing, azp claim can serve as fallback</li>
+ *   <li>If audience is missing, the azp claim can serve as fallback (unless the fallback is disabled)</li>
  *   <li>At least one token audience must match an expected audience</li>
  * </ul>
+ * <p>
+ * The azp→audience fallback conflates the authorized-party claim with the audience claim. It can be
+ * disabled per-issuer via {@code IssuerConfig#azpAudienceFallbackEnabled(false)}; when disabled a token
+ * that omits the audience claim is never accepted on the strength of a matching azp claim.
  *
  * @apiNote This class is internal to Token-Sheriff and not part of the public API.
  * @since 1.0
@@ -60,6 +64,12 @@ class AudienceValidator {
     private final SecurityEventCounter securityEventCounter;
 
     private final boolean accessTokenAudienceOptional;
+
+    /**
+     * Whether the azp→audience fallback is enabled. When {@code false}, a missing audience claim is
+     * never satisfied by a matching authorized-party (azp) claim.
+     */
+    private final boolean azpAudienceFallbackEnabled;
 
     /**
      * Validates the audience claim of the token.
@@ -84,7 +94,7 @@ class AudienceValidator {
     }
 
     private void handleMissingAudience(TokenContent token) {
-        if (isAzpClaimMatchingExpectedAudience(token)) {
+        if (azpAudienceFallbackEnabled && isAzpClaimMatchingExpectedAudience(token)) {
             return;
         }
 
