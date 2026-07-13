@@ -70,6 +70,20 @@ public class HttpJwksLoaderConfig {
     private static final int DEFAULT_MAX_RETIRED_KEY_SETS = 3;
 
     /**
+     * Default connect timeout in seconds (2) for the direct-JWKS transport, set explicitly to match
+     * the discovery transport defaults in {@link WellKnownConfig} rather than silently inheriting the
+     * laxer cui-http 10-second default. Keeping the JWKS and discovery timeouts consistent gives both
+     * IdP-advertised fetches the same tight DoS bound (M8).
+     */
+    private static final int DEFAULT_CONNECT_TIMEOUT_SECONDS = 2;
+
+    /**
+     * Default read timeout in seconds (3) for the direct-JWKS transport, set explicitly to match the
+     * discovery transport defaults in {@link WellKnownConfig}. See {@link #DEFAULT_CONNECT_TIMEOUT_SECONDS}.
+     */
+    private static final int DEFAULT_READ_TIMEOUT_SECONDS = 3;
+
+    /**
      * The interval in seconds at which to refresh the keys.
      * If set to 0, no time-based caching will be used.
      * It defaults to 10 minutes (600 seconds).
@@ -294,7 +308,7 @@ public class HttpJwksLoaderConfig {
         private Duration keyRotationGracePeriod = DEFAULT_KEY_ROTATION_GRACE_PERIOD;
         private int maxRetiredKeySets = DEFAULT_MAX_RETIRED_KEY_SETS;
         private ParserConfig parserConfig;
-        private boolean allowInsecureHttp = true;
+        private boolean allowInsecureHttp = false;
         private boolean allowLoopbackEgress = false;
 
         // Pending well-known values — WellKnownConfig creation is deferred to build()
@@ -308,20 +322,25 @@ public class HttpJwksLoaderConfig {
          * Constructor initializing the HttpHandlerBuilder.
          */
         public HttpJwksLoaderConfigBuilder() {
-            this.httpHandlerBuilder = HttpHandler.builder();
+            // Apply explicit, documented timeout defaults consistent with the discovery transport
+            // (WellKnownConfig) so the JWKS fetch does not silently inherit cui-http's laxer 10s/10s
+            // defaults (M8). A later connectTimeoutSeconds()/readTimeoutSeconds() call overrides these.
+            this.httpHandlerBuilder = HttpHandler.builder()
+                    .connectionTimeoutSeconds(DEFAULT_CONNECT_TIMEOUT_SECONDS)
+                    .readTimeoutSeconds(DEFAULT_READ_TIMEOUT_SECONDS);
         }
 
         /**
-         * Controls whether plaintext {@code http://} endpoints are permitted.
+         * Controls whether plaintext {@code http://} JWKS endpoints are permitted.
          * <p>
-         * Defaults to {@code true}, which preserves the "allow but warn" contract:
-         * cleartext endpoints are accepted but a {@code TokenSheriff-139}
-         * ({@code INSECURE_HTTP_JWKS}) warning is emitted. Set to {@code false} to
-         * enforce HTTPS and have {@link #build()} reject {@code http://} endpoints,
-         * which is recommended for production to protect against man-in-the-middle
-         * attacks on JWKS resolution.
+         * Defaults to {@code false} (secure by default): {@link #build()} rejects
+         * {@code http://} JWKS endpoints so key material cannot be substituted via a
+         * man-in-the-middle downgrade. Set to {@code true} to opt into cleartext HTTP —
+         * accepted but with a {@code TokenSheriff-139} ({@code INSECURE_HTTP_JWKS})
+         * warning — which should only be used for local development or trusted-network
+         * scenarios, never in production.
          *
-         * @param allowInsecureHttp {@code false} to require HTTPS, {@code true} (default) to allow cleartext HTTP
+         * @param allowInsecureHttp {@code true} to opt into cleartext HTTP, {@code false} (default) to require HTTPS
          * @return this builder instance
          */
         public HttpJwksLoaderConfigBuilder allowInsecureHttp(boolean allowInsecureHttp) {

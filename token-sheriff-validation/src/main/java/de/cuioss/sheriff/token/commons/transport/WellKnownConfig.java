@@ -116,7 +116,7 @@ public class WellKnownConfig {
         private final HttpHandler.HttpHandlerBuilder httpHandlerBuilder;
         private RetryConfig retryConfig = RetryConfig.defaults();
         private ParserConfig parserConfig;
-        private boolean allowInsecureHttp = true;
+        private boolean allowInsecureHttp = false;
         private boolean allowLoopbackEgress = false;
 
         /**
@@ -131,13 +131,14 @@ public class WellKnownConfig {
         /**
          * Controls whether plaintext {@code http://} discovery endpoints are permitted.
          * <p>
-         * Defaults to {@code true}, which preserves the "allow but warn" contract:
-         * cleartext endpoints are accepted but a {@code TokenSheriff-129}
-         * ({@code INSECURE_HTTP_WELLKNOWN}) warning is emitted. Set to {@code false} to
-         * enforce HTTPS and have {@link #build()} reject {@code http://} discovery
-         * endpoints, which is recommended for production.
+         * Defaults to {@code false} (secure by default): {@link #build()} rejects
+         * {@code http://} discovery endpoints so discovery metadata cannot be tampered
+         * with via a man-in-the-middle downgrade. Set to {@code true} to opt into
+         * cleartext HTTP — accepted but with a {@code TokenSheriff-129}
+         * ({@code INSECURE_HTTP_WELLKNOWN}) warning — which should only be used for local
+         * development or trusted-network scenarios, never in production.
          *
-         * @param allowInsecureHttp {@code false} to require HTTPS, {@code true} (default) to allow cleartext HTTP
+         * @param allowInsecureHttp {@code true} to opt into cleartext HTTP, {@code false} (default) to require HTTPS
          * @return this builder instance
          */
         public WellKnownConfigBuilder allowInsecureHttp(boolean allowInsecureHttp) {

@@ -36,14 +36,24 @@ class WellKnownConfigTest {
     private static final String INSECURE_WELL_KNOWN_URL = "http://example.com/.well-known/openid-configuration";
 
     @Test
-    @DisplayName("Should warn about insecure HTTP well-known discovery URL")
+    @DisplayName("Should reject insecure HTTP well-known URL by default (cleartext is opt-in)")
+    void shouldRejectInsecureHttpWellKnownUrlByDefault() {
+        var builder = WellKnownConfig.builder()
+                .wellKnownUrl(INSECURE_WELL_KNOWN_URL);
+        assertThrows(IllegalArgumentException.class, builder::build,
+                "http:// well-known URL must be rejected by default without an explicit opt-in");
+    }
+
+    @Test
+    @DisplayName("Should warn about insecure HTTP well-known discovery URL under explicit opt-in")
     void shouldWarnAboutInsecureHttpWellKnownUrl() {
         WellKnownConfig config = WellKnownConfig.builder()
+                .allowInsecureHttp(true)
                 .wellKnownUrl(INSECURE_WELL_KNOWN_URL)
                 .build();
 
         assertTrue(config.getHttpHandler().getUri().toString().startsWith("http://"),
-                "Insecure HTTP well-known URL is allowed by default");
+                "Insecure HTTP well-known URL is allowed when insecure HTTP is explicitly enabled");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                 TransportLogMessages.WARN.INSECURE_HTTP_WELLKNOWN.resolveIdentifierString());
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, INSECURE_WELL_KNOWN_URL);
