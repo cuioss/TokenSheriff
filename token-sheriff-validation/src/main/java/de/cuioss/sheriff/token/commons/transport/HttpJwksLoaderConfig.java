@@ -651,7 +651,7 @@ public class HttpJwksLoaderConfig {
          * @throws IllegalArgumentException if any parameter is invalid
          * @throws IllegalArgumentException if no endpoint was configured
          */
-        @SuppressWarnings("java:S3776") // ok for builder
+        @SuppressWarnings({"java:S3776", "java:S6541"}) // ok for builder — validation/defaulting inherent to a single build() entry point
         public HttpJwksLoaderConfig build() {
             // Ensure at least one endpoint configuration method was used
             if (endpointSource == null) {

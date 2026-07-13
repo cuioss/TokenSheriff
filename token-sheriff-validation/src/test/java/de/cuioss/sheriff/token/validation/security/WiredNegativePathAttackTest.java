@@ -159,6 +159,7 @@ class WiredNegativePathAttackTest {
     }
 
     @Test
+    @SuppressWarnings("java:S5778") // each lambda's non-assertion calls (dpopValidator()/dpopRequest()) are pure factories that never throw
     @DisplayName("VTEST-8: DPoP sender-binding violations are each rejected with their specific event")
     void shouldRejectDpopSenderBindingViolations() {
         KeyPair dpopKeyPair = generateRsaKeyPair();

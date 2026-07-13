@@ -84,6 +84,7 @@ public class JweAlgorithmPreferences {
      * @return the preferred key management algorithm for new deployments (OAEP with SHA-256
      * rather than the SHA-1 MGF1 variant)
      */
+    @SuppressWarnings("java:S3400") // intentional public accessor method; converting to a constant field would break API compatibility
     public static String getPreferredKeyManagementAlgorithm() {
         return "RSA-OAEP-256";
     }

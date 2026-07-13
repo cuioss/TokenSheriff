@@ -541,6 +541,8 @@ public class NonValidatingJwtParser {
      *
      * @param jsonBytes the decoded (UTF-8) JSON bytes of a single JWT part
      */
+    @SuppressWarnings({"java:S3776", "java:S6916"}) // single-pass state-tracking scan is a deliberate security-critical
+    // DoS bound check; splitting the switch cases or the method risks introducing a subtle parsing bug
     private void enforceStructuralBounds(byte[] jsonBytes) {
         final int maxDepth = config.getMaxNestingDepth();
         final int maxArraySize = config.getMaxArraySize();

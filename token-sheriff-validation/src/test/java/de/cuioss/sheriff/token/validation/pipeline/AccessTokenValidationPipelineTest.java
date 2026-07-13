@@ -51,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class AccessTokenValidationPipelineTest {
 
     @Test
+    @SuppressWarnings("java:S5778") // AccessTokenRequest.of(rawToken) is a pure factory call that never throws
     @DisplayName("Should re-run custom rules on a cache hit and reject a previously-cached token when a rule flips (M5)")
     void shouldReRunCustomRulesOnCacheHit() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();

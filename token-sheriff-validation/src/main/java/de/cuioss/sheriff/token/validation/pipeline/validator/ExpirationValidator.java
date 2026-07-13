@@ -197,6 +197,7 @@ public class ExpirationValidator {
         rejectBlankClaim(token, ClaimName.ISSUER);
     }
 
+    @SuppressWarnings("java:S125") // false positive: explanatory prose comment, not commented-out code
     private void rejectBlankClaim(TokenContent token, ClaimName claimName) {
         var claim = token.getClaimOption(claimName);
         // A custom SPI ClaimMapper may construct a ClaimValue with a null originalString;

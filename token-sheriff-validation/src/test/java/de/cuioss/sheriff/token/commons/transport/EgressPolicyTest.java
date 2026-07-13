@@ -68,6 +68,7 @@ class EgressPolicyTest {
                 "0.0.0.0"           // wildcard / any-local
         })
         @DisplayName("Should reject each internal/metadata address")
+        @SuppressWarnings("java:S5778") // URI.create(ATTACKER_URL) is a fixed constant that never throws
         void shouldRejectBlockedAddress(String blockedIp) {
             EgressPolicy policy = EgressPolicy.builder()
                     .resolver(fixedResolver(blockedIp))
@@ -110,6 +111,7 @@ class EgressPolicyTest {
 
         @Test
         @DisplayName("Should still block non-loopback internal ranges under loopback opt-in")
+        @SuppressWarnings("java:S5778") // URI.create(ATTACKER_URL) is a fixed constant that never throws
         void shouldStillBlockSiteLocalUnderLoopbackOptIn() {
             EgressPolicy policy = EgressPolicy.builder()
                     .allowLoopback(true)
@@ -159,6 +161,7 @@ class EgressPolicyTest {
 
         @Test
         @DisplayName("Should reject when any resolved address is internal")
+        @SuppressWarnings("java:S5778") // URI.create(ATTACKER_URL) is a fixed constant that never throws
         void shouldRejectWhenAnyResolvedAddressIsInternal() {
             EgressPolicy policy = EgressPolicy.builder()
                     .resolver(fixedResolver("93.184.216.34", "169.254.169.254"))
@@ -176,6 +179,7 @@ class EgressPolicyTest {
 
         @Test
         @DisplayName("Should reject a URI without a host")
+        @SuppressWarnings("java:S5778") // URI.create(...) is a fixed constant literal that never throws
         void shouldRejectUriWithoutHost() {
             EgressPolicy policy = EgressPolicy.secureDefault();
 
@@ -205,6 +209,7 @@ class EgressPolicyTest {
 
         @Test
         @DisplayName("Should reject loopback with the production default resolver")
+        @SuppressWarnings("java:S5778") // URI.create(...) is a fixed constant literal that never throws
         void secureDefaultRejectsLoopback() {
             EgressPolicy policy = EgressPolicy.secureDefault();
 
