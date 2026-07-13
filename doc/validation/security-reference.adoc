@@ -31,12 +31,13 @@ Supported algorithms (preference order: ECDSA > EdDSA > RSA-PSS > RSA PKCS#1 v1.
 === Claims Validation
 
 * **iss** (issuer) - validated by `IssuerConfigCache` during issuer resolution
-* **sub** (subject) - mandatory, validated by `TokenClaimValidator`
+* **sub** (subject) - mandatory by default (RFC 7519 §4.1.2), validated by `TokenClaimValidator`; may be made optional per issuer via `IssuerConfig.claimSubOptional(true)`
 * **exp** (expiration) - mandatory, with configurable clock skew
-* **iat** (issued at) - extracted into token content but not actively validated
+* **iat** (issued at) - validated against `maxTokenAgeSeconds` when configured on the issuer (a token is rejected when `now - iat > maxTokenAgeSeconds + clockSkewSeconds`); when `maxTokenAgeSeconds` is unset it is extracted into token content without an age check
 * **nbf** (not before) - validated if present
 * **aud** (audience) - validated when `expectedAudience` is configured
 * **azp** (authorized party) - validated when `expectedClientId` is configured
+* **jti** (JWT ID) - accessible via generic claim access on the token content; the library exposes no typed accessor for it
 
 [[secure-communication]]
 === Secure Communication
@@ -75,7 +76,7 @@ Algorithm upgrades without breaking changes via `SignatureAlgorithmPreferences`.
 |Attack |Description |Mitigation |Test Class
 |Client Confusion |Token from client A used at client B |`aud` + `azp` validation; mandatory when configured |`ClientConfusionAttackTest`
 |Scope Upgrade |Extra scopes in token exchange |Scope accessible via `AccessTokenContent` for application-level validation |—
-|Mutable Claims |Using `email` as identity |`sub` claim mandatory and validated |`TokenClaimValidatorTest`
+|Mutable Claims |Using `email` as identity |`sub` claim mandatory and validated by default (opt-out per issuer via `claimSubOptional`) |`TokenClaimValidatorTest`
 |CSRF / Redirect Attacks |OAuth flow attacks |Out of scope (authorization server responsibility) |—
 |===
 
