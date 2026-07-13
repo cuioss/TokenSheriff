@@ -69,10 +69,23 @@ public class JweAlgorithmPreferences {
     }
 
     /**
-     * @return default supported key management algorithms
+     * @return default supported key management algorithms, in preference order
+     * <p>
+     * {@code RSA-OAEP-256} (MGF1 with SHA-256) is listed first because it is preferred over
+     * {@code RSA-OAEP}, whose OAEP padding uses MGF1 with SHA-1. The SHA-1 variant is retained
+     * only for interoperability with issuers that have not yet adopted OAEP-256 (L7); new
+     * deployments should prefer {@code RSA-OAEP-256}.
      */
     public static List<String> getDefaultKeyManagementAlgorithms() {
-        return List.of("RSA-OAEP", "RSA-OAEP-256", "ECDH-ES");
+        return List.of("RSA-OAEP-256", "RSA-OAEP", "ECDH-ES");
+    }
+
+    /**
+     * @return the preferred key management algorithm for new deployments (OAEP with SHA-256
+     * rather than the SHA-1 MGF1 variant)
+     */
+    public static String getPreferredKeyManagementAlgorithm() {
+        return "RSA-OAEP-256";
     }
 
     /**

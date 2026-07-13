@@ -357,6 +357,56 @@ class JweDecryptorTest {
         }
 
         @Test
+        @DisplayName("L6: should reject an off-curve ephemeral point independent of the provider")
+        void shouldRejectOffCurveEphemeralPoint() {
+            String curve = "secp256r1";
+            KeyPair recipientKeyPair = JweTestTokenFactory.generateEcKeyPair(curve);
+            KeyPair ephemeralKeyPair = JweTestTokenFactory.generateEcKeyPair(curve);
+
+            String jwe = JweTestTokenFactory.createEcdhEsJweWrappedAccessToken(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                    ephemeralKeyPair,
+                    (ECPublicKey) recipientKeyPair.getPublic(),
+                    "A128GCM", "https://test-issuer.example.com");
+
+            String[] parts = jwe.split("\\.");
+            // Move the embedded ephemeral point off the curve by mutating the first character of its
+            // x coordinate. Curve parameters still match the recipient key, so only the independent
+            // on-curve check can catch this — exactly the provider-independent guard under test.
+            String headerJson = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
+            int keyIdx = headerJson.indexOf("\"x\"");
+            assertTrue(keyIdx >= 0, "The ECDH-ES header must embed an epk x coordinate");
+            int valueStart = headerJson.indexOf('"', headerJson.indexOf(':', keyIdx) + 1) + 1;
+            char original = headerJson.charAt(valueStart);
+            char replacement = original == 'A' ? 'B' : 'A';
+            String tamperedJson = headerJson.substring(0, valueStart) + replacement
+                    + headerJson.substring(valueStart + 1);
+            parts[0] = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(tamperedJson.getBytes(StandardCharsets.UTF_8));
+
+            JwtHeader header = parseHeader(parts[0]);
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(recipientKeyPair.getPrivate())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+            assertTrue(ex.getMessage().contains("Ephemeral EC point"),
+                    "An off-curve ephemeral point must be rejected by the independent on-curve check, but was: "
+                            + ex.getMessage());
+        }
+
+        @Test
+        @DisplayName("L7: RSA-OAEP-256 is preferred over the SHA-1 MGF1 RSA-OAEP variant")
+        void shouldPreferOaep256OverSha1Mgf1() {
+            assertEquals("RSA-OAEP-256", JweAlgorithmPreferences.getPreferredKeyManagementAlgorithm());
+            assertEquals("RSA-OAEP-256", JweAlgorithmPreferences.getDefaultKeyManagementAlgorithms().get(0),
+                    "OAEP-256 must be listed ahead of the SHA-1 MGF1 RSA-OAEP variant");
+            assertTrue(JweAlgorithmPreferences.getDefaultKeyManagementAlgorithms().contains("RSA-OAEP"),
+                    "RSA-OAEP is retained for interoperability");
+        }
+
+        @Test
         @DisplayName("Should fail ECDH-ES without epk in header")
         void shouldFailEcdhEsWithoutEpk() {
             JweDecryptionConfig config = JweDecryptionConfig.builder()

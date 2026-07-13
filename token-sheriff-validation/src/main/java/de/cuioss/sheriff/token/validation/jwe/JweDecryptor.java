@@ -30,13 +30,17 @@ import javax.crypto.Mac;
 import javax.crypto.spec.*;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
+import java.security.spec.ECFieldFp;
 import java.security.spec.ECParameterSpec;
+import java.security.spec.ECPoint;
+import java.security.spec.EllipticCurve;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.MGF1ParameterSpec;
 import java.util.Arrays;
@@ -222,6 +226,12 @@ public class JweDecryptor {
                     "Ephemeral key curve does not match private key curve");
         }
 
+        // Independently verify the ephemeral point lies on the curve BEFORE key agreement.
+        // Matching curve parameters alone does not prove the supplied point is valid; an
+        // off-curve point enables the Invalid Curve Attack. We do not rely on the JCE provider
+        // to perform this check (L6).
+        validatePointOnCurve(ephemeralKey.getW(), privateParams);
+
         // Perform ECDH key agreement
         KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH");
         keyAgreement.init(ecPrivateKey);
@@ -237,6 +247,49 @@ public class JweDecryptor {
             return ConcatKdf.derive(sharedSecret, keyLengthBits, enc, apu, apv);
         } finally {
             Arrays.fill(sharedSecret, (byte) 0);
+        }
+    }
+
+    /**
+     * Independently verifies that an EC point satisfies the curve equation
+     * {@code y^2 == x^3 + a*x + b (mod p)} over the prime field of the given parameters,
+     * rejecting the point at infinity and coordinates outside {@code [0, p)}.
+     * <p>
+     * This is a provider-independent Invalid Curve Attack guard: it does not trust the JCE
+     * provider to reject an off-curve ephemeral point before ECDH key agreement.
+     *
+     * @param point  the ephemeral public point to validate
+     * @param params the EC domain parameters (curve and prime field)
+     */
+    private static void validatePointOnCurve(ECPoint point, ECParameterSpec params) {
+        if (ECPoint.POINT_INFINITY.equals(point)) {
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                    "Ephemeral EC point is the point at infinity");
+        }
+        EllipticCurve curve = params.getCurve();
+        if (!(curve.getField() instanceof ECFieldFp fieldFp)) {
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                    "Ephemeral EC point uses an unsupported (non-prime) field");
+        }
+        BigInteger p = fieldFp.getP();
+        BigInteger x = point.getAffineX();
+        BigInteger y = point.getAffineY();
+        if (x.signum() < 0 || x.compareTo(p) >= 0 || y.signum() < 0 || y.compareTo(p) >= 0) {
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                    "Ephemeral EC point coordinates are outside the field range [0, p)");
+        }
+        BigInteger lhs = y.multiply(y).mod(p);
+        BigInteger rhs = x.multiply(x).multiply(x)
+                .add(curve.getA().multiply(x))
+                .add(curve.getB())
+                .mod(p);
+        if (!lhs.equals(rhs)) {
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                    "Ephemeral EC point does not lie on the expected curve");
         }
     }
 
