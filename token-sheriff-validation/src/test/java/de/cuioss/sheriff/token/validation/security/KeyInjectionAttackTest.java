@@ -320,6 +320,9 @@ class KeyInjectionAttackTest {
                 "A DPoP proof with a sub-2048-bit embedded RSA key must be rejected");
         assertEquals(SecurityEventCounter.EventType.DPOP_PROOF_INVALID, exception.getEventType(),
                 "A weak embedded RSA key must be rejected as an invalid DPoP proof");
+        assertTrue(exception.getMessage().contains("minimum accepted is 2048"),
+                "The rejection must be driven by the embedded key's sub-2048-bit size, but was: "
+                        + exception.getMessage());
     }
 
     private static RSAPublicKey generateRsaPublicKey(int bits) throws Exception {
