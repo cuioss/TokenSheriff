@@ -29,7 +29,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -316,6 +323,57 @@ class HttpWellKnownResolverTest {
         assertEquals(0, moduleDispatcher.getCallCounter(),
                 "The egress guard must reject the discovery endpoint BEFORE any fetch is issued");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "SSRF egress guard blocked");
+    }
+
+    @Test
+    @DisplayName("Should perform exactly one HTTP load under concurrent first-access callers (single-flight)")
+    void shouldLoadOnceUnderConcurrentAccess(URIBuilder uriBuilder) throws InterruptedException {
+        moduleDispatcher.returnDefault();
+        String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
+                .addPathSegment("openid-configuration").buildAsString();
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowLoopbackEgress(true)
+                .allowInsecureHttp(true)
+                .wellKnownUrl(wellKnownUrl)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        resolver = config.createResolver(new SecurityEventCounter());
+
+        int threadCount = 16;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch ready = new CountDownLatch(threadCount);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger present = new AtomicInteger();
+        try {
+            List<Future<?>> futures = new java.util.ArrayList<>();
+            for (int i = 0; i < threadCount; i++) {
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    try {
+                        // Release all threads simultaneously to maximise the race on first access.
+                        start.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    if (resolver.getJwksUri().isPresent()) {
+                        present.incrementAndGet();
+                    }
+                }));
+            }
+            assertTrue(ready.await(5, TimeUnit.SECONDS), "All worker threads should reach the barrier");
+            start.countDown();
+            for (Future<?> future : futures) {
+                assertDoesNotThrow(() -> future.get(10, TimeUnit.SECONDS));
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertEquals(threadCount, present.get(), "Every concurrent caller must observe the discovered JWKS URI");
+        assertEquals(1, moduleDispatcher.getCallCounter(),
+                "Concurrent first-access callers must trigger exactly one HTTP load — the single-flight gate must hold");
+        assertEquals(LoaderStatus.OK, resolver.getLoaderStatus(), "Status must settle to OK after the single load");
     }
 
     @Test
