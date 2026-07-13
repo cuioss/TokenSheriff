@@ -504,6 +504,18 @@ public final class JWTValidationLogMessages {
                 .template("azp claim missing, using client_id claim '%s' for authorized party validation (RFC 9068)")
                 .build();
 
+        public static final LogRecord DUPLICATE_JWKS_KID = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(168)
+                .template("Duplicate kid '%s' in JWKS: a later key overwrote an earlier one — the JWKS should carry a unique kid per key")
+                .build();
+
+        public static final LogRecord JWKS_REFRESH_RETURNED_NO_KEYS = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(169)
+                .template("JWKS refresh for issuer '%s' produced no usable keys — retaining the current key set instead of retiring it")
+                .build();
+
     }
 
 }

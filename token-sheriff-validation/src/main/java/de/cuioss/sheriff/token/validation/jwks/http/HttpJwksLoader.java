@@ -283,14 +283,22 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             return; // Content unchanged, no need to update
         }
 
-        // Content has changed, update the reference
-        currentJwksContent.set(newJwks);
-
         JWKSKeyLoader newLoader = JWKSKeyLoader.builder()
                 .jwksContent(newJwks)
                 .jwksType(config.getJwksType())
                 .build();
         newLoader.initJWKSLoader(securityEventCounter);
+
+        // Never retire a good key set for an empty/ERROR refresh (L9). If the freshly-loaded key
+        // set produced no usable keys, keep the current keys and leave the content reference
+        // unchanged so the next scheduled refresh retries against the same content.
+        if (newLoader.getLoaderStatus() != LoaderStatus.OK) {
+            LOGGER.warn(WARN.JWKS_REFRESH_RETURNED_NO_KEYS, getResolvedIssuer());
+            return;
+        }
+
+        // Content has changed and the new key set is usable — commit the reference.
+        currentJwksContent.set(newJwks);
 
         // Use a single timestamp to avoid timing issues (Issue #110)
         Instant now = Instant.now();

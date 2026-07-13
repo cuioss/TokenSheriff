@@ -267,6 +267,41 @@ class HttpJwksLoaderKeyRotationTest {
     }
 
     @Test
+    @DisplayName("L9: a good key set survives an empty/ERROR refresh (not retired)")
+    void shouldRetainGoodKeysWhenRefreshReturnsEmpty(URIBuilder uriBuilder) {
+        String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
+
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
+                .jwksUrl(jwksEndpoint)
+                .issuerIdentifier("test-issuer")
+                .keyRotationGracePeriod(Duration.ofMinutes(5))
+                .refreshIntervalSeconds(1) // Enable background refresh for testing
+                .build();
+
+        HttpJwksLoader loader = new HttpJwksLoader(config);
+        loader.initJWKSLoader(securityEventCounter).join();
+
+        // Good initial load — the original key is present.
+        moduleDispatcher.returnDefault();
+        assertTrue(loader.getKeyInfo(ORIGINAL_KEY_ID).isPresent(), "Original key should be found initially");
+
+        // The endpoint now returns an empty JWKS on every subsequent refresh.
+        int callsBefore = moduleDispatcher.getCallCounter();
+        moduleDispatcher.returnEmptyJwks();
+
+        // Wait until at least one background refresh has actually fetched the empty JWKS.
+        await("At least one refresh against the empty endpoint")
+                .atMost(10, SECONDS)
+                .until(() -> moduleDispatcher.getCallCounter() > callsBefore);
+
+        // The empty refresh must NOT have retired the previously-good key set.
+        assertTrue(loader.getKeyInfo(ORIGINAL_KEY_ID).isPresent(),
+                "A good key set must survive an empty/ERROR refresh and remain accessible");
+
+        loader.close();
+    }
+
+    @Test
     @DisplayName("Should prioritize current keys over retired keys")
     void shouldPrioritizeCurrentKeysOverRetiredKeys(URIBuilder uriBuilder) {
         // This test would verify that if a key ID exists in both current and retired keys,
