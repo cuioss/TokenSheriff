@@ -27,6 +27,8 @@ import lombok.ToString;
 import javax.net.ssl.SSLContext;
 import java.net.URI;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -310,6 +312,7 @@ public class HttpJwksLoaderConfig {
         private ParserConfig parserConfig;
         private boolean allowInsecureHttp = false;
         private boolean allowLoopbackEgress = false;
+        private final List<String> allowedEgressHosts = new ArrayList<>();
 
         // Pending well-known values — WellKnownConfig creation is deferred to build()
         private String pendingWellKnownUrl;
@@ -363,6 +366,28 @@ public class HttpJwksLoaderConfig {
          */
         public HttpJwksLoaderConfigBuilder allowLoopbackEgress(boolean allowLoopbackEgress) {
             this.allowLoopbackEgress = allowLoopbackEgress;
+            return this;
+        }
+
+        /**
+         * Adds a host to the SSRF egress guard's explicit allow-list for both the advertised
+         * {@code jwks_uri} fetch and, in well-known mode, the discovery fetch.
+         * <p>
+         * Allow-listed hosts bypass the address-range checks entirely, so a JWKS or discovery
+         * endpoint whose host resolves to a site-local, link-local, or ULA address (for example
+         * a Docker service name such as {@code keycloak} on a container bridge network) can be
+         * reached despite the secure-by-default {@link EgressPolicy}. Matching is case-insensitive.
+         * This is an explicit, discoverable knob intended for integration tests and trusted
+         * local/dev topologies; it must be scoped narrowly and never used to allow-list
+         * attacker-influenceable hosts in production.
+         *
+         * @param host the host name to allow-list; ignored when {@code null} or blank
+         * @return this builder instance
+         */
+        public HttpJwksLoaderConfigBuilder allowedEgressHost(String host) {
+            if (host != null && !host.isBlank()) {
+                allowedEgressHosts.add(host);
+            }
             return this;
         }
 
@@ -652,6 +677,9 @@ public class HttpJwksLoaderConfig {
                         .parserConfig(resolvedParserConfig)
                         .allowInsecureHttp(allowInsecureHttp)
                         .allowLoopbackEgress(allowLoopbackEgress);
+                for (String allowedHost : allowedEgressHosts) {
+                    wkBuilder.allowedEgressHost(allowedHost);
+                }
                 if (pendingWellKnownUrl != null) {
                     wkBuilder.wellKnownUrl(pendingWellKnownUrl);
                 } else {
@@ -695,9 +723,12 @@ public class HttpJwksLoaderConfig {
 
             // For well-known, issuer will be discovered dynamically during resolution (optional in config)
 
-            EgressPolicy resolvedEgressPolicy = EgressPolicy.builder()
-                    .allowLoopback(allowLoopbackEgress)
-                    .build();
+            EgressPolicy.EgressPolicyBuilder egressPolicyBuilder = EgressPolicy.builder()
+                    .allowLoopback(allowLoopbackEgress);
+            for (String allowedHost : allowedEgressHosts) {
+                egressPolicyBuilder.allowedHost(allowedHost);
+            }
+            EgressPolicy resolvedEgressPolicy = egressPolicyBuilder.build();
 
             return new HttpJwksLoaderConfig(
                     refreshIntervalSeconds,

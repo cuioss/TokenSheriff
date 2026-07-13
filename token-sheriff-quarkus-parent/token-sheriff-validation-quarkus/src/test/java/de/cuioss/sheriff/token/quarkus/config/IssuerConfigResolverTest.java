@@ -667,6 +667,110 @@ class IssuerConfigResolverTest {
     }
 
     @Nested
+    @DisplayName("Secure Transport Opt-Ins (H1/C1)")
+    @EnableTestLogger(debug = IssuerConfigResolver.class)
+    class SecureTransportOptIns {
+
+        @Test
+        @DisplayName("should reject cleartext http JWKS URL by default (H1 secure default)")
+        void shouldRejectInsecureHttpByDefault() {
+            TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "http://localhost:8080/realms/test",
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "http://localhost:8080/jwks",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
+            ));
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config, RetryConfig.defaults(), null, null);
+
+            assertThrows(IllegalArgumentException.class, resolver::resolveIssuerConfigs,
+                    "Cleartext http JWKS URL must be rejected when allow-insecure-http is unset (default false)");
+        }
+
+        @Test
+        @DisplayName("should accept cleartext http JWKS URL when allow-insecure-http=true")
+        void shouldAllowInsecureHttpWhenOptedIn() {
+            TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "http://localhost:8080/realms/test",
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER), "http://localhost:8080/jwks",
+                    JwtPropertyKeys.ISSUERS.ALLOW_INSECURE_HTTP.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ALLOW_LOOPBACK_EGRESS.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
+            ));
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config, RetryConfig.defaults(), null, null);
+
+            List<IssuerConfig> result = resolver.resolveIssuerConfigs();
+
+            assertEquals(1, result.size(), "Should resolve one issuer");
+            assertNotNull(result.getFirst().getJwksLoader(),
+                    "Should have JWKS loader when cleartext http is opted in");
+            assertLogMessagePresentContaining(TestLogLevel.DEBUG,
+                    "Enabled cleartext HTTP for " + TEST_ISSUER);
+            assertLogMessagePresentContaining(TestLogLevel.DEBUG,
+                    "Enabled loopback egress for " + TEST_ISSUER);
+        }
+
+        @Test
+        @DisplayName("should reject cleartext http well-known URL by default (H1 secure default)")
+        void shouldRejectInsecureWellKnownByDefault() {
+            TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "http://localhost:8080/realms/test",
+                    JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted(TEST_ISSUER),
+                    "http://localhost:8080/realms/test/.well-known/openid-configuration",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
+            ));
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config, RetryConfig.defaults(), null, null);
+
+            assertThrows(IllegalArgumentException.class, resolver::resolveIssuerConfigs,
+                    "Cleartext http well-known URL must be rejected when allow-insecure-http is unset (default false)");
+        }
+
+        @Test
+        @DisplayName("should accept cleartext http well-known URL when opted in")
+        void shouldAllowInsecureWellKnownWhenOptedIn() {
+            TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "http://localhost:8080/realms/test",
+                    JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted(TEST_ISSUER),
+                    "http://localhost:8080/realms/test/.well-known/openid-configuration",
+                    JwtPropertyKeys.ISSUERS.ALLOW_INSECURE_HTTP.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ALLOW_LOOPBACK_EGRESS.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
+            ));
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config, RetryConfig.defaults(), null, null);
+
+            List<IssuerConfig> result = resolver.resolveIssuerConfigs();
+
+            assertEquals(1, result.size(), "Should resolve one issuer");
+            assertNotNull(result.getFirst().getJwksLoader(),
+                    "Should have JWKS loader when cleartext http well-known is opted in");
+        }
+
+        @Test
+        @DisplayName("should thread allowed-egress-hosts allow-list into the JWKS config")
+        void shouldConfigureAllowedEgressHosts() {
+            TestConfig config = new TestConfig(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://keycloak:8443/realms/test",
+                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(TEST_ISSUER),
+                    "https://keycloak:8443/realms/test/protocol/openid-connect/certs",
+                    JwtPropertyKeys.ISSUERS.ALLOWED_EGRESS_HOSTS.formatted(TEST_ISSUER), "keycloak, dex",
+                    JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(TEST_ISSUER), "true"
+            ));
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config, RetryConfig.defaults(), null, null);
+
+            List<IssuerConfig> result = resolver.resolveIssuerConfigs();
+
+            assertEquals(1, result.size(), "Should resolve one issuer");
+            assertNotNull(result.getFirst().getJwksLoader(),
+                    "Should have JWKS loader when egress hosts are allow-listed");
+            assertLogMessagePresentContaining(TestLogLevel.DEBUG,
+                    "Allow-listed egress hosts for " + TEST_ISSUER);
+        }
+    }
+
+    @Nested
     @DisplayName("Logging Validation")
     @EnableTestLogger(debug = IssuerConfigResolver.class)
     class LoggingValidation {

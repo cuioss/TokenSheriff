@@ -486,6 +486,78 @@ public final class JwtPropertyKeys {
          */
         public static final String MAX_RETIRED_KEY_SETS = HTTP_BASE + "max-retired-key-sets";
 
+        /**
+         * Whether cleartext {@code http://} JWKS and well-known discovery URLs are permitted for this issuer.
+         * Template: "sheriff.token.issuers.%s.jwks.http.allow-insecure-http"
+         * <p>
+         * By default, the transport layer requires {@code https://} for JWKS and well-known discovery
+         * fetches and rejects cleartext {@code http://} URLs. Setting this to {@code true} opts into
+         * cleartext transport, which is only appropriate for local development and integration tests
+         * (for example, a Keycloak reached over {@code http://localhost}).
+         * </p>
+         * <p>
+         * <strong>Security warning:</strong> Never enable this in production. Cleartext transport exposes
+         * JWKS material and discovery documents to interception and tampering.
+         * </p>
+         * <p>
+         * Default value is {@code false} (HTTPS required). Applies to both {@link #JWKS_URL} and
+         * {@link #WELL_KNOWN_URL}.
+         * </p>
+         *
+         * @see de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder#allowInsecureHttp(boolean)
+         */
+        public static final String ALLOW_INSECURE_HTTP = HTTP_BASE + "allow-insecure-http";
+
+        /**
+         * Whether egress to loopback/link-local/site-local/ULA/metadata addresses is permitted for this issuer.
+         * Template: "sheriff.token.issuers.%s.jwks.http.allow-loopback-egress"
+         * <p>
+         * By default, the transport layer's egress guard rejects JWKS and well-known discovery fetches
+         * whose host resolves to a loopback, link-local, site-local, unique-local, or cloud-metadata
+         * address, mitigating SSRF. Setting this to {@code true} opts into loopback egress, which is
+         * only appropriate for local development and integration tests (for example, a Keycloak reached
+         * over {@code http://localhost}).
+         * </p>
+         * <p>
+         * <strong>Security warning:</strong> Never enable this in production. It weakens the SSRF egress
+         * guard on both the advertised JWKS URI and the well-known discovery fetch.
+         * </p>
+         * <p>
+         * Default value is {@code false} (loopback egress rejected). Applies to both {@link #JWKS_URL} and
+         * {@link #WELL_KNOWN_URL}.
+         * </p>
+         *
+         * @see de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder#allowLoopbackEgress(boolean)
+         */
+        public static final String ALLOW_LOOPBACK_EGRESS = HTTP_BASE + "allow-loopback-egress";
+
+        /**
+         * Comma-separated list of hosts to add to the SSRF egress guard's explicit allow-list for this issuer.
+         * Template: "sheriff.token.issuers.%s.jwks.http.allowed-egress-hosts"
+         * <p>
+         * Allow-listed hosts bypass the egress guard's address-range checks entirely, so a JWKS or
+         * well-known discovery endpoint whose host resolves to a site-local, link-local, or ULA address
+         * (for example a Docker service name such as {@code keycloak} on a container bridge network) can
+         * be reached despite the secure-by-default egress policy. Matching is case-insensitive.
+         * </p>
+         * <p>
+         * Unlike {@link #ALLOW_LOOPBACK_EGRESS} — which only permits {@code 127.0.0.0/8} / {@code ::1}
+         * loopback resolutions — this allow-list is the mechanism for reaching Docker-internal service
+         * names whose bridge-network addresses fall in the private (site-local) ranges.
+         * </p>
+         * <p>
+         * <strong>Security warning:</strong> Never allow-list attacker-influenceable hosts in production.
+         * Scope this narrowly to trusted local/dev and integration-test topologies.
+         * </p>
+         * <p>
+         * Default value is empty (no host allow-listed). Applies to both {@link #JWKS_URL} and
+         * {@link #WELL_KNOWN_URL}.
+         * </p>
+         *
+         * @see de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder#allowedEgressHost(String)
+         */
+        public static final String ALLOWED_EGRESS_HOSTS = HTTP_BASE + "allowed-egress-hosts";
+
     }
 
     /**

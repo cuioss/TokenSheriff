@@ -26,6 +26,8 @@ import lombok.ToString;
 
 import javax.net.ssl.SSLContext;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Configuration for well-known endpoint discovery.
@@ -118,6 +120,7 @@ public class WellKnownConfig {
         private ParserConfig parserConfig;
         private boolean allowInsecureHttp = false;
         private boolean allowLoopbackEgress = false;
+        private final List<String> allowedEgressHosts = new ArrayList<>();
 
         /**
          * Constructor initializing the HttpHandlerBuilder with sensible defaults.
@@ -163,6 +166,27 @@ public class WellKnownConfig {
          */
         public WellKnownConfigBuilder allowLoopbackEgress(boolean allowLoopbackEgress) {
             this.allowLoopbackEgress = allowLoopbackEgress;
+            return this;
+        }
+
+        /**
+         * Adds a host to the SSRF egress guard's explicit allow-list for the discovery fetch.
+         * <p>
+         * Allow-listed hosts bypass the address-range checks entirely, so a discovery endpoint
+         * whose host resolves to a site-local, link-local, or ULA address (for example a Docker
+         * service name such as {@code keycloak} on a container bridge network) can be reached
+         * despite the secure-by-default {@link EgressPolicy}. Matching is case-insensitive.
+         * This is an explicit, discoverable knob intended for integration tests and trusted
+         * local/dev topologies; it must be scoped narrowly and never used to allow-list
+         * attacker-influenceable hosts in production.
+         *
+         * @param host the discovery host name to allow-list; ignored when {@code null} or blank
+         * @return this builder instance
+         */
+        public WellKnownConfigBuilder allowedEgressHost(String host) {
+            if (host != null && !host.isBlank()) {
+                allowedEgressHosts.add(host);
+            }
             return this;
         }
 
@@ -277,9 +301,12 @@ public class WellKnownConfig {
                 }
 
                 ParserConfig finalParserConfig = parserConfig != null ? parserConfig : ParserConfig.builder().build();
-                EgressPolicy egressPolicy = EgressPolicy.builder()
-                        .allowLoopback(allowLoopbackEgress)
-                        .build();
+                EgressPolicy.EgressPolicyBuilder egressPolicyBuilder = EgressPolicy.builder()
+                        .allowLoopback(allowLoopbackEgress);
+                for (String allowedHost : allowedEgressHosts) {
+                    egressPolicyBuilder.allowedHost(allowedHost);
+                }
+                EgressPolicy egressPolicy = egressPolicyBuilder.build();
                 return new WellKnownConfig(httpHandler, retryConfig, finalParserConfig, egressPolicy);
             } catch (IllegalArgumentException | IllegalStateException e) {
                 throw new IllegalArgumentException("Invalid well-known endpoint configuration", e);

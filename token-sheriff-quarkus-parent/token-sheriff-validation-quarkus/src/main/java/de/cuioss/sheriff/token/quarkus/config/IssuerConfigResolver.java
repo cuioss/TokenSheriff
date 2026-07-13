@@ -503,6 +503,41 @@ public class IssuerConfigResolver {
             builder.wellKnownUrl(wellKnownUrl);
         }
 
+        // Secure-by-default transport opt-ins (default false when unset).
+        // The builder threads both flags into the internal WellKnownConfig (discovery fetch)
+        // AND the JWKS HttpHandler / EgressPolicy (advertised jwks_uri), so a single opt-in
+        // covers both the well-known discovery fetch and the JWKS URI.
+        boolean allowInsecureHttp = config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.ALLOW_INSECURE_HTTP.formatted(issuerName),
+                Boolean.class
+        ).orElse(false);
+        if (allowInsecureHttp) {
+            builder.allowInsecureHttp(true);
+            LOGGER.debug("Enabled cleartext HTTP for %s (allow-insecure-http=true)", issuerName);
+        }
+
+        boolean allowLoopbackEgress = config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.ALLOW_LOOPBACK_EGRESS.formatted(issuerName),
+                Boolean.class
+        ).orElse(false);
+        if (allowLoopbackEgress) {
+            builder.allowLoopbackEgress(true);
+            LOGGER.debug("Enabled loopback egress for %s (allow-loopback-egress=true)", issuerName);
+        }
+
+        // Explicit egress host allow-list — needed to reach Docker-internal service names
+        // (site-local bridge addresses) that allow-loopback-egress does NOT cover.
+        config.getOptionalValue(
+                JwtPropertyKeys.ISSUERS.ALLOWED_EGRESS_HOSTS.formatted(issuerName),
+                String.class
+        ).ifPresent(hostsCsv -> {
+            List<String> hosts = ConfigValueParser.splitCsv(hostsCsv);
+            hosts.forEach(builder::allowedEgressHost);
+            if (!hosts.isEmpty()) {
+                LOGGER.debug("Allow-listed egress hosts for %s: %s", issuerName, hosts);
+            }
+        });
+
         // Configure HTTP timeouts (use builder defaults if not specified)
         config.getOptionalValue(
                 JwtPropertyKeys.ISSUERS.REFRESH_INTERVAL_SECONDS.formatted(issuerName),

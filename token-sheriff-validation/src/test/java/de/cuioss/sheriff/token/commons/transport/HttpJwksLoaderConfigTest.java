@@ -104,6 +104,34 @@ class HttpJwksLoaderConfigTest {
     }
 
     @Test
+    @DisplayName("Should reject a JWKS host resolving to a blocked range when no egress opt-in is set")
+    void shouldRejectBlockedHostWithoutEgressOptIn() {
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .jwksUrl(VALID_URL)
+                .issuerIdentifier("test-issuer")
+                .build();
+        // "localhost" resolves to a loopback address, which the secure-default egress guard blocks.
+        assertThrows(de.cuioss.sheriff.token.commons.error.TransportException.class,
+                () -> config.getEgressPolicy().check(URI.create("https://localhost:8443/certs")),
+                "A loopback-resolving host must be blocked when no egress opt-in is configured");
+    }
+
+    @Test
+    @DisplayName("Should permit a JWKS host that is on the explicit egress allow-list")
+    void shouldPermitAllowedEgressHost() {
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .jwksUrl(VALID_URL)
+                .issuerIdentifier("test-issuer")
+                .allowedEgressHost("localhost")
+                .build();
+        // The allow-list bypasses the address-range checks entirely, so the otherwise-blocked
+        // loopback resolution of "localhost" is permitted.
+        assertDoesNotThrow(
+                () -> config.getEgressPolicy().check(URI.create("https://localhost:8443/certs")),
+                "An allow-listed host must bypass the egress address-range checks");
+    }
+
+    @Test
     @DisplayName("Should create config with default values")
     void shouldCreateConfigWithDefaultValues() {
 

@@ -82,6 +82,30 @@ class WellKnownConfigTest {
     }
 
     @Test
+    @DisplayName("Should reject a discovery host resolving to a blocked range when no egress opt-in is set")
+    void shouldRejectBlockedDiscoveryHostWithoutEgressOptIn() {
+        WellKnownConfig config = WellKnownConfig.builder()
+                .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                .build();
+        // "localhost" resolves to a loopback address, which the secure-default egress guard blocks.
+        assertThrows(de.cuioss.sheriff.token.commons.error.TransportException.class,
+                () -> config.getEgressPolicy().check(URI.create("https://localhost:8443/.well-known/openid-configuration")),
+                "A loopback-resolving discovery host must be blocked when no egress opt-in is configured");
+    }
+
+    @Test
+    @DisplayName("Should permit a discovery host that is on the explicit egress allow-list")
+    void shouldPermitAllowedEgressDiscoveryHost() {
+        WellKnownConfig config = WellKnownConfig.builder()
+                .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                .allowedEgressHost("localhost")
+                .build();
+        assertDoesNotThrow(
+                () -> config.getEgressPolicy().check(URI.create("https://localhost:8443/.well-known/openid-configuration")),
+                "An allow-listed discovery host must bypass the egress address-range checks");
+    }
+
+    @Test
     @DisplayName("Should create config with URL string")
     void shouldCreateConfigWithUrl() {
         WellKnownConfig config = WellKnownConfig.builder()
