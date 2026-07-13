@@ -87,24 +87,28 @@ class PsychicSignatureAttackTest {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next()
                 .withSigningAlgorithm(algorithm);
         IssuerConfig issuerConfig = tokenHolder.getIssuerConfig();
-        TokenValidator tokenValidator = TokenValidator.builder()
+
+        // TokenValidator is Closeable and schedules a background cache-eviction task; close it on every
+        // path (including assertion failure) so the 3 invocations of this helper do not leak daemon threads.
+        try (TokenValidator tokenValidator = TokenValidator.builder()
                 .parserConfig(ParserConfig.builder().build())
                 .issuerConfig(issuerConfig)
-                .build();
+                .build()) {
 
-        String[] parts = tokenHolder.getRawToken().split("\\.");
-        byte[] zeroSignature = new byte[signatureLength];
-        String zeroSignatureBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(zeroSignature);
-        String tamperedToken = parts[0] + "." + parts[1] + "." + zeroSignatureBase64;
-        AccessTokenRequest request = AccessTokenRequest.of(tamperedToken);
+            String[] parts = tokenHolder.getRawToken().split("\\.");
+            byte[] zeroSignature = new byte[signatureLength];
+            String zeroSignatureBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(zeroSignature);
+            String tamperedToken = parts[0] + "." + parts[1] + "." + zeroSignatureBase64;
+            AccessTokenRequest request = AccessTokenRequest.of(tamperedToken);
 
-        assertThrows(TokenValidationException.class, () -> tokenValidator.createAccessToken(request));
+            assertThrows(TokenValidationException.class, () -> tokenValidator.createAccessToken(request));
 
-        SecurityEventCounter counter = tokenValidator.getSecurityEventCounter();
-        assertAll("Psychic signature must be rejected by the signature verifier",
-                () -> assertEquals(1, counter.getCount(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED),
-                        "All-zero ECDSA signature must be rejected with SIGNATURE_VALIDATION_FAILED"),
-                () -> assertEquals(0, counter.getCount(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM),
-                        "Attack must reach the verifier, not be short-circuited as UNSUPPORTED_ALGORITHM"));
+            SecurityEventCounter counter = tokenValidator.getSecurityEventCounter();
+            assertAll("Psychic signature must be rejected by the signature verifier",
+                    () -> assertEquals(1, counter.getCount(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED),
+                            "All-zero ECDSA signature must be rejected with SIGNATURE_VALIDATION_FAILED"),
+                    () -> assertEquals(0, counter.getCount(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM),
+                            "Attack must reach the verifier, not be short-circuited as UNSUPPORTED_ALGORITHM"));
+        }
     }
 }
