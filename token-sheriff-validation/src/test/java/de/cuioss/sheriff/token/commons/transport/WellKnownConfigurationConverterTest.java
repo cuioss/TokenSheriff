@@ -71,6 +71,8 @@ class WellKnownConfigurationConverterTest {
         assertNotNull(result.failure());
         assertTrue(result.failure().getMessage().contains("exceeds maximum allowed size"),
                 "Failure must name the size-ceiling breach, but was: " + result.failure().getMessage());
+        assertTrue(result.cancelled(),
+                "Content-Length pre-check must cancel the subscription — the over-limit body is never read, not drained");
     }
 
     @Test

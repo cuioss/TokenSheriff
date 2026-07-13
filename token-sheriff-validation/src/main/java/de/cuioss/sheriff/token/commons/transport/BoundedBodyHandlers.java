@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.token.commons.transport;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -70,15 +69,56 @@ final class BoundedBodyHandlers {
     }
 
     /**
-     * A subscriber that discards the incoming body (so the connection is not left dangling) and fails
-     * the body future — used for the {@code Content-Length} pre-check rejection path.
+     * A subscriber that cancels the subscription the instant it is offered — so <em>no</em> body
+     * bytes are ever streamed — and fails the body future with an over-limit {@link IOException}.
+     * Used for the {@code Content-Length} pre-check rejection path, honouring the class contract
+     * that an over-advertised body is "rejected without reading its body".
      */
     private static java.net.http.HttpResponse.BodySubscriber<String> rejectingSubscriber(long maxBytes) {
-        return java.net.http.HttpResponse.BodySubscribers.mapping(
-                java.net.http.HttpResponse.BodySubscribers.discarding(),
-                ignored -> {
-                    throw new UncheckedIOException(new IOException(overLimitMessage(maxBytes)));
-                });
+        return new CancellingRejectSubscriber(maxBytes);
+    }
+
+    /**
+     * {@link java.net.http.HttpResponse.BodySubscriber BodySubscriber} whose {@code onSubscribe}
+     * immediately cancels the subscription (stopping the read before any byte flows) and whose
+     * {@link #getBody()} returns an already-failed future carrying the over-limit
+     * {@link IOException}. Unlike a discarding subscriber — which requests {@link Long#MAX_VALUE}
+     * and drains every incoming buffer — this defeats an attacker-controlled multi-gigabyte body at
+     * the {@code Content-Length} pre-check without reading it.
+     */
+    private static final class CancellingRejectSubscriber
+            implements java.net.http.HttpResponse.BodySubscriber<String> {
+
+        private final CompletableFuture<String> result = new CompletableFuture<>();
+
+        CancellingRejectSubscriber(long maxBytes) {
+            result.completeExceptionally(new IOException(overLimitMessage(maxBytes)));
+        }
+
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            subscription.cancel();
+        }
+
+        @Override
+        public void onNext(List<ByteBuffer> buffers) {
+            // Cancelled in onSubscribe; no body bytes are delivered.
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            // Body future is already completed exceptionally with the over-limit IOException.
+        }
+
+        @Override
+        public void onComplete() {
+            // Body future is already completed exceptionally with the over-limit IOException.
+        }
+
+        @Override
+        public CompletionStage<String> getBody() {
+            return result;
+        }
     }
 
     private static String overLimitMessage(long maxBytes) {
