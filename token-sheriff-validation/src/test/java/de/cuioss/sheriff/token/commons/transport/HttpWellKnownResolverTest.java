@@ -65,7 +65,7 @@ class HttpWellKnownResolverTest {
                 .addPathSegment("openid-configuration").buildAsString();
         String expectedJwksUri = baseUrl + "/oidc/jwks.json";
 
-        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true)
+        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(wellKnownUrl)
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
@@ -94,7 +94,7 @@ class HttpWellKnownResolverTest {
         String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
                 .addPathSegment("openid-configuration").buildAsString();
 
-        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true)
+        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(wellKnownUrl)
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
@@ -120,7 +120,7 @@ class HttpWellKnownResolverTest {
         String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
                 .addPathSegment("openid-configuration").buildAsString();
 
-        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true)
+        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(wellKnownUrl)
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
@@ -154,7 +154,7 @@ class HttpWellKnownResolverTest {
         String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
                 .addPathSegment("openid-configuration").buildAsString();
 
-        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true)
+        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(wellKnownUrl)
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
@@ -182,7 +182,7 @@ class HttpWellKnownResolverTest {
         String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
                 .addPathSegment("openid-configuration").buildAsString();
 
-        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true)
+        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(wellKnownUrl)
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
@@ -208,7 +208,7 @@ class HttpWellKnownResolverTest {
         String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
                 .addPathSegment("openid-configuration").buildAsString();
 
-        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true)
+        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(wellKnownUrl)
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();

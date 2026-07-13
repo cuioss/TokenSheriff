@@ -48,7 +48,7 @@ class SimpleHttpJwksLoaderTest {
 
         SecurityEventCounter securityEventCounter = new SecurityEventCounter();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .build();

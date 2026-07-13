@@ -43,7 +43,7 @@ class HttpJwksLoaderWellKnownAsyncTest {
         // Create a well-known configuration with invalid URL to test constructor behavior
         String invalidWellKnownUrl = "https://invalid-host.example.com/.well-known/openid_configuration";
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(invalidWellKnownUrl)
                 .build();
 
@@ -69,7 +69,7 @@ class HttpJwksLoaderWellKnownAsyncTest {
         // Create configuration with invalid well-known URL
         String invalidWellKnownUrl = "https://invalid-host.example.com/.well-known/openid_configuration";
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(invalidWellKnownUrl)
                 .build();
 

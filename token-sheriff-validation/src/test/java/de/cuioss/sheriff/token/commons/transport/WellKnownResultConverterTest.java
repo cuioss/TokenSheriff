@@ -25,8 +25,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -194,15 +196,34 @@ class WellKnownResultConverterTest {
     }
 
     @Test
-    @DisplayName("Should provide appropriate BodyHandler")
+    @DisplayName("Should provide a bounded String BodyHandler")
     void shouldProvideAppropriateBodyHandler() {
         var bodyHandler = converter.getBodyHandler();
 
-        assertNotNull(bodyHandler);
-        // Should be a String BodyHandler - we can't easily test the exact type
-        // but we can verify it's not null and works as expected
-        assertSame(HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8).getClass(),
-                bodyHandler.getClass());
+        assertNotNull(bodyHandler, "getBodyHandler must return a non-null body handler");
+
+        // H2 (a0e4f81e) wraps the discovery body in a BoundedBodyHandlers streaming size ceiling, so
+        // the handler is deliberately no longer the plain HttpResponse.BodyHandlers.ofString. Assert
+        // it still functions as a String body handler (produces a subscriber for a 200 response)
+        // rather than pinning its now-bounded implementation class.
+        HttpResponse.ResponseInfo responseInfo = new HttpResponse.ResponseInfo() {
+            @Override
+            public int statusCode() {
+                return 200;
+            }
+
+            @Override
+            public HttpHeaders headers() {
+                return HttpHeaders.of(Map.of(), (k, v) -> true);
+            }
+
+            @Override
+            public HttpClient.Version version() {
+                return HttpClient.Version.HTTP_1_1;
+            }
+        };
+        assertNotNull(bodyHandler.apply(responseInfo),
+                "The bounded body handler must produce a subscriber for a successful response");
     }
 
     @Test
