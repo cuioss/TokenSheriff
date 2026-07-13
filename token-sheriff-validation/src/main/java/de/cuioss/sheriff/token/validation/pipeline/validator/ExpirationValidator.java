@@ -199,7 +199,9 @@ public class ExpirationValidator {
 
     private void rejectBlankClaim(TokenContent token, ClaimName claimName) {
         var claim = token.getClaimOption(claimName);
-        if (claim.isPresent() && claim.get().getOriginalString().isBlank()) {
+        // A custom SPI ClaimMapper may construct a ClaimValue with a null originalString;
+        // treat null the same as blank so it is rejected as MISSING_CLAIM rather than throwing an NPE.
+        if (claim.isPresent() && isNullOrBlank(claim.get().getOriginalString())) {
             LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_CLAIM, claimName.getName());
             securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_CLAIM);
             throw new TokenValidationException(
@@ -208,5 +210,9 @@ public class ExpirationValidator {
                             + "A blank mandatory claim is treated as missing."
             );
         }
+    }
+
+    private static boolean isNullOrBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

@@ -295,6 +295,20 @@ class ExpirationValidatorTest {
     }
 
     @Test
+    @DisplayName("Should reject null-originalString subject claim as MISSING_CLAIM instead of throwing NPE")
+    void shouldRejectNullOriginalStringSubjectClaim() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        tokenHolder.withClaim(ClaimName.SUBJECT.getName(), ClaimValue.forPlainString(null));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> validator.validateMandatoryClaimsNonBlank(token));
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
+        assertTrue(exception.getMessage().contains("'sub' is present but blank"));
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+    }
+
+    @Test
     @DisplayName("Should pass non-blank mandatory claims guard for a well-formed token")
     void shouldPassNonBlankMandatoryClaimsForWellFormedToken() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
