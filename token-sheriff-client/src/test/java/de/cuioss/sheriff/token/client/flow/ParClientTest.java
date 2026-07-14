@@ -71,10 +71,22 @@ class ParClientTest {
                 "response_type", "code",
                 "redirect_uri", "https://rp.example.com/callback",
                 "scope", "openid",
-                "state", Generators.nonBlankStrings().next(),
-                "nonce", Generators.nonBlankStrings().next(),
-                "code_challenge", Generators.nonBlankStrings().next(),
+                "state", opaqueParameterValue(),
+                "nonce", opaqueParameterValue(),
+                "code_challenge", opaqueParameterValue(),
                 "code_challenge_method", "S256"));
+    }
+
+    /**
+     * Generates a distinctive, sufficiently long opaque value for the security-sensitive
+     * authorization parameters (state, nonce, PKCE challenge). A minimum length of 24 random
+     * letters guarantees the value cannot coincidentally occur as a substring of the fixed
+     * mock AS-issued opaque {@code request_uri}, which would otherwise make the no-leak
+     * assertions in {@link #shouldReturnRequestUri} flaky (a short {@code nonBlankStrings}
+     * value could match by chance).
+     */
+    private static String opaqueParameterValue() {
+        return Generators.letterStrings(24, 40).next();
     }
 
     private static String parEndpoint(URIBuilder uriBuilder) {
