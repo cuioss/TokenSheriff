@@ -220,4 +220,101 @@ class ExpirationValidatorTest {
         assertDoesNotThrow(() -> validator.validateNotBefore(token, context));
         assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE));
     }
+
+    @Test
+    @DisplayName("Should reject issued-at unreasonably in the future")
+    void shouldRejectIssuedAtUnreasonablyInTheFuture() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        OffsetDateTime fixedTime = OffsetDateTime.now();
+        OffsetDateTime farFutureIat = fixedTime.plusSeconds(120); // beyond the 60s clock skew
+        tokenHolder.withClaim(ClaimName.ISSUED_AT.getName(),
+                ClaimValue.forDateTime(String.valueOf(farFutureIat.toEpochSecond()), farFutureIat));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
+
+        ValidationContext testContext = new ValidationContext(fixedTime, 60, null);
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> validator.validateIssuedAtNotInFuture(token, testContext));
+        assertEquals(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE, exception.getEventType());
+        assertTrue(exception.getMessage().contains("issued-at (iat) is more than 60 seconds in the future"));
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE));
+    }
+
+    @Test
+    @DisplayName("Should pass issued-at within clock skew tolerance")
+    void shouldPassIssuedAtWithinClockSkewTolerance() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        OffsetDateTime fixedTime = OffsetDateTime.now();
+        OffsetDateTime nearFutureIat = fixedTime.plusSeconds(30); // within the 60s clock skew
+        tokenHolder.withClaim(ClaimName.ISSUED_AT.getName(),
+                ClaimValue.forDateTime(String.valueOf(nearFutureIat.toEpochSecond()), nearFutureIat));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
+
+        ValidationContext testContext = new ValidationContext(fixedTime, 60, null);
+        assertDoesNotThrow(() -> validator.validateIssuedAtNotInFuture(token, testContext));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE));
+    }
+
+    @Test
+    @DisplayName("Should pass future-iat guard when issued-at claim is absent")
+    void shouldPassFutureIatGuardWhenIssuedAtAbsent() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
+        claims.remove(ClaimName.ISSUED_AT.getName());
+        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken());
+
+        assertDoesNotThrow(() -> validator.validateIssuedAtNotInFuture(token, context));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE));
+    }
+
+    @Test
+    @DisplayName("Should reject blank subject claim")
+    void shouldRejectBlankSubjectClaim() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        tokenHolder.withClaim(ClaimName.SUBJECT.getName(), ClaimValue.forPlainString("   "));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> validator.validateMandatoryClaimsNonBlank(token));
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
+        assertTrue(exception.getMessage().contains("'sub' is present but blank"));
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+    }
+
+    @Test
+    @DisplayName("Should reject blank issuer claim")
+    void shouldRejectBlankIssuerClaim() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        tokenHolder.withClaim(ClaimName.ISSUER.getName(), ClaimValue.forPlainString(""));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> validator.validateMandatoryClaimsNonBlank(token));
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
+        assertTrue(exception.getMessage().contains("'iss' is present but blank"));
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+    }
+
+    @Test
+    @DisplayName("Should reject null-originalString subject claim as MISSING_CLAIM instead of throwing NPE")
+    void shouldRejectNullOriginalStringSubjectClaim() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        tokenHolder.withClaim(ClaimName.SUBJECT.getName(), ClaimValue.forPlainString(null));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> validator.validateMandatoryClaimsNonBlank(token));
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
+        assertTrue(exception.getMessage().contains("'sub' is present but blank"));
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+    }
+
+    @Test
+    @DisplayName("Should pass non-blank mandatory claims guard for a well-formed token")
+    void shouldPassNonBlankMandatoryClaimsForWellFormedToken() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
+
+        assertDoesNotThrow(() -> validator.validateMandatoryClaimsNonBlank(token));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+    }
 }

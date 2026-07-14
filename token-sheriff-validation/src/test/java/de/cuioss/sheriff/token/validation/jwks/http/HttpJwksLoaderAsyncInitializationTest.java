@@ -57,7 +57,7 @@ class HttpJwksLoaderAsyncInitializationTest {
     @DisplayName("Constructor should not block or perform I/O operations")
     void constructorShouldNotBlockOrPerformIO(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .build();
@@ -92,7 +92,7 @@ class HttpJwksLoaderAsyncInitializationTest {
     @DisplayName("initJWKSLoader should return non-completed CompletableFuture")
     void initJWKSLoaderShouldReturnAsyncCompletableFuture(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .build();
@@ -120,7 +120,7 @@ class HttpJwksLoaderAsyncInitializationTest {
     @DisplayName("Status should transition atomically during async initialization")
     void statusShouldTransitionAtomicallyDuringAsyncInit(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .build();
@@ -154,7 +154,7 @@ class HttpJwksLoaderAsyncInitializationTest {
     @DisplayName("Multiple concurrent initJWKSLoader calls should be handled safely")
     void multipleConcurrentInitCallsShouldBeSafe(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .build();

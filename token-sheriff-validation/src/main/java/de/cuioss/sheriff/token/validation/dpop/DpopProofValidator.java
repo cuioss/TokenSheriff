@@ -19,6 +19,7 @@ import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.commons.transport.JwkKey;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
@@ -41,6 +42,7 @@ import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -71,8 +73,6 @@ public class DpopProofValidator {
     private static final CuiLogger LOGGER = new CuiLogger(DpopProofValidator.class);
     private static final String DPOP_HEADER_NAME = "dpop";
     private static final String DPOP_TYP = "dpop+jwt";
-    /** Maximum DPoP proof size (8KB matches the token size limit from ParserConfig). */
-    private static final int MAX_DPOP_PROOF_SIZE = 8192;
 
     private final DpopConfig config;
     private final int clockSkewSeconds;
@@ -80,6 +80,7 @@ public class DpopProofValidator {
     private final DpopReplayProtection replayProtection;
     private final SignatureAlgorithmPreferences algorithmPreferences;
     private final SignatureTemplateManager signatureTemplateManager;
+    private final ParserConfig parserConfig;
     private final DslJson<Object> dslJson;
 
     /**
@@ -99,12 +100,14 @@ public class DpopProofValidator {
      * @param securityEventCounter    the security event counter
      * @param replayProtection        shared replay protection instance
      * @param signatureTemplateManager shared signature template manager (reused across validators)
+     * @param parserConfig            shared ParserConfig whose token/payload size bounds are applied to the DPoP proof
      * @param dslJson                 shared DslJson instance from ParserConfig
      */
     public DpopProofValidator(IssuerConfig issuerConfig,
             SecurityEventCounter securityEventCounter,
             DpopReplayProtection replayProtection,
             SignatureTemplateManager signatureTemplateManager,
+            ParserConfig parserConfig,
             DslJson<Object> dslJson) {
         this.config = issuerConfig.getDpopConfig();
         this.clockSkewSeconds = issuerConfig.getClockSkewSeconds();
@@ -112,6 +115,7 @@ public class DpopProofValidator {
         this.replayProtection = replayProtection;
         this.algorithmPreferences = issuerConfig.getAlgorithmPreferences();
         this.signatureTemplateManager = signatureTemplateManager;
+        this.parserConfig = parserConfig;
         this.dslJson = dslJson;
     }
 
@@ -168,8 +172,12 @@ public class DpopProofValidator {
      * @throws TokenValidationException if multiple DPoP headers are present or the proof exceeds the size limit
      */
     private String extractDpopHeader(AccessTokenRequest request) {
-        List<String> dpopHeaders = request.httpHeaders().get(DPOP_HEADER_NAME);
-        if (dpopHeaders == null || dpopHeaders.isEmpty()) {
+        // HTTP header names are case-insensitive (RFC 9110). Look the DPoP header up case-insensitively
+        // so a client that sends "DPoP" (the canonical RFC 9449 casing) is honored and cannot be
+        // silently downgraded to bearer mode by a case mismatch (M4). AccessTokenRequest already stores
+        // headers in a case-insensitive map; this lookup is defense-in-depth for maps built elsewhere.
+        List<String> dpopHeaders = getHeaderIgnoreCase(request.httpHeaders(), DPOP_HEADER_NAME);
+        if (dpopHeaders.isEmpty()) {
             return null;
         }
         if (dpopHeaders.size() > 1) {
@@ -177,11 +185,31 @@ public class DpopProofValidator {
                     "Multiple DPoP headers found; RFC 9449 requires exactly one");
         }
         String dpopProofString = dpopHeaders.getFirst();
-        if (dpopProofString != null && dpopProofString.length() > MAX_DPOP_PROOF_SIZE) {
+        if (dpopProofString != null && dpopProofString.length() > parserConfig.getMaxTokenSize()) {
             rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
-                    "DPoP proof exceeds maximum size of %s bytes".formatted(MAX_DPOP_PROOF_SIZE));
+                    "DPoP proof exceeds maximum size of %s bytes".formatted(parserConfig.getMaxTokenSize()));
         }
         return dpopProofString;
+    }
+
+    /**
+     * Looks a header up case-insensitively, tolerating any header-name casing (RFC 9110).
+     *
+     * @param headers the HTTP header map
+     * @param name    the canonical header name to resolve
+     * @return the header values, or an empty list if no matching header is present
+     */
+    private static List<String> getHeaderIgnoreCase(Map<String, List<String>> headers, String name) {
+        List<String> direct = headers.get(name);
+        if (direct != null) {
+            return direct;
+        }
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            if (name.equalsIgnoreCase(entry.getKey())) {
+                return entry.getValue();
+            }
+        }
+        return List.of();
     }
 
     /**
@@ -221,6 +249,12 @@ public class DpopProofValidator {
         try {
             byte[] headerBytes = Base64.getUrlDecoder().decode(parts[0]);
             byte[] bodyBytes = Base64.getUrlDecoder().decode(parts[1]);
+            int maxPayloadSize = parserConfig.getMaxPayloadSize();
+            if (headerBytes.length > maxPayloadSize || bodyBytes.length > maxPayloadSize) {
+                rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
+                        "DPoP proof decoded part exceeds the configured maximum payload size of %s bytes"
+                                .formatted(maxPayloadSize));
+            }
             headerMap = MapRepresentation.fromJson(dslJson, headerBytes);
             bodyMap = MapRepresentation.fromJson(dslJson, bodyBytes);
         } catch (IllegalArgumentException | IOException e) {
@@ -387,18 +421,39 @@ public class DpopProofValidator {
     }
 
     /**
-     * Strips query string and fragment from a URI per RFC 9449 Section 4.3.
-     * Returns the URI with only scheme, authority, and path.
+     * Normalizes a URI for {@code htu} comparison per RFC 9449 §4.3 and RFC 3986 §6.
+     * <p>
+     * Beyond stripping the query string and fragment, this lower-cases the scheme and host
+     * (case-insensitive per RFC 3986 §6.2.2.1), strips the default port for {@code http} (80)
+     * and {@code https} (443) (§6.2.3), and resolves dot-segments in the path via
+     * {@link URI#normalize()} (§6.2.2.3), so that syntactically different but semantically
+     * equivalent URIs compare equal and cannot be used to bypass the {@code htu} check.
      */
     private static String stripQueryAndFragment(String uri) {
         try {
-            var parsed = new URI(uri);
-            return new URI(parsed.getScheme(), parsed.getAuthority(), parsed.getPath(),
-                    null, null).toString();
+            var parsed = new URI(uri).normalize();
+            String host = parsed.getHost();
+            if (host == null) {
+                // Opaque or registry-based authority — cannot safely decompose host/port;
+                // fall back to scheme/authority/path with query and fragment stripped.
+                return new URI(lowerCaseOrNull(parsed.getScheme()), parsed.getAuthority(),
+                        parsed.getPath(), null, null).toString();
+            }
+            String scheme = lowerCaseOrNull(parsed.getScheme());
+            int port = parsed.getPort();
+            if (("http".equals(scheme) && port == 80) || ("https".equals(scheme) && port == 443)) {
+                port = -1;
+            }
+            return new URI(scheme, parsed.getUserInfo(), host.toLowerCase(Locale.ROOT), port,
+                    parsed.getPath(), null, null).toString();
         } catch (URISyntaxException e) {
             // If URI is malformed, return as-is and let comparison fail
             return uri;
         }
+    }
+
+    private static String lowerCaseOrNull(String value) {
+        return value == null ? null : value.toLowerCase(Locale.ROOT);
     }
 
     private PublicKey parsePublicKey(Map<String, Object> jwkMap) {
@@ -423,6 +478,10 @@ public class DpopProofValidator {
             );
 
             return switch (kty) {
+                // Sub-2048-bit RSA keys (M1) are rejected inside JwkKeyHandler.parseRsaKey, which throws
+                // InvalidKeySpecException ("RSA key modulus is %d bits; minimum accepted is %d bits"); the
+                // catch block below converts that into the same DPOP_PROOF_INVALID rejection, so no
+                // duplicate pre-check is needed here.
                 case "RSA" -> JwkKeyHandler.parseRsaKey(jwkKey);
                 case "EC" -> JwkKeyHandler.parseEcKey(jwkKey);
                 case "OKP" -> JwkKeyHandler.parseOkpKey(jwkKey);

@@ -130,7 +130,10 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
 
     @Override
     public HttpResponse.BodyHandler<?> getBodyHandler() {
-        return HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8);
+        // Enforce the byte ceiling while the body streams — an over-limit discovery document is
+        // rejected before it is fully buffered, closing the unbounded-buffering DoS vector (H2).
+        // The post-materialization check in convert(...) remains as defense in depth.
+        return BoundedBodyHandlers.ofBoundedString(StandardCharsets.UTF_8, maxContentSize);
     }
 
     @Override

@@ -16,15 +16,20 @@
 package de.cuioss.sheriff.token.validation.jwks.parser;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
-import de.cuioss.sheriff.token.commons.transport.JwkKey;
 import de.cuioss.sheriff.token.commons.transport.Jwks;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.security.JwkAlgorithmPreferences;
+import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.math.BigInteger;
+import java.security.interfaces.RSAPublicKey;
+import java.util.Arrays;
+import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -37,20 +42,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("KeyProcessor RSA default algorithm")
 class KeyProcessorRsaDefaultAlgorithmTest {
 
-    // Valid RSA public key components (from test JWKS)
     private static final String TEST_KID = "test-rsa-no-alg";
-    private static final String RSA_N = "nzyis1ZjfNB0bBgKFMSvvkTtwlvBsaJq7S5wA-kzeVOVpVWwkWdVha4s38XM_pa_yr47av7-z3VTmvDRyAHcaT92whREFpLv9cj5lTeJSibyr_Mrm_YtjCZVWgaOYIhwrXwKLqPr_11inWsAkfIytvHWTxZYEcXLgAXFuUuaS3uF9gEiNQwzGTU1v0FqkqTBr4B8nW3HCN47XUu0t8Y0e3zvAIhySnxIZi9aDaPvSlAeZ7VVl5ivy_43QvTRpM3eBFs9A1Y9a9aCtHSP8KXRTYhH2TvPxLOOFg0Lu-pwrps6CqvbeZjQlqCh9cGowQ";
-    private static final String RSA_E = "AQAB";
 
     @Test
     @DisplayName("Should default to RS256 when RSA key has no algorithm specified")
     void shouldDefaultToRs256WhenNoAlgorithm() {
         var processor = new KeyProcessor(new SecurityEventCounter(), new JwkAlgorithmPreferences());
 
+        // Derive n/e from the test infrastructure's default 2048-bit RSA key so the key satisfies the
+        // >= 2048-bit minimum (M1) while still omitting "alg" — the scenario under test.
+        RSAPublicKey defaultKey = (RSAPublicKey) InMemoryKeyMaterialHandler.getDefaultPublicKey();
+        String rsaN = base64Url(toUnsignedBytes(defaultKey.getModulus()));
+        String rsaE = base64Url(toUnsignedBytes(defaultKey.getPublicExponent()));
+
         // Create a JWKS JSON without "alg" for the RSA key
         String jwksJson = """
                 {"keys":[{"kty":"RSA","use":"sig","kid":"%s","n":"%s","e":"%s"}]}"""
-                .formatted(TEST_KID, RSA_N, RSA_E);
+                .formatted(TEST_KID, rsaN, rsaE);
 
         // Parse via JwksParser to get JwkKey objects
         var dslJson = ParserConfig.builder().build().getDslJson();
@@ -75,5 +83,17 @@ class KeyProcessorRsaDefaultAlgorithmTest {
         } catch (Exception e) {
             throw new AssertionError("Failed to parse test JWKS", e);
         }
+    }
+
+    private static byte[] toUnsignedBytes(BigInteger value) {
+        byte[] bytes = value.toByteArray();
+        if (bytes.length > 1 && bytes[0] == 0) {
+            return Arrays.copyOfRange(bytes, 1, bytes.length);
+        }
+        return bytes;
+    }
+
+    private static String base64Url(byte[] data) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(data);
     }
 }

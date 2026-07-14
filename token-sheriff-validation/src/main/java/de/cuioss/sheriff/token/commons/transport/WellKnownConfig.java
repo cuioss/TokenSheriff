@@ -26,6 +26,8 @@ import lombok.ToString;
 
 import javax.net.ssl.SSLContext;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Configuration for well-known endpoint discovery.
@@ -75,10 +77,19 @@ public class WellKnownConfig {
     @Getter
     private final ParserConfig parserConfig;
 
-    private WellKnownConfig(HttpHandler httpHandler, RetryConfig retryConfig, ParserConfig parserConfig) {
+    /**
+     * The SSRF egress policy applied to the discovery endpoint before it is fetched.
+     * Defaults to {@link EgressPolicy#secureDefault()}; relaxed only via the explicit
+     * {@link WellKnownConfigBuilder#allowLoopbackEgress(boolean)} knob.
+     */
+    @Getter
+    private final EgressPolicy egressPolicy;
+
+    private WellKnownConfig(HttpHandler httpHandler, RetryConfig retryConfig, ParserConfig parserConfig, EgressPolicy egressPolicy) {
         this.httpHandler = httpHandler;
         this.retryConfig = retryConfig;
         this.parserConfig = parserConfig;
+        this.egressPolicy = egressPolicy;
     }
 
     /**
@@ -107,7 +118,9 @@ public class WellKnownConfig {
         private final HttpHandler.HttpHandlerBuilder httpHandlerBuilder;
         private RetryConfig retryConfig = RetryConfig.defaults();
         private ParserConfig parserConfig;
-        private boolean allowInsecureHttp = true;
+        private boolean allowInsecureHttp = false;
+        private boolean allowLoopbackEgress = false;
+        private final List<String> allowedEgressHosts = new ArrayList<>();
 
         /**
          * Constructor initializing the HttpHandlerBuilder with sensible defaults.
@@ -121,17 +134,59 @@ public class WellKnownConfig {
         /**
          * Controls whether plaintext {@code http://} discovery endpoints are permitted.
          * <p>
-         * Defaults to {@code true}, which preserves the "allow but warn" contract:
-         * cleartext endpoints are accepted but a {@code TokenSheriff-129}
-         * ({@code INSECURE_HTTP_WELLKNOWN}) warning is emitted. Set to {@code false} to
-         * enforce HTTPS and have {@link #build()} reject {@code http://} discovery
-         * endpoints, which is recommended for production.
+         * Defaults to {@code false} (secure by default): {@link #build()} rejects
+         * {@code http://} discovery endpoints so discovery metadata cannot be tampered
+         * with via a man-in-the-middle downgrade. Set to {@code true} to opt into
+         * cleartext HTTP — accepted but with a {@code TokenSheriff-129}
+         * ({@code INSECURE_HTTP_WELLKNOWN}) warning — which should only be used for local
+         * development or trusted-network scenarios, never in production.
          *
-         * @param allowInsecureHttp {@code false} to require HTTPS, {@code true} (default) to allow cleartext HTTP
+         * @param allowInsecureHttp {@code true} to opt into cleartext HTTP, {@code false} (default) to require HTTPS
          * @return this builder instance
          */
         public WellKnownConfigBuilder allowInsecureHttp(boolean allowInsecureHttp) {
             this.allowInsecureHttp = allowInsecureHttp;
+            return this;
+        }
+
+        /**
+         * Permits the SSRF egress guard to resolve the discovery endpoint to a loopback
+         * address.
+         * <p>
+         * Defaults to {@code false}: the secure-by-default {@link EgressPolicy} rejects
+         * loopback, link-local, site-local, ULA, and cloud-metadata addresses so an
+         * attacker-controlled discovery URL cannot reach internal endpoints. Set to
+         * {@code true} to fetch discovery from {@code localhost} — required by
+         * MockWebServer-based tests and local/dev callers, which must opt in deliberately.
+         * This is an explicit, discoverable knob, never an implicit test-mode; all other
+         * blocked ranges still apply.
+         *
+         * @param allowLoopbackEgress {@code true} to allow loopback discovery fetches, {@code false} (default) to reject them
+         * @return this builder instance
+         */
+        public WellKnownConfigBuilder allowLoopbackEgress(boolean allowLoopbackEgress) {
+            this.allowLoopbackEgress = allowLoopbackEgress;
+            return this;
+        }
+
+        /**
+         * Adds a host to the SSRF egress guard's explicit allow-list for the discovery fetch.
+         * <p>
+         * Allow-listed hosts bypass the address-range checks entirely, so a discovery endpoint
+         * whose host resolves to a site-local, link-local, or ULA address (for example a Docker
+         * service name such as {@code keycloak} on a container bridge network) can be reached
+         * despite the secure-by-default {@link EgressPolicy}. Matching is case-insensitive.
+         * This is an explicit, discoverable knob intended for integration tests and trusted
+         * local/dev topologies; it must be scoped narrowly and never used to allow-list
+         * attacker-influenceable hosts in production.
+         *
+         * @param host the discovery host name to allow-list; ignored when {@code null} or blank
+         * @return this builder instance
+         */
+        public WellKnownConfigBuilder allowedEgressHost(String host) {
+            if (host != null && !host.isBlank()) {
+                allowedEgressHosts.add(host);
+            }
             return this;
         }
 
@@ -246,7 +301,13 @@ public class WellKnownConfig {
                 }
 
                 ParserConfig finalParserConfig = parserConfig != null ? parserConfig : ParserConfig.builder().build();
-                return new WellKnownConfig(httpHandler, retryConfig, finalParserConfig);
+                EgressPolicy.EgressPolicyBuilder egressPolicyBuilder = EgressPolicy.builder()
+                        .allowLoopback(allowLoopbackEgress);
+                for (String allowedHost : allowedEgressHosts) {
+                    egressPolicyBuilder.allowedHost(allowedHost);
+                }
+                EgressPolicy egressPolicy = egressPolicyBuilder.build();
+                return new WellKnownConfig(httpHandler, retryConfig, finalParserConfig, egressPolicy);
             } catch (IllegalArgumentException | IllegalStateException e) {
                 throw new IllegalArgumentException("Invalid well-known endpoint configuration", e);
             }

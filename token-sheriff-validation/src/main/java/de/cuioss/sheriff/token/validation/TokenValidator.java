@@ -310,7 +310,7 @@ public class TokenValidator implements Closeable {
                 DpopProofValidator dpopValidator = new DpopProofValidator(
                         issuerConfig, this.securityEventCounter, this.dpopReplayProtection,
                         signatureTemplateManagers.get(issuerConfig.getIssuerIdentifier()),
-                        parserConfig.getDslJson());
+                        parserConfig, parserConfig.getDslJson());
                 dpopValidatorsMap.put(issuerConfig.getIssuerIdentifier(), dpopValidator);
                 LOGGER.debug("Pre-created DpopProofValidator for issuer: %s", issuerConfig.getIssuerIdentifier());
             }

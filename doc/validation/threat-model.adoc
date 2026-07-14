@@ -334,8 +334,8 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.7[VALIDATION-8.7: DPoP Send
 
 |DP5
 |HTTP method/URI mismatch
-|DPoP proof `htm` and `htu` validation is not performed by the library; this is handled at the application/framework level (e.g., Quarkus integration)
-|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/dpop/DpopPipelineIntegrationTest.java[DpopPipelineIntegrationTest]
+|DPoP proof `htm` and `htu` are enforced by the library in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/dpop/DpopProofValidator.java[DpopProofValidator.validateHtuHtm]. When a proof is present the request method and URI are required (fail-closed — a missing method/URI is rejected rather than skipped), `htm` must match the request method case-insensitively, and `htu` must match the request URI after query string and fragment are stripped per RFC 9449 §4.3
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/dpop/DpopProofValidatorTest.java[DpopProofValidatorTest]
 |===
 
 ==== Open Recommendations
@@ -360,6 +360,19 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.7[VALIDATION-8.7: DPoP Send
 |===
 
 Unmitigated: R5 (log tampering — application-level), I5 (side-channel — low risk for validation library).
+
+[IMPORTANT]
+.Wired-test rule for coverage
+====
+A threat may only be marked *Test Covered* (and never 100% for a category) unless it is backed by a *wired negative-path test* — a test that drives the crafted attack through the real `TokenValidator` entry point and asserts the specific rejection event, rather than a unit test that exercises a validator in isolation or a counter assertion that is trivially true.
+
+The 100%-covered cells above are backed by the wired negative-path attack tiers added in this remediation:
+
+* link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/WiredNegativePathAttackTest.java[WiredNegativePathAttackTest] — HMAC/RSA algorithm confusion (Spoofing/EoP), JWE decompression bomb (Denial of Service), cross-issuer key substitution (Tampering), unsupported JWE key-management algorithm, DPoP sender-binding violations (DPoP), and embedded-JWK header injection (Spoofing/EoP).
+* link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/PsychicSignatureAttackTest.java[PsychicSignatureAttackTest] — zero-value ECDSA psychic-signature bypass (Tampering).
+
+Any future threat marked covered without a corresponding wired negative-path test violates this rule and must be treated as an uncovered threat.
+====
 
 == References
 

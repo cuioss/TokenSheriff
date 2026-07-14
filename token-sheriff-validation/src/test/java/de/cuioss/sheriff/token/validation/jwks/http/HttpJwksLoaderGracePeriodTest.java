@@ -84,7 +84,7 @@ class HttpJwksLoaderGracePeriodTest {
         @Test
         @DisplayName("Should use default grace period of 5 minutes")
         void shouldUseDefaultGracePeriodOf5Minutes() {
-            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl("https://example.com/jwks")
                     .issuerIdentifier("test-issuer")
                     .build(); // No explicit grace period - should use default
@@ -98,7 +98,7 @@ class HttpJwksLoaderGracePeriodTest {
         @Test
         @DisplayName("Should allow custom grace period configuration")
         void shouldAllowCustomGracePeriodConfiguration() {
-            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl("https://example.com/jwks")
                     .issuerIdentifier("test-issuer")
                     .keyRotationGracePeriod(Duration.ofMinutes(10))
@@ -114,7 +114,7 @@ class HttpJwksLoaderGracePeriodTest {
         @Test
         @DisplayName("Should allow zero grace period to disable feature")
         void shouldAllowZeroGracePeriodToDisableFeature() {
-            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl("https://example.com/jwks")
                     .issuerIdentifier("test-issuer")
                     .keyRotationGracePeriod(Duration.ZERO)
@@ -127,7 +127,7 @@ class HttpJwksLoaderGracePeriodTest {
         @Test
         @DisplayName("Configuration should be accessible via getters")
         void configurationShouldBeAccessibleViaGetters() {
-            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl("https://example.com/jwks")
                     .issuerIdentifier("test-issuer")
                     .keyRotationGracePeriod(Duration.ofMinutes(5))
@@ -144,7 +144,7 @@ class HttpJwksLoaderGracePeriodTest {
         @SuppressWarnings("java:S5778") // Single lambda invocation - validation happens in setter
         void shouldValidateNegativeGracePeriodIsNotAllowed() {
             assertThrows(IllegalArgumentException.class, () ->
-                    HttpJwksLoaderConfig.builder()
+                    HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                             .jwksUrl("https://example.com/jwks")
                             .issuerIdentifier("test-issuer")
                             .keyRotationGracePeriod(Duration.ofMinutes(-1))
@@ -154,14 +154,14 @@ class HttpJwksLoaderGracePeriodTest {
         @Test
         @DisplayName("Should validate maxRetiredKeySets is positive")
         void shouldValidateMaxRetiredKeySetsIsPositive() {
-            var baseBuilder = HttpJwksLoaderConfig.builder()
+            var baseBuilder = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl("https://example.com/jwks")
                     .issuerIdentifier("test-issuer");
 
             assertThrows(IllegalArgumentException.class,
                     () -> baseBuilder.maxRetiredKeySets(0));
 
-            var anotherBuilder = HttpJwksLoaderConfig.builder()
+            var anotherBuilder = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl("https://example.com/jwks")
                     .issuerIdentifier("test-issuer");
 
@@ -191,7 +191,7 @@ class HttpJwksLoaderGracePeriodTest {
         void shouldImmediatelyInvalidateRetiredKeysWithZeroGracePeriod(URIBuilder uriBuilder) {
             String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
-            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl(jwksEndpoint)
                     .issuerIdentifier("test-issuer")
                     .keyRotationGracePeriod(Duration.ZERO) // Zero grace period - should immediately invalidate retired keys
@@ -237,7 +237,7 @@ class HttpJwksLoaderGracePeriodTest {
         void shouldKeepRetiredKeysAccessibleWithinGracePeriod(URIBuilder uriBuilder) {
             String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
-            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl(jwksEndpoint)
                     .issuerIdentifier("test-issuer")
                     .keyRotationGracePeriod(Duration.ofMinutes(5)) // 5 minute grace period
@@ -282,7 +282,7 @@ class HttpJwksLoaderGracePeriodTest {
             String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
             // Use short grace period for faster test
-            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl(jwksEndpoint)
                     .issuerIdentifier("test-issuer")
                     .keyRotationGracePeriod(Duration.ofSeconds(1)) // Very short grace period
@@ -335,7 +335,7 @@ class HttpJwksLoaderGracePeriodTest {
             String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
             // Configure with small limit
-            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl(jwksEndpoint)
                     .issuerIdentifier("test-issuer")
                     .keyRotationGracePeriod(Duration.ofMinutes(5))
@@ -358,7 +358,7 @@ class HttpJwksLoaderGracePeriodTest {
             String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
             // Configure with only 1 maxRetiredKeySets to make the bug appear faster
-            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl(jwksEndpoint)
                     .issuerIdentifier("test-issuer")
                     .keyRotationGracePeriod(Duration.ofMinutes(5)) // 5 minute grace period
@@ -443,7 +443,7 @@ class HttpJwksLoaderGracePeriodTest {
             String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
             // Configure loader with 5-minute grace period
-            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl(jwksEndpoint)
                     .issuerIdentifier("test-issuer")
                     .keyRotationGracePeriod(Duration.ofMinutes(5))
@@ -553,7 +553,7 @@ class HttpJwksLoaderGracePeriodTest {
             String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
             // Configure loader with ZERO grace period
-            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                     .jwksUrl(jwksEndpoint)
                     .issuerIdentifier("test-issuer")
                     .keyRotationGracePeriod(Duration.ZERO) // Zero grace period!

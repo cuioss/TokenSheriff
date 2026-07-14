@@ -19,9 +19,12 @@ import de.cuioss.http.client.adapter.ETagAwareHttpAdapter;
 import de.cuioss.http.client.adapter.HttpAdapter;
 import de.cuioss.http.client.adapter.ResilientHttpAdapter;
 import de.cuioss.http.client.result.HttpResult;
+import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
 
+import java.net.URI;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -36,8 +39,17 @@ import java.util.concurrent.atomic.AtomicReference;
  * subsequent endpoint lookups. It provides methods to access common OIDC endpoints
  * like JWKS URI, issuer, authorization endpoint, etc.
  * <p>
- * <strong>Thread Safety:</strong> This class uses AtomicReference for lock-free thread-safe caching.
- * The compareAndSet pattern prevents duplicate loads while allowing concurrent access.
+ * <strong>Thread Safety:</strong> a cached success is served through a lock-free {@code AtomicReference}
+ * fast path, while the side-effecting (re)load — the SSRF egress check, the blocking HTTP fetch, and the
+ * status transitions — runs under a single-flight monitor so only one thread loads per refresh and racing
+ * callers reuse the winning result. The load is deliberately kept out of any {@code updateAndGet} callback,
+ * whose function may re-run under CAS contention.
+ * <p>
+ * <strong>Caching semantics (M2):</strong> only <em>successful</em> discovery results are cached,
+ * and each cached success carries a bounded time-to-live ({@link #DISCOVERY_SUCCESS_TTL}). Once the
+ * TTL elapses the next lookup revalidates against the endpoint, so discovery metadata cannot be
+ * pinned indefinitely. A <em>failed</em> discovery is never cached — it is retried on the next call
+ * rather than being pinned as a permanent negative result.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -46,9 +58,45 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
 
     private static final CuiLogger LOGGER = new CuiLogger(HttpWellKnownResolver.class);
 
+    /**
+     * Bounded time-to-live for a cached <em>successful</em> discovery result before it is
+     * revalidated (M2). Keeps a stale discovery document from being served indefinitely while
+     * still avoiding a network round-trip on every lookup.
+     */
+    private static final Duration DISCOVERY_SUCCESS_TTL = Duration.ofMinutes(15);
+
     private final HttpAdapter<WellKnownResult> wellKnownAdapter;
-    private final AtomicReference<HttpResult<WellKnownResult>> cachedResult = new AtomicReference<>();
+    private final long successTtlNanos;
+
+    /**
+     * SSRF egress guard applied to the discovery endpoint immediately before it is fetched (C1).
+     * Resolving the discovery host fresh at each fetch — rather than trusting an earlier
+     * resolution — also closes the DNS-rebinding window for the well-known document itself,
+     * mirroring the guard {@code HttpJwksLoader} applies to the advertised {@code jwks_uri}.
+     */
+    private final EgressPolicy egressPolicy;
+
+    /**
+     * The discovery endpoint URI the egress guard resolves and validates before every fetch.
+     */
+    private final URI discoveryUri;
+
+    private final AtomicReference<CachedDiscovery> cachedResult = new AtomicReference<>();
     private final AtomicReference<LoaderStatus> status = new AtomicReference<>(LoaderStatus.UNDEFINED);
+
+    /**
+     * Holds a cached successful discovery result together with the {@link System#nanoTime()}
+     * instant at which it expires and must be revalidated.
+     *
+     * @param result       the successful discovery result
+     * @param expiresAtNanos the {@link System#nanoTime()} deadline after which {@code result} is stale
+     */
+    private record CachedDiscovery(HttpResult<WellKnownResult> result, long expiresAtNanos) {
+
+        boolean isFresh() {
+            return System.nanoTime() - expiresAtNanos < 0;
+        }
+    }
 
     /**
      * Creates a new HttpWellKnownResolver with the specified configuration.
@@ -63,6 +111,20 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
      * @param securityEventCounter the shared security event counter for tracking violations
      */
     public HttpWellKnownResolver(WellKnownConfig config, SecurityEventCounter securityEventCounter) {
+        this(config, securityEventCounter, DISCOVERY_SUCCESS_TTL);
+    }
+
+    /**
+     * Creates a new HttpWellKnownResolver with an explicit success TTL.
+     * <p>
+     * Package-private overload used by tests to exercise the bounded-TTL revalidation path (M2)
+     * deterministically without waiting out the production {@link #DISCOVERY_SUCCESS_TTL}.
+     *
+     * @param config the well-known configuration containing HTTP handler and parser settings
+     * @param securityEventCounter the shared security event counter for tracking violations
+     * @param successTtl the bounded time-to-live for a cached successful discovery result
+     */
+    HttpWellKnownResolver(WellKnownConfig config, SecurityEventCounter securityEventCounter, Duration successTtl) {
         var converter = new WellKnownConfigurationConverter(
                 config.getParserConfig().getDslJson(),
                 securityEventCounter,
@@ -76,6 +138,9 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
 
         // Wrap with retry behavior
         this.wellKnownAdapter = ResilientHttpAdapter.wrap(baseAdapter, config.getRetryConfig());
+        this.successTtlNanos = successTtl.toNanos();
+        this.egressPolicy = config.getEgressPolicy();
+        this.discoveryUri = config.getHttpHandler().getUri();
 
         LOGGER.debug("Created HttpWellKnownResolver for well-known endpoint discovery");
     }
@@ -83,23 +148,70 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
     /**
      * Ensures the well-known configuration is loaded and cached using thread-safe lazy initialization.
      * <p>
-     * Uses AtomicReference.updateAndGet for lock-free thread-safe caching. The atomic update ensures
-     * only one thread performs the HTTP load, while racing threads get the cached result.
+     * A lock-free fast path serves a cached success while it is still within its bounded TTL (M2).
+     * When the cache is empty or the cached success has expired, the actual load runs inside
+     * {@link #loadDiscovery()} under this instance's monitor, so the SSRF egress check, the blocking
+     * HTTP fetch, and the {@link #status} transitions each execute <em>at most once</em> per refresh.
+     * The side-effecting load is deliberately kept out of any {@code AtomicReference} update callback:
+     * {@link AtomicReference#updateAndGet} may re-run its function under CAS contention, which would
+     * let the egress check and HTTP load fire more than once and leave {@code status} out of sync with
+     * the winning cache entry.
      *
      * @return Optional containing the WellKnownResult if available and valid, empty otherwise
      */
     private Optional<WellKnownResult> ensureLoaded() {
-        HttpResult<WellKnownResult> result = cachedResult.updateAndGet(current -> {
-            if (current == null) {
-                status.set(LoaderStatus.LOADING);
-                HttpResult<WellKnownResult> loaded = wellKnownAdapter.getBlocking();
-                status.set(loaded.isSuccess() ? LoaderStatus.OK : LoaderStatus.ERROR);
-                return loaded;
-            }
-            return current;
-        });
+        // Fast path: reuse a cached success while it is still within its bounded TTL (M2) — no lock.
+        CachedDiscovery current = cachedResult.get();
+        if (current != null && current.isFresh()) {
+            return current.result().getContent();
+        }
+        return loadDiscovery();
+    }
 
-        return result.isSuccess() ? result.getContent() : Optional.empty();
+    /**
+     * Performs the single-flight discovery load. The {@code synchronized} monitor is the single-flight
+     * gate: only one thread runs the SSRF egress check and the blocking HTTP fetch at a time, while
+     * racing callers block and then reuse whichever result the winning thread cached. A failed load is
+     * never cached (M2), so failures remain retryable on the next call rather than being pinned as a
+     * permanent negative result.
+     *
+     * @return Optional containing the WellKnownResult if the (re)load succeeded, empty otherwise
+     */
+    private synchronized Optional<WellKnownResult> loadDiscovery() {
+        // Re-check under the lock: a racing thread may have completed the (re)load while we waited.
+        CachedDiscovery current = cachedResult.get();
+        if (current != null && current.isFresh()) {
+            return current.result().getContent();
+        }
+        // No cache yet, or an expired success: (re)load. A previously failed load was never cached
+        // (see below), so a failure never reaches this branch as a pinned negative result.
+        status.set(LoaderStatus.LOADING);
+        // SSRF egress guard (C1): resolve the discovery endpoint and reject it if it lands on an
+        // internal/loopback/link-local/metadata address BEFORE any fetch is issued. Because each
+        // (re)load re-runs this fresh resolution, a DNS rebind that flips the discovery host into a
+        // blocked range after an earlier fetch is caught on the next revalidation, not trusted.
+        try {
+            egressPolicy.check(discoveryUri);
+        } catch (TransportException e) {
+            LOGGER.warn(e, TransportLogMessages.WARN.SSRF_EGRESS_BLOCKED_DISCOVERY, e.getMessage());
+            // Do not cache failures (M2): clear any expired entry so the next call retries discovery.
+            cachedResult.set(null);
+            status.set(LoaderStatus.ERROR);
+            return Optional.empty();
+        }
+        HttpResult<WellKnownResult> loaded = wellKnownAdapter.getBlocking();
+        if (loaded.isSuccess()) {
+            // Publish the cache entry BEFORE flipping status to OK so a fast-path reader that observes
+            // OK also observes the fresh entry.
+            cachedResult.set(new CachedDiscovery(loaded, System.nanoTime() + successTtlNanos));
+            status.set(LoaderStatus.OK);
+            return loaded.getContent();
+        }
+        // Do not cache failures (M2): clearing the cache lets the next call retry discovery instead of
+        // pinning a permanent negative result.
+        cachedResult.set(null);
+        status.set(LoaderStatus.ERROR);
+        return Optional.empty();
     }
 
     /**

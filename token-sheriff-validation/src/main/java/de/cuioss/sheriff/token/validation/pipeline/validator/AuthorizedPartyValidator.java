@@ -33,6 +33,10 @@ import java.util.Set;
  * <p>
  * The azp claim identifies the client that the token was issued for and must match
  * one of the expected client IDs if client ID validation is configured.
+ * <p>
+ * RFC 9068 permits falling back to the {@code client_id} claim when {@code azp} is absent. This
+ * substitution can be disabled per-issuer via {@code IssuerConfig#clientIdFallbackEnabled(false)}; when
+ * disabled, a token that omits {@code azp} is never accepted on the strength of a matching {@code client_id}.
  *
  * @apiNote This class is internal to Token-Sheriff and not part of the public API.
  * @since 1.0
@@ -48,6 +52,12 @@ class AuthorizedPartyValidator {
 
 
     private final SecurityEventCounter securityEventCounter;
+
+    /**
+     * Whether the RFC 9068 {@code client_id}→{@code azp} fallback is enabled. When {@code false}, a token
+     * that omits {@code azp} is never accepted on the strength of a matching {@code client_id} claim.
+     */
+    private final boolean clientIdFallbackEnabled;
 
     /**
      * Validates the authorized party claim.
@@ -85,20 +95,22 @@ class AuthorizedPartyValidator {
             );
         }
 
-        // RFC 9068 fallback: check client_id claim when azp is absent
-        var clientIdObj = token.getClaimOption(ClaimName.CLIENT_ID);
-        if (clientIdObj.isPresent()) {
-            String clientId = clientIdObj.get().getOriginalString();
-            if (expectedClientId.contains(clientId)) {
-                LOGGER.warn(JWTValidationLogMessages.WARN.AZP_CLIENT_ID_FALLBACK, clientId);
-                return;
+        // RFC 9068 fallback: check client_id claim when azp is absent (unless the fallback is disabled)
+        if (clientIdFallbackEnabled) {
+            var clientIdObj = token.getClaimOption(ClaimName.CLIENT_ID);
+            if (clientIdObj.isPresent()) {
+                String clientId = clientIdObj.get().getOriginalString();
+                if (expectedClientId.contains(clientId)) {
+                    LOGGER.warn(JWTValidationLogMessages.WARN.AZP_CLIENT_ID_FALLBACK, clientId);
+                    return;
+                }
+                LOGGER.warn(JWTValidationLogMessages.WARN.AZP_MISMATCH, clientId, expectedClientId);
+                securityEventCounter.increment(SecurityEventCounter.EventType.AZP_MISMATCH);
+                throw new TokenValidationException(
+                        SecurityEventCounter.EventType.AZP_MISMATCH,
+                        "Authorized party mismatch: token client_id '%s' does not match any expected client ID %s".formatted(clientId, expectedClientId)
+                );
             }
-            LOGGER.warn(JWTValidationLogMessages.WARN.AZP_MISMATCH, clientId, expectedClientId);
-            securityEventCounter.increment(SecurityEventCounter.EventType.AZP_MISMATCH);
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.AZP_MISMATCH,
-                    "Authorized party mismatch: token client_id '%s' does not match any expected client ID %s".formatted(clientId, expectedClientId)
-            );
         }
 
         LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_CLAIM, ClaimName.AUTHORIZED_PARTY.getName());

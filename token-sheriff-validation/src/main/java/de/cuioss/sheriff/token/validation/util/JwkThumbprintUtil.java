@@ -85,6 +85,10 @@ public final class JwkThumbprintUtil {
     /**
      * Builds a JSON object string from key-value pairs.
      * Keys must already be in lexicographic order.
+     * <p>
+     * Both keys and values are escaped per RFC 8259 (referenced by RFC 7638 Section 3) so the
+     * canonical JSON is spec-correct. Conformant base64url members require no escaping, but escaping
+     * is applied unconditionally so a non-conformant member can never produce malformed JSON.
      */
     private static String buildJson(String... keyValuePairs) {
         var sb = new StringBuilder("{");
@@ -92,9 +96,40 @@ public final class JwkThumbprintUtil {
             if (i > 0) {
                 sb.append(',');
             }
-            sb.append('"').append(keyValuePairs[i]).append("\":\"").append(keyValuePairs[i + 1]).append('"');
+            sb.append('"').append(escapeJsonString(keyValuePairs[i])).append("\":\"")
+                    .append(escapeJsonString(keyValuePairs[i + 1])).append('"');
         }
         sb.append('}');
+        return sb.toString();
+    }
+
+    /**
+     * Escapes a string for inclusion in a JSON string literal per RFC 8259 Section 7:
+     * the quotation mark and reverse solidus are escaped, and all control characters
+     * (U+0000 through U+001F) are escaped using their short form where defined and the
+     * {@code \\uXXXX} form otherwise.
+     */
+    private static String escapeJsonString(String value) {
+        var sb = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\b' -> sb.append("\\b");
+                case '\t' -> sb.append("\\t");
+                case '\n' -> sb.append("\\n");
+                case '\f' -> sb.append("\\f");
+                case '\r' -> sb.append("\\r");
+                default -> {
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
         return sb.toString();
     }
 

@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.validation.dpop;
 
 import com.dslplatform.json.DslJson;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -71,7 +73,7 @@ class DpopProofValidatorTest {
                 .audienceValidationDisabled(true)
                 .build();
 
-        validator = new DpopProofValidator(issuerConfig, securityEventCounter, replayProtection, new SignatureTemplateManager(issuerConfig.getAlgorithmPreferences()), new DslJson<>(new DslJson.Settings<>()));
+        validator = new DpopProofValidator(issuerConfig, securityEventCounter, replayProtection, new SignatureTemplateManager(issuerConfig.getAlgorithmPreferences()), ParserConfig.builder().build(), new DslJson<>(new DslJson.Settings<>()));
     }
 
     @AfterEach
@@ -119,7 +121,7 @@ class DpopProofValidatorTest {
                 .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
                 .audienceValidationDisabled(true)
                 .build();
-        var requiredValidator = new DpopProofValidator(requiredConfig, securityEventCounter, replayProtection, new SignatureTemplateManager(requiredConfig.getAlgorithmPreferences()), new DslJson<>(new DslJson.Settings<>()));
+        var requiredValidator = new DpopProofValidator(requiredConfig, securityEventCounter, replayProtection, new SignatureTemplateManager(requiredConfig.getAlgorithmPreferences()), ParserConfig.builder().build(), new DslJson<>(new DslJson.Settings<>()));
 
         DecodedJwt accessToken = createAccessTokenJwt(null); // no cnf.jkt
         AccessTokenRequest request = AccessTokenRequest.of("dummy-token");
@@ -211,6 +213,57 @@ class DpopProofValidatorTest {
         var ex = assertThrows(TokenValidationException.class,
                 () -> validator.validate(request2, accessToken, rawAccessToken));
         assertEquals(EventType.DPOP_REPLAY_DETECTED, ex.getEventType());
+    }
+
+    @Test
+    @DisplayName("DpopConfig build should enforce the replay-window invariant ttl >= proofMaxAge + clockSkew (M3)")
+    void shouldEnforceReplayWindowInvariantOnBuild() {
+        // Under defaults the effective replay TTL must cover the full proof freshness window
+        // (proofMaxAge + clock skew), so a jti cannot expire while its proof is still fresh.
+        DpopConfig defaults = DpopConfig.builder().build();
+        assertTrue(
+                defaults.getNonceCacheTtlSeconds() >= defaults.getProofMaxAgeSeconds() + DpopConfig.DEFAULT_CLOCK_SKEW_SECONDS,
+                "Default replay TTL must cover proofMaxAge + clock skew");
+
+        // A configured TTL smaller than the freshness window is widened up to it, closing the window.
+        DpopConfig widened = DpopConfig.builder()
+                .proofMaxAgeSeconds(600)
+                .nonceCacheTtlSeconds(120)
+                .build();
+        assertEquals(600 + DpopConfig.DEFAULT_CLOCK_SKEW_SECONDS, widened.getNonceCacheTtlSeconds(),
+                "A TTL shorter than proofMaxAge + clock skew must be widened to the freshness window");
+
+        // A configured TTL that already covers the freshness window is preserved unchanged.
+        DpopConfig preserved = DpopConfig.builder()
+                .proofMaxAgeSeconds(300)
+                .nonceCacheTtlSeconds(1000)
+                .build();
+        assertEquals(1000, preserved.getNonceCacheTtlSeconds(),
+                "A TTL that already covers the freshness window must be preserved");
+    }
+
+    @ParameterizedTest(name = "Should honor a DPoP proof supplied under the \"{0}\" header (M4)")
+    @ValueSource(strings = {"DPoP", "DPOP", "dpop", "Dpop"})
+    @DisplayName("Should honor a DPoP proof regardless of header-name casing (M4)")
+    void shouldHonorDpopHeaderRegardlessOfCasing(String headerName) {
+        KeyPair keyPair = generateRsaKeyPair();
+        Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+        String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+
+        String rawAccessToken = "some.access.token";
+        DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+        String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken,
+                "GET", "https://resource.example.org/protectedresource");
+
+        // Supply the proof under a non-canonical header casing; case-insensitive lookup must still
+        // resolve it so DPoP is enforced rather than being silently downgraded to bearer mode (M4).
+        AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                Map.of(headerName, List.of(dpopProof)),
+                "https://resource.example.org/protectedresource", "GET");
+
+        assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken),
+                "A DPoP proof under the '" + headerName + "' header must be honored, not downgraded to bearer mode");
     }
 
     @Test
@@ -330,7 +383,7 @@ class DpopProofValidatorTest {
                 .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
                 .audienceValidationDisabled(true)
                 .build();
-        var requiredValidator = new DpopProofValidator(requiredConfig, securityEventCounter, replayProtection, new SignatureTemplateManager(requiredConfig.getAlgorithmPreferences()), new DslJson<>(new DslJson.Settings<>()));
+        var requiredValidator = new DpopProofValidator(requiredConfig, securityEventCounter, replayProtection, new SignatureTemplateManager(requiredConfig.getAlgorithmPreferences()), ParserConfig.builder().build(), new DslJson<>(new DslJson.Settings<>()));
 
         // Required mode, access token has cnf.jkt but no DPoP header
         DecodedJwt accessToken = createAccessTokenJwt("some-thumbprint");
@@ -522,6 +575,98 @@ class DpopProofValidatorTest {
                     () -> validator.validate(request, accessToken, rawAccessToken));
             assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
             assertTrue(ex.getMessage().contains(expectedClaim));
+        }
+    }
+
+    @Nested
+    @DisplayName("Low/info DPoP security sweep (L1, L3, L5)")
+    class DpopSecuritySweepTests {
+
+        @Test
+        @DisplayName("L1: an operator-tightened maxTokenSize is applied to the DPoP proof")
+        void shouldRejectDpopProofExceedingTightenedParserBounds() {
+            ParserConfig tightConfig = ParserConfig.builder().maxTokenSize(200).build();
+            IssuerConfig issuerConfig = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .dpopConfig(DpopConfig.builder().build())
+                    .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
+                    .audienceValidationDisabled(true)
+                    .build();
+            var tightValidator = new DpopProofValidator(issuerConfig, securityEventCounter, replayProtection,
+                    new SignatureTemplateManager(issuerConfig.getAlgorithmPreferences()), tightConfig,
+                    tightConfig.getDslJson());
+
+            KeyPair keyPair = generateRsaKeyPair();
+            Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+            String rawAccessToken = "some.access.token";
+            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+            String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken,
+                    "GET", "https://resource.example.org/protectedresource");
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)),
+                    "https://resource.example.org/protectedresource", "GET");
+
+            var ex = assertThrows(TokenValidationException.class,
+                    () -> tightValidator.validate(request, accessToken, rawAccessToken));
+            assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
+            assertTrue(ex.getMessage().contains("exceeds maximum size"),
+                    "A proof larger than the operator-tightened maxTokenSize must be rejected");
+        }
+
+        @Test
+        @DisplayName("L5: an htu differing only by case, default port, and dot-segments normalizes equal")
+        void shouldAcceptHtuDifferingOnlyByCasePortAndDotSegments() {
+            KeyPair keyPair = generateRsaKeyPair();
+            Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+            String rawAccessToken = "some.access.token";
+            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+            // Upper-case host, explicit default port, and a dot-segment — all must normalize away.
+            String messyHtu = "https://RESOURCE.Example.ORG:443/a/../protectedresource";
+            String cleanRequestUri = "https://resource.example.org/protectedresource";
+            String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, "GET", messyHtu);
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)), cleanRequestUri, "GET");
+
+            assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken),
+                    "An htu differing only by case, default port, and dot-segments must normalize equal");
+        }
+
+        @Test
+        @DisplayName("L5: an htu with a genuinely different host is still rejected")
+        void shouldRejectHtuWithDifferentHost() {
+            KeyPair keyPair = generateRsaKeyPair();
+            Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+            String rawAccessToken = "some.access.token";
+            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+            String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, "GET",
+                    "https://attacker.example.org/protectedresource");
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)),
+                    "https://resource.example.org/protectedresource", "GET");
+
+            var ex = assertThrows(TokenValidationException.class,
+                    () -> validator.validate(request, accessToken, rawAccessToken));
+            assertEquals(EventType.DPOP_HTU_MISMATCH, ex.getEventType(),
+                    "Normalization must not collapse genuinely different hosts");
+        }
+
+        @Test
+        @DisplayName("L3: in-window jtis survive flood eviction and are still detected as replays")
+        void shouldNotEvictInWindowJtisUnderFlood() {
+            try (DpopReplayProtection floodProtection = new DpopReplayProtection(300, 2)) {
+                assertTrue(floodProtection.checkAndStore("first-jti"), "A fresh jti is accepted");
+                for (int i = 0; i < 20; i++) {
+                    assertTrue(floodProtection.checkAndStore("flood-jti-" + i),
+                            "Each flooding jti is fresh and accepted");
+                }
+                assertFalse(floodProtection.checkAndStore("first-jti"),
+                        "An in-window jti must survive flood eviction and still be detected as a replay");
+            }
         }
     }
 

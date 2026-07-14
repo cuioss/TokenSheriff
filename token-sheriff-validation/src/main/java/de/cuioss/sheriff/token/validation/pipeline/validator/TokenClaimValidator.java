@@ -88,10 +88,11 @@ public class TokenClaimValidator {
         this.expectedClientId = issuerConfig.getExpectedClientId();
 
         this.audienceValidator = new AudienceValidator(expectedAudience, securityEventCounter,
-                issuerConfig.isAccessTokenAudienceOptional());
+                issuerConfig.isAccessTokenAudienceOptional(), issuerConfig.isAzpAudienceFallbackEnabled());
         this.expirationValidator = new ExpirationValidator(securityEventCounter);
         this.mandatoryClaimsValidator = new MandatoryClaimsValidator(issuerConfig, securityEventCounter);
-        this.authorizedPartyValidator = new AuthorizedPartyValidator(expectedClientId, securityEventCounter);
+        this.authorizedPartyValidator = new AuthorizedPartyValidator(expectedClientId, securityEventCounter,
+                issuerConfig.isClientIdFallbackEnabled());
 
         if (MoreCollections.isEmpty(expectedAudience) && !issuerConfig.isAudienceValidationDisabled()) {
             LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_RECOMMENDED_ELEMENT, "expectedAudience");
@@ -123,10 +124,12 @@ public class TokenClaimValidator {
     public TokenContent validate(TokenContent token, ValidationContext context) {
         LOGGER.trace("Validating token: %s", token);
         mandatoryClaimsValidator.validateMandatoryClaims(token);
+        expirationValidator.validateMandatoryClaimsNonBlank(token);
         audienceValidator.validateAudience(token);
         authorizedPartyValidator.validateAuthorizedParty(token);
         expirationValidator.validateNotBefore(token, context);
         expirationValidator.validateNotExpired(token, context);
+        expirationValidator.validateIssuedAtNotInFuture(token, context);
         expirationValidator.validateTokenAge(token, context);
         LOGGER.debug("Token is valid");
         return token;

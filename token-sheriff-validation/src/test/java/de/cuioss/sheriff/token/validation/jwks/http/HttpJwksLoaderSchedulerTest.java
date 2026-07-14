@@ -67,7 +67,7 @@ class HttpJwksLoaderSchedulerTest {
         moduleDispatcher.returnDefault();
 
         // Create loader without scheduler config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .refreshIntervalSeconds(0) // Disable scheduler
@@ -94,7 +94,7 @@ class HttpJwksLoaderSchedulerTest {
         // Ensure dispatcher is in normal mode
         moduleDispatcher.returnDefault();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .refreshIntervalSeconds(0) // Zero means no refresh
@@ -123,7 +123,7 @@ class HttpJwksLoaderSchedulerTest {
         // Ensure dispatcher is in normal mode
         moduleDispatcher.returnDefault();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .refreshIntervalSeconds(1) // 1 second for testing
@@ -159,7 +159,7 @@ class HttpJwksLoaderSchedulerTest {
         // Ensure dispatcher is in normal mode
         moduleDispatcher.returnDefault();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .refreshIntervalSeconds(1) // 1 second for testing
@@ -198,7 +198,7 @@ class HttpJwksLoaderSchedulerTest {
         // Ensure dispatcher is in normal mode
         moduleDispatcher.returnDefault();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .refreshIntervalSeconds(1) // 1 second for testing
@@ -243,7 +243,7 @@ class HttpJwksLoaderSchedulerTest {
         // Ensure dispatcher is in normal mode
         moduleDispatcher.returnDefault();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .refreshIntervalSeconds(10) // Longer interval to avoid multiple executions during test
@@ -279,7 +279,7 @@ class HttpJwksLoaderSchedulerTest {
         // Ensure dispatcher is in normal mode
         moduleDispatcher.returnDefault();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .refreshIntervalSeconds(1)
@@ -312,7 +312,7 @@ class HttpJwksLoaderSchedulerTest {
         // Make all requests fail from the start
         moduleDispatcher.returnError();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .refreshIntervalSeconds(1)
@@ -343,7 +343,7 @@ class HttpJwksLoaderSchedulerTest {
         // Ensure dispatcher is in normal mode
         moduleDispatcher.returnDefault();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .refreshIntervalSeconds(1)

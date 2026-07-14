@@ -18,9 +18,16 @@ package de.cuioss.sheriff.token.commons.error;
 import java.io.Serial;
 
 /**
- * Signals a failure of outbound IdP transport in the {@code commons.transport} layer:
- * a rejected TLS connection, an SSRF-blocked target, a connect/read timeout, an oversized
- * or malformed response, or an otherwise unreachable endpoint.
+ * Signals a failure of outbound IdP transport in the {@code commons.transport} layer.
+ * <p>
+ * The branches this layer currently raises are:
+ * <ul>
+ *   <li>an SSRF-blocked egress target — the URL has no resolvable host, or it resolves to a
+ *       loopback/link-local/site-local/any-local/multicast/unique-local address (see
+ *       {@code EgressPolicy})</li>
+ *   <li>an oversized or malformed IdP response — the well-known/JWKS payload exceeds the configured
+ *       size ceiling or trips a parser security limit (see {@code WellKnownConfigurationConverter})</li>
+ * </ul>
  * <p>
  * At an HTTP edge this maps to a 5xx {@code application/problem+json} document (typically
  * 502/503), distinct from token-validation failures which map to 401 (see

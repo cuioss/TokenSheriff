@@ -17,11 +17,14 @@ package de.cuioss.sheriff.token.validation.pipeline.validator;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
+import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.context.ValidationContext;
 import de.cuioss.sheriff.token.validation.domain.token.TokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.RequiredArgsConstructor;
+
+import java.time.OffsetDateTime;
 
 /**
  * Validator for JWT expiration and time-based claims.
@@ -30,6 +33,8 @@ import lombok.RequiredArgsConstructor;
  * <ul>
  *   <li>Expiration time (exp) - tokens must not be expired</li>
  *   <li>Not before time (nbf) - tokens must not be used before their valid time</li>
+ *   <li>Issued at time (iat) - must not be unreasonably in the future</li>
+ *   <li>Non-blank mandatory claims (sub, iss) - a present claim must not be an empty string</li>
  * </ul>
  * <p>
  * The validator applies the per-issuer configurable clock skew tolerance (provided via the
@@ -139,5 +144,76 @@ public class ExpirationValidator {
             );
         }
         LOGGER.debug("Token age is within acceptable range");
+    }
+
+    /**
+     * Validates that the token's issued-at (iat) claim is not unreasonably in the future.
+     * <p>
+     * A token whose {@code iat} is more than the configured clock-skew tolerance in the future
+     * indicates a misconfigured issuer or a forged token and is rejected. When the {@code iat}
+     * claim is absent, this validation passes (mandatory-claim presence is enforced elsewhere).
+     * <p>
+     * The failure is reported under {@link SecurityEventCounter.EventType#TOKEN_NBF_FUTURE}, the
+     * time-claim-in-the-future event category shared with the not-before check.
+     *
+     * @param token the token to validate
+     * @param context the validation context containing cached current time and clock-skew tolerance
+     * @throws TokenValidationException if the issued-at time is unreasonably in the future
+     */
+    public void validateIssuedAtNotInFuture(TokenContent token, ValidationContext context) {
+        var issuedAtClaim = token.getClaimOption(ClaimName.ISSUED_AT);
+        if (issuedAtClaim.isEmpty()) {
+            LOGGER.debug("Issued-at claim not present, skipping future-iat guard");
+            return;
+        }
+
+        OffsetDateTime issuedAt = issuedAtClaim.get().getDateTime();
+        if (context.isNotBeforeInvalid(issuedAt)) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_NBF_FUTURE, context.getClockSkewSeconds());
+            securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE);
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.TOKEN_NBF_FUTURE,
+                    "Token issued-at (iat) is more than " + context.getClockSkewSeconds()
+                            + " seconds in the future. Issued at: " + issuedAt + ", Current time: "
+                            + context.getCurrentTime() + " (with " + context.getClockSkewSeconds() + "s clock skew tolerance)"
+            );
+        }
+        LOGGER.debug("Token issued-at is not unreasonably in the future");
+    }
+
+    /**
+     * Validates that present mandatory string claims are non-blank.
+     * <p>
+     * The mandatory-claim presence check keys on claim presence only, so an empty-string {@code sub}
+     * or {@code iss} counts as present and slips through. This guard rejects a present-but-blank
+     * subject or issuer claim, closing that gap without forcing presence (optionality is enforced
+     * by the mandatory-claim validator).
+     *
+     * @param token the token to validate
+     * @throws TokenValidationException if a present {@code sub} or {@code iss} claim is blank
+     */
+    public void validateMandatoryClaimsNonBlank(TokenContent token) {
+        rejectBlankClaim(token, ClaimName.SUBJECT);
+        rejectBlankClaim(token, ClaimName.ISSUER);
+    }
+
+    @SuppressWarnings("java:S125") // false positive: explanatory prose comment, not commented-out code
+    private void rejectBlankClaim(TokenContent token, ClaimName claimName) {
+        var claim = token.getClaimOption(claimName);
+        // A custom SPI ClaimMapper may construct a ClaimValue with a null originalString;
+        // treat null the same as blank so it is rejected as MISSING_CLAIM rather than throwing an NPE.
+        if (claim.isPresent() && isNullOrBlank(claim.get().getOriginalString())) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_CLAIM, claimName.getName());
+            securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_CLAIM);
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.MISSING_CLAIM,
+                    "Mandatory claim '" + claimName.getName() + "' is present but blank (empty string). "
+                            + "A blank mandatory claim is treated as missing."
+            );
+        }
+    }
+
+    private static boolean isNullOrBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

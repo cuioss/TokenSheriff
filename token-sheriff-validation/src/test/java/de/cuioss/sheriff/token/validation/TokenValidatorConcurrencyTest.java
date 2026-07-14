@@ -26,8 +26,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -118,26 +120,38 @@ class TokenValidatorConcurrencyTest {
         var tokenValidator = TokenValidator.builder().parserConfig(ParserConfig.builder().build()).issuerConfig(issuerConfig).build();
         var validJwt = testToken.getRawToken();
 
-        ExecutorService executor = Executors.newFixedThreadPool(50);
-        CountDownLatch latch = new CountDownLatch(50);
+        int threadCount = 50;
+        int iterationsPerThread = 20;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicReference<Throwable> firstFailure = new AtomicReference<>();
 
         // Launch multiple threads to create access tokens simultaneously
-        for (int i = 0; i < 50; i++) {
+        for (int i = 0; i < threadCount; i++) {
             var request = AccessTokenRequest.of(validJwt);
             executor.submit(() -> {
                 try {
-                    for (int j = 0; j < 20; j++) {
+                    for (int j = 0; j < iterationsPerThread; j++) {
                         tokenValidator.createAccessToken(request);
+                        successCount.incrementAndGet();
                     }
+                } catch (RuntimeException e) {
+                    // A submitted Runnable would otherwise swallow the exception into the (unread)
+                    // Future — capture it so the map-optimization race actually fails the test.
+                    firstFailure.compareAndSet(null, e);
                 } finally {
                     latch.countDown();
                 }
             });
         }
 
-        assertTrue(latch.await(20, TimeUnit.SECONDS));
+        assertTrue(latch.await(20, TimeUnit.SECONDS), "All threads should complete within the timeout");
         executor.shutdown();
 
-        // Test passes if no exceptions occurred - any UnsupportedOperationException will fail the test naturally
+        assertNull(firstFailure.get(),
+                () -> "No thread may observe a map-optimization race exception, but one did: " + firstFailure.get());
+        assertEquals(threadCount * iterationsPerThread, successCount.get(),
+                "Every concurrent createAccessToken call must succeed");
     }
 }

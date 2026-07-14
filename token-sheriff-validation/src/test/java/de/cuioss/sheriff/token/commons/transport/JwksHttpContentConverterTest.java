@@ -40,11 +40,12 @@ class JwksHttpContentConverterTest {
     private final JwksHttpContentConverter converter = new JwksHttpContentConverter(ParserConfig.builder().build());
 
     @Test
-    void shouldReturnCorrectBodyHandler() {
+    void shouldReturnBoundedBodyHandler() {
         HttpResponse.BodyHandler<?> handler = converter.getBodyHandler();
         assertNotNull(handler);
-        // Should be String body handler with UTF-8
-        assertEquals(HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8).getClass(), handler.getClass());
+        // The JWKS body is now bounded during streaming (H2), so the handler is no longer the plain
+        // ofString handler; its size-ceiling behaviour is asserted by the streaming tests below.
+        assertNotEquals(HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8).getClass(), handler.getClass());
     }
 
     @Test
@@ -150,5 +151,65 @@ class JwksHttpContentConverterTest {
         // Verify LogRecord is logged when DSL-JSON returns null
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                 WARN.JWKS_PARSE_NULL_RESULT.resolveIdentifierString());
+    }
+
+    private static final int BOUNDED_MAX = 64;
+
+    private JwksHttpContentConverter boundedConverter() {
+        return new JwksHttpContentConverter(ParserConfig.builder().maxPayloadSize(BOUNDED_MAX).build());
+    }
+
+    @Test
+    void shouldRejectOverLimitJwksBodyDuringStreaming() {
+        HttpResponse.BodyHandler<?> handler = boundedConverter().getBodyHandler();
+        byte[] overLimit = "x".repeat(BOUNDED_MAX + 40).getBytes(StandardCharsets.UTF_8);
+
+        var result = BoundedBodyHandlerTestSupport.drive(handler, overLimit, null);
+
+        assertFalse(result.succeeded(), "Over-limit JWKS body must fail closed during streaming");
+        assertNotNull(result.failure());
+        assertTrue(result.failure().getMessage().contains("exceeds maximum allowed size"),
+                "Failure must name the size-ceiling breach, but was: " + result.failure().getMessage());
+        assertTrue(result.cancelled(),
+                "Subscription must be cancelled mid-stream — the over-limit body is not fully buffered");
+    }
+
+    @Test
+    void shouldRejectOverLimitJwksBodyViaContentLengthPreCheck() {
+        HttpResponse.BodyHandler<?> handler = boundedConverter().getBodyHandler();
+        byte[] overLimit = "x".repeat(BOUNDED_MAX + 40).getBytes(StandardCharsets.UTF_8);
+
+        var result = BoundedBodyHandlerTestSupport.drive(handler, overLimit, (long) overLimit.length);
+
+        assertFalse(result.succeeded(), "A JWKS body advertising an over-limit Content-Length must be rejected");
+        assertNotNull(result.failure());
+        assertTrue(result.failure().getMessage().contains("exceeds maximum allowed size"),
+                "Failure must name the size-ceiling breach, but was: " + result.failure().getMessage());
+        assertTrue(result.cancelled(),
+                "Content-Length pre-check must cancel the subscription — the over-limit body is never read, not drained");
+    }
+
+    @Test
+    void shouldAcceptAtLimitJwksBody() {
+        HttpResponse.BodyHandler<?> handler = boundedConverter().getBodyHandler();
+        String atLimit = "y".repeat(BOUNDED_MAX);
+        byte[] body = atLimit.getBytes(StandardCharsets.UTF_8);
+
+        var result = BoundedBodyHandlerTestSupport.drive(handler, body, (long) body.length);
+
+        assertTrue(result.succeeded(), "An at-limit JWKS body must be accepted");
+        assertEquals(atLimit, result.body());
+        assertFalse(result.cancelled(), "An at-limit JWKS body must not trigger a streaming abort");
+    }
+
+    @Test
+    void shouldReturnEmptyForOverLimitJwksContentAsDefenseInDepth() {
+        String overLimit = "z".repeat(BOUNDED_MAX + 40);
+
+        Optional<Jwks> result = boundedConverter().convert(overLimit);
+
+        assertTrue(result.isEmpty(), "convertString() must reject an over-limit body as defense in depth");
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                WARN.JWKS_JSON_PARSE_FAILED.resolveIdentifierString());
     }
 }

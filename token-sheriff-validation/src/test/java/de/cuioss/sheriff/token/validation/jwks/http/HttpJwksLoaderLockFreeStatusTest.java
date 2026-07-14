@@ -53,7 +53,7 @@ class HttpJwksLoaderLockFreeStatusTest {
     @DisplayName("getLoaderStatus should be lock-free under high contention")
     void getLoaderStatusShouldBeLockFreeUnderHighContention(URIBuilder uriBuilder) throws Exception {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("lock-free-test-issuer")
                 .build();
@@ -126,7 +126,7 @@ class HttpJwksLoaderLockFreeStatusTest {
     @DisplayName("Status transitions should be atomic and consistent")
     void statusTransitionsShouldBeAtomicAndConsistent(URIBuilder uriBuilder) throws Exception {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("atomic-transition-test-issuer")
                 .build();
@@ -221,7 +221,7 @@ class HttpJwksLoaderLockFreeStatusTest {
     @DisplayName("Concurrent status checks during multiple initializations should be safe")
     void concurrentStatusChecksDuringMultipleInitializationsShouldBeSafe(URIBuilder uriBuilder) throws Exception {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("multi-init-test-issuer")
                 .build();

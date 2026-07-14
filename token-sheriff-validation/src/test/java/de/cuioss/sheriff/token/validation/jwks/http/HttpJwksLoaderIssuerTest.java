@@ -18,6 +18,8 @@ package de.cuioss.sheriff.token.validation.jwks.http;
 import de.cuioss.http.client.HttpLogMessages;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
+import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
+import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.test.dispatcher.WellKnownDispatcher;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
@@ -57,7 +59,7 @@ class HttpJwksLoaderIssuerTest {
         moduleDispatcher.returnDefault();
 
         // Create HttpJwksLoader with well-known config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
                 .build();
 
@@ -76,7 +78,7 @@ class HttpJwksLoaderIssuerTest {
     @DisplayName("Should require issuer identifier for direct JWKS configuration")
     void shouldRequireIssuerForDirectJwks(URIBuilder uriBuilder) {
         // Attempt to create HttpJwksLoader with direct JWKS URL but no issuer - should fail
-        HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder jwks = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder jwks = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(uriBuilder.addPathSegment("jwks").buildAsString());
 
         assertThrows(IllegalArgumentException.class, jwks::build, "Should throw exception when issuer is missing for direct JWKS configuration");
@@ -89,7 +91,7 @@ class HttpJwksLoaderIssuerTest {
         moduleDispatcher.returnError();
 
         // Create HttpJwksLoader with well-known config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
                 .build();
 
@@ -113,7 +115,7 @@ class HttpJwksLoaderIssuerTest {
         moduleDispatcher.returnMissingIssuer();
 
         // Create HttpJwksLoader with well-known config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
                 .build();
 
@@ -133,7 +135,7 @@ class HttpJwksLoaderIssuerTest {
         moduleDispatcher.returnDefault();
 
         // Create HttpJwksLoader with well-known config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
                 .build();
 
@@ -163,7 +165,7 @@ class HttpJwksLoaderIssuerTest {
         moduleDispatcher.returnDefault();
 
         // Create HttpJwksLoader with well-known config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
                 .build();
 
@@ -206,7 +208,7 @@ class HttpJwksLoaderIssuerTest {
     void shouldReturnEmptyWhenConfigReturnsEmptyIssuer() {
         // Create HttpJwksLoader with an invalid well-known URL
         // This will cause the config to fail and return empty issuer
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl("https://invalid.example.com/.well-known/openid-configuration")
                 .build();
 
@@ -217,5 +219,57 @@ class HttpJwksLoaderIssuerTest {
         // Get issuer identifier - should return empty
         Optional<String> issuer = jwksLoader.getIssuerIdentifier();
         assertFalse(issuer.isPresent(), "Issuer should not be present when config returns empty");
+    }
+
+    @Test
+    @DisplayName("Should hard-fail discovery before fetching the advertised URL when the advertised issuer mismatches the configured trust anchor (M7)")
+    void shouldHardFailWhenAdvertisedIssuerMismatches(URIBuilder uriBuilder) {
+        // The discovery document advertises issuer == mock-server base URL; the configured trust
+        // anchor is a different issuer, so discovery must hard-fail before the advertised jwks_uri
+        // is fetched.
+        moduleDispatcher.returnDefault();
+
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .allowLoopbackEgress(true)
+                .allowInsecureHttp(true)
+                .issuerIdentifier("https://trusted-issuer.example.com")
+                .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
+                .build();
+
+        jwksLoader = new HttpJwksLoader(config);
+        LoaderStatus status = jwksLoader.initJWKSLoader(securityEventCounter).join();
+
+        assertAll("advertised-issuer gate (M7)",
+                () -> assertEquals(LoaderStatus.ERROR, status,
+                        "Discovery must hard-fail when the advertised issuer does not match the configured trust anchor"),
+                () -> assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.ISSUER_MISMATCH),
+                        "An advertised-issuer mismatch must be recorded exactly once"),
+                () -> assertTrue(jwksLoader.getKeyInfo("any-kid").isEmpty(),
+                        "No keys may be loaded from the advertised URL once the issuer gate fails"));
+
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                JWTValidationLogMessages.WARN.ISSUER_MISMATCH.resolveIdentifierString());
+    }
+
+    @Test
+    @DisplayName("Should tolerate a trailing-slash difference between advertised and configured issuer (M7)")
+    void shouldTolerateTrailingSlashIssuerDifference(URIBuilder uriBuilder) {
+        // The discovery document advertises issuer == base URL (no trailing slash); configuring the
+        // same issuer with a trailing slash is a benign formatting variance, not a genuine mismatch.
+        moduleDispatcher.returnDefault();
+        String baseUrl = uriBuilder.buildAsString();
+
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .allowLoopbackEgress(true)
+                .allowInsecureHttp(true)
+                .issuerIdentifier(baseUrl + "/")
+                .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
+                .build();
+
+        jwksLoader = new HttpJwksLoader(config);
+        jwksLoader.initJWKSLoader(securityEventCounter).join();
+
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.ISSUER_MISMATCH),
+                "A trailing-slash difference must not be treated as an advertised-issuer mismatch");
     }
 }

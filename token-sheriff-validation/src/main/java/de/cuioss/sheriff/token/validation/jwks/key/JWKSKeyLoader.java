@@ -41,6 +41,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
+
 /**
  * Implementation of {@link JwksLoader} that loads JWKS from string content.
  * <p>
@@ -387,7 +389,18 @@ public class JWKSKeyLoader implements JwksLoader {
         for (JwkKey jwk : jwkObjects) {
             // Process JwkKey directly
             var keyInfoOpt = processor.processKey(jwk);
-            keyInfoOpt.ifPresent(keyInfo -> keyMap.put(keyInfo.keyId(), keyInfo));
+            keyInfoOpt.ifPresent(keyInfo -> {
+                KeyInfo previous = keyMap.put(keyInfo.keyId(), keyInfo);
+                if (previous != null) {
+                    // A duplicate kid means a later key silently shadowed an earlier one; warn so the
+                    // ambiguous JWKS is visible rather than resolving to whichever key parsed last, and
+                    // count it so the ambiguity surfaces in the security-event metrics like other warnings.
+                    LOGGER.warn(WARN.DUPLICATE_JWKS_KID, keyInfo.keyId());
+                    if (securityEventCounter != null) {
+                        securityEventCounter.increment(SecurityEventCounter.EventType.DUPLICATE_JWKS_KID);
+                    }
+                }
+            });
         }
 
         this.keyInfoMap = keyMap;

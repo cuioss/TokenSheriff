@@ -64,18 +64,71 @@ class HttpJwksLoaderConfigTest {
     }
 
     @Test
-    @DisplayName("Should warn when creating a handler for a discovered http:// JWKS URL")
+    @DisplayName("Should reject http:// JWKS URL by default (cleartext is opt-in)")
+    void shouldRejectInsecureHttpByDefault() {
+        var builder = HttpJwksLoaderConfig.builder()
+                .jwksUrl("http://example.com/.well-known/jwks.json")
+                .issuerIdentifier("test-issuer");
+        assertThrows(IllegalArgumentException.class, builder::build,
+                "http:// JWKS URL must be rejected by default without an explicit opt-in");
+    }
+
+    @Test
+    @DisplayName("Should allow http:// JWKS URL only when allowInsecureHttp(true) is set explicitly")
+    void shouldAllowInsecureHttpWhenExplicitlyEnabled() {
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .jwksUrl("http://example.com/.well-known/jwks.json")
+                .issuerIdentifier("test-issuer")
+                .allowInsecureHttp(true)
+                .build();
+        assertTrue(config.getHttpHandler().getUri().toString().startsWith("http://"),
+                "http:// JWKS URL must be accepted when insecure HTTP is explicitly enabled");
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                TransportLogMessages.WARN.INSECURE_HTTP_JWKS.resolveIdentifierString());
+    }
+
+    @Test
+    @DisplayName("Should warn when creating a handler for a discovered http:// JWKS URL under explicit opt-in")
     void shouldWarnForDiscoveredInsecureJwksUrl() {
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
                 .jwksUrl(VALID_URL)
                 .issuerIdentifier("test-issuer")
+                .allowInsecureHttp(true)
                 .build();
 
         HttpHandler handler = config.getHttpHandler("http://internal.example/jwks.json");
         assertTrue(handler.getUri().toString().startsWith("http://"),
-                "Discovered http:// JWKS URL is allowed by default");
+                "Discovered http:// JWKS URL is allowed when insecure HTTP is explicitly enabled");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                 TransportLogMessages.WARN.INSECURE_HTTP_JWKS.resolveIdentifierString());
+    }
+
+    @Test
+    @DisplayName("Should reject a JWKS host resolving to a blocked range when no egress opt-in is set")
+    void shouldRejectBlockedHostWithoutEgressOptIn() {
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .jwksUrl(VALID_URL)
+                .issuerIdentifier("test-issuer")
+                .build();
+        // "localhost" resolves to a loopback address, which the secure-default egress guard blocks.
+        assertThrows(de.cuioss.sheriff.token.commons.error.TransportException.class,
+                () -> config.getEgressPolicy().check(URI.create("https://localhost:8443/certs")),
+                "A loopback-resolving host must be blocked when no egress opt-in is configured");
+    }
+
+    @Test
+    @DisplayName("Should permit a JWKS host that is on the explicit egress allow-list")
+    void shouldPermitAllowedEgressHost() {
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .jwksUrl(VALID_URL)
+                .issuerIdentifier("test-issuer")
+                .allowedEgressHost("localhost")
+                .build();
+        // The allow-list bypasses the address-range checks entirely, so the otherwise-blocked
+        // loopback resolution of "localhost" is permitted.
+        assertDoesNotThrow(
+                () -> config.getEgressPolicy().check(URI.create("https://localhost:8443/certs")),
+                "An allow-listed host must bypass the egress address-range checks");
     }
 
     @Test
@@ -218,6 +271,24 @@ class HttpJwksLoaderConfigTest {
     }
 
     @Test
+    @DisplayName("Should apply explicit JWKS transport timeout defaults consistent with discovery (M8)")
+    void shouldApplyExplicitTransportTimeoutDefaults() {
+
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .jwksUrl(VALID_URL)
+                .issuerIdentifier("test-issuer")
+                .refreshIntervalSeconds(REFRESH_INTERVAL)
+                .build();
+
+        HttpHandler handler = config.getHttpHandler();
+        assertAll("Explicit JWKS transport timeout defaults (M8)",
+                () -> assertEquals(2, handler.getConnectionTimeoutSeconds(),
+                        "Default JWKS connect timeout must be 2s to match the discovery transport, not cui-http's laxer 10s default"),
+                () -> assertEquals(3, handler.getReadTimeoutSeconds(),
+                        "Default JWKS read timeout must be 3s to match the discovery transport, not cui-http's laxer 10s default"));
+    }
+
+    @Test
     @DisplayName("Should set connect timeout seconds")
     void shouldSetConnectTimeoutSeconds() {
 
@@ -228,9 +299,8 @@ class HttpJwksLoaderConfigTest {
                 .refreshIntervalSeconds(REFRESH_INTERVAL)
                 .connectTimeoutSeconds(connectTimeout)
                 .build();
-        assertNotNull(config.getHttpHandler(), "HttpHandler should be created");
-        // Note: We can't directly verify the timeout value as it's internal to HttpHandler
-        // but we can verify the config builds successfully with the timeout set
+        assertEquals(connectTimeout, config.getHttpHandler().getConnectionTimeoutSeconds(),
+                "Explicit connect timeout must override the default and be carried by the HttpHandler");
     }
 
     @Test
@@ -244,9 +314,8 @@ class HttpJwksLoaderConfigTest {
                 .refreshIntervalSeconds(REFRESH_INTERVAL)
                 .readTimeoutSeconds(readTimeout)
                 .build();
-        assertNotNull(config.getHttpHandler(), "HttpHandler should be created");
-        // Note: We can't directly verify the timeout value as it's internal to HttpHandler
-        // but we can verify the config builds successfully with the timeout set
+        assertEquals(readTimeout, config.getHttpHandler().getReadTimeoutSeconds(),
+                "Explicit read timeout must override the default and be carried by the HttpHandler");
     }
 
     @Test
@@ -262,7 +331,12 @@ class HttpJwksLoaderConfigTest {
                 .connectTimeoutSeconds(connectTimeout)
                 .readTimeoutSeconds(readTimeout)
                 .build();
-        assertNotNull(config.getHttpHandler(), "HttpHandler should be created");
+        HttpHandler handler = config.getHttpHandler();
+        assertAll("Explicit connect and read timeouts",
+                () -> assertEquals(connectTimeout, handler.getConnectionTimeoutSeconds(),
+                        "Explicit connect timeout must be carried by the HttpHandler"),
+                () -> assertEquals(readTimeout, handler.getReadTimeoutSeconds(),
+                        "Explicit read timeout must be carried by the HttpHandler"));
     }
 
     @Test

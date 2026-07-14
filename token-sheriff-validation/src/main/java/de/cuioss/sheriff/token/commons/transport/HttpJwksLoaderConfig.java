@@ -27,6 +27,8 @@ import lombok.ToString;
 import javax.net.ssl.SSLContext;
 import java.net.URI;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -68,6 +70,20 @@ public class HttpJwksLoaderConfig {
      * Default maximum number of retired key sets to keep.
      */
     private static final int DEFAULT_MAX_RETIRED_KEY_SETS = 3;
+
+    /**
+     * Default connect timeout in seconds (2) for the direct-JWKS transport, set explicitly to match
+     * the discovery transport defaults in {@link WellKnownConfig} rather than silently inheriting the
+     * laxer cui-http 10-second default. Keeping the JWKS and discovery timeouts consistent gives both
+     * IdP-advertised fetches the same tight DoS bound (M8).
+     */
+    private static final int DEFAULT_CONNECT_TIMEOUT_SECONDS = 2;
+
+    /**
+     * Default read timeout in seconds (3) for the direct-JWKS transport, set explicitly to match the
+     * discovery transport defaults in {@link WellKnownConfig}. See {@link #DEFAULT_CONNECT_TIMEOUT_SECONDS}.
+     */
+    private static final int DEFAULT_READ_TIMEOUT_SECONDS = 3;
 
     /**
      * The interval in seconds at which to refresh the keys.
@@ -149,6 +165,16 @@ public class HttpJwksLoaderConfig {
     @EqualsAndHashCode.Exclude
     private final ParserConfig parserConfig;
 
+    /**
+     * The SSRF egress policy applied to the advertised/configured JWKS URL immediately
+     * before it is fetched. Defaults to {@link EgressPolicy#secureDefault()} (loopback and
+     * all internal ranges rejected); relaxed only via the explicit
+     * {@link HttpJwksLoaderConfigBuilder#allowLoopbackEgress(boolean)} knob.
+     */
+    @Getter
+    @EqualsAndHashCode.Exclude
+    private final EgressPolicy egressPolicy;
+
     @SuppressWarnings("java:S107") // ok for builder
     private HttpJwksLoaderConfig(int refreshIntervalSeconds,
             HttpHandler httpHandler,
@@ -159,7 +185,8 @@ public class HttpJwksLoaderConfig {
             String issuerIdentifier,
             Duration keyRotationGracePeriod,
             int maxRetiredKeySets,
-            ParserConfig parserConfig) {
+            ParserConfig parserConfig,
+            EgressPolicy egressPolicy) {
         this.refreshIntervalSeconds = refreshIntervalSeconds;
         this.httpHandler = httpHandler;
         this.wellKnownConfig = wellKnownConfig;
@@ -170,6 +197,7 @@ public class HttpJwksLoaderConfig {
         this.keyRotationGracePeriod = keyRotationGracePeriod;
         this.maxRetiredKeySets = maxRetiredKeySets;
         this.parserConfig = parserConfig;
+        this.egressPolicy = egressPolicy;
     }
 
     /**
@@ -282,7 +310,9 @@ public class HttpJwksLoaderConfig {
         private Duration keyRotationGracePeriod = DEFAULT_KEY_ROTATION_GRACE_PERIOD;
         private int maxRetiredKeySets = DEFAULT_MAX_RETIRED_KEY_SETS;
         private ParserConfig parserConfig;
-        private boolean allowInsecureHttp = true;
+        private boolean allowInsecureHttp = false;
+        private boolean allowLoopbackEgress = false;
+        private final List<String> allowedEgressHosts = new ArrayList<>();
 
         // Pending well-known values — WellKnownConfig creation is deferred to build()
         private String pendingWellKnownUrl;
@@ -295,24 +325,69 @@ public class HttpJwksLoaderConfig {
          * Constructor initializing the HttpHandlerBuilder.
          */
         public HttpJwksLoaderConfigBuilder() {
-            this.httpHandlerBuilder = HttpHandler.builder();
+            // Apply explicit, documented timeout defaults consistent with the discovery transport
+            // (WellKnownConfig) so the JWKS fetch does not silently inherit cui-http's laxer 10s/10s
+            // defaults (M8). A later connectTimeoutSeconds()/readTimeoutSeconds() call overrides these.
+            this.httpHandlerBuilder = HttpHandler.builder()
+                    .connectionTimeoutSeconds(DEFAULT_CONNECT_TIMEOUT_SECONDS)
+                    .readTimeoutSeconds(DEFAULT_READ_TIMEOUT_SECONDS);
         }
 
         /**
-         * Controls whether plaintext {@code http://} endpoints are permitted.
+         * Controls whether plaintext {@code http://} JWKS endpoints are permitted.
          * <p>
-         * Defaults to {@code true}, which preserves the "allow but warn" contract:
-         * cleartext endpoints are accepted but a {@code TokenSheriff-139}
-         * ({@code INSECURE_HTTP_JWKS}) warning is emitted. Set to {@code false} to
-         * enforce HTTPS and have {@link #build()} reject {@code http://} endpoints,
-         * which is recommended for production to protect against man-in-the-middle
-         * attacks on JWKS resolution.
+         * Defaults to {@code false} (secure by default): {@link #build()} rejects
+         * {@code http://} JWKS endpoints so key material cannot be substituted via a
+         * man-in-the-middle downgrade. Set to {@code true} to opt into cleartext HTTP —
+         * accepted but with a {@code TokenSheriff-139} ({@code INSECURE_HTTP_JWKS})
+         * warning — which should only be used for local development or trusted-network
+         * scenarios, never in production.
          *
-         * @param allowInsecureHttp {@code false} to require HTTPS, {@code true} (default) to allow cleartext HTTP
+         * @param allowInsecureHttp {@code true} to opt into cleartext HTTP, {@code false} (default) to require HTTPS
          * @return this builder instance
          */
         public HttpJwksLoaderConfigBuilder allowInsecureHttp(boolean allowInsecureHttp) {
             this.allowInsecureHttp = allowInsecureHttp;
+            return this;
+        }
+
+        /**
+         * Permits the SSRF egress guard to resolve the JWKS URL to a loopback address.
+         * <p>
+         * Defaults to {@code false}: the secure-by-default {@link EgressPolicy} rejects
+         * loopback, link-local, site-local, ULA, and cloud-metadata addresses so an
+         * attacker-advertised {@code jwks_uri} cannot reach internal endpoints. Set to
+         * {@code true} to fetch JWKS from {@code localhost} — required by MockWebServer-based
+         * tests and local/dev callers, which must opt in deliberately. This is an explicit,
+         * discoverable knob, never an implicit test-mode; all other blocked ranges still apply.
+         *
+         * @param allowLoopbackEgress {@code true} to allow loopback JWKS fetches, {@code false} (default) to reject them
+         * @return this builder instance
+         */
+        public HttpJwksLoaderConfigBuilder allowLoopbackEgress(boolean allowLoopbackEgress) {
+            this.allowLoopbackEgress = allowLoopbackEgress;
+            return this;
+        }
+
+        /**
+         * Adds a host to the SSRF egress guard's explicit allow-list for both the advertised
+         * {@code jwks_uri} fetch and, in well-known mode, the discovery fetch.
+         * <p>
+         * Allow-listed hosts bypass the address-range checks entirely, so a JWKS or discovery
+         * endpoint whose host resolves to a site-local, link-local, or ULA address (for example
+         * a Docker service name such as {@code keycloak} on a container bridge network) can be
+         * reached despite the secure-by-default {@link EgressPolicy}. Matching is case-insensitive.
+         * This is an explicit, discoverable knob intended for integration tests and trusted
+         * local/dev topologies; it must be scoped narrowly and never used to allow-list
+         * attacker-influenceable hosts in production.
+         *
+         * @param host the host name to allow-list; ignored when {@code null} or blank
+         * @return this builder instance
+         */
+        public HttpJwksLoaderConfigBuilder allowedEgressHost(String host) {
+            if (host != null && !host.isBlank()) {
+                allowedEgressHosts.add(host);
+            }
             return this;
         }
 
@@ -576,7 +651,7 @@ public class HttpJwksLoaderConfig {
          * @throws IllegalArgumentException if any parameter is invalid
          * @throws IllegalArgumentException if no endpoint was configured
          */
-        @SuppressWarnings("java:S3776") // ok for builder
+        @SuppressWarnings({"java:S3776", "java:S6541"}) // ok for builder — validation/defaulting inherent to a single build() entry point
         public HttpJwksLoaderConfig build() {
             // Ensure at least one endpoint configuration method was used
             if (endpointSource == null) {
@@ -600,7 +675,11 @@ public class HttpJwksLoaderConfig {
                 var wkBuilder = WellKnownConfig.builder()
                         .retryConfig(RetryConfig.defaults())
                         .parserConfig(resolvedParserConfig)
-                        .allowInsecureHttp(allowInsecureHttp);
+                        .allowInsecureHttp(allowInsecureHttp)
+                        .allowLoopbackEgress(allowLoopbackEgress);
+                for (String allowedHost : allowedEgressHosts) {
+                    wkBuilder.allowedEgressHost(allowedHost);
+                }
                 if (pendingWellKnownUrl != null) {
                     wkBuilder.wellKnownUrl(pendingWellKnownUrl);
                 } else {
@@ -644,6 +723,13 @@ public class HttpJwksLoaderConfig {
 
             // For well-known, issuer will be discovered dynamically during resolution (optional in config)
 
+            EgressPolicy.EgressPolicyBuilder egressPolicyBuilder = EgressPolicy.builder()
+                    .allowLoopback(allowLoopbackEgress);
+            for (String allowedHost : allowedEgressHosts) {
+                egressPolicyBuilder.allowedHost(allowedHost);
+            }
+            EgressPolicy resolvedEgressPolicy = egressPolicyBuilder.build();
+
             return new HttpJwksLoaderConfig(
                     refreshIntervalSeconds,
                     jwksHttpHandler,
@@ -654,7 +740,8 @@ public class HttpJwksLoaderConfig {
                     issuerIdentifier,
                     keyRotationGracePeriod,
                     maxRetiredKeySets,
-                    resolvedParserConfig);
+                    resolvedParserConfig,
+                    resolvedEgressPolicy);
         }
 
     }

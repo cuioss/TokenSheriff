@@ -23,6 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -94,5 +95,38 @@ class DSLJsonSecurityTest {
 
         assertThrows(IOException.class, () ->
                 dslJson.deserialize(Jwks.class, malformedJwks.getBytes(), malformedJwks.getBytes().length));
+    }
+
+    @Test
+    @DisplayName("Should reject a JWKS whose string value exceeds the configured maxStringLength")
+    void shouldRejectJwksWithOverLimitString() {
+        int maxStringLength = 1000;
+        ParserConfig config = ParserConfig.builder()
+                .maxStringLength(maxStringLength)
+                .build();
+
+        DslJson<Object> dslJson = config.getDslJson();
+
+        // The "n" modulus value is one character past the configured limit; DSL-JSON's
+        // limitStringBuffer must abort deserialization rather than buffer the oversized string.
+        String oversizedModulus = "a".repeat(maxStringLength + 1);
+        String overLimitJwks = """
+                {
+                    "keys": [
+                        {
+                            "kty": "RSA",
+                            "kid": "test-key-1",
+                            "alg": "RS256",
+                            "n": "%s",
+                            "e": "AQAB"
+                        }
+                    ]
+                }
+                """.formatted(oversizedModulus);
+        byte[] payload = overLimitJwks.getBytes(StandardCharsets.UTF_8);
+
+        assertThrows(IOException.class, () ->
+                        dslJson.deserialize(Jwks.class, payload, payload.length),
+                "A string longer than maxStringLength must be rejected during deserialization");
     }
 }

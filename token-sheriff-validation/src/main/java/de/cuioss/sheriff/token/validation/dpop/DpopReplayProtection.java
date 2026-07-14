@@ -124,12 +124,23 @@ public class DpopReplayProtection implements Closeable {
         if (overflow <= 0) {
             return;
         }
-        // Single-pass: sort by insertion order and remove oldest entries atomically
-        seenJti.entrySet().stream()
+        long now = System.currentTimeMillis();
+        // Only evict entries whose freshness window (ttlMillis) has already elapsed, oldest first.
+        // Evicting a jti still inside its window would forget it early and permit a replay, defeating
+        // the protection this cache exists to provide. Under a flood of in-window jtis the cache may
+        // temporarily exceed maxSize; the periodic evictExpired sweep reclaims those entries once
+        // their windows close.
+        var evictable = seenJti.entrySet().stream()
+                .filter(entry -> (now - entry.getValue().timestampMillis()) >= ttlMillis)
                 .sorted(Map.Entry.comparingByValue(
                         Comparator.comparingLong(Entry::insertionOrder)))
                 .limit(overflow)
-                .forEach(entry -> seenJti.remove(entry.getKey(), entry.getValue()));
+                .toList();
+        evictable.forEach(entry -> seenJti.remove(entry.getKey(), entry.getValue()));
+        if (evictable.size() < overflow) {
+            LOGGER.debug("DPoP replay cache over soft capacity: retained %s in-window jtis to preserve replay protection (overflow=%s, evicted=%s)",
+                    seenJti.size(), overflow, evictable.size());
+        }
     }
 
     @Override

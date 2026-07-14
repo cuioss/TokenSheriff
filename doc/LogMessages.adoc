@@ -49,7 +49,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-009 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
 |===
 
-== WARN Level (100-167)
+== WARN Level (100-168)
 
 [cols="1,1,2,2", options="header"]
 |===
@@ -120,6 +120,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-165 |Audience |Audience claim missing but azp claim '%s' matches expected audience — using azp as fallback |Logged when the audience (aud) claim is absent but the azp claim matches the expected audience, falling back to azp for audience validation
 |TokenSheriff-166 |Audience |Access token audience validation skipped (accessTokenAudienceOptional=true). Expected audience: %s |Logged when audience validation is skipped for an access token because accessTokenAudienceOptional is enabled
 |TokenSheriff-167 |Authorized Party |azp claim missing, using client_id claim '%s' for authorized party validation (RFC 9068) |Logged when the azp claim is absent but the client_id claim (per RFC 9068) matches the expected client ID
+|TokenSheriff-168 |JWKS |SSRF egress guard blocked well-known discovery fetch: %s |Logged when the SSRF egress guard rejects the OIDC well-known discovery endpoint because its host resolves to a disallowed (loopback/link-local/site-local/ULA/metadata) address before any fetch is issued
 |===
 
 == ERROR Level (200-206)

@@ -67,7 +67,7 @@ class HttpJwksLoaderKeyRotationTest {
     void shouldFindKeyInCurrentKeysAfterRotation(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .keyRotationGracePeriod(Duration.ofMinutes(5))
@@ -105,7 +105,7 @@ class HttpJwksLoaderKeyRotationTest {
     void shouldFindOriginalKeyInRetiredKeysWithinGracePeriod(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .keyRotationGracePeriod(Duration.ofMinutes(5)) // 5 minute grace period
@@ -149,7 +149,7 @@ class HttpJwksLoaderKeyRotationTest {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
         // Very short grace period for this test
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .keyRotationGracePeriod(Duration.ofMillis(100)) // 100ms grace period
@@ -196,7 +196,7 @@ class HttpJwksLoaderKeyRotationTest {
     void shouldRespectMaximumRetiredKeySetsLimit(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .keyRotationGracePeriod(Duration.ofMinutes(5))
@@ -218,7 +218,7 @@ class HttpJwksLoaderKeyRotationTest {
     void shouldDisableGracePeriodWhenDurationIsZero(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .keyRotationGracePeriod(Duration.ZERO) // Disable grace period
@@ -257,13 +257,48 @@ class HttpJwksLoaderKeyRotationTest {
     void shouldUseDefaultGracePeriodOf5Minutes(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .build(); // No explicit grace period - should use default
 
         assertEquals(Duration.ofMinutes(5), config.getKeyRotationGracePeriod(),
                 "Default grace period should be 5 minutes as per Issue #110");
+    }
+
+    @Test
+    @DisplayName("L9: a good key set survives an empty/ERROR refresh (not retired)")
+    void shouldRetainGoodKeysWhenRefreshReturnsEmpty(URIBuilder uriBuilder) {
+        String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
+
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                .jwksUrl(jwksEndpoint)
+                .issuerIdentifier("test-issuer")
+                .keyRotationGracePeriod(Duration.ofMinutes(5))
+                .refreshIntervalSeconds(1) // Enable background refresh for testing
+                .build();
+
+        HttpJwksLoader loader = new HttpJwksLoader(config);
+        loader.initJWKSLoader(securityEventCounter).join();
+
+        // Good initial load — the original key is present.
+        moduleDispatcher.returnDefault();
+        assertTrue(loader.getKeyInfo(ORIGINAL_KEY_ID).isPresent(), "Original key should be found initially");
+
+        // The endpoint now returns an empty JWKS on every subsequent refresh.
+        int callsBefore = moduleDispatcher.getCallCounter();
+        moduleDispatcher.returnEmptyJwks();
+
+        // Wait until at least one background refresh has actually fetched the empty JWKS.
+        await("At least one refresh against the empty endpoint")
+                .atMost(10, SECONDS)
+                .until(() -> moduleDispatcher.getCallCounter() > callsBefore);
+
+        // The empty refresh must NOT have retired the previously-good key set.
+        assertTrue(loader.getKeyInfo(ORIGINAL_KEY_ID).isPresent(),
+                "A good key set must survive an empty/ERROR refresh and remain accessible");
+
+        loader.close();
     }
 
     @Test
@@ -275,7 +310,7 @@ class HttpJwksLoaderKeyRotationTest {
 
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .keyRotationGracePeriod(Duration.ofMinutes(5))

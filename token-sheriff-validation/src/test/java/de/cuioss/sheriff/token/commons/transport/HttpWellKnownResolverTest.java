@@ -18,6 +18,8 @@ package de.cuioss.sheriff.token.commons.transport;
 import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.test.dispatcher.WellKnownDispatcher;
+import de.cuioss.test.juli.LogAsserts;
+import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
@@ -26,7 +28,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -64,7 +74,7 @@ class HttpWellKnownResolverTest {
                 .addPathSegment("openid-configuration").buildAsString();
         String expectedJwksUri = baseUrl + "/oidc/jwks.json";
 
-        WellKnownConfig config = WellKnownConfig.builder()
+        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(wellKnownUrl)
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
@@ -93,7 +103,7 @@ class HttpWellKnownResolverTest {
         String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
                 .addPathSegment("openid-configuration").buildAsString();
 
-        WellKnownConfig config = WellKnownConfig.builder()
+        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(wellKnownUrl)
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
@@ -119,7 +129,7 @@ class HttpWellKnownResolverTest {
         String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
                 .addPathSegment("openid-configuration").buildAsString();
 
-        WellKnownConfig config = WellKnownConfig.builder()
+        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(wellKnownUrl)
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
@@ -153,7 +163,7 @@ class HttpWellKnownResolverTest {
         String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
                 .addPathSegment("openid-configuration").buildAsString();
 
-        WellKnownConfig config = WellKnownConfig.builder()
+        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(wellKnownUrl)
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
@@ -181,7 +191,7 @@ class HttpWellKnownResolverTest {
         String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
                 .addPathSegment("openid-configuration").buildAsString();
 
-        WellKnownConfig config = WellKnownConfig.builder()
+        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(wellKnownUrl)
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
@@ -207,7 +217,7 @@ class HttpWellKnownResolverTest {
         String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
                 .addPathSegment("openid-configuration").buildAsString();
 
-        WellKnownConfig config = WellKnownConfig.builder()
+        WellKnownConfig config = WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(wellKnownUrl)
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build())
                 .build();
@@ -221,5 +231,168 @@ class HttpWellKnownResolverTest {
         var wellKnown = result.get();
         assertNotNull(wellKnown.getIssuer(), "Issuer should be present in result");
         assertNotNull(wellKnown.getJwksUri(), "JWKS URI should be present in result");
+    }
+
+    @Test
+    @DisplayName("Should reuse a cached successful discovery within the bounded TTL (M2)")
+    void shouldReuseCachedSuccessWithinTtl(URIBuilder uriBuilder) {
+        moduleDispatcher.returnDefault();
+        String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
+                .addPathSegment("openid-configuration").buildAsString();
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowLoopbackEgress(true)
+                .allowInsecureHttp(true)
+                .wellKnownUrl(wellKnownUrl)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        resolver = config.createResolver(new SecurityEventCounter());
+
+        assertTrue(resolver.getJwksUri().isPresent(), "First discovery should succeed");
+        assertTrue(resolver.getIssuer().isPresent(), "Second lookup should be served from cache");
+        assertTrue(resolver.getWellKnownResult().isPresent(), "Third lookup should be served from cache");
+
+        assertEquals(1, moduleDispatcher.getCallCounter(),
+                "A successful discovery must be cached within its bounded TTL — only one network call");
+    }
+
+    @Test
+    @DisplayName("Should revalidate a successful discovery once the bounded TTL elapses (M2)")
+    void shouldRevalidateAfterTtlElapses(URIBuilder uriBuilder) {
+        moduleDispatcher.returnDefault();
+        String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
+                .addPathSegment("openid-configuration").buildAsString();
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowLoopbackEgress(true)
+                .allowInsecureHttp(true)
+                .wellKnownUrl(wellKnownUrl)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        // A zero TTL makes every cached success immediately stale, so each lookup revalidates.
+        resolver = new HttpWellKnownResolver(config, new SecurityEventCounter(), Duration.ZERO);
+
+        assertTrue(resolver.getJwksUri().isPresent(), "First discovery should succeed");
+        assertTrue(resolver.getJwksUri().isPresent(), "Second discovery should succeed after revalidation");
+
+        assertEquals(2, moduleDispatcher.getCallCounter(),
+                "An elapsed bounded TTL must trigger revalidation — the endpoint is fetched again");
+    }
+
+    @Test
+    @DisplayName("Should not pin a failed discovery — recovers on the next call (M2)")
+    void shouldNotPinFailedDiscovery(URIBuilder uriBuilder) {
+        moduleDispatcher.returnError();
+        String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
+                .addPathSegment("openid-configuration").buildAsString();
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowLoopbackEgress(true)
+                .allowInsecureHttp(true)
+                .wellKnownUrl(wellKnownUrl)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        resolver = config.createResolver(new SecurityEventCounter());
+
+        assertFalse(resolver.getJwksUri().isPresent(), "Discovery should fail while the endpoint returns errors");
+        assertEquals(LoaderStatus.ERROR, resolver.getLoaderStatus(), "Status should reflect the failure");
+
+        // The endpoint recovers; a previously failed discovery must not be pinned.
+        moduleDispatcher.returnDefault();
+        assertTrue(resolver.getJwksUri().isPresent(),
+                "A previously failed discovery must not be cached — it recovers once the endpoint is healthy");
+        assertEquals(LoaderStatus.OK, resolver.getLoaderStatus(), "Status should recover to OK");
+    }
+
+    @Test
+    @DisplayName("Should reject a loopback discovery endpoint before any fetch when egress is not opted in (C1)")
+    void shouldRejectLoopbackDiscoveryBeforeFetch(URIBuilder uriBuilder) {
+        moduleDispatcher.returnDefault();
+        String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
+                .addPathSegment("openid-configuration").buildAsString();
+        // allowInsecureHttp(true) only permits the cleartext MockWebServer URL; allowLoopbackEgress
+        // is deliberately left at its secure default (false) so the egress guard rejects loopback.
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowInsecureHttp(true)
+                .wellKnownUrl(wellKnownUrl)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        resolver = config.createResolver(new SecurityEventCounter());
+
+        assertFalse(resolver.getJwksUri().isPresent(),
+                "Discovery must be blocked when its host resolves to a loopback address");
+        assertEquals(LoaderStatus.ERROR, resolver.getLoaderStatus(),
+                "A blocked discovery must surface as ERROR");
+        assertEquals(0, moduleDispatcher.getCallCounter(),
+                "The egress guard must reject the discovery endpoint BEFORE any fetch is issued");
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "SSRF egress guard blocked");
+    }
+
+    @Test
+    @DisplayName("Should perform exactly one HTTP load under concurrent first-access callers (single-flight)")
+    void shouldLoadOnceUnderConcurrentAccess(URIBuilder uriBuilder) throws InterruptedException {
+        moduleDispatcher.returnDefault();
+        String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
+                .addPathSegment("openid-configuration").buildAsString();
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowLoopbackEgress(true)
+                .allowInsecureHttp(true)
+                .wellKnownUrl(wellKnownUrl)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        resolver = config.createResolver(new SecurityEventCounter());
+
+        int threadCount = 16;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch ready = new CountDownLatch(threadCount);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger present = new AtomicInteger();
+        try {
+            List<Future<?>> futures = new java.util.ArrayList<>();
+            for (int i = 0; i < threadCount; i++) {
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    try {
+                        // Release all threads simultaneously to maximise the race on first access.
+                        start.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    if (resolver.getJwksUri().isPresent()) {
+                        present.incrementAndGet();
+                    }
+                }));
+            }
+            assertTrue(ready.await(5, TimeUnit.SECONDS), "All worker threads should reach the barrier");
+            start.countDown();
+            for (Future<?> future : futures) {
+                assertDoesNotThrow(() -> future.get(10, TimeUnit.SECONDS));
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertEquals(threadCount, present.get(), "Every concurrent caller must observe the discovered JWKS URI");
+        assertEquals(1, moduleDispatcher.getCallCounter(),
+                "Concurrent first-access callers must trigger exactly one HTTP load — the single-flight gate must hold");
+        assertEquals(LoaderStatus.OK, resolver.getLoaderStatus(), "Status must settle to OK after the single load");
+    }
+
+    @Test
+    @DisplayName("Should fetch the discovery endpoint when loopback egress is explicitly opted in (C1)")
+    void shouldFetchLoopbackDiscoveryWhenOptedIn(URIBuilder uriBuilder) {
+        moduleDispatcher.returnDefault();
+        String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
+                .addPathSegment("openid-configuration").buildAsString();
+        WellKnownConfig config = WellKnownConfig.builder()
+                .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
+                .wellKnownUrl(wellKnownUrl)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        resolver = config.createResolver(new SecurityEventCounter());
+
+        assertTrue(resolver.getJwksUri().isPresent(),
+                "The explicit loopback opt-in must permit the discovery fetch");
+        assertEquals(1, moduleDispatcher.getCallCounter(),
+                "With the opt-in the discovery endpoint is fetched exactly once");
     }
 }

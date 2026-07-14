@@ -50,8 +50,20 @@ public class DpopConfig {
     /** Default maximum number of jti entries in the replay cache. */
     public static final int DEFAULT_NONCE_CACHE_SIZE = 10_000;
 
-    /** Default TTL in seconds for jti replay cache entries. */
-    public static final long DEFAULT_NONCE_CACHE_TTL_SECONDS = 300;
+    /**
+     * Default TTL in seconds for jti replay cache entries. Set to
+     * {@code DEFAULT_PROOF_MAX_AGE_SECONDS + DEFAULT_CLOCK_SKEW_SECONDS} so the default configuration
+     * already satisfies the replay-window invariant (M3) without derivation.
+     */
+    public static final long DEFAULT_NONCE_CACHE_TTL_SECONDS = 360;
+
+    /**
+     * Clock-skew allowance in seconds used to size the replay window (M3). Mirrors the default DPoP
+     * proof {@code iat} freshness tolerance ({@code IssuerConfig.DEFAULT_CLOCK_SKEW_SECONDS}): a proof
+     * is acceptable while its age lies in {@code [-clockSkew, proofMaxAge]}, so its jti must stay
+     * cached for at least {@code proofMaxAge + clockSkew} to prevent replay across that whole window.
+     */
+    public static final long DEFAULT_CLOCK_SKEW_SECONDS = 60;
 
     /**
      * Whether DPoP validation is required for this issuer.
@@ -172,7 +184,13 @@ public class DpopConfig {
             if (nonceCacheTtlSeconds > 86400) {
                 throw new IllegalArgumentException("nonceCacheTtlSeconds must not exceed 86400 (24 hours), got: " + nonceCacheTtlSeconds);
             }
-            return new DpopConfig(required, proofMaxAgeSeconds, nonceCacheSize, nonceCacheTtlSeconds);
+            // Enforce the replay-window invariant (M3): the jti replay cache must live at least as long
+            // as a proof can remain acceptable — the freshness window is proofMaxAge + clock skew. If the
+            // configured TTL is shorter, a jti could expire while the same proof is still fresh, opening a
+            // replay window. Derive the effective TTL up to that minimum so the window is always closed.
+            long minReplayTtlSeconds = proofMaxAgeSeconds + DEFAULT_CLOCK_SKEW_SECONDS;
+            long effectiveNonceCacheTtlSeconds = Math.max(nonceCacheTtlSeconds, minReplayTtlSeconds);
+            return new DpopConfig(required, proofMaxAgeSeconds, nonceCacheSize, effectiveNonceCacheTtlSeconds);
         }
     }
 }

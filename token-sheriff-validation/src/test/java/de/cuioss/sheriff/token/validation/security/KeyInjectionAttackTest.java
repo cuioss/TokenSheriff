@@ -15,25 +15,51 @@
  */
 package de.cuioss.sheriff.token.validation.security;
 
+import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.JwkKey;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
+import de.cuioss.sheriff.token.validation.dpop.DpopConfig;
+import de.cuioss.sheriff.token.validation.dpop.DpopProofValidator;
+import de.cuioss.sheriff.token.validation.dpop.DpopReplayProtection;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.json.JwtHeader;
+import de.cuioss.sheriff.token.validation.json.MapRepresentation;
+import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
+import de.cuioss.sheriff.token.validation.jwks.parser.KeyProcessor;
+import de.cuioss.sheriff.token.validation.pipeline.DecodedJwt;
+import de.cuioss.sheriff.token.validation.pipeline.SignatureTemplateManager;
+import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.sheriff.token.validation.test.junit.TestTokenSource;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.tools.logging.CuiLogger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.interfaces.RSAPublicKey;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -77,7 +103,11 @@ class KeyInjectionAttackTest {
 
     private static final CuiLogger LOGGER = new CuiLogger(KeyInjectionAttackTest.class);
 
+    private static final String TEST_ISSUER = "https://test-issuer.example.com";
+
     private TokenValidator tokenValidator;
+    private DpopProofValidator dpopValidator;
+    private DpopReplayProtection replayProtection;
 
     @BeforeEach
     void setUp() {
@@ -90,6 +120,25 @@ class KeyInjectionAttackTest {
         // Create the token validator
         ParserConfig config = ParserConfig.builder().build();
         tokenValidator = TokenValidator.builder().parserConfig(config).issuerConfig(issuerConfig).build();
+
+        // Set up a DPoP proof validator for the embedded-JWK weak-key test
+        replayProtection = new DpopReplayProtection(300, 10_000);
+        IssuerConfig dpopIssuerConfig = IssuerConfig.builder()
+                .issuerIdentifier(TEST_ISSUER)
+                .dpopConfig(DpopConfig.builder().build())
+                .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
+                .audienceValidationDisabled(true)
+                .build();
+        dpopValidator = new DpopProofValidator(dpopIssuerConfig, new SecurityEventCounter(), replayProtection,
+                new SignatureTemplateManager(dpopIssuerConfig.getAlgorithmPreferences()),
+                ParserConfig.builder().build(), new DslJson<>(new DslJson.Settings<>()));
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (replayProtection != null) {
+            replayProtection.close();
+        }
     }
 
     /**
@@ -213,5 +262,109 @@ class KeyInjectionAttackTest {
         assertNotNull(accessToken, "Token with valid KID should be accepted");
         assertEquals(0, tokenValidator.getSecurityEventCounter().getCount(SecurityEventCounter.EventType.KEY_NOT_FOUND),
                 "No KEY_NOT_FOUND security events should be recorded for valid token");
+    }
+
+    @ParameterizedTest(name = "Should reject {0}-bit RSA key on the JWKS parsing path")
+    @ValueSource(ints = {512, 1024})
+    @DisplayName("Should reject sub-2048-bit RSA keys on the JWKS path (M1)")
+    void shouldRejectWeakRsaKeyOnJwksPath(int bits) throws Exception {
+        RSAPublicKey weakKey = generateRsaPublicKey(bits);
+        JwkKey jwk = rsaJwkKey(weakKey, "weak-rsa-kid");
+        SecurityEventCounter counter = new SecurityEventCounter();
+        KeyProcessor processor = new KeyProcessor(counter, new JwkAlgorithmPreferences());
+
+        Optional<KeyInfo> result = processor.processKey(jwk);
+
+        assertTrue(result.isEmpty(), bits + "-bit RSA key must be rejected on the JWKS path");
+        assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWKS_JSON_PARSE_FAILED),
+                "A sub-2048-bit RSA key must increment the JWKS parse-failed counter");
+    }
+
+    @Test
+    @DisplayName("Should still accept a conformant 2048-bit RSA key on the JWKS path (M1)")
+    void shouldAcceptConformantRsaKeyOnJwksPath() throws Exception {
+        RSAPublicKey strongKey = generateRsaPublicKey(2048);
+        JwkKey jwk = rsaJwkKey(strongKey, "strong-rsa-kid");
+        SecurityEventCounter counter = new SecurityEventCounter();
+        KeyProcessor processor = new KeyProcessor(counter, new JwkAlgorithmPreferences());
+
+        Optional<KeyInfo> result = processor.processKey(jwk);
+
+        assertTrue(result.isPresent(), "A conformant 2048-bit RSA key must still be accepted");
+        assertEquals(0, counter.getCount(SecurityEventCounter.EventType.JWKS_JSON_PARSE_FAILED),
+                "A conformant RSA key must not increment the JWKS parse-failed counter");
+    }
+
+    @Test
+    @DisplayName("Should reject a DPoP proof whose embedded JWK is a weak (1024-bit) RSA key (M1)")
+    void shouldRejectWeakRsaKeyOnDpopEmbeddedJwkPath() throws Exception {
+        RSAPublicKey weakKey = generateRsaPublicKey(1024);
+        String modulus = base64Url(weakKey.getModulus());
+        String exponent = base64Url(weakKey.getPublicExponent());
+
+        // Build a DPoP proof carrying the weak RSA key as its embedded JWK. The signature is a
+        // placeholder: the embedded key is rejected during key parsing, before signature verification.
+        String headerJson = ("{\"typ\":\"dpop+jwt\",\"alg\":\"RS256\",\"jwk\":{\"kty\":\"RSA\",\"kid\":\"weak\","
+                + "\"n\":\"%s\",\"e\":\"%s\"}}").formatted(modulus, exponent);
+        String bodyJson = "{\"jti\":\"weak-rsa-jti\",\"iat\":%d,\"ath\":\"test-ath\"}"
+                .formatted(System.currentTimeMillis() / 1000);
+        String proof = base64Url(headerJson.getBytes(StandardCharsets.UTF_8)) + "."
+                + base64Url(bodyJson.getBytes(StandardCharsets.UTF_8)) + ".dummy-sig";
+
+        AccessTokenRequest request = AccessTokenRequest.of("dummy-token", Map.of("dpop", List.of(proof)));
+        DecodedJwt accessToken = createAccessTokenJwt("any-thumbprint");
+
+        var exception = assertThrows(TokenValidationException.class,
+                () -> dpopValidator.validate(request, accessToken, "dummy-token"),
+                "A DPoP proof with a sub-2048-bit embedded RSA key must be rejected");
+        assertEquals(SecurityEventCounter.EventType.DPOP_PROOF_INVALID, exception.getEventType(),
+                "A weak embedded RSA key must be rejected as an invalid DPoP proof");
+        assertTrue(exception.getMessage().contains("minimum accepted is 2048"),
+                "The rejection must be driven by the embedded key's sub-2048-bit size, but was: "
+                        + exception.getMessage());
+    }
+
+    private static RSAPublicKey generateRsaPublicKey(int bits) throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(bits);
+        KeyPair keyPair = generator.generateKeyPair();
+        return (RSAPublicKey) keyPair.getPublic();
+    }
+
+    private static JwkKey rsaJwkKey(RSAPublicKey publicKey, String kid) {
+        return new JwkKey("RSA", kid, "RS256",
+                base64Url(publicKey.getModulus()), base64Url(publicKey.getPublicExponent()),
+                null, null, null);
+    }
+
+    private static String base64Url(BigInteger value) {
+        return base64Url(toUnsignedBytes(value));
+    }
+
+    private static String base64Url(byte[] value) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(value);
+    }
+
+    private static byte[] toUnsignedBytes(BigInteger value) {
+        byte[] bytes = value.toByteArray();
+        if (bytes[0] == 0) {
+            return Arrays.copyOfRange(bytes, 1, bytes.length);
+        }
+        return bytes;
+    }
+
+    private static DecodedJwt createAccessTokenJwt(String cnfJkt) {
+        Map<String, Object> bodyMap = new HashMap<>();
+        bodyMap.put("iss", TEST_ISSUER);
+        bodyMap.put("sub", "test-subject");
+        bodyMap.put("exp", (System.currentTimeMillis() / 1000) + 3600);
+        bodyMap.put("iat", System.currentTimeMillis() / 1000);
+        if (cnfJkt != null) {
+            bodyMap.put("cnf", Map.of("jkt", cnfJkt));
+        }
+
+        var body = new MapRepresentation(bodyMap);
+        var header = new JwtHeader("RS256", null, "test-key-id", null, null, null, null, null, null, null);
+        return new DecodedJwt(header, body, "dummy-sig", new String[]{"a", "b", "c"}, "a.b.c");
     }
 }
