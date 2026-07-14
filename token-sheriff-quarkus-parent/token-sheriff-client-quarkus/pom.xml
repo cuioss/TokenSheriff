@@ -18,9 +18,6 @@
 
     <properties>
         <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.token.client.quarkus</maven.jar.plugin.automatic.module.name>
-        <!-- Wired, empty skeleton (Plan 05): only package-info.java, so Javadoc has no public
-             classes to document and would fail. Re-enable once client runtime code lands (Plan 06). -->
-        <maven.javadoc.skip>true</maven.javadoc.skip>
     </properties>
 
     <dependencies>
