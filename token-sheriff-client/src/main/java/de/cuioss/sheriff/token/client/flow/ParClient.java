@@ -22,6 +22,7 @@ import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
+import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.tools.logging.CuiLogger;
@@ -138,8 +139,11 @@ public class ParClient {
             }
             return parResponse;
         } catch (IOException e) {
-            LOGGER.debug(e, "Failed to parse PAR endpoint response: %s", e.getMessage());
-            throw new TransportException("Failed to parse PAR endpoint response: " + e.getMessage(), e);
+            // The parse-error message can echo an AS-controlled JSON fragment; sanitize it (CWE-117)
+            // before it reaches the log appender or the exception message.
+            String sanitizedError = LogSanitizer.sanitize(e.getMessage());
+            LOGGER.debug(e, "Failed to parse PAR endpoint response: %s", sanitizedError);
+            throw new TransportException("Failed to parse PAR endpoint response: " + sanitizedError, e);
         }
     }
 

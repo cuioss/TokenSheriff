@@ -25,15 +25,21 @@ import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
+import de.cuioss.test.mockwebserver.dispatcher.HttpMethodMapper;
+import de.cuioss.test.mockwebserver.dispatcher.ModuleDispatcherElement;
 import lombok.Getter;
+import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
+import okhttp3.Headers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,7 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ParClientTest {
 
     @Getter
-    private final ParDispatcher moduleDispatcher = new ParDispatcher();
+    private final ParTestDispatcher moduleDispatcher = new ParTestDispatcher();
 
     @BeforeEach
     void resetDispatcher() {
@@ -188,5 +194,96 @@ class ParClientTest {
 
         assertThrows(TransportException.class,
                 () -> client.pushAuthorizationRequest(endpoint, params, auth));
+    }
+
+    @Test
+    @DisplayName("Should sanitize an AS-controlled parse-error fragment carrying CR/LF (M8)")
+    void shouldSanitizeParseErrorFragment(URIBuilder uriBuilder) {
+        // The PAR response body is AS-controlled; a malformed value with an embedded CR/LF must not
+        // forge a log line — the parse-error fragment must be routed through LogSanitizer before it is
+        // exposed on the exception message or the log appender.
+        moduleDispatcher.returnMalformedJson("{\"request_uri\":\"urn:x\",\"expires_in\":9\r\nINJECTED9}");
+        var auth = new ClientSecretBasicAuth(Generators.nonBlankStrings().next(), Generators.nonBlankStrings().next());
+        var endpoint = parEndpoint(uriBuilder);
+        var client = parClient();
+        var params = authorizationParameters();
+
+        TransportException thrown = assertThrows(TransportException.class,
+                () -> client.pushAuthorizationRequest(endpoint, params, auth),
+                "a malformed PAR response must surface as a TransportException");
+
+        String message = thrown.getMessage();
+        assertAll("sanitized parse-error fragment",
+                () -> assertFalse(message.indexOf('\r') >= 0,
+                        "a raw CR from the AS-controlled body must not reach the exception message"),
+                () -> assertFalse(message.indexOf('\n') >= 0,
+                        "a raw LF from the AS-controlled body must not reach the exception message"),
+                () -> assertTrue(message.contains("\\r") && message.contains("\\n"),
+                        "the injected CR/LF must survive in escaped form, proving the fragment was carried and sanitized"));
+    }
+
+    /**
+     * Wraps the shared {@link ParDispatcher} strategies and adds a malformed-JSON strategy so the M8
+     * parse-error sanitization path can be exercised with an AS-controlled CR/LF payload.
+     */
+    static final class ParTestDispatcher implements ModuleDispatcherElement {
+
+        private static final String APPLICATION_JSON = "application/json";
+
+        private final ParDispatcher delegate = new ParDispatcher();
+        private boolean malformed;
+        private String malformedBody = "";
+
+        ParTestDispatcher returnDefault() {
+            malformed = false;
+            delegate.returnDefault();
+            return this;
+        }
+
+        ParTestDispatcher returnOAuthError() {
+            malformed = false;
+            delegate.returnOAuthError();
+            return this;
+        }
+
+        ParTestDispatcher returnError() {
+            malformed = false;
+            delegate.returnError();
+            return this;
+        }
+
+        ParTestDispatcher returnOversizedBody() {
+            malformed = false;
+            delegate.returnOversizedBody();
+            return this;
+        }
+
+        ParTestDispatcher returnMalformedJson(String body) {
+            malformed = true;
+            malformedBody = body;
+            return this;
+        }
+
+        void setCallCounter(int callCounter) {
+            delegate.setCallCounter(callCounter);
+        }
+
+        @Override
+        public String getBaseUrl() {
+            return delegate.getBaseUrl();
+        }
+
+        @Override
+        public Set<HttpMethodMapper> supportedMethods() {
+            return delegate.supportedMethods();
+        }
+
+        @Override
+        public Optional<MockResponse> handlePost(RecordedRequest request) {
+            if (malformed) {
+                return Optional.of(new MockResponse(200, Headers.of("Content-Type", APPLICATION_JSON), malformedBody));
+            }
+            return delegate.handlePost(request);
+        }
     }
 }
