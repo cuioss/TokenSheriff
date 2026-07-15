@@ -19,6 +19,8 @@ import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.commons.error.InboundErrorNormalizer;
 import de.cuioss.tools.logging.CuiLogger;
 
+import org.jspecify.annotations.Nullable;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Objects;
@@ -70,7 +72,7 @@ public class CallbackHandler {
                 .orElseThrow(() -> new ClientProtocolException("authorization callback is missing the authorization code"));
     }
 
-    private static boolean statesMatch(String expected, String actual) {
+    private static boolean statesMatch(String expected, @Nullable String actual) {
         if (actual == null) {
             return false;
         }

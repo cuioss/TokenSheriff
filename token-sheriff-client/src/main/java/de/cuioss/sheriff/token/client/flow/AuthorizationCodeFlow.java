@@ -153,7 +153,11 @@ public class AuthorizationCodeFlow {
      */
     public AuthorizationRedirect authorize(ProviderMetadata metadata) {
         Objects.requireNonNull(metadata, "metadata must not be null");
-        FlowContext context = FlowContext.create(configuration.getRedirectUri());
+        String redirectUri = configuration.getRedirectUri();
+        if (redirectUri == null || redirectUri.isBlank()) {
+            throw new IllegalArgumentException("client declares no redirect URI");
+        }
+        FlowContext context = FlowContext.create(redirectUri);
         String url = authorizationRequestBuilder.build(configuration, metadata, context);
         return new AuthorizationRedirect(url, context);
     }

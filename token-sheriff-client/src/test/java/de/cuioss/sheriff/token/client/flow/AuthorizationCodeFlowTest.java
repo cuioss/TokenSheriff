@@ -146,6 +146,26 @@ class AuthorizationCodeFlowTest {
     }
 
     @Test
+    @DisplayName("authorize() should reject a client that declares no redirect URI with IllegalArgumentException (not NPE)")
+    void shouldRejectMissingRedirectUri() {
+        var config = ClientConfiguration.builder()
+                .issuer("https://issuer.example.com")
+                .clientId(Generators.nonBlankStrings().next())
+                .clientSecret(Generators.nonBlankStrings().next())
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                .scope("openid")
+                .allowInsecureHttp(true)
+                .build();
+        var metadata = new ProviderMetadata();
+        metadata.authorizationEndpoint = AUTH_ENDPOINT;
+        metadata.codeChallengeMethodsSupported = List.of("S256");
+        var flow = flow(config);
+
+        assertThrows(IllegalArgumentException.class, () -> flow.authorize(metadata),
+                "a client without a redirect URI must fail with IllegalArgumentException, not a raw NPE");
+    }
+
+    @Test
     @DisplayName("exchange() should redeem the code and return the validated, nonce-bound access and ID tokens")
     void shouldRedeemAndValidate(URIBuilder uriBuilder, MockWebServer server) throws Exception {
         var config = config();

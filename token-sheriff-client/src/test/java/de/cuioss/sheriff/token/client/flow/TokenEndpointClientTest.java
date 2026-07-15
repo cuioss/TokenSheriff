@@ -79,9 +79,11 @@ class TokenEndpointClientTest {
         var config = config();
         var client = new TokenEndpointClient(config);
         String endpoint = uriBuilder.addPathSegment("token").buildAsString();
+        Map<String, String> requestParams = Map.of("grant_type", "authorization_code");
+        Map<String, String> requestHeaders = Map.of();
 
         TransportException thrown = assertThrows(TransportException.class,
-                () -> client.requestToken(endpoint, Map.of("grant_type", "authorization_code"), Map.of()),
+                () -> client.requestToken(endpoint, requestParams, requestHeaders),
                 "a malformed token response must surface as a TransportException");
 
         String message = thrown.getMessage();

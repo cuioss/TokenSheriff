@@ -15,7 +15,6 @@
  */
 package de.cuioss.sheriff.token.validation.security;
 
-import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;

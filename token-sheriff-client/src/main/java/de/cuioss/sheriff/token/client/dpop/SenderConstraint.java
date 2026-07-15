@@ -46,10 +46,10 @@ public final class SenderConstraint {
     /** The RFC 9449 request header carrying the DPoP proof. */
     static final String DPOP_HEADER = "DPoP";
 
-    private final DpopProofGenerator dpopGenerator;
+    private final @Nullable DpopProofGenerator dpopGenerator;
     private final ConstraintBinding binding;
 
-    private SenderConstraint(DpopProofGenerator dpopGenerator, ConstraintBinding binding) {
+    private SenderConstraint(@Nullable DpopProofGenerator dpopGenerator, ConstraintBinding binding) {
         this.dpopGenerator = dpopGenerator;
         this.binding = binding;
     }
