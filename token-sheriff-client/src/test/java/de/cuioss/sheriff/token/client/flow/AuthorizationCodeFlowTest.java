@@ -19,6 +19,8 @@ import de.cuioss.sheriff.token.client.auth.ClientSecretBasicAuth;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.client.dpop.DpopProofGenerator;
+import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.token.IdTokenValidationBridge;
 import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
@@ -45,6 +47,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -56,6 +60,7 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -166,6 +171,55 @@ class AuthorizationCodeFlowTest {
                         "the secret PKCE verifier must be redeemed at the token endpoint"),
                 () -> assertNotNull(request.getHeaders().get("Authorization"),
                         "client authentication must decorate the token request"));
+    }
+
+    @Test
+    @DisplayName("exchange() should DPoP-bind the code redemption when a sender-constraint is configured")
+    void shouldAttachDpopProofWhenConstrained(URIBuilder uriBuilder, MockWebServer server) throws Exception {
+        var config = config();
+        var context = FlowContext.create(REDIRECT_URI);
+        idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
+        var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
+        SenderConstraint constraint = SenderConstraint.dpop(new DpopProofGenerator(rsaKeyPair(), "RS256"));
+        var flow = new AuthorizationCodeFlow(config, new TokenEndpointClient(config), accessBridge, idBridge,
+                new IssValidator(), constraint);
+
+        flow.exchange(metadataWithTokenEndpoint(uriBuilder), context, callback, auth(config));
+
+        RecordedRequest request = server.takeRequest();
+        String proof = request.getHeaders().get("DPoP");
+        assertAll("DPoP-bound code exchange",
+                () -> assertNotNull(proof, "the code redemption must carry a DPoP proof header"),
+                () -> assertEquals(3, proof.split("\\.").length, "the DPoP header is a compact proof JWT"));
+    }
+
+    @Test
+    @DisplayName("exchange() should send no DPoP proof when no sender-constraint is configured")
+    void shouldNotAttachDpopProofWhenUnconstrained(URIBuilder uriBuilder, MockWebServer server) throws Exception {
+        var config = config();
+        var context = FlowContext.create(REDIRECT_URI);
+        idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
+        var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
+
+        flow(config).exchange(metadataWithTokenEndpoint(uriBuilder), context, callback, auth(config));
+
+        RecordedRequest request = server.takeRequest();
+        assertNull(request.getHeaders().get("DPoP"),
+                "an unconstrained code redemption must carry no DPoP proof header");
+    }
+
+    private static KeyPair rsaKeyPair() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("RSA key pair generation failed", e);
+        }
     }
 
     @Test

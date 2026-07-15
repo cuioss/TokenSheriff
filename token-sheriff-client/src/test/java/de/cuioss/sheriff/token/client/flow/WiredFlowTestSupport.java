@@ -19,6 +19,8 @@ import de.cuioss.sheriff.token.client.auth.ClientSecretBasicAuth;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.client.dpop.DpopProofGenerator;
+import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.token.IdTokenValidationBridge;
 import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
 import de.cuioss.sheriff.token.validation.TokenValidator;
@@ -34,6 +36,9 @@ import mockwebserver3.RecordedRequest;
 import okhttp3.Headers;
 import org.junit.jupiter.api.function.Executable;
 
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -138,6 +143,30 @@ abstract class WiredFlowTestSupport {
      */
     protected AuthorizationCodeFlow authorizationCodeFlow(ClientConfiguration config) {
         return new AuthorizationCodeFlow(config, new TokenEndpointClient(config), accessBridge, idBridge);
+    }
+
+    /**
+     * Assembles a DPoP-constrained {@code authorization_code} flow, so a wired test can prove the code
+     * redemption attaches a DPoP proof (mirrors the sender-constrained assembly a caller performs when
+     * the client is configured for DPoP-bound tokens).
+     *
+     * @param config the client configuration
+     * @return the wired, DPoP-constrained authorization-code flow
+     */
+    protected AuthorizationCodeFlow dpopAuthorizationCodeFlow(ClientConfiguration config) {
+        SenderConstraint constraint = SenderConstraint.dpop(new DpopProofGenerator(rsaKeyPair(), "RS256"));
+        return new AuthorizationCodeFlow(config, new TokenEndpointClient(config), accessBridge, idBridge,
+                new IssValidator(), constraint);
+    }
+
+    private static KeyPair rsaKeyPair() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("RSA key pair generation failed", e);
+        }
     }
 
     /**

@@ -274,8 +274,13 @@ public class TokenSheriffClientProducer {
     public AuthorizationCodeFlow authorizationCodeFlow(ClientConfiguration clientConfiguration,
             TokenEndpointClient tokenEndpointClient, TokenValidationBridge tokenValidationBridge,
             IdTokenValidationBridge idTokenValidationBridge, IssValidator issValidator) {
+        // SenderConstraint is a per-request DPoP/mTLS binding, deliberately NOT produced as an
+        // @ApplicationScoped bean (see class Javadoc); the sibling refreshFlow() producer likewise
+        // wires RefreshFlow's unconstrained overload. Pass null here to preserve the plain-bearer
+        // CDI-wired behaviour — DPoP-bound authorization-code redemption remains available to callers
+        // that construct AuthorizationCodeFlow directly with a constraint.
         return new AuthorizationCodeFlow(clientConfiguration, tokenEndpointClient, tokenValidationBridge,
-                idTokenValidationBridge, issValidator);
+                idTokenValidationBridge, issValidator, null);
     }
 
     /**
