@@ -189,6 +189,10 @@ public class TokenEndpointClient {
         }
     }
 
+    // java:S2589 — body is non-null by every current caller/handler wiring, but the guard is kept
+    // (consistent with the equivalent parse() entry guards in UserInfoClient / ParClient) as
+    // defensive resilience against a future change to the shared bounded body-handler.
+    @SuppressWarnings("java:S2589")
     private TokenResponse parse(String body) {
         if (body == null || body.isBlank()) {
             throw new TransportException("Empty token endpoint response");
@@ -211,8 +215,11 @@ public class TokenEndpointClient {
             }
             return tokenResponse;
         } catch (IOException e) {
-            LOGGER.debug(e, "Failed to parse token endpoint response: %s", e.getMessage());
-            throw new TransportException("Failed to parse token endpoint response: " + e.getMessage(), e);
+            // The parse-error message can echo an AS-controlled JSON fragment; sanitize it (CWE-117)
+            // before it reaches the log appender or the exception message, matching the token_type site.
+            String sanitizedError = LogSanitizer.sanitize(e.getMessage());
+            LOGGER.debug("Failed to parse token endpoint response: %s", sanitizedError);
+            throw new TransportException("Failed to parse token endpoint response: " + sanitizedError, e);
         }
     }
 

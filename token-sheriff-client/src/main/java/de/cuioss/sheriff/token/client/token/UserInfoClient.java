@@ -21,6 +21,7 @@ import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
+import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.tools.logging.CuiLogger;
@@ -207,7 +208,12 @@ public class UserInfoClient {
             throw new TransportException("Empty userinfo endpoint response");
         }
         UserInfoResponse userInfo = signedResponseValidator.validate(body);
-        if (userInfo == null || userInfo.sub == null || userInfo.sub.isBlank()) {
+        // java:S2589 — the SignedUserInfoValidator functional interface and UserInfoResponse.sub are
+        // declared non-null under @NullMarked, but a caller-supplied validator implementation can
+        // still violate that contract; kept as a defensive guard against a misbehaving validator.
+        @SuppressWarnings("java:S2589")
+        boolean missingSub = userInfo == null || userInfo.sub == null || userInfo.sub.isBlank();
+        if (missingSub) {
             throw new TransportException("signed userinfo response is missing the 'sub' claim");
         }
         return userInfo;
@@ -228,6 +234,10 @@ public class UserInfoClient {
         }
     }
 
+    // java:S2589 — body is non-null by every current caller/handler wiring, but the guard is kept
+    // (consistent with the equivalent parse() entry guards in ParClient / TokenEndpointClient) as
+    // defensive resilience against a future change to the shared bounded body-handler.
+    @SuppressWarnings("java:S2589")
     private UserInfoResponse parse(String body) {
         if (body == null || body.isBlank()) {
             throw new TransportException("Empty userinfo endpoint response");
@@ -243,8 +253,11 @@ public class UserInfoClient {
             }
             return userInfo;
         } catch (IOException e) {
-            LOGGER.debug(e, "Failed to parse userinfo endpoint response: %s", e.getMessage());
-            throw new TransportException("Failed to parse userinfo endpoint response: " + e.getMessage(), e);
+            // The parse-error message can echo an AS-controlled JSON fragment; sanitize it (CWE-117)
+            // before it reaches the log appender or the exception message.
+            String sanitizedError = LogSanitizer.sanitize(e.getMessage());
+            LOGGER.debug("Failed to parse userinfo endpoint response: %s", sanitizedError);
+            throw new TransportException("Failed to parse userinfo endpoint response: " + sanitizedError, e);
         }
     }
 }

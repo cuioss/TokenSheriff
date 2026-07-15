@@ -21,15 +21,12 @@ import de.cuioss.sheriff.token.client.flow.TokenEndpointClient;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import de.cuioss.sheriff.token.validation.test.dispatcher.TokenDispatcher;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
-import de.cuioss.test.mockwebserver.dispatcher.HttpMethodMapper;
-import de.cuioss.test.mockwebserver.dispatcher.ModuleDispatcherElement;
 import lombok.Getter;
-import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
-import okhttp3.Headers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,8 +36,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -66,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ClientSecretAuthTest {
 
     @Getter
-    private final TokenEndpointDispatcher moduleDispatcher = new TokenEndpointDispatcher();
+    private final TokenDispatcher moduleDispatcher = new TokenDispatcher();
 
     @BeforeEach
     void resetDispatcher() {
@@ -84,7 +79,7 @@ class ClientSecretAuthTest {
     }
 
     private static String tokenEndpoint(URIBuilder uriBuilder) {
-        return uriBuilder.addPathSegment("token").buildAsString();
+        return uriBuilder.addPathSegments("oidc", "token").buildAsString();
     }
 
     @Test
@@ -123,7 +118,7 @@ class ClientSecretAuthTest {
     @Test
     @DisplayName("client_secret_basic should send the Basic header on the wire without leaking the secret into the URL")
     void basicShouldSendHeaderOnTheWire(URIBuilder uriBuilder, MockWebServer server) throws Exception {
-        moduleDispatcher.success();
+        moduleDispatcher.returnDefault();
         String clientId = Generators.letterStrings(5, 12).next();
         String clientSecret = Generators.letterStrings(8, 20).next();
         var auth = new ClientSecretBasicAuth(clientId, clientSecret);
@@ -186,7 +181,7 @@ class ClientSecretAuthTest {
     @Test
     @DisplayName("client_secret_post should send credentials in the form body without leaking the secret into the URL")
     void postShouldSendFormCredentialsOnTheWire(URIBuilder uriBuilder, MockWebServer server) throws Exception {
-        moduleDispatcher.success();
+        moduleDispatcher.returnDefault();
         String clientId = Generators.letterStrings(5, 12).next();
         String clientSecret = Generators.letterStrings(8, 20).next();
         var auth = new ClientSecretPostAuth(clientId, clientSecret);
@@ -218,40 +213,5 @@ class ClientSecretAuthTest {
         assertAll("null rejection",
                 () -> assertThrows(NullPointerException.class, () -> new ClientSecretPostAuth(null, secret)),
                 () -> assertThrows(NullPointerException.class, () -> new ClientSecretPostAuth(id, null)));
-    }
-
-    /**
-     * Minimal token-endpoint dispatcher serving a success response so {@link TokenEndpointClient}
-     * completes and the request can be inspected.
-     */
-    static final class TokenEndpointDispatcher implements ModuleDispatcherElement {
-
-        private static final int HTTP_OK = 200;
-
-        private String body = "";
-
-        void reset() {
-            this.body = "";
-        }
-
-        void success() {
-            this.body = "{\"access_token\":\"" + Generators.letterStrings(20, 40).next()
-                    + "\",\"token_type\":\"Bearer\",\"expires_in\":300}";
-        }
-
-        @Override
-        public String getBaseUrl() {
-            return "/token";
-        }
-
-        @Override
-        public Set<HttpMethodMapper> supportedMethods() {
-            return Set.of(HttpMethodMapper.POST);
-        }
-
-        @Override
-        public Optional<MockResponse> handlePost(RecordedRequest request) {
-            return Optional.of(new MockResponse(HTTP_OK, Headers.of("Content-Type", "application/json"), body));
-        }
     }
 }

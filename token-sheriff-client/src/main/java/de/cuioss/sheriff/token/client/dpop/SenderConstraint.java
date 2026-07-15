@@ -33,8 +33,8 @@ import java.util.Objects;
  *       {@code cnf."x5t#S256"}. No request header is added — the binding is transport-level.</li>
  * </ul>
  * Either way the resulting {@link ConstraintBinding} is recorded ({@link #binding()}) so the
- * sender-constraint can be preserved alongside the stored token (consumed by the token-lifecycle
- * increment, {@code CLIENT-18}).
+ * sender-constraint can be preserved alongside the stored token (consumed by the token lifecycle,
+ * {@code CLIENT-18}).
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -46,10 +46,10 @@ public final class SenderConstraint {
     /** The RFC 9449 request header carrying the DPoP proof. */
     static final String DPOP_HEADER = "DPoP";
 
-    private final DpopProofGenerator dpopGenerator;
+    private final @Nullable DpopProofGenerator dpopGenerator;
     private final ConstraintBinding binding;
 
-    private SenderConstraint(DpopProofGenerator dpopGenerator, ConstraintBinding binding) {
+    private SenderConstraint(@Nullable DpopProofGenerator dpopGenerator, ConstraintBinding binding) {
         this.dpopGenerator = dpopGenerator;
         this.binding = binding;
     }

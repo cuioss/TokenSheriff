@@ -213,6 +213,29 @@ class CallbackHandlerTest {
         }
 
         @Test
+        @DisplayName("Should route both error and error_description through the commons normalizer (COMMONS-11)")
+        void shouldSurfaceSanitizedErrorDescription() {
+            var context = context();
+            // The previous inline rejection dropped error_description entirely; the normalizer now
+            // surfaces it — sanitized — so both directions share one contract.
+            var parameters = new CallbackParameters(null, context.state(),
+                    "access_denied", "the resource owner denied\r\nWARN forged the request", null);
+
+            var thrown = assertThrows(ClientProtocolException.class,
+                    () -> handler.handle(context, parameters));
+
+            assertAll("normalized error callback",
+                    () -> assertTrue(thrown.getMessage().contains("access_denied"),
+                            "the error code is surfaced"),
+                    () -> assertTrue(thrown.getMessage().contains("the resource owner denied"),
+                            "the (sanitized) error_description is now surfaced, not dropped"),
+                    () -> assertFalse(thrown.getMessage().contains("\n"),
+                            "no raw newline from the error_description survives"),
+                    () -> assertFalse(thrown.getMessage().contains("\r"),
+                            "no raw carriage return from the error_description survives"));
+        }
+
+        @Test
         @DisplayName("Should truncate an over-long error value in the exception message to bound log flooding")
         void shouldTruncateOverlongError() {
             var context = context();

@@ -18,12 +18,14 @@ package de.cuioss.sheriff.token.client.flow;
 import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.token.IdTokenValidationBridge;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
 import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -67,6 +69,8 @@ public class AuthorizationCodeFlow {
     private final IssValidator issValidator;
     private final AuthorizationRequestBuilder authorizationRequestBuilder;
     private final CallbackHandler callbackHandler;
+    @Nullable
+    private final SenderConstraint senderConstraint;
 
     /**
      * Creates a flow with a default {@link IssValidator}, {@link AuthorizationRequestBuilder}, and
@@ -80,24 +84,30 @@ public class AuthorizationCodeFlow {
     public AuthorizationCodeFlow(ClientConfiguration configuration, TokenEndpointClient tokenEndpointClient,
             TokenValidationBridge accessTokenBridge, IdTokenValidationBridge idTokenBridge) {
         this(configuration, tokenEndpointClient, accessTokenBridge, idTokenBridge, new IssValidator(),
-                new AuthorizationRequestBuilder(), new CallbackHandler());
+                new AuthorizationRequestBuilder(), new CallbackHandler(), null);
     }
 
     /**
      * Creates a flow with an explicit {@link IssValidator} and default {@link AuthorizationRequestBuilder}
      * / {@link CallbackHandler}.
+     * <p>
+     * When {@code senderConstraint} is supplied, the initial code redemption is DPoP/mTLS-bound so the
+     * issued access token is confirmed to the proof key ({@code CLIENT-11}); {@code null} preserves the
+     * plain-bearer redemption.
      *
      * @param configuration       the client configuration; must not be {@code null}
      * @param tokenEndpointClient the token-endpoint transport; must not be {@code null}
      * @param accessTokenBridge   the access-token validation bridge; must not be {@code null}
      * @param idTokenBridge       the ID-token validation bridge; must not be {@code null}
      * @param issValidator        the RFC 9207 issuer mix-up validator; must not be {@code null}
+     * @param senderConstraint    the DPoP/mTLS sender-constraint to attach to the code exchange, or
+     *                            {@code null} for a plain bearer redemption
      */
     public AuthorizationCodeFlow(ClientConfiguration configuration, TokenEndpointClient tokenEndpointClient,
             TokenValidationBridge accessTokenBridge, IdTokenValidationBridge idTokenBridge,
-            IssValidator issValidator) {
+            IssValidator issValidator, @Nullable SenderConstraint senderConstraint) {
         this(configuration, tokenEndpointClient, accessTokenBridge, idTokenBridge, issValidator,
-                new AuthorizationRequestBuilder(), new CallbackHandler());
+                new AuthorizationRequestBuilder(), new CallbackHandler(), senderConstraint);
     }
 
     /**
@@ -110,11 +120,17 @@ public class AuthorizationCodeFlow {
      * @param issValidator                the RFC 9207 issuer mix-up validator; must not be {@code null}
      * @param authorizationRequestBuilder the authorization-request builder; must not be {@code null}
      * @param callbackHandler             the callback handler; must not be {@code null}
+     * @param senderConstraint            the DPoP/mTLS sender-constraint to attach to the code exchange,
+     *                                    or {@code null} for a plain bearer redemption
      */
+    // S107 (too many parameters) is unavoidable here: this is the explicit-collaborators constructor
+    // that exposes every dependency for DI/testing; the two shorter overloads above delegate to it.
+    // Collapsing the parameters into a parameter object would obscure, not reduce, the collaborators.
+    @SuppressWarnings("java:S107")
     public AuthorizationCodeFlow(ClientConfiguration configuration, TokenEndpointClient tokenEndpointClient,
             TokenValidationBridge accessTokenBridge, IdTokenValidationBridge idTokenBridge,
             IssValidator issValidator, AuthorizationRequestBuilder authorizationRequestBuilder,
-            CallbackHandler callbackHandler) {
+            CallbackHandler callbackHandler, @Nullable SenderConstraint senderConstraint) {
         this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
         this.tokenEndpointClient = Objects.requireNonNull(tokenEndpointClient, "tokenEndpointClient must not be null");
         this.accessTokenBridge = Objects.requireNonNull(accessTokenBridge, "accessTokenBridge must not be null");
@@ -123,6 +139,7 @@ public class AuthorizationCodeFlow {
         this.authorizationRequestBuilder = Objects.requireNonNull(authorizationRequestBuilder,
                 "authorizationRequestBuilder must not be null");
         this.callbackHandler = Objects.requireNonNull(callbackHandler, "callbackHandler must not be null");
+        this.senderConstraint = senderConstraint;
     }
 
     /**
@@ -136,7 +153,11 @@ public class AuthorizationCodeFlow {
      */
     public AuthorizationRedirect authorize(ProviderMetadata metadata) {
         Objects.requireNonNull(metadata, "metadata must not be null");
-        FlowContext context = FlowContext.create(configuration.getRedirectUri());
+        String redirectUri = configuration.getRedirectUri();
+        if (redirectUri == null || redirectUri.isBlank()) {
+            throw new IllegalArgumentException("client declares no redirect URI");
+        }
+        FlowContext context = FlowContext.create(redirectUri);
         String url = authorizationRequestBuilder.build(configuration, metadata, context);
         return new AuthorizationRedirect(url, context);
     }
@@ -184,7 +205,12 @@ public class AuthorizationCodeFlow {
         Map<String, String> headers = new HashMap<>();
         clientAuthentication.decorate(form, headers);
 
-        TokenResponse tokenResponse = tokenEndpointClient.requestToken(tokenEndpoint, form, headers);
+        // Route through the constraint-bearing overload so a DPoP/mTLS-requiring AS can bind the
+        // initial code redemption; a null senderConstraint preserves the plain-bearer exchange.
+        // The one-shot use_dpop_nonce retry the 4-arg overload implements applies only when a DPoP
+        // senderConstraint is supplied — it never fires for the null-senderConstraint plain-bearer path.
+        TokenResponse tokenResponse = tokenEndpointClient.requestToken(tokenEndpoint, form, headers,
+                senderConstraint);
         AccessTokenContent accessToken = accessTokenBridge.validateAccessToken(tokenResponse.accessToken);
 
         if (tokenResponse.idToken == null || tokenResponse.idToken.isBlank()) {

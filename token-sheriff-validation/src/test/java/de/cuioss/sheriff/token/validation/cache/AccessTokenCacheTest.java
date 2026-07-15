@@ -136,10 +136,11 @@ class AccessTokenCacheTest {
         // Create test data with consistent token
         String testToken = "test-jwt-token";
 
-        // First access - cache a token that will expire soon
+        // First access - cache a token with a fixed TTL
+        OffsetDateTime tokenExpiry = OffsetDateTime.now().plusSeconds(2);
         AccessTokenContent expiredContent = createAccessTokenWithRawToken(
                 "https://example.com",
-                OffsetDateTime.now().plusSeconds(2), // Will expire in 2 seconds
+                tokenExpiry,
                 testToken
         );
 
@@ -157,17 +158,10 @@ class AccessTokenCacheTest {
         assertEquals(1, validationCount.get());
         assertEquals(1, cache.size());
 
-        // Wait for token to expire using Awaitility
-        await()
-                .atMost(3, TimeUnit.SECONDS)
-                .pollInterval(100, TimeUnit.MILLISECONDS)
-                .until(() -> {
-                    // Check if token has expired by comparing with current time
-                    return expiredContent.getExpirationDateTime().isBefore(OffsetDateTime.now());
-                });
-
-        // When - second access should detect expiration and throw exception
-        OffsetDateTime checkTime = OffsetDateTime.now();
+        // Injected clock: advance the reference instant past the token TTL instead of sleeping ~2 s
+        // of wall-clock time. get(...) evaluates expiration against the supplied instant, so a
+        // checkTime after the TTL makes the cached token expired deterministically.
+        OffsetDateTime checkTime = tokenExpiry.plusSeconds(1);
         TokenValidationException exception =
                 assertThrows(TokenValidationException.class, () ->
                         cache.get(testToken, performanceMonitor, checkTime));
@@ -625,8 +619,10 @@ class AccessTokenCacheTest {
                 .build();
         cache = new AccessTokenCache(config, securityEventCounter, 0);
 
-        // When - add 5 tokens that will expire in 2 seconds
-        OffsetDateTime expirationTime = OffsetDateTime.now().plusSeconds(2);
+        // Pre-expire the tokens (TTL already in the past) so the background eviction executor removes
+        // them on its next scheduled tick without any ~2 s wall-clock wait for the expiry transition.
+        // Only the executor's 1 s scheduling interval remains — not a token-TTL sleep.
+        OffsetDateTime expirationTime = OffsetDateTime.now().minusSeconds(1);
         for (int i = 0; i < 5; i++) {
             String rawToken = "raw-token-" + i;
             AccessTokenContent content = createAccessTokenWithRawToken(
@@ -643,7 +639,8 @@ class AccessTokenCacheTest {
         // Then - verify all 5 tokens are in cache
         assertEquals(5, cache.size());
 
-        // Use awaitility with shorter timeout
+        // Await only the background executor's next scheduled tick (interval 1 s); the tokens are
+        // already past their TTL, so there is no wall-clock wait for the expiry transition itself.
         await()
                 .atMost(4, TimeUnit.SECONDS)
                 .pollInterval(200, TimeUnit.MILLISECONDS)

@@ -19,6 +19,8 @@ import de.cuioss.sheriff.token.client.auth.ClientSecretBasicAuth;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.client.dpop.DpopProofGenerator;
+import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.token.IdTokenValidationBridge;
 import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
@@ -30,37 +32,35 @@ import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
+import de.cuioss.sheriff.token.validation.test.dispatcher.TokenDispatcher;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
-import de.cuioss.test.mockwebserver.dispatcher.HttpMethodMapper;
-import de.cuioss.test.mockwebserver.dispatcher.ModuleDispatcherElement;
 import lombok.Getter;
-import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
-import okhttp3.Headers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,7 +77,7 @@ class AuthorizationCodeFlowTest {
     private static final Pattern JWS_ALG_PATTERN = Pattern.compile("\"alg\"\\s*:\\s*\"([^\"]+)\"");
 
     @Getter
-    private final TokenEndpointDispatcher moduleDispatcher = new TokenEndpointDispatcher();
+    private final TokenDispatcher moduleDispatcher = new TokenDispatcher();
 
     private TestTokenHolder accessHolder;
     private TestTokenHolder idHolder;
@@ -109,7 +109,7 @@ class AuthorizationCodeFlowTest {
     private static ProviderMetadata metadataWithTokenEndpoint(URIBuilder uriBuilder) {
         var metadata = new ProviderMetadata();
         metadata.issuer = "https://issuer.example.com";
-        metadata.tokenEndpoint = uriBuilder.addPathSegment("token").buildAsString();
+        metadata.tokenEndpoint = uriBuilder.addPathSegments("oidc", "token").buildAsString();
         return metadata;
     }
 
@@ -146,12 +146,33 @@ class AuthorizationCodeFlowTest {
     }
 
     @Test
+    @DisplayName("authorize() should reject a client that declares no redirect URI with IllegalArgumentException (not NPE)")
+    void shouldRejectMissingRedirectUri() {
+        var config = ClientConfiguration.builder()
+                .issuer("https://issuer.example.com")
+                .clientId(Generators.nonBlankStrings().next())
+                .clientSecret(Generators.nonBlankStrings().next())
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                .scope("openid")
+                .allowInsecureHttp(true)
+                .build();
+        var metadata = new ProviderMetadata();
+        metadata.authorizationEndpoint = AUTH_ENDPOINT;
+        metadata.codeChallengeMethodsSupported = List.of("S256");
+        var flow = flow(config);
+
+        assertThrows(IllegalArgumentException.class, () -> flow.authorize(metadata),
+                "a client without a redirect URI must fail with IllegalArgumentException, not a raw NPE");
+    }
+
+    @Test
     @DisplayName("exchange() should redeem the code and return the validated, nonce-bound access and ID tokens")
     void shouldRedeemAndValidate(URIBuilder uriBuilder, MockWebServer server) throws Exception {
         var config = config();
         var context = FlowContext.create(REDIRECT_URI);
         idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
-        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
         String code = Generators.letterStrings(20, 40).next();
         var callback = new CallbackParameters(code, context.state(), null, null, null);
 
@@ -173,12 +194,62 @@ class AuthorizationCodeFlowTest {
     }
 
     @Test
+    @DisplayName("exchange() should DPoP-bind the code redemption when a sender-constraint is configured")
+    void shouldAttachDpopProofWhenConstrained(URIBuilder uriBuilder, MockWebServer server) throws Exception {
+        var config = config();
+        var context = FlowContext.create(REDIRECT_URI);
+        idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
+        var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
+        SenderConstraint constraint = SenderConstraint.dpop(new DpopProofGenerator(rsaKeyPair(), "RS256"));
+        var flow = new AuthorizationCodeFlow(config, new TokenEndpointClient(config), accessBridge, idBridge,
+                new IssValidator(), constraint);
+
+        flow.exchange(metadataWithTokenEndpoint(uriBuilder), context, callback, auth(config));
+
+        RecordedRequest request = server.takeRequest();
+        String proof = request.getHeaders().get("DPoP");
+        assertAll("DPoP-bound code exchange",
+                () -> assertNotNull(proof, "the code redemption must carry a DPoP proof header"),
+                () -> assertEquals(3, proof.split("\\.").length, "the DPoP header is a compact proof JWT"));
+    }
+
+    @Test
+    @DisplayName("exchange() should send no DPoP proof when no sender-constraint is configured")
+    void shouldNotAttachDpopProofWhenUnconstrained(URIBuilder uriBuilder, MockWebServer server) throws Exception {
+        var config = config();
+        var context = FlowContext.create(REDIRECT_URI);
+        idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
+        var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
+
+        flow(config).exchange(metadataWithTokenEndpoint(uriBuilder), context, callback, auth(config));
+
+        RecordedRequest request = server.takeRequest();
+        assertNull(request.getHeaders().get("DPoP"),
+                "an unconstrained code redemption must carry no DPoP proof header");
+    }
+
+    private static KeyPair rsaKeyPair() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("RSA key pair generation failed", e);
+        }
+    }
+
+    @Test
     @DisplayName("exchange() should reject an ID token whose nonce does not match the flow context")
     void shouldRejectNonceMismatch(URIBuilder uriBuilder) {
         var config = config();
         var context = FlowContext.create(REDIRECT_URI);
         idHolder.withClaim("nonce", ClaimValue.forPlainString(Generators.letterStrings(20, 40).next()));
-        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
         var metadata = metadataWithTokenEndpoint(uriBuilder);
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
         var flow = flow(config);
@@ -193,7 +264,7 @@ class AuthorizationCodeFlowTest {
     void shouldRejectMissingIdToken(URIBuilder uriBuilder) {
         var config = config();
         var context = FlowContext.create(REDIRECT_URI);
-        moduleDispatcher.success(accessHolder.getRawToken(), null);
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null, null, 300));
         var metadata = metadataWithTokenEndpoint(uriBuilder);
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
         var flow = flow(config);
@@ -225,7 +296,8 @@ class AuthorizationCodeFlowTest {
         var config = config();
         var context = FlowContext.create(REDIRECT_URI);
         idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
-        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
         var metadata = new ProviderMetadata();
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
         var flow = flow(config);
@@ -240,7 +312,7 @@ class AuthorizationCodeFlowTest {
     void shouldSurfaceTransportException(URIBuilder uriBuilder) {
         var config = config();
         var context = FlowContext.create(REDIRECT_URI);
-        moduleDispatcher.error();
+        moduleDispatcher.returnOAuthError();
         var metadata = metadataWithTokenEndpoint(uriBuilder);
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
         var flow = flow(config);
@@ -258,7 +330,8 @@ class AuthorizationCodeFlowTest {
         accessHolder.withClaim(ClaimName.ISSUER.getName(),
                 ClaimValue.forPlainString("https://attacker.example.com"));
         idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
-        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
         var metadata = metadataWithTokenEndpoint(uriBuilder);
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
         var flow = flow(config);
@@ -276,7 +349,8 @@ class AuthorizationCodeFlowTest {
         String otherAccessToken = Generators.letterStrings(20, 40).next();
         idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
         idHolder.withClaim(AT_HASH_CLAIM, ClaimValue.forPlainString(atHash(idHolder.getRawToken(), otherAccessToken)));
-        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
         var metadata = metadataWithTokenEndpoint(uriBuilder);
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
         var flow = flow(config);
@@ -375,54 +449,5 @@ class AuthorizationCodeFlowTest {
                         () -> new AuthorizationCodeFlow.AuthenticationResult(null, id)),
                 () -> assertThrows(NullPointerException.class,
                         () -> new AuthorizationCodeFlow.AuthenticationResult(access, null)));
-    }
-
-    /**
-     * Token-endpoint dispatcher serving a configurable authorization_code response (with optional ID
-     * token) or an error.
-     */
-    static final class TokenEndpointDispatcher implements ModuleDispatcherElement {
-
-        private static final int HTTP_OK = 200;
-        private static final int HTTP_BAD_REQUEST = 400;
-
-        private int status = HTTP_OK;
-        private String body = "";
-
-        void reset() {
-            this.status = HTTP_OK;
-            this.body = "";
-        }
-
-        void success(String accessToken, String idToken) {
-            this.status = HTTP_OK;
-            StringBuilder json = new StringBuilder("{\"access_token\":\"").append(accessToken)
-                    .append("\",\"token_type\":\"Bearer\",\"expires_in\":300");
-            if (idToken != null) {
-                json.append(",\"id_token\":\"").append(idToken).append('"');
-            }
-            json.append('}');
-            this.body = json.toString();
-        }
-
-        void error() {
-            this.status = HTTP_BAD_REQUEST;
-            this.body = "{\"error\":\"invalid_grant\"}";
-        }
-
-        @Override
-        public String getBaseUrl() {
-            return "/token";
-        }
-
-        @Override
-        public Set<HttpMethodMapper> supportedMethods() {
-            return Set.of(HttpMethodMapper.POST);
-        }
-
-        @Override
-        public Optional<MockResponse> handlePost(RecordedRequest request) {
-            return Optional.of(new MockResponse(status, Headers.of("Content-Type", "application/json"), body));
-        }
     }
 }

@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -193,6 +194,30 @@ class UserInfoClientTest {
     }
 
     @Test
+    @DisplayName("Should sanitize an AS-controlled parse-error fragment carrying CR/LF (M8)")
+    void shouldSanitizeParseErrorFragment(URIBuilder uriBuilder) {
+        // The userinfo body is AS-controlled; a malformed value with an embedded CR/LF must not forge a
+        // log line — the parse-error fragment must be routed through LogSanitizer before it is exposed.
+        moduleDispatcher.returnMalformedJson("{\"sub\":\"a\",\"email_verified\":tru\r\nINJECTED}");
+        var client = userInfoClient();
+        var endpoint = userInfoEndpoint(uriBuilder);
+        var token = Generators.nonBlankStrings().next();
+
+        TransportException thrown = assertThrows(TransportException.class,
+                () -> client.fetchUserInfo(endpoint, token),
+                "a malformed userinfo response must surface as a TransportException");
+
+        String message = thrown.getMessage();
+        assertAll("sanitized parse-error fragment",
+                () -> assertFalse(message.indexOf('\r') >= 0,
+                        "a raw CR from the AS-controlled body must not reach the exception message"),
+                () -> assertFalse(message.indexOf('\n') >= 0,
+                        "a raw LF from the AS-controlled body must not reach the exception message"),
+                () -> assertTrue(message.contains("\\r") && message.contains("\\n"),
+                        "the injected CR/LF must survive in escaped form, proving the fragment was carried and sanitized"));
+    }
+
+    @Test
     @DisplayName("Should reject a signed userinfo response whose validated claims omit the sub (M3)")
     void shouldRejectSignedUserInfoMissingSub(URIBuilder uriBuilder) {
         moduleDispatcher.returnSigned(APPLICATION_JWT,
@@ -212,14 +237,26 @@ class UserInfoClientTest {
      */
     static final class UserInfoTestDispatcher implements ModuleDispatcherElement {
 
+        private static final String APPLICATION_JSON = "application/json";
+
         private final UserInfoDispatcher json = new UserInfoDispatcher();
         private boolean signed;
         private String signedContentType = APPLICATION_JWT;
         private String signedBody = "";
+        private boolean malformed;
+        private String malformedBody = "";
 
         UserInfoTestDispatcher returnDefault() {
             signed = false;
+            malformed = false;
             json.returnDefault();
+            return this;
+        }
+
+        UserInfoTestDispatcher returnMalformedJson(String body) {
+            signed = false;
+            malformed = true;
+            malformedBody = body;
             return this;
         }
 
@@ -264,6 +301,9 @@ class UserInfoClientTest {
 
         @Override
         public Optional<MockResponse> handleGet(RecordedRequest request) {
+            if (malformed) {
+                return Optional.of(new MockResponse(200, Headers.of("Content-Type", APPLICATION_JSON), malformedBody));
+            }
             if (signed) {
                 return Optional.of(new MockResponse(200, Headers.of("Content-Type", signedContentType), signedBody));
             }

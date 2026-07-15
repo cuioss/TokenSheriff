@@ -27,4 +27,7 @@
  *
  * @since 1.0
  */
+@NullMarked
 package de.cuioss.sheriff.token.client.auth;
+
+import org.jspecify.annotations.NullMarked;

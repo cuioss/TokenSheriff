@@ -15,9 +15,11 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
-import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
+import de.cuioss.sheriff.token.commons.error.InboundErrorNormalizer;
 import de.cuioss.tools.logging.CuiLogger;
+
+import org.jspecify.annotations.Nullable;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -57,9 +59,9 @@ public class CallbackHandler {
         Objects.requireNonNull(parameters, "parameters must not be null");
 
         if (parameters.hasError()) {
-            throw new ClientProtocolException(
-                    "authorization server returned an error callback: "
-                            + LogSanitizer.sanitize(parameters.error()));
+            // Route both error and error_description through the shared commons normalizer so the
+            // inbound and outbound error surfaces render one sanitized contract (COMMONS-11).
+            throw InboundErrorNormalizer.normalize(parameters.error(), parameters.errorDescription());
         }
         if (!statesMatch(context.state(), parameters.state())) {
             LOGGER.debug("Rejecting authorization callback: state mismatch");
@@ -70,7 +72,7 @@ public class CallbackHandler {
                 .orElseThrow(() -> new ClientProtocolException("authorization callback is missing the authorization code"));
     }
 
-    private static boolean statesMatch(String expected, String actual) {
+    private static boolean statesMatch(String expected, @Nullable String actual) {
         if (actual == null) {
             return false;
         }

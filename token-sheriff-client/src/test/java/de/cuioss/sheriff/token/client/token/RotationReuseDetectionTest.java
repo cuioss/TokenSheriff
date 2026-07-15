@@ -32,6 +32,7 @@ import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
+import de.cuioss.sheriff.token.validation.test.dispatcher.TokenDispatcher;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -40,12 +41,7 @@ import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
-import de.cuioss.test.mockwebserver.dispatcher.HttpMethodMapper;
-import de.cuioss.test.mockwebserver.dispatcher.ModuleDispatcherElement;
 import lombok.Getter;
-import mockwebserver3.MockResponse;
-import mockwebserver3.RecordedRequest;
-import okhttp3.Headers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,13 +50,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -89,7 +83,7 @@ class RotationReuseDetectionTest {
     private static final int SINGLE_FLIGHT_THREADS = 8;
 
     @Getter
-    private final TokenEndpointDispatcher moduleDispatcher = new TokenEndpointDispatcher();
+    private final TokenDispatcher moduleDispatcher = new TokenDispatcher();
 
     private TestTokenHolder accessHolder;
     private TestTokenHolder idHolder;
@@ -118,7 +112,7 @@ class RotationReuseDetectionTest {
 
     private static ProviderMetadata metadata(URIBuilder uriBuilder) {
         var metadata = new ProviderMetadata();
-        metadata.tokenEndpoint = uriBuilder.addPathSegment("token").buildAsString();
+        metadata.tokenEndpoint = uriBuilder.addPathSegments("oidc", "token").buildAsString();
         metadata.revocationEndpoint = uriBuilder.addPathSegment("revoke").buildAsString();
         return metadata;
     }
@@ -152,12 +146,13 @@ class RotationReuseDetectionTest {
         String rt2 = Generators.letterStrings(20, 40).next();
 
         manager.store(session, bearerBundle(rt1, null));
-        moduleDispatcher.success(accessHolder.getRawToken(), rt2, null, 300);
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), rt2, null, 300));
         manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth(config));
 
         // Roll the store back to the now-superseded token while the family stays at rt2, then present it.
         manager.store(session, bearerBundle(rt1, null));
-        moduleDispatcher.success(accessHolder.getRawToken(), Generators.letterStrings(20, 40).next(), null, 300);
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(),
+                Generators.letterStrings(20, 40).next(), null, 300));
         var clientAuth = clientAuth(config);
 
         assertThrows(ClientProtocolException.class,
@@ -186,8 +181,8 @@ class RotationReuseDetectionTest {
         manager.store(session, bearerBundle(rt1, null));
 
         CountDownLatch allStarted = new CountDownLatch(SINGLE_FLIGHT_THREADS);
-        moduleDispatcher.success(accessHolder.getRawToken(), rt2, null, 300);
-        moduleDispatcher.blockRedeemUntil(allStarted);
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), rt2, null, 300));
+        moduleDispatcher.blockUntil(allStarted);
 
         ExecutorService pool = Executors.newFixedThreadPool(SINGLE_FLIGHT_THREADS);
         List<Future<Optional<StoredToken>>> futures = new ArrayList<>();
@@ -208,7 +203,7 @@ class RotationReuseDetectionTest {
         }
 
         assertAll("single-flight outcome",
-                () -> assertEquals(1, moduleDispatcher.tokenCallCount(),
+                () -> assertEquals(1, moduleDispatcher.getCallCounter(),
                         "the concurrent refresh redeems the token exactly once (single-flight)"),
                 () -> assertFalse(revocationClient.revokedAny(),
                         "a benign race must not trigger a revocation"),
@@ -232,8 +227,8 @@ class RotationReuseDetectionTest {
         String rt1 = Generators.letterStrings(20, 40).next();
         String originalIdToken = Generators.letterStrings(20, 40).next();
         manager.store(session, bearerBundle(rt1, originalIdToken));
-        moduleDispatcher.success(accessHolder.getRawToken(), Generators.letterStrings(20, 40).next(),
-                idHolder.getRawToken(), 300);
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(),
+                Generators.letterStrings(20, 40).next(), idHolder.getRawToken(), 300));
         var clientAuth = clientAuth(config);
 
         assertThrows(IllegalStateException.class,
@@ -262,8 +257,8 @@ class RotationReuseDetectionTest {
         String session = Generators.letterStrings(10, 20).next();
         String rt1 = Generators.letterStrings(20, 40).next();
         manager.store(session, bearerBundle(rt1, Generators.letterStrings(20, 40).next()));
-        moduleDispatcher.success(accessHolder.getRawToken(), Generators.letterStrings(20, 40).next(),
-                idHolder.getRawToken(), 300);
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(),
+                Generators.letterStrings(20, 40).next(), idHolder.getRawToken(), 300));
 
         StoredToken refreshed = manager
                 .refresh(session, metadata, flow, revocationClient, idBridge, clientAuth(config))
@@ -349,67 +344,4 @@ class RotationReuseDetectionTest {
         }
     }
 
-    /**
-     * Token-endpoint dispatcher serving a configurable refresh response, with an optional gate that
-     * holds the (single) redeem until a latch releases — the window a single-flight test uses to prove
-     * a concurrent refresh collapses onto one redeem.
-     */
-    static final class TokenEndpointDispatcher implements ModuleDispatcherElement {
-
-        private static final int HTTP_OK = 200;
-
-        private String body = "";
-        private final AtomicInteger tokenCalls = new AtomicInteger();
-        private CountDownLatch redeemGate;
-
-        void reset() {
-            this.body = "";
-            this.tokenCalls.set(0);
-            this.redeemGate = null;
-        }
-
-        void success(String accessToken, String refreshToken, String idToken, long expiresIn) {
-            StringBuilder json = new StringBuilder("{\"access_token\":\"").append(accessToken)
-                    .append("\",\"token_type\":\"Bearer\",\"expires_in\":").append(expiresIn);
-            if (refreshToken != null) {
-                json.append(",\"refresh_token\":\"").append(refreshToken).append('"');
-            }
-            if (idToken != null) {
-                json.append(",\"id_token\":\"").append(idToken).append('"');
-            }
-            json.append('}');
-            this.body = json.toString();
-        }
-
-        void blockRedeemUntil(CountDownLatch gate) {
-            this.redeemGate = gate;
-        }
-
-        int tokenCallCount() {
-            return tokenCalls.get();
-        }
-
-        @Override
-        public String getBaseUrl() {
-            return "/token";
-        }
-
-        @Override
-        public Set<HttpMethodMapper> supportedMethods() {
-            return Set.of(HttpMethodMapper.POST);
-        }
-
-        @Override
-        public Optional<MockResponse> handlePost(RecordedRequest request) {
-            tokenCalls.incrementAndGet();
-            if (redeemGate != null) {
-                try {
-                    redeemGate.await(10, TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-            return Optional.of(new MockResponse(HTTP_OK, Headers.of("Content-Type", "application/json"), body));
-        }
-    }
 }
