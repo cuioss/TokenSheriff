@@ -88,10 +88,10 @@
         "default:finalize-step-security-audit": {
           "lane": "full"
         },
-        "default:push": {
+        "default:architecture-refresh": {
           "lane": "minimal"
         },
-        "default:create-pr": {
+        "default:push": {
           "lane": "minimal"
         },
         "plan-marshall:automatic-review": {
@@ -106,10 +106,10 @@
           "review_completion_poll_timeout_seconds": 600,
           "lane": "ask"
         },
-        "default:ci-verify": {
+        "default:create-pr": {
           "lane": "minimal"
         },
-        "default:architecture-refresh": {
+        "default:ci-verify": {
           "lane": "minimal"
         },
         "default:sonar-roundtrip": {
@@ -279,7 +279,7 @@
       "lessons_superseded_days": 0,
       "temp_on_maintenance": true
     },
-    "provisioned_version": "0.1.1114",
+    "provisioned_version": "0.1.1116",
     "config_seed_fingerprint": "37df1a33"
   }
 }
