@@ -16,102 +16,126 @@
 package de.cuioss.sheriff.token.validation.security;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
-import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
-import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
-import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
-import de.cuioss.sheriff.token.validation.test.junit.TestTokenSource;
-import de.cuioss.test.generator.junit.EnableGeneratorController;
-import de.cuioss.test.juli.junit5.EnableTestLogger;
+import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
+import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.api.Test;
 
-import java.util.Base64;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.time.Instant;
+import java.util.Date;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for validating protection against JKU/X5U header abuse attacks.
+ * Certifies the real defense against JKU (JWK Set URL) / X5U (X.509 URL) header-injection attacks (H4).
  * <p>
- * This attack allows attackers to host their own key sets and instruct the token
- * validator to fetch and trust those keys by including JKU (JWK Set URL) or X5U
- * (X.509 URL) headers pointing to attacker-controlled URLs.
+ * A JKU/X5U attack instructs the validator to fetch and trust key material from an attacker-controlled
+ * URL carried in the token header. Token-Sheriff's defense is that it <em>never</em> honors {@code jku}
+ * or {@code x5u}: signature verification is driven exclusively by the pre-configured issuer JWKS, so a
+ * token whose signature only verifies against the attacker's advertised key is rejected.
  * <p>
- * This test verifies that the library correctly rejects tokens with JKU or X5U
- * headers pointing to malicious URLs.
+ * Both tests below construct the attack the honest way (mirroring
+ * {@link WiredNegativePathAttackTest}): the token is <em>re-signed</em> with an attacker RSA key and
+ * carries a {@code jku}/{@code x5u} header pointing at that attacker's key set, while presenting the
+ * configured {@code kid}. If the library honored the header it would fetch the attacker key and accept
+ * the token; because it uses the configured key instead, verification fails with
+ * {@link EventType#SIGNATURE_VALIDATION_FAILED}. A mutation that made the validator fetch keys from the
+ * {@code jku}/{@code x5u} URL would make the attacker signature verify and turn both tests red — so the
+ * rejection is attributable to the named defense, not to an incidental broken signature.
  */
-@EnableTestLogger
-@EnableGeneratorController
 @DisplayName("Tests for JKU/X5U Header Abuse Protection")
 class JkuX5uAttackTest {
+
+    private static final String TEST_ISSUER = "https://jku-x5u-attack-test.example.com";
+    private static final String TEST_AUDIENCE = "test-client";
+    private static final String DEFAULT_KEY_ID = InMemoryKeyMaterialHandler.DEFAULT_KEY_ID;
+    private static final String ATTACKER_JKU = "https://attacker-controlled-site.com/jwks.json";
+    private static final String ATTACKER_X5U = "https://attacker-controlled-site.com/keys.pem";
 
     private TokenValidator tokenValidator;
 
     @BeforeEach
     void setUp() {
-        // Create issuer config with JWKS content
         IssuerConfig issuerConfig = IssuerConfig.builder()
-                .issuerIdentifier(TestTokenHolder.TEST_ISSUER)
-                .expectedAudience("test-client")
-                .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
+                .issuerIdentifier(TEST_ISSUER)
+                .expectedAudience(TEST_AUDIENCE)
+                .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
                 .build();
-
-        // Create validation factory
-        tokenValidator = TokenValidator.builder().parserConfig(ParserConfig.builder().build()).issuerConfig(issuerConfig).build();
-
+        tokenValidator = TokenValidator.builder()
+                .parserConfig(ParserConfig.builder().build())
+                .issuerConfig(issuerConfig)
+                .build();
     }
 
-    @ParameterizedTest
-    @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 3)
-    @DisplayName("Should reject tokens with JKU header pointing to malicious URL")
-    void shouldRejectTokenWithJkuHeader(TestTokenHolder tokenHolder) {
-        String validToken = tokenHolder.getRawToken();
-        String[] parts = validToken.split("\\.");
+    @Test
+    @DisplayName("Should reject a token whose signature only verifies against a JKU-advertised attacker key")
+    void shouldRejectTokenWithJkuHeader() {
+        // Attacker signs the token with their own key and advertises the matching key set via `jku`,
+        // presenting the configured kid. The validator ignores `jku` and verifies against the configured
+        // key, so the attacker signature fails — proving the library never fetched the advertised keys.
+        String forged = forgeAttackerToken("jku", ATTACKER_JKU);
 
-        String header = parts[0];
-        byte[] headerBytes = Base64.getUrlDecoder().decode(header);
-        String headerJson = new String(headerBytes);
-
-        String maliciousJku = "\"jku\":\"https://attacker-controlled-site.com/jwks.json\"";
-        String tamperedHeaderJson = headerJson.substring(0, headerJson.length() - 1) + "," + maliciousJku + "}";
-        String tamperedHeader = Base64.getUrlEncoder().withoutPadding().encodeToString(tamperedHeaderJson.getBytes());
-        String tamperedToken = tamperedHeader + "." + parts[1] + "." + parts[2];
-
-        var jkuRequest = AccessTokenRequest.of(tamperedToken);
-        assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(jkuRequest),
-                "Should reject token with malicious JKU header");
-        assertTrue(tokenValidator.getSecurityEventCounter().getCount(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED) >= 0,
-                "Security event counter should track JKU header attack attempts");
+        var request = AccessTokenRequest.of(forged);
+        var ex = assertThrows(TokenValidationException.class,
+                () -> tokenValidator.createAccessToken(request),
+                "A token trusting a jku-advertised attacker key must be rejected");
+        assertEquals(EventType.SIGNATURE_VALIDATION_FAILED, ex.getEventType(),
+                "Rejection must come from the configured-key signature check, not the jku header");
+        assertEquals(1, tokenValidator.getSecurityEventCounter().getCount(EventType.SIGNATURE_VALIDATION_FAILED),
+                "Exactly one signature-validation failure must be recorded for the jku attack");
     }
 
-    @ParameterizedTest
-    @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 3)
-    @DisplayName("Should reject tokens with X5U header pointing to malicious URL")
-    void shouldRejectTokenWithX5uHeader(TestTokenHolder tokenHolder) {
-        String validToken = tokenHolder.getRawToken();
-        String[] parts = validToken.split("\\.");
+    @Test
+    @DisplayName("Should reject a token whose signature only verifies against an X5U-advertised attacker key")
+    void shouldRejectTokenWithX5uHeader() {
+        // Same honest construction as the jku case, advertising the attacker key set via `x5u`.
+        String forged = forgeAttackerToken("x5u", ATTACKER_X5U);
 
-        String header = parts[0];
-        byte[] headerBytes = Base64.getUrlDecoder().decode(header);
-        String headerJson = new String(headerBytes);
+        var request = AccessTokenRequest.of(forged);
+        var ex = assertThrows(TokenValidationException.class,
+                () -> tokenValidator.createAccessToken(request),
+                "A token trusting an x5u-advertised attacker key must be rejected");
+        assertEquals(EventType.SIGNATURE_VALIDATION_FAILED, ex.getEventType(),
+                "Rejection must come from the configured-key signature check, not the x5u header");
+        assertEquals(1, tokenValidator.getSecurityEventCounter().getCount(EventType.SIGNATURE_VALIDATION_FAILED),
+                "Exactly one signature-validation failure must be recorded for the x5u attack");
+    }
 
-        String maliciousX5u = "\"x5u\":\"https://attacker-controlled-site.com/keys.pem\"";
-        String tamperedHeaderJson = headerJson.substring(0, headerJson.length() - 1) + "," + maliciousX5u + "}";
-        String tamperedHeader = Base64.getUrlEncoder().withoutPadding().encodeToString(tamperedHeaderJson.getBytes());
-        String tamperedToken = tamperedHeader + "." + parts[1] + "." + parts[2];
+    /**
+     * Builds a well-formed RS256 access token signed with a freshly generated attacker key and carrying
+     * a {@code jku}/{@code x5u} header pointing at the attacker's advertised key set. The configured
+     * {@code kid} and issuer are used so validation reaches (and fails at) the signature check.
+     */
+    private String forgeAttackerToken(String headerName, String attackerUrl) {
+        KeyPair attackerKeyPair = generateRsaKeyPair();
+        return Jwts.builder()
+                .header().keyId(DEFAULT_KEY_ID).add(headerName, attackerUrl).and()
+                .issuer(TEST_ISSUER)
+                .subject("attacker")
+                .audience().add(TEST_AUDIENCE).and()
+                .issuedAt(Date.from(Instant.now()))
+                .expiration(Date.from(Instant.now().plusSeconds(3600)))
+                .signWith(attackerKeyPair.getPrivate(), Jwts.SIG.RS256)
+                .compact();
+    }
 
-        var x5uRequest = AccessTokenRequest.of(tamperedToken);
-        assertThrows(TokenValidationException.class,
-                () -> tokenValidator.createAccessToken(x5uRequest),
-                "Should reject token with malicious X5U header");
-        assertTrue(tokenValidator.getSecurityEventCounter().getCount(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED) >= 0,
-                "Security event counter should track X5U header attack attempts");
+    private static KeyPair generateRsaKeyPair() {
+        try {
+            KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+            gen.initialize(2048);
+            return gen.generateKeyPair();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("RSA not available", e);
+        }
     }
 }
