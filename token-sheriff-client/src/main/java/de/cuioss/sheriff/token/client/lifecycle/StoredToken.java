@@ -27,7 +27,7 @@ import java.util.Optional;
  * <p>
  * A stored token keeps the retrieved token material off the browser: the access token, the optional
  * refresh token and ID token, the optional sender-constraint {@link ConstraintBinding} (from the
- * DPoP/mTLS increment), and the access-token expiry. Carrying the {@code ConstraintBinding} here is
+ * DPoP/mTLS sender-constraint), and the access-token expiry. Carrying the {@code ConstraintBinding} here is
  * what lets the sender-constraint survive storage and proactive refresh.
  * <p>
  * <strong>Refresh is proof-driven, not metadata-only.</strong> {@link #refreshed} does <em>not</em>

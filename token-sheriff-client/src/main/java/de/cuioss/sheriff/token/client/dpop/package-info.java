@@ -22,7 +22,7 @@
  * {@link de.cuioss.sheriff.token.client.dpop.SenderConstraint} applies the DPoP proof header (or,
  * for mTLS, relies on the transport-level certificate binding) to the token request and records the
  * resulting {@link de.cuioss.sheriff.token.client.dpop.ConstraintBinding}. The binding is carried
- * alongside the stored token by the token-lifecycle increment so the constraint survives storage and
+ * alongside the stored token by the token lifecycle so the constraint survives storage and
  * refresh ({@code CLIENT-18}). Verifying that a presented token matches its confirmed key is
  * inherited from the validation pipeline ({@code VALIDATION-8.7}) and is not re-implemented here.
  *

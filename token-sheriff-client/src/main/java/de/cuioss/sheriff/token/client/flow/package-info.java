@@ -20,8 +20,9 @@
  * {@code HttpHandler} wrapper for the authenticated back-channel token-endpoint {@code POST}
  * (design fork 1). {@link de.cuioss.sheriff.token.client.flow.ClientCredentialsFlow} drives the
  * {@code client_credentials} grant on top of it, validating every retrieved token through the
- * validation pipeline. Later increments add the {@code refresh_token} and
- * {@code authorization_code} + PKCE flows to this package.
+ * validation pipeline. {@link de.cuioss.sheriff.token.client.flow.RefreshFlow} drives the
+ * {@code refresh_token} grant and {@link de.cuioss.sheriff.token.client.flow.AuthorizationCodeFlow}
+ * drives the {@code authorization_code} + PKCE flow on the same back-channel client.
  *
  * @since 1.0
  */

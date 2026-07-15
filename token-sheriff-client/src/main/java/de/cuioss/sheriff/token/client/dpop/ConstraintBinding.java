@@ -24,7 +24,7 @@ import java.util.Objects;
  * {@code cnf} (confirmation) claim ties it to a key the client holds — a DPoP proof-key thumbprint
  * ({@code cnf.jkt}, RFC 9449) or the client certificate thumbprint ({@code cnf."x5t#S256"},
  * RFC 8705). This value object carries that binding alongside the stored token so the constraint
- * survives storage and refresh (consumed by the token-lifecycle increment, {@code CLIENT-18}).
+ * survives storage and refresh (consumed by the token lifecycle, {@code CLIENT-18}).
  * <p>
  * The engine only <em>records</em> the binding here; verifying that a presented token actually
  * matches the confirmed key is inherited from the validation pipeline ({@code VALIDATION-8.7}) and
