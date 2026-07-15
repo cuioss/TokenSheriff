@@ -25,4 +25,7 @@
  *
  * @since 1.0
  */
+@NullMarked
 package de.cuioss.sheriff.token.client.flow;
+
+import org.jspecify.annotations.NullMarked;
