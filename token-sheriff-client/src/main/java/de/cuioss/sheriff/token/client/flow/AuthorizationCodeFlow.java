@@ -206,8 +206,9 @@ public class AuthorizationCodeFlow {
         clientAuthentication.decorate(form, headers);
 
         // Route through the constraint-bearing overload so a DPoP/mTLS-requiring AS can bind the
-        // initial code redemption; a null senderConstraint preserves the plain-bearer exchange
-        // (including the one-shot use_dpop_nonce retry the 4-arg overload already implements).
+        // initial code redemption; a null senderConstraint preserves the plain-bearer exchange.
+        // The one-shot use_dpop_nonce retry the 4-arg overload implements applies only when a DPoP
+        // senderConstraint is supplied — it never fires for the null-senderConstraint plain-bearer path.
         TokenResponse tokenResponse = tokenEndpointClient.requestToken(tokenEndpoint, form, headers,
                 senderConstraint);
         AccessTokenContent accessToken = accessTokenBridge.validateAccessToken(tokenResponse.accessToken);

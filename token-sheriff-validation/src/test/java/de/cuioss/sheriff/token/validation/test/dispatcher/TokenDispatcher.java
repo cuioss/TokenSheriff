@@ -17,9 +17,7 @@ package de.cuioss.sheriff.token.validation.test.dispatcher;
 
 import de.cuioss.test.mockwebserver.dispatcher.HttpMethodMapper;
 import de.cuioss.test.mockwebserver.dispatcher.ModuleDispatcherElement;
-import lombok.Getter;
 import lombok.NonNull;
-import lombok.Setter;
 import mockwebserver3.MockResponse;
 import mockwebserver3.RecordedRequest;
 import okhttp3.Headers;
@@ -28,6 +26,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static jakarta.servlet.http.HttpServletResponse.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -53,20 +52,36 @@ public class TokenDispatcher implements ModuleDispatcherElement {
      */
     public static final String LOCAL_PATH = "/oidc/token";
 
-    @Getter
-    @Setter
-    private int callCounter = 0;
+    private final AtomicInteger callCounter = new AtomicInteger();
     private ResponseStrategy responseStrategy = ResponseStrategy.DEFAULT;
 
     /** Caller-shaped response body/status that overrides the strategy switch when {@code customStatus >= 0}. */
-    private int customStatus = -1;
-    private String customBody = "";
+    private volatile int customStatus = -1;
+    private volatile String customBody = "";
 
     /** Optional per-redeem gate: when set, each call blocks (bounded 10 s) until the latch releases. */
-    private CountDownLatch redeemGate;
+    private volatile CountDownLatch redeemGate;
 
     public TokenDispatcher() {
         // No initialization needed
+    }
+
+    /**
+     * Return the number of times this endpoint has been called.
+     *
+     * @return the current call count
+     */
+    public int getCallCounter() {
+        return callCounter.get();
+    }
+
+    /**
+     * Set the call count. Retained for callers that reset the counter to a known value.
+     *
+     * @param value the new call count
+     */
+    public void setCallCounter(int value) {
+        callCounter.set(value);
     }
 
     /**
@@ -117,7 +132,7 @@ public class TokenDispatcher implements ModuleDispatcherElement {
         this.customStatus = -1;
         this.customBody = "";
         this.redeemGate = null;
-        this.callCounter = 0;
+        this.callCounter.set(0);
     }
 
     /**
@@ -172,7 +187,7 @@ public class TokenDispatcher implements ModuleDispatcherElement {
 
     @Override
     public Optional<MockResponse> handlePost(@NonNull RecordedRequest request) {
-        callCounter++;
+        callCounter.incrementAndGet();
         awaitGate();
         Headers json = Headers.of("Content-Type", "application/json");
         if (customStatus >= 0) {
@@ -251,7 +266,7 @@ public class TokenDispatcher implements ModuleDispatcherElement {
      * @param expected count of calls
      */
     public void assertCallsAnswered(int expected) {
-        assertEquals(expected, callCounter);
+        assertEquals(expected, callCounter.get());
     }
 
     /**

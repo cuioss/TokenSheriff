@@ -40,6 +40,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.io.OutputStream;
 import java.nio.file.Files;
@@ -76,6 +77,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @EnableMockWebServer(useHttps = true)
 @TestProvidedCertificate(providerClass = WiredFlowHttpsTest.class, methodName = "serverCertificates")
 @DisplayName("Wired back-channel exchange over HTTPS (TLS path)")
+@Isolated
 class WiredFlowHttpsTest {
 
     private static final String ISSUER = "https://issuer.example.com";

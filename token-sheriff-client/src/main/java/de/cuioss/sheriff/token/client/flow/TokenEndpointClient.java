@@ -218,7 +218,7 @@ public class TokenEndpointClient {
             // The parse-error message can echo an AS-controlled JSON fragment; sanitize it (CWE-117)
             // before it reaches the log appender or the exception message, matching the token_type site.
             String sanitizedError = LogSanitizer.sanitize(e.getMessage());
-            LOGGER.debug(e, "Failed to parse token endpoint response: %s", sanitizedError);
+            LOGGER.debug("Failed to parse token endpoint response: %s", sanitizedError);
             throw new TransportException("Failed to parse token endpoint response: " + sanitizedError, e);
         }
     }

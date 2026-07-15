@@ -78,6 +78,19 @@ abstract class WiredFlowTestSupport {
     /** The single, exact redirect URI the interactive flow is registered with. */
     protected static final String REDIRECT_URI = "https://rp.example.com/callback";
 
+    /** Cached 2048-bit RSA key pair, generated once for the whole test suite (DPoP proof material). */
+    private static final KeyPair RSA_KEY_PAIR;
+
+    static {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            RSA_KEY_PAIR = generator.generateKeyPair();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("RSA key pair generation failed", e);
+        }
+    }
+
     @Getter
     private final RecordingTokenEndpointDispatcher moduleDispatcher = new RecordingTokenEndpointDispatcher();
 
@@ -160,13 +173,7 @@ abstract class WiredFlowTestSupport {
     }
 
     private static KeyPair rsaKeyPair() {
-        try {
-            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-            generator.initialize(2048);
-            return generator.generateKeyPair();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("RSA key pair generation failed", e);
-        }
+        return RSA_KEY_PAIR;
     }
 
     /**

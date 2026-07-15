@@ -256,7 +256,7 @@ public class UserInfoClient {
             // The parse-error message can echo an AS-controlled JSON fragment; sanitize it (CWE-117)
             // before it reaches the log appender or the exception message.
             String sanitizedError = LogSanitizer.sanitize(e.getMessage());
-            LOGGER.debug(e, "Failed to parse userinfo endpoint response: %s", sanitizedError);
+            LOGGER.debug("Failed to parse userinfo endpoint response: %s", sanitizedError);
             throw new TransportException("Failed to parse userinfo endpoint response: " + sanitizedError, e);
         }
     }
