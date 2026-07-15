@@ -25,8 +25,13 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -176,5 +181,69 @@ class TokenStoreTest {
                 () -> assertThrows(IllegalArgumentException.class, () -> store.store("  ", token)),
                 () -> assertThrows(IllegalArgumentException.class,
                         () -> new RefreshScheduler(negativeLead)));
+    }
+
+    @Test
+    @DisplayName("Should treat the exact refresh-window edge as eligible and one instant earlier as not (injected clock)")
+    void shouldRefreshExactlyAtWindowEdge() {
+        var refreshLead = Duration.ofSeconds(30);
+        var scheduler = new RefreshScheduler(refreshLead);
+        // Injected clock: every reference instant is derived from a fixed base, so the boundary is
+        // exercised deterministically without any wall-clock sleep.
+        Instant expiresAt = Instant.now().plusSeconds(300);
+        Instant windowOpensAt = expiresAt.minus(refreshLead);
+        StoredToken token = new StoredToken(Generators.letterStrings(20, 40).next(), null, null, null, expiresAt);
+
+        assertAll("refresh-window edge (injected clock)",
+                () -> assertFalse(scheduler.needsRefresh(token, windowOpensAt.minusNanos(1)),
+                        "one instant before the window opens is not yet refresh-eligible"),
+                () -> assertTrue(scheduler.needsRefresh(token, windowOpensAt),
+                        "exactly at the window edge the token is refresh-eligible"),
+                () -> assertTrue(scheduler.needsRefresh(token, windowOpensAt.plusNanos(1)),
+                        "just inside the window the token is refresh-eligible"),
+                () -> assertTrue(scheduler.needsRefresh(token, expiresAt),
+                        "at expiry the token is refresh-eligible"));
+    }
+
+    @Test
+    @DisplayName("Should keep logout fail-closed under a concurrent refresh — a revoked session is never resurrected")
+    void shouldNotResurrectSessionUnderConcurrentRefreshAndLogout() {
+        var manager = new TokenLifecycleManager(new InMemoryTokenStore(), new RefreshScheduler());
+        // computeIfPresent makes retrieve-transform-store atomic, so whichever thread runs first, the
+        // final state after a concurrent logout is always empty: a refresh can never resurrect a
+        // revoked session. A CyclicBarrier releases both threads simultaneously each iteration, so the
+        // interleaving is genuinely exercised without any timing assumption (no flake).
+        int iterations = 500;
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            for (int i = 0; i < iterations; i++) {
+                String sessionId = Generators.letterStrings(10, 20).next();
+                manager.store(sessionId, bearerToken());
+                String rotatedAccess = Generators.letterStrings(20, 40).next();
+                var barrier = new CyclicBarrier(2);
+
+                Callable<Void> refreshTask = () -> {
+                    barrier.await();
+                    manager.applyRefresh(sessionId, rotatedAccess, null, null, null);
+                    return null;
+                };
+                Callable<Void> logoutTask = () -> {
+                    barrier.await();
+                    manager.revokeAndClear(sessionId);
+                    return null;
+                };
+                var refreshResult = pool.submit(refreshTask);
+                var logoutResult = pool.submit(logoutTask);
+
+                assertDoesNotThrow(() -> {
+                    refreshResult.get();
+                    logoutResult.get();
+                }, "neither concurrent operation fails");
+                assertTrue(manager.get(sessionId).isEmpty(),
+                        "after a concurrent logout the session holds no token — refresh cannot resurrect it");
+            }
+        } finally {
+            pool.shutdownNow();
+        }
     }
 }
