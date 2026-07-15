@@ -25,6 +25,7 @@ import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
+import de.cuioss.sheriff.token.validation.test.dispatcher.TokenDispatcher;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -32,12 +33,7 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.TestProvidedCertificate;
 import de.cuioss.test.mockwebserver.URIBuilder;
-import de.cuioss.test.mockwebserver.dispatcher.HttpMethodMapper;
-import de.cuioss.test.mockwebserver.dispatcher.ModuleDispatcherElement;
 import lombok.Getter;
-import mockwebserver3.MockResponse;
-import mockwebserver3.RecordedRequest;
-import okhttp3.Headers;
 import okhttp3.tls.HandshakeCertificates;
 import okhttp3.tls.HeldCertificate;
 import org.junit.jupiter.api.AfterEach;
@@ -52,8 +48,6 @@ import java.security.KeyStore;
 import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -117,7 +111,7 @@ class WiredFlowHttpsTest {
     }
 
     @Getter
-    private final TokenEndpointDispatcher moduleDispatcher = new TokenEndpointDispatcher();
+    private final TokenDispatcher moduleDispatcher = new TokenDispatcher();
 
     private TestTokenHolder accessHolder;
     private TestTokenHolder idHolder;
@@ -156,7 +150,8 @@ class WiredFlowHttpsTest {
         var config = tlsConfig();
         var context = FlowContext.create(REDIRECT_URI);
         idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
-        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
         String code = Generators.letterStrings(20, 40).next();
         var callback = new CallbackParameters(code, context.state(), null, null, null);
         var metadata = metadataWithTokenEndpoint(uriBuilder);
@@ -169,7 +164,7 @@ class WiredFlowHttpsTest {
                         "the exchange must target the TLS token endpoint"),
                 () -> assertNotNull(result.accessToken(), "a validated access token must be returned over TLS"),
                 () -> assertNotNull(result.idToken(), "a validated ID token must be returned over TLS"),
-                () -> moduleDispatcher.assertCalled(1));
+                () -> moduleDispatcher.assertCallsAnswered(1));
     }
 
     @Test
@@ -179,7 +174,8 @@ class WiredFlowHttpsTest {
         var config = tlsConfig();
         var context = FlowContext.create(REDIRECT_URI);
         idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
-        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(),
                 context.state(), null, null, null);
         var metadata = metadataWithTokenEndpoint(uriBuilder);
@@ -189,7 +185,7 @@ class WiredFlowHttpsTest {
         assertThrows(TransportException.class,
                 () -> flow.exchange(metadata, context, callback, clientAuth),
                 "a TLS handshake against an untrusted server certificate must fail the back-channel call");
-        moduleDispatcher.assertNotCalled();
+        moduleDispatcher.assertCallsAnswered(0);
     }
 
     private static ClientConfiguration tlsConfig() {
@@ -207,7 +203,7 @@ class WiredFlowHttpsTest {
     private static ProviderMetadata metadataWithTokenEndpoint(URIBuilder uriBuilder) {
         var metadata = new ProviderMetadata();
         metadata.issuer = ISSUER;
-        metadata.tokenEndpoint = uriBuilder.addPathSegment("token").buildAsString();
+        metadata.tokenEndpoint = uriBuilder.addPathSegments("oidc", "token").buildAsString();
         return metadata;
     }
 
@@ -244,60 +240,5 @@ class WiredFlowHttpsTest {
     private void captureAndSet(String key, String value) {
         savedTrustStoreProperties.put(key, System.getProperty(key));
         System.setProperty(key, value);
-    }
-
-    /**
-     * Token-endpoint dispatcher serving a configurable authorization_code response and recording how
-     * many times it was actually reached, so a refused TLS handshake can be asserted to never arrive.
-     */
-    static final class TokenEndpointDispatcher implements ModuleDispatcherElement {
-
-        private static final int HTTP_OK = 200;
-
-        private String body = "";
-
-        @Getter
-        private int callCount;
-
-        void reset() {
-            this.body = "";
-            this.callCount = 0;
-        }
-
-        void success(String accessToken, String idToken) {
-            StringBuilder json = new StringBuilder("{\"access_token\":\"").append(accessToken)
-                    .append("\",\"token_type\":\"Bearer\",\"expires_in\":300");
-            if (idToken != null) {
-                json.append(",\"id_token\":\"").append(idToken).append('"');
-            }
-            json.append('}');
-            this.body = json.toString();
-        }
-
-        @Override
-        public String getBaseUrl() {
-            return "/token";
-        }
-
-        @Override
-        public Set<HttpMethodMapper> supportedMethods() {
-            return Set.of(HttpMethodMapper.POST);
-        }
-
-        @Override
-        public Optional<MockResponse> handlePost(RecordedRequest request) {
-            callCount++;
-            return Optional.of(new MockResponse(HTTP_OK, Headers.of("Content-Type", "application/json"), body));
-        }
-
-        void assertCalled(int expected) {
-            org.junit.jupiter.api.Assertions.assertEquals(expected, callCount,
-                    "unexpected token-endpoint call-count");
-        }
-
-        void assertNotCalled() {
-            org.junit.jupiter.api.Assertions.assertEquals(0, callCount,
-                    "a refused TLS handshake must never reach the token endpoint");
-        }
     }
 }
