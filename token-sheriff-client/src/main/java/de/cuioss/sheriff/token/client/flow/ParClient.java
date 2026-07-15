@@ -124,6 +124,10 @@ public class ParClient {
         }
     }
 
+    // java:S2589 — body is non-null by every current caller/handler wiring, but the guard is kept
+    // (consistent with the equivalent parse() entry guards in UserInfoClient / TokenEndpointClient) as
+    // defensive resilience against a future change to the shared bounded body-handler.
+    @SuppressWarnings("java:S2589")
     private ParResponse parse(String body) {
         if (body == null || body.isBlank()) {
             throw new TransportException("Empty PAR endpoint response");

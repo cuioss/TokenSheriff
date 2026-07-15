@@ -123,6 +123,10 @@ public class AuthorizationCodeFlow {
      * @param senderConstraint            the DPoP/mTLS sender-constraint to attach to the code exchange,
      *                                    or {@code null} for a plain bearer redemption
      */
+    // S107 (too many parameters) is unavoidable here: this is the explicit-collaborators constructor
+    // that exposes every dependency for DI/testing; the two shorter overloads above delegate to it.
+    // Collapsing the parameters into a parameter object would obscure, not reduce, the collaborators.
+    @SuppressWarnings("java:S107")
     public AuthorizationCodeFlow(ClientConfiguration configuration, TokenEndpointClient tokenEndpointClient,
             TokenValidationBridge accessTokenBridge, IdTokenValidationBridge idTokenBridge,
             IssValidator issValidator, AuthorizationRequestBuilder authorizationRequestBuilder,

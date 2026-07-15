@@ -189,6 +189,10 @@ public class TokenEndpointClient {
         }
     }
 
+    // java:S2589 — body is non-null by every current caller/handler wiring, but the guard is kept
+    // (consistent with the equivalent parse() entry guards in UserInfoClient / ParClient) as
+    // defensive resilience against a future change to the shared bounded body-handler.
+    @SuppressWarnings("java:S2589")
     private TokenResponse parse(String body) {
         if (body == null || body.isBlank()) {
             throw new TransportException("Empty token endpoint response");
