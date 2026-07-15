@@ -84,15 +84,20 @@ class ParClientTest {
     }
 
     /**
-     * Generates a distinctive, sufficiently long opaque value for the security-sensitive
-     * authorization parameters (state, nonce, PKCE challenge). A minimum length of 24 random
-     * letters guarantees the value cannot coincidentally occur as a substring of the fixed
-     * mock AS-issued opaque {@code request_uri}, which would otherwise make the no-leak
-     * assertions in {@link #shouldReturnRequestUri} flaky (a short {@code nonBlankStrings}
-     * value could match by chance).
+     * Generates a distinctive opaque value for the security-sensitive authorization parameters
+     * (state, nonce, PKCE challenge) that is <em>provably</em> never a substring of the fixed mock
+     * AS-issued opaque {@code request_uri} ({@code urn:ietf:params:oauth:request_uri:mock-par-reference}).
+     * <p>
+     * Root cause of the historical JDK 25 flake: a letters-only generated value shares the
+     * request_uri's alphabet, so the no-leak substring assertions in {@link #shouldReturnRequestUri}
+     * relied on the random value being improbably — but not provably — distinct, which a
+     * cui-test-generator value collision under a given seed could defeat. The fixed request_uri
+     * contains no digits, so appending a generated digit run puts every pushed value in an alphabet
+     * disjoint from the request_uri: the value can never occur as a substring of it, making the
+     * no-leak assertions deterministic under any generator seed on JDK 25.
      */
     private static String opaqueParameterValue() {
-        return Generators.letterStrings(24, 40).next();
+        return Generators.letterStrings(24, 40).next() + Generators.integers(100000, 999999).next();
     }
 
     private static String parEndpoint(URIBuilder uriBuilder) {
