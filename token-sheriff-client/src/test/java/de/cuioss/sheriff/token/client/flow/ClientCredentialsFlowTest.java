@@ -29,19 +29,16 @@ import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
+import de.cuioss.sheriff.token.validation.test.dispatcher.TokenDispatcher;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
-import de.cuioss.test.mockwebserver.dispatcher.HttpMethodMapper;
-import de.cuioss.test.mockwebserver.dispatcher.ModuleDispatcherElement;
 import lombok.Getter;
-import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
-import okhttp3.Headers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,8 +47,6 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -67,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ClientCredentialsFlowTest {
 
     @Getter
-    private final TokenEndpointDispatcher moduleDispatcher = new TokenEndpointDispatcher();
+    private final TokenDispatcher moduleDispatcher = new TokenDispatcher();
 
     private TestTokenHolder holder;
     private TokenValidationBridge bridge;
@@ -93,7 +88,7 @@ class ClientCredentialsFlowTest {
 
     private static ProviderMetadata metadata(URIBuilder uriBuilder) {
         var metadata = new ProviderMetadata();
-        metadata.tokenEndpoint = uriBuilder.addPathSegment("token").buildAsString();
+        metadata.tokenEndpoint = uriBuilder.addPathSegments("oidc", "token").buildAsString();
         return metadata;
     }
 
@@ -105,14 +100,10 @@ class ClientCredentialsFlowTest {
         return new ClientSecretBasicAuth(config.getClientId(), config.getClientSecret());
     }
 
-    private static String successBody(String accessToken) {
-        return "{\"access_token\":\"" + accessToken + "\",\"token_type\":\"Bearer\",\"expires_in\":300}";
-    }
-
     @Test
     @DisplayName("Should obtain, validate, and return the access token with client_secret_basic auth")
     void shouldObtainAndValidateToken(URIBuilder uriBuilder, MockWebServer server) throws Exception {
-        moduleDispatcher.success(successBody(holder.getRawToken()));
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(holder.getRawToken(), null, null, 300));
         var config = config();
 
         AccessTokenContent content = flow(config, basicAuth(config)).obtainToken(metadata(uriBuilder));
@@ -128,7 +119,7 @@ class ClientCredentialsFlowTest {
     @Test
     @DisplayName("Should acquire a service-to-service token with private_key_jwt when the strategy is injected")
     void shouldAcquireWithPrivateKeyJwt(URIBuilder uriBuilder, MockWebServer server) throws Exception {
-        moduleDispatcher.success(successBody(holder.getRawToken()));
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(holder.getRawToken(), null, null, 300));
         var config = config();
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
@@ -157,7 +148,7 @@ class ClientCredentialsFlowTest {
     @Test
     @DisplayName("Should delegate Basic encoding to ClientSecretBasicAuth rather than duplicate it")
     void shouldDelegateBasicEncodingToStrategy(URIBuilder uriBuilder, MockWebServer server) throws Exception {
-        moduleDispatcher.success(successBody(holder.getRawToken()));
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(holder.getRawToken(), null, null, 300));
         var config = config();
         var basicAuth = basicAuth(config);
         Map<String, String> expectedHeaders = new HashMap<>();
@@ -184,7 +175,7 @@ class ClientCredentialsFlowTest {
     @Test
     @DisplayName("Should surface a TransportException on a token-endpoint error response")
     void shouldRejectErrorResponse(URIBuilder uriBuilder) {
-        moduleDispatcher.error();
+        moduleDispatcher.returnOAuthError();
         var config = config();
         var flow = flow(config, basicAuth(config));
         var metadata = metadata(uriBuilder);
@@ -196,53 +187,11 @@ class ClientCredentialsFlowTest {
     @DisplayName("Should reject a retrieved token that fails pipeline validation")
     void shouldRejectTamperedToken(URIBuilder uriBuilder) {
         holder.withClaim(ClaimName.ISSUER.getName(), ClaimValue.forPlainString("https://attacker.example.com"));
-        moduleDispatcher.success(successBody(holder.getRawToken()));
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(holder.getRawToken(), null, null, 300));
         var config = config();
         var flow = flow(config, basicAuth(config));
         var metadata = metadata(uriBuilder);
 
         assertThrows(TokenValidationException.class, () -> flow.obtainToken(metadata));
-    }
-
-    /**
-     * Minimal token-endpoint dispatcher serving a configurable success or error response.
-     */
-    static final class TokenEndpointDispatcher implements ModuleDispatcherElement {
-
-        private static final int HTTP_OK = 200;
-        private static final int HTTP_BAD_REQUEST = 400;
-
-        private int status = HTTP_OK;
-        private String body = "";
-
-        void reset() {
-            this.status = HTTP_OK;
-            this.body = "";
-        }
-
-        void success(String responseBody) {
-            this.status = HTTP_OK;
-            this.body = responseBody;
-        }
-
-        void error() {
-            this.status = HTTP_BAD_REQUEST;
-            this.body = "{\"error\":\"invalid_client\"}";
-        }
-
-        @Override
-        public String getBaseUrl() {
-            return "/token";
-        }
-
-        @Override
-        public Set<HttpMethodMapper> supportedMethods() {
-            return Set.of(HttpMethodMapper.POST);
-        }
-
-        @Override
-        public Optional<MockResponse> handlePost(RecordedRequest request) {
-            return Optional.of(new MockResponse(status, Headers.of("Content-Type", "application/json"), body));
-        }
     }
 }

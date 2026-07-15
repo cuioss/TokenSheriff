@@ -30,19 +30,16 @@ import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
+import de.cuioss.sheriff.token.validation.test.dispatcher.TokenDispatcher;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
-import de.cuioss.test.mockwebserver.dispatcher.HttpMethodMapper;
-import de.cuioss.test.mockwebserver.dispatcher.ModuleDispatcherElement;
 import lombok.Getter;
-import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
-import okhttp3.Headers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,8 +50,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -77,7 +72,7 @@ class AuthorizationCodeFlowTest {
     private static final Pattern JWS_ALG_PATTERN = Pattern.compile("\"alg\"\\s*:\\s*\"([^\"]+)\"");
 
     @Getter
-    private final TokenEndpointDispatcher moduleDispatcher = new TokenEndpointDispatcher();
+    private final TokenDispatcher moduleDispatcher = new TokenDispatcher();
 
     private TestTokenHolder accessHolder;
     private TestTokenHolder idHolder;
@@ -109,7 +104,7 @@ class AuthorizationCodeFlowTest {
     private static ProviderMetadata metadataWithTokenEndpoint(URIBuilder uriBuilder) {
         var metadata = new ProviderMetadata();
         metadata.issuer = "https://issuer.example.com";
-        metadata.tokenEndpoint = uriBuilder.addPathSegment("token").buildAsString();
+        metadata.tokenEndpoint = uriBuilder.addPathSegments("oidc", "token").buildAsString();
         return metadata;
     }
 
@@ -151,7 +146,8 @@ class AuthorizationCodeFlowTest {
         var config = config();
         var context = FlowContext.create(REDIRECT_URI);
         idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
-        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
         String code = Generators.letterStrings(20, 40).next();
         var callback = new CallbackParameters(code, context.state(), null, null, null);
 
@@ -178,7 +174,8 @@ class AuthorizationCodeFlowTest {
         var config = config();
         var context = FlowContext.create(REDIRECT_URI);
         idHolder.withClaim("nonce", ClaimValue.forPlainString(Generators.letterStrings(20, 40).next()));
-        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
         var metadata = metadataWithTokenEndpoint(uriBuilder);
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
         var flow = flow(config);
@@ -193,7 +190,7 @@ class AuthorizationCodeFlowTest {
     void shouldRejectMissingIdToken(URIBuilder uriBuilder) {
         var config = config();
         var context = FlowContext.create(REDIRECT_URI);
-        moduleDispatcher.success(accessHolder.getRawToken(), null);
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null, null, 300));
         var metadata = metadataWithTokenEndpoint(uriBuilder);
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
         var flow = flow(config);
@@ -225,7 +222,8 @@ class AuthorizationCodeFlowTest {
         var config = config();
         var context = FlowContext.create(REDIRECT_URI);
         idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
-        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
         var metadata = new ProviderMetadata();
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
         var flow = flow(config);
@@ -240,7 +238,7 @@ class AuthorizationCodeFlowTest {
     void shouldSurfaceTransportException(URIBuilder uriBuilder) {
         var config = config();
         var context = FlowContext.create(REDIRECT_URI);
-        moduleDispatcher.error();
+        moduleDispatcher.returnOAuthError();
         var metadata = metadataWithTokenEndpoint(uriBuilder);
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
         var flow = flow(config);
@@ -258,7 +256,8 @@ class AuthorizationCodeFlowTest {
         accessHolder.withClaim(ClaimName.ISSUER.getName(),
                 ClaimValue.forPlainString("https://attacker.example.com"));
         idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
-        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
         var metadata = metadataWithTokenEndpoint(uriBuilder);
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
         var flow = flow(config);
@@ -276,7 +275,8 @@ class AuthorizationCodeFlowTest {
         String otherAccessToken = Generators.letterStrings(20, 40).next();
         idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
         idHolder.withClaim(AT_HASH_CLAIM, ClaimValue.forPlainString(atHash(idHolder.getRawToken(), otherAccessToken)));
-        moduleDispatcher.success(accessHolder.getRawToken(), idHolder.getRawToken());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
         var metadata = metadataWithTokenEndpoint(uriBuilder);
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
         var flow = flow(config);
@@ -375,54 +375,5 @@ class AuthorizationCodeFlowTest {
                         () -> new AuthorizationCodeFlow.AuthenticationResult(null, id)),
                 () -> assertThrows(NullPointerException.class,
                         () -> new AuthorizationCodeFlow.AuthenticationResult(access, null)));
-    }
-
-    /**
-     * Token-endpoint dispatcher serving a configurable authorization_code response (with optional ID
-     * token) or an error.
-     */
-    static final class TokenEndpointDispatcher implements ModuleDispatcherElement {
-
-        private static final int HTTP_OK = 200;
-        private static final int HTTP_BAD_REQUEST = 400;
-
-        private int status = HTTP_OK;
-        private String body = "";
-
-        void reset() {
-            this.status = HTTP_OK;
-            this.body = "";
-        }
-
-        void success(String accessToken, String idToken) {
-            this.status = HTTP_OK;
-            StringBuilder json = new StringBuilder("{\"access_token\":\"").append(accessToken)
-                    .append("\",\"token_type\":\"Bearer\",\"expires_in\":300");
-            if (idToken != null) {
-                json.append(",\"id_token\":\"").append(idToken).append('"');
-            }
-            json.append('}');
-            this.body = json.toString();
-        }
-
-        void error() {
-            this.status = HTTP_BAD_REQUEST;
-            this.body = "{\"error\":\"invalid_grant\"}";
-        }
-
-        @Override
-        public String getBaseUrl() {
-            return "/token";
-        }
-
-        @Override
-        public Set<HttpMethodMapper> supportedMethods() {
-            return Set.of(HttpMethodMapper.POST);
-        }
-
-        @Override
-        public Optional<MockResponse> handlePost(RecordedRequest request) {
-            return Optional.of(new MockResponse(status, Headers.of("Content-Type", "application/json"), body));
-        }
     }
 }
