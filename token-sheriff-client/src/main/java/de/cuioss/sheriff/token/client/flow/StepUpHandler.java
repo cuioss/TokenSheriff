@@ -81,7 +81,7 @@ public class StepUpHandler {
      * @param challenge     the parsed step-up challenge; must not be {@code null}
      * @return the elevated authorization request (URL + fresh flow context)
      * @throws IllegalArgumentException if the client declares no redirect URI
-     * @throws ClientProtocolException  if the AS advertises no authorization endpoint or no PKCE
+     * @throws de.cuioss.sheriff.token.commons.error.ClientProtocolException if the AS advertises no authorization endpoint or no PKCE
      *                                  {@code S256}
      */
     public StepUpRequest initiate(ClientConfiguration configuration, ProviderMetadata metadata,

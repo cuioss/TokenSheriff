@@ -80,7 +80,7 @@ public class ParClient {
      * Pushes the given authorization parameters and returns the AS-issued {@code request_uri}.
      *
      * @param parEndpoint            the absolute PAR endpoint URL (from discovery); must be TLS unless
-     *                               {@link ClientConfiguration#isAllowInsecureHttp()} is set
+     *                               {@link ClientConfiguration#allowInsecureHttp} is set
      * @param authorizationParameters the authorization request parameters to push (for example
      *                                {@code response_type}, {@code redirect_uri}, PKCE, {@code state})
      * @param clientAuthentication    the client authentication strategy to present; must not be

@@ -26,9 +26,9 @@ import java.util.Optional;
  * <p>
  * Each constant carries two pieces of metadata:
  * <ul>
- *   <li>its {@link #getMetadataValue() metadata value} — the exact string the AS advertises in
+ *   <li>its {@link #metadataValue metadata value} — the exact string the AS advertises in
  *       {@code token_endpoint_auth_methods_supported} (RFC 8414);</li>
- *   <li>its {@link #getStrength() strength} — a relative ordering used by the
+ *   <li>its {@link #strength strength} — a relative ordering used by the
  *       {@code ClientAuthenticationSelector} to prefer the strongest method the AS supports.
  *       Key-based methods ({@code private_key_jwt}, {@code tls_client_auth}) rank above the
  *       shared-secret methods, so the selector never downgrades to a shared secret where a
@@ -83,7 +83,7 @@ public enum ClientAuthMethod {
     }
 
     /**
-     * Resolves the method whose {@link #getMetadataValue() metadata value} equals the supplied
+     * Resolves the method whose {@link #metadataValue metadata value} equals the supplied
      * advertised string.
      *
      * @param metadataValue the {@code token_endpoint_auth_methods_supported} entry to resolve;

@@ -18,7 +18,7 @@ package de.cuioss.sheriff.token.quarkus.deployment;
 import de.cuioss.sheriff.token.quarkus.runtime.TokenSheriffDevUIRuntimeService;
 import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
 import io.quarkus.devui.spi.page.CardPageBuildItem;
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 class TokenSheriffDevUIIntegrationTest {
 
     @RegisterExtension
-    static final QuarkusUnitTest config = new QuarkusUnitTest()
+    static final QuarkusExtensionTest config = new QuarkusExtensionTest()
             .withApplicationRoot(jar -> jar
                     .addClasses(TokenSheriffProcessor.class,
                             TokenSheriffDevUIRuntimeService.class))
@@ -46,7 +46,7 @@ class TokenSheriffDevUIIntegrationTest {
     @DisplayName("Should register DevUI components successfully")
     void devUIComponentsRegistered() {
         // Verify the processor class required for DevUI registration is accessible.
-        // The QuarkusUnitTest bootstrap above constitutes the primary assertion:
+        // The QuarkusExtensionTest bootstrap above constitutes the primary assertion:
         // if the extension fails to register its DevUI components, the test setup
         // itself would throw an exception before reaching this point.
         assertNotNull(TokenSheriffProcessor.class.getName(),

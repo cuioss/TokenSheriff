@@ -72,7 +72,7 @@ public class RevocationClient {
      * Revokes a token at the revocation endpoint.
      *
      * @param revocationEndpoint   the absolute revocation endpoint URL (from discovery); must be TLS
-     *                             unless {@link ClientConfiguration#isAllowInsecureHttp()} is set
+     *                             unless {@link ClientConfiguration#allowInsecureHttp} is set
      * @param token                the token to revoke; must not be {@code null} or blank
      * @param tokenTypeHint        the RFC 7009 {@code token_type_hint} (e.g. {@code refresh_token}), or
      *                             {@code null} to omit it

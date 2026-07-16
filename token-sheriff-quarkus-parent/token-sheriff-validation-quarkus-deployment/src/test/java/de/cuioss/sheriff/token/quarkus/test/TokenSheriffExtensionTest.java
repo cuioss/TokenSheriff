@@ -16,7 +16,7 @@
 package de.cuioss.sheriff.token.quarkus.test;
 
 import de.cuioss.test.juli.junit5.EnableTestLogger;
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -26,24 +26,24 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 /**
  * Test to verify the Token-Sheriff extension is properly registered and configured.
  * 
- * Uses QuarkusUnitTest to properly test the extension in a Quarkus context.
+ * Uses QuarkusExtensionTest to properly test the extension in a Quarkus context.
  */
 @EnableTestLogger
 @DisplayName("Token-Sheriff Extension Registration Test")
 class TokenSheriffExtensionTest {
 
     @RegisterExtension
-    static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
+    static final QuarkusExtensionTest unitTest = new QuarkusExtensionTest()
             .withEmptyApplication()
             .setLogRecordPredicate(log -> true);
 
     @Test
     @DisplayName("Should register the extension")
     void shouldRegisterExtension() {
-        // The QuarkusUnitTest bootstrap above is the primary assertion: if the
+        // The QuarkusExtensionTest bootstrap above is the primary assertion: if the
         // Token-Sheriff extension fails to register correctly, Quarkus startup
         // would throw before reaching this method. The explicit assertion below
         // satisfies static analysis requirements.
-        assertNotNull(unitTest, "QuarkusUnitTest extension must be initialized for extension registration to succeed");
+        assertNotNull(unitTest, "QuarkusExtensionTest extension must be initialized for extension registration to succeed");
     }
 }

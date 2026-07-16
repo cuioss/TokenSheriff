@@ -48,7 +48,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *       fetched. The precise scope of this control — path-structure and scheme, not host-address
  *       reachability — is documented in the client transport specification.</li>
  *   <li><strong>Scheme / TLS control:</strong> a non-TLS ({@code http://}) endpoint is refused unless
- *       {@link ClientConfiguration#isAllowInsecureHttp()} is set, via the {@link HttpHandler} builder's
+ *       {@link ClientConfiguration#allowInsecureHttp} is set, via the {@link HttpHandler} builder's
  *       own TLS enforcement.</li>
  *   <li><strong>Consistent transport typing (M9):</strong> a malformed or non-TLS endpoint surfaces as
  *       the declared {@link TransportException}, never a raw {@link IllegalArgumentException} leaking

@@ -103,7 +103,7 @@ public class UserInfoClient {
      * credential.
      *
      * @param userInfoEndpoint the absolute userinfo endpoint URL (from discovery); must be TLS unless
-     *                         {@link ClientConfiguration#isAllowInsecureHttp()} is set
+     *                         {@link ClientConfiguration#allowInsecureHttp} is set
      * @param accessToken      the validated access token to present as a Bearer credential; must not
      *                         be {@code null}
      * @return the normalized userinfo response
@@ -125,7 +125,7 @@ public class UserInfoClient {
      * the token is presented as a plain {@code Bearer} credential.
      *
      * @param userInfoEndpoint the absolute userinfo endpoint URL (from discovery); must be TLS unless
-     *                         {@link ClientConfiguration#isAllowInsecureHttp()} is set
+     *                         {@link ClientConfiguration#allowInsecureHttp} is set
      * @param accessToken      the validated access token to present; must not be {@code null}
      * @param senderConstraint the DPoP/mTLS sender-constraint the token was bound under, or
      *                         {@code null} for a plain bearer token
@@ -149,7 +149,7 @@ public class UserInfoClient {
      * rather than being mis-parsed. A plain JSON response is parsed exactly as before.
      *
      * @param userInfoEndpoint         the absolute userinfo endpoint URL (from discovery); must be TLS
-     *                                 unless {@link ClientConfiguration#isAllowInsecureHttp()} is set
+     *                                 unless {@link ClientConfiguration#allowInsecureHttp} is set
      * @param accessToken              the validated access token to present; must not be {@code null}
      * @param senderConstraint         the DPoP/mTLS sender-constraint the token was bound under, or
      *                                 {@code null} for a plain bearer token

@@ -118,7 +118,7 @@ public class AuthorizationRequestBuilder {
      * Refuses a non-TLS authorization endpoint (L5). The authorization request URL is the front-channel
      * redirect the user agent follows, so a cleartext {@code http://} endpoint would expose the
      * {@code state}/{@code nonce}/PKCE parameters — and the resulting authorization code — to a network
-     * observer. A non-TLS endpoint is rejected unless {@link ClientConfiguration#isAllowInsecureHttp()}
+     * observer. A non-TLS endpoint is rejected unless {@link ClientConfiguration#allowInsecureHttp}
      * is set for a local test setup, mirroring the discovery/back-channel TLS policy.
      */
     private static void enforceEndpointScheme(String authorizationEndpoint, ClientConfiguration configuration) {
