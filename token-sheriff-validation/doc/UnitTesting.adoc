@@ -20,7 +20,7 @@ See xref:../README.adoc#test-artifact[Test Artifact Dependencies] in the main mo
 === Contents
 
 * `de.cuioss.sheriff.token.validation.test` - Core test utilities
-* `de.cuioss.sheriff.token.validation.test.dispatcher` - MockWebServer dispatchers (`WellKnownDispatcher`, `JwksResolveDispatcher`)
+* `de.cuioss.sheriff.token.validation.test.dispatcher` - MockWebServer dispatchers: discovery/JWKS (`WellKnownDispatcher`, `JwksResolveDispatcher`, `EnhancedJwksResolveDispatcher`, `MultiIssuerJwksDispatcher`) and the OP-endpoint dispatchers (`TokenDispatcher`, `UserInfoDispatcher`, `RevocationDispatcher`, `IntrospectionDispatcher`, `EndSessionDispatcher`, `ParDispatcher`), plus the shared `AdversarialResponses` payloads
 * `de.cuioss.sheriff.token.validation.test.generator` - Token and claim generators
 * `de.cuioss.sheriff.token.validation.test.junit` - JUnit 5 extensions and annotations (`@TestTokenSource`)
 

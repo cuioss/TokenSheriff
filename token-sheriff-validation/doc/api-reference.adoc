@@ -15,11 +15,11 @@ The main entry point for token validation.
 [source,java]
 ----
 public class TokenValidator implements Closeable {
-    public static Builder builder() { ... }
+    public static TokenValidatorBuilder builder() { ... }
 
     public AccessTokenContent createAccessToken(AccessTokenRequest request);
     public IdTokenContent createIdToken(IdTokenRequest request);
-    public RefreshTokenContent createRefreshToken(RefreshTokenRequest request);
+    public UnvalidatedRefreshToken createRefreshToken(RefreshTokenRequest request);
 ----
 
 === AccessTokenContent
@@ -58,7 +58,7 @@ public class AccessTokenContent extends BaseTokenContent {
 [source,java]
 ----
 public class IssuerConfig implements LoadingStatusProvider {
-    public static Builder builder() { ... }
+    public static IssuerConfigBuilder builder() { ... }
 
     public static class IssuerConfigBuilder {
         public IssuerConfigBuilder enabled(boolean enabled);
