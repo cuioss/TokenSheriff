@@ -8,7 +8,7 @@
 
 == Overview
 
-Integration tests for the Token-Sheriff Quarkus extension with native container testing, HTTPS support, health checks, and metrics validation.
+Integration tests for the Token-Sheriff Quarkus extensions with native container testing, HTTPS support, health checks, and metrics validation. Covers both the validation extension (token validation, bearer auth, DPoP, JWE) and the client engine (discovery, flows, logout) against a real Keycloak.
 
 == Port Configuration
 
@@ -176,10 +176,15 @@ token-sheriff-quarkus-integration-tests/
 │           └── integration-realm.json
 ├── src/test/java/de/cuioss/sheriff/token/integration/
 │   ├── BaseIntegrationTest.java
+│   ├── TestConstants.java
 │   ├── TestRealm.java
 │   ├── TestProviders.java
 │   ├── token/TokenValidationSpecIT.java
 │   ├── bearer/BearerAuthSpecIT.java
+│   ├── client/{DiscoverySpecIT,ClientCredentialsSpecIT,ClientAuthSpecIT,RefreshSpecIT,
+│   │           AuthCodePkceSpecIT,MixUpSpecIT,ParSpecIT,UserInfoSpecIT,DpopBoundSpecIT,
+│   │           RevocationSpecIT,LogoutSpecIT,StepUpSpecIT,FullFlowE2EIT,
+│   │           FormPostSupport,KeycloakUrlSupport}.java
 │   ├── security/{DpopSpecIT,JweDecryptionSpecIT,DpopProofHelper}.java
 │   ├── health/{HealthCheckIntegrationIT,HealthCheckResponsivenessIT}.java
 │   └── api/{ApiValidationSpecIT,TokenRequestSpecIT}.java
@@ -187,6 +192,8 @@ token-sheriff-quarkus-integration-tests/
     ├── start-integration-container.sh
     ├── stop-integration-container.sh
     ├── build-native-if-needed.sh
+    ├── dump-app-logs.sh
+    ├── dump-keycloak-logs.sh
     └── verify-environment.sh
 ----
 
@@ -216,6 +223,7 @@ Tests use `@ParameterizedTest` with `@MethodSource` to run against multiple OIDC
 * **bearer/BearerAuthSpecIT**: Bearer token producers and interceptors (Keycloak-only — requires ROLES, GROUPS, CUSTOM_SCOPES)
 * **security/DpopSpecIT**: DPoP RFC 9449 validation (parameterized over DPoP-capable providers)
 * **security/JweDecryptionSpecIT**: JWE RFC 7516 decryption (parameterized over JWE-capable providers)
+* **client/***: Client-engine specs against a real Keycloak — discovery (`DiscoverySpecIT`), `client_credentials` (`ClientCredentialsSpecIT`), client authentication (`ClientAuthSpecIT`), refresh with rotation (`RefreshSpecIT`), authorization-code + PKCE (`AuthCodePkceSpecIT`), mix-up defence (`MixUpSpecIT`), PAR (`ParSpecIT`), userinfo (`UserInfoSpecIT`), DPoP-bound tokens (`DpopBoundSpecIT`), revocation (`RevocationSpecIT`), RP-initiated logout (`LogoutSpecIT`), step-up (`StepUpSpecIT`), and the full-flow E2E (`FullFlowE2EIT`)
 * **health/HealthCheckIntegrationIT**: Health endpoint validation
 * **health/HealthCheckResponsivenessIT**: Health endpoint responsiveness testing
 * **api/ApiValidationSpecIT**: API input validation (provider-independent)

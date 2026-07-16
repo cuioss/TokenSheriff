@@ -96,8 +96,8 @@ Automatically registers classes for reflection across 5 build steps (36 classes 
 **Configuration Classes (Methods Only):**
 
 * `de.cuioss.sheriff.token.validation.IssuerConfig` - Issuer configuration
-* `de.cuioss.sheriff.token.validation.ParserConfig` - Parser settings
-* `de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderConfig` - JWKS loader configuration
+* `de.cuioss.sheriff.token.commons.transport.ParserConfig` - Parser settings
+* `de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig` - JWKS loader configuration
 
 **Runtime Initialization:**
 
