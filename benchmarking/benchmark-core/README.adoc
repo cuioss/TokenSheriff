@@ -58,11 +58,11 @@ Performance benchmarking for JWT token validation core library using JMH.
 ----
 # Single benchmark
 ./mvnw clean verify -pl benchmarking/benchmark-core -Pbenchmark \
-  -Djmh.include=TokenValidatorBenchmark
+  -Djmh.include=SimpleCoreValidationBenchmark
 
 # Multiple benchmarks
 ./mvnw clean verify -pl benchmarking/benchmark-core -Pbenchmark \
-  -Djmh.include="TokenValidator|JwksClient"
+  -Djmh.include="SimpleCoreValidation|SimpleErrorLoad"
 ----
 
 == Benchmarks
@@ -74,7 +74,6 @@ Performance benchmarking for JWT token validation core library using JMH.
 
 === JFR-Enabled Benchmarks
 
-* `UnifiedJfrBenchmark` - Combined benchmark with Java Flight Recorder integration
 * `CoreJfrBenchmark` - Core validation with JFR profiling
 * `ErrorJfrBenchmark` - Error scenarios with JFR profiling
 * `MixedJfrBenchmark` - Mixed validation scenarios with JFR profiling
