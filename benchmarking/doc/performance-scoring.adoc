@@ -10,7 +10,11 @@
 
 A weighted performance score combining throughput, latency, and error resilience into a single metric.
 
-== Formula
+Two formulas exist (both in `MetricsComputer`): one for micro (JMH) benchmarks and one for integration (WRK) benchmarks.
+
+== Micro (JMH) Formula
+
+Implemented by `MetricsComputer.calculatePerformanceScore`:
 
 [source,text]
 ----
@@ -28,8 +32,6 @@ Note: Scores are not capped, allowing exceptional performance to exceed 100.
 Final scores are rounded to the nearest integer.
 ----
 
-== Metrics
-
 === Throughput (50% weight)
 
 * Measures: Average operations per second across all throughput benchmarks
@@ -42,7 +44,21 @@ Final scores are rounded to the nearest integer.
 * Score normalized: 1 ms = 100 points (inverse relationship)
 * Lower is better, no upper limit on score
 
+== Integration (WRK) Formula
+
+Implemented by `MetricsComputer.computeIntegrationScore` — a capped 0-100 scale:
+
+[source,text]
+----
+Integration Score = Throughput_Score + Latency_Score
+
+- Throughput_Score = min(50, Throughput ÷ 200)   // capped at 50 (10,000 req/s = 50 points)
+- Latency_Score    = max(0, 50 − Latency_ms ÷ 2) // floored at 0
+----
+
 == Score Interpretation
+
+Micro (JMH) grades from `getPerformanceGrade`:
 
 [cols="1,1,2", options="header"]
 |===
@@ -73,24 +89,22 @@ Final scores are rounded to the nearest integer.
 |Poor performance - optimization required
 |===
 
+Integration (WRK) grades from `gradeIntegration` use different thresholds and have no A+: A ≥ 90, B ≥ 80, C ≥ 70, D ≥ 60, F < 60.
+
 == Example Calculation
 
 [source,text]
 ----
-Integration Benchmark:
-Average Throughput: 5,847 ops/sec
+Integration Benchmark (computeIntegrationScore):
+Average Throughput: 5,847 req/sec
 Average Latency: 1.17 ms
 
-Throughput_Score = 5847 ÷ 100 = 58.47
-Latency_Score = 100 ÷ 1.17 = 85.47
+Throughput_Score = min(50, 5847 ÷ 200) = 29
+Latency_Score = max(0, 50 − 1.17 ÷ 2) = 49
 
-Raw Score = (58.47 × 0.5) + (85.47 × 0.5)
-          = 29.24 + 42.74
-          = 71.97
+Integration Score = 29 + 49 = 78 (Grade C)
 
-Performance Score = round(71.97) = 72 (Grade C)
-
-Micro Benchmark:
+Micro Benchmark (calculatePerformanceScore):
 Average Throughput: 83,909 ops/sec
 Average Latency: 0.35 ms
 

@@ -1,7 +1,9 @@
 = JFR Profiling Analysis - March 2026
-:toc:
-:toc-placement: preamble
+:toc: left
 :toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
 
 == Recording Configuration
 

@@ -25,23 +25,27 @@ The benchmark processing is automatically triggered in GitHub Actions:
    - Set up JDK 21 with Maven cache
    - Build entire project (all modules, tests skipped)
 
-2. **Micro Benchmarks**
+2. **Historical Data Preparation**
+   - Fetch previous benchmark history from `cuioss.github.io` (micro and integration)
+   - Prepare it via `benchmarking/scripts/benchmark-pages.py prepare-history` for trend calculation
+
+3. **Micro Benchmarks**
    - Run JMH benchmarks using `benchmark` profile
    - Automatically generates artifacts in `target/benchmark-results`
    - Creates performance badges, reports, and metrics
 
-3. **WRK Load Testing Benchmarks**
+4. **WRK Load Testing Benchmarks**
    - Start Quarkus and Keycloak containers
    - Run WRK HTTP load tests
    - Collect Prometheus metrics
    - Automatically generates WRK-specific artifacts
 
-4. **Artifact Combination**
-   - Merge artifacts from both benchmark modules
+5. **Artifact Combination**
+   - Merge artifacts from both benchmark modules via `benchmark-pages.py assemble`
    - Create unified GitHub Pages structure
    - Add metadata and timestamps
 
-5. **Deployment**
+6. **Deployment**
    - Deploy combined results to cuioss.github.io
    - Results available at `TokenSheriff/benchmarks`
 
@@ -100,21 +104,19 @@ Each benchmark module generates a consistent artifact structure. See link:../REA
 * **Last Run** - Timestamp of most recent benchmark
 * **WRK Performance** - WRK load testing specific score
 
-=== Quality Gates
+=== Regression Visibility
 
-Each benchmark run evaluates:
+There is no automated pass/fail quality gate — regressions surface through:
 
-* **Throughput** - Minimum operations per second
-* **Latency** - Maximum response times (P50, P90, P99)
-* **Regression** - Performance change from baseline
-* **Overall Status** - PASS/FAIL based on all gates
+* **Trend badges** - EWMA-based change detection (up/stable/down with ±2% threshold, see link:performance-scoring.adoc#_trend_calculation[Trend Calculation])
+* **Historical trends** - `trends.html` charts against previous runs
 
 == API Endpoints
 
 The generated artifacts include JSON API endpoints:
 
 * `api/latest.json` - Latest benchmark results
-* `api/status.json` - Current quality gate status
+* `api/status.json` - Run status and last-run timestamp
 * `api/benchmarks.json` - List of all benchmarks
 
 == Performance Requirements
@@ -131,12 +133,11 @@ Check that:
 - No compilation errors in benchmarking-common
 - Correct profile used (`-Pbenchmark`)
 
-=== Quality Gates Failing
+=== Unexpected Trend Direction
 
 Review:
 
-- Performance thresholds in `BenchmarkConstants`
-- Baseline comparison data availability
+- Baseline comparison data availability (`benchmark.history.dir`)
 - Resource constraints during benchmark run
 
 === Local Viewing Issues
