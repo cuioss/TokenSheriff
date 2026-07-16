@@ -103,6 +103,14 @@
                                 <recipe>org.openrewrite.staticanalysis.SimplifyBooleanExpression</recipe>
                                 <recipe>org.openrewrite.staticanalysis.UnnecessaryParentheses</recipe>
                             </activeRecipes>
+                            <!-- Appended to the parent's exclusions (target/**): the OpenRewrite YAML
+                                 parser cannot parse e-2-e-playwright/docker-compose.yml (valid compose
+                                 syntax; the healthcheck shell redirection trips the parser) and emits a
+                                 "There were problems parsing" warning on every run. No active recipe
+                                 targets compose files, so excluding them loses nothing. -->
+                            <exclusions combine.children="append">
+                                <exclusion>**/docker-compose.yml</exclusion>
+                            </exclusions>
                         </configuration>
                     </plugin>
                 </plugins>
