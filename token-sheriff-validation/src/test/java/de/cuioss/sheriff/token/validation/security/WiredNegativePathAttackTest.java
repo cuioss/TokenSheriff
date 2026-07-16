@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,20 +33,16 @@ import org.junit.jupiter.api.Test;
 import javax.crypto.spec.SecretKeySpec;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Date;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -159,7 +155,8 @@ class WiredNegativePathAttackTest {
     }
 
     @Test
-    @SuppressWarnings("java:S5778") // each lambda's non-assertion calls (dpopValidator()/dpopRequest()) are pure factories that never throw
+    @SuppressWarnings("java:S5778")
+    // each lambda's non-assertion calls (dpopValidator()/dpopRequest()) are pure factories that never throw
     @DisplayName("VTEST-8: DPoP sender-binding violations are each rejected with their specific event")
     void shouldRejectDpopSenderBindingViolations() {
         KeyPair dpopKeyPair = generateRsaKeyPair();
@@ -203,7 +200,7 @@ class WiredNegativePathAttackTest {
         RSAPublicKey attackerPublicKey = (RSAPublicKey) attackerKeyPair.getPublic();
         String embeddedKey = base64Url(toUnsignedBytes(attackerPublicKey.getModulus()));
         String headerJson = "{\"alg\":\"RS256\",\"kid\":\"%s\",\"jwk\":\"%s\"}".formatted(DEFAULT_KEY_ID, embeddedKey);
-        String payloadJson = ("{\"iss\":\"%s\",\"sub\":\"attacker\",\"aud\":\"%s\",\"iat\":%d,\"exp\":%d}").formatted(
+        String payloadJson = "{\"iss\":\"%s\",\"sub\":\"attacker\",\"aud\":\"%s\",\"iat\":%d,\"exp\":%d}".formatted(
                 TEST_ISSUER, TEST_AUDIENCE,
                 System.currentTimeMillis() / 1000, (System.currentTimeMillis() / 1000) + 3600);
         String signingInput = base64Url(headerJson.getBytes(StandardCharsets.UTF_8)) + "."
@@ -269,7 +266,7 @@ class WiredNegativePathAttackTest {
 
     private String dpopProof(KeyPair keyPair, Map<String, Object> jwkMap, String accessToken, long iatSeconds) {
         String headerJson = "{\"typ\":\"dpop+jwt\",\"alg\":\"RS256\",\"jwk\":%s}".formatted(mapToJson(jwkMap));
-        String bodyJson = ("{\"jti\":\"%s\",\"iat\":%d,\"ath\":\"%s\",\"htm\":\"%s\",\"htu\":\"%s\"}").formatted(
+        String bodyJson = "{\"jti\":\"%s\",\"iat\":%d,\"ath\":\"%s\",\"htm\":\"%s\",\"htu\":\"%s\"}".formatted(
                 UUID.randomUUID(), iatSeconds, computeAth(accessToken), RESOURCE_METHOD, RESOURCE_URI);
         String signingInput = base64Url(headerJson.getBytes(StandardCharsets.UTF_8)) + "."
                 + base64Url(bodyJson.getBytes(StandardCharsets.UTF_8));
@@ -278,7 +275,7 @@ class WiredNegativePathAttackTest {
 
     private String hs256DpopProof(String accessToken) {
         String headerJson = "{\"typ\":\"dpop+jwt\",\"alg\":\"HS256\"}";
-        String bodyJson = ("{\"jti\":\"%s\",\"iat\":%d,\"ath\":\"%s\",\"htm\":\"%s\",\"htu\":\"%s\"}").formatted(
+        String bodyJson = "{\"jti\":\"%s\",\"iat\":%d,\"ath\":\"%s\",\"htm\":\"%s\",\"htu\":\"%s\"}".formatted(
                 UUID.randomUUID(), System.currentTimeMillis() / 1000, computeAth(accessToken),
                 RESOURCE_METHOD, RESOURCE_URI);
         String signingInput = base64Url(headerJson.getBytes(StandardCharsets.UTF_8)) + "."
@@ -299,7 +296,7 @@ class WiredNegativePathAttackTest {
             signer.initSign(privateKey);
             signer.update(signingInput.getBytes(StandardCharsets.UTF_8));
             return signer.sign();
-        } catch (java.security.GeneralSecurityException e) {
+        } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Failed to RSA-sign", e);
         }
     }
@@ -309,7 +306,7 @@ class WiredNegativePathAttackTest {
             byte[] hash = MessageDigest.getInstance("SHA-256")
                     .digest(accessToken.getBytes(StandardCharsets.US_ASCII));
             return base64Url(hash);
-        } catch (java.security.NoSuchAlgorithmException e) {
+        } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 not available", e);
         }
     }
@@ -319,7 +316,7 @@ class WiredNegativePathAttackTest {
             KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
             gen.initialize(2048);
             return gen.generateKeyPair();
-        } catch (java.security.NoSuchAlgorithmException e) {
+        } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("RSA not available", e);
         }
     }
