@@ -1,6 +1,7 @@
 = Token Validation Threat Model
 :toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
@@ -124,7 +125,7 @@ _See Requirement xref:requirements.adoc#VALIDATION-7[VALIDATION-7: Logging Requi
 
 |R2
 |Unauthorized token operations
-|Security event counting via link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/security/SecurityEventCounter.java[SecurityEventCounter]; Micrometer metrics in Quarkus
+|Security event counting via link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/events/SecurityEventCounter.java[SecurityEventCounter]; Micrometer metrics in Quarkus
 |link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/SecurityEventCounterTest.java[SecurityEventCounterTest]
 
 |R3

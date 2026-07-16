@@ -1,6 +1,7 @@
 = Token Validation Architecture
 :toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
@@ -58,7 +59,7 @@ image::../resources/diagrams/token-content-types.svg["Token-content type hierarc
 * **TokenContent** / **BaseTokenContent** - Core interface and abstract base for JWT tokens
 * **AccessTokenContent** - OAuth2 access token with scope and role support
 * **IdTokenContent** - OpenID Connect ID token for user identity
-* **RefreshTokenContent** - Refresh token with minimal validation (implements `MinimalTokenContent`; if JWT-formatted, claims are extracted but no cryptographic signature verification or claim validation is performed)
+* **UnvalidatedRefreshToken** - Refresh token with minimal validation (implements `MinimalTokenContent`; if JWT-formatted, claims are extracted but no cryptographic signature verification or claim validation is performed)
 
 [[multi-issuer]]
 === IssuerConfig and Multi-Issuer Support
@@ -111,7 +112,7 @@ Thread-safe counter for security events during token processing. Created by `Tok
 
 === TokenValidatorMonitor
 
-High-performance, lock-free monitoring of validation pipeline metrics with microsecond precision. Measures the validation pipeline steps: `COMPLETE_VALIDATION`, `TOKEN_FORMAT_CHECK`, `TOKEN_PARSING`, `ISSUER_EXTRACTION`, `CACHE_LOOKUP`, `ISSUER_CONFIG_RESOLUTION`, `HEADER_VALIDATION`, `SIGNATURE_VALIDATION`, `TOKEN_BUILDING`, `CLAIMS_VALIDATION`, `CACHE_STORE`. Exposed as Micrometer counters in Quarkus (`sheriff.token.validation.errors`, `sheriff.token.validation.success`).
+High-performance, lock-free monitoring of validation pipeline metrics with microsecond precision. Measures the validation pipeline steps: `COMPLETE_VALIDATION`, `TOKEN_PARSING`, `ISSUER_EXTRACTION`, `CACHE_LOOKUP`, `ISSUER_CONFIG_RESOLUTION`, `HEADER_VALIDATION`, `SIGNATURE_VALIDATION`, `TOKEN_BUILDING`, `CLAIMS_VALIDATION`, `CACHE_STORE`. Exposed as Micrometer counters in Quarkus (`sheriff.token.validation.errors`, `sheriff.token.validation.success`).
 
 == Size Limits
 

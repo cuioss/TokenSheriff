@@ -160,7 +160,7 @@ The following capabilities have no equivalent in MP-JWT 2.1:
 * **DPoP (RFC 9449)** — Optional Demonstrating Proof-of-Possession validation
 * **Custom claim mappers** — Pluggable `ClaimMapper` interface with Keycloak-specific implementations
 * **Custom validation rules** — Pluggable `TokenValidationRule` interface for domain-specific post-validation checks (e.g., tenant-id enforcement, subject blocklists)
-* **Sealed token hierarchy** — `AccessTokenContent`, `IdTokenContent`, `RefreshTokenContent` with type-safe access patterns
+* **Sealed token hierarchy** — `AccessTokenContent`, `IdTokenContent`, `UnvalidatedRefreshToken` with type-safe access patterns
 * **Security event tracking** — `SecurityEventCounter` with categorized validation failure tracking
 * **Performance monitoring** — `TokenValidatorMonitor` with microsecond-precision pipeline measurements
 * **Token caching** — `AccessTokenCache` with TTL-based eviction
@@ -174,7 +174,7 @@ The following capabilities have no equivalent in MP-JWT 2.1:
 |MP-JWT Property |TokenSheriff Equivalent |Notes
 
 |`mp.jwt.verify.issuer`
-|`sheriff.token.issuers.<name>.expected-issuer`
+|`sheriff.token.issuers.<name>.issuer-identifier`
 |Per-issuer in TokenSheriff
 
 |`mp.jwt.verify.audiences`
@@ -186,7 +186,7 @@ The following capabilities have no equivalent in MP-JWT 2.1:
 |TokenSheriff uses OIDC discovery or direct JWKS URL
 
 |`mp.jwt.verify.publickey.algorithm`
-|`sheriff.token.issuers.<name>.allowed-signature-algorithms`
+|`sheriff.token.issuers.<name>.algorithm-preferences`
 |Per-issuer, multiple algorithms supported
 
 |`mp.jwt.verify.clock.skew`
@@ -206,12 +206,12 @@ The following capabilities have no equivalent in MP-JWT 2.1:
 |Global setting
 
 |`mp.jwt.decrypt.key.location`
-|`sheriff.token.jwe.decrypt-key-location`
-|JWE decryption key
+|`sheriff.token.jwe.decryption-key-path`
+|JWE decryption key (PKCS#8 PEM; keystore-based configuration also supported)
 
 |`mp.jwt.decrypt.key.algorithm`
-|`sheriff.token.jwe.key-management-algorithm`
-|JWE key management algorithm
+|`sheriff.token.jwe.key-management-algorithms`
+|JWE key management algorithms (list)
 |===
 
 == References
