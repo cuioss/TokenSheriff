@@ -7,7 +7,7 @@
 
 == Overview
 
-This document provides a reference for all log messages used in the JWT Token Validation library.
+This document provides a reference for all log messages used across Token-Sheriff: the validation library (including the commons transport layer), the Quarkus integration module, and the client engine.
 
 === Document Navigation
 
@@ -19,7 +19,7 @@ This document provides a reference for all log messages used in the JWT Token Va
 
 === Log Message Format
 
-All messages follow the format: TokenSheriff-[identifier]: [message]
+All messages follow the format: [prefix]-[identifier]: [message], with one prefix per module: `TokenSheriff` (validation library, including the commons transport layer), `TokenSheriff_Q` (Quarkus integration), and `TokenSheriffClient` (client engine).
 
 The log message levels follow these identifier ranges:
 
@@ -49,7 +49,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-009 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
 |===
 
-== WARN Level (100-168)
+== WARN Level (100-169)
 
 [cols="1,1,2,2", options="header"]
 |===
@@ -62,6 +62,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-105 |TOKEN |Decoded part exceeds maximum size limit of %s bytes |Logged when a decoded part of the token exceeds the maximum size limit
 |TokenSheriff-106 |TOKEN |Unsupported algorithm: %s |Logged when an unsupported algorithm is encountered
 |TokenSheriff-107 |TOKEN |Token has a 'not before' claim that is more than %s seconds in the future |Logged when a token has a 'not before' claim that is further in the future than the configured clock skew tolerance
+|TokenSheriff-108 |TOKEN |JSON structure bounds exceeded: %s |Logged when a token's JSON payload exceeds the configured structural bounds (depth, array size, or field count)
 |TokenSheriff-109 |TOKEN |Token is missing required claim: %s |Logged when a token is missing a required claim
 |TokenSheriff-110 |TOKEN |Token has expired |Logged when a token has expired
 |TokenSheriff-111 |TOKEN |Token authorized party '%s' does not match expected client ID '%s' |Logged when the azp claim in the token does not match the expected client ID
@@ -121,6 +122,8 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-166 |Audience |Access token audience validation skipped (accessTokenAudienceOptional=true). Expected audience: %s |Logged when audience validation is skipped for an access token because accessTokenAudienceOptional is enabled
 |TokenSheriff-167 |Authorized Party |azp claim missing, using client_id claim '%s' for authorized party validation (RFC 9068) |Logged when the azp claim is absent but the client_id claim (per RFC 9068) matches the expected client ID
 |TokenSheriff-168 |JWKS |SSRF egress guard blocked well-known discovery fetch: %s |Logged when the SSRF egress guard rejects the OIDC well-known discovery endpoint because its host resolves to a disallowed (loopback/link-local/site-local/ULA/metadata) address before any fetch is issued
+|TokenSheriff-168 |JWKS |Duplicate kid '%s' in JWKS: a later key overwrote an earlier one — the JWKS should carry a unique kid per key |Logged when a JWKS document contains two keys with the same key ID (note: this identifier is currently shared with the SSRF egress guard message above)
+|TokenSheriff-169 |JWKS |JWKS refresh for issuer '%s' produced no usable keys — retaining the current key set instead of retiring it |Logged when a JWKS refresh returns no usable keys and the previously loaded key set is kept
 |===
 
 == ERROR Level (200-206)
@@ -187,4 +190,42 @@ This section documents log messages specific to the Quarkus integration module (
 |===
 |ID |Component |Message |Description
 |TokenSheriff_Q-200 |VERTX |Vertx HttpServerRequest context is unavailable - no active request context found |Indicates that the Vertx HTTP server request context could not be resolved
+|===
+
+== Client Engine Messages
+
+This section documents log messages specific to the client engine (token-sheriff-client). Messages carry the `TokenSheriffClient` prefix.
+
+=== Client INFO Level (001-002)
+
+[cols="1,1,2,2", options="header"]
+|===
+|ID |Component |Message |Description
+|TokenSheriffClient-001 |DISCOVERY |Resolved OIDC provider metadata for issuer '%s' |Logged when provider metadata is successfully resolved for an issuer
+|TokenSheriffClient-002 |LOGOUT |Cleared held tokens for session '%s' as part of RP-initiated logout |Logged when held tokens for a session are cleared from the local store during RP-initiated logout (client-side store clear only; RFC 7009 revocation is performed separately)
+|===
+
+=== Client WARN Level (100-109)
+
+[cols="1,1,2,2", options="header"]
+|===
+|ID |Component |Message |Description
+|TokenSheriffClient-100 |DISCOVERY |Rejecting non-TLS issuer '%s' for discovery; enable allowInsecureHttp only for local test setups |Logged when a non-TLS issuer is rejected for discovery
+|TokenSheriffClient-101 |DISCOVERY |Discovery for issuer '%s' returned unexpected HTTP status %s |Logged when the discovery request returns a non-success HTTP status
+|TokenSheriffClient-102 |FLOW |Authorization server '%s' does not advertise PKCE 'S256'; interactive authorization_code flows will be refused |Logged when the authorization server does not advertise the PKCE S256 code-challenge method
+|TokenSheriffClient-103 |DISCOVERY |Discovery document issuer '%s' does not match configured issuer '%s' |Logged when the discovery document's issuer does not match the configured issuer
+|TokenSheriffClient-104 |TOKEN |Refresh token reuse detected; the refresh token family has been revoked |Logged when a superseded refresh token is replayed and the rotation family is revoked
+|TokenSheriffClient-105 |FLOW |Authorization response 'iss' '%s' does not match the initiating issuer '%s'; rejecting the callback (mix-up defence) |Logged when the RFC 9207 authorization-response iss claim does not match the initiating issuer
+|TokenSheriffClient-106 |DPOP |DPoP proof 'jti' reuse detected; refusing to emit a replayable proof (RFC 9449 token-replay defence) |Logged when a DPoP proof jti would be reused and the proof is refused
+|TokenSheriffClient-107 |LOGOUT |Post-logout redirect URI '%s' does not exactly match any registered URI; refusing RP-initiated logout (open-redirect defence) |Logged when a post-logout redirect URI does not exactly match a registered URI
+|TokenSheriffClient-108 |LIFECYCLE |Refresh token reuse detected for session '%s'; revoking the family at the authorization server (RFC 7009) and clearing the store |Logged when refresh-token reuse is detected on a stored session and the family is revoked
+|TokenSheriffClient-109 |TOKEN |Refreshed ID token is inconsistent with the refreshed access token (OIDC Core §12.2 'iss'/'sub'); refusing to apply the refresh |Logged when a refreshed ID token is inconsistent with the refreshed access token
+|===
+
+=== Client ERROR Level (200)
+
+[cols="1,1,2,2", options="header"]
+|===
+|ID |Component |Message |Description
+|TokenSheriffClient-200 |DISCOVERY |OIDC discovery failed for issuer '%s': %s |Logged when OIDC discovery fails for an issuer
 |===

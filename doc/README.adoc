@@ -1,5 +1,9 @@
 = Documentation Hub
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
+:source-highlighter: highlight.js
 
 This is the central navigation for TokenSheriff documentation.
 
@@ -37,7 +41,7 @@ The token validation capability — its requirements, architecture, security mod
 === Specifications
 
 * xref:validation/specification/microprofile-jwt-compatibility.adoc[MicroProfile JWT Compatibility] - MP-JWT 2.1 integration and rationale
-* xref:validation/specification/token-decryption.adoc[Token Decryption] - Future JWE support
+* xref:validation/specification/token-decryption.adoc[Token Decryption] - JWE encrypted-token support
 * xref:validation/specification/multi-idp-testing.adoc[Multi-IDP Testing] - Testing with multiple OIDC providers
 
 === FAQ
@@ -49,9 +53,10 @@ The token validation capability — its requirements, architecture, security mod
 The active OIDC capability — the server-side confidential-client engine that retrieves
 tokens, holds and refreshes them server-side, and drives the flows on top of the commons
 transport. It is the engine a Backend-For-Frontend (BFF) is built on; it is not itself a BFF.
-The `token-sheriff-client` module (and its `token-sheriff-client-quarkus` extension) now exist
-as a wired, empty skeleton (xref:oidc/05-client-module/README.adoc[Plan 05]); this document set
-still leads the functional content, which lands per xref:oidc/06-implement/README.adoc[Plan 06].
+The `token-sheriff-client` module (and its `token-sheriff-client-quarkus` extension) is
+implemented — module structure per xref:oidc/05-client-module/README.adoc[Plan 05], functional
+content delivered under xref:oidc/06-implement/README.adoc[Plan 06]; this document set remains
+the normative specification.
 
 * xref:client/README.adoc[Overview] - Capability entry point: intro, scope, reading order, document map
 * xref:client/requirements.adoc[Requirements] - `CLIENT-N`, grouped by aspect (Retrieval & flow / Token)
@@ -68,6 +73,7 @@ still leads the functional content, which lands per xref:oidc/06-implement/READM
 * xref:client/specification/retrieval-flow.adoc[Retrieval & Flow] - Auth-code + PKCE, grants, client auth, `state`/`nonce`, mix-up, PAR
 * xref:client/specification/step-up-and-logout.adoc[Step-up & Logout] - RFC 9470 step-up; RP-initiated logout
 * xref:client/specification/token-handling.adoc[Token Handling] - Server-side lifecycle delta (references the validation module)
+* xref:client/specification/test-strategy.adoc[Test Strategy] - Two-layer verification model and traceability matrix
 
 == Reference
 
@@ -80,12 +86,12 @@ still leads the functional content, which lands per xref:oidc/06-implement/READM
 ** xref:../token-sheriff-validation/doc/api-reference.adoc[API Reference]
 ** xref:../token-sheriff-validation/doc/developing.adoc[Developing]
 ** xref:../token-sheriff-validation/doc/UnitTesting.adoc[Unit Testing]
-* xref:../token-sheriff-client/README.adoc[token-sheriff-client] - Framework-agnostic OIDC/OAuth client engine _(wired, empty skeleton — Plan 05)_
+* xref:../token-sheriff-client/README.adoc[token-sheriff-client] - Framework-agnostic OIDC/OAuth client engine
 ** xref:../token-sheriff-client/doc/README.adoc[Module Documentation]
 * xref:../token-sheriff-quarkus-parent/README.adoc[token-sheriff-quarkus-parent] - Quarkus extensions
 ** xref:../token-sheriff-quarkus-parent/doc/README.adoc[Module Documentation]
 ** `token-sheriff-validation-quarkus` (+ `-deployment`) - validation extension
-** `token-sheriff-client-quarkus` (+ `-deployment`) - client extension _(wired, empty skeleton — Plan 05)_
+** `token-sheriff-client-quarkus` (+ `-deployment`) - client extension
 
 == Benchmarking
 

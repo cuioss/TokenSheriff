@@ -1,4 +1,8 @@
 = Commons Base Layer
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
 :source-highlighter: highlight.js
 
 The *shared base layer* every Token-Sheriff capability sits on — the
@@ -7,7 +11,7 @@ dependency-light layer by ArchUnit rather than shipped as a separate artifact. C
 *moves bytes, raises typed errors, counts events and exposes metrics; it never interprets a
 token's trust* — that is the xref:../validation/README.adoc[validation] layer's job.
 
-Both validation and the coming xref:../client/README.adoc[client] consume it; the
+Both validation and the xref:../client/README.adoc[client] consume it; the
 re-packaging and the ArchUnit boundary are established in
 xref:../oidc/03-commons/README.adoc[Plan 03].
 
@@ -68,6 +72,6 @@ xref:architecture.adoc[Architecture]).
 
 * xref:../README.adoc[Documentation Hub]
 * xref:../validation/README.adoc[Validation] — the token-trust pipeline that ships alongside this base layer
-* xref:../client/README.adoc[Client] — the coming consumer of the extended transport
+* xref:../client/README.adoc[Client] — the consumer of the extended transport
 * xref:../oidc/decision-oidc-module.adoc[Module Architecture decision] — why commons is an enforced layer, not a separate artifact
 * xref:../oidc/03-commons/README.adoc[Plan 03] — the commons base-layer plan
