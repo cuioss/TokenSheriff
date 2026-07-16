@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,7 @@ package de.cuioss.sheriff.token.validation.domain.context;
 
 import org.jspecify.annotations.Nullable;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.TreeMap;
+import java.util.*;
 
 /**
  * Request object for access token validation, carrying the token string, HTTP headers,

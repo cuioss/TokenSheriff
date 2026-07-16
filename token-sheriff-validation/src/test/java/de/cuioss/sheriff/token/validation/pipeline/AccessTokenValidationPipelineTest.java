@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,9 +33,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests for {@link AccessTokenValidationPipeline}'s interaction with custom validation rules,
@@ -51,7 +49,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class AccessTokenValidationPipelineTest {
 
     @Test
-    @SuppressWarnings("java:S5778") // AccessTokenRequest.of(rawToken) is a pure factory call that never throws
+    @SuppressWarnings("java:S5778")
+    // AccessTokenRequest.of(rawToken) is a pure factory call that never throws
     @DisplayName("Should re-run custom rules on a cache hit and reject a previously-cached token when a rule flips (M5)")
     void shouldReRunCustomRulesOnCacheHit() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
@@ -61,10 +60,10 @@ class AccessTokenValidationPipelineTest {
         FlippingRule flippingRule = new FlippingRule();
 
         try (TokenValidator validator = TokenValidator.builder()
-                .issuerConfig(issuerConfig)
-                .tokenValidationRule(flippingRule)
-                .cacheConfig(AccessTokenCacheConfig.defaultConfig())
-                .build()) {
+                     .issuerConfig(issuerConfig)
+                     .tokenValidationRule(flippingRule)
+                     .cacheConfig(AccessTokenCacheConfig.defaultConfig())
+                     .build()) {
 
             // First validation: cache miss — the rule passes and the token is cached.
             AccessTokenContent first = validator.createAccessToken(AccessTokenRequest.of(rawToken));

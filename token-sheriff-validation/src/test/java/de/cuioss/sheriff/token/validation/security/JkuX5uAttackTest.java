@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Date;
 
@@ -133,7 +134,7 @@ class JkuX5uAttackTest {
             KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
             gen.initialize(2048);
             return gen.generateKeyPair();
-        } catch (java.security.NoSuchAlgorithmException e) {
+        } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("RSA not available", e);
         }
     }

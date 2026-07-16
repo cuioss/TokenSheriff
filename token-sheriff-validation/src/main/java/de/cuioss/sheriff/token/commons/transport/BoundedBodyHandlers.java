@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.commons.transport;
 
 import java.io.IOException;
+import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -58,7 +59,7 @@ final class BoundedBodyHandlers {
      * @param maxBytes the inclusive byte ceiling; a body strictly larger than this is rejected
      * @return a bounded {@code BodyHandler<String>}
      */
-    static java.net.http.HttpResponse.BodyHandler<String> ofBoundedString(Charset charset, long maxBytes) {
+    static HttpResponse.BodyHandler<String> ofBoundedString(Charset charset, long maxBytes) {
         return responseInfo -> {
             OptionalLong advertised = responseInfo.headers().firstValueAsLong("Content-Length");
             if (advertised.isPresent() && advertised.getAsLong() > maxBytes) {
@@ -74,7 +75,7 @@ final class BoundedBodyHandlers {
      * Used for the {@code Content-Length} pre-check rejection path, honouring the class contract
      * that an over-advertised body is "rejected without reading its body".
      */
-    private static java.net.http.HttpResponse.BodySubscriber<String> rejectingSubscriber(long maxBytes) {
+    private static HttpResponse.BodySubscriber<String> rejectingSubscriber(long maxBytes) {
         return new CancellingRejectSubscriber(maxBytes);
     }
 
@@ -87,7 +88,7 @@ final class BoundedBodyHandlers {
      * the {@code Content-Length} pre-check without reading it.
      */
     private static final class CancellingRejectSubscriber
-            implements java.net.http.HttpResponse.BodySubscriber<String> {
+            implements HttpResponse.BodySubscriber<String> {
 
         private final CompletableFuture<String> result = new CompletableFuture<>();
 
@@ -130,7 +131,7 @@ final class BoundedBodyHandlers {
      * running byte total would exceed the ceiling.
      */
     private static final class BoundedStringSubscriber
-            implements java.net.http.HttpResponse.BodySubscriber<String> {
+            implements HttpResponse.BodySubscriber<String> {
 
         private final Charset charset;
         private final long maxBytes;

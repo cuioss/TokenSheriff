@@ -269,7 +269,7 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
             KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
             generator.initialize(2048);
             return generator.generateKeyPair();
-        } catch (Exception e) {
+        } /*~~(TODO: Catch specific not Exception. Suppress: // cui-rewrite:disable InvalidExceptionUsageRecipe)~~>*/catch (Exception e) {
             throw new IllegalStateException("RSA key pair generation failed", e);
         }
     }

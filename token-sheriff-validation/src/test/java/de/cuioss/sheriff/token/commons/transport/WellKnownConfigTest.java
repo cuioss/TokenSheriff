@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.commons.transport;
 
 import de.cuioss.http.client.handler.SecureSSLContextProvider;
+import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -88,7 +89,7 @@ class WellKnownConfigTest {
                 .wellKnownUrl(TEST_WELL_KNOWN_URL)
                 .build();
         // "localhost" resolves to a loopback address, which the secure-default egress guard blocks.
-        assertThrows(de.cuioss.sheriff.token.commons.error.TransportException.class,
+        assertThrows(TransportException.class,
                 () -> config.getEgressPolicy().check(URI.create("https://localhost:8443/.well-known/openid-configuration")),
                 "A loopback-resolving discovery host must be blocked when no egress opt-in is configured");
     }

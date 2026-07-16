@@ -18,7 +18,6 @@ package de.cuioss.sheriff.token.client.flow;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.commons.error.InboundErrorNormalizer;
 import de.cuioss.tools.logging.CuiLogger;
-
 import org.jspecify.annotations.Nullable;
 
 import java.nio.charset.StandardCharsets;

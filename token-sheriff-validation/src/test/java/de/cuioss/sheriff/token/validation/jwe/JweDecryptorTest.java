@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -400,7 +400,7 @@ class JweDecryptorTest {
         @DisplayName("L7: RSA-OAEP-256 is preferred over the SHA-1 MGF1 RSA-OAEP variant")
         void shouldPreferOaep256OverSha1Mgf1() {
             assertEquals("RSA-OAEP-256", JweAlgorithmPreferences.getPreferredKeyManagementAlgorithm());
-            assertEquals("RSA-OAEP-256", JweAlgorithmPreferences.getDefaultKeyManagementAlgorithms().get(0),
+            assertEquals("RSA-OAEP-256", JweAlgorithmPreferences.getDefaultKeyManagementAlgorithms().getFirst(),
                     "OAEP-256 must be listed ahead of the SHA-1 MGF1 RSA-OAEP variant");
             assertTrue(JweAlgorithmPreferences.getDefaultKeyManagementAlgorithms().contains("RSA-OAEP"),
                     "RSA-OAEP is retained for interoperability");

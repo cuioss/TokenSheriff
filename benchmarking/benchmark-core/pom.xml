@@ -73,7 +73,7 @@
             <scope>compile</scope>
         </dependency>
 
-<!-- Keycloak test integration -->
+        <!-- Keycloak test integration -->
         <dependency>
             <groupId>de.cuioss.test</groupId>
             <artifactId>cui-test-keycloak-integration</artifactId>
@@ -196,6 +196,10 @@
                             <groupId>org.openjdk.jmh</groupId>
                             <artifactId>jmh-generator-annprocess</artifactId>
                             <version>${version.jmh}</version>
+                        </path>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
                         </path>
                     </annotationProcessorPaths>
                     <release>21</release>

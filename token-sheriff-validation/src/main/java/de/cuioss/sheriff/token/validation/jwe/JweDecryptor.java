@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,12 +37,7 @@ import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
-import java.security.spec.ECFieldFp;
-import java.security.spec.ECParameterSpec;
-import java.security.spec.ECPoint;
-import java.security.spec.EllipticCurve;
-import java.security.spec.InvalidKeySpecException;
-import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.*;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.zip.DataFormatException;

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,13 +29,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -327,7 +324,7 @@ class HttpWellKnownResolverTest {
 
     @Test
     @DisplayName("Should perform exactly one HTTP load under concurrent first-access callers (single-flight)")
-    void shouldLoadOnceUnderConcurrentAccess(URIBuilder uriBuilder) throws InterruptedException {
+    void shouldLoadOnceUnderConcurrentAccess(URIBuilder uriBuilder) throws Exception {
         moduleDispatcher.returnDefault();
         String wellKnownUrl = uriBuilder.addPathSegment(".well-known")
                 .addPathSegment("openid-configuration").buildAsString();
@@ -345,7 +342,7 @@ class HttpWellKnownResolverTest {
         CountDownLatch start = new CountDownLatch(1);
         AtomicInteger present = new AtomicInteger();
         try {
-            List<Future<?>> futures = new java.util.ArrayList<>();
+            List<Future<?>> futures = new ArrayList<>();
             for (int i = 0; i < threadCount; i++) {
                 futures.add(executor.submit(() -> {
                     ready.countDown();
