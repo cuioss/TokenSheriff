@@ -1,6 +1,8 @@
 {
   "best_practices": [],
-  "insights": [],
+  "insights": [
+    "Pre-existing JaCoCo coverage baseline debt: instruction 0.70 and branch 0.57 are below the 0.80 threshold. Standing debt predating current work \u2014 coverage-threshold Q-Gate findings against this module on unrelated plans are expected and were accepted (plan full-review-adoc-documents, 2026-07-16). All tests pass; the shortfall is baseline, not regression."
+  ],
   "internal_dependencies": [],
   "key_dependencies": [
     "org.openjdk.jmh:jmh-core",
