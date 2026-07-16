@@ -60,6 +60,17 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Client Deployment Module for Quarkus Extension: explicit dependency forces correct
+             reactor ordering under the -T1C parallel build (Quarkus's implicit runtime->deployment
+             artifact linkage is invisible to Maven's dependency graph), mirroring the validation
+             deployment module above. -->
+        <dependency>
+            <groupId>de.cuioss.sheriff.token</groupId>
+            <artifactId>token-sheriff-client-quarkus-deployment</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Dev-UI runtime: required for Dev-UI to work in dev mode.
              The conditional-dev-dependency mechanism in quarkus-vertx-http should
              automatically include this in dev mode, but fails to resolve the
