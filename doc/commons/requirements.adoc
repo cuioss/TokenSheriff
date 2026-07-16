@@ -37,10 +37,12 @@ xref:threat-model.adoc[Threat Model]._
 [#COMMONS-1]
 === COMMONS-1: Outbound IdP HTTP transport
 
-Commons is the single owner of all outbound HTTP to an OpenID Provider. It provides the
-HTTP client (built on `cui-http`) used for discovery, JWKS, and — for the client
-capability — token, userinfo, revocation, introspection, end-session and PAR. No other
-package issues outbound IdP requests directly.
+Commons owns the validation-side outbound HTTP to an OpenID Provider — discovery and
+JWKS — and provides the hardened transport primitives (built on `cui-http`) it is
+performed with. The client capability builds its *own* back-channel HTTP (token, userinfo,
+revocation, PAR) on those primitives and applies its own in-module egress control
+(xref:../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]); it
+does not route those fetches through a commons transport service.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (single hardened HTTP surface).
 
@@ -58,9 +60,9 @@ HTTP endpoints MUST be rejected. TLS configuration is centralized (via `cui-http
 
 Any URL taken from an IdP-controlled source (`jwks_uri`, discovery endpoints, `userinfo`,
 or any endpoint advertised via discovery) MUST be constrained before it is fetched:
-scheme restricted to HTTPS, host subject to an allow-list / egress policy, and internal /
-link-local / loopback address ranges blocked. The *existing* `wellknown` and `jwks`
-fetch paths are audited to this requirement as part of their relocation into commons.
+scheme restricted to HTTPS, host subject to an allow-list / egress policy (`EgressPolicy`),
+and internal / link-local / loopback address ranges blocked. The `wellknown` and `jwks`
+fetch paths were audited to this requirement during their relocation into commons.
 
 * Source: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery[OWASP SSRF], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180], https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4.10].
 
@@ -96,11 +98,11 @@ keys remain in validation.
 [#COMMONS-7]
 === COMMONS-7: Extended IdP endpoints (client-facing)
 
-Commons defines the transport contract for the endpoints the OIDC client capability will
-add: token (RFC 6749), userinfo (OIDC Core), revocation (RFC 7009), introspection
+Commons defines the transport contract for the endpoints the OIDC client capability
+drives: token (RFC 6749), userinfo (OIDC Core), revocation (RFC 7009), introspection
 (RFC 7662), end-session / RP-initiated logout, and PAR (RFC 9126). Each is exercised by a
 dedicated MockWebServer dispatcher in the `generators` test artifact (default + adversarial
-modes) so the contract is testable before the client engine exists.
+modes), so the contract is testable independently of the client engine.
 
 * Source: https://www.rfc-editor.org/rfc/rfc6749[RFC 6749], https://www.rfc-editor.org/rfc/rfc7009[RFC 7009], https://www.rfc-editor.org/rfc/rfc7662[RFC 7662], https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OIDC RP-Initiated Logout 1.0].
 
@@ -119,7 +121,7 @@ _See xref:specification/error-model.adoc[Error-model specification]._
 [#COMMONS-9]
 === COMMONS-9: Typed exception hierarchy
 
-Library code (the `commons` and `validation` packages, and the future client engine — pure
+Library code (the `commons` and `validation` packages, and the client engine — pure
 Java) MUST signal failure through a typed exception hierarchy defined in `commons.error`.
 Library code MUST NOT produce HTTP problem documents — that is not its layer.
 
@@ -128,7 +130,7 @@ Library code MUST NOT produce HTTP problem documents — that is not its layer.
 [#COMMONS-10]
 === COMMONS-10: RFC 9457 rendering at every HTTP edge
 
-Every HTTP edge — `token-sheriff-validation-quarkus`, the future `token-sheriff-client-quarkus`,
+Every HTTP edge — `token-sheriff-validation-quarkus`, `token-sheriff-client-quarkus`,
 and any future non-Quarkus/RESTEasy edge (e.g. a portal adapter) — MUST map the typed
 exceptions to `application/problem+json` per RFC 9457. Existing validation rejection
 responses are retrofitted to this contract.
@@ -159,7 +161,7 @@ _See xref:specification/observability.adoc[Observability specification]._
 === COMMONS-13: Shared security-event surface
 
 `SecurityEventCounter` and the security-event types live in `commons.events` so validation
-and the future client share one event surface. The counter MUST remain thread-safe and
+and the client share one event surface. The counter MUST remain thread-safe and
 free of any Micrometer dependency; Quarkus extensions expose it as before.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (security monitoring).
@@ -169,7 +171,7 @@ free of any Micrometer dependency; Quarkus extensions expose it as before.
 
 Each security event MUST carry a category (structure / signature / semantic) usable by an
 edge to select a response. Event categories MUST NOT depend on any validation-layer type
-(the ArchUnit boundary — see xref:architecture.adoc#_archunit_boundary[Architecture]).
+(the ArchUnit boundary — see xref:architecture.adoc#archunit[Architecture]).
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4].
 

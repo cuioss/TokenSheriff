@@ -174,9 +174,9 @@ For detailed architectural information, see:
 | Module | Description |
 | --- | --- |
 | [`token-sheriff-validation`](token-sheriff-validation/README.adoc) | Core JWT validation engine. Also carries the `commons` base layer (`de.cuioss.sheriff.token.commons.*`: transport, error model, events, metrics), enforced by ArchUnit. |
-| [`token-sheriff-client`](token-sheriff-client/README.adoc) | Framework-agnostic OIDC/OAuth **client** engine (token retrieval, userinfo, revocation, introspection, end-session, PAR). Depends on `token-sheriff-validation`. _Wired, empty skeleton (Plan 05) — no functional content yet._ |
+| [`token-sheriff-client`](token-sheriff-client/README.adoc) | Framework-agnostic OIDC/OAuth **client** engine: OIDC discovery, authorization-code / client-credentials / refresh flows with PKCE and PAR, client authentication (`client_secret_basic`/`client_secret_post`, `private_key_jwt`, mTLS), DPoP proof generation, token lifecycle management (store, refresh scheduling, revocation), logout/end-session, and userinfo. Depends on `token-sheriff-validation`. |
 | [`token-sheriff-validation-quarkus`](token-sheriff-quarkus-parent/README.adoc) | Quarkus extension (runtime + deployment) for token validation. |
-| `token-sheriff-client-quarkus` | Quarkus extension (runtime + deployment) that wires the client engine into Quarkus, building on the validation extension. _Wired, empty skeleton (Plan 05)._ |
+| `token-sheriff-client-quarkus` | Quarkus extension (runtime + deployment) that wires the client engine into Quarkus: CDI producer (`TokenSheriffClientProducer`), configuration mapping (`ClientRuntimeConfig`), and exception mapping, building on the validation extension. |
 | [`bom`](bom/pom.xml) | Bill of Materials for all Token-Sheriff artifacts. |
 | [`benchmarking`](benchmarking/README.adoc) | JMH micro-benchmarks and WRK integration load tests. |
 

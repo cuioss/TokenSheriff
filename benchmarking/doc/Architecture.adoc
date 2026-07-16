@@ -38,11 +38,11 @@ The Token-Sheriff benchmarking infrastructure consists of three specialized modu
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────┐
-│              benchmarking-common                    │
+│              benchmarking-common                        │
 │  • Benchmark runners and configuration                  │
 │  • Metrics collection and transformation                │
 │  • Report and badge generation                          │
-│  • Token management                                     │
+│  • JFR instrumentation support                          │
 │  • HTTP utilities                                       │
 └──────────────┬──────────────────────────────────────────┘
                │
@@ -53,12 +53,12 @@ The Token-Sheriff benchmarking infrastructure consists of three specialized modu
 │core          │  │                         │
 │              │  │ Shell-based WRK testing │
 │JMH Benchmarks│  │ 1 Java post-processor   │
-└──────────────┘  └─────────────────────────┘
-      │                      │
-      ▼                      ▼
+└──────┬───────┘  └────────────┬────────────┘
+       │                       │
+       ▼                       ▼
 ┌──────────────┐  ┌─────────────────────────┐
-│token-sheriff-      │  │Docker Containers:       │
-│core          │  │ • Quarkus App           │
+│token-sheriff-│  │Docker Containers:       │
+│validation    │  │ • Quarkus App           │
 │              │  │ • Keycloak              │
 │              │  │ • Prometheus            │
 └──────────────┘  └─────────────────────────┘
@@ -76,41 +76,37 @@ Foundation framework providing shared utilities, configuration, metrics processi
 |Component |Key Classes
 
 |Benchmark Execution
-|`AbstractBenchmarkRunner`, `BenchmarkResultProcessor`, `AbstractBenchmarkBase`
+|`AbstractBenchmarkRunner`, `BenchmarkResultProcessor`
 
 |Configuration
-|`BenchmarkConfiguration`, `BenchmarkType`, `IntegrationConfiguration`, `ReportConfiguration`
+|`BenchmarkConfiguration`, `BenchmarkType`, `ReportConfiguration`
 
 |Metrics Collection
 |`PrometheusClient`, `PrometheusMetricsManager`, `MetricsOrchestrator`
 
 |Metrics Processing
-|`BenchmarkMetricsTransformer`, `MetricsTransformer`, `MetricsComputer`, `StatisticsCalculator`
+|`BenchmarkMetricsTransformer`, `MetricsJsonExporter`, `MetricsComputer`, `StatisticsCalculator`
 
 |Report Generation
-|`ReportGenerator`, `BadgeGenerator`, `GitHubPagesGenerator`, `ReportDataGenerator`
+|`ReportGenerator`, `BadgeGenerator`, `GitHubPagesGenerator`, `ReportDataGenerator`, `HistoricalDataManager`, `TrendDataProcessor`
 
 |Data Conversion
-|`JmhBenchmarkConverter`, `WrkBenchmarkConverter`, `BenchmarkConverter`
-
-|Token Management
-|`KeycloakTokenRepository`, `TokenRepositoryConfig`, `TokenProvider`
+|`JmhBenchmarkConverter`, `WrkBenchmarkConverter`, `BenchmarkConverter`, `ReportMetadataFactory`
 
 |HTTP Utilities
 |`HttpClientFactory`
 
 |JFR Support
-|`JfrInstrumentation`, `JfrSupport`, `JfrVarianceAnalyzer`
+|`JfrInstrumentation`, `JfrVarianceAnalyzer`, `BenchmarkPhaseEvent`, `OperationEvent`, `OperationStatisticsEvent`
 
 |Utilities
-|`JsonSerializationHelper`, `BenchmarkLoggingSetup`, `OutputDirectoryStructure`
+|`JsonSerializationHelper`, `BenchmarkingLogMessages`, `OutputDirectoryStructure`
 |===
 
 === Package Structure
 [source]
 ----
 de.cuioss.benchmarking.common/
-├── base/          # Base classes for benchmarks
 ├── config/        # Configuration classes
 ├── constants/     # Constants
 ├── converter/     # Result converters (JMH/WRK → BenchmarkData)
@@ -120,9 +116,7 @@ de.cuioss.benchmarking.common/
 ├── model/         # Data models (BenchmarkData)
 ├── output/        # Output directory management
 ├── report/        # Report and badge generation
-├── repository/    # Token repositories
 ├── runner/        # Benchmark runner framework
-├── token/         # Token provider interfaces
 └── util/          # General utilities
 ----
 
@@ -141,10 +135,13 @@ Executes JMH-based micro-benchmarks directly against the JWT validation library 
 |`SimpleCoreValidationBenchmark`, `SimpleErrorLoadBenchmark`
 
 |JFR Benchmarks
-|`CoreJfrBenchmark`, `ErrorJfrBenchmark`, `MixedJfrBenchmark`, `UnifiedJfrBenchmark`
+|`CoreJfrBenchmark`, `ErrorJfrBenchmark`, `MixedJfrBenchmark`
+
+|Base Classes and Delegates
+|`AbstractBenchmark`, `AbstractJfrBenchmark`, `BenchmarkDelegate`, `CoreValidationDelegate`, `ErrorLoadDelegate`
 
 |Runners
-|`CoreBenchmarkRunner`, `JfrBenchmarkRunner`
+|`CoreBenchmarkRunner`, `JfrBenchmarkRunner`, `ConcurrencySweepRunner`
 
 |Support Classes
 |`BenchmarkKeyCache`, `MockTokenRepository`, `LibraryMetricsExporter`
@@ -154,6 +151,8 @@ Executes JMH-based micro-benchmarks directly against the JWT validation library 
 
 * `benchmark` - Standard JMH benchmarks (< 10 minutes)
 * `benchmark-jfr` - Benchmarks with Java Flight Recorder profiling
+* `benchmark-concurrency-sweep` - `measureAverageTime` at 1, 10, 50, 100 threads
+* `analyze-jfr` - Analyze an existing JFR recording (`-Djfr.file=...`)
 * `quick` - Reduced iterations for fast testing
 
 === Configuration
@@ -208,6 +207,7 @@ Prometheus:  http://localhost:9090
 === Maven Profiles
 
 * `benchmark` - Full lifecycle: build containers, run tests, collect metrics, stop containers
+* `benchmark-jfr` - JFR profiling run via `jfr_benchmark_dispatcher.sh` (200s duration, JFR compose overlay)
 * `quick` - Reduced duration (30s), skips container lifecycle
 * `autoscale` - 8 threads, 200 connections
 * `stress` - 10 threads, 150 connections
@@ -253,7 +253,6 @@ Does the code generate reports/badges/artifacts?
 * Metrics collection or transformation
 * Report/badge generation
 * Configuration management
-* Token management
 * HTTP client utilities
 
 === Place in benchmark-core when:
@@ -279,7 +278,6 @@ Does the code generate reports/badges/artifacts?
 public final void runBenchmark() throws IOException, RunnerException {
     BenchmarkConfiguration config = createConfiguration();
     validateConfiguration(config);
-    prometheusMetricsManager.clear();
     Path outputPath = Path.of(config.resultsDirectory());
     Files.createDirectories(outputPath);
     try {
@@ -287,7 +285,9 @@ public final void runBenchmark() throws IOException, RunnerException {
         beforeBenchmark(config);           // pre-benchmark hook
         Options options = buildCommonOptions(config).build();
         Collection<RunResult> results = executeBenchmark(options);
-        processTimestampData(results, outputPath);
+        if (results.isEmpty()) {
+            throw new IllegalStateException("No benchmark results produced");
+        }
         processResults(results, config);
         afterBenchmark(results, config);   // post-benchmark hook
     } finally {
@@ -334,7 +334,7 @@ Converter (JmhBenchmarkConverter / WrkBenchmarkConverter)
 BenchmarkData (unified model)
         │
         ▼
-MetricsTransformer / BenchmarkMetricsTransformer
+BenchmarkMetricsTransformer
         │
         ├──> BadgeGenerator → JSON badges
         ├──> ReportGenerator → HTML reports

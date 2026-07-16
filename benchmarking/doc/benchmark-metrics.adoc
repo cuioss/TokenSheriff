@@ -290,7 +290,7 @@ IMPORTANT: **Metrics collection failures NEVER fail the build**. Builds continue
 Comprehensive test coverage:
 
 * **PrometheusClientTest**: API client testing with mock responses
-* **MetricsTransformerTest**: Aggregation and transformation logic
+* **BenchmarkMetricsTransformerTest**: Aggregation and transformation logic
 * **MetricsJsonExporterTest**: End-to-end metrics JSON export
 
 Test data: `benchmarking-common/src/test/resources/metrics/`
@@ -314,7 +314,7 @@ Collected metrics enable analysis of:
 2. **Real-time**: Captures metrics during actual benchmark execution
 3. **Time-aligned**: Metrics correlate with benchmark phases
 4. **Unified**: Single orchestrator handles WRK and JMH benchmarks
-5. **Professional**: Industry-standard Prometheus/Grafana stack
+5. **Standard tooling**: Prometheus time-series collection and query API
 6. **Build-safe**: Failures never break builds
 7. **Testable**: Comprehensive test coverage with real data
 

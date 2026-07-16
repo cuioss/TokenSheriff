@@ -32,7 +32,6 @@ Individual operation metrics captured per validation:
 * `metadataKey` / `metadataValue` - Custom metadata (e.g., issuer)
 * `success` - Operation result (true/false)
 * `errorType` - Type of error if operation failed
-* `cached` - Whether result was served from cache
 * `concurrentOperations` - Number of concurrent operations at execution time
 
 === Statistics (1-second intervals)
@@ -50,7 +49,6 @@ Periodic statistics events aggregated over 1-second windows:
 * `variance` - Variance (nanoseconds²)
 * `coefficientOfVariation` - CV as percentage
 * `concurrentThreads` - Active threads during period
-* `cacheHitRate` - Percentage of cache hits
 
 == Variance Interpretation
 
@@ -93,7 +91,6 @@ Individual operation timing event with metadata.
 * `concurrentOperations` - Concurrent operation count
 * `metadataKey` / `metadataValue` - Custom metadata pairs
 * `errorType` - Error classification if failed
-* `cached` - Cache hit indicator
 
 === de.cuioss.benchmark.OperationStatistics
 
@@ -118,7 +115,6 @@ Periodic performance snapshot (emitted every 1 second).
 * `variance` - Variance (ns²)
 * `coefficientOfVariation` - CV percentage
 * `concurrentThreads` - Active thread count
-* `cacheHitRate` - Cache hit percentage
 
 == Analysis Tools
 

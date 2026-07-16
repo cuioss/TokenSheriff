@@ -109,7 +109,7 @@ Runtime service for DevUI integration:
 [source, yaml]
 ----
 sheriff:
-  oauth:
+  token:
     issuers:
       my-issuer:
         issuer-identifier: "https://auth.example.com"
@@ -124,7 +124,7 @@ sheriff:
 [source, yaml]
 ----
 sheriff:
-  oauth:
+  token:
     issuers:
       issuer-one:
         issuer-identifier: "https://auth1.example.com"

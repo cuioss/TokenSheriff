@@ -1,6 +1,7 @@
 = Commons Architecture
 :toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
@@ -32,10 +33,13 @@ metrics; it never interprets a token's trust.*
 | Sub-package | Responsibility
 
 | `commons.transport`
-| All outbound IdP HTTP — discovery (`.well-known`, RFC 8414), JWKS (RFC 7517), and
-  (client-facing) token / userinfo / revocation / introspection / end-session / PAR. Owns
-  TLS enforcement, SSRF defence, timeouts, response-size limits, retry/backoff, the
-  `cui-http` client, and discovery / JWKS caching. See xref:specification/transport.adoc[transport spec].
+| The validation-side outbound IdP HTTP — discovery (`.well-known`, RFC 8414) and JWKS
+  (RFC 7517) — plus the shared transport primitives: TLS enforcement, egress policy
+  (`EgressPolicy`), timeouts, response-size limits (`BoundedBodyHandlers`), retry/backoff,
+  the `cui-http` client, and discovery / JWKS caching. The client engine builds its *own*
+  back-channel HTTP (token / userinfo / revocation / PAR) on these primitives
+  (xref:../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]).
+  See xref:specification/transport.adoc[transport spec].
 
 | `commons.error`
 | The typed exception hierarchy that library code throws, plus the inbound normalization of
@@ -43,7 +47,7 @@ metrics; it never interprets a token's trust.*
   HTTP edge, not here. See xref:specification/error-model.adoc[error-model spec].
 
 | `commons.events`
-| `SecurityEventCounter` and the security-event types, so validation and the future client
+| `SecurityEventCounter` and the security-event types, so validation and the client
   share one event surface. Thread-safe, no Micrometer dependency. See
   xref:specification/observability.adoc[observability spec].
 
@@ -61,8 +65,9 @@ sources — giving the same guarantee a module boundary would, with one fewer ar
   `…validation..`.
 * `…validation..` may depend on `…commons..` (the allowed direction).
 * No package cycles across the `commons` / `validation` boundary.
-* The client boundary (`client → validation`, never the reverse) is enforced by *Maven*
-  once the client module exists (xref:../oidc/05-client-module/README.adoc[Plan 05]).
+* The client boundary (`client → validation`, never the reverse) is enforced by *Maven* —
+  the `token-sheriff-client` module (created by
+  xref:../oidc/05-client-module/README.adoc[Plan 05]) declares the dependency.
 
 Because commons must not depend on validation, the security-event types in `commons.events`
 carry no link to validation's log-message registry, and the transport layer keeps its
@@ -72,7 +77,7 @@ dependencies to `cui-http` / `cui-tooling` plus commons-internal types.
 
 * `validation` → `commons` (uses transport, events, metrics, error).
 * `token-sheriff-validation-quarkus` → renders `commons.error` exceptions as RFC 9457.
-* `token-sheriff-client` (future, separate module) → `validation`, and thus `commons`
+* `token-sheriff-client` (separate module) → `validation`, and thus `commons`
   transitively.
 * `nifi-extensions` (external consumer) → `validation`; any commons-visible package move is
   recorded in xref:../oidc/01-restructure/migration-nifi-extensions.adoc[the migration guide].

@@ -1,6 +1,9 @@
 = Plan 01 — Phase 3 Execution Checklist (repo rename + external services)
-:toc: macro
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
+:source-highlighter: highlight.js
 
 This is the committed, self-detecting checklist for Phase 3 of the Token-Sheriff
 rename. Each row carries a read-only *Detect* command (the source of truth — run
@@ -17,8 +20,6 @@ the true state, then execute the *Action* of each not-yet-done row. The repo
 rename keeps the old URL redirecting, so the primary path needs no re-clone —
 `git remote set-url` suffices (row 2).
 ====
-
-toc::[]
 
 == Checklist
 

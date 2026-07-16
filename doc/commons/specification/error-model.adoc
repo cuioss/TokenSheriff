@@ -1,6 +1,7 @@
 = Commons Specification — Error Model
 :toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
@@ -19,7 +20,7 @@ the inbound normalization of IdP error responses; each edge owns its RFC 9457 ma
 |===
 | Layer | Behaviour
 
-| *Libraries* — `commons` + `validation` packages, the future client engine (pure Java)
+| *Libraries* — `commons` + `validation` packages, the client engine (pure Java)
 | Throw a *typed exception hierarchy* defined in `commons.error`. They MUST NOT produce HTTP
   problem documents — that is not their layer (xref:../requirements.adoc#COMMONS-9[COMMONS-9]).
 
@@ -33,15 +34,16 @@ the inbound normalization of IdP error responses; each edge owns its RFC 9457 ma
 
 == Typed exception hierarchy (`commons.error`)
 
-A small, stable hierarchy that library code throws and edges map. The concrete shape is
-defined during re-packaging; the contract is:
+A small, stable hierarchy that library code throws and edges map:
 
-* A common base carrying a *category* (from `commons.events`, structure / signature /
-  semantic) and a *safe, caller-facing message* — never internal detail.
+* `TokenSheriffException` is the common base, carrying a *category* (from `commons.events`,
+  structure / signature / semantic) and a *safe, caller-facing message* — never internal
+  detail.
 * Transport failures (TLS rejected, SSRF blocked, timeout, oversized response, unreachable
-  endpoint) are one branch.
-* Token-validation failures (the existing `TokenValidationException`, keyed by
-  `SecurityEventCounter.EventType`) are another — retrofitted onto the shared base so the
+  endpoint) are the `TransportException` branch; inbound IdP protocol errors normalize to
+  `ClientProtocolException` (via `InboundErrorNormalizer`).
+* Token-validation failures (`TokenValidationException`, keyed by
+  `SecurityEventCounter.EventType`) are another branch on the shared base so the
   edges have one mapping surface.
 
 == RFC 9457 mapping at the edge

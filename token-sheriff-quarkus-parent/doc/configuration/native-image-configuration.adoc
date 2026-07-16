@@ -27,10 +27,11 @@ The Token-Sheriff Quarkus deployment automatically registers the following class
 
 * **JWT Validation Pipeline**: `NonValidatingJwtParser`, `TokenSignatureValidator`, `TokenHeaderValidator`, `TokenClaimValidator`, `TokenBuilder`, `DecodedJwt`
 * **JWKS Loading**: `HttpJwksLoader`, `JWKSKeyLoader`, `KeyInfo`, `JwksParser`
-* **Token Content**: `AccessTokenContent`, `IdTokenContent`, `RefreshTokenContent`, `ClaimValue`
+* **Token Content**: `AccessTokenContent`, `IdTokenContent`, `UnvalidatedRefreshToken`, `ClaimValue`
 * **Security/Algorithm**: `SignatureAlgorithmPreferences`, `JwkAlgorithmPreferences`, `SecurityEventCounter`
 
-**Total Reflection Classes**: 39 classes registered automatically across 5 build steps.
+All reflection classes are registered automatically by the deployment module's build steps
+(see `TokenSheriffProcessor`) — no manual `reflect-config.json` entries are required.
 
 === Resource Configuration
 
@@ -169,7 +170,7 @@ quarkus.native.container-runtime-options=-m=64m
 
 * Native image size: 96-104MB (distroless: 104MB, JFR/UBI: 96MB)
 * Startup time: <1 second
-* Reflection classes: 39 registered
+* Reflection classes: registered automatically by `TokenSheriffProcessor`
 * Security services: All enabled for JWT support
 
 [source,bash]

@@ -1,4 +1,6 @@
 = Token-Sheriff Quarkus Extension Configuration Reference
+:toc: left
+:toclevels: 3
 :toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
@@ -29,6 +31,10 @@ Properties under `sheriff.token.issuers.<name>.*` — one block per issuer.
 |`algorithm-preferences` |String (csv) |— |Allowed signature algorithms (default: all supported)
 |`claim-sub-optional` |boolean |`false` |Allow missing `sub` claim
 |`expected-token-type` |String |— (disabled) |Expected `typ` header value. Set to `at+jwt` for RFC 9068-compliant IdPs. Most IdPs (Keycloak, Zitadel, Dex) do *not* set `at+jwt` — verify before enabling.
+|`audience-validation-disabled` |boolean |`false` |Disable audience validation for this issuer
+|`access-token-audience-optional` |boolean |`false` |Allow access tokens without an `aud` claim
+|`clock-skew-seconds` |int |`60` |Clock skew tolerance for `exp` / `nbf` validation
+|`max-token-age-seconds` |int |— (disabled) |Max token age based on `iat`; rejects when `now - iat > max-token-age-seconds + clock-skew-seconds`
 |===
 
 === JWKS Source (mutually exclusive)
@@ -52,6 +58,9 @@ Properties under `sheriff.token.issuers.<name>.*` — one block per issuer.
 |`jwks.http.read-timeout-seconds` |int |`10` |HTTP read timeout
 |`jwks.http.key-rotation-grace-period-seconds` |int |`300` |Grace period for retired keys during rotation
 |`jwks.http.max-retired-key-sets` |int |`3` |Max retained retired key sets
+|`jwks.http.allow-insecure-http` |boolean |`false` |Permit plain-HTTP JWKS endpoints (testing only)
+|`jwks.http.allow-loopback-egress` |boolean |`false` |Permit loopback resolutions in the SSRF egress guard (local development / MockWebServer)
+|`jwks.http.allowed-egress-hosts` |String (csv) |— |Explicit host allow-list bypassing the egress address-range checks
 |===
 
 === DPoP (RFC 9449)
@@ -86,6 +95,36 @@ without enabling DPoP fails at application startup to prevent silently disabled 
 |Property |Type |Default |Description
 |`sheriff.token.cache.access-token.max-size` |int |`1000` |Max cached tokens (0 = disabled)
 |`sheriff.token.cache.access-token.eviction-interval-seconds` |long |`10` |Eviction run interval
+|===
+
+== Token Extraction
+
+[cols="2,1,1,3", options="header"]
+|===
+|Property |Type |Default |Description
+|`sheriff.token.token.header` |String |`Authorization` |Token source: `Authorization` (Bearer header) or `Cookie`
+|`sheriff.token.token.cookie-name` |String |`Bearer` |Cookie name when `sheriff.token.token.header=Cookie`
+|===
+
+== JWE Decryption
+
+Configured at the `TokenValidator` level (not per-issuer) — the decryption private key
+belongs to this Resource Server.
+
+[cols="2,1,1,3", options="header"]
+|===
+|Property |Type |Default |Description
+|`sheriff.token.jwe.decryption-key-path` |String |— |Path to a PKCS#8 PEM file with the decryption private key
+|`sheriff.token.jwe.decryption-key-id` |String |— |Key ID (`kid`) associated with the PEM key
+|`sheriff.token.jwe.decryption-keys.<kid>` |String |— |Additional per-`kid` PEM key paths (rotation)
+|`sheriff.token.jwe.default-key-id` |String |— |Default key ID when multiple keys are configured
+|`sheriff.token.jwe.keystore-path` |String |— |Keystore-based key configuration (alternative to PEM)
+|`sheriff.token.jwe.keystore-password` |String |— |Keystore password
+|`sheriff.token.jwe.key-alias` |String |— |Keystore key alias
+|`sheriff.token.jwe.key-password` |String |— |Key password (defaults to keystore password)
+|`sheriff.token.jwe.key-management-algorithms` |String (csv) |all supported |Allowed key management algorithms (RSA-OAEP, RSA-OAEP-256, ECDH-ES)
+|`sheriff.token.jwe.content-encryption-algorithms` |String (csv) |all supported |Allowed content encryption algorithms (A128GCM, A256GCM, A128CBC-HS256, A256CBC-HS512)
+|`sheriff.token.jwe.max-encrypted-token-size` |int |`32768` |Max JWE token size (bytes)
 |===
 
 == Health Checks

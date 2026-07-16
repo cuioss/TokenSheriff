@@ -106,7 +106,7 @@ public class OpenIDConnectValidator {
 public class MultiProviderDiscovery {
 
     public static TokenValidator createMultiProvider() {
-        TokenValidator.Builder builder = TokenValidator.builder();
+        TokenValidator.TokenValidatorBuilder builder = TokenValidator.builder();
 
         addProviderFromDiscovery(builder, "https://accounts.google.com", "google-client-id");
         addProviderFromDiscovery(builder, "https://login.microsoftonline.com/common/v2.0", "microsoft-client-id");
@@ -116,7 +116,7 @@ public class MultiProviderDiscovery {
     }
 
     private static void addProviderFromDiscovery(
-            TokenValidator.Builder builder, String issuerUrl, String clientId) {
+            TokenValidator.TokenValidatorBuilder builder, String issuerUrl, String clientId) {
         try {
             IssuerConfig issuerConfig = IssuerConfig.builder()
                 .expectedAudience(clientId)

@@ -33,16 +33,18 @@ image::../resources/diagrams/module-architecture.svg["Token-Sheriff module archi
 * The engine is *pure Java* (xref:requirements.adoc#CLIENT-21[CLIENT-21]) — no CDI /
   MicroProfile / JAX-RS inside it. It depends on `token-sheriff-validation`, which
   transitively provides the `commons` base layer.
-* The `client → validation` dependency direction is enforced by *Maven* once the module
-  exists (xref:../oidc/05-client-module/README.adoc[Plan 05]); it never reverses.
+* The `client → validation` dependency direction is enforced by *Maven* — the
+  `token-sheriff-client` module (created by
+  xref:../oidc/05-client-module/README.adoc[Plan 05]) declares the dependency; it never
+  reverses.
 * The HTTP edge (`token-sheriff-client-quarkus`, or a future RESTEasy / portal adapter) maps
   the engine's typed exceptions to `application/problem+json`
   (xref:requirements.adoc#CLIENT-20[CLIENT-20], `COMMONS-10`).
 
-NOTE: The Maven module, the `token-sheriff-client-quarkus` extension, and the BOM/reactor
-assembly are *not* created by this capability — that is
+NOTE: The Maven module (`token-sheriff-client`), the `token-sheriff-client-quarkus`
+extension, and the BOM/reactor assembly were delivered by
 xref:../oidc/05-client-module/README.adoc[Plan 05]. This document specifies the engine those
-modules will host.
+modules host.
 
 == The engine seam
 

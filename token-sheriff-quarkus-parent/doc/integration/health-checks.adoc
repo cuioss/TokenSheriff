@@ -1,6 +1,6 @@
 = Health Checks
 :toc: left
-:toclevels: 2
+:toclevels: 3
 :source-highlighter: highlight.js
 :toc-title: Table of Contents
 :sectnums:

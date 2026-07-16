@@ -7,7 +7,7 @@
 
 == Overview
 
-Documentation for the Token-Sheriff Quarkus extension -- a JWT validation library integrated with Quarkus. The extension provides automatic configuration, health checks, metrics integration, and development UI components.
+Documentation for the Token-Sheriff Quarkus extensions. The validation extension provides automatic configuration, health checks, metrics integration, and development UI components; the client-engine extension (`token-sheriff-client-quarkus`) wires the OIDC/OAuth client engine into Quarkus (CDI producer, configuration mapping, exception mapping).
 
 == Quick Links
 
@@ -37,11 +37,12 @@ The Token-Sheriff Quarkus extension provides JWT validation through a modular ar
 
 * **xref:performance/jwt-validation-performance.adoc[JWT Validation Performance]** - Performance baselines and metrics
 * **xref:performance/native-optimization-guide.adoc[Native Optimization Guide]** - GraalVM build configuration
+* **xref:performance/graalvm-enterprise-optimization-options.adoc[GraalVM Enterprise Optimization Options]** - Oracle GraalVM optimization flags
 * **xref:performance/jfr-profiling-guide.adoc[JFR Profiling Guide]** - Performance analysis tools
 
 == BearerToken CDI Injection
 
-The extension provides CDI injection for validated bearer tokens via the `@BearerToken` annotation. See xref:../README.adoc#_bearertokenresult_injection_recommended[BearerTokenResult Injection] in the parent README for complete examples including scopes, roles, groups, and JAX-RS endpoint usage.
+The extension provides CDI injection for validated bearer tokens via the `@BearerToken` annotation. See xref:../README.adoc#bearer-auth-declarative-security[Declarative Security with @BearerAuth] in the parent README for complete examples including scopes, roles, groups, and JAX-RS endpoint usage.
 
 == Additional Resources
 

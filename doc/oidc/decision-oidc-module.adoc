@@ -1,6 +1,7 @@
 = Design Decision: Module Architecture — validation (with a commons base layer) + client
-:toc: macro
+:toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
@@ -12,8 +13,6 @@
 | Supersedes| —
 | Related   | xref:01-restructure/README.adoc[Plan 01 — Restructure], xref:03-commons/README.adoc[Plan 03 — Commons], xref:05-client-module/README.adoc[Plan 05 — Add the Client Module], xref:../../README.md[Project README]
 |===
-
-toc::[]
 
 == Context
 
@@ -105,7 +104,7 @@ Until then, ArchUnit delivers the same layering guarantee with one fewer artifac
 
 == Still open
 
-* Session/state storage abstraction and its dependency footprint (addressed in the Plan 06 token-lifecycle increment).
+* _None._ The last open item — the session/state storage abstraction and its dependency footprint — was resolved by the Plan 06 token-lifecycle increment: the `TokenStore` abstraction with the dependency-free `InMemoryTokenStore` implementation ships in `token-sheriff-client`.
 
 == Alternatives considered
 

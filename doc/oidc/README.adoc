@@ -1,5 +1,9 @@
 = OIDC Planning
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
+:source-highlighter: highlight.js
 
 Working area for the Token-Sheriff direction: numbered, self-contained
 implementation plans plus the standing design decisions behind them.
@@ -56,8 +60,8 @@ implementation plans plus the standing design decisions behind them.
 * xref:02-doc-structure/README.adoc[Plan 02 — Documentation Structure]: *Phase 1 done*
   (2026-07, https://github.com/cuioss/TokenSheriff/pull/524[#524]) — the validation
   capability split under `doc/validation/` is executed and wired into the
-  xref:../README.adoc[Documentation Hub]. Phase 2 (client scaffolding) is deferred by
-  design until client work starts.
+  xref:../README.adoc[Documentation Hub]. Phase 2 (client scaffolding) was superseded —
+  the client document set landed under Plan 04 (`doc/client/`).
 * xref:03-commons/README.adoc[Plan 03 — Commons]: *Done*
   (2026-07-04, https://github.com/cuioss/TokenSheriff/pull/536[#536]) — the
   `de.cuioss.sheriff.token.commons.*` base layer (transport / error / events / metrics),
@@ -70,10 +74,13 @@ implementation plans plus the standing design decisions behind them.
 * xref:05-client-module/README.adoc[Plan 05 — Client Module]: *Done*
   (2026-07-05, https://github.com/cuioss/TokenSheriff/pull/538[#538]) — the wired-but-empty
   `token-sheriff-client` engine plus `token-sheriff-client-quarkus` extension/deployment
-  and BOM/reactor assembly exist; the `commons.transport` migration was folded in.
-* xref:06-implement/README.adoc[Plan 06 — Implement the Client]: *Next — not yet started.*
-  All dependencies (Plans 03–05) are satisfied; execution begins with Increment 1
-  (client config + discovery).
+  and BOM/reactor assembly were established; the `commons.transport` migration was folded in.
+  The skeleton has since been filled in by Plan 06.
+* xref:06-implement/README.adoc[Plan 06 — Implement the Client]: *Done* — the client engine
+  is implemented (discovery, authorization-code / client-credentials / refresh flows with
+  PKCE and PAR, client authentication, DPoP, token lifecycle, logout and userinfo; 60 source /
+  51 test files), and the `token-sheriff-client-quarkus` extension carries its CDI producer,
+  config mapping and exception mapper.
 
 [NOTE]
 ====

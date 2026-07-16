@@ -40,7 +40,6 @@ metrics.ifPresent(stats -> {
 Pipeline steps (in execution order):
 
 * `COMPLETE_VALIDATION` - End-to-end validation time
-* `TOKEN_FORMAT_CHECK` - Pre-pipeline string validation (empty/blank/size checks)
 * `TOKEN_PARSING` - Base64URL decoding and JSON structure parsing
 * `ISSUER_EXTRACTION` - Extract and validate issuer (iss) claim
 * `CACHE_LOOKUP` - Check cache before expensive operations (access tokens only)
@@ -50,14 +49,6 @@ Pipeline steps (in execution order):
 * `TOKEN_BUILDING` - Build typed token object from validated JWT
 * `CLAIMS_VALIDATION` - Token claims validation (exp, nbf, aud, iss)
 * `CACHE_STORE` - Store validated token in cache (access tokens only)
-
-Cross-cutting concerns:
-
-* `JWKS_OPERATIONS` - Key loading and caching operations (within signature validation)
-* `JWE_DECRYPTION` - JWE token decryption (within token parsing for 5-part JWE tokens)
-* `RETRY_ATTEMPT` - Individual HTTP retry attempt timing
-* `RETRY_COMPLETE` - Complete retry cycle with all attempts and delays
-* `RETRY_DELAY` - Exponential backoff delay timing between retries
 
 === Design Principles
 
@@ -157,7 +148,7 @@ See xref:UnitTesting.adoc[Unit Testing Guide] for test utilities via the `genera
 * Configure appropriate JWKS refresh intervals (300-3600 seconds)
 * Consider using the built-in access token cache
 
-Some operations (`TOKEN_FORMAT_CHECK`, `ISSUER_EXTRACTION`, `JWKS_OPERATIONS` with cached keys) execute in sub-microsecond time and may appear as zero when exported to milliseconds. This is expected behavior.
+Some operations (`ISSUER_EXTRACTION`, `CACHE_LOOKUP` with cached keys) execute in sub-microsecond time and may appear as zero when exported to milliseconds. This is expected behavior.
 
 == Memory Management
 

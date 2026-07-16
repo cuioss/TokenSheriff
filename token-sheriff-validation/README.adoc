@@ -1,6 +1,6 @@
 = Token-Sheriff Core
 :toc: left
-:toclevels: 2
+:toclevels: 3
 :source-highlighter: highlight.js
 :toc-title: Table of Contents
 :sectnums:
@@ -49,8 +49,11 @@ try {
 * **Type-Safe Tokens**: Strongly typed Access, ID, and Refresh tokens
 * **Security Pipeline**: Structure, signature, and semantic validation
 * **Flexible Key Management**: Static keys, JWKS endpoints, OpenID Connect
+* **JWE Decryption**: Encrypted-token (RFC 7516) support via `JweDecryptionConfig`
+* **DPoP Validation**: Sender-constrained tokens (RFC 9449)
 * **Built-in Caching**: Performance-optimized token validation
 * **Custom Claim Mapping**: Extensible claim processing
+* **Commons Base Layer**: The artifact also carries the `de.cuioss.sheriff.token.commons.*` transport / error / events / metrics layer (ArchUnit-enforced), consumed by validation and the client engine
 
 == Documentation
 

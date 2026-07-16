@@ -1,18 +1,17 @@
 = Plan 05 — Add the Client Module, Extension & Assembly (wired, empty)
-:toc: macro
+:toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
 [cols="1,3"]
 |===
-| Status     | *Done* — the wired-but-empty `token-sheriff-client` engine, `token-sheriff-client-quarkus` extension/deployment, and BOM/reactor assembly exist; the `commons.transport` migration was folded in. Ship date + PR in the xref:../README.adoc[status roll-up].
+| Status     | *Done* — the wired-but-empty `token-sheriff-client` engine, `token-sheriff-client-quarkus` extension/deployment, and BOM/reactor assembly were established; the `commons.transport` migration was folded in. The skeleton has since been filled in by xref:../06-implement/README.adoc[Plan 06]. Ship date + PR in the xref:../README.adoc[status roll-up].
 | Depends on | Plan 01 (rename → `token-sheriff-*`) + Plan 03 (the `commons` base layer inside `token-sheriff-validation` it builds on). Independent of Plan 04 (structure, not content).
 | Outcome    | The three in-repo pieces — *module, extension, assembly* — fully wired, building green, with *no functional content yet*.
 | Scope      | In-repo only. `portal-authentication-oauth` (`cui-portal-core`) is the *replacement target* — a design reference (xref:../decision-oidc-module.adoc[decision], xref:../04-client-spec/README.adoc[Plan 04]), *not* a deliverable of this plan. The portal adapter and the integration tests against it are *future work beyond Plans 01–06*.
 |===
-
-toc::[]
 
 == Goal
 

@@ -1,6 +1,7 @@
 = Commons Threat Model
 :toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
@@ -21,14 +22,16 @@ Each entry cites a source, a mitigation, and the covering `COMMONS-N` requiremen
 
 The commons layer:
 
-* Issues all outbound HTTP to OpenID Providers (discovery, JWKS; client-facing:
-  token / userinfo / revocation / introspection / end-session / PAR).
+* Issues the validation-side outbound HTTP to OpenID Providers (discovery, JWKS) and
+  provides the hardened transport primitives the client engine builds its *own*
+  back-channel HTTP on
+  (xref:../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]).
 * Follows URLs that are partly *IdP-controlled* (advertised via discovery).
 * Normalizes inbound IdP error responses and raises typed exceptions.
 * Is rendered to end-callers by the HTTP edges as `application/problem+json`.
 
-The relocated `wellknown` and `jwks.http` code is *in scope* — its egress and TLS paths are
-audited to the requirements below as part of the move into commons.
+The relocated `wellknown` and `jwks.http` code is *in scope* — its egress and TLS paths
+were audited to the requirements below during the move into commons.
 
 == Threat catalog
 
@@ -40,9 +43,9 @@ audited to the requirements below as part of the move into commons.
 | *SSRF via `jwks_uri` / discovery / userinfo / any IdP-advertised URL.* An attacker who
   controls or spoofs IdP metadata points a URL at an internal service (cloud metadata,
   link-local, loopback) to make the server fetch it.
-| HTTPS-only scheme restriction, host allow-list / egress policy, and blocking of
-  internal / link-local / loopback ranges before any advertised URL is fetched. Audit the
-  *existing* `wellknown` / `jwks` fetch code being relocated.
+| HTTPS-only scheme restriction, host allow-list / egress policy (`EgressPolicy`), and
+  blocking of internal / link-local / loopback ranges before any advertised URL is
+  fetched. The relocated `wellknown` / `jwks` fetch code was audited to this control.
 | https://owasp.org/www-community/attacks/Server_Side_Request_Forgery[OWASP SSRF], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180]
 | xref:requirements.adoc#COMMONS-3[COMMONS-3]
 
@@ -83,7 +86,7 @@ audited to the requirements below as part of the move into commons.
 == Adversarial test coverage
 
 Each transport threat is exercised by the `generators` test artifact's dispatchers in an
-*adversarial* mode (see xref:specification/transport.adoc#_adversarial_dispatchers[Transport
+*adversarial* mode (see xref:specification/transport.adoc#adversarial_dispatchers[Transport
 spec]):
 
 [cols="1,3", options="header"]

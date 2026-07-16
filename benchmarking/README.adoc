@@ -1,6 +1,6 @@
 = Token-Sheriff Benchmarking
-:toc:
-:toclevels: 2
+:toc: left
+:toclevels: 3
 :toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
@@ -165,6 +165,8 @@ See link:doc/workflow.adoc[Benchmark Workflow] for the complete process.
 
 * link:doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis (March 2026)] - WRK-based HTTP load testing with resource monitoring
 * link:doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis (March 2026)] - JMH library performance and validation pipeline breakdown
+* link:doc/Analysis-03.2026-JFR-Profiling.adoc[JFR Profiling Analysis (March 2026)] - JFR-based variance and hotspot analysis
+* link:doc/Analysis-03.2026-Latency-Decomposition.adoc[Latency Decomposition Analysis (March 2026)] - End-to-end latency breakdown
 
 == Development
 

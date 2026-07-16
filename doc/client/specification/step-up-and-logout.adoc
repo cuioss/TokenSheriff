@@ -1,6 +1,7 @@
 = Client Specification — Step-Up & RP-Initiated Logout
 :toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 

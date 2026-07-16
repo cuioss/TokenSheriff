@@ -139,7 +139,7 @@ The `gh-pages-ready/` directory contains a complete, self-contained report struc
 * **API Endpoints** (`api/` directory):
   - `benchmarks.json` - All benchmark results
   - `latest.json` - Latest run metadata
-  - `status.json` - Quality gate status
+  - `status.json` - Run status and last-run timestamp
 
 * **Historical Data** (`history/` directory):
   - Timestamped JSON files for trend analysis

@@ -1,6 +1,7 @@
 = Commons Specification — Transport
 :toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
@@ -9,10 +10,13 @@
 _Realizes xref:../requirements.adoc#COMMONS-1[COMMONS-1]–xref:../requirements.adoc#COMMONS-8[COMMONS-8].
 See xref:../threat-model.adoc[Threat Model] and xref:../architecture.adoc[Architecture]._
 
-`commons.transport` is the single owner of all outbound HTTP to an OpenID Provider. It
-*moves bytes* — it never decides whether a token is trustworthy. It owns TLS enforcement,
-SSRF defence, timeouts, response-size limits, retry/backoff, the `cui-http` client, and
-discovery / JWKS caching.
+`commons.transport` owns the validation-side outbound HTTP to an OpenID Provider —
+discovery and JWKS — and the shared transport primitives (TLS enforcement, SSRF egress
+policy, timeouts, response-size limits, retry/backoff, the `cui-http` client, and
+discovery / JWKS caching). It *moves bytes* — it never decides whether a token is
+trustworthy. The client engine builds its *own* back-channel HTTP (token, userinfo,
+revocation, PAR) on these primitives
+(xref:../../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]).
 
 == Endpoints
 
@@ -31,8 +35,9 @@ discovery / JWKS caching.
 |===
 
 Discovery and JWKS are *relocated existing code* (`wellknown`, `jwks.http`); the remaining
-six are *transport contracts* the OIDC client engine (xref:../../oidc/06-implement/README.adoc[Plan 06])
-will drive. All eight are exercised by dispatchers in the `generators` test artifact.
+six are *transport contracts* the OIDC client engine
+(xref:../../oidc/06-implement/README.adoc[Plan 06]) drives with its own back-channel HTTP.
+All eight are exercised by dispatchers in the `generators` test artifact.
 
 == Security controls
 

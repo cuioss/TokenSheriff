@@ -107,7 +107,7 @@ public class DynamicTokenValidator {
     private volatile TokenValidator validator;
 
     public void reloadIssuers() {
-        TokenValidator.Builder builder = TokenValidator.builder();
+        TokenValidator.TokenValidatorBuilder builder = TokenValidator.builder();
         List<IssuerConfig> issuers = loadIssuersFromDatabase();
         for (IssuerConfig issuer : issuers) {
             builder.issuerConfig(issuer);

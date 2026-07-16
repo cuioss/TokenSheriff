@@ -1,4 +1,8 @@
 = Token Validation Capability
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
 :source-highlighter: highlight.js
 
 The *passive* core of Token-Sheriff: a multi-issuer *JWT validation library* for resource
@@ -53,7 +57,7 @@ a consumer that needs only validation (e.g. `nifi-extensions`) pulls a single ar
 | MP-JWT 2.1 integration and rationale.
 
 | xref:specification/token-decryption.adoc[Spec — Token decryption]
-| Future JWE / encrypted-token support.
+| JWE / encrypted-token support (RFC 7516).
 
 | xref:specification/multi-idp-testing.adoc[Spec — Multi-IdP testing]
 | Testing against multiple OIDC providers.

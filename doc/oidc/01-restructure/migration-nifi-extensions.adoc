@@ -1,6 +1,7 @@
 = Migration Guide: nifi-extensions → Token-Sheriff
-:toc: macro
+:toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
@@ -10,8 +11,6 @@
 | Context  | xref:README.adoc[Plan 01 — Restructure]
 | Status   | *Done — executed and merged* via https://github.com/cuioss/nifi-extensions/pull/398[nifi-extensions#398] against Token-Sheriff `0.9.0` (verified: coordinates, imports, config keys, `generators` classifier — zero functional residuals). Kept as reference for any further consumer.
 |===
-
-toc::[]
 
 == What changes
 

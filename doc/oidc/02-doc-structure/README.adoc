@@ -1,17 +1,16 @@
 = Plan 02 — Documentation Structure for the Commons & Client Capabilities
-:toc: macro
+:toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
 [cols="1,3"]
 |===
-| Status     | *Phase 1 done* — the validation capability split shipped via https://github.com/cuioss/TokenSheriff/pull/524[#524] (2026-07). Phase 2 (client scaffolding) deferred by design until client work starts.
+| Status     | *Phase 1 done* — the validation capability split shipped via https://github.com/cuioss/TokenSheriff/pull/524[#524] (2026-07). Phase 2 (client scaffolding) was superseded: the client document set landed under xref:../04-client-spec/README.adoc[Plan 04] (`doc/client/`), and the client module docs plus global log-registry entries followed with Plans 05/06.
 | Depends on | Plan 01 — Restructure (rename); run after it to pay link churn once
 | Scope      | Reshape `doc/` so validation, Commons and the coming OIDC client are peer capabilities, with a shared cross-cutting area
 |===
-
-toc::[]
 
 == Goal
 

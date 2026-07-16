@@ -1,4 +1,8 @@
 = Client Capability
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
 :source-highlighter: highlight.js
 
 The *active* OIDC side of Token-Sheriff: a server-side *confidential-client engine* that
@@ -7,9 +11,9 @@ Connect flows on top of the xref:../commons/requirements.adoc[commons] transport
 engine a *Backend-For-Frontend (BFF)* is built on — *it is not itself a BFF*.
 
 The set is documented *spec-first*: the requirements, threat model and specifications below
-lead; the functional code lands protocol-by-protocol under
-xref:../oidc/06-implement/README.adoc[Plan 06]. The `token-sheriff-client` module currently
-exists as a wired, empty skeleton (xref:../oidc/05-client-module/README.adoc[Plan 05]).
+are normative. The `token-sheriff-client` module is implemented — its structure was
+established by xref:../oidc/05-client-module/README.adoc[Plan 05] and the functional code
+delivered protocol-by-protocol under xref:../oidc/06-implement/README.adoc[Plan 06].
 
 == Scope at a glance
 
@@ -64,7 +68,7 @@ no signature policy (the seam is detailed in xref:architecture.adoc[Architecture
 | The server-side lifecycle delta — validation, storage, refresh, revocation, sender-constraint preservation (`CLIENT-15`–`CLIENT-20`).
 
 | xref:specification/test-strategy.adoc[Spec — Test strategy]
-| The two-layer verification model (MockWebServer unit + real-Keycloak integration), the adversarial coverage, and the `CLIENT-N` → threat → test traceability matrix (`CLIENT-22`). Executed by xref:../oidc/06-implement/README.adoc[Plan 06].
+| The two-layer verification model (MockWebServer unit + real-Keycloak integration), the adversarial coverage, and the `CLIENT-N` → threat → test traceability matrix (`CLIENT-22`). Executed under xref:../oidc/06-implement/README.adoc[Plan 06].
 |===
 
 == See also

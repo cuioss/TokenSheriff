@@ -1,6 +1,7 @@
 = Client Specification — Test Strategy
 :toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
@@ -117,9 +118,8 @@ structure — the same layout as `token-sheriff-validation` (`@DisplayName`, `@N
 
 The OP simulators are *not re-authored*: `token-sheriff-validation` already publishes its test
 utilities as a *test-jar with classifier `generators`* (its `maven-jar-plugin` `test-jar`
-goal, xref:../../oidc/03-commons/README.adoc[Plan 03]). The client test module declares that
-test-jar dependency (a xref:../../oidc/06-implement/README.adoc[Plan 06] wiring step — the
-`token-sheriff-client` pom does not yet declare it) and reuses:
+goal, xref:../../oidc/03-commons/README.adoc[Plan 03]). The `token-sheriff-client` pom
+declares that test-jar dependency (`classifier` `generators`, `scope` `test`) and reuses:
 
 * the OP-endpoint dispatchers — `TokenDispatcher`, `UserInfoDispatcher`,
   `RevocationDispatcher`, `IntrospectionDispatcher`, `EndSessionDispatcher`, `ParDispatcher`,

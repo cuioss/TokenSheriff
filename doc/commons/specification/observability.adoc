@@ -1,6 +1,7 @@
 = Commons Specification — Observability
 :toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
@@ -14,8 +15,8 @@ dependency, and are wired to Micrometer by each Quarkus extension.
 
 == Security events (`commons.events`)
 
-`SecurityEventCounter` and the security-event types move into `commons.events` so validation
-and the future client share one event surface (xref:../requirements.adoc#COMMONS-13[COMMONS-13]).
+`SecurityEventCounter` and the security-event types live in `commons.events` so validation
+and the client share one event surface (xref:../requirements.adoc#COMMONS-13[COMMONS-13]).
 
 * `SecurityEventCounter` — a thread-safe, highly concurrent counter keyed by event type; no
   Micrometer dependency (so the base layer stays dependency-light).
