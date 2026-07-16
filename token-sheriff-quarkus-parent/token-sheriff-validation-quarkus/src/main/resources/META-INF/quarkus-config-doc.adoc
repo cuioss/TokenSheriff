@@ -115,9 +115,9 @@ belongs to this Resource Server.
 |===
 |Property |Type |Default |Description
 |`sheriff.token.jwe.decryption-key-path` |String |— |Path to a PKCS#8 PEM file with the decryption private key
-|`sheriff.token.jwe.decryption-key-id` |String |— |Key id (`kid`) associated with the PEM key
+|`sheriff.token.jwe.decryption-key-id` |String |— |Key ID (`kid`) associated with the PEM key
 |`sheriff.token.jwe.decryption-keys.<kid>` |String |— |Additional per-`kid` PEM key paths (rotation)
-|`sheriff.token.jwe.default-key-id` |String |— |Default key id when multiple keys are configured
+|`sheriff.token.jwe.default-key-id` |String |— |Default key ID when multiple keys are configured
 |`sheriff.token.jwe.keystore-path` |String |— |Keystore-based key configuration (alternative to PEM)
 |`sheriff.token.jwe.keystore-password` |String |— |Keystore password
 |`sheriff.token.jwe.key-alias` |String |— |Keystore key alias

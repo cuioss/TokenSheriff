@@ -223,7 +223,7 @@ Tests use `@ParameterizedTest` with `@MethodSource` to run against multiple OIDC
 * **bearer/BearerAuthSpecIT**: Bearer token producers and interceptors (Keycloak-only — requires ROLES, GROUPS, CUSTOM_SCOPES)
 * **security/DpopSpecIT**: DPoP RFC 9449 validation (parameterized over DPoP-capable providers)
 * **security/JweDecryptionSpecIT**: JWE RFC 7516 decryption (parameterized over JWE-capable providers)
-* **client/***: Client-engine specs against a real Keycloak — discovery (`DiscoverySpecIT`), `client_credentials` (`ClientCredentialsSpecIT`), client authentication (`ClientAuthSpecIT`), refresh with rotation (`RefreshSpecIT`), authorization-code + PKCE (`AuthCodePkceSpecIT`), mix-up defence (`MixUpSpecIT`), PAR (`ParSpecIT`), userinfo (`UserInfoSpecIT`), DPoP-bound tokens (`DpopBoundSpecIT`), revocation (`RevocationSpecIT`), RP-initiated logout (`LogoutSpecIT`), step-up (`StepUpSpecIT`), and the full-flow E2E (`FullFlowE2EIT`)
+* `client/**`: Client-engine specs against a real Keycloak — discovery (`DiscoverySpecIT`), `client_credentials` (`ClientCredentialsSpecIT`), client authentication (`ClientAuthSpecIT`), refresh with rotation (`RefreshSpecIT`), authorization-code + PKCE (`AuthCodePkceSpecIT`), mix-up defence (`MixUpSpecIT`), PAR (`ParSpecIT`), userinfo (`UserInfoSpecIT`), DPoP-bound tokens (`DpopBoundSpecIT`), revocation (`RevocationSpecIT`), RP-initiated logout (`LogoutSpecIT`), step-up (`StepUpSpecIT`), and the full-flow E2E (`FullFlowE2EIT`)
 * **health/HealthCheckIntegrationIT**: Health endpoint validation
 * **health/HealthCheckResponsivenessIT**: Health endpoint responsiveness testing
 * **api/ApiValidationSpecIT**: API input validation (provider-independent)
