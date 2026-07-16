@@ -22,7 +22,7 @@ jobs:
     with:
       report-name: token-sheriff-multi-idp-tests
       maven-args-input: |
-        install -DskipTests -DskipITs -pl token-sheriff-validation,token-sheriff-quarkus-parent/token-sheriff-validation-quarkus,token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment -am
+        install -DskipTests -DskipITs -pl token-sheriff-validation,token-sheriff-client,token-sheriff-quarkus-parent/token-sheriff-validation-quarkus,token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment,token-sheriff-quarkus-parent/token-sheriff-client-quarkus,token-sheriff-quarkus-parent/token-sheriff-client-quarkus-deployment -am
         verify -Pmulti-idp-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
       reports-folder: |
         token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/target/failsafe-reports
