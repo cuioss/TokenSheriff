@@ -372,8 +372,8 @@ The engine MUST be pure Java, depending on `token-sheriff-validation` (which tra
 provides the commons base layer) — no CDI, no MicroProfile Config, no JAX-RS in the engine
 itself. Framework bindings (Quarkus, and any RESTEasy/portal adapter) sit *outside* the
 engine, so the engine is reusable across framework contexts. The `client → validation`
-dependency direction is enforced by Maven once the module exists
-(xref:../oidc/05-client-module/README.adoc[Plan 05]).
+dependency direction is enforced by Maven — the `token-sheriff-client` module (created by
+xref:../oidc/05-client-module/README.adoc[Plan 05]) declares the dependency.
 
 * Source: xref:../oidc/decision-oidc-module.adoc[Module Architecture decision] (client → validation, never the reverse).
 

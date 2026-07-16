@@ -16,9 +16,13 @@ xref:threat-model.adoc[threat], and reflects the *most-secure current subset* pr
 direction, Browser-Based-Apps BFF guidance, FAPI 2.0 where it raises the bar), and no
 capability included merely because "the spec allows it".
 
-The checklist is organized by aspect. Transport hardening (TLS, SSRF, timeouts, JWKS
-caching) is *owned by* xref:../commons/requirements.adoc[commons] (`COMMONS-1`–`COMMONS-8`) —
-the client uses it and adds no HTTP of its own; the transport row records that boundary.
+The checklist is organized by aspect. Transport hardening *primitives* (TLS enforcement,
+timeouts, bounded reads, JWKS caching) are *owned by*
+xref:../commons/requirements.adoc[commons] (`COMMONS-1`–`COMMONS-8`); the client drives its
+*own* OIDC/OAuth back-channel HTTP on those primitives and applies an in-module egress/path
+control before each fetch (see
+xref:architecture.adoc#_owned_back_channel_http[Owned back-channel HTTP]); the transport rows
+record that boundary.
 
 == Retrieval & flow
 
@@ -124,15 +128,18 @@ the client uses it and adds no HTTP of its own; the transport row records that b
 | xref:requirements.adoc#CLIENT-19[CLIENT-19]
 |===
 
-== Transport (owned by commons — boundary note)
+== Transport (commons primitives — boundary note)
 
 [cols="3,1", options="header"]
 |===
 | Practice | Owner
 
-| Enforced TLS 1.2+, SSRF defence on advertised URLs, connect/read timeouts and response-size
-  limits, JWKS cache / rotation. *The client uses the commons transport and adds none of its
-  own HTTP.*
+| TLS 1.2+ enforcement, connect/read timeouts, response-size limits and JWKS cache / rotation
+  come from the `cui-http` transport primitives owned by commons. *The client builds its own
+  `HttpHandler`s for the OIDC/OAuth back channel* (discovery, token, userinfo, revocation,
+  PAR) and applies an in-module egress/path validation before each fetch
+  (xref:architecture.adoc#_owned_back_channel_http[Owned back-channel HTTP]); JWKS retrieval
+  stays with the commons-backed validation pipeline.
 | xref:../commons/requirements.adoc#COMMONS-1[COMMONS-1]–xref:../commons/requirements.adoc#COMMONS-8[COMMONS-8]
 
 | HTTP-surfaced client errors render as `application/problem+json` (RFC 9457) at the edge; the
