@@ -82,7 +82,7 @@ public class TokenEndpointClient {
      * normalizes the response.
      *
      * @param tokenEndpoint    the absolute token endpoint URL (from discovery); must be TLS unless
-     *                         {@link ClientConfiguration#isAllowInsecureHttp()} is set
+     *                         {@link ClientConfiguration#allowInsecureHttp} is set
      * @param formParameters   the form-encoded request body parameters (e.g. {@code grant_type})
      * @param requestHeaders   additional request headers (e.g. an {@code Authorization} header)
      * @return the normalized token response
@@ -107,7 +107,7 @@ public class TokenEndpointClient {
      * add no header (the binding is transport-level) and never trigger a nonce retry.
      *
      * @param tokenEndpoint    the absolute token endpoint URL (from discovery); must be TLS unless
-     *                         {@link ClientConfiguration#isAllowInsecureHttp()} is set
+     *                         {@link ClientConfiguration#allowInsecureHttp} is set
      * @param formParameters   the form-encoded request body parameters (e.g. {@code grant_type})
      * @param requestHeaders   additional request headers (e.g. an {@code Authorization} header)
      * @param senderConstraint the DPoP/mTLS sender-constraint to apply, or {@code null} for a plain

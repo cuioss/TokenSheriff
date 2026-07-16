@@ -30,7 +30,7 @@ import java.util.Set;
  * <p>
  * Given the client's configured authentication strategies and the AS
  * {@code token_endpoint_auth_methods_supported} metadata (RFC 8414), the selector picks the strategy
- * with the highest {@link de.cuioss.sheriff.token.client.config.ClientAuthMethod#getStrength()
+ * with the highest {@link de.cuioss.sheriff.token.client.config.ClientAuthMethod#strength
  * strength} that the AS supports — preferring {@code private_key_jwt} over a shared secret, and
  * never silently downgrading to a shared secret where a stronger method is both configured and
  * advertised. When the AS advertises no configured method, selection fails closed.

@@ -49,7 +49,7 @@ import java.util.Objects;
  * the commons {@link ParserConfig} DSL-JSON instance (secure limits, native-image friendly).
  * <p>
  * <strong>Security:</strong> a non-TLS issuer is rejected unless
- * {@link ClientConfiguration#isAllowInsecureHttp()} is set; the discovery document's
+ * {@link ClientConfiguration#allowInsecureHttp} is set; the discovery document's
  * {@code issuer} must match the configured issuer (OpenID Connect Discovery §4.3, a mix-up
  * precaution); and the availability of PKCE {@code S256} is recorded so the interactive
  * {@code authorization_code} flow can refuse a downgrade ({@code CLIENT-2}).
