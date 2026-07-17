@@ -6,16 +6,33 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# shellcheck source=lib-docker-compose.sh
+source "${SCRIPT_DIR}/lib-docker-compose.sh"
+
 echo "Stopping JWT Integration Tests Docker containers"
 
 cd "${PROJECT_DIR}"
+
+# This runs at Maven's pre-clean phase as a best-effort cleanup. If Docker isn't
+# available or the daemon isn't running there is nothing to stop, so exit
+# cleanly rather than failing `clean install`.
+COMPOSE_BASE="$(resolve_compose_cmd || true)"
+if [[ -z "$COMPOSE_BASE" ]]; then
+    echo "Docker Compose not available — nothing to stop, skipping cleanup."
+    exit 0
+fi
+if ! docker_daemon_up; then
+    echo "Docker daemon not running — nothing to stop, skipping cleanup."
+    exit 0
+fi
 
 # Use the docker-compose.yml file (only file available)
 COMPOSE_FILE="docker-compose.yml"
 MODE="native"
 
 # Build compose command with optional overlay (using array for safe argument handling)
-COMPOSE_CMD=("docker" "compose" "-f" "$COMPOSE_FILE")
+read -ra COMPOSE_CMD <<< "$COMPOSE_BASE"
+COMPOSE_CMD+=("-f" "$COMPOSE_FILE")
 if [[ -n "$COMPOSE_OVERRIDE" ]]; then
     echo "Using compose overlay: $COMPOSE_OVERRIDE"
     COMPOSE_CMD+=("-f" "$COMPOSE_OVERRIDE")

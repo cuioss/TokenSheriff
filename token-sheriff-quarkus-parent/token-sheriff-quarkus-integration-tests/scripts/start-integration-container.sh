@@ -7,9 +7,23 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 ROOT_DIR="$(dirname "$(dirname "$PROJECT_DIR")")"
 
+# shellcheck source=lib-docker-compose.sh
+source "${SCRIPT_DIR}/lib-docker-compose.sh"
+
 echo "Starting JWT Integration Tests with Docker Compose"
 echo "Project directory: ${PROJECT_DIR}"
 echo "Root directory: ${ROOT_DIR}"
+
+# Resolve the compose command (docker compose plugin vs standalone docker-compose)
+COMPOSE_BASE="$(resolve_compose_cmd || true)"
+if [[ -z "$COMPOSE_BASE" ]]; then
+    echo "Error: Docker Compose not available (neither 'docker compose' nor 'docker-compose')"
+    exit 1
+fi
+if ! docker_daemon_up; then
+    echo "Error: Docker daemon not running — start Docker/Rancher Desktop first"
+    exit 1
+fi
 
 cd "${PROJECT_DIR}"
 
@@ -76,9 +90,9 @@ echo "Quarkus logs will be written to: ${LOG_TARGET_DIR}/quarkus.log"
 if [[ -n "$COMPOSE_OVERRIDE" ]]; then
     mkdir -p "${PROJECT_DIR}/target/jfr-output"
     echo "Using compose overlay: $COMPOSE_OVERRIDE"
-    (cd "${PROJECT_DIR}" && docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE" up -d)
+    (cd "${PROJECT_DIR}" && $COMPOSE_BASE -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE" up -d)
 else
-    (cd "${PROJECT_DIR}" && docker compose -f "$COMPOSE_FILE" up -d)
+    (cd "${PROJECT_DIR}" && $COMPOSE_BASE -f "$COMPOSE_FILE" up -d)
 fi
 
 # Wait for Keycloak to be ready first
@@ -136,7 +150,7 @@ if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
     echo "Running Zitadel setup script..."
     # Copy PAT from Docker container to host-accessible location
     # Retry because Zitadel may still be writing the PAT file after health check passes
-    PAT_CONTAINER=$(docker compose ps -q zitadel)
+    PAT_CONTAINER=$($COMPOSE_BASE ps -q zitadel)
     mkdir -p /tmp/zitadel-admin-pat
     for i in {1..10}; do
         if docker cp "${PAT_CONTAINER}:/machinekey/zitadel-admin-sa.pat" /tmp/zitadel-admin-pat/ 2>/dev/null; then
@@ -229,7 +243,7 @@ if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
 fi
 
 # Extract native startup time from logs
-NATIVE_STARTUP=$(docker compose logs token-sheriff-integration-tests 2>/dev/null | grep "started in" | sed -n 's/.*started in \([0-9.]*\)s.*/\1/p' | tail -1)
+NATIVE_STARTUP=$($COMPOSE_BASE logs token-sheriff-integration-tests 2>/dev/null | grep "started in" | sed -n 's/.*started in \([0-9.]*\)s.*/\1/p' | tail -1)
 if [ ! -z "$NATIVE_STARTUP" ]; then
     echo "Native app startup: ${NATIVE_STARTUP}s (application only)"
 fi
