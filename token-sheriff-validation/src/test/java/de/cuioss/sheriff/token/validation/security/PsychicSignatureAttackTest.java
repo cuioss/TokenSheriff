@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,9 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Base64;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests for validating protection against the "Psychic Signature" vulnerability (CVE-2022-21449).
@@ -91,9 +89,9 @@ class PsychicSignatureAttackTest {
         // TokenValidator is Closeable and schedules a background cache-eviction task; close it on every
         // path (including assertion failure) so the 3 invocations of this helper do not leak daemon threads.
         try (TokenValidator tokenValidator = TokenValidator.builder()
-                .parserConfig(ParserConfig.builder().build())
-                .issuerConfig(issuerConfig)
-                .build()) {
+                     .parserConfig(ParserConfig.builder().build())
+                     .issuerConfig(issuerConfig)
+                     .build()) {
 
             String[] parts = tokenHolder.getRawToken().split("\\.");
             byte[] zeroSignature = new byte[signatureLength];

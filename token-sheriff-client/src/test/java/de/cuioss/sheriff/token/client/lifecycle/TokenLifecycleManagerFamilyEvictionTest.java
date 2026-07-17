@@ -44,7 +44,7 @@ class TokenLifecycleManagerFamilyEvictionTest {
     @Test
     @DisplayName("Should evict the least-recently-used family once the cap is exceeded")
     @SuppressWarnings("unchecked")
-    void shouldBoundFamilyMapGrowth() throws ReflectiveOperationException {
+    void shouldBoundFamilyMapGrowth() throws Exception {
         var manager = new TokenLifecycleManager(new InMemoryTokenStore(), new RefreshScheduler());
 
         int cap = readCap();

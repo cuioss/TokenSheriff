@@ -155,6 +155,10 @@
                             <groupId>io.quarkus</groupId>
                             <artifactId>quarkus-extension-processor</artifactId>
                         </path>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </path>
                     </annotationProcessorPaths>
                     <!-- Use release instead of source/target to properly handle modules -->
                     <release>21</release>

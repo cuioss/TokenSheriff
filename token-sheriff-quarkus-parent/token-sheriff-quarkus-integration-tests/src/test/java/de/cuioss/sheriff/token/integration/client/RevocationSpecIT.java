@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 CUI-OpenSource-Software (info@cuioss.de)
+ * Copyright © 2022 CUI-OpenSource-Software (info@cuioss.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.HashMap;
@@ -116,7 +117,7 @@ class RevocationSpecIT extends BaseIntegrationTest {
             }
         }};
         SSLContext context = SSLContext.getInstance("TLS");
-        context.init(null, trustAll, new java.security.SecureRandom());
+        context.init(null, trustAll, new SecureRandom());
         return context;
     }
 }

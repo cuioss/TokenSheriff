@@ -49,7 +49,7 @@ import java.util.Objects;
  */
 public record RotationResult(AccessTokenContent accessToken, String refreshToken,
 @Nullable
-    String idToken, long accessTokenExpiresInSeconds, boolean rotated) {
+String idToken, long accessTokenExpiresInSeconds, boolean rotated) {
 
     /**
      * @param accessToken               the validated access token content; must not be {@code null}

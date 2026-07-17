@@ -283,7 +283,7 @@ public class TokenLifecycleManager {
                     idTokenValidationBridge, clientAuthentication);
             mine.complete(refreshed);
             return refreshed;
-        } catch (RuntimeException failure) {
+        } /*~~(TODO: Catch specific not RuntimeException. Suppress: // cui-rewrite:disable InvalidExceptionUsageRecipe)~~>*/ catch (RuntimeException failure) {
             mine.completeExceptionally(failure);
             throw failure;
         } finally {
@@ -336,7 +336,7 @@ public class TokenLifecycleManager {
         metadata.getRevocationEndpoint().ifPresent(endpoint -> {
             try {
                 revocationClient.revoke(endpoint, reusedToken, REFRESH_TOKEN_TYPE_HINT, clientAuthentication);
-            } catch (RuntimeException revocationFailure) {
+            } /*~~(TODO: Catch specific not RuntimeException. Suppress: // cui-rewrite:disable InvalidExceptionUsageRecipe)~~>*/ catch (RuntimeException revocationFailure) {
                 // Revocation is best-effort: a failed AS revocation must not stop the client-side
                 // fail-closed store clear below, nor mask the reuse signal to the caller.
                 LOGGER.debug(revocationFailure, "RFC 7009 revocation on detected reuse failed: %s",
