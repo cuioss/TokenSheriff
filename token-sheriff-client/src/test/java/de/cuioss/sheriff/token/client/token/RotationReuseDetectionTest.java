@@ -168,6 +168,39 @@ class RotationReuseDetectionTest {
     }
 
     @Test
+    @DisplayName("Should still fail closed and propagate reuse when the AS revocation itself throws")
+    void shouldFailClosedWhenRevocationThrows(URIBuilder uriBuilder) {
+        ClientConfiguration config = config();
+        ProviderMetadata metadata = metadata(uriBuilder);
+        RefreshFlow flow = refreshFlow(config);
+        var revocationClient = new ThrowingRevocationClient(config);
+        TokenLifecycleManager manager = manager();
+        String session = Generators.letterStrings(10, 20).next();
+        String rt1 = Generators.letterStrings(20, 40).next();
+        String rt2 = Generators.letterStrings(20, 40).next();
+
+        manager.store(session, bearerBundle(rt1, null));
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), rt2, null, 300));
+        manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth(config));
+
+        // Roll the store back to the now-superseded token while the family stays at rt2, then present it.
+        manager.store(session, bearerBundle(rt1, null));
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(),
+                Generators.letterStrings(20, 40).next(), null, 300));
+        var clientAuth = clientAuth(config);
+
+        assertThrows(ClientProtocolException.class,
+                () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth),
+                "a best-effort revocation failure must not mask the reuse signal to the caller");
+
+        assertAll("fail-closed despite revocation failure",
+                () -> assertTrue(revocationClient.attempted(rt1),
+                        "the RFC 7009 revocation of the reused token was attempted"),
+                () -> assertTrue(manager.get(session).isEmpty(),
+                        "the store is still cleared fail-closed when the AS revocation throws"));
+    }
+
+    @Test
     @DisplayName("Should collapse a concurrent refresh onto one redeem without revoking the family")
     void shouldNotMisclassifyBenignRaceAsReuse(URIBuilder uriBuilder) throws Exception {
         ClientConfiguration config = config();
@@ -341,6 +374,31 @@ class RotationReuseDetectionTest {
 
         boolean revokedAny() {
             return !revokedTokens.isEmpty();
+        }
+    }
+
+    /**
+     * Records the attempted revocation and then throws, so a wired reuse test can assert the
+     * best-effort {@code catch (RuntimeException)} in {@code revokeReusedFamily} still fails closed:
+     * the reuse signal propagates and the store is cleared even when the RFC 7009 revocation fails.
+     */
+    static final class ThrowingRevocationClient extends RevocationClient {
+
+        private final List<String> attemptedTokens = Collections.synchronizedList(new ArrayList<>());
+
+        ThrowingRevocationClient(ClientConfiguration configuration) {
+            super(configuration);
+        }
+
+        @Override
+        public void revoke(String revocationEndpoint, String token, String tokenTypeHint,
+                ClientAuthentication clientAuthentication) {
+            attemptedTokens.add(token);
+            throw new IllegalStateException("simulated AS revocation failure");
+        }
+
+        boolean attempted(String token) {
+            return attemptedTokens.contains(token);
         }
     }
 
