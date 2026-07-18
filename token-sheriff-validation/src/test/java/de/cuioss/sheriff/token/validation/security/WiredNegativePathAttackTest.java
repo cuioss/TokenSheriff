@@ -57,7 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * re-signed so a naive verifier would accept it, and the cross-issuer substitution uses a real signature
  * from the wrong key rather than a corrupted one).
  * <p>
- * The six defenses proven on the wired path:
+ * The defenses proven on the wired path:
  * <ul>
  *   <li>VTEST-2 — HMAC/RSA algorithm confusion (HS256 signed over the RSA public key)</li>
  *   <li>VTEST-3 — JWE decompression bomb ({@code zip:"DEF"} inflating past the 256&nbsp;KB ceiling)</li>
@@ -65,13 +65,23 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  *   <li>VTEST-7 — JWE key-management algorithm allow-list ({@code RSA1_5})</li>
  *   <li>VTEST-8 — DPoP sender-binding (cnf.jkt mismatch, stale iat, and HS256 proof)</li>
  *   <li>VTEST-9 — embedded-JWK header injection with a re-signed token</li>
+ *   <li>VTEST-10 — {@code alg} case-variant of "none" ({@code NoNe}) rejected by the allow-list</li>
+ *   <li>VTEST-11 — over-depth JSON payload rejected during parsing (Nimbus CVE-2025-53864 class)</li>
+ *   <li>VTEST-12 — cross-audience token rejected on {@code aud} (Argo CD CVE-2023-22482 class)</li>
+ *   <li>VTEST-13 — JWE header downgrade {@code RSA-OAEP}&rarr;{@code RSA1_5} refused before decryption</li>
+ *   <li>VTEST-14 — RSA-OAEP decryption failures are indistinguishable (Bleichenbacher-oracle class)</li>
+ *   <li>VTEST-15 — client_id&rarr;azp fallback off by default; a token omitting azp is rejected</li>
  * </ul>
+ * <p>
+ * VTEST-10 through VTEST-15 were derived from the real-world CVEs catalogued in the
+ * {@code doc/validation/cve-lessons-register.adoc} hardening backlog (items B1–B4).
  */
 @DisplayName("Wired Negative-Path Attack Tests (H4)")
 class WiredNegativePathAttackTest {
 
     private static final String TEST_ISSUER = "https://wired-attack-test.example.com";
     private static final String TEST_AUDIENCE = "test-audience";
+    private static final String EXPECTED_CLIENT_ID = "wired-attack-client";
     private static final String DEFAULT_KEY_ID = InMemoryKeyMaterialHandler.DEFAULT_KEY_ID;
     private static final String RESOURCE_URI = "https://resource.example.org/protectedresource";
     private static final String RESOURCE_METHOD = "GET";
@@ -214,6 +224,150 @@ class WiredNegativePathAttackTest {
                 "A token carrying an embedded JWK header must be rejected regardless of a valid re-signature");
     }
 
+    @Test
+    @DisplayName("VTEST-10: an alg header case-variant of \"none\" is rejected as UNSUPPORTED_ALGORITHM")
+    void shouldRejectNoneAlgorithmCaseVariant() {
+        // The allow-list decides acceptance by exact membership, so every case-variant of "none"
+        // (NoNe, nOnE, …) fails by construction — there is no case-insensitive block-list to bypass.
+        long now = System.currentTimeMillis() / 1000;
+        String headerJson = "{\"alg\":\"NoNe\",\"kid\":\"%s\"}".formatted(DEFAULT_KEY_ID);
+        String payloadJson = "{\"iss\":\"%s\",\"sub\":\"attacker\",\"aud\":\"%s\",\"iat\":%d,\"exp\":%d}".formatted(
+                TEST_ISSUER, TEST_AUDIENCE, now, now + 3600);
+        String forged = base64Url(headerJson.getBytes(StandardCharsets.UTF_8)) + "."
+                + base64Url(payloadJson.getBytes(StandardCharsets.UTF_8)) + ".AAAA";
+
+        TokenValidator validator = plainValidator();
+        var request = AccessTokenRequest.of(forged);
+        var ex = assertThrows(TokenValidationException.class, () -> validator.createAccessToken(request));
+        assertEquals(EventType.UNSUPPORTED_ALGORITHM, ex.getEventType(),
+                "A case-variant of the \"none\" algorithm must be rejected as unsupported");
+    }
+
+    @Test
+    @DisplayName("VTEST-11: a payload nested past maxNestingDepth is rejected as JSON_STRUCTURE_BOUNDS_EXCEEDED")
+    void shouldRejectOverDepthJsonPayload() {
+        // A validly-signed token whose payload nests deeper than the configured limit — so a naive
+        // verifier that trusted the signature would still be forced to parse the bomb. Token-Sheriff
+        // bounds nesting independently of DSL-JSON, the check Nimbus JOSE+JWT lacked (CVE-2025-53864).
+        long now = System.currentTimeMillis() / 1000;
+        String payloadJson = "{\"iss\":\"%s\",\"sub\":\"s\",\"aud\":\"%s\",\"iat\":%d,\"exp\":%d,\"n\":%s}".formatted(
+                TEST_ISSUER, TEST_AUDIENCE, now, now + 3600, deeplyNested(6));
+        String headerJson = "{\"alg\":\"RS256\",\"kid\":\"%s\"}".formatted(DEFAULT_KEY_ID);
+        String signingInput = base64Url(headerJson.getBytes(StandardCharsets.UTF_8)) + "."
+                + base64Url(payloadJson.getBytes(StandardCharsets.UTF_8));
+        String forged = signingInput + "."
+                + base64Url(rsaSign(signingInput, InMemoryKeyMaterialHandler.getDefaultPrivateKey()));
+
+        TokenValidator validator = lowDepthValidator(3);
+        var request = AccessTokenRequest.of(forged);
+        var ex = assertThrows(TokenValidationException.class, () -> validator.createAccessToken(request));
+        assertEquals(EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED, ex.getEventType(),
+                "A payload nested beyond maxNestingDepth must fail closed during parsing");
+    }
+
+    @Test
+    @DisplayName("VTEST-12: an access token whose aud targets a different service is rejected as AUDIENCE_MISMATCH")
+    void shouldRejectCrossAudienceToken() {
+        // Same trusted issuer and a genuine signature, but the audience names a different resource
+        // server — the Argo CD (CVE-2023-22482) / Symfony (CVE-2026-45069) class. Must be rejected on
+        // the aud claim, never accepted on the strength of the signature alone.
+        String forged = Jwts.builder()
+                .header().keyId(DEFAULT_KEY_ID).and()
+                .issuer(TEST_ISSUER)
+                .subject("legit-user")
+                .audience().add("https://other-service.example.com").and()
+                .issuedAt(Date.from(Instant.now()))
+                .expiration(Date.from(Instant.now().plusSeconds(3600)))
+                .signWith(InMemoryKeyMaterialHandler.getDefaultPrivateKey(), Jwts.SIG.RS256)
+                .compact();
+
+        TokenValidator validator = plainValidator(); // expectedAudience = TEST_AUDIENCE
+        var request = AccessTokenRequest.of(forged);
+        var ex = assertThrows(TokenValidationException.class, () -> validator.createAccessToken(request));
+        assertEquals(EventType.AUDIENCE_MISMATCH, ex.getEventType(),
+                "A validly-signed token for a different audience must be rejected on the aud claim");
+    }
+
+    @Test
+    @DisplayName("VTEST-13: a JWE header downgraded from RSA-OAEP to RSA1_5 is rejected as JWE_UNSUPPORTED_ALGORITHM")
+    void shouldRejectJweHeaderAlgorithmDowngrade() {
+        // jose4j GHSA-jgvc-jfgh-rjvv: the attacker rewrites an RSA-OAEP header to RSA1_5 to reach a
+        // padding oracle. Token-Sheriff validates the header alg against the allow-list before any
+        // decryption, so the downgrade is refused rather than silently honored.
+        KeyPair jweKeyPair = JweTestTokenFactory.generateRsaKeyPair();
+        String oaepJwe = JweTestTokenFactory.createJweWrappedAccessToken(
+                InMemoryKeyMaterialHandler.getDefaultPrivateKey(), jweKeyPair.getPublic(),
+                "RS256", "RSA-OAEP", "A256GCM", TEST_ISSUER, null);
+        String[] parts = oaepJwe.split("\\.");
+        String header = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8)
+                .replace("\"RSA-OAEP\"", "\"RSA1_5\"");
+        parts[0] = base64Url(header.getBytes(StandardCharsets.UTF_8));
+        String downgraded = String.join(".", parts);
+
+        TokenValidator validator = jweValidator(jweKeyPair.getPrivate());
+        var request = AccessTokenRequest.of(downgraded);
+        var ex = assertThrows(TokenValidationException.class, () -> validator.createAccessToken(request));
+        assertEquals(EventType.JWE_UNSUPPORTED_ALGORITHM, ex.getEventType(),
+                "A header-driven downgrade to a rejected key-management algorithm must be refused before decryption");
+    }
+
+    @Test
+    @DisplayName("VTEST-14: distinct RSA-OAEP decryption failures all surface the same JWE_DECRYPTION_FAILED event")
+    void shouldKeepJweDecryptionFailuresIndistinguishable() {
+        // Authlib CVE-2026-28490 / jose4j GHSA-jgvc-jfgh-rjvv: a distinguishable error path (padding
+        // failure vs auth failure) is a Bleichenbacher oracle. All three failure modes below must
+        // collapse to one indistinguishable event so an attacker learns nothing from the response.
+        KeyPair jweKeyPair = JweTestTokenFactory.generateRsaKeyPair();
+        KeyPair wrongKeyPair = JweTestTokenFactory.generateRsaKeyPair();
+        TokenValidator validator = jweValidator(jweKeyPair.getPrivate());
+        PrivateKey signingKey = InMemoryKeyMaterialHandler.getDefaultPrivateKey();
+
+        // (a) wrong decryption key: the CEK was wrapped for a different RSA key than the validator holds.
+        String wrongKeyJwe = JweTestTokenFactory.createJweWrappedAccessToken(
+                signingKey, wrongKeyPair.getPublic(), "RS256", "RSA-OAEP", "A256GCM", TEST_ISSUER, null);
+        // (b) tampered ciphertext and (c) tampered auth tag: correct key, corrupted AES-GCM.
+        String tamperedCiphertext = JweTestTokenFactory.createJweWithTamperedCiphertext(
+                signingKey, jweKeyPair.getPublic(), TEST_ISSUER);
+        String tamperedAuthTag = JweTestTokenFactory.createJweWithTamperedAuthTag(
+                signingKey, jweKeyPair.getPublic(), TEST_ISSUER);
+
+        EventType wrongKey = decryptionFailureEvent(validator, wrongKeyJwe);
+        EventType badCiphertext = decryptionFailureEvent(validator, tamperedCiphertext);
+        EventType badTag = decryptionFailureEvent(validator, tamperedAuthTag);
+
+        assertEquals(EventType.JWE_DECRYPTION_FAILED, wrongKey,
+                "A wrong-key OAEP unwrap must surface as JWE_DECRYPTION_FAILED");
+        assertEquals(wrongKey, badCiphertext,
+                "A tampered ciphertext must be indistinguishable from a wrong key");
+        assertEquals(wrongKey, badTag,
+                "A tampered auth tag must be indistinguishable from a wrong key");
+    }
+
+    @Test
+    @DisplayName("VTEST-15: with the client_id→azp fallback off (default), a token omitting azp is rejected as MISSING_CLAIM")
+    void shouldRejectClientIdAzpFallbackByDefault() {
+        // RFC 9068 permits client_id to stand in for a missing azp. With the fallback now off by
+        // default, a validly-signed token that carries only client_id (client identity) and omits
+        // azp must be rejected — the same client-identity-as-authorization conflation as the
+        // azp→aud fallback flipped in VTEST-12's backlog item.
+        String forged = Jwts.builder()
+                .header().keyId(DEFAULT_KEY_ID).and()
+                .issuer(TEST_ISSUER)
+                .subject("legit-user")
+                .audience().add(TEST_AUDIENCE).and()
+                .issuedAt(Date.from(Instant.now()))
+                .expiration(Date.from(Instant.now().plusSeconds(3600)))
+                .claim("client_id", EXPECTED_CLIENT_ID)
+                .signWith(InMemoryKeyMaterialHandler.getDefaultPrivateKey(), Jwts.SIG.RS256)
+                .compact();
+
+        TokenValidator validator = clientIdValidator();
+        var request = AccessTokenRequest.of(forged);
+        var ex = assertThrows(TokenValidationException.class, () -> validator.createAccessToken(request));
+        assertEquals(EventType.MISSING_CLAIM, ex.getEventType(),
+                "With the client_id→azp fallback disabled by default, a token omitting azp must be rejected");
+    }
+
     // === Validators ===
 
     private TokenValidator plainValidator() {
@@ -236,6 +390,28 @@ class WiredNegativePathAttackTest {
                 .issuerConfig(issuerConfig)
                 .jweDecryptionConfig(JweDecryptionConfig.builder().defaultDecryptionKey(decryptionKey).build())
                 .build();
+    }
+
+    private TokenValidator clientIdValidator() {
+        IssuerConfig issuerConfig = IssuerConfig.builder()
+                .issuerIdentifier(TEST_ISSUER)
+                .expectedAudience(TEST_AUDIENCE)
+                .expectedClientId(EXPECTED_CLIENT_ID)
+                .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
+                .build();
+        return TokenValidator.builder().parserConfig(ParserConfig.builder().build())
+                .issuerConfig(issuerConfig).build();
+    }
+
+    private TokenValidator lowDepthValidator(int maxNestingDepth) {
+        IssuerConfig issuerConfig = IssuerConfig.builder()
+                .issuerIdentifier(TEST_ISSUER)
+                .expectedAudience(TEST_AUDIENCE)
+                .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
+                .build();
+        return TokenValidator.builder()
+                .parserConfig(ParserConfig.builder().maxNestingDepth(maxNestingDepth).build())
+                .issuerConfig(issuerConfig).build();
     }
 
     private TokenValidator dpopValidator() {
@@ -289,6 +465,17 @@ class WiredNegativePathAttackTest {
     }
 
     // === Low-level helpers ===
+
+    private EventType decryptionFailureEvent(TokenValidator validator, String jwe) {
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.createAccessToken(AccessTokenRequest.of(jwe)));
+        return ex.getEventType();
+    }
+
+    private static String deeplyNested(int levels) {
+        // Produces {"a":{"a":{ … 1 … }}} nested `levels` deep.
+        return "{\"a\":".repeat(levels) + "1" + "}".repeat(levels);
+    }
 
     private static byte[] rsaSign(String signingInput, PrivateKey privateKey) {
         try {

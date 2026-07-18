@@ -9,7 +9,7 @@
 
 _See Requirement xref:requirements.adoc#VALIDATION-8[VALIDATION-8: Security]_
 
-This document consolidates JWT attack mitigations, security controls, and best practices for the Token-Sheriff library.
+This document consolidates JWT attack mitigations, security controls, and best practices for the Token-Sheriff library. For the mapping of these controls against concrete real-world CVEs in other OAuth/OIDC/JWT/JOSE libraries, see the xref:cve-lessons-register.adoc[CVE Lessons Register].
 
 [[security-controls]]
 == Security Controls
