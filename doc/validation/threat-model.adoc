@@ -7,7 +7,7 @@
 
 == Overview
 
-_See Requirement xref:requirements.adoc#VALIDATION-8[VALIDATION-8: Security Requirements] and xref:architecture.adoc[Architecture] and xref:security-reference.adoc[Security Reference]_
+_See Requirement xref:requirements.adoc#VALIDATION-8[VALIDATION-8: Security Requirements] and xref:architecture.adoc[Architecture] and xref:security-reference.adoc[Security Reference] and xref:cve-lessons-register.adoc[CVE Lessons Register]_
 
 This document outlines the threat model for the JWT Token Validation library. The threat model follows OWASP recommendations and the STRIDE methodology. Each category lists threats, current mitigations with implementation references, coverage status, and open recommendations.
 
@@ -194,6 +194,9 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.3[VALIDATION-8.3: Secure Co
 
 * Certificate pinning for JWKS endpoints
 * Constant-time comparison for security-critical comparisons
+* JWE decryption timing side channel: VTEST-14 proves *exception-path* indistinguishability across
+  wrong-key / bad-ciphertext / bad-tag failures, but true *timing* indistinguishability for the
+  permitted RSA-OAEP paths is not asserted by a test (mitigated in principle by rejecting `RSA1_5`).
 
 === Denial of Service
 
@@ -302,6 +305,9 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.4[VALIDATION-8.4: Claims Va
 * Role hierarchy validation
 * Mandatory audience validation for client applications
 * Warning when mutable claims (e.g., `email`) used for identification
+* Evaluate the `clientIdFallbackEnabled` default (RFC 9068 `client_id`→`azp` fallback): it still
+  defaults to `true`, the same claim-conflation pattern as the `azp`→`aud` fallback which was
+  flipped to secure-by-default. See the xref:cve-lessons-register.adoc[CVE Lessons Register] residuals.
 
 === DPoP Threats (RFC 9449)
 
@@ -369,7 +375,7 @@ A threat may only be marked *Test Covered* (and never 100% for a category) unles
 
 The 100%-covered cells above are backed by the wired negative-path attack tiers added in this remediation:
 
-* link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/WiredNegativePathAttackTest.java[WiredNegativePathAttackTest] — HMAC/RSA algorithm confusion (Spoofing/EoP), JWE decompression bomb (Denial of Service), cross-issuer key substitution (Tampering), unsupported JWE key-management algorithm, DPoP sender-binding violations (DPoP), and embedded-JWK header injection (Spoofing/EoP).
+* link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/WiredNegativePathAttackTest.java[WiredNegativePathAttackTest] — HMAC/RSA algorithm confusion (Spoofing/EoP), JWE decompression bomb (Denial of Service), cross-issuer key substitution (Tampering), unsupported JWE key-management algorithm, DPoP sender-binding violations (DPoP), and embedded-JWK header injection (Spoofing/EoP). Extended with the CVE-derived tier VTEST-10..14 (see xref:cve-lessons-register.adoc[CVE Lessons Register]): `alg` case-variant of "none" (Spoofing), over-depth JSON payload (Denial of Service), cross-audience token rejection (EoP), JWE header algorithm downgrade (Tampering), and RSA-OAEP decryption-failure indistinguishability (Information Disclosure).
 * link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/PsychicSignatureAttackTest.java[PsychicSignatureAttackTest] — zero-value ECDSA psychic-signature bypass (Tampering).
 
 Any future threat marked covered without a corresponding wired negative-path test violates this rule and must be treated as an uncovered threat.

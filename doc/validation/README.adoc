@@ -53,6 +53,9 @@ a consumer that needs only validation (e.g. `nifi-extensions`) pulls a single ar
 | xref:security-reference.adoc[Security Reference]
 | Consolidated JWT attack mitigations, security controls and best practices.
 
+| xref:cve-lessons-register.adoc[CVE Lessons Register]
+| Real-world OAuth/OIDC/JWT/JOSE CVEs mapped to Token-Sheriff's defenses, coverage status, and a derived hardening backlog.
+
 | xref:specification/microprofile-jwt-compatibility.adoc[Spec — MicroProfile JWT]
 | MP-JWT 2.1 integration and rationale.
 

@@ -211,9 +211,10 @@ public class IssuerConfig implements LoadingStatusProvider {
      * Whether the azp→audience fallback is enabled for this issuer.
      * <p>
      * The fallback accepts a token that omits the audience ("aud") claim when its authorized-party
-     * ("azp") claim matches an expected audience — conflating client identity with audience. Default is
-     * {@code true} (fallback enabled) for backward compatibility. Set to {@code false} to require a genuine
-     * audience claim and never accept an azp match as a substitute.
+     * ("azp") claim matches an expected audience — conflating client identity (azp) with intended
+     * recipient (aud). Default is {@code false} (fallback disabled): a genuine audience claim is
+     * required and an azp match is never accepted as a substitute. Set to {@code true} only if an
+     * issuer is known to omit {@code aud} and cannot be reconfigured.
      * </p>
      */
     @Getter
@@ -426,7 +427,7 @@ public class IssuerConfig implements LoadingStatusProvider {
         private @Nullable Set<String> expectedClientId;
         private boolean claimSubOptional = false;
         private boolean accessTokenAudienceOptional = false;
-        private boolean azpAudienceFallbackEnabled = true;
+        private boolean azpAudienceFallbackEnabled = false;
         private boolean clientIdFallbackEnabled = true;
         private @Nullable String expectedTokenType;
         private @Nullable DpopConfig dpopConfig;
@@ -629,8 +630,9 @@ public class IssuerConfig implements LoadingStatusProvider {
         /**
          * Sets whether the azp→audience fallback is enabled for this issuer.
          * <p>
-         * When {@code false}, a token that omits the audience ("aud") claim is never accepted on the
-         * strength of a matching authorized-party ("azp") claim. Default is {@code true}.
+         * When {@code false} (the default), a token that omits the audience ("aud") claim is never
+         * accepted on the strength of a matching authorized-party ("azp") claim. Set to {@code true}
+         * only if an issuer is known to omit {@code aud} and cannot be reconfigured.
          * </p>
          *
          * @param azpAudienceFallbackEnabled {@code true} to allow azp to substitute for a missing audience,
