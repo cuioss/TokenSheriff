@@ -70,9 +70,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  *   <li>VTEST-12 — cross-audience token rejected on {@code aud} (Argo CD CVE-2023-22482 class)</li>
  *   <li>VTEST-13 — JWE header downgrade {@code RSA-OAEP}&rarr;{@code RSA1_5} refused before decryption</li>
  *   <li>VTEST-14 — RSA-OAEP decryption failures are indistinguishable (Bleichenbacher-oracle class)</li>
+ *   <li>VTEST-15 — client_id&rarr;azp fallback off by default; a token omitting azp is rejected</li>
  * </ul>
  * <p>
- * VTEST-10 through VTEST-14 were derived from the real-world CVEs catalogued in the
+ * VTEST-10 through VTEST-15 were derived from the real-world CVEs catalogued in the
  * {@code doc/validation/cve-lessons-register.adoc} hardening backlog (items B1–B4).
  */
 @DisplayName("Wired Negative-Path Attack Tests (H4)")
@@ -80,6 +81,7 @@ class WiredNegativePathAttackTest {
 
     private static final String TEST_ISSUER = "https://wired-attack-test.example.com";
     private static final String TEST_AUDIENCE = "test-audience";
+    private static final String EXPECTED_CLIENT_ID = "wired-attack-client";
     private static final String DEFAULT_KEY_ID = InMemoryKeyMaterialHandler.DEFAULT_KEY_ID;
     private static final String RESOURCE_URI = "https://resource.example.org/protectedresource";
     private static final String RESOURCE_METHOD = "GET";
@@ -341,6 +343,31 @@ class WiredNegativePathAttackTest {
                 "A tampered auth tag must be indistinguishable from a wrong key");
     }
 
+    @Test
+    @DisplayName("VTEST-15: with the client_id→azp fallback off (default), a token omitting azp is rejected as MISSING_CLAIM")
+    void shouldRejectClientIdAzpFallbackByDefault() {
+        // RFC 9068 permits client_id to stand in for a missing azp. With the fallback now off by
+        // default, a validly-signed token that carries only client_id (client identity) and omits
+        // azp must be rejected — the same client-identity-as-authorization conflation as the
+        // azp→aud fallback flipped in VTEST-12's backlog item.
+        String forged = Jwts.builder()
+                .header().keyId(DEFAULT_KEY_ID).and()
+                .issuer(TEST_ISSUER)
+                .subject("legit-user")
+                .audience().add(TEST_AUDIENCE).and()
+                .issuedAt(Date.from(Instant.now()))
+                .expiration(Date.from(Instant.now().plusSeconds(3600)))
+                .claim("client_id", EXPECTED_CLIENT_ID)
+                .signWith(InMemoryKeyMaterialHandler.getDefaultPrivateKey(), Jwts.SIG.RS256)
+                .compact();
+
+        TokenValidator validator = clientIdValidator();
+        var request = AccessTokenRequest.of(forged);
+        var ex = assertThrows(TokenValidationException.class, () -> validator.createAccessToken(request));
+        assertEquals(EventType.MISSING_CLAIM, ex.getEventType(),
+                "With the client_id→azp fallback disabled by default, a token omitting azp must be rejected");
+    }
+
     // === Validators ===
 
     private TokenValidator plainValidator() {
@@ -363,6 +390,17 @@ class WiredNegativePathAttackTest {
                 .issuerConfig(issuerConfig)
                 .jweDecryptionConfig(JweDecryptionConfig.builder().defaultDecryptionKey(decryptionKey).build())
                 .build();
+    }
+
+    private TokenValidator clientIdValidator() {
+        IssuerConfig issuerConfig = IssuerConfig.builder()
+                .issuerIdentifier(TEST_ISSUER)
+                .expectedAudience(TEST_AUDIENCE)
+                .expectedClientId(EXPECTED_CLIENT_ID)
+                .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
+                .build();
+        return TokenValidator.builder().parserConfig(ParserConfig.builder().build())
+                .issuerConfig(issuerConfig).build();
     }
 
     private TokenValidator lowDepthValidator(int maxNestingDepth) {

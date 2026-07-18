@@ -305,9 +305,10 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.4[VALIDATION-8.4: Claims Va
 * Role hierarchy validation
 * Mandatory audience validation for client applications
 * Warning when mutable claims (e.g., `email`) used for identification
-* Evaluate the `clientIdFallbackEnabled` default (RFC 9068 `client_id`→`azp` fallback): it still
-  defaults to `true`, the same claim-conflation pattern as the `azp`→`aud` fallback which was
-  flipped to secure-by-default. See the xref:cve-lessons-register.adoc[CVE Lessons Register] residuals.
+* Both audience/authorized-party fallbacks now default to secure-by-default: `azpAudienceFallbackEnabled`
+  (`azp`→`aud`) and `clientIdFallbackEnabled` (RFC 9068 `client_id`→`azp`) default to `false`, so a
+  matching client-identity claim is never accepted as a substitute for a missing recipient claim
+  (wired via VTEST-12 and VTEST-15; see the xref:cve-lessons-register.adoc[CVE Lessons Register]).
 
 === DPoP Threats (RFC 9449)
 
@@ -375,7 +376,7 @@ A threat may only be marked *Test Covered* (and never 100% for a category) unles
 
 The 100%-covered cells above are backed by the wired negative-path attack tiers added in this remediation:
 
-* link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/WiredNegativePathAttackTest.java[WiredNegativePathAttackTest] — HMAC/RSA algorithm confusion (Spoofing/EoP), JWE decompression bomb (Denial of Service), cross-issuer key substitution (Tampering), unsupported JWE key-management algorithm, DPoP sender-binding violations (DPoP), and embedded-JWK header injection (Spoofing/EoP). Extended with the CVE-derived tier VTEST-10..14 (see xref:cve-lessons-register.adoc[CVE Lessons Register]): `alg` case-variant of "none" (Spoofing), over-depth JSON payload (Denial of Service), cross-audience token rejection (EoP), JWE header algorithm downgrade (Tampering), and RSA-OAEP decryption-failure indistinguishability (Information Disclosure).
+* link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/WiredNegativePathAttackTest.java[WiredNegativePathAttackTest] — HMAC/RSA algorithm confusion (Spoofing/EoP), JWE decompression bomb (Denial of Service), cross-issuer key substitution (Tampering), unsupported JWE key-management algorithm, DPoP sender-binding violations (DPoP), and embedded-JWK header injection (Spoofing/EoP). Extended with the CVE-derived tier VTEST-10..15 (see xref:cve-lessons-register.adoc[CVE Lessons Register]): `alg` case-variant of "none" (Spoofing), over-depth JSON payload (Denial of Service), cross-audience token rejection (EoP), JWE header algorithm downgrade (Tampering), RSA-OAEP decryption-failure indistinguishability (Information Disclosure), and `client_id`→`azp` fallback rejection (EoP).
 * link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/PsychicSignatureAttackTest.java[PsychicSignatureAttackTest] — zero-value ECDSA psychic-signature bypass (Tampering).
 
 Any future threat marked covered without a corresponding wired negative-path test violates this rule and must be treated as an uncovered threat.

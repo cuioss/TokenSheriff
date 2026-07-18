@@ -224,9 +224,9 @@ public class IssuerConfig implements LoadingStatusProvider {
      * Whether the RFC 9068 {@code client_id}→{@code azp} fallback is enabled for this issuer.
      * <p>
      * The fallback accepts a token that omits the {@code azp} claim when its {@code client_id} claim
-     * matches an expected client ID. Default is {@code true} (fallback enabled) for backward compatibility.
-     * Set to {@code false} to require a genuine {@code azp} claim and never accept a {@code client_id} match
-     * as a substitute.
+     * matches an expected client ID. Default is {@code false} (fallback disabled): a genuine
+     * {@code azp} claim is required and a {@code client_id} match is never accepted as a substitute.
+     * Set to {@code true} only if an issuer is known to omit {@code azp} and cannot be reconfigured.
      * </p>
      */
     @Getter
@@ -428,7 +428,7 @@ public class IssuerConfig implements LoadingStatusProvider {
         private boolean claimSubOptional = false;
         private boolean accessTokenAudienceOptional = false;
         private boolean azpAudienceFallbackEnabled = false;
-        private boolean clientIdFallbackEnabled = true;
+        private boolean clientIdFallbackEnabled = false;
         private @Nullable String expectedTokenType;
         private @Nullable DpopConfig dpopConfig;
         private int clockSkewSeconds = DEFAULT_CLOCK_SKEW_SECONDS;
@@ -647,8 +647,9 @@ public class IssuerConfig implements LoadingStatusProvider {
         /**
          * Sets whether the RFC 9068 {@code client_id}→{@code azp} fallback is enabled for this issuer.
          * <p>
-         * When {@code false}, a token that omits the {@code azp} claim is never accepted on the strength
-         * of a matching {@code client_id} claim. Default is {@code true}.
+         * When {@code false} (the default), a token that omits the {@code azp} claim is never accepted
+         * on the strength of a matching {@code client_id} claim. Set to {@code true} only if an issuer
+         * is known to omit {@code azp} and cannot be reconfigured.
          * </p>
          *
          * @param clientIdFallbackEnabled {@code true} to allow client_id to substitute for a missing azp,
