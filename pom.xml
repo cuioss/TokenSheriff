@@ -4,7 +4,7 @@
     <parent>
         <groupId>de.cuioss</groupId>
         <artifactId>cui-java-parent</artifactId>
-        <version>1.5.1</version>
+        <version>1.5.2</version>
         <relativePath />
     </parent>
     <groupId>de.cuioss.sheriff.token</groupId>
@@ -46,76 +46,5 @@
         <frontend.node.version>v22.22.0</frontend.node.version>
         <frontend.npm.version>10.9.2</frontend.npm.version>
     </properties>
-
-    <profiles>
-        <profile>
-            <!-- Overrides the pre-commit profile inherited from cui-java-parent: redeclares the
-                 OpenRewrite activeRecipes list WITHOUT org.openrewrite.java.migrate.util.JavaUtilAPIs.
-                 Its UseMapOf sub-recipe produces broken output in this codebase:
-                 1. Rewrites LinkedHashMap/HashMap put-chains to `new HashMap<>(Map.of(...))` without
-                    adding the java.util.HashMap import (compile failures in BadgeGenerator,
-                    GitHubPagesGenerator, LibraryMetricsExporter).
-                 2. Map.of() rejects null values that the original put() chains tolerated
-                    (NullPointerException in ReportDataGenerator.convertMetadata and
-                    TokenSheriffDevUIRuntimeService.getConfiguration, which puts explicit nulls).
-                 3. Silently replaces LinkedHashMap with HashMap, discarding deliberate insertion
-                    ordering of generated report/JSON output.
-                 Remove this override once the recipe defect is fixed upstream. -->
-            <id>pre-commit</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.openrewrite.maven</groupId>
-                        <artifactId>rewrite-maven-plugin</artifactId>
-                        <configuration>
-                            <activeRecipes combine.self="override">
-                                <!-- Code formatting - MUST run first to normalize whitespace -->
-                                <recipe>org.openrewrite.java.format.AutoFormat</recipe>
-                                <recipe>org.openrewrite.java.format.NormalizeLineBreaks</recipe>
-                                <recipe>org.openrewrite.java.format.RemoveTrailingWhitespace</recipe>
-
-                                <!-- CUI-specific formatting and standards - run after base formatting -->
-                                <recipe>de.cuioss.rewrite.format.AnnotationNewlineFormat</recipe>
-                                <recipe>de.cuioss.rewrite.logging.CuiLoggerStandardsRecipe</recipe>
-                                <recipe>de.cuioss.rewrite.logging.CuiLogRecordPatternRecipe</recipe>
-                                <recipe>de.cuioss.rewrite.logging.InvalidExceptionUsageRecipe</recipe>
-
-                                <!-- Java 21 migration and modernization -->
-                                <recipe>org.openrewrite.java.migrate.UpgradeToJava21</recipe>
-
-                                <!-- Not included in UpgradeToJava21.
-                                     NOTE: org.openrewrite.java.migrate.util.JavaUtilAPIs is deliberately
-                                     NOT active here (see profile comment above). -->
-                                <recipe>org.openrewrite.java.migrate.RemoveSecurityManager</recipe>
-
-                                <!-- Code organization -->
-                                <recipe>org.openrewrite.java.OrderImports</recipe>
-                                <recipe>org.openrewrite.java.RemoveUnusedImports</recipe>
-                                <recipe>org.openrewrite.java.ShortenFullyQualifiedTypeReferences</recipe>
-
-                                <!-- Testing improvements -->
-                                <recipe>org.openrewrite.java.testing.junit5.JUnit5BestPractices</recipe>
-                                <recipe>org.openrewrite.java.testing.junit5.RemoveTryCatchFailBlocks</recipe>
-
-                                <!-- Static analysis improvements -->
-                                <recipe>org.openrewrite.staticanalysis.EqualsAvoidsNull</recipe>
-                                <recipe>org.openrewrite.staticanalysis.NoPrimitiveWrappersForToStringOrCompareTo</recipe>
-                                <recipe>org.openrewrite.staticanalysis.SimplifyBooleanExpression</recipe>
-                                <recipe>org.openrewrite.staticanalysis.UnnecessaryParentheses</recipe>
-                            </activeRecipes>
-                            <!-- Appended to the parent's exclusions (target/**): the OpenRewrite YAML
-                                 parser cannot parse e-2-e-playwright/docker-compose.yml (valid compose
-                                 syntax; the healthcheck shell redirection trips the parser) and emits a
-                                 "There were problems parsing" warning on every run. No active recipe
-                                 targets compose files, so excluding them loses nothing. -->
-                            <exclusions combine.children="append">
-                                <exclusion>**/docker-compose.yml</exclusion>
-                            </exclusions>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 
 </project>
