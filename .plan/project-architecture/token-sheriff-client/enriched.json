@@ -1,5 +1,7 @@
 {
-  "best_practices": [],
+  "best_practices": [
+    "Javadoc {@link} references deliberately target Lombok-backed private fields (e.g. ClientConfiguration#allowInsecureHttp, ClientAuthMethod#strength) instead of generated accessors \u2014 Lombok getters are invisible to javadoc without delombok; the field-link form validates clean under -Xdoclint:all. Decline review-bot suggestions to switch to accessor links"
+  ],
   "insights": [],
   "internal_dependencies": [
     "token-sheriff-validation"

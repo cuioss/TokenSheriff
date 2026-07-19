@@ -107,7 +107,7 @@ public final class TestResourceLoader {
      */
     public static Path writeTestFile(Path tempDir, String fileName, String content) throws IOException {
         Path filePath = tempDir.resolve(fileName);
-        Files.writeString(filePath, content, StandardCharsets.UTF_8);
+        Files.writeString(filePath, content);
         return filePath;
     }
 

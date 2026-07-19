@@ -1,5 +1,7 @@
 {
-  "best_practices": [],
+  "best_practices": [
+    "License scanners (Sourcery/trivy) cannot identify the OSI-approved BlueOak-1.0.0 license used by several transitive npm packages (chownr, tar, yallist, isexe, ...) \u2014 such license-ID-gap notices on package-lock.json are an accepted, non-actionable finding class; do not chase them as security/legal risks"
+  ],
   "insights": [],
   "internal_dependencies": [
     "token-sheriff-validation-quarkus-deployment-maven"
