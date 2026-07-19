@@ -104,10 +104,16 @@ README change.
 git add .github/project.yml
 git commit -m "chore(release): prepare release <version>" --trailer "Co-Authored-By: Claude <noreply@anthropic.com>"
 git push -u origin chore/release_<version>
+gh label create skip-bot-review --repo cuioss/TokenSheriff --description "Skip automated bot review" --color ededed 2>/dev/null || true
 gh pr create --repo cuioss/TokenSheriff --base main \
   --title "chore(release): prepare release <version>" \
+  --label "skip-bot-review" \
   --body "Bump current-version to <version>, next-version to <next>-SNAPSHOT. Triggers the automated Release workflow on merge."
 ```
+
+The mechanical release PR carries the `skip-bot-review` label so automated bot review is
+skipped, matching the other cuioss release skills (the preceding `gh label create` ensures the
+label exists first).
 
 Use the project commit convention: `Co-Authored-By: Claude <noreply@anthropic.com>` (no model
 name / no "Generated with Claude Code" footer).
@@ -135,8 +141,15 @@ If using a scheduled/loop wait, poll roughly every few minutes up to ~20 min.
 Once checks are green and comments resolved:
 
 ```bash
-gh pr merge <pr#> --repo cuioss/TokenSheriff --squash --delete-branch
+gh pr merge <pr#> --repo cuioss/TokenSheriff --squash
 ```
+`main` uses the org-managed merge queue (`main-merge-queue`), so the merge **enqueues** (it is
+not immediate) and `--delete-branch` is rejected (the queue auto-deletes the branch on merge).
+After `gh pr merge ... --squash`, poll
+`gh pr view <pr#> --repo cuioss/TokenSheriff --json state --jq .state` until it reports `MERGED`
+before expecting the Release workflow. The release workflow is unaffected because
+`cuioss-release-bot` is a bypass actor on the queue.
+
 Merging this PR (it touches `.github/project.yml`) fires `release.yml` automatically — do
 **not** dispatch the release manually unless the auto-trigger demonstrably did not fire.
 
