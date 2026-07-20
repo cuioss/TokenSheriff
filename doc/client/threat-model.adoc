@@ -206,8 +206,7 @@ The client engine:
 Each flow / token threat is exercised by the commons `generators` dispatchers in their
 *adversarial* mode (xref:../commons/specification/transport.adoc#adversarial_dispatchers[commons
 transport spec], `COMMONS-7`), driven by the client unit tests
-(xref:requirements.adoc#CLIENT-22[CLIENT-22]) and the
-xref:../oidc/06-implement/README.adoc[Plan 06] integration suite:
+(xref:requirements.adoc#CLIENT-22[CLIENT-22]) and the integration suite:
 
 [cols="1,3", options="header"]
 |===

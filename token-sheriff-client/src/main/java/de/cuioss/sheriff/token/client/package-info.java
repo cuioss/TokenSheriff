@@ -22,7 +22,7 @@
  * (RFC 7662), RP-initiated end-session and pushed authorization requests (RFC 9126).
  * <p>
  * It is pure Java with no framework dependency (see the module-architecture decision:
- * {@code doc/oidc/decision-oidc-module.adoc}) so it can be wired into any runtime — the Quarkus
+ * {@code doc/adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc}) so it can be wired into any runtime — the Quarkus
  * extension {@code token-sheriff-client-quarkus} is one such binding; a CDI/RESTEasy portal adapter
  * is another. The engine builds on the {@code commons} base layer (transport, error model, events,
  * metrics) that ships inside {@code token-sheriff-validation}; it adds flows, not HTTP plumbing —

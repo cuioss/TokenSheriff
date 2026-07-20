@@ -1,0 +1,81 @@
+= ADR-0001: Validation and Client Module Split with a Commons Base Layer
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: Ship OIDC capabilities as two Maven modules (validation + client) in one repository, with a commons base layer enforced by ArchUnit rather than carved out as a third artifact.
+// tags: module-architecture, layering, archunit
+// affects: commons, client, validation
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Accepted
+
+== Context
+
+Token-Sheriff is a passive multi-issuer JWT validation library — it validates tokens and deliberately never acquires them. Its capability surface is growing along two axes at once, and each axis forces a packaging choice.
+
+* An *active* relying-party client is coming — authorization-code / PKCE flows, token-endpoint exchange, userinfo, `nonce`/`state`. This code acquires tokens, which is the exact behaviour the validation surface promises never to do.
+* A *base layer of concerns belongs to neither side alone but to both*: the outbound IdP HTTP (discovery and JWKS today; token, userinfo, revocation, introspection, end-session, PAR tomorrow), the typed error model that the HTTP edges render as RFC 9457, the security-event surface, and the metric identifiers. Housing these only inside validation would force the client to duplicate them.
+
+Two structural questions follow, and they are independent of the OAuth-versus-OIDC distinction (validation already performs OIDC discovery and ID-token checks):
+
+. *Repository boundary* — do the active capabilities live in a separate Git project or as modules inside this repository?
+. *Module count and layering* — how many Maven modules, and where does the shared base live relative to them?
+
+The forces that decide these questions are: preserving the "validate, never acquire" promise as an artifact-level guarantee; letting the client co-evolve with a still-pre-1.0, actively changing validation API; and avoiding release, BOM, and CI surface that no consumer actually asks for.
+
+== Decision
+
+*Keep every capability in this one multi-module repository and split it into two Maven modules — `token-sheriff-validation` and `token-sheriff-client` — with the shared base carried as an ArchUnit-enforced package layer inside validation, not as a third artifact.*
+
+image::../resources/diagrams/module-architecture.svg["Token-Sheriff module architecture — the commons base layer and the validation layer ship in one token-sheriff-validation artifact (ArchUnit-enforced boundary); token-sheriff-client is a separate Maven module depending on validation; token-sheriff-client-quarkus is the HTTP edge", align=center]
+
+The layering is realised by three mechanisms:
+
+* *`commons` is a package layer, not a module.* The `de.cuioss.sheriff.token.commons.*` packages ship inside the `token-sheriff-validation` artifact and depend only on `cui-http` and `cui-tooling`. Their responsibilities and internal structure are the subject of xref:../commons/architecture.adoc[the commons architecture] and are not restated here.
+* *ArchUnit enforces the boundary the missing module would have given.* A rule forbids the `commons` packages from depending "up" on `…validation..`, so the base stays dependency-light and the layering direction never reverses — without the POM, release, and BOM surface a separate `token-sheriff-commons` artifact would add for a dependency no consumer selects alone.
+* *The client is a separate module that depends on validation.* `token-sheriff-client` carries the active flows and token lifecycle and depends on `token-sheriff-validation`, from which it inherits the `commons` base transitively. The dependency direction `client → validation` is the natural clean layering and never reverses.
+
+The seams are therefore *shared base (transport, error model, events, metrics) → `commons` packages*, *passive validation → `validation` packages*, and *active acquisition → `client` module*.
+
+== Consequences
+
+=== Positive
+
+* The user-facing separation of concerns is delivered as an opt-in artifact: a consumer that needs only validation pulls `token-sheriff-validation`; one that needs acquisition adds `token-sheriff-client`.
+* One repository means shared CI, SonarCloud, BOM, release automation, and benchmarking — no duplicated infrastructure and no cross-repo pull requests when the seam shifts.
+* Changes that cross the validation/client seam are atomic; there is no version-compatibility matrix to keep in step.
+* The client co-evolves freely with the still-moving pre-1.0 validation API.
+
+=== Negative
+
+* The single repository grows larger — mitigated by it already being multi-module.
+* The "validate, never acquire" promise now depends on token-acquiring code staying under the distinct `token-sheriff-client` artifact and name; it must never leak into `token-sheriff-validation`.
+
+=== Risks
+
+The base and the client are deliberately kept coupled to their host. Each coupling has a documented promotion trigger, and the residual risk is that a trigger is missed and the coupling outlives its justification:
+
+* Promote `token-sheriff-client` to its own repository when an independent release cadence is genuinely blocked by shared versioning, when it drags in a heavier or higher-risk dependency tree that should not touch the validation supply chain, when its audience, governance, or license diverges, or when a distinct maintainer set needs a separate review and security process.
+* Promote `commons` to its own `token-sheriff-commons` module — moving the `…commons.*` tree and swapping the ArchUnit rule for a Maven dependency — when a consumer genuinely needs the base without validation, when the base needs an independent release cadence, or when it grows a dependency tree that validation-only consumers should not inherit.
+
+Until a trigger bites, the coupled form is strictly better: promoting a coupled layer later is cheap (move a package tree or a directory and redirect one dependency edge), while merging back after a premature split is expensive.
+
+== Alternatives Considered
+
+* *A separate Git project for the active capabilities.* This buys only a repository boundary while costing a version-compatibility matrix, two release trains, duplicated CI / SonarCloud / release / BOM infrastructure, and cross-repo pull requests every time the seam moves. Rejected while the API is still pre-1.0 and co-evolving; retained as the documented promotion path once an independent release cadence is actually required.
+* *A third `token-sheriff-commons` artifact for the base layer.* This adds a POM, release, and BOM surface for a dependency no consumer picks alone — the client pulls validation (and the base transitively) to validate what it retrieves, and validation-only consumers want validation. Rejected: ArchUnit delivers the identical layering guarantee with one fewer artifact.
+* *Folding the client into `token-sheriff-validation`.* Rejected: it breaks the "validate, never acquire" promise and bloats the most security-critical, most-reused artifact with token-acquiring code.
+
+The unifying principle: introduce a repository or artifact boundary only when a concrete force — independent release cadence, divergent dependency tree, or divergent audience/governance — demands it. Absent that force, enforce the layering with ArchUnit and keep the coupling, because a premature boundary is expensive to reverse.
+
+== References
+
+* xref:../commons/architecture.adoc[Commons Architecture] — the responsibilities and internal structure of the `commons` base layer.
+* xref:../commons/threat-model.adoc[Commons Threat Model] — the trust boundaries the base layer defends.

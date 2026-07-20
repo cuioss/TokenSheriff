@@ -11,7 +11,7 @@ Module-level documentation hub for `token-sheriff-client` (usage, configuration,
 
 The conceptual *client capability* docs (requirements, architecture, threat model, specifications)
 live at the repository root under xref:../../doc/client/[`doc/client/`], as peer capabilities to
-`doc/validation/` and `doc/commons/` (see xref:../../doc/oidc/02-doc-structure/README.adoc[Plan 02]).
+`doc/validation/` and `doc/commons/`.
 They are the normative reference for the implemented engine:
 
 * xref:../../doc/client/architecture.adoc[Architecture] — the engine seam and its

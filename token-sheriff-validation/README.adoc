@@ -72,7 +72,7 @@ try {
 == JSON Processing
 
 This library uses DSL-JSON for secure, high-performance JSON parsing with configurable security limits.
-DSL-JSON provides compile-time code generation and actual enforcement of security constraints, 
+DSL-JSON provides compile-time code generation and actual enforcement of security constraints,
 unlike reflection-based parsers that often ignore configured limits.
 
 == Test Support

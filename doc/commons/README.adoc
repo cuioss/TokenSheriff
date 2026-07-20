@@ -12,8 +12,7 @@ dependency-light layer by ArchUnit rather than shipped as a separate artifact. C
 token's trust* — that is the xref:../validation/README.adoc[validation] layer's job.
 
 Both validation and the xref:../client/README.adoc[client] consume it; the
-re-packaging and the ArchUnit boundary are established in
-xref:../oidc/03-commons/README.adoc[Plan 03].
+re-packaging and the ArchUnit boundary live inside `token-sheriff-validation`.
 
 == Scope at a glance
 
@@ -73,5 +72,4 @@ xref:architecture.adoc[Architecture]).
 * xref:../README.adoc[Documentation Hub]
 * xref:../validation/README.adoc[Validation] — the token-trust pipeline that ships alongside this base layer
 * xref:../client/README.adoc[Client] — the consumer of the extended transport
-* xref:../oidc/decision-oidc-module.adoc[Module Architecture decision] — why commons is an enforced layer, not a separate artifact
-* xref:../oidc/03-commons/README.adoc[Plan 03] — the commons base-layer plan
+* xref:../adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc[Module Architecture decision] — why commons is an enforced layer, not a separate artifact

@@ -8,16 +8,16 @@
 == Overview
 
 _Realizes xref:../requirements.adoc#CLIENT-22[CLIENT-22] (thread safety + adversarial test
-coverage) and is the test specification the xref:../../oidc/06-implement/README.adoc[Plan 06]
-implementation executes. See xref:../threat-model.adoc[Threat Model],
+coverage) and is the test specification the client-engine implementation executes. See
+xref:../threat-model.adoc[Threat Model],
 xref:../requirements.adoc[Requirements], xref:../best-practices.adoc[Best Practices] and
 xref:../architecture.adoc[Architecture]._
 
 This specification defines *how the client engine is verified* — the test surface that every
 `CLIENT-N` requirement, and every threat in the xref:../threat-model.adoc[threat model], is
-proven against. It is the source of truth for the two-layer testing model
-xref:../../oidc/06-implement/README.adoc[Plan 06] carries out increment by increment; Plan 06
-backtracks to this document rather than re-deriving the model.
+proven against. It is the source of truth for the two-layer testing model the implementation
+carries out increment by increment; the implementation backtracks to this document rather than
+re-deriving the model.
 
 The strategy has *two layers that are never conflated*:
 
@@ -29,13 +29,13 @@ The strategy has *two layers that are never conflated*:
   unit-tested with no CDI / Quarkus in the loop.
 * *Integration layer* — Failsafe `*IT` tests running the *Quarkus-packaged* engine against
   *real* OpenID Providers (Keycloak always-on; Dex and Zitadel profile-gated), reusing the
-  existing xref:../../oidc/06-implement/README.adoc[in-repo] Docker-Compose harness. This
+  existing in-repo Docker-Compose harness. This
   proves each protocol *actually interoperates* with a real OP, across *happy*,
   *corner / edge* and *attack* case classes.
 
 [IMPORTANT]
 ====
-The user-facing rule (xref:../../oidc/06-implement/README.adoc[Plan 06]): *MockWebServer
+The user-facing rule: *MockWebServer
 proves the mechanics and the attacks; Keycloak proves it really works.* Both layers are
 required for every protocol increment — neither substitutes for the other.
 ====
@@ -118,7 +118,7 @@ structure — the same layout as `token-sheriff-validation` (`@DisplayName`, `@N
 
 The OP simulators are *not re-authored*: `token-sheriff-validation` already publishes its test
 utilities as a *test-jar with classifier `generators`* (its `maven-jar-plugin` `test-jar`
-goal, xref:../../oidc/03-commons/README.adoc[Plan 03]). The `token-sheriff-client` pom
+goal). The `token-sheriff-client` pom
 declares that test-jar dependency (`classifier` `generators`, `scope` `test`) and reuses:
 
 * the OP-endpoint dispatchers — `TokenDispatcher`, `UserInfoDispatcher`,
@@ -315,7 +315,7 @@ protections a real OP naturally enforces.
 == [[_traceability]] Traceability matrix
 
 Each `CLIENT-N` requirement maps to its threat(s), its unit coverage, its integration
-coverage, and the xref:../../oidc/06-implement/README.adoc[Plan 06] increment that delivers it.
+coverage, and the increment that delivers it.
 For a requirement whose defence lives in flow orchestration
 (xref:../requirements.adoc#CLIENT-8[CLIENT-8],
 xref:../requirements.adoc#CLIENT-10[CLIENT-10],
@@ -428,8 +428,7 @@ an isolated-component or server-capability test alone does not qualify the row a
 
 == Per-increment definition of done (test view)
 
-This is the test-side complement of the xref:../../oidc/06-implement/README.adoc[Plan 06]
-per-increment definition of done. For each protocol increment:
+This is the test-side complement of the per-increment definition of done. For each protocol increment:
 
 * [ ] *Unit — happy*: the protocol's mechanics against the dispatcher default mode, plus
   request verification of the secure form the engine sends.
@@ -450,5 +449,4 @@ per-increment definition of done. For each protocol increment:
 * xref:step-up-and-logout.adoc[Step-up & logout specification]
 * xref:token-handling.adoc[Token-handling specification]
 * xref:../../commons/specification/transport.adoc#adversarial_dispatchers[Commons transport spec] — the dispatcher artifact reused here
-* xref:../../oidc/06-implement/README.adoc[Plan 06 — Implement the Client] — executes this test specification
 * xref:../references.adoc[References] — OWASP WSTG (OAuth weaknesses), cui-http-testing

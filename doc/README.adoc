@@ -7,6 +7,12 @@
 
 This is the central navigation for TokenSheriff documentation.
 
+== Architecture Decisions
+
+Standing architectural decisions, recorded as durable ADRs under `doc/adr/`.
+
+* xref:adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc[ADR-0001: Validation and Client Module Split with a Commons Base Layer] - Two Maven modules (validation + client) in one repository, with the `commons` base layer enforced by ArchUnit rather than carved out as a third artifact
+
 == Commons (base layer)
 
 The shared base layer every capability sits on — the `de.cuioss.sheriff.token.commons.*`
@@ -54,9 +60,7 @@ The active OIDC capability — the server-side confidential-client engine that r
 tokens, holds and refreshes them server-side, and drives the flows on top of the commons
 transport. It is the engine a Backend-For-Frontend (BFF) is built on; it is not itself a BFF.
 The `token-sheriff-client` module (and its `token-sheriff-client-quarkus` extension) is
-implemented — module structure per xref:oidc/05-client-module/README.adoc[Plan 05], functional
-content delivered under xref:oidc/06-implement/README.adoc[Plan 06]; this document set remains
-the normative specification.
+implemented; this document set remains the normative specification.
 
 * xref:client/README.adoc[Overview] - Capability entry point: intro, scope, reading order, document map
 * xref:client/requirements.adoc[Requirements] - `CLIENT-N`, grouped by aspect (Retrieval & flow / Token)

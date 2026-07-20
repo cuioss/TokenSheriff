@@ -35,8 +35,7 @@ revocation, PAR) on these primitives
 |===
 
 Discovery and JWKS are *relocated existing code* (`wellknown`, `jwks.http`); the remaining
-six are *transport contracts* the OIDC client engine
-(xref:../../oidc/06-implement/README.adoc[Plan 06]) drives with its own back-channel HTTP.
+six are *transport contracts* the OIDC client engine drives with its own back-channel HTTP.
 All eight are exercised by dispatchers in the `generators` test artifact.
 
 == Security controls
@@ -100,5 +99,5 @@ dispatcher per new endpoint, each following the existing pattern
 | `JwksResolveDispatcher` (existing) | Valid JWKS | Internal-range redirect, oversized JWKS
 |===
 
-These are the unit-test doubles xref:../../oidc/06-implement/README.adoc[Plan 06] drives for
+These are the unit-test doubles the client engine drives for
 its MockWebServer adversarial coverage.

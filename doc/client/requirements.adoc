@@ -21,7 +21,7 @@ perform a needed operation — "the spec allows it" is not, by itself, a reason 
 (xref:best-practices.adoc[Best Practices]). Legacy / discouraged mechanisms are refused and
 sourced (<<_security_exclusions_legacy_discouraged>>).
 
-Requirement IDs use the `CLIENT-N` scheme (per xref:../oidc/02-doc-structure/README.adoc[Plan 02]),
+Requirement IDs use the `CLIENT-N` scheme,
 *grouped by aspect*: xref:#_retrieval_flow_requirements[Retrieval & flow] (net-new) and
 xref:#_token_requirements[Token] (the server-side lifecycle delta). IDs are stable
 identifiers referenced across documentation and the xref:threat-model.adoc[threat model];
@@ -372,10 +372,10 @@ The engine MUST be pure Java, depending on `token-sheriff-validation` (which tra
 provides the commons base layer) — no CDI, no MicroProfile Config, no JAX-RS in the engine
 itself. Framework bindings (Quarkus, and any RESTEasy/portal adapter) sit *outside* the
 engine, so the engine is reusable across framework contexts. The `client → validation`
-dependency direction is enforced by Maven — the `token-sheriff-client` module (created by
-xref:../oidc/05-client-module/README.adoc[Plan 05]) declares the dependency.
+dependency direction is enforced by Maven — the `token-sheriff-client` module declares the
+dependency.
 
-* Source: xref:../oidc/decision-oidc-module.adoc[Module Architecture decision] (client → validation, never the reverse).
+* Source: xref:../adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc[Module Architecture decision] (client → validation, never the reverse).
 
 [#CLIENT-22]
 === CLIENT-22: Thread safety and adversarial test coverage
@@ -383,8 +383,7 @@ xref:../oidc/05-client-module/README.adoc[Plan 05]) declares the dependency.
 The engine MUST be thread-safe (shared per-issuer configuration, concurrent flows). Each
 `CLIENT-N` flow / token requirement MUST be exercised by unit tests driving the commons
 `generators` dispatchers in both default and *adversarial* modes (the token / userinfo /
-end-session / PAR dispatchers, `COMMONS-7`), plus real-IdP integration tests
-(xref:../oidc/06-implement/README.adoc[Plan 06]). The two-layer verification model, the
+end-session / PAR dispatchers, `COMMONS-7`), plus real-IdP integration tests. The two-layer verification model, the
 adversarial coverage, and the full `CLIENT-N` → threat → test traceability are specified in
 xref:specification/test-strategy.adoc[Test strategy].
 

@@ -85,4 +85,4 @@ flow contracts and the xref:../doc/client/best-practices.adoc[Best Practices] ch
 The engine is framework-agnostic. The Quarkus binding lives in
 `token-sheriff-quarkus-parent/token-sheriff-client-quarkus` (runtime + deployment); other runtimes
 (e.g. a CDI/RESTEasy portal adapter) can bind the same engine. See the
-xref:../doc/oidc/decision-oidc-module.adoc[module-architecture decision].
+xref:../doc/adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc[module-architecture decision].
