@@ -2,7 +2,9 @@
   "best_practices": [
     "Javadoc {@link} references deliberately target Lombok-backed private fields (e.g. ClientConfiguration#allowInsecureHttp, ClientAuthMethod#strength) instead of generated accessors \u2014 Lombok getters are invisible to javadoc without delombok; the field-link form validates clean under -Xdoclint:all. Decline review-bot suggestions to switch to accessor links"
   ],
-  "insights": [],
+  "insights": [
+    "package-info.java carries a Javadoc {@code doc/...adoc} reference into the doc/ tree (e.g. {@code doc/oidc/decision-oidc-module.adoc}). Any doc reorganization that deletes or moves files under doc/ MUST sweep this module's source for {@code doc/...} Javadoc references and repoint them, or they become dangling links to removed files. The scope_criterion_validator's recursive grep over token-sheriff-client/ catches these before execution."
+  ],
   "internal_dependencies": [
     "token-sheriff-validation"
   ],
