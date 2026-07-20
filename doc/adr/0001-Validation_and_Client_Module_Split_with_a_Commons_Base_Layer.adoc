@@ -39,7 +39,7 @@ image::../resources/diagrams/module-architecture.svg["Token-Sheriff module archi
 The layering is realised by three mechanisms:
 
 * *`commons` is a package layer, not a module.* The `de.cuioss.sheriff.token.commons.*` packages ship inside the `token-sheriff-validation` artifact and depend only on `cui-http` and `cui-tooling`. Their responsibilities and internal structure are the subject of xref:../commons/architecture.adoc[the commons architecture] and are not restated here.
-* *ArchUnit enforces the boundary the missing module would have given.* A rule forbids the `commons` packages from depending "up" on `…validation..`, so the base stays dependency-light and the layering direction never reverses — without the POM, release, and BOM surface a separate `token-sheriff-commons` artifact would add for a dependency no consumer selects alone.
+* *ArchUnit enforces the boundary the missing module would have given.* A rule forbids the `commons` packages from depending "up" on `..validation..`, so the base stays dependency-light and the layering direction never reverses — without the POM, release, and BOM surface a separate `token-sheriff-commons` artifact would add for a dependency no consumer selects alone.
 * *The client is a separate module that depends on validation.* `token-sheriff-client` carries the active flows and token lifecycle and depends on `token-sheriff-validation`, from which it inherits the `commons` base transitively. The dependency direction `client → validation` is the natural clean layering and never reverses.
 
 The seams are therefore *shared base (transport, error model, events, metrics) → `commons` packages*, *passive validation → `validation` packages*, and *active acquisition → `client` module*.
