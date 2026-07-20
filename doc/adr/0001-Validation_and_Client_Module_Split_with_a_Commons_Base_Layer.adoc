@@ -63,7 +63,7 @@ The seams are therefore *shared base (transport, error model, events, metrics) �
 The base and the client are deliberately kept coupled to their host. Each coupling has a documented promotion trigger, and the residual risk is that a trigger is missed and the coupling outlives its justification:
 
 * Promote `token-sheriff-client` to its own repository when an independent release cadence is genuinely blocked by shared versioning, when it drags in a heavier or higher-risk dependency tree that should not touch the validation supply chain, when its audience, governance, or license diverges, or when a distinct maintainer set needs a separate review and security process.
-* Promote `commons` to its own `token-sheriff-commons` module — moving the `…commons.*` tree and swapping the ArchUnit rule for a Maven dependency — when a consumer genuinely needs the base without validation, when the base needs an independent release cadence, or when it grows a dependency tree that validation-only consumers should not inherit.
+* Promote `commons` to its own `token-sheriff-commons` module — moving the `de.cuioss.sheriff.token.commons.*` package tree and swapping the ArchUnit rule for a Maven dependency — when a consumer genuinely needs the base without validation, when the base needs an independent release cadence, or when it grows a dependency tree that validation-only consumers should not inherit.
 
 Until a trigger bites, the coupled form is strictly better: promoting a coupled layer later is cheap (move a package tree or a directory and redirect one dependency edge), while merging back after a premature split is expensive.
 

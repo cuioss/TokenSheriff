@@ -165,6 +165,7 @@ To *acquire* tokens — the active, confidential-client side — use the framewo
 
 ```java
 // Configure once per issuer; endpoints resolve via OIDC discovery
+String secret = System.getenv("OIDC_CLIENT_SECRET"); // supply via config or environment
 ClientConfiguration config = ClientConfiguration.builder()
     .issuer("https://issuer.example.com/realms/demo")
     .clientId("my-confidential-client")

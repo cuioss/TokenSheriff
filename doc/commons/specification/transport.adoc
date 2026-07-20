@@ -99,5 +99,7 @@ dispatcher per new endpoint, each following the existing pattern
 | `JwksResolveDispatcher` (existing) | Valid JWKS | Internal-range redirect, oversized JWKS
 |===
 
-These are the unit-test doubles the client engine drives for
-its MockWebServer adversarial coverage.
+The token, userinfo, revocation, introspection, end-session, and PAR doubles are driven
+by the client engine; `WellKnownDispatcher` and `JwksResolveDispatcher` back the
+validation-side Discovery/JWKS coverage. All are unit-test doubles for MockWebServer
+adversarial coverage.
