@@ -9,7 +9,7 @@
 
 _See xref:requirements.adoc[Client Requirements], xref:threat-model.adoc[Threat Model],
 xref:best-practices.adoc[Best Practices] and the
-xref:../oidc/decision-oidc-module.adoc[module-architecture decision]._
+xref:../adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc[module-architecture decision]._
 
 The `client` capability is the *active* OIDC side: a server-side *confidential-client engine*
 that retrieves tokens, holds and refreshes them server-side, and drives the flows on top of
@@ -34,16 +34,13 @@ image::../resources/diagrams/module-architecture.svg["Token-Sheriff module archi
   MicroProfile / JAX-RS inside it. It depends on `token-sheriff-validation`, which
   transitively provides the `commons` base layer.
 * The `client → validation` dependency direction is enforced by *Maven* — the
-  `token-sheriff-client` module (created by
-  xref:../oidc/05-client-module/README.adoc[Plan 05]) declares the dependency; it never
-  reverses.
+  `token-sheriff-client` module declares the dependency; it never reverses.
 * The HTTP edge (`token-sheriff-client-quarkus`, or a future RESTEasy / portal adapter) maps
   the engine's typed exceptions to `application/problem+json`
   (xref:requirements.adoc#CLIENT-20[CLIENT-20], `COMMONS-10`).
 
 NOTE: The Maven module (`token-sheriff-client`), the `token-sheriff-client-quarkus`
-extension, and the BOM/reactor assembly were delivered by
-xref:../oidc/05-client-module/README.adoc[Plan 05]. This document specifies the engine those
+extension, and the BOM/reactor assembly are in place. This document specifies the engine those
 modules host.
 
 == The engine seam
@@ -201,4 +198,3 @@ control) are each captured as sourced `CLIENT-N` requirements above.
 * xref:specification/step-up-and-logout.adoc[Step-up & logout specification]
 * xref:specification/token-handling.adoc[Token-handling specification]
 * xref:specification/test-strategy.adoc[Test-strategy specification]
-* xref:../oidc/04-client-spec/README.adoc[Plan 04 — Client Spec]

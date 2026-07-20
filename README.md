@@ -66,7 +66,7 @@ Modern microservice architectures often need to validate JWT tokens from multipl
 - **Configuration Overhead**: OpenID Connect Discovery for automatic configuration from well-known endpoints
 
 > [!NOTE]
-> This library focuses on JWT validation and is not meant as a replacement for full OAuth2 or OpenID Connect libraries. It will never create tokens, only validate them.
+> The `token-sheriff-validation` library focuses on JWT validation — it will never create or acquire tokens, only validate them. Active token acquisition (the OIDC/OAuth client flows) is a distinct concern, shipped separately as the `token-sheriff-client` engine.
 
 ## Quick Start
 
@@ -152,6 +152,31 @@ TokenValidator validator = TokenValidator.builder()
 AccessTokenContent accessToken = validator.createAccessToken(AccessTokenRequest.of(tokenString));
 ```
 
+### Client Engine
+
+To *acquire* tokens — the active, confidential-client side — use the framework-agnostic `token-sheriff-client` engine (it validates every token it retrieves via `token-sheriff-validation`):
+
+```xml
+<dependency>
+    <groupId>de.cuioss.sheriff.token</groupId>
+    <artifactId>token-sheriff-client</artifactId>
+</dependency>
+```
+
+```java
+// Configure once per issuer; endpoints resolve via OIDC discovery
+String secret = System.getenv("OIDC_CLIENT_SECRET"); // supply via config or environment
+ClientConfiguration config = ClientConfiguration.builder()
+    .issuer("https://issuer.example.com/realms/demo")
+    .clientId("my-confidential-client")
+    .clientSecret(secret)
+    .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+    .scope("openid")
+    .build();
+```
+
+See the [token-sheriff-client README](token-sheriff-client/README.adoc) and the [client capability documentation](doc/client/README.adoc) for the flows, client-authentication methods, and token-lifecycle handling.
+
 ## Core Features
 
 - **Multi-issuer support** for handling tokens from different identity providers
@@ -183,6 +208,7 @@ For detailed architectural information, see:
 ## Documentation
 
 - [Documentation Hub](doc/README.adoc) - Complete guide to all documentation
+- [Client Capability](doc/client/README.adoc) - The OIDC/OAuth client engine: flows, client authentication, and token lifecycle
 - [Usage Guide](token-sheriff-validation/README.adoc) - Detailed usage examples
 - [Requirements](doc/validation/requirements.adoc) - Functional and non-functional requirements
 - [Threat Model](doc/validation/threat-model.adoc) - Security analysis

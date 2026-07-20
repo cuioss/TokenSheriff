@@ -145,7 +145,7 @@ passes the in-module egress / path control before the fetch
 Each check above is exercised against the commons `TokenDispatcher` / `WellKnownDispatcher` /
 `ParDispatcher` in *adversarial* mode
 (xref:../../commons/specification/transport.adoc#adversarial_dispatchers[commons transport
-spec], `COMMONS-7`) and the xref:../../oidc/06-implement/README.adoc[Plan 06] integration
+spec], `COMMONS-7`) and the integration
 suite (xref:../requirements.adoc#CLIENT-22[CLIENT-22]): PKCE downgrade refused, `state` /
 `iss` / `redirect_uri` mismatches rejected, injected codes not redeemable, and the configured
 client-auth method asserted. The full unit + integration coverage and the `CLIENT-N` → threat →

@@ -14,8 +14,7 @@ gathers the four cross-cutting concerns every capability sits on: *IdP transport
 counts events and exposes metrics; it never interprets a token's trust* — that is the
 validation layer's job.
 
-Requirement IDs use the `COMMONS-N` scheme (per xref:../oidc/02-doc-structure/README.adoc[Plan 02]),
-grouped by concern. IDs are stable identifiers referenced across documentation and the
+Requirement IDs use the `COMMONS-N` scheme, grouped by concern. IDs are stable identifiers referenced across documentation and the
 xref:threat-model.adoc[threat model]; they are not sequential across groups.
 
 === Document Navigation

@@ -8,7 +8,7 @@
 == Overview
 
 _See xref:requirements.adoc[Commons Requirements], xref:threat-model.adoc[Threat Model] and
-the xref:../oidc/decision-oidc-module.adoc[module-architecture decision]._
+the xref:../adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc[module-architecture decision]._
 
 `commons` is the *shared base layer* every capability sits on. It is the package root
 `de.cuioss.sheriff.token.commons` — with sub-packages `transport`, `error`, `events` and
@@ -66,8 +66,7 @@ sources — giving the same guarantee a module boundary would, with one fewer ar
 * `…validation..` may depend on `…commons..` (the allowed direction).
 * No package cycles across the `commons` / `validation` boundary.
 * The client boundary (`client → validation`, never the reverse) is enforced by *Maven* —
-  the `token-sheriff-client` module (created by
-  xref:../oidc/05-client-module/README.adoc[Plan 05]) declares the dependency.
+  the `token-sheriff-client` module declares the dependency.
 
 Because commons must not depend on validation, the security-event types in `commons.events`
 carry no link to validation's log-message registry, and the transport layer keeps its
@@ -79,12 +78,11 @@ dependencies to `cui-http` / `cui-tooling` plus commons-internal types.
 * `token-sheriff-validation-quarkus` → renders `commons.error` exceptions as RFC 9457.
 * `token-sheriff-client` (separate module) → `validation`, and thus `commons`
   transitively.
-* `nifi-extensions` (external consumer) → `validation`; any commons-visible package move is
-  recorded in xref:../oidc/01-restructure/migration-nifi-extensions.adoc[the migration guide].
+* `nifi-extensions` (external consumer) → `validation`; any commons-visible package move must
+  be coordinated with that external consumer.
 
 == See also
 
 * xref:specification/transport.adoc[Transport specification]
 * xref:specification/error-model.adoc[Error-model specification]
 * xref:specification/observability.adoc[Observability specification]
-* xref:../oidc/03-commons/README.adoc[Plan 03 — Commons]
