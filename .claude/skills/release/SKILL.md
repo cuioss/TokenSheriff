@@ -44,18 +44,54 @@ Observed timings (use these as the basis for the waits below):
 
 ### Step 1 — Determine the version number
 
-`.github/project.yml` is the single source of truth for both versions — read it, never
-assume:
-
-```bash
-grep -E 'current-version|next-version' .github/project.yml
-```
+`.github/project.yml` is the single source of truth for **every** version this skill
+touches. Derive them; never read the project version from `pom.xml`, a git tag, a previous
+GitHub release, or your own memory of the last cycle, and never hand-substitute a literal.
 
 - `release.current-version` — the **last released** version.
 - `release.next-version` — what `pom.xml` carries between releases.
 
 **Default rule:** the release version is `next-version` with `-SNAPSHOT` stripped. The new
-`next-version` is the next bump plus `-SNAPSHOT`.
+`next-version` is the next patch bump plus `-SNAPSHOT`.
+
+Export the three values once and use these variables verbatim in every later step — branch
+name, commit subject, PR title and body, tag check, notes filenames, and the changelog
+compare range:
+
+```bash
+eval "$(python3 - <<'PY'
+import pathlib, re
+text = pathlib.Path('.github/project.yml').read_text()
+def field(key):
+    m = re.search(rf'^\s*{key}:\s*(\S+)\s*$', text, re.M)
+    if not m:
+        raise SystemExit(f'{key} not found in .github/project.yml')
+    return m.group(1)
+prev = field('current-version')
+release = field('next-version').removesuffix('-SNAPSHOT')
+major, minor, patch = release.split('.')
+print(f'PREV_VERSION={prev}')
+print(f'RELEASE_VERSION={release}')
+print(f'NEXT_VERSION={major}.{minor}.{int(patch) + 1}-SNAPSHOT')
+PY
+)"
+echo "$PREV_VERSION -> $RELEASE_VERSION (then $NEXT_VERSION)"
+```
+
+`PREV_VERSION` is captured **before** the edit in Step 5 — once `current-version` is
+bumped, the previous release is no longer recoverable from the file, and both the
+`**Full Changelog**` compare range and the "previously …" Quarkus line need it.
+
+Then assert `pom.xml` agrees with `next-version`. project.yml stays the source of truth;
+a mismatch means the tree is in an unexpected state, so stop and investigate rather than
+releasing:
+
+```bash
+POM_VERSION=$(./mvnw -B -q help:evaluate -Dexpression=project.version -DforceStdout -N)
+[ "$POM_VERSION" = "${RELEASE_VERSION}-SNAPSHOT" ] \
+  && echo "OK: pom.xml agrees with project.yml" \
+  || { echo "STOP - pom.xml=$POM_VERSION, expected ${RELEASE_VERSION}-SNAPSHOT"; false; }
+```
 
 **Ask the user** (AskUserQuestion) only if in doubt — e.g. the numbers don't follow the
 expected pattern, a patch/major release is plausible, or `current-version` and `next-version`
@@ -84,11 +120,21 @@ python3 .claude/skills/release/check-quarkus-alignment.py --repo . --check-resol
 | 1 | **misaligned** — stop, fix, restart |
 | 2 | **could not determine** — also a stop. An unresolvable check is never a pass. |
 
-`version.quarkus` here is a **project-owned pin, not an override**: the parent chain declares
-no Quarkus version at all, and it cannot — Maven does not propagate properties from
-*imported* BOMs, and `quarkus-maven-plugin` needs the value as a build extension. This
-project's Quarkus therefore moves independently of `cuioss-parent-pom`, and nothing upstream
-validates it.
+`version.quarkus` reaches this project in one of **two** shapes, and the script resolves
+both — first by scanning reactor POMs, then, if none declares it, from the effective POM:
+
+- **declared here** — the historical shape, and still what any consumer pinning its own
+  Quarkus does.
+- **inherited from the parent chain** — TokenSheriff since it adopted `cui-quarkus-parent`
+  (PR #717). An *imported* BOM can never supply the value, because Maven does not propagate
+  properties from imported BOMs and `quarkus-maven-plugin` needs it as a build extension —
+  but a real `<parent>` does propagate it.
+
+That fallback exists because the text scan alone reported the inherited case as "not declared
+anywhere" and exited 2 — blocking every release at this step. A gate that *cannot run* is the
+one that gets waved through, which is exactly the outage it exists to prevent. A genuine
+*conflict* between reactor declarations still fails loudly: that is a real split, not a
+missing value.
 
 Quarkus' deployment classes are compiled against one specific smallrye-config release, so a
 newer version — even an internally coherent one — fails augmentation with
@@ -116,16 +162,17 @@ Branch name uses the `chore/` prefix (required — the Maven CI workflow only tr
 `build` check and block auto-merge):
 
 ```bash
-git checkout -b chore/release_<version>
+git checkout -b "chore/release_${RELEASE_VERSION}"
 ```
 
 ### Step 5 — Update `.github/project.yml`
 
 Edit the `release` block:
-- `current-version:` → the version determined in Step 1
-- `next-version:` → next bump + `-SNAPSHOT`
+- `current-version:` → `$RELEASE_VERSION`
+- `next-version:` → `$NEXT_VERSION`
 
-Leave everything else untouched.
+Leave everything else untouched — the diff must be exactly those two lines. Confirm with
+`git diff .github/project.yml` before committing.
 
 ### Step 6 — Badges in README.md (normally no action)
 
@@ -138,13 +185,13 @@ README change.
 
 ```bash
 git add .github/project.yml
-git commit -m "chore(release): prepare release <version>"
-git push -u origin chore/release_<version>
+git commit -m "chore(release): prepare release ${RELEASE_VERSION}"
+git push -u origin "chore/release_${RELEASE_VERSION}"
 gh label create skip-bot-review --repo cuioss/TokenSheriff --description "Skip automated bot review" --color ededed 2>/dev/null || true
 gh pr create --repo cuioss/TokenSheriff --base main \
-  --title "chore(release): prepare release <version>" \
+  --title "chore(release): prepare release ${RELEASE_VERSION}" \
   --label "skip-bot-review" \
-  --body "Bump current-version to <version>, next-version to <next>-SNAPSHOT. Triggers the automated Release workflow on merge."
+  --body "Bump current-version to ${RELEASE_VERSION}, next-version to ${NEXT_VERSION}. Triggers the automated Release workflow on merge."
 ```
 
 The mechanical release PR carries the `skip-bot-review` label so automated bot review is
@@ -204,12 +251,44 @@ Pages deploy + GitHub release publish before treating it as stuck.
 ### Step 12 — Verify the release landed
 
 ```bash
-gh release view <version> --repo cuioss/TokenSheriff \
+gh release view "$RELEASE_VERSION" --repo cuioss/TokenSheriff \
   --json tagName,name,createdAt,body
-git fetch --tags && git tag --list <version>
+git fetch --tags && git tag --list "$RELEASE_VERSION"
 ```
-Confirm the tag exists and a GitHub release for `<version>` was created. If it did not appear,
+Confirm the tag exists and a GitHub release for `$RELEASE_VERSION` was created. If it did not appear,
 inspect the Release workflow run log before proceeding.
+
+### Step 12b — Verify consumer propagation actually changed something
+
+The Release workflow's `propagate-to-consumers` job opens a bump PR in each consumer repo.
+It reports **success even when it changed nothing**, so a green job is not evidence that
+consumers moved. Read the per-consumer `RESULT:` lines:
+
+```bash
+JOB=$(gh run view <run-id> --repo cuioss/TokenSheriff --json jobs \
+  --jq '.jobs[] | select(.name|test("propagate")) | .databaseId')
+gh run view --job "$JOB" --repo cuioss/TokenSheriff --log \
+  | grep -E 'Propagating to|Skipping|RESULT:'
+```
+
+`"status": "no_changes"` is the one to look at. It means either "already correct" **or**
+the updater declined, and the two are indistinguishable in the job summary. The decline
+that matters:
+
+```
+Skipping SNAPSHOT property value: <version>-SNAPSHOT
+```
+
+A consumer developing against the unreleased snapshot pins `<version>-SNAPSHOT`, and the
+updater refuses to overwrite a SNAPSHOT pin — a sound guard that nevertheless blinds it at
+the exact moment the pin should move, because `X-SNAPSHOT → X` is the one bump it will
+never make. That consumer keeps building against mutable snapshot bytes that Central will
+eventually purge, and any temporary snapshot-repository block stays in its resolution path.
+
+Such a consumer needs a **manual** PR: move the pin to the release version, drop any
+snapshot-repository declaration added for it, and re-check version-convergence comments
+that name the old Quarkus/platform numbers. Report it in Step 14 rather than treating the
+green job as done.
 
 ### Step 13 — Reformat the generated release notes
 
@@ -219,9 +298,11 @@ the update:
 
 ```bash
 mkdir -p .plan/temp
-gh release view <version> --repo cuioss/TokenSheriff --json body --jq .body > .plan/temp/release-<version>-orig.md
-# ...build the reformatted body in .plan/temp/release-<version>.md...
-gh release edit <version> --repo cuioss/TokenSheriff --notes-file .plan/temp/release-<version>.md
+gh release view "$RELEASE_VERSION" --repo cuioss/TokenSheriff --json body --jq .body \
+  > ".plan/temp/release-${RELEASE_VERSION}-orig.md"
+# ...build the reformatted body in .plan/temp/release-${RELEASE_VERSION}.md...
+gh release edit "$RELEASE_VERSION" --repo cuioss/TokenSheriff \
+  --notes-file ".plan/temp/release-${RELEASE_VERSION}.md"
 ```
 
 After building the reformatted file, **cross-check coverage** before editing the release:
@@ -302,7 +383,8 @@ not in the original.
    `* <title> by @author in <url>` shape. Rules 5 and 6 **override** verbatimness where
    they conflict: rewrite the title's version range to span the collapsed chain, and name
    the several modules or coordinates on the surviving line.
-10. Keep the trailing `**Full Changelog**: ...compare/<prev>...<version>` line.
+10. Keep the trailing `**Full Changelog**: ...compare/$PREV_VERSION...$RELEASE_VERSION`
+    line, built from the Step 1 values rather than copied from the generated notes.
 
 #### Verify before publishing (mandatory)
 
@@ -311,7 +393,7 @@ library under differing titles. After building the notes file and **before**
 `gh release edit`, assert that every library appears exactly once:
 
 ```bash
-grep -oE '(bump|update) [^ ]+ (from|in)' .plan/temp/release-<version>.md \
+grep -oE '(bump|update) [^ ]+ (from|in)' ".plan/temp/release-${RELEASE_VERSION}.md" \
   | sort | uniq -c | sort -rn | head
 ```
 
@@ -322,13 +404,18 @@ Every count must be `1`. Any count `>1` is an unmerged duplicate — collapse it
 
 ### Step 14 — Done
 
-Report: released version, release URL, the PR number, and a short summary of how many
-dependency PRs were collapsed/removed during note reformatting.
+Report: released version, release URL, the PR number, a short summary of how many
+dependency PRs were collapsed/removed during note reformatting, and the outcome of Step 12b
+— naming any consumer that reported `no_changes` because it pins a SNAPSHOT and therefore
+still needs a manual bump.
 
 ## Critical rules
 
 - The release is triggered by **merging a `.github/project.yml` change** — never hand-run
   Maven release goals.
+- **Every project version is derived from `.github/project.yml`** — via the Step 1 export,
+  never from `pom.xml`, a git tag, a prior release, or a literal typed into a command.
+  `pom.xml` is checked *against* it, never read *as* it.
 - Always pass `--repo cuioss/TokenSheriff` to `gh` (the local checkout is named `OAuthSheriff`).
 - Branch prefix **must** be `chore/` (or another CI-accepted prefix) or the build check skips
   and auto-merge is blocked.
