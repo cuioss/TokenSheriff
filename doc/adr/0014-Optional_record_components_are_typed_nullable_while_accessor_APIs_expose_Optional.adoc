@@ -48,7 +48,7 @@ Two boundaries keep the rule from over-reaching. It does not say `Optional` is u
 === Positive
 
 * Optionality is machine-readable at the point of declaration. A `@Nullable` component feeds the same tooling that enforces the `@NullMarked` posture everywhere else, so an optional record component is checked rather than merely documented.
-* Records stay free of stored containers. No `Optional` enters a generated `equals`, `hashCode`, or `toString`, and none is capable of being both null and empty, so the "empty versus absent" ambiguity that an `Optional`-typed field creates cannot arise.
+* An optional record component stores no container. Clause 1 keeps `Optional` out of the state a generated `equals`, `hashCode`, or `toString` is derived from for the components it governs, and a `@Nullable` reference cannot be both `null` and empty, so the "empty versus absent" ambiguity an `@Nullable Optional<String>` component would create cannot arise on them. Clause 1 constrains only the representation of an *optional* component; a required component's type is left to the type's own design, so this is not a module-wide prohibition on `Optional` in records.
 * Callers of accessor APIs keep a shape they cannot dereference by accident. `TokenResponse.getRefreshToken()` hands back an absence the caller must open, which is the property `Optional` is for.
 * The apparent inconsistency becomes a readable rule. A reader meeting both shapes has one question to ask — is this a projected component or a designed accessor — and the answer determines the shape without further judgement.
 * New types have a default. The rule applies before anyone reaches for a preference, so the module does not drift toward whichever shape was written most recently.

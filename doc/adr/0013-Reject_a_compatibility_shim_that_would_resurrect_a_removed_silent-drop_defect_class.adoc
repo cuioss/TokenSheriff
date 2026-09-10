@@ -46,7 +46,7 @@ The compatibility posture for this change is *breaking*, and the posture is what
 
 === Positive
 
-* The silent-drop defect class is closed structurally rather than by convention. No call shape exists that discards a refresh token without a caller writing `null` at the call site, so the loss cannot happen inattentively.
+* The implicit path into the silent-drop defect class is closed structurally rather than by convention. No call shape omits the refresh token any more: a site that carries none must write `null`, where the omission is visible to a reader and shows up in the diff that introduced it. The removal is of the *implicit* omission, not of the outcome — an explicit `null` remains constructible, and can still be written without thought (see Risks) — so what the change guarantees is that the omission is stated and reviewable, not that it is considered.
 * Every construction site states its refresh-token handling. A reader of any `new AuthenticationResult(...)` sees what that site believes about refresh-token availability, without tracing which overload was chosen.
 * The migration is finite and mechanical. There is one constructor, so there is no period during which two forms coexist, no deprecation bookkeeping, and no later removal to schedule and remember.
 * The public surface stays minimal. One constructor for one record is the smallest API that expresses the contract, and it does not grow a second entry point whose only purpose is to be avoided.

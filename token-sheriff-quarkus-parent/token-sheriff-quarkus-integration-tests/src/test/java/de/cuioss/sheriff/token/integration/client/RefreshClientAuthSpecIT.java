@@ -38,6 +38,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPublicKey;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -185,9 +186,12 @@ class RefreshClientAuthSpecIT extends BaseIntegrationTest {
         // Pin the advertised set so the selector has a real choice between private_key_jwt and a
         // shared secret, rather than depending on whatever the realm's live discovery document
         // happens to return. The selection asserted below is therefore driven by this fixture
-        // list, not by the realm's actual discovery response.
-        metadata.tokenEndpointAuthMethodsSupported =
-                List.of("client_secret_basic", "client_secret_post", "private_key_jwt", "tls_client_auth");
+        // list, not by the realm's actual discovery response. Deriving the entries from
+        // ClientAuthMethod does not make the list live discovery — it stays a fixture substituted
+        // for the discovery response, one that cannot drift from the enum as methods are added.
+        metadata.tokenEndpointAuthMethodsSupported = Arrays.stream(ClientAuthMethod.values())
+                .map(ClientAuthMethod::getMetadataValue)
+                .toList();
 
         ClientAuthentication selected = new ClientAuthenticationSelector().select(
                 List.of(new ClientSecretBasicAuth(PRIVATE_KEY_JWT_CLIENT_ID, "unused-shared-secret"),
