@@ -4,7 +4,7 @@
     <parent>
         <groupId>de.cuioss.sheriff.token</groupId>
         <artifactId>token-sheriff-parent</artifactId>
-        <version>0.9.5</version>
+        <version>0.9.6-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -278,8 +278,7 @@
 
                      The 11 classes listed below hold 800 covered instructions and 83 covered branches
                      between them. So a TOTAL refresh-path wipeout is caught by the bundle rule on BRANCH
-                     (83 > 54) and missed entirely on INSTRUCTION (800 < 1127). An earlier form of this comment justified the per-class rule by claiming a total wipeout passed the bundle
-                     outright; on the measurement above that claim is half expired, and it is no longer the
+                     (83 > 54) and missed entirely on INSTRUCTION (800 < 1127). An earlier form of this comment justified the per-class rule by claiming a total wipeout passed the bundle outright; on the measurement above that claim is half expired, and it is no longer the
                      reason this gate earns its keep.
 
                      The live justification is the SINGLE-CLASS case. flow.RefreshFlow alone carries 322
