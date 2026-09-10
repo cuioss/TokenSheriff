@@ -38,6 +38,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPublicKey;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,17 +49,27 @@ import static org.junit.jupiter.api.Assertions.*;
  * Drives the {@code refresh_token} leg through the production client-authentication strategies other
  * than {@code client_secret_basic}, against the real Keycloak container.
  * <p>
- * The engine ships four strategies behind {@link ClientAuthenticationSelector}, but only
+ * The client-authentication implementations that can be handed to
+ * {@link ClientAuthenticationSelector} map 1:1 onto the methods {@link ClientAuthMethod} declares —
+ * the production methods plus the alpha {@code tls_client_auth} — but only
  * {@link ClientSecretBasicAuth} had ever authenticated a refresh against a real authorization server:
  * every other refresh spec in this module builds its flow from
- * {@link RefreshEngineSupport#clientAuthentication(ClientConfiguration)}, which is Basic. This spec
- * closes {@link ClientSecretPostAuth} and {@link PrivateKeyJwtAuth}, and pins the selector's routing
- * against the realm's genuinely advertised {@code token_endpoint_auth_methods_supported}.
+ * {@link RefreshEngineSupport#clientAuthentication(ClientConfiguration)}, which is Basic.
+ * This spec closes {@link ClientSecretPostAuth} and {@link PrivateKeyJwtAuth}, and pins the
+ * selector's routing against a fixture {@code token_endpoint_auth_methods_supported} list rather
+ * than whatever the realm's live discovery document happens to return. With those legs closed,
+ * <strong>every method the selector can actually select is exercised here</strong> — the claim is
+ * bounded by what {@link ClientAuthenticationSelector#select} does rather than by a fixed strategy
+ * count: it walks the caller-configured {@link ClientAuthentication} strategies it is handed, skips
+ * the alpha {@code tls_client_auth}, and keeps the strongest candidate whose
+ * {@link ClientAuthMethod} the authorization server advertises.
  * <p>
- * {@code MtlsClientAuth} is deliberately absent: it is a transport-layer binding the client transport
+ * {@code MtlsClientAuth} is outside that exercised set by <em>classification</em>, not by omission:
+ * {@code tls_client_auth} is an alpha capability — declared, never selected, and not a coverage
+ * obligation while unexercised (ADR-0012). It is a transport-layer binding the client transport
  * cannot honor (no client key material is plumbed through the {@code SSLContext}), and
- * {@link ClientAuthenticationSelector} skips {@code tls_client_auth} for exactly that reason. Driving
- * it would need certificate infrastructure this fixture does not have.
+ * {@link ClientAuthenticationSelector} skips it for exactly that reason. Driving it would need
+ * certificate infrastructure this fixture does not have.
  *
  * <h2>Ephemeral {@code private_key_jwt} key material</h2>
  * The assertion signing key is generated per test run and its public half is pushed onto the realm's
@@ -172,10 +183,15 @@ class RefreshClientAuthSpecIT extends BaseIntegrationTest {
                 PRIVATE_KEY_JWT_CLIENT_ID, null, ClientAuthMethod.PRIVATE_KEY_JWT);
         ClientAuthentication assertionAuth = privateKeyJwtAuth();
         ProviderMetadata metadata = RefreshEngineSupport.discoveredProviderMetadata();
-        // The realm genuinely advertises both, verified against its live discovery document; the
-        // selector must therefore have a real choice to make rather than a single candidate.
-        metadata.tokenEndpointAuthMethodsSupported =
-                List.of("client_secret_basic", "client_secret_post", "private_key_jwt", "tls_client_auth");
+        // Pin the advertised set so the selector has a real choice between private_key_jwt and a
+        // shared secret, rather than depending on whatever the realm's live discovery document
+        // happens to return. The selection asserted below is therefore driven by this fixture
+        // list, not by the realm's actual discovery response. Deriving the entries from
+        // ClientAuthMethod does not make the list live discovery — it stays a fixture substituted
+        // for the discovery response, one that cannot drift from the enum as methods are added.
+        metadata.tokenEndpointAuthMethodsSupported = Arrays.stream(ClientAuthMethod.values())
+                .map(ClientAuthMethod::getMetadataValue)
+                .toList();
 
         ClientAuthentication selected = new ClientAuthenticationSelector().select(
                 List.of(new ClientSecretBasicAuth(PRIVATE_KEY_JWT_CLIENT_ID, "unused-shared-secret"),

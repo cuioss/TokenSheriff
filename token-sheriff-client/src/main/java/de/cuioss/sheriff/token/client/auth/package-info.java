@@ -21,7 +21,8 @@
  * {@link de.cuioss.sheriff.token.client.auth.ClientSecretBasicAuth} and
  * {@link de.cuioss.sheriff.token.client.auth.ClientSecretPostAuth} (shared secret over TLS),
  * {@link de.cuioss.sheriff.token.client.auth.PrivateKeyJwtAuth} (RFC 7523 signed assertion), and
- * {@link de.cuioss.sheriff.token.client.auth.MtlsClientAuth} (RFC 8705 certificate binding).
+ * {@link de.cuioss.sheriff.token.client.auth.MtlsClientAuth} (RFC 8705 certificate binding; an
+ * alpha capability — declared, never selected, and not a coverage obligation while unexercised).
  * {@link de.cuioss.sheriff.token.client.auth.ClientAuthenticationSelector} picks the strongest
  * method the authorization server advertises, refusing to downgrade ({@code CLIENT-4}).
  *

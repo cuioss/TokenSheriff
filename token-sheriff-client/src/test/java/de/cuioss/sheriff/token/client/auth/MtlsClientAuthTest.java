@@ -25,34 +25,37 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Unit tests for {@link MtlsClientAuth} ({@code tls_client_auth}, RFC 8705) — H4.
+ * Alpha-surface contract test for {@link MtlsClientAuth} ({@code tls_client_auth}, RFC 8705) — H4.
  * <p>
+ * {@code tls_client_auth} is an alpha capability: declared, never selected, and not a coverage
+ * obligation while unexercised. Its fail-fast constructor is what holds that classification, so
+ * these tests pin the contract of the alpha surface rather than the behaviour of a usable strategy.
  * Mutual-TLS authenticates the client at the transport layer via a client certificate carried by an
  * {@code SSLContext} on the {@code HttpHandler}. No code path plumbs such an {@code SSLContext} into
  * the transport, so a {@code tls_client_auth} request would leave the client without a bound
- * certificate — an unauthenticated request. The strategy therefore fails fast at construction rather
- * than producing that request; these tests confirm the fail-fast contract.
+ * certificate — an unauthenticated request. The strategy refuses construction rather than producing
+ * that request.
  */
 @EnableTestLogger
 @EnableGeneratorController
-@DisplayName("Mutual-TLS (tls_client_auth) client authentication")
+@DisplayName("Mutual-TLS (tls_client_auth) alpha-surface contract")
 class MtlsClientAuthTest {
 
     @Test
-    @DisplayName("Should fail fast at construction because the transport cannot honor mutual-TLS")
+    @DisplayName("Should refuse construction — the alpha surface is declared but never constructible")
     void shouldFailFastAtConstruction() {
         String clientId = Generators.letterStrings(5, 12).next();
 
         var exception = assertThrows(UnsupportedOperationException.class,
                 () -> new MtlsClientAuth(clientId),
-                "constructing tls_client_auth must fail fast until the transport can honor mTLS");
+                "constructing the alpha tls_client_auth strategy must fail fast");
 
         assertTrue(exception.getMessage().contains("tls_client_auth"),
                 "the failure must name the unsupported method");
     }
 
     @Test
-    @DisplayName("Should fail fast for a null client id — no unauthenticated strategy is constructible")
+    @DisplayName("Should refuse construction for a null client id — no client id makes the alpha surface usable")
     void shouldFailFastForNullClientId() {
         assertThrows(UnsupportedOperationException.class, () -> new MtlsClientAuth(null),
                 "no tls_client_auth strategy is constructible regardless of the client id");

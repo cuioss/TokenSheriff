@@ -169,9 +169,8 @@ final class RefreshEngineSupport {
 
     /**
      * @param clientId     the realm client to authenticate as
-     * @param clientSecret the client's shared secret, or {@code null} for the key-based methods
-     *                     ({@code private_key_jwt} / {@code tls_client_auth}) where no shared secret
-     *                     exists
+     * @param clientSecret the client's shared secret, or {@code null} for {@code private_key_jwt} —
+     *                     and for the alpha {@code tls_client_auth} — where no shared secret exists
      * @param authMethod   the client-authentication method the configuration declares
      * @return a configuration bound to the {@code client-engine} realm's issuer identity and carrying
      *         the chain-validating trust material

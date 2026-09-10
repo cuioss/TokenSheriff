@@ -430,6 +430,8 @@ class ClientConfigurationTest {
         @Test
         @DisplayName("Should rank key-based methods above shared-secret methods")
         void shouldRankKeyBasedMethodsStronger() {
+            // The TLS_CLIENT_AUTH leg pins the declared alpha surface: the constant keeps its
+            // key-based rank even though the selector never picks it.
             assertAll(
                     () -> assertTrue(ClientAuthMethod.PRIVATE_KEY_JWT.getStrength()
                             > ClientAuthMethod.CLIENT_SECRET_BASIC.getStrength()),
@@ -440,6 +442,8 @@ class ClientConfigurationTest {
         @Test
         @DisplayName("Should resolve a method from its advertised metadata value")
         void shouldResolveFromMetadataValue() {
+            // The tls_client_auth round-trip pins the declared alpha surface: an advertised
+            // tls_client_auth entry still resolves to a named method even though it is never selected.
             assertAll(
                     () -> assertEquals(ClientAuthMethod.PRIVATE_KEY_JWT,
                             ClientAuthMethod.fromMetadataValue("private_key_jwt").orElseThrow()),

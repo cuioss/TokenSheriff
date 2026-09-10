@@ -1,0 +1,98 @@
+= ADR-0012: mTLS client authentication is an alpha capability, DPoP is the sender-constraining and client-authentication direction
+:toc: left
+:toclevels: 2
+:sectnums:
+
+// adr-metadata
+// summary: tls_client_auth / MtlsClientAuth is an alpha capability - a declared client-authentication surface that is never selected and is not counted as a coverage gap when unexercised - because its binding is transport-level and the client transport plumbs no client key material; DPoP is the sender-constraining and client-authentication direction for first production
+// tags: oauth, client-authentication, mtls, dpop, coverage
+// affects: token-sheriff-client
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+An OAuth client that offers a catalogue of client-authentication strategies faces a structural question the catalogue itself cannot answer: what does it mean for one entry in that catalogue to be *declared* but not *reachable*, and how should the project's coverage accounting grade it?
+
+Mutual-TLS client authentication (`tls_client_auth`) is the entry where that question bites, because it is the only strategy in the catalogue whose credential does not live in the request the client composes. Every other strategy - a shared secret carried in the authorization header or the form body, a signed client assertion - is assembled inside the token request and is therefore fully determined by the client-authentication layer. mTLS is different in kind: its credential is a client certificate presented during the TLS handshake, one layer below the HTTP request, and it is honoured only if the transport was constructed with client key material in its `SSLContext`. The client's transport plumbs no such material. A `tls_client_auth` selection therefore cannot produce an authenticated request at all - it produces an ordinary anonymous TLS connection that the authorization server refuses, or worse, silently treats as a different (weaker) authentication posture.
+
+Two consequences follow from a strategy being declared-but-unreachable, and they pull in opposite directions:
+
+* The selector must not choose it. Preferring a strategy that cannot work over one that can is a silent-failure generator: the caller configured authentication, the client appeared to honour the configuration, and the request went out unauthenticated.
+* The absence of tests exercising it reads, to any coverage-accounting rule that treats declared surfaces uniformly, as a coverage hole. Driving the strategy end-to-end would require certificate infrastructure - a client keypair, a server configured to request and validate it, and a transport plumbed to present it - that the project's fixtures do not have and that no production requirement currently asks for.
+
+An unclassified surface leaves both consequences unresolved simultaneously: the code carries a strategy nobody may select, and the quality gates carry a permanent red mark for not exercising it. The project needs a classification that says, once and durably, what this surface *is*, so that neither the selector's behaviour nor the coverage verdict has to be re-derived from the transport's plumbing every time either is questioned.
+
+The direction that resolves the question is already set independently. Sender-constrained tokens and confidential-client authentication for first production are carried by DPoP: an application-layer proof-of-possession whose key material the client owns and whose binding survives inside the token itself, rather than in a connection. Anything the mTLS path would have delivered for first production is delivered by a mechanism the client can actually construct.
+
+== Decision
+
+`tls_client_auth`, and its implementation `MtlsClientAuth`, is an *alpha capability*. The classification has exactly three properties, and they hold together:
+
+. *Retained as a declared surface.* The strategy stays in the code and in the configuration enumeration. It is a real, named, compilable client-authentication method with a real implementation - not a stub, not a `TODO`, and not deleted.
+. *Never selected.* `ClientAuthenticationSelector` does not choose it, no matter what the authorization server advertises. A working method is always preferred over a silently non-functional one, so a server that advertises `tls_client_auth` alongside any reachable method routes to the reachable one.
+. *Not counted as a coverage gap when unexercised.* Tests that would exercise the strategy end-to-end are not owed, and their absence is not a hole. An alpha capability is graded on being declared and inert, not on being driven.
+
+DPoP is the sender-constraining and client-authentication direction for first production. Work that would otherwise be spent making the mTLS path reachable belongs on the DPoP path instead.
+
+The classification is not a promise that the strategy will remain forever unreachable. It is a statement about the current architecture: an alpha capability is one the codebase declares and does not use, and the route out of alpha is plumbing client key material through the transport and standing up the certificate infrastructure to exercise it - a change of the architecture, made deliberately, not a gap to be closed opportunistically by a coverage pass.
+
+== Consequences
+
+Three dispositions recorded in the refresh-path elimination verdict are settled by this classification. Each row carries the verdict's own wording:
+
+[cols="1,3,2", options="header"]
+|===
+| Verdict location | What the verdict recorded | Disposition under this decision
+
+| Section 1.4, item 2 (residual at case 2a)
+| "*mTLS client authentication - the one client-authentication strategy still unexercised.*" `MtlsClientAuth` "remains open and is a *permanent residual for this fixture*: the binding is transport-level, no client key material is plumbed through the transport's `SSLContext`, and `ClientAuthenticationSelector` deliberately skips `tls_client_auth` for exactly that reason (preferring a working method over a silently non-functional one). Driving it needs certificate infrastructure this fixture does not have."
+| Reclassified from residual to out-of-scope: the strategy is alpha, so its absence from the exercised set is the expected state rather than an open item. The verdict's honest note survives the reclassification unchanged - the fixture does lack the certificate infrastructure, and that remains the reason the path cannot be driven, not a reason to owe a test for it.
+
+| Section 4 (residual scope, cross-repository)
+| "*mTLS is not* (section 1.4 item 2) - if API Sheriff's BFF uses `tls_client_auth`, this elimination still does not cover its configuration."
+| Closed outright. The caveat existed because a relying party might have been authenticating with a strategy this engine had never exercised. Under this decision the engine never selects that strategy, so there is no engine-side configuration for the caveat to fail to cover; a relying party that requires mTLS client authentication requires a capability this client does not offer, which is a statement of scope rather than an uncovered elimination bound.
+
+| Section 1.3, variant 3 (exercised at case 2a)
+| "*DPoP-bound sender-constraint continuity* - a DPoP-bound bundle acquired from `dpop-client` (`dpop.bound.access.tokens=true`) with a test-owned RSA-2048 key, then refreshed through a `RefreshFlow` carrying `SenderConstraint.dpop(...)` over the _same_ key; the rotated access token asserted to still carry the identical `cnf.jkt` thumbprint."
+| Foregrounded. This is the evidence behind the direction, not an incidental exercised row: the sender-constraining mechanism the project is choosing is already demonstrated to survive a rotation against a live authorization server, which is precisely the property the mTLS route was the alternative candidate for.
+|===
+
+This classification scopes `tls_client_auth` / `MtlsClientAuth` on the OAuth client-authentication dimension only, and leaves the mTLS sender-constraint-preservation mechanics - a `cnf.x5t#S256` certificate thumbprint carried across token storage and refresh - entirely untouched, because presenting a client certificate to authenticate a token request and preserving a certificate-bound confirmation claim already present on a token are different capabilities that happen to share the word "mTLS".
+
+=== Positive
+
+* The silent-failure mode is structurally closed rather than documented: no configuration, and no authorization-server advertisement, can route a request through a strategy that would go out unauthenticated.
+* Coverage accounting gets a stable answer. An unexercised alpha strategy is not a hole, so a coverage gate reading the client-authentication package is graded on the strategies that can actually run, and does not carry a permanent red mark that every reader must learn to discount.
+* The elimination bound recorded for the shared refresh surface stops being qualified by an mTLS caveat, so a consumer reading it no longer has to determine whether their own client-authentication configuration falls inside or outside the bound.
+* Effort follows the direction. Certificate infrastructure that would only ever serve an unselected strategy is not built, and the sender-constraining work concentrates on the mechanism the client can construct today.
+
+=== Negative
+
+* The codebase carries a real implementation that no production path reaches. A reader encountering `MtlsClientAuth` sees working-looking code and must consult this classification to learn that it is inert by design; the code alone does not say so.
+* A relying party that requires mTLS client authentication is not served, and finds out by reading the classification rather than by observing a failure. The declared surface is, from the outside, indistinguishable from an offered capability until the selector's behaviour is understood.
+* "Alpha" is a project-level term with no enforcement of its own. It constrains the selector and the coverage verdict because this decision says so, not because any mechanism prevents a future change from selecting the strategy.
+
+=== Risks
+
+* A future change that plumbs a caller-supplied `SSLContext` carrying client key material could make the strategy reachable without anyone revisiting this classification, leaving the selector skipping a strategy that would now work - the inverse of the failure this decision closes.
+* Treating an unexercised alpha surface as exempt from coverage accounting is a rule that generalises badly if applied loosely: any inconvenient surface can be relabelled rather than tested. The exemption is sound here only because the strategy is unreachable by construction, and it stops being sound the moment the strategy becomes selectable.
+* The scoping sentence separating client authentication from sender-constraint preservation depends on readers keeping two mTLS-adjacent capabilities apart. A reader who collapses them may conclude that certificate-bound confirmation claims are also alpha, which this decision does not say.
+
+== Alternatives Considered
+
+* *Make the strategy reachable now - plumb client key material through the transport and stand up the certificate infrastructure to exercise it.* This is the only option that turns the declared surface into a working one, and it would close the coverage question by making the tests owed and passing rather than not owed. Its cost is a transport-layer capability (client key material in the `SSLContext`, and the configuration surface to supply it), a fixture capability (a client keypair and an authorization server configured to request and validate it), and continuing maintenance of both - all in service of an authentication method no production requirement asks for, while the sender-constraining direction it competes with is already demonstrated working. Rejected as effort spent widening a path the architecture is not taking.
+* *Delete the `tls_client_auth` surface outright.* This resolves the silent-failure risk with maximum finality - a strategy that does not exist cannot be selected - and removes the coverage question with the code. It also discards a correct implementation of a standard mechanism, turns a future decision to support mTLS into a from-scratch exercise, and removes the client's ability to *name* the strategy when reporting what an authorization server advertised. Rejected because the declared surface has value independent of being selected, and inertness is achievable without deletion.
+* *Leave the strategy unclassified and carry it as a permanent coverage residual.* This is the status quo the decision replaces: the selector already skips the strategy, and the residual is already recorded honestly. It costs nothing to adopt, and that is its whole appeal. What it does not do is settle anything - every coverage review re-encounters an open item that will never close, every reader of the elimination bound re-derives whether mTLS matters to them, and the reason the selector skips the strategy lives only in a comment next to the skip. Rejected because an item that is permanently open is a classification the project has declined to make, not a residual it is tracking.
+
+The alternatives fall into one class: each answers the question by changing what the code *contains* (build the capability, or remove it) or by declining to answer it at all (carry it open forever). This decision instead changes what the code *claims* - the surface stays, its selectability and its coverage obligation are stated once - which is the cheapest of the four and the only one that leaves the architecture free to move in either direction later.
+
+== References
+
+* `.plan/local/archived-plans/2026-08-29-refresh-integration-coverage/work/refresh-elimination-verdict.md` - the refresh-path elimination verdict whose mTLS residual, cross-repository caveat and DPoP sender-constraint-continuity result this ADR supersedes. Read-only source: it is a point-in-time record and is not edited by this decision.
+* ADR-0008 - Adopt the upstream cui-http `verifyHostname` knob rather than a local trust manager; the transport-layer TLS and `SSLContext` posture this decision's reachability argument rests on.
+* `doc/client/architecture.adoc` - the client architecture document carrying the client-authentication strategy surface.

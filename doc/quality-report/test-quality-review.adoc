@@ -279,3 +279,15 @@ Client + Quarkus:
 * TLS: genuine JDK handshake in both trust directions with proof that no request left before refusal; cleartext-client-not-reused-for-TLS.
 * Logout open-redirect (unit): exact-match only, look-alike host/sub-path/query/prefix rejections, full attack corpus, state-echo binding.
 * Bearer path (Quarkus): real 200 positives with body assertions and 401 negatives across producer/interceptor/CDI; a thorough 400/401 boundary sweep in `ApiValidationSpecIT`.
+
+[NOTE]
+====
+2026-09-09 — superseding direction, not a correction. Everything recorded above stands as
+reviewed on 2026-08-15. Since then, `tls_client_auth` / `MtlsClientAuth` has been classified an
+*alpha capability* — a declared client-authentication surface that is never selected and is not
+counted as a coverage gap when unexercised — and DPoP is the sender-constraining and
+client-authentication direction. The "mTLS special case" listed above under client-auth selection
+therefore reads as coverage of the alpha surface's refusal behaviour, not as coverage of a
+production client-authentication route. See
+xref:../adr/0012-mTLS_client_authentication_is_an_alpha_capability_DPoP_is_the_sender-constraining_and_client-authentication_direction.adoc[ADR-0012].
+====

@@ -1,0 +1,81 @@
+= ADR-0013: Reject a compatibility shim that would resurrect a removed silent-drop defect class
+:toc: left
+:toclevels: 2
+:sectnums:
+
+// adr-metadata
+// summary: A transitional overload is refused when the value it would supply implicitly is the exact value the breaking change made unreachable by accident - the two-argument AuthenticationResult constructor would default refreshToken to null and restore the silent-drop path the arity widening removed, so callers migrate to the full-arity constructor with no shim
+// tags: oauth, refresh-token, public-api, backward-compatibility
+// affects: token-sheriff-client
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+Widening a public constructor's arity to make an implicit value explicit is a breaking change, and it invites an obvious softening: keep the old signature as a delegating overload that supplies the value the new parameter now demands. The overload costs one method, recompiles every existing caller unchanged, and looks like ordinary courtesy toward downstream consumers.
+
+The question this raises is not whether the courtesy is cheap. It is *what the implicit value means*. An arity widening is worth making only when the value being forced into the open was previously being chosen wrongly, silently, or both — otherwise the parameter would not be worth adding. So the delegating overload does not merely preserve a signature: it preserves the one call shape that produces the value the widening exists to stop producing by accident.
+
+`AuthorizationCodeFlow.AuthenticationResult` is where this bites. The record carries three components — `accessToken`, `idToken`, and `refreshToken` — and the three are not symmetric. `accessToken` and `idToken` are validated products the exchange cannot succeed without, so the compact constructor null-rejects both. `refreshToken` is different in kind: an authorization server legitimately issues none, so `null` there is a normal outcome rather than an error, and the compact constructor deliberately does not check it.
+
+That asymmetry is precisely what makes the two-argument shim dangerous rather than merely redundant. A delegating `AuthenticationResult(accessToken, idToken)` has exactly one thing it can pass for the third component, and that is `null`. Every caller that reaches for the shorter form therefore constructs a result asserting *the authorization server issued no refresh token*, whether or not the server issued one. Nothing rejects that result: `null` is a legal, documented, expected value there. The claim is silently false and structurally indistinguishable from the truthful case.
+
+The defect class has a name worth stating plainly: a **silent drop**. A refresh token arrives, is not carried into the result, and the loss surfaces later — as a session that cannot be refreshed, at a point far from the construction site that discarded it. The full-arity constructor closes that class not by validating anything, but by removing the call shape that could omit the value at all. A caller must now name what it is passing, and a caller that has a refresh token cannot fail to pass it without writing `null` deliberately.
+
+So the choice point is general, not local: *when a breaking change removes a defect class by forcing callers to state a value, may the project offer a transitional overload that supplies that value implicitly?*
+
+== Decision
+
+No. A compatibility shim is refused when the value it would supply implicitly is the value the breaking change made unreachable by accident.
+
+`AuthenticationResult` exposes exactly one constructor — the full-arity canonical one. There is no two-argument delegating overload, no static factory with the same effect under a different name, and no `@Deprecated` transitional form scheduled for later removal. Callers migrate by naming the third component.
+
+Three properties define the decision, and they hold together:
+
+. *Source compatibility is not the acceptance test.* A shim that recompiles every existing caller is a shim that leaves every existing caller's behaviour unexamined, which on this change is the entire point of the change. The migration's value comes from each call site being read and its refresh-token handling made explicit; an overload that skips the reading skips the value.
+. *A deprecation window would not narrow the exposure, only date it.* A `@Deprecated` two-argument form is reachable for exactly as long as it exists, and the defect it enables is one that surfaces late and far from its origin. A window during which the removed defect class is available again is not a softer version of the change; it is the change deferred.
+. *The refusal is scoped to the resurrection property, not to shims generally.* An overload that defaults a parameter to a value that is *always correct* — an empty collection, an identity transform, a genuinely inert default — carries none of this reasoning. What is refused here is an implicit value that is a substantive, frequently-wrong claim about the world.
+
+The compatibility posture for this change is *breaking*, and the posture is what the decision honours. A breaking posture that ships a transitional overload has not been applied; it has been announced.
+
+== Consequences
+
+=== Positive
+
+* The implicit path into the silent-drop defect class is closed structurally rather than by convention. No call shape omits the refresh token any more: a site that carries none must write `null`, where the omission is visible to a reader and shows up in the diff that introduced it. The removal is of the *implicit* omission, not of the outcome — an explicit `null` remains constructible, and can still be written without thought (see Risks) — so what the change guarantees is that the omission is stated and reviewable, not that it is considered.
+* Every construction site states its refresh-token handling. A reader of any `new AuthenticationResult(...)` sees what that site believes about refresh-token availability, without tracing which overload was chosen.
+* The migration is finite and mechanical. There is one constructor, so there is no period during which two forms coexist, no deprecation bookkeeping, and no later removal to schedule and remember.
+* The public surface stays minimal. One constructor for one record is the smallest API that expresses the contract, and it does not grow a second entry point whose only purpose is to be avoided.
+
+=== Negative
+
+* Downstream consumers do not recompile unchanged. Every existing construction site is a compile error until it is edited, and the edit is manual — the compiler names the site but cannot supply the value.
+* Consumers who do not recompile at all fail later and less legibly. A classfile already compiled against the two-argument form — reached through a stale transitive dependency — still carries a reference to the removed constructor, and resolving that reference fails with `NoSuchMethodError` when the construction site is first executed. The break is the same removal, but it surfaces as a runtime error in a deployed artifact rather than as a diagnostic at build time.
+* A reflective lookup of the removed signature fails as a different throwable. `Class.getConstructor(...)` declares `throws NoSuchMethodException`, a checked exception raised by the reflection API itself, not the `NoSuchMethodError` linkage failure above; the two share a name but not a hierarchy, so handling written for one does not catch the other.
+* The compile error arrives without guidance. A caller sees a missing-argument diagnostic, not an explanation of why the argument became mandatory; the reasoning lives here and in the component documentation, not in the failure.
+* Consumers who genuinely have no refresh token pay a cost for a defect they were never at risk of. Passing an explicit `null` is noise at those sites, and the decision imposes it uniformly because it cannot distinguish them from the sites it exists to correct.
+
+=== Risks
+
+* The explicit `null` is itself a call shape, and a caller can write it inattentively. The change forces the value into the open; it does not force the value to be *considered*, and a mechanical migration that inserts `null` everywhere reproduces the original defect with better provenance.
+* The reasoning generalises badly if applied loosely. Read as "no compatibility shims", it would refuse harmless defaulting overloads across the codebase. The refusal depends on the implicit value being a substantive claim that is often wrong, and it stops applying the moment that condition fails.
+* A future component added to the record inherits the same question, and nothing enforces that it be asked. This decision constrains one constructor because it says so, not because a mechanism prevents a delegating overload from being added later.
+
+== Alternatives Considered
+
+* *Ship the delegating two-argument constructor.* This is the maximum-compatibility option: every existing caller recompiles untouched, the migration cost falls to zero, and the new component is available to callers who want it. Its cost is that it retains the exact call shape the widening removed, and retains it as the *more convenient* of the two — so the path of least resistance for a caller remains the path that silently claims no refresh token was issued. Rejected because it preserves the defect class the change exists to remove, while presenting the change as having removed it.
+* *Ship the two-argument constructor as `@Deprecated`, removing it in a later release.* This softens the migration without abandoning the destination: callers get a compiler warning rather than an error, tooling can find the sites, and the surface converges on one constructor eventually. What it does not do is bound the exposure, because a silent drop surfaces late and far from its origin — a defect constructed during the deprecation window can present long after the window closed. Rejected because the window is a period during which the removed defect is available again, and the change's whole value is that the defect is not available.
+* *Keep the two-argument form but make it reject rather than default — throw when no refresh token is supplied.* This preserves the signature while refusing the dangerous implicit value, converting a silent drop into a loud failure. It is coherent, and it is worse than both neighbours: it keeps a constructor whose only behaviour is to fail, so every caller must migrate anyway, and it does so at runtime rather than at compile time — trading a diagnostic the compiler gives for free against one the caller discovers in production. Rejected because it imposes the full migration cost while delivering the failure later.
+* *Validate `refreshToken` in the compact constructor instead of widening the arity.* This attacks the problem from the other side: leave the call shapes alone and reject the bad value wherever it appears. It cannot work here, because `null` is a *legitimate* value for that component — an authorization server issuing no refresh token is a normal outcome — so there is no predicate the constructor could apply that separates the honest `null` from the dropped one. Rejected because the information needed to distinguish them exists only at the call site, which is exactly where the arity widening puts the decision.
+
+The alternatives divide into two classes. Three of them keep the old call shape and try to make it safe — by documenting it, by dating it, or by making it throw — and each fails because the shape's danger is that it is *available and convenient*, not that it is undocumented. The fourth tries to move the check into the type, and fails because the type cannot see what the call site knows. Removing the shape is the only option that puts the decision where the information is.
+
+== References
+
+* ADR-0010 - A refresh token the authorization server declares invalid is a third classification state; the refresh-token lifecycle this result feeds, and the reason a dropped refresh token surfaces late rather than at construction.
+* ADR-0014 - Optional record components are typed nullable while accessor APIs expose `Optional`; the sibling decision governing how the same optional component is *typed*, where this one governs how it is *constructed*.
+* `doc/client/architecture.adoc` - the client architecture document carrying the authorization-code flow surface this record belongs to.

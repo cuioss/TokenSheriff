@@ -35,11 +35,12 @@ import java.util.Set;
  * never silently downgrading to a shared secret where a stronger method is both configured and
  * advertised. When the AS advertises no configured method, selection fails closed.
  * <p>
- * {@code tls_client_auth} is <strong>never selected</strong>: mutual-TLS is a transport-layer
- * binding that the current transport cannot honor (no {@code SSLContext} client key material is
- * plumbed), so selecting it would produce an unauthenticated request. The selector skips it even
+ * {@code tls_client_auth} is an <strong>alpha method and is never selected</strong>: mutual-TLS is
+ * a transport-layer binding the transport cannot honor (no {@code SSLContext} client key material
+ * is plumbed), so selecting it would produce an unauthenticated request. The selector skips it even
  * when the AS advertises it, so a working {@code client_secret_basic} is preferred rather than
- * silently downgraded to a non-functional mTLS method (H4).
+ * silently downgraded to a non-functional mTLS method (H4). DPoP (RFC 9449) is the
+ * sender-constraining direction and is explicitly not a client-authentication method.
  *
  * @since 1.0
  * @author Oliver Wolff

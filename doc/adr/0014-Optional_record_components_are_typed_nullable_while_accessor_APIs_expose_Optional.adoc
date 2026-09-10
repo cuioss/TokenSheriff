@@ -1,0 +1,81 @@
+= ADR-0014: Optional record components are typed nullable while accessor APIs expose Optional
+:toc: left
+:toclevels: 2
+:sectnums:
+
+// adr-metadata
+// summary: Under the project's @NullMarked JSpecify posture an optional record component is typed @Nullable and carries null, while an accessor-style API keeps returning Optional - the record's generated accessor is a component projection whose annotation is the contract, whereas a hand-written getter is a designed return surface; the compact constructor null-rejects every non-optional component and must keep doing so
+// tags: null-safety, jspecify, public-api, record
+// affects: token-sheriff-client
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+The client's packages are `@NullMarked` under JSpecify, so every reference type is non-null unless it carries an explicit `@Nullable`. That posture makes optionality a *declared* property rather than a convention, and it forces a question the codebase must answer the same way every time: when a value is genuinely optional, which shape carries the optionality — a `@Nullable` reference, or an `Optional` wrapper?
+
+Answering "always `Optional`" is tempting because it is uniform, and uniformity is usually the right instinct for a null-safety posture. It is the wrong instinct here, because the two shapes are not competing conventions for the same construct. They belong to two different kinds of API surface, and the codebase contains both.
+
+A **record component** is a piece of state with a generated accessor. The accessor is not designed — it is projected from the component declaration, one per component, with the component's type. Typing a component as `Optional<String>` therefore does not add an `Optional`-returning accessor to an otherwise ordinary record: it makes `Optional` the *stored state*, which means the container itself is what the record's generated `equals`, `hashCode`, and `toString` are derived from. Under `@NullMarked` that container is non-null by declaration; it becomes a second spelling of absence only if the component is *also* annotated `@Nullable Optional<String>`, at which point `null` and `Optional.empty()` are both constructible and mean different things. The component's `@Nullable` annotation, by contrast, is read by exactly the tooling the `@NullMarked` posture exists to feed, and it costs no state at all.
+
+A **hand-written accessor** is the opposite case. Its return type is a design decision independent of how the value is stored, so returning `Optional` imposes nothing on the object's state and gives the caller a shape that cannot be dereferenced by accident. There is no projection to preserve and no stored container to introduce.
+
+Both shapes are live in the client, and the pairing is deliberate rather than accidental drift:
+
+* `AuthorizationCodeFlow.AuthenticationResult` is a record whose `refreshToken` component is declared `@Nullable String`. An authorization server legitimately issues no refresh token, so `null` there is a normal outcome, and the annotation is what says so.
+* `TokenResponse` is a mutable deserialization target with hand-written accessors, and `getRefreshToken()` returns `Optional<String>` over a nullable field. The field is what the wire produces; the accessor is what callers are given.
+
+A reader encountering both without an explanation sees an inconsistency: the same domain value, refresh token presence, expressed two ways in one module. The question is worth settling once, because the alternative is that every new type re-litigates it and the module drifts toward whichever shape the most recent author preferred.
+
+== Decision
+
+The shape follows the kind of surface, not the kind of value.
+
+. *An optional record component is typed `@Nullable` and carries `null`.* The generated accessor projects the component's declared type, so the annotation *is* the contract that `@NullMarked` tooling reads. No `Optional` is stored.
+. *An optional value on a hand-written accessor API is exposed as `Optional`.* The return type is designed rather than projected, so `Optional` costs no state and denies the caller an accidental dereference.
+. *A record's compact constructor null-rejects every component that is not annotated `@Nullable`, and must continue to.* The annotation is the whole signal distinguishing "optional" from "required" on a record, so the runtime check is what makes the annotation load-bearing rather than decorative. `AuthenticationResult` requires `accessToken` and `idToken` and deliberately does not check `refreshToken` — that asymmetry is the decision applied, not an oversight.
+
+The three clauses are one rule seen from three sides: optionality is declared where the declaration is read, and enforced where the enforcement is possible.
+
+Two boundaries keep the rule from over-reaching. It does not say `Optional` is unwelcome — clause 2 mandates it on the surface where it belongs. And it does not licence an unchecked component: a component with no `@Nullable` annotation and no constructor check is outside the rule in both directions, because the reader cannot tell whether optionality was intended.
+
+== Consequences
+
+=== Positive
+
+* Optionality is machine-readable at the point of declaration. A `@Nullable` component feeds the same tooling that enforces the `@NullMarked` posture everywhere else, so an optional record component is checked rather than merely documented.
+* An optional record component stores no container. Clause 1 keeps `Optional` out of the state a generated `equals`, `hashCode`, or `toString` is derived from for the components it governs, and a `@Nullable` reference cannot be both `null` and empty, so the "empty versus absent" ambiguity an `@Nullable Optional<String>` component would create cannot arise on them. Clause 1 constrains only the representation of an *optional* component; a required component's type is left to the type's own design, so this is not a module-wide prohibition on `Optional` in records.
+* Callers of accessor APIs keep a shape they cannot dereference by accident. `TokenResponse.getRefreshToken()` hands back an absence the caller must open, which is the property `Optional` is for.
+* The apparent inconsistency becomes a readable rule. A reader meeting both shapes has one question to ask — is this a projected component or a designed accessor — and the answer determines the shape without further judgement.
+* New types have a default. The rule applies before anyone reaches for a preference, so the module does not drift toward whichever shape was written most recently.
+
+=== Negative
+
+* The module genuinely contains two shapes for one domain concept, and the rule explains the split without removing it. A reader must know the rule to see the consistency; the code alone reads as a discrepancy.
+* A `@Nullable` component is only as safe as the tooling reading it. Where JSpecify analysis is not applied, the component degrades to an ordinary nullable reference with a comment. An `Optional` component would still carry a typed absence API for the value it wraps, which the annotation does not — but that is not an unconditional type-system guarantee: the `Optional` reference is itself non-null only by the same `@NullMarked` declaration, so absent that analysis or an explicit runtime check it can be null just as the annotated reference can.
+* The compact-constructor obligation is a convention the language does not enforce. Nothing makes a future record null-check its non-optional components, so clause 3 depends on being remembered at each new record rather than on a mechanism.
+
+=== Risks
+
+* A future component added to `AuthenticationResult` may be given neither a `@Nullable` annotation nor a constructor check, leaving its optionality undeclared in both places. That state is indistinguishable from an oversight, which is precisely what clause 3 exists to prevent and cannot itself detect.
+* The rule can be misread as "records never use `Optional`", extending it to a record's hand-written derived accessors, where clause 2 should govern. The discriminator is projection versus design, not record versus class.
+* Removing a `@Nullable` annotation without adding the matching constructor check silently widens a required component into an unchecked one. The annotation and the check are a pair, and nothing links them beyond this decision.
+
+== Alternatives Considered
+
+* *Type optional record components as `Optional` for uniformity with the accessor APIs.* This gives the module one shape for optionality, removes the reader's discrimination entirely, and makes the optionality enforced by the type system rather than by an annotation and a checker. Its cost is that the `Optional` becomes stored state: it is what the generated `equals` compares, and what any binding later applied over the record's state — a JSON mapping, for instance — would have to carry. Under `@NullMarked` the component is non-null by declaration, so the container is not nullable on its own; the ambiguity arises only where the component is *also* annotated `@Nullable Optional<String>`, which makes `Optional.empty()` and `null` two distinguishable spellings of absence in the same field. That extra annotation is a separate discipline violation rather than an automatic consequence of the shape — but it is an ambiguity the nullable component cannot express at all. Rejected because it buys uniformity by paying in stored state, and by leaving that ambiguity available.
+* *Type accessor-API returns as `@Nullable` for uniformity in the other direction.* Symmetrically, this makes `@Nullable` the module's single optionality shape and keeps every surface annotation-driven. It costs callers the property that matters most on a consumed API: a `@Nullable String` return can be dereferenced without ceremony and fails at runtime, where an `Optional` cannot be opened without the caller acknowledging the absence. Rejected because it removes a compile-time guard from the surface consumers actually call, in exchange for a consistency that only readers of the module benefit from.
+* *Make no rule and decide per type.* This is the status quo the decision replaces, and its appeal is real — each author picks the shape that fits the type in front of them, and no rule has to be maintained. What it does not do is make the existing pairing legible: a reader meeting `@Nullable String refreshToken` and `Optional<String> getRefreshToken()` in one module has no way to tell a considered split from drift, and every new optional value re-opens the question. Rejected because the shapes are already consistent, and only the rule that explains them is missing.
+* *Rely on the `@NullMarked` posture alone and drop the compact-constructor null checks.* If every non-annotated reference is non-null by declaration, the runtime checks look redundant with the static analysis. They are not: a record's canonical constructor is a public entry point reachable from unanalysed callers, deserialization, and reflection, so the declaration constrains the analysed callers and the check constrains the rest. Rejected because it would make the `@Nullable` annotation the *only* signal on records, leaving required components enforced nowhere.
+
+The alternatives split cleanly. Two of them chase uniformity by collapsing the distinction — one direction pays in stored-state ambiguity, the other in a lost compile-time guard — and both trade a real property for a cosmetic one. The third declines to state the rule the code already follows. The fourth removes the enforcement that makes the annotation mean anything. The distinction between a projected component and a designed accessor is what all four try to ignore, and it is the only thing that makes both shapes correct where they stand.
+
+== References
+
+* ADR-0013 - Reject a compatibility shim that would resurrect a removed silent-drop defect class; the sibling decision governing how the same optional component is *constructed*, where this one governs how it is *typed*.
+* ADR-0010 - A refresh token the authorization server declares invalid is a third classification state; the refresh-token lifecycle whose absence-versus-invalid distinction this typing rule has to keep expressible.
+* `doc/client/architecture.adoc` - the client architecture document carrying the flow and token surfaces on which both shapes appear.

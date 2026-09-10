@@ -46,10 +46,13 @@ record that boundary.
 | https://www.rfc-editor.org/rfc/rfc9700#section-2.4[RFC 9700 §2.4], https://www.rfc-editor.org/rfc/rfc8693[RFC 8693]
 | xref:requirements.adoc#CLIENT-3[CLIENT-3]
 
-| Use the *strongest client authentication the AS offers* — `private_key_jwt` (RFC 7523) or
-  mTLS (RFC 8705) over `client_secret`; secrets only over TLS, never in a URL; protect at
-  rest; never log.
-| https://www.rfc-editor.org/rfc/rfc7523[RFC 7523], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705], https://www.rfc-editor.org/rfc/rfc9700#section-2.2[RFC 9700 §2.2]
+| Use the *strongest client authentication the AS offers* — `private_key_jwt` (RFC 7523) over
+  `client_secret`; secrets only over TLS, never in a URL; protect at rest; never log. mTLS
+  (`tls_client_auth`, RFC 8705) is alpha — declared, never selected — so `private_key_jwt` is
+  the supported strong client-authentication route. DPoP (RFC 9449) is the sender-constraining
+  direction and is not a client-authentication method; it constrains how an issued token may be
+  presented and composes with whichever client-authentication method is in use.
+| https://www.rfc-editor.org/rfc/rfc7523[RFC 7523], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705], https://www.rfc-editor.org/rfc/rfc9449[RFC 9449], https://www.rfc-editor.org/rfc/rfc9700#section-2.2[RFC 9700 §2.2]
 | xref:requirements.adoc#CLIENT-4[CLIENT-4] / xref:threat-model.adoc#T-CLIENT-CRED[T-CLIENT-CRED]
 
 | Defeat callback CSRF with a *session-bound `state`*; reject a missing / mismatched value.
@@ -75,8 +78,9 @@ record that boundary.
 | https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0]
 | xref:requirements.adoc#CLIENT-10[CLIENT-10] / xref:threat-model.adoc#T-PARAM-INTEGRITY[T-PARAM-INTEGRITY]
 
-| *Sender-constrain retrieved tokens* with DPoP or mTLS wherever the AS supports it; preserve
-  the binding through storage and refresh.
+| *Sender-constrain retrieved tokens* with DPoP wherever the AS supports it; preserve the
+  binding through storage and refresh. DPoP is the supported route; the certificate-bound
+  variant is preserved where it already exists, but mTLS client authentication is alpha.
 | https://www.rfc-editor.org/rfc/rfc9449[RFC 9449], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0]
 | xref:requirements.adoc#CLIENT-11[CLIENT-11] / xref:threat-model.adoc#T-TOKEN-REPLAY[T-TOKEN-REPLAY]
 

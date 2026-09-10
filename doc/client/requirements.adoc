@@ -111,8 +111,14 @@ grants MUST NOT be implemented (<<_security_exclusions_legacy_discouraged>>).
 === CLIENT-4: Strong token-endpoint client authentication
 
 The engine MUST authenticate to the token endpoint (and PAR / revocation / introspection
-endpoints) and MUST prefer the *strongest method the authorization server offers*:
-`private_key_jwt` (RFC 7523) or mTLS (RFC 8705) over a shared `client_secret`. When a
+endpoints). Among the strategies the caller has *configured*, the engine MUST prefer the
+*strongest method the authorization server also advertises*: `private_key_jwt` (RFC 7523)
+over a shared `client_secret`. Selection never reaches outside the configured set — a method
+the caller did not configure is never chosen, however the authorization server advertises it.
+`private_key_jwt` is the implemented key-based method; mTLS (`tls_client_auth`, RFC 8705) is
+an alpha capability — declared, never selected — leaving `private_key_jwt` as the supported
+strong client-authentication route. DPoP (RFC 9449) is the sender-constraining direction
+(<<CLIENT-11>>) and is not itself a client-authentication method. When a
 `client_secret` is used it MUST be sent only over TLS (<<CLIENT-14>>, transport TLS is
 `COMMONS-2`) and via `client_secret_basic` / `client_secret_post` — never in a URL. Client
 credentials MUST be protected at rest and MUST NOT be logged.
@@ -181,14 +187,27 @@ exposed or tamperable in the browser. PAR is required by FAPI 2.0 and preferred 
 * Source: https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0] (PAR mandatory), https://www.rfc-editor.org/rfc/rfc9700#section-2.1[RFC 9700 §2.1].
 
 [#CLIENT-11]
-=== CLIENT-11: Requesting sender-constrained tokens (DPoP / mTLS)
+=== CLIENT-11: Requesting sender-constrained tokens (DPoP)
 
-The engine MUST be able to *request* sender-constrained tokens at the token endpoint — DPoP
-(RFC 9449) by presenting a DPoP proof, or mTLS (RFC 8705) certificate-bound tokens — so
-retrieved tokens cannot be replayed by a bearer that stole them. The *validation* of the
-resulting binding is inherited from the validation module (`VALIDATION-8.7`); this
-requirement is the client-side delta of *asking for* the constraint and preserving it
-(<<CLIENT-18>>).
+The engine MUST be able to *request* sender-constrained tokens at the token endpoint by
+presenting a DPoP proof (RFC 9449), so retrieved tokens cannot be replayed by a bearer that
+stole them. DPoP is the implemented direction and the only token-request route this
+requirement mandates: it binds the issued token to the client's proof key without
+authenticating the client, so it composes with `private_key_jwt` (<<CLIENT-4>>) rather than
+replacing it.
+
+Requesting an mTLS (RFC 8705) certificate-bound token is *not* a capability this engine has,
+and this requirement does not demand it: obtaining that binding means presenting a client
+certificate at the token endpoint, and mTLS client authentication (`tls_client_auth`) is
+alpha — declared, never selected, with no `SSLContext` client key material plumbed into the
+transport (<<CLIENT-4>>). The certificate-bound case therefore stays specified only as a
+*binding kind the server-side lifecycle preserves* where a token already carries one
+(<<CLIENT-18>>) — preserving a `cnf.x5t#S256` binding is a capability distinct from the alpha
+client-authentication method.
+
+The *validation* of the resulting binding is inherited from the validation module
+(`VALIDATION-8.7`); this requirement is the client-side delta of *asking for* the constraint
+and preserving it (<<CLIENT-18>>).
 
 * Source: https://www.rfc-editor.org/rfc/rfc9449[RFC 9449], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705], https://www.rfc-editor.org/rfc/rfc9700#section-4.10[RFC 9700 §4.10], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0].
 
@@ -315,7 +334,9 @@ Where a token is sender-constrained (DPoP or mTLS, <<CLIENT-11>>), the engine MU
 binding intact across server-side storage, refresh and any forwarding: the stored token
 stays associated with its proof key / certificate binding, and refresh preserves the
 constraint. Storage MUST be minimal — no wider copying of bound tokens than the lifecycle
-requires.
+requires. DPoP is the implemented direction; the certificate-bound case stays specified here
+because preserving a `cnf.x5t#S256` binding is a different capability from mTLS client
+authentication, which is alpha.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9449[RFC 9449], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705].
 
@@ -378,8 +399,11 @@ surface.
 | Leak via history, logs, `Referer`. Use `form_post` + token-endpoint exchange.
 | https://www.rfc-editor.org/rfc/rfc9700#section-4.3[RFC 9700 §4.3]
 
-| *Weak client auth where `private_key_jwt`/mTLS is available; secrets over non-TLS*
-| Shared secrets are the weakest link; strong auth is available.
+| *Weak client auth where `private_key_jwt` is available; secrets over non-TLS*
+| Shared secrets are the weakest link; strong auth is available as `private_key_jwt`. mTLS
+  (`tls_client_auth`) is alpha and never selected, so it is not the strong alternative here.
+  DPoP (RFC 9449) is the sender-constraining direction and is explicitly not a
+  client-authentication method.
 | https://www.rfc-editor.org/rfc/rfc9700[RFC 9700], https://www.rfc-editor.org/rfc/rfc7523[RFC 7523], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705]
 |===
 

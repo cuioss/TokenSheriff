@@ -351,7 +351,7 @@ class TokenSheriffClientProducerTest {
             assertAll("fail-closed client authentication",
                     () -> assertThrows(IllegalStateException.class,
                             () -> keyBased.clientAuthentication(keyBasedConfig),
-                            "a key-based method that is not yet plumbed must fail closed, never downgrade"),
+                            "private_key_jwt is not plumbed into the produced graph, so it must fail closed, never downgrade"),
                     () -> assertThrows(IllegalStateException.class,
                             () -> secretless.clientAuthentication(secretlessConfig),
                             "a shared-secret method without a secret must fail loud"));

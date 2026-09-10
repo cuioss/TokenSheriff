@@ -88,7 +88,7 @@ class ClientAuthenticationSelectorTest {
     }
 
     @Test
-    @DisplayName("Should never select tls_client_auth over a working client_secret_basic (H4)")
+    @DisplayName("Should never select the alpha tls_client_auth over a working client_secret_basic (H4)")
     void shouldNeverSelectTlsClientAuthOverWorkingSecret() {
         ClientAuthentication basic = auth(ClientAuthMethod.CLIENT_SECRET_BASIC);
         ClientAuthentication mtls = auth(ClientAuthMethod.TLS_CLIENT_AUTH);
@@ -97,19 +97,19 @@ class ClientAuthenticationSelectorTest {
         ClientAuthentication selected = selector.select(List.of(basic, mtls), metadata);
 
         assertSame(basic, selected,
-                "tls_client_auth cannot be honored by the transport, so it must not be selected over "
-                        + "a working client_secret_basic");
+                "tls_client_auth is an alpha method the transport cannot honor, so it must not be "
+                        + "selected over a working client_secret_basic");
     }
 
     @Test
-    @DisplayName("Should fail closed when the AS advertises only tls_client_auth — never a non-functional method")
+    @DisplayName("Should fail closed when the AS advertises only the alpha tls_client_auth")
     void shouldFailClosedWhenOnlyTlsClientAuthAdvertised() {
         ClientAuthentication mtls = auth(ClientAuthMethod.TLS_CLIENT_AUTH);
         var metadata = metadataAdvertising(List.of("tls_client_auth"));
         var configured = List.of(mtls);
 
         assertThrows(ClientProtocolException.class, () -> selector.select(configured, metadata),
-                "selection must fail closed rather than pick the transport-unsupported tls_client_auth");
+                "selection must fail closed rather than pick the alpha tls_client_auth");
     }
 
     @Test

@@ -184,8 +184,12 @@ would supersede it via a thin portal adapter preserving the portal contract (`Oa
 `AuthenticatedUserInfo`; config namespace `authentication.oidc.*`). That replacement — the
 adapter and its integration tests — is *future work beyond Plans 01–06*; no current plan
 touches it. The modernization deltas it motivates (cryptographic ID-token validation via the
-validation module, `iss` mix-up defence, `private_key_jwt`/mTLS, PAR, DPoP/mTLS
-sender-constraining, stronger `nonce`, in-module hardened back-channel HTTP with an egress/path
+validation module, `iss` mix-up defence, `private_key_jwt` (mTLS `tls_client_auth` is alpha —
+declared, never selected), PAR, DPoP sender-constraining — requesting a certificate-bound token
+is not a capability the engine has, while preserving a certificate binding a token already
+carries is, and that preservation is a capability distinct from mTLS client authentication and
+unaffected by its alpha status — stronger `nonce`, in-module hardened
+back-channel HTTP with an egress/path
 control) are each captured as sourced `CLIENT-N` requirements above.
 ====
 

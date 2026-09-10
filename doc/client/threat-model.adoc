@@ -103,16 +103,21 @@ The client engine:
 | [[T-CLIENT-CRED]]T-CLIENT-CRED
 | *Weak or leaked client credentials.* A shared `client_secret` is guessed, leaked from
   config/logs, or intercepted, letting an attacker impersonate the client.
-| Prefer `private_key_jwt` / mTLS over `client_secret`; send secrets only over TLS and never
-  in a URL; protect credentials at rest; never log them; restrict grants to the secure subset.
+| Prefer `private_key_jwt` over `client_secret`; send secrets only over TLS and never in a
+  URL; protect credentials at rest; never log them; restrict grants to the secure subset. mTLS
+  (`tls_client_auth`) is alpha — declared, never selected — so it is not a mitigation route
+  here, leaving `private_key_jwt` as the supported strong client-authentication route.
 | https://www.rfc-editor.org/rfc/rfc7523[RFC 7523], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705], https://www.rfc-editor.org/rfc/rfc9700#section-2.2[RFC 9700 §2.2]
 | xref:requirements.adoc#CLIENT-3[CLIENT-3], xref:requirements.adoc#CLIENT-4[CLIENT-4]
 
 | [[T-TOKEN-REPLAY]]T-TOKEN-REPLAY
 | *Token replay (no sender-constraining).* A stolen bearer access token is replayed by any
   holder.
-| Request sender-constrained tokens — DPoP proof or mTLS certificate binding — at the token
-  endpoint; validation of the binding is inherited (`VALIDATION-8.7`).
+| Request sender-constrained tokens — a DPoP proof — at the token endpoint; validation of the
+  binding is inherited (`VALIDATION-8.7`). DPoP (RFC 9449) is the implemented direction: it
+  binds the issued token to the client's key without authenticating the client, so it composes
+  with `private_key_jwt` rather than replacing it. The certificate-bound variant remains
+  specified as a binding kind, while mTLS client authentication is alpha.
 | https://www.rfc-editor.org/rfc/rfc9700#section-4.10[RFC 9700 §4.10], https://www.rfc-editor.org/rfc/rfc9449[RFC 9449], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0]
 | xref:requirements.adoc#CLIENT-11[CLIENT-11]
 

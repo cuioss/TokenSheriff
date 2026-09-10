@@ -30,9 +30,10 @@ import java.util.Optional;
  *       {@code token_endpoint_auth_methods_supported} (RFC 8414);</li>
  *   <li>its {@link #strength strength} — a relative ordering used by the
  *       {@code ClientAuthenticationSelector} to prefer the strongest method the AS supports.
- *       Key-based methods ({@code private_key_jwt}, {@code tls_client_auth}) rank above the
- *       shared-secret methods, so the selector never downgrades to a shared secret where a
- *       stronger method is available.</li>
+ *       The key-based rank sits above the shared-secret methods, so the selector never downgrades
+ *       to a shared secret where a stronger method is available. Of the two key-based methods only
+ *       {@code private_key_jwt} is selectable: {@code tls_client_auth} carries the same rank but is
+ *       an alpha method the selector never picks.</li>
  * </ul>
  *
  * @since 1.0
@@ -62,6 +63,13 @@ public enum ClientAuthMethod {
     /**
      * Mutual-TLS certificate-bound client authentication (RFC 8705). The client is authenticated
      * by its TLS client certificate.
+     * <p>
+     * <strong>Alpha method.</strong> It is declared so an advertised {@code tls_client_auth} entry
+     * still resolves to a named method, it is never selected, and leaving it unexercised is not a
+     * coverage obligation. {@link #PRIVATE_KEY_JWT} is the supported client-authentication route;
+     * DPoP (RFC 9449) is the sender-constraining direction and is not itself a client-authentication
+     * method, which is why it is absent from this enum. The fail-fast constructor of
+     * {@code MtlsClientAuth} is what holds the classification.
      */
     TLS_CLIENT_AUTH("tls_client_auth", 3);
 

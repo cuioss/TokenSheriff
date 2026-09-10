@@ -1,4 +1,7 @@
 {
+  "extension_defaults": {
+    "build.maven.profiles.mutating": "pre-commit"
+  },
   "plan": {
     "effort": "level-3",
     "open_in_ide": true,
@@ -66,7 +69,7 @@
       }
     },
     "phase-6-finalize": {
-      "max_iterations": 6,
+      "max_iterations": 10,
       "finalize_without_asking": true,
       "loop_back_without_asking": true,
       "checks_wait_timeout_seconds": 600,
@@ -337,8 +340,5 @@
     },
     "provisioned_version": "0.1.1622",
     "config_seed_fingerprint": "4d9d904a"
-  },
-  "extension_defaults": {
-    "build.maven.profiles.mutating": "pre-commit"
   }
 }

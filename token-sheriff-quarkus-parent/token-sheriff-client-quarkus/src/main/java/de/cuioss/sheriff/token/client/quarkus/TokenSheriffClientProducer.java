@@ -214,14 +214,18 @@ public class TokenSheriffClientProducer {
     /**
      * Produces the default client authentication the back-channel flows present. The strategy is
      * derived from the configured {@link ClientAuthMethod}; the shared-secret methods
-     * ({@code client_secret_basic} / {@code client_secret_post}) are supported here. Key-based client
-     * authentication ({@code private_key_jwt} / {@code tls_client_auth}) is not yet plumbed into the
-     * produced bean graph and fails closed rather than silently downgrading to a shared secret.
+     * ({@code client_secret_basic} / {@code client_secret_post}) are supported here. Neither
+     * key-based method is produced, and the two are withheld for different reasons:
+     * {@code private_key_jwt} is not yet plumbed into the produced bean graph, while
+     * {@code tls_client_auth} is an alpha capability — declared, never selected, and leaving it
+     * unexercised is not a coverage obligation. Both fail closed rather than silently downgrading
+     * to a shared secret.
      *
      * @param clientConfiguration the resolved client configuration
      * @return the client authentication strategy to present on authenticated back-channel requests
-     * @throws IllegalStateException if the configured method requires a secret that is absent, or is a
-     *                               key-based method not yet plumbed into the produced graph
+     * @throws IllegalStateException if the configured method requires a secret that is absent, or is
+     *                               {@code private_key_jwt} (not yet plumbed into the produced
+     *                               graph) or {@code tls_client_auth} (an alpha capability)
      */
     @Produces
     @ApplicationScoped
@@ -234,8 +238,10 @@ public class TokenSheriffClientProducer {
             case CLIENT_SECRET_POST ->
                 new ClientSecretPostAuth(clientId, requireSecret(clientConfiguration, method));
             case PRIVATE_KEY_JWT, TLS_CLIENT_AUTH -> throw new IllegalStateException(
-                    "client authentication method " + method + " is not yet plumbed into the produced"
-                            + " client bean graph; configure a shared-secret method to inject the flow beans");
+                    "client authentication method " + method + " is not produced here: private_key_jwt"
+                            + " is not yet plumbed into the produced client bean graph and tls_client_auth"
+                            + " is an alpha capability; configure a shared-secret method to inject the"
+                            + " flow beans");
         };
     }
 

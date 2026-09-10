@@ -40,8 +40,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * The security invariant under test: the selector must never downgrade to a shared secret when a
  * stronger method ({@code private_key_jwt}) is <em>both</em> configured and advertised, and must
  * fail closed rather than fall back to a configured secret the AS does not advertise. Mutual-TLS
- * ({@code tls_client_auth}) is a separate case: the transport cannot honor it, so a working shared
- * secret is preferred over it rather than treated as a downgrade (H4).
+ * ({@code tls_client_auth}) is a separate case: it is an alpha method the transport cannot honor,
+ * so a working shared secret is preferred over it rather than treated as a downgrade (H4).
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -89,7 +89,7 @@ class WeakAuthRefusedTest {
     }
 
     @Test
-    @DisplayName("Should prefer a working client_secret_basic over a non-functional tls_client_auth (H4)")
+    @DisplayName("Should prefer a working client_secret_basic over the alpha tls_client_auth (H4)")
     void shouldPreferWorkingSecretOverNonFunctionalMtls() {
         var metadata = advertising(List.of("client_secret_basic", "tls_client_auth"));
 
@@ -98,19 +98,20 @@ class WeakAuthRefusedTest {
                 metadata);
 
         assertEquals(ClientAuthMethod.CLIENT_SECRET_BASIC, selected.method(),
-                "tls_client_auth cannot be honored by the transport, so the working shared secret is used "
-                        + "rather than producing an unauthenticated request");
+                "tls_client_auth is an alpha method the transport cannot honor, so the working shared "
+                        + "secret is used rather than producing an unauthenticated request");
     }
 
     @Test
-    @DisplayName("Should fail closed rather than fall back to a configured secret the AS does not advertise")
+    @DisplayName("Should fail closed when the AS advertises only the alpha tls_client_auth")
     void shouldFailClosedRatherThanUseUnadvertisedSecret() {
         ClientAuthentication basic = auth(ClientAuthMethod.CLIENT_SECRET_BASIC);
         var metadata = advertising(List.of("tls_client_auth"));
         var configured = List.of(basic);
 
         assertThrows(ClientProtocolException.class, () -> selector.select(configured, metadata),
-                "a configured secret that the AS does not advertise must not be silently used");
+                "a configured secret that the AS does not advertise must not be silently used, and the "
+                        + "advertised alpha tls_client_auth is never a fallback");
     }
 
     @Test

@@ -132,7 +132,19 @@ The "One-time-use discard contract (L7)" Javadoc states the type carries no cons
 * *Callback parsing*: duplicate-parameter injection rejected fail-closed; the `of(Map)` bypass is explicitly documented; `code`/`state` redacted in `toString` (`CallbackParameters.java:68-84`).
 * *Token-response parsing*: missing `access_token` and missing/unrecognized `token_type` both fail closed; AS-controlled fragments sanitized before exception/log (`TokenEndpointClient.java:196-226`).
 * *Logout open-redirect*: exact whole-string allow-list match, no normalization/prefix/wildcard; post-logout state verified constant-time and required (`PostLogoutRedirectValidator.java:80-93`, `EndSessionFlow.java:113-120`).
-* *Client authentication*: the selector prefers the strongest advertised method, fails closed when nothing overlaps, never silently selects unimplementable `tls_client_auth` (`MtlsClientAuth` fails at construction rather than sending unauthenticated requests); the RFC 8414 basic-default applies only when metadata is absent; `client_secret_basic` correctly form-encodes credentials per RFC 6749 Appendix B; secrets only ever in headers/body and excluded from Lombok `toString` (`ClientAuthenticationSelector.java:61-102`, `ClientConfiguration.java:91-93`).
+* *Client authentication*: the selector prefers the strongest configured method that the AS also advertises — never a method the caller did not configure — fails closed when nothing overlaps, never silently selects unimplementable `tls_client_auth` (`MtlsClientAuth` fails at construction rather than sending unauthenticated requests); the RFC 8414 basic-default applies only when metadata is absent; `client_secret_basic` correctly form-encodes credentials per RFC 6749 Appendix B; secrets only ever in headers/body and excluded from Lombok `toString` (`ClientAuthenticationSelector.java:61-102`, `ClientConfiguration.java:91-93`).
++
+[NOTE]
+====
+2026-09-09 — superseding direction, not a correction. The behaviour recorded in this bullet stands
+as reviewed on 2026-08-15: the selector still never silently selects `tls_client_auth`, and
+`MtlsClientAuth` still fails at construction rather than sending unauthenticated requests. Since
+then that surface has been classified an *alpha capability* — declared, never selected, and not
+counted as a coverage gap when unexercised — with DPoP as the sender-constraining and
+client-authentication direction. See
+xref:../adr/0012-mTLS_client_authentication_is_an_alpha_capability_DPoP_is_the_sender-constraining_and_client-authentication_direction.adoc[ADR-0012].
+====
+
 * *DPoP proof generation*: full P-256 domain-parameter check defeats curve confusion; fixed-width EC coordinate encoding; P1363 ECDSA output; a single JWK feeds both the `jwk` header and `jkt`; bounded `jti` reuse refusal; `htu` query/fragment stripping per RFC 9449 §4.2; one-shot `use_dpop_nonce` retry only for DPoP (`DpopProofGenerator.java:203-296, 328-357`).
 * *Concurrency*: per-session single-flight refresh with correct exceptional propagation; atomic `computeIfPresent` store update closes the refresh-after-logout resurrection race; atomic take-and-clear logout (`TokenLifecycleManager.java:276-292, 380-390`, `InMemoryTokenStore.java:57-63`).
 * *Transport posture*: shared egress validation, TLS enforcement, per-client `SSLContext`, scheme-keyed client cache preventing trust-material bleed, streaming size bound with cancel-on-overflow (`BackChannelHttp.java:126-199`, `BoundedContentBodyHandler.java:115-133`).
