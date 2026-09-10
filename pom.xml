@@ -9,7 +9,7 @@
     </parent>
     <groupId>de.cuioss.sheriff.token</groupId>
     <artifactId>token-sheriff-parent</artifactId>
-    <version>0.9.5-SNAPSHOT</version>
+    <version>0.9.5</version>
     <packaging>pom</packaging>
     <!-- Must be declared: <inceptionYear> is inherited, and the license plugin binds
          the copyright ${year} to it. Without this, this project would report
@@ -37,7 +37,7 @@
         <developerConnection>
             scm:git:https://github.com/cuioss/TokenSheriff/
         </developerConnection>
-        <tag>HEAD</tag>
+        <tag>0.9.5</tag>
     </scm>
     <issueManagement>
         <url>https://github.com/cuioss/TokenSheriff/issues</url>
