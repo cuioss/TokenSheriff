@@ -108,46 +108,49 @@ gh pr list --repo cuioss/TokenSheriff --state open --json number,title,isDraft
 
 Also confirm the working tree is clean (`git status --porcelain`) before branching.
 
-### Step 2b — Gate on smallrye/Quarkus alignment (do NOT skip)
+### Step 2b — Confirm the smallrye/Quarkus alignment gate passed on main
+
+This check is **no longer run by hand here**. It lives in the shared reusable build workflow
+(`cuioss-organization`, v0.26.0+) as the `build / quarkus-alignment` job, so every PR and every
+push to `main` is gated continuously rather than once per release. `cuioss-parent-pom` gates its
+own two properties against each other as well, so a mismatch can no longer ship from upstream.
+
+Confirm the latest `main` build is green on that job before branching:
 
 ```bash
-python3 .claude/skills/release/check-quarkus-alignment.py --repo . --check-resolved
+RUN=$(gh run list --repo cuioss/TokenSheriff --workflow "Maven Build" --branch main \
+  --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run view "$RUN" --repo cuioss/TokenSheriff --json jobs \
+  --jq '.jobs[] | select(.name|test("quarkus-alignment")) | "\(.conclusion) \(.name)"'
 ```
 
-| exit | meaning |
-|------|---------|
-| 0 | aligned — proceed |
-| 1 | **misaligned** — stop, fix, restart |
-| 2 | **could not determine** — also a stop. An unresolvable check is never a pass. |
+Anything other than `success` — including the job being **absent** — is a stop. Absent means
+this repo has fallen back to an org-workflow version predating v0.26.0, which leaves the release
+ungated; fix the org pin before releasing rather than proceeding uncovered.
 
-`version.quarkus` reaches this project in one of **two** shapes, and the script resolves
-both — first by scanning reactor POMs, then, if none declares it, from the effective POM:
-
-- **declared here** — the historical shape, and still what any consumer pinning its own
-  Quarkus does.
-- **inherited from the parent chain** — TokenSheriff since it adopted `cui-quarkus-parent`
-  (PR #717). An *imported* BOM can never supply the value, because Maven does not propagate
-  properties from imported BOMs and `quarkus-maven-plugin` needs it as a build extension —
-  but a real `<parent>` does propagate it.
-
-That fallback exists because the text scan alone reported the inherited case as "not declared
-anywhere" and exited 2 — blocking every release at this step. A gate that *cannot run* is the
-one that gets waved through, which is exactly the outage it exists to prevent. A genuine
-*conflict* between reactor declarations still fails loudly: that is a real split, not a
-missing value.
+#### Why this gate exists
 
 Quarkus' deployment classes are compiled against one specific smallrye-config release, so a
 newer version — even an internally coherent one — fails augmentation with
 `failed to access io.smallrye.config.ConfigMappingLoader$ConfigMappingImplementation`. That
-shipped twice through `cuioss-parent-pom` and cost five weeks of red builds the first time.
-The `requireSameVersions` enforcer guard cannot catch it: nothing is split, so it stays
-correctly silent.
+shipped twice through `cuioss-parent-pom` and cost five weeks of red builds the first time. The
+`requireSameVersions` enforcer guard cannot catch it: nothing is split, so it stays correctly
+silent.
 
-`--check-resolved` asserts every `io.smallrye.config` artifact actually resolves to what
-**this** project's Quarkus was built against, catching a split family as well as a wrong one.
+The shared job asserts every resolved `io.smallrye.config` artifact matches what **this**
+project's Quarkus was built against, catching a split family as well as a wrong one, and reads
+`version.quarkus` from the *effective* POM — TokenSheriff inherits it from `cui-quarkus-parent`
+rather than declaring it, and a text scan reports "not declared anywhere".
 
-Keep the script in sync with `cuioss-parent-pom`'s copy; there is no shared parent to inherit
-it from.
+Two things upstream cannot check, because they are consumer-side facts:
+
+- **BOM import order.** `token-sheriff-quarkus-parent` imports `quarkus-bom` ahead of
+  `token-sheriff-bom` deliberately; the latter carries `java-ee-10-bom`'s smallrye pins. That
+  ordering is what keeps the family coherent — see the comment on that `<dependencyManagement>`
+  block, and do not reorder it.
+- **A local `version.quarkus` override.** Supported by `cui-quarkus-parent` for an emergency
+  pin, but it moves Quarkus without moving `java-ee-10-bom`'s inherited smallrye pin. The
+  resolved job catches this; the upstream property check cannot.
 
 ### Step 3 — Pull current main
 
