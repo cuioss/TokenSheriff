@@ -35,6 +35,30 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- ORDER IS LOAD-BEARING: quarkus-bom MUST stay ahead of token-sheriff-bom.
+
+                 Maven resolves competing <scope>import</scope> BOMs first-declared-wins, and these
+                 two both manage io.smallrye.config. token-sheriff-bom looks like it manages only our
+                 own artifacts, but it imports de.cuioss:java-ee-10-bom, whose io.smallrye.config
+                 pins ride along: token-sheriff-bom's EFFECTIVE dependencyManagement manages 13
+                 io.smallrye.config artifacts. Declared first, quarkus-bom wins those coordinates,
+                 and the family lands on whatever this Quarkus was built against - measured at
+                 3.39.2: quarkus-core 3.39.2 with io.smallrye.config uniformly 3.17.2.
+
+                 Swap the two and java-ee-10-bom's pins win instead. That is silent while the two
+                 happen to agree, and becomes a split smallrye-config the moment they diverge -
+                 which breaks Quarkus config-mapping augmentation with
+                 `failed to access io.smallrye.config.ConfigMappingLoader$ConfigMappingImplementation
+                 from io.quarkus.deployment.configuration.ConfigMappingUtils`. Demonstrated, not
+                 assumed: pinning version.quarkus to a mismatched release on a scratch branch still
+                 resolved coherently BECAUSE of this ordering, and reproducing the split required
+                 swapping these two imports as well.
+
+                 So the protection here is the order, not the parent. cui-quarkus-parent supplies
+                 version.quarkus by inheritance, but an inherited import is outranked by every
+                 child-declared one - which is why quarkus-bom is restated here rather than left to
+                 the parent (see cui-quarkus-parent's own note to consumers with competing BOMs).
+                 Do not alphabetise, deduplicate against the parent, or "tidy" this block. -->
             <dependency>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-bom</artifactId>
