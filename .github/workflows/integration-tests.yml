@@ -18,7 +18,7 @@ permissions:
 jobs:
   integration-tests:
     # Multi-IDP tests (Keycloak + Dex + Zitadel) — superset that includes standard integration tests
-    uses: cuioss/cuioss-organization/.github/workflows/reusable-maven-integration-tests.yml@daae5e2ca7930267ceeee92cbb35041687de6544 # v0.26.0
+    uses: cuioss/cuioss-organization/.github/workflows/reusable-maven-integration-tests.yml@9cffe3a2febb07d668784a1257b025101228754d # v0.27.0
     with:
       # Pinned rather than inherited. This job's five most recent real runs took
       # 6m04s-7m35s; the reusable workflow's default is 20, which is what cancelled
