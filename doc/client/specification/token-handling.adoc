@@ -202,6 +202,8 @@ storage is kept minimal so a bound token is never copied more widely than the li
 requires. A sender-constrained token MUST NOT be degraded to a replayable bearer token by the
 way it is stored or forwarded.
 
+NOTE: "mTLS-bound" here means preserving a certificate-bound confirmation claim (`cnf.x5t#S256`) a token already carries. That is separate from mTLS client authentication (`tls_client_auth`), which is an alpha capability (xref:../../adr/0012-mTLS_client_authentication_is_an_alpha_capability_DPoP_is_the_sender-constraining_and_client-authentication_direction.adoc[ADR-0012]).
+
 A refresh that would apply no confirmed `cnf` binding to a sender-constrained bundle is therefore
 *refused* by the same atomic store transform that enforces the subject binding — the refusal is
 independent of what the authorization server returned, since the client cannot preserve a

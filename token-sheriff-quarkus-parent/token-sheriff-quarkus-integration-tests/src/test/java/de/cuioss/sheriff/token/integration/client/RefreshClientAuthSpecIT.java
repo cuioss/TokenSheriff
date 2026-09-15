@@ -49,9 +49,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * Drives the {@code refresh_token} leg through the production client-authentication strategies other
  * than {@code client_secret_basic}, against the real Keycloak container.
  * <p>
- * The client-authentication implementations that can be handed to
- * {@link ClientAuthenticationSelector} map 1:1 onto the methods {@link ClientAuthMethod} declares —
- * the production methods plus the alpha {@code tls_client_auth} — but only
+ * The client-authentication implementations that are constructible, and can therefore be handed to
+ * {@link ClientAuthenticationSelector}, cover the production methods {@link ClientAuthMethod}
+ * declares. The alpha {@code tls_client_auth} is declared there as well but sits deliberately outside
+ * that set: {@code MtlsClientAuth} refuses construction, so no instance of it is ever handed to the
+ * selector (ADR-0012). Of the constructible implementations, only
  * {@link ClientSecretBasicAuth} had ever authenticated a refresh against a real authorization server:
  * every other refresh spec in this module builds its flow from
  * {@link RefreshEngineSupport#clientAuthentication(ClientConfiguration)}, which is Basic.
@@ -61,7 +63,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * <strong>every method the selector can actually select is exercised here</strong> — the claim is
  * bounded by what {@link ClientAuthenticationSelector#select} does rather than by a fixed strategy
  * count: it walks the caller-configured {@link ClientAuthentication} strategies it is handed, skips
- * the alpha {@code tls_client_auth}, and keeps the strongest candidate whose
+ * the alpha {@code tls_client_auth} as a defensive guard, and keeps the strongest candidate whose
  * {@link ClientAuthMethod} the authorization server advertises.
  * <p>
  * {@code MtlsClientAuth} is outside that exercised set by <em>classification</em>, not by omission:

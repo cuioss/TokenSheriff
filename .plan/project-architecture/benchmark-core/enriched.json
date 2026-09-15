@@ -1,5 +1,9 @@
 {
   "best_practices": [],
+  "generation": {
+    "by": "architecture",
+    "tree_sha": null
+  },
   "insights": [],
   "internal_dependencies": [
     "token-sheriff-validation",
@@ -11,13 +15,13 @@
   ],
   "key_dependencies_reasoning": "Benchmarks token-sheriff-validation via JMH using benchmarking-common infrastructure",
   "key_packages": {
-    "de.cuioss.sheriff.token.validation.benchmark": {
+    "benchmarking/benchmark-core/src/main/java/de/cuioss/sheriff/token/validation/benchmark": {
       "description": "Top-level JMH benchmark classes and base state for validation benchmarks."
     },
-    "de.cuioss.sheriff.token.validation.benchmark.jfr": {
+    "benchmarking/benchmark-core/src/main/java/de/cuioss/sheriff/token/validation/benchmark/jfr": {
       "description": "JFR-instrumented benchmark variants for flight-recorder profiling."
     },
-    "de.cuioss.sheriff.token.validation.benchmark.standard": {
+    "benchmarking/benchmark-core/src/main/java/de/cuioss/sheriff/token/validation/benchmark/standard": {
       "description": "Standard end-to-end token validation benchmark scenarios."
     }
   },

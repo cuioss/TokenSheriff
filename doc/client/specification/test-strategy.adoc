@@ -230,6 +230,8 @@ test asserts rejection:
 
 | xref:../threat-model.adoc#T-CONSTRAINT-LOSS[T-CONSTRAINT-LOSS]
 | A DPoP / mTLS-bound token is asserted to keep its binding across storage and refresh.
+  "mTLS-bound" means an existing `cnf.x5t#S256` binding, not mTLS client authentication, which
+  is alpha (xref:../../adr/0012-mTLS_client_authentication_is_an_alpha_capability_DPoP_is_the_sender-constraining_and_client-authentication_direction.adoc[ADR-0012]).
 |===
 
 *Attack databases* — for untrusted *input parsing* inside the engine (callback query

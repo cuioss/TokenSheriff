@@ -1,5 +1,9 @@
 {
   "best_practices": [],
+  "generation": {
+    "by": "architecture",
+    "tree_sha": null
+  },
   "insights": [
     "Pre-existing JaCoCo coverage baseline debt: branch coverage 0.75 is below the 0.80 threshold. Standing debt predating current work \u2014 coverage-threshold Q-Gate findings against this module on unrelated plans are expected and were accepted (plan full-review-adoc-documents, 2026-07-16). All tests pass; the shortfall is baseline, not regression."
   ],
@@ -12,16 +16,16 @@
   ],
   "key_dependencies_reasoning": "Uses cui-java-tools and cui-http as the transport/utility base, JJWT for JWT primitives and Jakarta JSON (Parsson/dsl-json) for parsing; pure Java with no framework runtime deps.",
   "key_packages": {
-    "de.cuioss.sheriff.token.validation": {
+    "token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation": {
       "description": "Public entry point: TokenValidator plus IssuerConfig/IssuerConfigCache, TokenType and the JWT validation LogMessages."
     },
-    "de.cuioss.sheriff.token.validation.domain.token": {
+    "token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/domain/token": {
       "description": "Immutable token content domain types (access/id/refresh) returned from validation."
     },
-    "de.cuioss.sheriff.token.validation.jwks": {
+    "token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks": {
       "description": "JWKS key material loading and the JwksLoader factory used to resolve signing keys per issuer."
     },
-    "de.cuioss.sheriff.token.validation.pipeline": {
+    "token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline": {
       "description": "Staged validation pipelines (access/id/refresh) with JWT decoding, signature verification and token building."
     }
   },
