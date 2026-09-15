@@ -1,2 +1,0 @@
-Benchmark logging configured - writing to: target/benchmark-results/benchmark-run_2025-08-23_18-40-20.log
-All console output (System.out/err and JMH) will be captured to both console and file
