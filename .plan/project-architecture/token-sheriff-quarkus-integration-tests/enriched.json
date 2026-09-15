@@ -1,5 +1,9 @@
 {
   "best_practices": [],
+  "generation": {
+    "by": "architecture",
+    "tree_sha": null
+  },
   "insights": [],
   "internal_dependencies": [
     "token-sheriff-validation-quarkus",
@@ -10,10 +14,10 @@
   ],
   "key_dependencies_reasoning": "Exercises the deployed validation extension end-to-end via REST-assured against Keycloak",
   "key_packages": {
-    "de.cuioss.sheriff.token.integration": {
+    "token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/src/main/java/de/cuioss/sheriff/token/integration": {
       "description": "Integration test support/bootstrapping shared across the endpoint and scenario tests."
     },
-    "de.cuioss.sheriff.token.integration.endpoint": {
+    "token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/src/main/java/de/cuioss/sheriff/token/integration/endpoint": {
       "description": "Test REST endpoints that invoke token validation for the integration/native container tests."
     }
   },

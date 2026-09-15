@@ -1,5 +1,9 @@
 {
   "best_practices": [],
+  "generation": {
+    "by": "architecture",
+    "tree_sha": null
+  },
   "insights": [],
   "internal_dependencies": [
     "token-sheriff-validation-quarkus"
@@ -7,7 +11,7 @@
   "key_dependencies": [],
   "key_dependencies_reasoning": "Build-time deployment counterpart of the validation runtime extension",
   "key_packages": {
-    "de.cuioss.sheriff.token.quarkus.deployment": {
+    "token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment/src/main/java/de/cuioss/sheriff/token/quarkus/deployment": {
       "description": "Build-time processor/build-steps registering the validation extension and its Dev-UI."
     }
   },

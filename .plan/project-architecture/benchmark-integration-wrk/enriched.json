@@ -1,5 +1,9 @@
 {
   "best_practices": [],
+  "generation": {
+    "by": "architecture",
+    "tree_sha": null
+  },
   "insights": [],
   "internal_dependencies": [
     "benchmarking-common"
@@ -7,7 +11,7 @@
   "key_dependencies": [],
   "key_dependencies_reasoning": "Reuses benchmarking-common report/metrics infrastructure to publish WRK results",
   "key_packages": {
-    "de.cuioss.sheriff.token.wrk.benchmark": {
+    "benchmarking/benchmark-integration-wrk/src/main/java/de/cuioss/sheriff/token/wrk/benchmark": {
       "description": "Java harness coordinating WRK HTTP benchmark runs and result collection."
     }
   },

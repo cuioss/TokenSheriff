@@ -1,5 +1,9 @@
 {
   "best_practices": [],
+  "generation": {
+    "by": "architecture",
+    "tree_sha": null
+  },
   "insights": [],
   "internal_dependencies": [
     "token-sheriff-validation"
@@ -11,16 +15,16 @@
   ],
   "key_dependencies_reasoning": "Wraps token-sheriff-validation with Quarkus (Arc CDI, config, health, vertx-http) and MicroProfile JWT APIs",
   "key_packages": {
-    "de.cuioss.sheriff.token.quarkus.config": {
+    "token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/config": {
       "description": "MicroProfile/YAML configuration mapping into issuer and validation configuration."
     },
-    "de.cuioss.sheriff.token.quarkus.health": {
+    "token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/health": {
       "description": "SmallRye health checks reporting issuer/JWKS readiness and liveness."
     },
-    "de.cuioss.sheriff.token.quarkus.producer": {
+    "token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/producer": {
       "description": "CDI producers exposing TokenValidator and related beans to the Quarkus application."
     },
-    "de.cuioss.sheriff.token.quarkus.servlet": {
+    "token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/servlet": {
       "description": "Servlet-layer integration for extracting and validating bearer tokens from HTTP requests."
     }
   },
