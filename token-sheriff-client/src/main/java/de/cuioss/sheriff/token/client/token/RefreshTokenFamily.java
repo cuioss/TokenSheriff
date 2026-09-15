@@ -34,6 +34,10 @@ import java.util.concurrent.locks.ReentrantLock;
  * The family is thread-safe: concurrent redemptions of the same current token are serialized so
  * that exactly one wins the rotation and every loser is treated as a reuse of the now-superseded
  * token, revoking the family.
+ * <p>
+ * Every refusal caused by a revoked family is raised as {@link RefreshTokenFamilyRevokedException}, a
+ * {@link ClientProtocolException} subtype, and it always ends the session: see
+ * {@link #rotate(String, String)} for what a caller owes it.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -42,6 +46,8 @@ import java.util.concurrent.locks.ReentrantLock;
 public class RefreshTokenFamily {
 
     private static final CuiLogger LOGGER = new CuiLogger(RefreshTokenFamily.class);
+
+    private static final String REVOKED_MESSAGE = "refresh token family is revoked";
 
     private final ReentrantLock lock = new ReentrantLock();
 
@@ -62,14 +68,28 @@ public class RefreshTokenFamily {
      * <p>
      * The presented token must be the current active token. Presenting a superseded token — or any
      * token that is not current — is treated as reuse: the family is revoked and a
-     * {@link ClientProtocolException} is thrown. Once revoked, every subsequent call fails closed.
+     * {@link RefreshTokenFamilyRevokedException} is thrown. Once revoked, every subsequent call fails
+     * closed with the same type.
+     * <p>
+     * <strong>What a caller owes on that refusal.</strong> It is session-ending, never transient: revoke
+     * at the authorization server (RFC 7009, best-effort), clear the stored token bundle and this family,
+     * and require re-authentication — which is what
+     * {@link de.cuioss.sheriff.token.client.lifecycle.TokenLifecycleManager} does. By the time this
+     * method is called the authorization server has already redeemed {@code presentedToken} and issued
+     * {@code rotatedToken}, so the refusal carries {@code rotatedToken} as a live revocation target
+     * ({@link RefreshTokenFamilyRevokedException#getRotatedRefreshToken()}). A caller that classifies
+     * failures through {@link de.cuioss.sheriff.token.client.flow.RefreshFlow#classify(Throwable)} may
+     * route this refusal through it: it classifies as
+     * {@link de.cuioss.sheriff.token.client.flow.RefreshFailureClassification.Kind#REDEEMED} with that
+     * successor, never as the session-preserving pre-redemption kind.
      *
      * @param presentedToken the refresh token being redeemed; must not be {@code null} or blank
      * @param rotatedToken   the successor refresh token the AS issued; must not be {@code null} or
      *                       blank, and must differ from {@code presentedToken}
-     * @throws ClientProtocolException  if the family is already revoked, or reuse is detected (which
-     *                                  also revokes the family)
-     * @throws IllegalArgumentException if {@code rotatedToken} equals {@code presentedToken}
+     * @throws RefreshTokenFamilyRevokedException if the family is already revoked, or reuse is detected
+     *                                            (which also revokes the family) — a
+     *                                            {@link ClientProtocolException} subtype
+     * @throws IllegalArgumentException           if {@code rotatedToken} equals {@code presentedToken}
      */
     public void rotate(String presentedToken, String rotatedToken) {
         requireNonBlank(presentedToken);
@@ -79,7 +99,7 @@ public class RefreshTokenFamily {
         }
         lock.lock();
         try {
-            assertRedeemable(presentedToken);
+            assertRedeemable(presentedToken, rotatedToken);
             currentToken = rotatedToken;
         } finally {
             lock.unlock();
@@ -100,13 +120,20 @@ public class RefreshTokenFamily {
 
     /**
      * @return the current active refresh token
-     * @throws ClientProtocolException if the family has been revoked
+     * @throws RefreshTokenFamilyRevokedException if the family has been revoked — a
+     *                                            {@link ClientProtocolException} subtype. Nothing was
+     *                                            redeemed on this call, so it carries no successor, but the
+     *                                            session is still over: clear the stored token bundle and
+     *                                            this family. Routed through
+     *                                            {@link de.cuioss.sheriff.token.client.flow.RefreshFlow#classify(Throwable)}
+     *                                            it classifies as
+     *                                            {@link de.cuioss.sheriff.token.client.flow.RefreshFailureClassification.Kind#CREDENTIAL_REJECTED}
      */
     public String currentToken() {
         lock.lock();
         try {
             if (revoked) {
-                throw new ClientProtocolException("refresh token family is revoked");
+                throw new RefreshTokenFamilyRevokedException(REVOKED_MESSAGE);
             }
             return currentToken;
         } finally {
@@ -114,15 +141,15 @@ public class RefreshTokenFamily {
         }
     }
 
-    private void assertRedeemable(String presentedToken) {
+    private void assertRedeemable(String presentedToken, String rotatedToken) {
         if (revoked) {
-            throw new ClientProtocolException("refresh token family is revoked");
+            throw new RefreshTokenFamilyRevokedException(REVOKED_MESSAGE, rotatedToken);
         }
         if (!currentToken.equals(presentedToken)) {
             revoked = true;
             LOGGER.warn(ClientLogMessages.WARN.REFRESH_TOKEN_REUSE);
-            throw new ClientProtocolException(
-                    "refresh token reuse detected; the refresh token family has been revoked");
+            throw new RefreshTokenFamilyRevokedException(
+                    "refresh token reuse detected; the refresh token family has been revoked", rotatedToken);
         }
     }
 

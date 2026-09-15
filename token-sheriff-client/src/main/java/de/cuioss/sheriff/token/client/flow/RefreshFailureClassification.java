@@ -41,6 +41,14 @@ import java.util.Objects;
  *       known about that, including the {@link RefreshRedemption#rotationUnknown()} state where it is
  *       not computable at all.</li>
  * </ul>
+ * A refresh-token family's reuse or already-revoked refusal
+ * ({@link de.cuioss.sheriff.token.client.token.RefreshTokenFamilyRevokedException}) is not a fourth
+ * situation. It is mapped onto the two session-ending kinds by what the authorization server has
+ * already done: {@link Kind#REDEEMED} when the family refused a rotation the server had already
+ * performed, with the successor it issued as the revocation target, and {@link Kind#CREDENTIAL_REJECTED}
+ * when the family refused outside any exchange, where nothing was redeemed. It never maps to
+ * {@link Kind#PRE_REDEMPTION}.
+ * <p>
  * The three are mutually exclusive and exhaustive, which is what lets a caller dispatch on
  * {@link #kind()} in a switch with no default arm: a fourth state added later is a compile error at
  * every dispatch site rather than a silent fall-through to the session-preserving default.
@@ -73,14 +81,16 @@ public record RefreshFailureClassification(Kind kind, @Nullable RefreshRedemptio
         /**
          * The authorization server refused the presented refresh token as invalid without processing
          * the grant. Nothing was rotated, so there is no successor to revoke, but the credential is
-         * dead and the session must be cleared.
+         * dead and the session must be cleared. Also the kind of a revoked refresh-token family's
+         * refusal raised outside any exchange, which likewise redeemed nothing.
          */
         CREDENTIAL_REJECTED,
 
         /**
          * The authorization server processed the grant — and therefore redeemed the presented refresh
          * token — before the refusal was raised. The carried {@link RefreshRedemption} says whether a
-         * successor is known.
+         * successor is known. Also the kind of a refresh-token family's reuse or already-revoked
+         * refusal of a rotation the server had already performed.
          */
         REDEEMED
     }

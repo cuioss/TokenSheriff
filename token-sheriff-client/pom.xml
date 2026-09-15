@@ -291,6 +291,9 @@
                      its BRANCH limit cannot bind — the same all-zero reasoning used below to exclude
                      RedeemedRefreshFailure. Its INSTRUCTION limit does bind, so the entry is thin but not
                      vacuous. Only a negative control shows that; a green build never can.
+                     token.RefreshTokenFamilyRevokedException has the same shape (no branch in any of its
+                     members, so only INSTRUCTION binds); its negative control — its dedicated tests
+                     disabled, `clean verify` — went RED naming it at 0.76 < 0.90 instructions.
 
                      Why the include entries are dotted FQCNs: jacoco matches an element=CLASS rule against
                      JavaNames.getQualifiedClassName(vmName), i.e. the DOTTED name (nested classes render as
@@ -328,7 +331,7 @@
                      as `..flow.Refresh*` / `..flow.Redeemed*`, which are incomplete — they miss
                      token.RotationResult, token.RefreshTokenFamily, lifecycle.RefreshScheduler and
                      lifecycle.InMemoryTokenStore, all of which are on the refresh path but named and
-                     packaged outside that shape. Eleven explicit dotted FQCNs, no wildcards.
+                     packaged outside that shape. Twelve explicit dotted FQCNs, no wildcards.
 
                      Why token.TokenErrorResponse is deliberately NOT in the list, even though the
                      credential-rejected classification parses through it: adding it would make "Token"
@@ -373,6 +376,7 @@
                                         <include>de.cuioss.sheriff.token.client.flow.RedeemedValidationRefusalException</include>
                                         <include>de.cuioss.sheriff.token.client.token.RotationResult</include>
                                         <include>de.cuioss.sheriff.token.client.token.RefreshTokenFamily</include>
+                                        <include>de.cuioss.sheriff.token.client.token.RefreshTokenFamilyRevokedException</include>
                                         <include>de.cuioss.sheriff.token.client.lifecycle.RefreshScheduler</include>
                                         <include>de.cuioss.sheriff.token.client.lifecycle.InMemoryTokenStore</include>
                                     </includes>

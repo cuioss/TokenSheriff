@@ -179,12 +179,66 @@ and a family of loosely related ones — or leaves the distinction expressible b
 The adopted decision makes all three states explicit, total, and exhaustively dispatched, so no
 caller can fall back to the wrong one by omission.
 
+== Amendment: a refresh-token family refusal maps onto the existing states
+
+=== Context
+
+The classification entry point was scoped to failures raised by the refresh exchange. The client's
+refresh-token family is a separate primitive: after the exchange succeeds, the caller feeds the
+rotation into it, and it refuses a presented token that is not current (reuse, which revokes the
+family) and every call on a family that is already revoked. That refusal was a plain protocol
+exception with no classification case of its own, so it fell through to pre-redemption, the one state
+whose disposition is to leave the session intact. A relying party that composes the refresh exchange
+and the family in one `try` and routes the failure through the classification entry point, as both
+types' documentation invited, kept a replayed session alive.
+
+=== Decision
+
+The family refusal gets its own type, a subtype of the protocol exception it replaces, and the
+classification entry point covers it. **No fourth kind is added**: the three kinds are dispatched
+exhaustively, so a fourth is a compile break at every consumer's dispatch site. The refusal maps onto
+the two existing session-ending kinds by what the authorization server has already done, which is the
+same discriminator this ADR and ADR-0005 dispatch on:
+
+* **Raised while feeding a rotation into the family** — the authorization server answered and issued
+  the successor before the family refused, so the presented token is redeemed and the successor is a
+  live credential. This is the redeemed state, carrying the successor as the revocation target. A
+  deserialized refusal, whose successor is deliberately not serialized, is redeemed with rotation
+  unknown: still fail-closed, with no token to name.
+* **Raised when reading the current token from a revoked family** — no exchange took place, nothing
+  was redeemed and no successor exists. This is the credential-rejected state: nothing to revoke, but
+  the session must be cleared.
+
+The refusal never maps to pre-redemption. The classification entry point's documented domain is now
+exactly those two sources — the refresh exchange and the family refusal — and nothing else.
+
+=== Alternatives considered
+
+*Map every family refusal to credential-rejected.* It ends the session, which is the property that
+matters most. Rejected for the rotation case because it is factually wrong there: the server did
+redeem the grant and did issue a successor, and credential-rejected asserts there is none. A caller
+dispatching on it would discard a live successor instead of revoking it — the "discarded rather than
+revoked" outcome ADR-0005 chose redemption-based dispatch to avoid.
+
+*Add a fourth kind for a revoked family.* The most precise name for the situation. Rejected because
+it breaks every consumer's exhaustive dispatch at compile time for a situation whose dispositions the
+existing kinds already express.
+
+=== Consequences
+
+* A composed caller classifies a family refusal as session-ending, never as a transient fault.
+* The existing lifecycle manager is unchanged: it handles the refusal in its own `catch` of the
+  supertype, which still catches the subtype, and never routes it through the classification entry
+  point. Its reuse disposition revokes the replayed presented token rather than the successor. Aligning
+  it with the redeemed disposition is a separate decision, not taken here.
+
 == References
 
 * ADR-0005 — the two-state redemption discriminator this decision supersedes; its redeemed-branch
   disposition is carried forward unchanged
 * ADR-0003 — the class-granularity refresh-path coverage gate, which the classification value and the
-  credential-rejected carrier are added to
+  credential-rejected carrier are added to, and which the amendment's family-refusal type joins
+* ADR-0006 — the subtype-exception rule the amendment's family-refusal type follows
 * `token-sheriff-client` refresh path — the token-endpoint client that performs the classification,
   the refresh flow that exposes it, the lifecycle manager that dispatches on it, and the
   `Redeemed*` refusal-exception hierarchy that carries the redeemed state
