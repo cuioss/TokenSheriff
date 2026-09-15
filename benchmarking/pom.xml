@@ -30,6 +30,7 @@
 
         <!-- Sonar configuration: Skip analysis for benchmarking modules -->
         <!-- Benchmarking code is for performance testing, not production code -->
+        <!-- Deliberately outside SonarCloud coverage: the reactor is not subject to the new-code coverage gate -->
         <sonar.skip>true</sonar.skip>
     </properties>
 
