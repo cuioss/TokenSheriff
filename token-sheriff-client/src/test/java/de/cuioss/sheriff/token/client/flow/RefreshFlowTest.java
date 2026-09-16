@@ -19,10 +19,12 @@ import de.cuioss.sheriff.token.client.auth.ClientSecretBasicAuth;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.client.token.RefreshTokenFamily;
 import de.cuioss.sheriff.token.client.token.RotationResult;
 import de.cuioss.sheriff.token.client.token.RotationResult.ScopeDelta;
 import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
+import de.cuioss.sheriff.token.commons.error.TokenSheriffException;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
@@ -56,6 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @EnableTestLogger
 @EnableGeneratorController
@@ -214,6 +217,68 @@ class RefreshFlowTest {
         String presented = Generators.letterStrings(20, 40).next();
 
         assertThrows(TokenValidationException.class, () -> flow.refresh(metadata, presented));
+    }
+
+    @Test
+    @DisplayName("Should end the session when a composed refresh-then-rotate replays a superseded token")
+    void shouldClassifyComposedFamilyReuseAsSessionEnding(URIBuilder uriBuilder) {
+        String initial = Generators.letterStrings(20, 40).next();
+        var family = new RefreshTokenFamily(initial);
+        family.rotate(initial, Generators.letterStrings(20, 40).next());
+        String issuedToReplay = Generators.letterStrings(20, 40).next();
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(holder.getRawToken(), issuedToReplay, null, 300));
+
+        RefreshFailureClassification classification =
+                refreshAndRotateClassified(flow(config()), metadata(uriBuilder), family, initial);
+
+        assertAll("the AS rotated before the family refused, so the session ends and the successor is revoked",
+                () -> assertEquals(RefreshFailureClassification.Kind.REDEEMED, classification.kind(),
+                        "a relying party following the classify contract must not keep a replayed session"),
+                () -> assertTrue(classification.redemption().presentedTokenBurned()),
+                () -> assertEquals(issuedToReplay, classification.redemption().rotatedRefreshToken(),
+                        "the successor the AS issued to the replay is the live credential to revoke"),
+                () -> assertTrue(family.isRevoked()));
+    }
+
+    @Test
+    @DisplayName("Should end the session when a composed caller reads the token from an already-revoked family")
+    void shouldClassifyComposedRevokedFamilyReadAsSessionEnding(URIBuilder uriBuilder) {
+        String initial = Generators.letterStrings(20, 40).next();
+        var family = new RefreshTokenFamily(initial);
+        family.rotate(initial, Generators.letterStrings(20, 40).next());
+        assertThrows(ClientProtocolException.class,
+                () -> family.rotate(initial, Generators.letterStrings(20, 40).next()));
+        var flow = flow(config());
+        var metadata = metadata(uriBuilder);
+
+        RefreshFailureClassification classification;
+        try {
+            String presented = family.currentToken();
+            RotationResult rotation = flow.refresh(metadata, presented);
+            family.rotate(presented, rotation.refreshToken());
+            classification = fail("a revoked family must refuse before any exchange");
+        } catch (TokenSheriffException refused) {
+            classification = RefreshFlow.classify(refused);
+        }
+
+        assertEquals(RefreshFailureClassification.Kind.CREDENTIAL_REJECTED, classification.kind(),
+                "nothing was redeemed, but the family is dead and the session must be cleared");
+    }
+
+    /**
+     * Composes the refresh and the family rotation in one {@code try}, exactly as a relying party wiring
+     * {@link RefreshFlow} and {@link RefreshTokenFamily} directly would, and classifies whatever either
+     * raised.
+     */
+    private static RefreshFailureClassification refreshAndRotateClassified(RefreshFlow flow,
+            ProviderMetadata metadata, RefreshTokenFamily family, String presented) {
+        try {
+            RotationResult rotation = flow.refresh(metadata, presented);
+            family.rotate(presented, rotation.refreshToken());
+            return fail("the composed refresh must be refused");
+        } catch (TokenSheriffException refused) {
+            return RefreshFlow.classify(refused);
+        }
     }
 
     @Test

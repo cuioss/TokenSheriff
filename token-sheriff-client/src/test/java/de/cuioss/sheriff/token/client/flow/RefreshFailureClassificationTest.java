@@ -20,6 +20,8 @@ import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.dpop.DpopProofGenerator;
 import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.flow.RefreshFailureClassification.Kind;
+import de.cuioss.sheriff.token.client.token.RefreshTokenFamily;
+import de.cuioss.sheriff.token.client.token.RefreshTokenFamilyRevokedException;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -39,6 +41,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -200,6 +207,95 @@ class RefreshFailureClassificationTest {
                     () -> assertEquals(Kind.REDEEMED, classification.kind()),
                     () -> assertTrue(classification.redemption().presentedTokenBurned()),
                     () -> assertNull(classification.redemption().rotatedRefreshToken()));
+        }
+    }
+
+    @Nested
+    @DisplayName("refresh-token family refusal")
+    class FamilyRefusal {
+
+        @Test
+        @DisplayName("Should classify a reuse refusal from rotate as REDEEMED, naming the successor to revoke")
+        void shouldClassifyReuseOnRotateAsRedeemed() {
+            String initial = Generators.letterStrings(20, 40).next();
+            String replaySuccessor = Generators.letterStrings(20, 40).next();
+            var family = new RefreshTokenFamily(initial);
+            family.rotate(initial, Generators.letterStrings(20, 40).next());
+            var reuse = assertThrows(RefreshTokenFamilyRevokedException.class,
+                    () -> family.rotate(initial, replaySuccessor));
+
+            var classification = RefreshFlow.classify(reuse);
+
+            assertRedeemedWithSuccessor(classification, replaySuccessor);
+        }
+
+        @Test
+        @DisplayName("Should classify a rotate refusal on an already-revoked family as REDEEMED with the successor")
+        void shouldClassifyRotateOnRevokedFamilyAsRedeemed() {
+            String initial = Generators.letterStrings(20, 40).next();
+            String next = Generators.letterStrings(20, 40).next();
+            String laterSuccessor = Generators.letterStrings(20, 40).next();
+            var family = new RefreshTokenFamily(initial);
+            family.rotate(initial, next);
+            assertThrows(RefreshTokenFamilyRevokedException.class,
+                    () -> family.rotate(initial, Generators.letterStrings(20, 40).next()));
+            var revoked = assertThrows(RefreshTokenFamilyRevokedException.class,
+                    () -> family.rotate(next, laterSuccessor));
+
+            var classification = RefreshFlow.classify(revoked);
+
+            assertRedeemedWithSuccessor(classification, laterSuccessor);
+        }
+
+        @Test
+        @DisplayName("Should classify a currentToken refusal on a revoked family as CREDENTIAL_REJECTED")
+        void shouldClassifyCurrentTokenOnRevokedFamilyAsCredentialRejected() {
+            String initial = Generators.letterStrings(20, 40).next();
+            var family = new RefreshTokenFamily(initial);
+            family.rotate(initial, Generators.letterStrings(20, 40).next());
+            assertThrows(RefreshTokenFamilyRevokedException.class,
+                    () -> family.rotate(initial, Generators.letterStrings(20, 40).next()));
+            var revoked = assertThrows(RefreshTokenFamilyRevokedException.class, family::currentToken);
+
+            var classification = RefreshFlow.classify(revoked);
+
+            assertAll("nothing was redeemed, but the session is over",
+                    () -> assertEquals(Kind.CREDENTIAL_REJECTED, classification.kind()),
+                    () -> assertNull(classification.redemption()));
+        }
+
+        @Test
+        @DisplayName("Should classify a rotation refusal that lost its successor as REDEEMED with rotation unknown")
+        void shouldClassifyRotationRefusalWithoutSuccessorAsRotationUnknown() throws Exception {
+            var original = new RefreshTokenFamilyRevokedException("refresh token family is revoked",
+                    Generators.letterStrings(20, 40).next());
+            var roundTripped = (RefreshTokenFamilyRevokedException) roundTrip(original);
+
+            var classification = RefreshFlow.classify(roundTripped);
+
+            assertAll("still post-redemption and fail-closed, with no token to name",
+                    () -> assertEquals(Kind.REDEEMED, classification.kind()),
+                    () -> assertTrue(classification.redemption().presentedTokenBurned()),
+                    () -> assertNull(classification.redemption().rotatedRefreshToken()));
+        }
+
+        private static void assertRedeemedWithSuccessor(RefreshFailureClassification classification,
+                String successor) {
+            assertAll("the server already rotated, so the session ends and the successor is revoked",
+                    () -> assertEquals(Kind.REDEEMED, classification.kind(),
+                            "a family refusal must never read as the session-preserving PRE_REDEMPTION"),
+                    () -> assertTrue(classification.redemption().presentedTokenBurned()),
+                    () -> assertEquals(successor, classification.redemption().rotatedRefreshToken()));
+        }
+
+        private static Object roundTrip(Object value) throws IOException, ClassNotFoundException {
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) {
+                out.writeObject(value);
+            }
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+                return in.readObject();
+            }
         }
     }
 

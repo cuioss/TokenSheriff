@@ -129,26 +129,37 @@ class RefreshLifecycleSpecIT extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should detect refresh-token reuse, revoke the family, and clear the session")
+    @DisplayName("Should detect refresh-token reuse, revoke both credentials, and clear the session")
     void shouldDetectRefreshTokenReuse() {
         String sessionId = newSessionId();
         StoredToken original = acquireBundle();
         manager.store(sessionId, original);
 
-        assertTrue(refreshSession(sessionId).isPresent(), "the first refresh must succeed");
+        StoredToken firstRotation = refreshSession(sessionId)
+                .orElseThrow(() -> new AssertionError("the first refresh must succeed"));
 
         // Re-storing the original bundle leaves the seeded family intact, so the already-superseded
-        // refresh token is presented again — the reuse the family exists to detect.
+        // refresh token is presented again — the reuse the family exists to detect. Keycloak still
+        // answers that exchange and mints a successor before the family refuses it, which is why two
+        // credentials exist to revoke here.
         manager.store(sessionId, original);
 
         assertThrows(ClientProtocolException.class, () -> refreshSession(sessionId),
                 "replaying a superseded refresh token must surface as a protocol-level reuse");
 
+        List<String> revoked = revocationClient.recordedTokens();
         assertAll("fail-closed reuse handling",
                 () -> assertTrue(manager.get(sessionId).isEmpty(),
                         "the session must be cleared after a detected reuse"),
-                () -> assertEquals(List.of("refresh_token"), revocationClient.recordedTokenTypeHints(),
-                        "exactly one RFC 7009 revocation must be issued, hinted as a refresh token"));
+                () -> assertEquals(List.of("refresh_token", "refresh_token"),
+                        revocationClient.recordedTokenTypeHints(),
+                        "both RFC 7009 revocations must be hinted as a refresh token"),
+                () -> assertEquals(original.refreshToken(), revoked.getFirst(),
+                        "the replayed token is revoked first: that is what a family-wide server keys on"),
+                () -> assertNotEquals(original.refreshToken(), revoked.get(1),
+                        "the second target must be the successor, not the replayed token again"),
+                () -> assertNotEquals(firstRotation.refreshToken(), revoked.get(1),
+                        "the successor is the one the replayed exchange minted, not the earlier rotation's"));
     }
 
     @Test
@@ -165,10 +176,12 @@ class RefreshLifecycleSpecIT extends BaseIntegrationTest {
                 "a failing revocation must not mask the reuse signal to the caller");
 
         assertAll("best-effort revocation does not weaken the fail-closed clear",
-                () -> assertEquals(List.of("refresh_token"), revocationClient.recordedTokenTypeHints(),
-                        "the revocation must have been attempted before it failed"),
-                () -> assertEquals(1, revocationClient.recordedFailureCount(),
-                        "the attempt must have genuinely failed — otherwise the swallow branch is untested"),
+                () -> assertEquals(List.of("refresh_token", "refresh_token"),
+                        revocationClient.recordedTokenTypeHints(),
+                        "both revocations must have been attempted before they failed — the second one"
+                                + " proves a failure of the first does not skip the successor"),
+                () -> assertEquals(2, revocationClient.recordedFailureCount(),
+                        "both attempts must have genuinely failed — otherwise the swallow branch is untested"),
                 () -> assertTrue(manager.get(sessionId).isEmpty(),
                         "the session must still be cleared after a failed revocation"));
     }
@@ -220,6 +233,7 @@ class RefreshLifecycleSpecIT extends BaseIntegrationTest {
     private static final class RecordingRevocationClient extends RevocationClient {
 
         private final List<String> tokenTypeHints = new ArrayList<>();
+        private final List<String> tokens = new ArrayList<>();
         private final List<TransportException> failures = new ArrayList<>();
 
         RecordingRevocationClient(ClientConfiguration configuration) {
@@ -230,6 +244,7 @@ class RefreshLifecycleSpecIT extends BaseIntegrationTest {
         public void revoke(String revocationEndpoint, String token, String tokenTypeHint,
                 ClientAuthentication clientAuthentication) {
             tokenTypeHints.add(tokenTypeHint);
+            tokens.add(token);
             try {
                 super.revoke(revocationEndpoint, token, tokenTypeHint, clientAuthentication);
             } catch (TransportException failure) {
@@ -242,6 +257,11 @@ class RefreshLifecycleSpecIT extends BaseIntegrationTest {
 
         List<String> recordedTokenTypeHints() {
             return List.copyOf(tokenTypeHints);
+        }
+
+        /** @return the credentials named in each RFC 7009 call, in call order */
+        List<String> recordedTokens() {
+            return List.copyOf(tokens);
         }
 
         int recordedFailureCount() {

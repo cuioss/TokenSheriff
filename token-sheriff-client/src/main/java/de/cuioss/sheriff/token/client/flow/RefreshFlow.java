@@ -21,6 +21,7 @@ import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
+import de.cuioss.sheriff.token.client.token.RefreshTokenFamilyRevokedException;
 import de.cuioss.sheriff.token.client.token.RotationResult;
 import de.cuioss.sheriff.token.client.token.RotationResult.ScopeDelta;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
@@ -52,6 +53,13 @@ import java.util.Set;
  * BCP), the {@link RotationResult} reports the rotated token and flags the rotation; the caller
  * feeds that transition into its {@link de.cuioss.sheriff.token.client.token.RefreshTokenFamily} so
  * a later replay of a superseded token is detected and the family revoked ({@code CLIENT-17}).
+ * The family refuses such a replay, and every call on an already-revoked family, with
+ * {@link RefreshTokenFamilyRevokedException}. That refusal is <strong>session-ending</strong>: the
+ * caller owes it a revocation at the authorization server (RFC 7009, best-effort) and a clear of both
+ * its stored token bundle and the family, forcing re-authentication — what
+ * {@link de.cuioss.sheriff.token.client.lifecycle.TokenLifecycleManager} does. A caller that runs
+ * {@code refresh} and {@code rotate} in one {@code try} may route the refusal through
+ * {@link #classify(Throwable)}, which never reads it as pre-redemption.
  * <p>
  * The flow also reconciles the scope the authorization server granted against the scope this client
  * requested, and reports the outcome on the {@link RotationResult}
@@ -227,17 +235,38 @@ public class RefreshFlow {
     }
 
     /**
-     * Classifies a failure raised by {@link #refresh(ProviderMetadata, String)} into the three
-     * situations a caller owes a different disposition — see {@link RefreshFailureClassification}.
+     * Classifies a refresh failure into the three situations a caller owes a different disposition —
+     * see {@link RefreshFailureClassification}.
+     * <p>
+     * <strong>What it covers, and nothing else:</strong> a failure raised by
+     * {@link #refresh(ProviderMetadata, String)}, and a {@link RefreshTokenFamilyRevokedException} raised
+     * by the {@link de.cuioss.sheriff.token.client.token.RefreshTokenFamily} the caller feeds the
+     * rotation into. Any other throwable — one raised by the caller's own store, binding or ID-token
+     * checks, for example — is outside its domain: it answers
+     * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION} for it, which is a statement about the
+     * token exchange and says nothing about that other failure.
      * <p>
      * This is the single place the distinction is decided, and callers must use it rather than
-     * enumerate exception types. It folds in the two cases that carry no state of their own:
+     * enumerate exception types. It folds in the three cases that carry no redemption of their own:
      * {@link RedeemedResponseException}, a success status whose body could not be parsed, where no
      * {@link de.cuioss.sheriff.token.client.token.TokenResponse} is ever constructed and rotation is
      * therefore not computable even in principle — mapped to {@link RefreshRedemption#rotationUnknown()}
      * so the presented token is presumed burned with no successor to revoke; and
      * {@link CredentialRejectedException}, a {@code 4xx} the authorization server attributed to the
-     * presented credential itself, which redeemed nothing but leaves the credential dead.
+     * presented credential itself, which redeemed nothing but leaves the credential dead; and
+     * {@link RefreshTokenFamilyRevokedException}, the family's reuse or already-revoked refusal.
+     * <p>
+     * The family refusal never classifies as pre-redemption, and which session-ending kind it gets
+     * follows what the authorization server has already done. Raised by
+     * {@link de.cuioss.sheriff.token.client.token.RefreshTokenFamily#rotate(String, String)}, it comes
+     * after the server redeemed the presented token and issued the successor the refusal names, so it is
+     * {@link RefreshFailureClassification.Kind#REDEEMED} with {@link RefreshRedemption#rotated(String)} —
+     * the successor is a live credential to revoke — or with {@link RefreshRedemption#rotationUnknown()}
+     * on a deserialized instance that lost it. Raised by
+     * {@link de.cuioss.sheriff.token.client.token.RefreshTokenFamily#currentToken()}, no exchange took
+     * place and there is no successor, so it is
+     * {@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED}: nothing to revoke, but the session
+     * must be cleared.
      * <p>
      * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION} means the request never reached the
      * point where the server processed the grant, so the presented refresh token is untouched and still
@@ -248,7 +277,8 @@ public class RefreshFlow {
      * that both implements it and extends one of the named classes must be classified by the state it
      * carries, not by its class.
      *
-     * @param failure the failure {@code refresh} raised; must not be {@code null}
+     * @param failure the failure {@code refresh} or the refresh-token family raised; must not be
+     *                {@code null}
      * @return the classification; never {@code null}
      */
     public static RefreshFailureClassification classify(Throwable failure) {
@@ -262,7 +292,24 @@ public class RefreshFlow {
         if (failure instanceof CredentialRejectedException) {
             return RefreshFailureClassification.credentialRejected();
         }
+        if (failure instanceof RefreshTokenFamilyRevokedException revokedFamily) {
+            return classifyRevokedFamily(revokedFamily);
+        }
         return RefreshFailureClassification.preRedemption();
+    }
+
+    /**
+     * Maps the family refusal onto the session-ending kind that matches what the authorization server
+     * has already done — see {@link #classify(Throwable)}.
+     */
+    private static RefreshFailureClassification classifyRevokedFamily(
+            RefreshTokenFamilyRevokedException revokedFamily) {
+        if (!revokedFamily.isRaisedOnRotation()) {
+            return RefreshFailureClassification.credentialRejected();
+        }
+        return RefreshFailureClassification.redeemed(revokedFamily.getRotatedRefreshToken()
+                .map(RefreshRedemption::rotated)
+                .orElseGet(RefreshRedemption::rotationUnknown));
     }
 
     /**
