@@ -21,6 +21,7 @@ import de.cuioss.sheriff.token.commons.transport.Jwks;
 import de.cuioss.sheriff.token.commons.transport.JwksType;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
 import de.cuioss.sheriff.token.validation.jwks.parser.JwksParser;
 import de.cuioss.sheriff.token.validation.jwks.parser.KeyProcessor;
@@ -275,9 +276,16 @@ public class JWKSKeyLoader implements JwksLoader {
     }
 
 
+    /**
+     * Guards the per-request key lookup against an unpublished loader. Evaluated on every
+     * {@link #getKeyInfo(String)} call, so it raises the declared type rather than an unchecked
+     * exception — {@code TokenSignatureValidator} narrows nothing around the lookup.
+     */
     private void ensureInitialized() {
         if (!initialized.get()) {
-            throw new IllegalStateException("JWKSKeyLoader not initialized. Call initJWKSLoader() first.");
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.KEY_NOT_FOUND,
+                    "JWKSKeyLoader not initialized. Call initJWKSLoader() first.");
         }
     }
 

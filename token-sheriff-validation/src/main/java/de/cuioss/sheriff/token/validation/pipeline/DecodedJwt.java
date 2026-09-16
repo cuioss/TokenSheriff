@@ -119,14 +119,15 @@ String rawToken
      * guarantees a non-null parts array with exactly 3 elements.
      *
      * @return the decoded signature bytes, never null
-     * @throws IllegalStateException if the signature cannot be decoded from Base64URL format
+     * @throws TokenValidationException if the signature cannot be decoded from Base64URL format
      */
     public byte[] getSignatureAsDecodedBytes() {
         // Decode the signature from Base64URL
         try {
             return Base64.getUrlDecoder().decode(parts[2]);
         } catch (IllegalArgumentException e) {
-            throw new IllegalStateException(
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED,
                     "Failed to decode signature from Base64URL format: %s".formatted(e.getMessage()),
                     e
             );

@@ -15,10 +15,12 @@
  */
 package de.cuioss.sheriff.token.validation.domain.token;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.context.ValidationContext;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -82,8 +84,9 @@ class TokenContentTest {
     void shouldThrowExceptionWhenIssuerClaimIsMissing() {
         AccessTokenContent token = createTokenWithoutIssuer();
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class,
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
                 token::getIssuer);
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
         assertTrue(exception.getMessage().contains("Issuer claim not present in token"));
     }
 
@@ -121,8 +124,9 @@ class TokenContentTest {
     void shouldThrowExceptionWhenExpirationClaimIsMissing() {
         AccessTokenContent token = createTokenWithoutExpiration();
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class,
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
                 token::getExpirationDateTime);
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
         assertTrue(exception.getMessage().contains("ExpirationTime claim not present in token"));
     }
 
@@ -141,8 +145,9 @@ class TokenContentTest {
     void shouldThrowExceptionWhenIssuedAtClaimIsMissing() {
         AccessTokenContent token = createTokenWithoutIssuedAt();
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class,
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
                 token::getIssuedAtDateTime);
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
         assertTrue(exception.getMessage().contains("issued at time claim not present in token"));
     }
 

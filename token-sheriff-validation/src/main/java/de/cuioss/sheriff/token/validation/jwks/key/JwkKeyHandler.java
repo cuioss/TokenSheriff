@@ -235,18 +235,35 @@ public final class JwkKeyHandler {
      * Get a KeyFactory instance for the specified algorithm.
      * Uses a cache to avoid creating new instances repeatedly.
      *
+     * Package-private rather than private so a test can ask for an algorithm the JRE really does not
+     * have and exercise the translation below; called only with {@code RSA}, {@code EC} and
+     * {@code EdDSA} in production.
+     *
      * @param algorithm the algorithm name
      * @return the KeyFactory instance
-     * @throws IllegalStateException if the algorithm is not available
+     * @throws InvalidKeySpecException if the algorithm is not available (broken JRE)
      */
-    private static KeyFactory getKeyFactory(String algorithm) {
-        return KEY_FACTORY_CACHE.computeIfAbsent(algorithm, alg -> {
-            try {
-                return KeyFactory.getInstance(alg);
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException("Failed to create KeyFactory for " + alg, e);
-            }
-        });
+    static KeyFactory getKeyFactory(String algorithm) throws InvalidKeySpecException {
+        // Key parsing runs per request (DPoP embedded JWK, JWE ephemeral key) as well as on the
+        // loader-init and background-refresh threads. Raising the checked InvalidKeySpecException that
+        // every parse method already declares keeps this broken-JRE case inside the contract each
+        // caller already handles: the request-path callers narrow it to their declared
+        // TokenValidationException, and KeyProcessor skips the individual key as before. An unchecked
+        // exception here would escape both. computeIfAbsent cannot propagate a checked exception, so
+        // the cache is populated with an explicit get/put instead.
+        KeyFactory cached = KEY_FACTORY_CACHE.get(algorithm);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            KeyFactory created = KeyFactory.getInstance(algorithm);
+            // Return whichever instance won the race, so every caller keeps sharing one KeyFactory
+            // per algorithm exactly as computeIfAbsent did.
+            KeyFactory published = KEY_FACTORY_CACHE.putIfAbsent(algorithm, created);
+            return published != null ? published : created;
+        } catch (NoSuchAlgorithmException e) {
+            throw new InvalidKeySpecException("Failed to create KeyFactory for " + algorithm, e);
+        }
     }
 
     /**

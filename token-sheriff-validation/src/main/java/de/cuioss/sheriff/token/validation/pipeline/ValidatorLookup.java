@@ -15,12 +15,20 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+
 import java.util.Map;
 
 /**
  * Utility for looking up pre-created validators from immutable maps keyed by issuer identifier.
- * Throws {@link IllegalStateException} if the validator is not found, indicating a programming
- * error in the pipeline setup (all validators are pre-created during {@code TokenValidator} construction).
+ * <p>
+ * A miss indicates a programming error in the pipeline setup — all validators are pre-created during
+ * {@code TokenValidator} construction, keyed by the same {@code getIssuerIdentifier()} the pipelines
+ * look them up with, so the branch is unreachable through {@code TokenValidator}'s public entry points.
+ * It nevertheless throws {@link TokenValidationException} rather than an unchecked exception: this
+ * lookup runs on the per-request path, and every failure a per-request call can raise must be the
+ * declared type (see {@code UncheckedThrowBoundaryTest}).
  *
  * @since 1.0
  */
@@ -38,12 +46,14 @@ final class ValidatorLookup {
      * @param issuerIdentifier the issuer identifier to look up
      * @param validatorType    a human-readable name for error messages (e.g., "header validator")
      * @return the validator instance, never null
-     * @throws IllegalStateException if no validator is found for the given issuer
+     * @throws TokenValidationException if no validator is found for the given issuer
      */
     static <T> T getOrThrow(Map<String, T> validators, String issuerIdentifier, String validatorType) {
         T validator = validators.get(issuerIdentifier);
         if (validator == null) {
-            throw new IllegalStateException("No %s found for issuer: %s".formatted(validatorType, issuerIdentifier));
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.NO_ISSUER_CONFIG,
+                    "No %s found for issuer: %s".formatted(validatorType, issuerIdentifier));
         }
         return validator;
     }

@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.validation;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.domain.context.IdTokenRequest;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.pipeline.IdTokenValidationPipeline;
 import de.cuioss.sheriff.token.validation.pipeline.NonValidatingJwtParser;
 import de.cuioss.sheriff.token.validation.pipeline.SignatureTemplateManager;
@@ -34,8 +35,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests for the defensive null-check branches in {@link IdTokenValidationPipeline}.
@@ -43,7 +43,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * These guard against misconfiguration where an issuer resolves successfully
  * but no validator was pre-created for it in the maps. Each test constructs
  * the pipeline directly with missing validator entries to trigger the
- * IllegalStateException branches.
+ * {@link TokenValidationException} branches — the lookup runs on the per-request path, so it
+ * refuses with the declared type rather than an unchecked exception.
  * <p>
  * This test class is in the {@code de.cuioss.sheriff.token.validation} package
  * to access the package-private {@link IssuerConfigCache} constructor.
@@ -94,10 +95,11 @@ class IdTokenValidationPipelineNullCheckTest {
         var request = IdTokenRequest.of(tokenString);
 
         // When/Then
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
+        TokenValidationException exception = assertThrows(
+                TokenValidationException.class,
                 () -> pipeline.validate(request)
         );
+        assertEquals(SecurityEventCounter.EventType.NO_ISSUER_CONFIG, exception.getEventType());
         assertTrue(exception.getMessage().contains("No header validator found for issuer"),
                 "Should indicate missing header validator");
     }
@@ -121,10 +123,11 @@ class IdTokenValidationPipelineNullCheckTest {
         var request = IdTokenRequest.of(tokenString);
 
         // When/Then
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
+        TokenValidationException exception = assertThrows(
+                TokenValidationException.class,
                 () -> pipeline.validate(request)
         );
+        assertEquals(SecurityEventCounter.EventType.NO_ISSUER_CONFIG, exception.getEventType());
         assertTrue(exception.getMessage().contains("No signature validator found for issuer"),
                 "Should indicate missing signature validator");
     }
@@ -150,10 +153,11 @@ class IdTokenValidationPipelineNullCheckTest {
         var request = IdTokenRequest.of(tokenString);
 
         // When/Then
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
+        TokenValidationException exception = assertThrows(
+                TokenValidationException.class,
                 () -> pipeline.validate(request)
         );
+        assertEquals(SecurityEventCounter.EventType.NO_ISSUER_CONFIG, exception.getEventType());
         assertTrue(exception.getMessage().contains("No token builder found for issuer"),
                 "Should indicate missing token builder, got: " + exception.getMessage());
     }
@@ -179,10 +183,11 @@ class IdTokenValidationPipelineNullCheckTest {
         var request = IdTokenRequest.of(tokenString);
 
         // When/Then
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
+        TokenValidationException exception = assertThrows(
+                TokenValidationException.class,
                 () -> pipeline.validate(request)
         );
+        assertEquals(SecurityEventCounter.EventType.NO_ISSUER_CONFIG, exception.getEventType());
         assertTrue(exception.getMessage().contains("No claim validator found for issuer"),
                 "Should indicate missing claim validator");
     }

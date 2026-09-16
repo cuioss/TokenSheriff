@@ -31,6 +31,7 @@ import de.cuioss.sheriff.token.validation.pipeline.SignatureTemplateManager;
 import de.cuioss.sheriff.token.validation.pipeline.SignatureVerificationUtil;
 import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.token.validation.util.JwkThumbprintUtil;
+import de.cuioss.sheriff.token.validation.util.Sha256Util;
 import de.cuioss.tools.logging.CuiLogger;
 import de.cuioss.tools.logging.LogRecord;
 
@@ -38,7 +39,9 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.security.*;
+import java.security.InvalidKeyException;
+import java.security.PublicKey;
+import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
 import java.util.List;
@@ -302,7 +305,16 @@ public class DpopProofValidator {
 
         validateDpopClaims(decoded.bodyMap(), rawAccessToken, request);
 
-        // Validate JWK Thumbprint
+        // Validate JWK Thumbprint.
+        // JwkThumbprintUtil declares IllegalArgumentException for an unsupported 'kty' or a missing
+        // required member, and it is deliberately left unchecked there because the class is dual-use:
+        // the client's DpopProofGenerator calls it from its constructor, where a malformed local JWK is
+        // an embedder contract violation, not a token failure. It cannot raise that exception here,
+        // because parsePublicKey above rejects the proof with DPOP_PROOF_INVALID for exactly the same
+        // inputs: it requires 'kty' to be one of RSA/EC/OKP, and JwkKeyHandler then requires precisely
+        // the members RFC 7638 canonicalization needs for that key type ({e,n} / {crv,x,y} / {crv,x}).
+        // Those member sets are identical, so by this line every member the thumbprint needs is
+        // present. No translation is added: it would be unreachable code that no test could exercise.
         String computedThumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
         if (!computedThumbprint.equals(expectedThumbprint)) {
             LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_THUMBPRINT_MISMATCH, computedThumbprint, expectedThumbprint);
@@ -516,13 +528,10 @@ public class DpopProofValidator {
     }
 
     private String computeAccessTokenHash(String rawAccessToken) {
-        try {
-            byte[] hash = MessageDigest.getInstance("SHA-256")
-                    .digest(rawAccessToken.getBytes(StandardCharsets.US_ASCII));
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
+        // Delegates to Sha256Util so the broken-JRE case is raised as a TokenValidationException in
+        // exactly one place, rather than duplicated here with its own unchecked translation.
+        byte[] hash = Sha256Util.digest(rawAccessToken.getBytes(StandardCharsets.US_ASCII));
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
     }
 
     private void rejectWith(EventType eventType,

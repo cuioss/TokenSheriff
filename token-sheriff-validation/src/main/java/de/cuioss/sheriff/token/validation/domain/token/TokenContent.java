@@ -15,9 +15,11 @@
  */
 package de.cuioss.sheriff.token.validation.domain.token;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.context.ValidationContext;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -75,13 +77,15 @@ public sealed interface TokenContent extends MinimalTokenContent permits BaseTok
      * Since 'iss' is a mandatory claim, this method will never return null.
      *
      * @return the issuer
-     * @throws IllegalStateException if the issuer claim is not present (should never happen
-     *                               for a properly constructed validation)
+     * @throws TokenValidationException if the issuer claim is not present (should never happen
+     *                                  for a properly constructed validation)
      */
     default String getIssuer() {
         return getClaimOption(ClaimName.ISSUER)
                 .map(ClaimValue::getOriginalString)
-                .orElseThrow(() -> new IllegalStateException("Issuer claim not present in token"));
+                .orElseThrow(() -> new TokenValidationException(
+                        SecurityEventCounter.EventType.MISSING_CLAIM,
+                        "Issuer claim not present in token"));
     }
 
     /**
@@ -113,24 +117,28 @@ public sealed interface TokenContent extends MinimalTokenContent permits BaseTok
      * Gets the expiration time as an OffsetDateTime.
      *
      * @return the expiration time
-     * @throws IllegalStateException if the expiration claim is not present
+     * @throws TokenValidationException if the expiration claim is not present
      */
     default OffsetDateTime getExpirationDateTime() {
         return getClaimOption(ClaimName.EXPIRATION)
                 .map(ClaimValue::getDateTime)
-                .orElseThrow(() -> new IllegalStateException("ExpirationTime claim not present in token"));
+                .orElseThrow(() -> new TokenValidationException(
+                        SecurityEventCounter.EventType.MISSING_CLAIM,
+                        "ExpirationTime claim not present in token"));
     }
 
     /**
      * Gets the issued-at time as an OffsetDateTime.
      *
      * @return the issued-at time
-     * @throws IllegalStateException if the issued-at claim is not present
+     * @throws TokenValidationException if the issued-at claim is not present
      */
     default OffsetDateTime getIssuedAtDateTime() {
         return getClaimOption(ClaimName.ISSUED_AT)
                 .map(ClaimValue::getDateTime)
-                .orElseThrow(() -> new IllegalStateException("issued at time claim not present in token"));
+                .orElseThrow(() -> new TokenValidationException(
+                        SecurityEventCounter.EventType.MISSING_CLAIM,
+                        "issued at time claim not present in token"));
     }
 
     /**
