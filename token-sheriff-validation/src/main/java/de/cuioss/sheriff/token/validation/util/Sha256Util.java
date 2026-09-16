@@ -30,13 +30,19 @@ import java.security.NoSuchAlgorithmException;
  * specification, so the checked {@link NoSuchAlgorithmException} can only occur on a broken JRE.
  * It is translated to {@link TokenValidationException} rather than an unchecked exception because
  * every caller is on the per-request validation path (access-token cache keying, DPoP proof
- * thumbprint and {@code ath} hashing), where an undeclared unchecked failure would escape
- * {@code TokenValidator}'s documented contract.
+ * thumbprint and {@code ath} hashing, ECDH-ES key derivation), where an undeclared unchecked failure
+ * would escape {@code TokenValidator}'s documented contract.
+ * <p>
+ * This class is the module's <strong>single</strong> translation point for that condition: callers
+ * that need an incremental digest take {@link #newDigest()} rather than calling
+ * {@link MessageDigest#getInstance(String)} and repeating the translation.
  *
  * @since 1.0
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class Sha256Util {
+
+    private static final String SHA_256 = "SHA-256";
 
     /**
      * Computes the SHA-256 digest of the given input.
@@ -46,13 +52,38 @@ public final class Sha256Util {
      * @throws TokenValidationException if the SHA-256 algorithm is not available (broken JRE)
      */
     public static byte[] digest(byte[] input) {
+        return newDigest().digest(input);
+    }
+
+    /**
+     * Returns a fresh SHA-256 {@link MessageDigest} for callers that digest incrementally.
+     *
+     * @return a new SHA-256 message digest
+     * @throws TokenValidationException if the SHA-256 algorithm is not available (broken JRE)
+     */
+    public static MessageDigest newDigest() {
+        return newDigest(SHA_256);
+    }
+
+    /**
+     * The algorithm-parameterised seam behind {@link #newDigest()}.
+     * <p>
+     * It exists so the broken-JRE translation can be exercised by asking for an algorithm the JRE
+     * really does not have. Without it the {@code catch} would be unreachable from any test — and an
+     * untested translation on the request path is exactly the kind of guard this module cannot take
+     * on trust, because it is the one that decides whether a refresh failure is declared or not.
+     *
+     * @param algorithm the digest algorithm to instantiate
+     * @return a new message digest for {@code algorithm}
+     * @throws TokenValidationException if the algorithm is not available
+     */
+    static MessageDigest newDigest(String algorithm) {
         try {
-            return MessageDigest.getInstance("SHA-256").digest(input);
+            return MessageDigest.getInstance(algorithm);
         } catch (NoSuchAlgorithmException e) {
-            // SHA-256 is required by the Java specification; this should never happen
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM,
-                    "SHA-256 algorithm not available", e);
+                    "%s algorithm not available".formatted(algorithm), e);
         }
     }
 }

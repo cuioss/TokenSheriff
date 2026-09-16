@@ -235,11 +235,15 @@ public final class JwkKeyHandler {
      * Get a KeyFactory instance for the specified algorithm.
      * Uses a cache to avoid creating new instances repeatedly.
      *
+     * Package-private rather than private so a test can ask for an algorithm the JRE really does not
+     * have and exercise the translation below; called only with {@code RSA}, {@code EC} and
+     * {@code EdDSA} in production.
+     *
      * @param algorithm the algorithm name
      * @return the KeyFactory instance
      * @throws InvalidKeySpecException if the algorithm is not available (broken JRE)
      */
-    private static KeyFactory getKeyFactory(String algorithm) throws InvalidKeySpecException {
+    static KeyFactory getKeyFactory(String algorithm) throws InvalidKeySpecException {
         // Key parsing runs per request (DPoP embedded JWK, JWE ephemeral key) as well as on the
         // loader-init and background-refresh threads. Raising the checked InvalidKeySpecException that
         // every parse method already declares keeps this broken-JRE case inside the contract each

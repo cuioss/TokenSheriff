@@ -15,14 +15,12 @@
  */
 package de.cuioss.sheriff.token.validation.jwe;
 
-import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
-import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.util.Sha256Util;
 import lombok.experimental.UtilityClass;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
 /**
@@ -55,41 +53,37 @@ public class ConcatKdf {
      */
     public static byte[] derive(byte[] sharedSecret, int keyLengthBits,
             String algorithmId, byte[] apu, byte[] apv) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            int hashLen = 256; // SHA-256 output length in bits
-            int reps = (keyLengthBits + hashLen - 1) / hashLen;
+        // Sha256Util owns the broken-JRE translation for the whole module, so this per-request JWE
+        // path raises the declared TokenValidationException without repeating it here:
+        // NonValidatingJwtParser.handleJweToken narrows only TokenValidationException and IOException,
+        // so an unchecked exception at this point would escape TokenValidator's contract.
+        MessageDigest digest = Sha256Util.newDigest();
+        int hashLen = 256; // SHA-256 output length in bits
+        int reps = (keyLengthBits + hashLen - 1) / hashLen;
 
-            byte[] algIdBytes = algorithmId.getBytes(StandardCharsets.US_ASCII);
+        byte[] algIdBytes = algorithmId.getBytes(StandardCharsets.US_ASCII);
 
-            // Build otherInfo per RFC 7518 Section 4.6.2:
-            // AlgorithmID, PartyUInfo, PartyVInfo, SuppPubInfo (concatenated)
-            // Each length-prefixed with 4-byte big-endian length
-            byte[] otherInfo = buildOtherInfo(algIdBytes, apu, apv, keyLengthBits);
+        // Build otherInfo per RFC 7518 Section 4.6.2:
+        // AlgorithmID, PartyUInfo, PartyVInfo, SuppPubInfo (concatenated)
+        // Each length-prefixed with 4-byte big-endian length
+        byte[] otherInfo = buildOtherInfo(algIdBytes, apu, apv, keyLengthBits);
 
-            byte[] derivedKeyMaterial = new byte[reps * (hashLen / 8)];
-            for (int counter = 1; counter <= reps; counter++) {
-                digest.reset();
-                // roundHash = Hash of: counter, Z, OtherInfo (concatenated)
-                digest.update(intToFourBytes(counter));
-                digest.update(sharedSecret);
-                digest.update(otherInfo);
-                byte[] hash = digest.digest();
-                System.arraycopy(hash, 0, derivedKeyMaterial, (counter - 1) * hash.length, hash.length);
-            }
-
-            // Truncate to desired key length
-            int keyLengthBytes = keyLengthBits / 8;
-            byte[] result = Arrays.copyOf(derivedKeyMaterial, keyLengthBytes);
-            Arrays.fill(derivedKeyMaterial, (byte) 0);
-            return result;
-        } catch (NoSuchAlgorithmException e) {
-            // Broken-JRE condition on the per-request JWE decryption path, so it is the declared type:
-            // NonValidatingJwtParser.handleJweToken narrows only TokenValidationException and IOException.
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                    "SHA-256 not available", e);
+        byte[] derivedKeyMaterial = new byte[reps * (hashLen / 8)];
+        for (int counter = 1; counter <= reps; counter++) {
+            digest.reset();
+            // roundHash = Hash of: counter, Z, OtherInfo (concatenated)
+            digest.update(intToFourBytes(counter));
+            digest.update(sharedSecret);
+            digest.update(otherInfo);
+            byte[] hash = digest.digest();
+            System.arraycopy(hash, 0, derivedKeyMaterial, (counter - 1) * hash.length, hash.length);
         }
+
+        // Truncate to desired key length
+        int keyLengthBytes = keyLengthBits / 8;
+        byte[] result = Arrays.copyOf(derivedKeyMaterial, keyLengthBytes);
+        Arrays.fill(derivedKeyMaterial, (byte) 0);
+        return result;
     }
 
     private static byte[] buildOtherInfo(byte[] algId, byte[] apu, byte[] apv, int keyLengthBits) {

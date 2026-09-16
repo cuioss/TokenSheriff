@@ -306,19 +306,16 @@ public class DpopProofValidator {
         validateDpopClaims(decoded.bodyMap(), rawAccessToken, request);
 
         // Validate JWK Thumbprint.
-        // JwkThumbprintUtil is dual-use: the client's DpopProofGenerator calls it from its constructor,
-        // where a malformed JWK is an embedder contract violation and must stay unchecked. Here the JWK
-        // comes from the attacker-supplied proof header, so its IllegalArgumentException is narrowed to
-        // the declared refusal. parsePublicKey above already rejects an unsupported 'kty' or a missing
-        // required member, so this is defence in depth against a reordering of the two.
-        String computedThumbprint;
-        try {
-            computedThumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
-        } catch (IllegalArgumentException e) {
-            rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
-                    "DPoP proof JWK cannot be reduced to a thumbprint: %s".formatted(e.getMessage()));
-            return; // unreachable — rejectWith always throws
-        }
+        // JwkThumbprintUtil declares IllegalArgumentException for an unsupported 'kty' or a missing
+        // required member, and it is deliberately left unchecked there because the class is dual-use:
+        // the client's DpopProofGenerator calls it from its constructor, where a malformed local JWK is
+        // an embedder contract violation, not a token failure. It cannot raise that exception here,
+        // because parsePublicKey above rejects the proof with DPOP_PROOF_INVALID for exactly the same
+        // inputs: it requires 'kty' to be one of RSA/EC/OKP, and JwkKeyHandler then requires precisely
+        // the members RFC 7638 canonicalization needs for that key type ({e,n} / {crv,x,y} / {crv,x}).
+        // Those member sets are identical, so by this line every member the thumbprint needs is
+        // present. No translation is added: it would be unreachable code that no test could exercise.
+        String computedThumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
         if (!computedThumbprint.equals(expectedThumbprint)) {
             LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_THUMBPRINT_MISMATCH, computedThumbprint, expectedThumbprint);
             securityEventCounter.increment(EventType.DPOP_THUMBPRINT_MISMATCH);
