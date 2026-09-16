@@ -41,6 +41,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -448,8 +449,12 @@ public class TokenLifecycleManager {
             try {
                 family.rotate(presentedRefreshToken, rotation.refreshToken());
             } catch (ClientProtocolException reuse) {
-                revokeReusedFamily(sessionId, metadata, presentedRefreshToken, revocationClient,
-                        clientAuthentication);
+                // The catch stays on the supertype: RefreshTokenFamilyRevokedException is a
+                // ClientProtocolException, so this keeps holding, and nothing else rotate can raise is
+                // one. The successor is read from the rotation this exchange actually produced, not from
+                // the refusal, so the revoked credential is one the AS demonstrably issued here.
+                revokeReusedFamily(sessionId, metadata, presentedRefreshToken, rotation.refreshToken(),
+                        revocationClient, clientAuthentication);
                 throw reuse;
             }
         }
@@ -541,10 +546,27 @@ public class TokenLifecycleManager {
         }
     }
 
+    /**
+     * Fails a session closed after the rotation family refused the redemption as a replay.
+     * <p>
+     * <strong>Both credentials are revoked, in this order.</strong> The replayed token is named first:
+     * it is the credential the authorization server's own reuse detection keys on, so on a server that
+     * revokes family-wide (OAuth 2.0 Security BCP §4.14.2) naming it is what kills the whole family. The
+     * successor is named second because a server that does <em>not</em> revoke family-wide has just
+     * issued it as a live credential on the very exchange this client is refusing — revoking only the
+     * replayed token would leave that successor valid until it expired, which is the disposition
+     * ADR-0005 and ADR-0010 assign to a refusal raised after redemption. Each revocation is independent
+     * and best-effort, so a failure of the first does not stop the second.
+     */
     private void revokeReusedFamily(String sessionId, ProviderMetadata metadata, String reusedToken,
-            RevocationClient revocationClient, ClientAuthentication clientAuthentication) {
+            @Nullable String rotatedSuccessor, RevocationClient revocationClient,
+            ClientAuthentication clientAuthentication) {
         LOGGER.warn(ClientLogMessages.WARN.REFRESH_REUSE_REVOCATION, maskSessionId(sessionId));
-        revokeAndClearFailClosed(sessionId, metadata, reusedToken, revocationClient, clientAuthentication);
+        List<String> revocationTargets = rotatedSuccessor == null
+                ? List.of(reusedToken)
+                : List.of(reusedToken, rotatedSuccessor);
+        revokeAndClearFailClosed(sessionId, metadata, revocationTargets, revocationClient,
+                clientAuthentication);
     }
 
     /**
@@ -562,7 +584,8 @@ public class TokenLifecycleManager {
     private void quarantineRejectedRotation(String sessionId, ProviderMetadata metadata, String rotatedToken,
             RevocationClient revocationClient, ClientAuthentication clientAuthentication) {
         LOGGER.warn(ClientLogMessages.WARN.REFRESH_IDENTITY_REJECTED_QUARANTINE, maskSessionId(sessionId));
-        revokeAndClearFailClosed(sessionId, metadata, rotatedToken, revocationClient, clientAuthentication);
+        revokeAndClearFailClosed(sessionId, metadata, revocationTargets(rotatedToken), revocationClient,
+                clientAuthentication);
     }
 
     /**
@@ -588,7 +611,8 @@ public class TokenLifecycleManager {
         } else {
             LOGGER.warn(ClientLogMessages.WARN.REFRESH_IDENTITY_REJECTED_QUARANTINE, maskSessionId(sessionId));
         }
-        revokeAndClearFailClosed(sessionId, metadata, rotatedToken, revocationClient, clientAuthentication);
+        revokeAndClearFailClosed(sessionId, metadata, revocationTargets(rotatedToken), revocationClient,
+                clientAuthentication);
     }
 
     /**
@@ -605,28 +629,44 @@ public class TokenLifecycleManager {
     private void quarantineRejectedCredential(String sessionId, ProviderMetadata metadata,
             RevocationClient revocationClient, ClientAuthentication clientAuthentication) {
         LOGGER.warn(ClientLogMessages.WARN.REFRESH_CREDENTIAL_REJECTED_QUARANTINE, maskSessionId(sessionId));
-        revokeAndClearFailClosed(sessionId, metadata, null, revocationClient, clientAuthentication);
+        revokeAndClearFailClosed(sessionId, metadata, List.of(), revocationClient, clientAuthentication);
     }
 
     /**
-     * Revokes {@code token} at the authorization server (best-effort) and clears the session's store
-     * entry and rotation family, so the client-side fail-closed clear happens whether or not the AS
-     * revocation succeeds. A {@code null} {@code token} means no revocable credential is known — the
-     * clear still happens, and no revocation is attempted.
+     * @return the revocation targets for a single, possibly unknown credential: the token when one is
+     *         known, and an empty list when it is {@code null}, which means there is nothing to name in
+     *         a revocation
+     */
+    private static List<String> revocationTargets(@Nullable String token) {
+        return token == null ? List.of() : List.of(token);
+    }
+
+    /**
+     * Revokes every named credential at the authorization server (best-effort, in the given order) and
+     * clears the session's store entry and rotation family, so the client-side fail-closed clear happens
+     * whether or not the AS revocations succeed. An empty list means no revocable credential is known —
+     * the clear still happens, and nothing is attempted.
+     * <p>
+     * Each revocation is attempted independently: a {@link TransportException} from one does not stop
+     * the next, because the targets are separate credentials and skipping the rest would leave a live
+     * one behind over an unrelated failure.
      */
     private void revokeAndClearFailClosed(String sessionId, ProviderMetadata metadata,
-            @Nullable String token, RevocationClient revocationClient,
+            List<String> revocationTargets, RevocationClient revocationClient,
             ClientAuthentication clientAuthentication) {
         try {
-            if (token != null) {
+            if (!revocationTargets.isEmpty()) {
                 metadata.getRevocationEndpoint().ifPresent(endpoint -> {
-                    try {
-                        revocationClient.revoke(endpoint, token, REFRESH_TOKEN_TYPE_HINT, clientAuthentication);
-                    } catch (TransportException revocationFailure) {
-                        // Revocation is best-effort: a failed AS revocation must not stop the client-side
-                        // fail-closed store clear below, nor mask the original refusal to the caller.
-                        LOGGER.debug(revocationFailure, "RFC 7009 revocation on fail-closed clear failed: %s",
-                                revocationFailure.getMessage());
+                    for (String token : revocationTargets) {
+                        try {
+                            revocationClient.revoke(endpoint, token, REFRESH_TOKEN_TYPE_HINT, clientAuthentication);
+                        } catch (TransportException revocationFailure) {
+                            // Revocation is best-effort: a failed AS revocation must not stop the
+                            // client-side fail-closed store clear below, must not stop the remaining
+                            // targets, and must not mask the original refusal to the caller.
+                            LOGGER.debug(revocationFailure, "RFC 7009 revocation on fail-closed clear failed: %s",
+                                    revocationFailure.getMessage());
+                        }
                     }
                 });
             }

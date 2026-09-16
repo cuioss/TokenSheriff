@@ -227,10 +227,14 @@ existing kinds already express.
 === Consequences
 
 * A composed caller classifies a family refusal as session-ending, never as a transient fault.
-* The existing lifecycle manager is unchanged: it handles the refusal in its own `catch` of the
-  supertype, which still catches the subtype, and never routes it through the classification entry
-  point. Its reuse disposition revokes the replayed presented token rather than the successor. Aligning
-  it with the redeemed disposition is a separate decision, not taken here.
+* The lifecycle manager keeps handling the refusal in its own `catch` of the supertype, which still
+  catches the new subtype, and still never routes it through the classification entry point. Its reuse
+  disposition is brought into line with the redeemed disposition above: it now revokes **both** the
+  replayed token and the successor the authorization server issued on the refused exchange, in that
+  order. Naming the replayed token first is what triggers family-wide revocation on a server that
+  implements it; naming the successor second is what keeps a server that does not from leaving a live
+  credential behind until it expires. The two revocations are independent and best-effort, so a failure
+  of one does not skip the other, and the client-side clear remains unconditional.
 
 == References
 

@@ -99,9 +99,12 @@ class RefreshAdversarialTest extends RefreshTestSupport {
         manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth(config));
 
         // Roll the store back to the now-superseded token while the family stays at rt2, then present it.
+        // The successor the AS mints for that replay is pinned, because it is a live credential this
+        // client must not merely discard.
         manager.store(session, bearerBundle(rt1, null));
+        String replaySuccessor = Generators.letterStrings(20, 40).next();
         getModuleDispatcher().respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(),
-                Generators.letterStrings(20, 40).next(), null, 300));
+                replaySuccessor, null, 300));
         var clientAuth = clientAuth(config);
 
         assertThrows(ClientProtocolException.class,
@@ -110,6 +113,9 @@ class RefreshAdversarialTest extends RefreshTestSupport {
         assertAll("reuse response",
                 () -> assertTrue(revocationClient.revoked(rt1),
                         "the reused refresh token is revoked at the AS (RFC 7009)"),
+                () -> assertTrue(revocationClient.revoked(replaySuccessor),
+                        "the successor the AS issued on the replayed exchange is revoked too: a server that"
+                                + " does not revoke family-wide would otherwise leave it live until it expired"),
                 () -> assertTrue(manager.get(session).isEmpty(),
                         "the store is cleared fail-closed on detected reuse"));
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
@@ -134,8 +140,9 @@ class RefreshAdversarialTest extends RefreshTestSupport {
 
         // Roll the store back to the now-superseded token while the family stays at rt2, then present it.
         manager.store(session, bearerBundle(rt1, null));
+        String replaySuccessor = Generators.letterStrings(20, 40).next();
         getModuleDispatcher().respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(),
-                Generators.letterStrings(20, 40).next(), null, 300));
+                replaySuccessor, null, 300));
         var clientAuth = clientAuth(config);
 
         assertThrows(ClientProtocolException.class,
@@ -145,6 +152,9 @@ class RefreshAdversarialTest extends RefreshTestSupport {
         assertAll("fail-closed despite revocation failure",
                 () -> assertTrue(revocationClient.attempted(rt1),
                         "the RFC 7009 revocation of the reused token was attempted"),
+                () -> assertTrue(revocationClient.attempted(replaySuccessor),
+                        "the two revocations are independent: the first one throwing must not skip the"
+                                + " successor, or a live credential would be left behind"),
                 () -> assertTrue(manager.get(session).isEmpty(),
                         "the store is still cleared fail-closed when the AS revocation throws"));
     }
