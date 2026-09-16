@@ -231,8 +231,12 @@ class RefreshFlowTest {
         // and classify answered PRE_REDEMPTION — "the AS never processed the grant, keep the
         // session" — for a refresh token the AS had just burned. This test drives the converted guard
         // through the real validator, so it fails if that conversion is ever reverted.
+        // The '!' is load-bearing: it is outside the Base64URL alphabet, so the decoder rejects the
+        // signature part. Without it the string decodes cleanly and validation fails later, in ordinary
+        // signature verification, which reports the same SIGNATURE_VALIDATION_FAILED event without ever
+        // reaching the converted guard — the assertion below would then pass for the wrong reason.
         String[] parts = holder.getRawToken().split("\\.");
-        String corruptSignature = parts[0] + "." + parts[1] + ".not-a-valid-base64url-signature";
+        String corruptSignature = parts[0] + "." + parts[1] + ".not-a-valid-base64url-signature!";
         String rotated = Generators.letterStrings(20, 40).next();
         moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(corruptSignature, rotated, null, 300));
         var flow = flow(config());
@@ -246,8 +250,14 @@ class RefreshFlowTest {
         assertAll("a pipeline refusal raised after the exchange is a redeemed, session-ending failure",
                 () -> assertEquals(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED,
                         refused.getEventType(),
-                        "the refusal must come from the signature-validation guard this plan converted,"
-                                + " not from an earlier parse-time rejection that was already declared"),
+                        "the refusal must come from the signature-validation step, not from an earlier"
+                                + " parse-time rejection that was already declared"),
+                () -> assertTrue(refused.getMessage().contains("Failed to decode signature from Base64URL format"),
+                        "the refusal must come from DecodedJwt.getSignatureAsDecodedBytes -- the guard this"
+                                + " plan converted -- and not from ordinary signature verification, which"
+                                + " reports the same event type. Only that guard produces this message, so"
+                                + " it is what binds this test to the conversion. Actual: "
+                                + refused.getMessage()),
                 () -> assertEquals(RefreshFailureClassification.Kind.REDEEMED, classification.kind(),
                         "the AS returned 200 and burned the presented token before validation refused it,"
                                 + " so the session must end — PRE_REDEMPTION here would keep a session"

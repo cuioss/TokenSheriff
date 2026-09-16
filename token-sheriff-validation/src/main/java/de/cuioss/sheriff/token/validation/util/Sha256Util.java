@@ -28,10 +28,18 @@ import java.security.NoSuchAlgorithmException;
  * <p>
  * SHA-256 is required to be present by the Java Security Standard Algorithm Names
  * specification, so the checked {@link NoSuchAlgorithmException} can only occur on a broken JRE.
- * It is translated to {@link TokenValidationException} rather than an unchecked exception because
- * every caller is on the per-request validation path (access-token cache keying, DPoP proof
- * thumbprint and {@code ath} hashing, ECDH-ES key derivation), where an undeclared unchecked failure
- * would escape {@code TokenValidator}'s documented contract.
+ * It is translated to {@link TokenValidationException} because the callers that matter are on the
+ * per-request validation path — access-token cache keying, DPoP proof thumbprint and {@code ath}
+ * hashing, ECDH-ES key derivation — where an undeclared unchecked failure would escape
+ * {@code TokenValidator}'s documented contract.
+ * <p>
+ * One caller is <em>not</em> on that path: {@code token-sheriff-client}'s {@code DpopProofGenerator}
+ * reaches this class from its constructor by way of {@code JwkThumbprintUtil}, so on a broken JRE it
+ * too now fails with {@link TokenValidationException}. That is deliberate and does not contradict the
+ * rule that construction-time failures stay unchecked: that rule exists for <em>contract violations
+ * by the embedder</em>, which must not be dressed up as token failures. A JRE missing a mandatory
+ * digest is not the embedder's mistake, and the generator's own argument validation — unsupported
+ * algorithm, wrong key type — still throws {@link IllegalArgumentException} unchanged.
  * <p>
  * This class is the module's <strong>single</strong> translation point for that condition: callers
  * that need an incremental digest take {@link #newDigest()} rather than calling
