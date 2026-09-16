@@ -15,6 +15,8 @@
  */
 package de.cuioss.sheriff.token.validation.jwe;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import lombok.experimental.UtilityClass;
 
 import java.nio.ByteBuffer;
@@ -82,7 +84,11 @@ public class ConcatKdf {
             Arrays.fill(derivedKeyMaterial, (byte) 0);
             return result;
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
+            // Broken-JRE condition on the per-request JWE decryption path, so it is the declared type:
+            // NonValidatingJwtParser.handleJweToken narrows only TokenValidationException and IOException.
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                    "SHA-256 not available", e);
         }
     }
 

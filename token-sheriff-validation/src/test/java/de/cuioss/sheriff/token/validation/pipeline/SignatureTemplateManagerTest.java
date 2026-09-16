@@ -15,6 +15,8 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -95,9 +97,12 @@ class SignatureTemplateManagerTest {
 
     @Test
     void getSignatureInstanceUnsupportedAlgorithm() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> manager.getSignatureInstance("UNSUPPORTED"));
 
+        assertEquals(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM, exception.getEventType(),
+                "getSignatureInstance runs per request (JWS and DPoP proof verification), so the"
+                        + " refusal must be the declared type, not an unchecked exception");
         assertTrue(exception.getMessage().contains("UNSUPPORTED"),
                 "Exception message should mention the rejected algorithm");
     }

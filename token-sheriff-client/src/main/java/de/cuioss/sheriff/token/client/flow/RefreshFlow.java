@@ -76,7 +76,10 @@ import java.util.Set;
  * be determined at all. A caller holding a session cannot tell from the exception type alone whether
  * the token it still has stored is alive or dead, so each of those refusals <em>carries</em> the
  * {@link RefreshRedemption} it was raised under ({@link RedeemedRefreshFailure}), and
- * {@link #classify(Throwable)} reads it back.
+ * {@link #classify(Throwable)} reads it back. The validation refusal is caught by type, and that catch
+ * is sufficient by construction: every request-path guard in the validation pipeline raises the
+ * declared {@code TokenValidationException}, enforced by that module's {@code UncheckedThrowBoundaryTest},
+ * so no pipeline failure can bypass this arm and be read as pre-redemption.
  * <p>
  * A failure raised before that point carries no redemption, and {@code classify} splits that region in
  * two rather than collapsing it. Most of it is

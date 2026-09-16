@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.validation.pipeline;
 
 import com.dslplatform.json.DslJson;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.JwtHeader;
@@ -199,8 +200,8 @@ class DecodedJwtTest {
     }
 
     @Test
-    @DisplayName("Should throw IllegalStateException for invalid Base64URL signature")
-    void shouldThrowIllegalStateExceptionForInvalidBase64() {
+    @DisplayName("Should refuse an invalid Base64URL signature with the declared type")
+    void shouldRefuseInvalidBase64WithDeclaredType() {
         JwtHeader header = createTestHeader();
         MapRepresentation body = createTestBody();
 
@@ -208,7 +209,9 @@ class DecodedJwtTest {
         String[] invalidBase64Parts = {"header", "payload", "invalid@base64!signature"};
         DecodedJwt jwt = new DecodedJwt(header, body, "invalid@base64!signature", invalidBase64Parts, RAW_TOKEN);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, jwt::getSignatureAsDecodedBytes);
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                jwt::getSignatureAsDecodedBytes);
+        assertEquals(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED, exception.getEventType());
         assertTrue(exception.getMessage().contains("Failed to decode signature from Base64URL format"));
         assertNotNull(exception.getCause());
         assertEquals(IllegalArgumentException.class, exception.getCause().getClass());

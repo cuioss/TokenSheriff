@@ -564,11 +564,13 @@ class AccessTokenCacheTest {
         Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
         assertTrue(cached.isEmpty(), "Cache should be empty initially");
 
-        // When/Then - should throw IllegalStateException from getExpirationTime()
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+        // When/Then - cache.put reads getExpirationDateTime() on the request path, so the refusal is
+        // the declared TokenValidationException rather than an unchecked exception
+        TokenValidationException exception = assertThrows(TokenValidationException.class, () ->
                 cache.put(token, contentWithoutExp, performanceMonitor)
         );
 
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
         assertEquals("ExpirationTime claim not present in token", exception.getMessage());
     }
 

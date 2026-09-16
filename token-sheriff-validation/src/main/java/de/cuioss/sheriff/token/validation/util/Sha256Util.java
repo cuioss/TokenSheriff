@@ -15,6 +15,8 @@
  */
 package de.cuioss.sheriff.token.validation.util;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
@@ -25,8 +27,11 @@ import java.security.NoSuchAlgorithmException;
  * Small utility wrapping {@link MessageDigest} SHA-256 digest computation.
  * <p>
  * SHA-256 is required to be present by the Java Security Standard Algorithm Names
- * specification, so the checked {@link NoSuchAlgorithmException} is translated to an
- * {@link IllegalStateException} (it can only occur on a broken JRE).
+ * specification, so the checked {@link NoSuchAlgorithmException} can only occur on a broken JRE.
+ * It is translated to {@link TokenValidationException} rather than an unchecked exception because
+ * every caller is on the per-request validation path (access-token cache keying, DPoP proof
+ * thumbprint and {@code ath} hashing), where an undeclared unchecked failure would escape
+ * {@code TokenValidator}'s documented contract.
  *
  * @since 1.0
  */
@@ -38,14 +43,16 @@ public final class Sha256Util {
      *
      * @param input the bytes to digest, must not be {@code null}
      * @return the 32-byte SHA-256 digest
-     * @throws IllegalStateException if the SHA-256 algorithm is not available (broken JRE)
+     * @throws TokenValidationException if the SHA-256 algorithm is not available (broken JRE)
      */
     public static byte[] digest(byte[] input) {
         try {
             return MessageDigest.getInstance("SHA-256").digest(input);
         } catch (NoSuchAlgorithmException e) {
             // SHA-256 is required by the Java specification; this should never happen
-            throw new IllegalStateException("SHA-256 algorithm not available", e);
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM,
+                    "SHA-256 algorithm not available", e);
         }
     }
 }

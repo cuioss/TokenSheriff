@@ -19,6 +19,7 @@ import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.JwksType;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.test.juli.LogAsserts;
@@ -275,8 +276,12 @@ class JWKSKeyLoaderExtendedTest {
                     .jwksContent("{\"keys\":[]}")
                     .build();
 
-            assertThrows(IllegalStateException.class, () -> keyLoader.getKeyInfo("test-kid"),
+            TokenValidationException refusal = assertThrows(TokenValidationException.class,
+                    () -> keyLoader.getKeyInfo("test-kid"),
                     "Loader should throw exception when getKeyInfo is called before initialization");
+            assertEquals(SecurityEventCounter.EventType.KEY_NOT_FOUND, refusal.getEventType(),
+                    "getKeyInfo is the per-request key lookup, so an unpublished loader must refuse"
+                            + " with the declared type rather than an unchecked exception");
         }
     }
 }

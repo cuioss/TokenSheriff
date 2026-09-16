@@ -15,6 +15,8 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.security.JwsAlgorithm;
 import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
 import de.cuioss.tools.logging.CuiLogger;
@@ -108,13 +110,17 @@ public final class SignatureTemplateManager {
      * @param algorithm the algorithm to use (e.g., "ES256", "RS256", "PS256")
      * @return a fresh Signature instance for the algorithm
      * @throws UnsupportedAlgorithmException if the algorithm is not supported by the JDK or PSS parameters are invalid
-     * @throws IllegalArgumentException if the algorithm is not recognized
+     * @throws TokenValidationException if the algorithm is not in the pre-configured set
      */
     public Signature getSignatureInstance(String algorithm) {
-        // Use cached template — only pre-configured algorithms are allowed (defense-in-depth)
+        // Use cached template — only pre-configured algorithms are allowed (defense-in-depth).
+        // This runs per request (JWS and DPoP proof verification), so the refusal is the declared
+        // type: the DPoP path narrows only InvalidKeyException/SignatureException and would
+        // otherwise let an unchecked exception escape validateAccessToken.
         SignatureTemplate template = signatureTemplateCache.get(algorithm);
         if (template == null) {
-            throw new IllegalArgumentException(
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM,
                     "Algorithm '%s' is not in the pre-configured set. Supported: %s"
                             .formatted(algorithm, signatureTemplateCache.keySet()));
         }

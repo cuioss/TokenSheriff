@@ -118,13 +118,17 @@ public class TokenSignatureValidator {
     public void validateSignature(DecodedJwt decodedJwt) {
         LOGGER.debug("Validating validation signature");
 
-        // Get the kid from the validation header - precondition: already validated by TokenHeaderValidator
-        var kid = decodedJwt.getKid().orElseThrow(() ->
-                new IllegalStateException("Key ID (kid) should have been validated by TokenHeaderValidator"));
+        // Get the kid from the validation header - precondition: already validated by TokenHeaderValidator.
+        // The event type matches the one TokenHeaderValidator raises for a missing 'kid', so bypassing or
+        // reordering header validation cannot turn this into an undeclared unchecked failure.
+        var kid = decodedJwt.getKid().orElseThrow(() -> new TokenValidationException(
+                SecurityEventCounter.EventType.MISSING_CLAIM,
+                "Key ID (kid) should have been validated by TokenHeaderValidator"));
 
         // Get the algorithm from the validation header - precondition: already validated by TokenHeaderValidator
-        var algorithm = decodedJwt.getAlg().orElseThrow(() ->
-                new IllegalStateException("Algorithm (alg) should have been validated by TokenHeaderValidator"));
+        var algorithm = decodedJwt.getAlg().orElseThrow(() -> new TokenValidationException(
+                SecurityEventCounter.EventType.MISSING_CLAIM,
+                "Algorithm (alg) should have been validated by TokenHeaderValidator"));
 
         // Signature validation is performed in verifySignature method
 
@@ -149,19 +153,13 @@ public class TokenSignatureValidator {
             );
         }
 
-        // Verify the signature
-        try {
-            LOGGER.debug("All checks passed, verifying signature");
-            verifySignature(decodedJwt, keyInfo.get().key(), algorithm);
-        } catch (IllegalArgumentException e) {
-            LOGGER.warn(e, JWTValidationLogMessages.ERROR.SIGNATURE_VALIDATION_FAILED, e.getMessage());
-            securityEventCounter.increment(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED);
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED,
-                    "Signature validation failed: %s".formatted(e.getMessage()),
-                    e
-            );
-        }
+        // Verify the signature. No IllegalArgumentException translation is needed around this call:
+        // its only two sources were DecodedJwt's Base64URL signature decode and
+        // SignatureTemplateManager.getSignatureInstance, both of which now raise the declared
+        // TokenValidationException themselves. Everything else it can fail with is a checked
+        // exception translated inside verifySignature.
+        LOGGER.debug("All checks passed, verifying signature");
+        verifySignature(decodedJwt, keyInfo.get().key(), algorithm);
     }
 
     /**
@@ -181,14 +179,13 @@ public class TokenSignatureValidator {
         try {
             dataToVerify = decodedJwt.getDataToVerify();
             signatureBytes = decodedJwt.getSignatureAsDecodedBytes();
-        } catch (IllegalStateException e) {
+        } catch (TokenValidationException e) {
+            // DecodedJwt carries no SecurityEventCounter, so the counter increment for an
+            // undecodable signature stays here, at the pipeline boundary that owns the counter.
+            // The exception itself already names SIGNATURE_VALIDATION_FAILED and is rethrown as-is.
             LOGGER.warn(e, JWTValidationLogMessages.ERROR.SIGNATURE_VALIDATION_FAILED, e.getMessage());
             securityEventCounter.increment(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED);
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED,
-                    "Failed to extract JWT data for signature verification: %s".formatted(e.getMessage()),
-                    e
-            );
+            throw e;
         }
 
         byte[] dataBytes = dataToVerify.getBytes(StandardCharsets.UTF_8);

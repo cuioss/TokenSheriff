@@ -207,8 +207,9 @@ class TokenSignatureValidatorTest {
         TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
 
         // Kid validation is now a precondition - should be validated by TokenHeaderValidator first
-        IllegalStateException exception = assertThrows(IllegalStateException.class,
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> validator.validateSignature(decodedJwt));
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
 
         assertTrue(exception.getMessage().contains("Key ID (kid) should have been validated by TokenHeaderValidator"),
                 "Exception message should indicate precondition violation");
