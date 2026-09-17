@@ -16,7 +16,9 @@
 package de.cuioss.sheriff.token.commons.transport;
 
 import de.cuioss.http.client.handler.HttpHandler;
+import de.cuioss.http.client.handler.SecureSSLContextProvider;
 
+import javax.net.ssl.SSLContext;
 import java.net.URI;
 
 /**
@@ -33,6 +35,18 @@ import java.net.URI;
 final class CleartextEndpoints {
 
     private CleartextEndpoints() {
+    }
+
+    /**
+     * The configured TLS settings of one transport configuration, retained so they can be applied to every
+     * TLS endpoint it serves — also to one derived from a handler that carries none, such as the handler of a
+     * cleartext discovery endpoint.
+     *
+     * @param verifyHostname the configured hostname-verification posture
+     * @param sslContext     the caller-supplied trust material, or {@code null} for the cui-http default
+     * @param tlsVersions    the caller-supplied TLS-version policy, or {@code null} for the cui-http default
+     */
+    record TlsSettings(boolean verifyHostname, SSLContext sslContext, SecureSSLContextProvider tlsVersions) {
     }
 
     /**
@@ -53,19 +67,27 @@ final class CleartextEndpoints {
     }
 
     /**
-     * Applies the TLS settings a builder may carry for {@code endpoint}: {@code verifyHostname} for a TLS
-     * endpoint; for a cleartext endpoint, the TLS-only settings are reset so cui-http accepts the handler.
+     * Fits a builder's TLS settings to {@code endpoint}: for a TLS endpoint the configured settings are applied
+     * (a {@code null} SSL context or TLS-version policy leaves whatever the builder already carries); for a
+     * cleartext endpoint the TLS-only settings are reset so cui-http accepts the handler.
      *
-     * @param builder        the handler builder already pointing at {@code endpoint}
-     * @param endpoint       the endpoint URL the builder targets
-     * @param verifyHostname the configured hostname-verification posture
+     * @param builder  the handler builder already pointing at {@code endpoint}
+     * @param endpoint the endpoint URL the builder targets
+     * @param settings the configured TLS settings
      * @return the given builder
      */
     static HttpHandler.HttpHandlerBuilder applyTlsSettings(HttpHandler.HttpHandlerBuilder builder, String endpoint,
-            boolean verifyHostname) {
+            TlsSettings settings) {
         if (isCleartext(endpoint)) {
             return builder.sslContext(null).tlsVersions(null).verifyHostname(true);
         }
-        return builder.verifyHostname(verifyHostname);
+        builder.verifyHostname(settings.verifyHostname());
+        if (settings.sslContext() != null) {
+            builder.sslContext(settings.sslContext());
+        }
+        if (settings.tlsVersions() != null) {
+            builder.tlsVersions(settings.tlsVersions());
+        }
+        return builder;
     }
 }

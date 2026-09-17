@@ -56,20 +56,26 @@ class CleartextEndpointsTest {
                 .tlsVersions(new SecureSSLContextProvider());
 
         var handler = assertDoesNotThrow(
-                () -> CleartextEndpoints.applyTlsSettings(builder, endpoint, false).build(),
+                () -> CleartextEndpoints.applyTlsSettings(builder, endpoint,
+                        new CleartextEndpoints.TlsSettings(false, null, null)).build(),
                 "cui-http refuses TLS-only settings on http://, so they must be reset");
 
         assertTrue(handler.isVerifyHostname(), "a cleartext handler keeps the neutral hostname default");
     }
 
     @Test
-    @DisplayName("Should apply the configured hostname verification to a TLS endpoint")
-    void shouldApplyVerifyHostnameToTlsEndpoint() {
+    @DisplayName("Should apply the configured TLS settings to a TLS endpoint")
+    void shouldApplyTlsSettingsToTlsEndpoint() throws Exception {
         String endpoint = "https://example.com/jwks";
 
-        var handler = CleartextEndpoints.applyTlsSettings(HttpHandler.builder().url(endpoint), endpoint, false)
-                .build();
+        var configured = SSLContext.getInstance("TLS");
+        configured.init(null, null, null);
 
-        assertFalse(handler.isVerifyHostname());
+        var handler = CleartextEndpoints.applyTlsSettings(HttpHandler.builder().url(endpoint), endpoint,
+                new CleartextEndpoints.TlsSettings(true, configured, new SecureSSLContextProvider())).build();
+
+        assertAll("the configured TLS settings reach a TLS endpoint",
+                () -> assertTrue(handler.isVerifyHostname()),
+                () -> assertSame(configured, handler.getSslContext()));
     }
 }

@@ -344,7 +344,9 @@ public class WellKnownConfig {
             }
             try {
                 httpHandlerBuilder.allowInsecureHttp(allowInsecureHttp);
-                CleartextEndpoints.applyTlsSettings(httpHandlerBuilder, wellKnownEndpoint, verifyHostname);
+                // sslContext/tlsVersions already reached the builder as pass-throughs; only verifyHostname is deferred
+                CleartextEndpoints.applyTlsSettings(httpHandlerBuilder, wellKnownEndpoint,
+                        new CleartextEndpoints.TlsSettings(verifyHostname, null, null));
                 HttpHandler httpHandler = httpHandlerBuilder.build();
 
                 // Emit a security warning when the discovery endpoint uses cleartext HTTP,

@@ -703,4 +703,32 @@ class HttpJwksLoaderConfigTest {
                 () -> assertFalse(cleartextDiscovery.getHttpHandler(VALID_URL).isVerifyHostname(),
                         "a TLS jwks_uri must keep the relaxation although the cleartext discovery handler carries none"));
     }
+
+    @Test
+    @DisplayName("Should carry caller-supplied TLS settings to the discovery handler and an advertised TLS JWKS URL")
+    void shouldCarryTlsSettingsThroughWellKnownDiscovery() throws Exception {
+        SSLContext configured = SSLContext.getInstance("TLS");
+        configured.init(null, null, null);
+        HttpJwksLoaderConfig tlsDiscovery = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl(WELL_KNOWN_URL)
+                .allowInsecureHttp(true)
+                .sslContext(configured)
+                .tlsVersions(new SecureSSLContextProvider())
+                .build();
+        HttpJwksLoaderConfig cleartextDiscovery = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl("http://example.com/.well-known/openid-configuration")
+                .allowInsecureHttp(true)
+                .sslContext(configured)
+                .build();
+
+        assertAll("the configured trust material must not silently fall back to the JVM default trust",
+                () -> assertSame(configured, tlsDiscovery.getHttpHandler().getSslContext(),
+                        "the discovery fetch must use the configured SSL context"),
+                () -> assertSame(configured, tlsDiscovery.getHttpHandler(VALID_URL).getSslContext(),
+                        "an advertised TLS jwks_uri must use the configured SSL context"),
+                () -> assertSame(configured, cleartextDiscovery.getHttpHandler(VALID_URL).getSslContext(),
+                        "a TLS jwks_uri behind cleartext discovery must still use the configured SSL context"),
+                () -> assertDoesNotThrow(() -> tlsDiscovery.getHttpHandler(INSECURE_JWKS_URL),
+                        "a cleartext jwks_uri must not inherit the TLS-only settings"));
+    }
 }
