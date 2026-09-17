@@ -175,6 +175,13 @@ public class HttpJwksLoaderConfig {
     @EqualsAndHashCode.Exclude
     private final EgressPolicy egressPolicy;
 
+    /**
+     * The configured hostname-verification posture, re-applied to every handler derived for an advertised
+     * TLS {@code jwks_uri} — also when the discovery endpoint itself is cleartext and its handler therefore
+     * carries no TLS settings to inherit.
+     */
+    private final boolean verifyHostname;
+
     @SuppressWarnings("java:S107") // ok for builder
     private HttpJwksLoaderConfig(int refreshIntervalSeconds,
             HttpHandler httpHandler,
@@ -186,7 +193,8 @@ public class HttpJwksLoaderConfig {
             Duration keyRotationGracePeriod,
             int maxRetiredKeySets,
             ParserConfig parserConfig,
-            EgressPolicy egressPolicy) {
+            EgressPolicy egressPolicy,
+            boolean verifyHostname) {
         this.refreshIntervalSeconds = refreshIntervalSeconds;
         this.httpHandler = httpHandler;
         this.wellKnownConfig = wellKnownConfig;
@@ -198,6 +206,7 @@ public class HttpJwksLoaderConfig {
         this.maxRetiredKeySets = maxRetiredKeySets;
         this.parserConfig = parserConfig;
         this.egressPolicy = egressPolicy;
+        this.verifyHostname = verifyHostname;
     }
 
     /**
@@ -240,10 +249,10 @@ public class HttpJwksLoaderConfig {
 
         // Create a new handler with the same configuration but different URL.
         // asBuilder() copies the base handler's settings (including allowInsecureHttp),
-        // so the caller's security preference is preserved.
-        HttpHandler handler = baseHandler.asBuilder()
-                .url(url)
-                .build();
+        // so the caller's security preference is preserved. The TLS settings are then fitted to the
+        // advertised URL's scheme, which may differ from the base handler's.
+        HttpHandler handler = CleartextEndpoints.applyTlsSettings(baseHandler.asBuilder().url(url), url,
+                verifyHostname).build();
 
         // Emit the insecure-HTTP warning for JWKS URLs discovered via well-known lookup,
         // mirroring the direct-configuration path in build().
@@ -322,6 +331,9 @@ public class HttpJwksLoaderConfig {
         private boolean sslContextSupplied = false;
         private final List<String> allowedEgressHosts = new ArrayList<>();
 
+        // The directly configured JWKS endpoint, kept to fit the TLS settings to its scheme in build()
+        private String directJwksEndpoint;
+
         // Pending well-known values — WellKnownConfig creation is deferred to build()
         private String pendingWellKnownUrl;
         private URI pendingWellKnownUri;
@@ -369,7 +381,8 @@ public class HttpJwksLoaderConfig {
          * <p>
          * The value is forwarded on both configuration branches: to the JWKS {@code HttpHandler} for a
          * directly configured endpoint, and to the {@link WellKnownConfig} for a discovery-configured
-         * one, so the knob is never silently inert for well-known issuers.
+         * one, so the knob is never silently inert for well-known issuers. It applies to TLS endpoints only
+         * and is not applied to a cleartext {@code http://} endpoint, which performs no hostname verification.
          * <p>
          * This knob cannot be combined with {@link #sslContext(SSLContext)}. The relaxation applies only
          * to the default-trust-store context the underlying HTTP handler derives, so a caller-supplied
@@ -501,6 +514,7 @@ public class HttpJwksLoaderConfig {
         public HttpJwksLoaderConfigBuilder jwksUri(URI jwksUri) {
             validateEndpointExclusivity(EndpointSource.JWKS_URI);
             this.endpointSource = EndpointSource.JWKS_URI;
+            this.directJwksEndpoint = jwksUri != null ? jwksUri.toString() : null;
             httpHandlerBuilder.uri(jwksUri);
             return this;
         }
@@ -519,6 +533,7 @@ public class HttpJwksLoaderConfig {
         public HttpJwksLoaderConfigBuilder jwksUrl(String jwksUrl) {
             validateEndpointExclusivity(EndpointSource.JWKS_URL);
             this.endpointSource = EndpointSource.JWKS_URL;
+            this.directJwksEndpoint = jwksUrl;
             httpHandlerBuilder.url(jwksUrl);
             return this;
         }
@@ -744,7 +759,7 @@ public class HttpJwksLoaderConfig {
                 // Build the HttpHandler for direct URL/URI configuration
                 try {
                     httpHandlerBuilder.allowInsecureHttp(allowInsecureHttp);
-                    httpHandlerBuilder.verifyHostname(verifyHostname);
+                    CleartextEndpoints.applyTlsSettings(httpHandlerBuilder, directJwksEndpoint, verifyHostname);
                     jwksHttpHandler = httpHandlerBuilder.build();
 
                     // Check for insecure HTTP protocol
@@ -796,7 +811,8 @@ public class HttpJwksLoaderConfig {
                     keyRotationGracePeriod,
                     maxRetiredKeySets,
                     resolvedParserConfig,
-                    resolvedEgressPolicy);
+                    resolvedEgressPolicy,
+                    verifyHostname);
         }
 
     }

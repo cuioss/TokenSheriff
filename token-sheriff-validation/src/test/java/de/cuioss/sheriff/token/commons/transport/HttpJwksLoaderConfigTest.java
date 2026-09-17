@@ -40,6 +40,7 @@ class HttpJwksLoaderConfigTest {
 
     private static final String VALID_URL = "https://example.com/.well-known/jwks.json";
     private static final String WELL_KNOWN_URL = "https://example.com/.well-known/openid-configuration";
+    private static final String INSECURE_JWKS_URL = "http://example.com/.well-known/jwks.json";
     private static final int REFRESH_INTERVAL = 60;
 
     @Test
@@ -648,5 +649,58 @@ class HttpJwksLoaderConfigTest {
                 "a trust-material conflict must not be reported as a malformed-URL problem");
         assertNull(exception.getCause(),
                 "the conflict must be raised first-class, not rewrapped around a nested cause");
+    }
+
+    @Test
+    @DisplayName("Should build a cleartext direct-JWKS handler despite TLS-only settings")
+    void shouldBuildCleartextDirectHandlerDespiteTlsSettings() throws Exception {
+        var relaxed = HttpJwksLoaderConfig.builder()
+                .jwksUrl(INSECURE_JWKS_URL)
+                .issuerIdentifier("test-issuer")
+                .allowInsecureHttp(true)
+                .verifyHostname(false);
+        var pinned = HttpJwksLoaderConfig.builder()
+                .jwksUrl(INSECURE_JWKS_URL)
+                .issuerIdentifier("test-issuer")
+                .allowInsecureHttp(true)
+                .sslContext(SSLContext.getDefault())
+                .tlsVersions(new SecureSSLContextProvider());
+
+        assertAll("cui-http refuses TLS-only settings on http://, so they must not reach a cleartext handler",
+                () -> assertDoesNotThrow(relaxed::build),
+                () -> assertDoesNotThrow(pinned::build));
+    }
+
+    @Test
+    @DisplayName("Should build a cleartext discovery handler when hostname verification is relaxed")
+    void shouldBuildCleartextWellKnownHandlerWithRelaxedHostnameVerification() {
+        var builder = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl("http://example.com/.well-known/openid-configuration")
+                .allowInsecureHttp(true)
+                .verifyHostname(false);
+
+        assertDoesNotThrow(builder::build);
+    }
+
+    @Test
+    @DisplayName("Should fit the TLS settings to the scheme of an advertised JWKS URL")
+    void shouldFitTlsSettingsToAdvertisedJwksScheme() {
+        HttpJwksLoaderConfig tlsDiscovery = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl(WELL_KNOWN_URL)
+                .allowInsecureHttp(true)
+                .verifyHostname(false)
+                .build();
+        HttpJwksLoaderConfig cleartextDiscovery = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl("http://example.com/.well-known/openid-configuration")
+                .allowInsecureHttp(true)
+                .verifyHostname(false)
+                .build();
+
+        assertAll("the advertised jwks_uri may differ in scheme from the discovery endpoint",
+                () -> assertDoesNotThrow(() -> tlsDiscovery.getHttpHandler(INSECURE_JWKS_URL),
+                        "a cleartext jwks_uri must not inherit verifyHostname(false) from a TLS discovery handler"),
+                () -> assertFalse(tlsDiscovery.getHttpHandler(VALID_URL).isVerifyHostname()),
+                () -> assertFalse(cleartextDiscovery.getHttpHandler(VALID_URL).isVerifyHostname(),
+                        "a TLS jwks_uri must keep the relaxation although the cleartext discovery handler carries none"));
     }
 }
