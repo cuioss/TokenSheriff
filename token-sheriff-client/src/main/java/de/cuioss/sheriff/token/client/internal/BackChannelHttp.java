@@ -54,7 +54,7 @@ import java.util.concurrent.ConcurrentMap;
  *       {@link ClientConfiguration#allowInsecureHttp} is set, via the {@link HttpHandler} builder's
  *       own TLS enforcement.</li>
  *   <li><strong>Per-client TLS trust:</strong> the {@link ClientConfiguration#getSslContext() configured
- *       SSLContext}, when present, is applied to every endpoint handler this helper produces — so all
+ *       SSLContext}, when present, is applied to every TLS endpoint handler this helper produces — so all
  *       five endpoint clients sharing one {@code ClientConfiguration} trust the same authorization
  *       server, without a process-global {@code javax.net.ssl.trustStore} override. When absent, the
  *       cui-http / JVM default truststore is used.</li>
@@ -140,7 +140,9 @@ public final class BackChannelHttp {
                     .allowInsecureHttp(configuration.isAllowInsecureHttp())
                     .verifyHostname(configuration.isVerifyHostname());
             SSLContext sslContext = configuration.getSslContext();
-            if (sslContext != null) {
+            // The trust material is TLS-only: a cleartext endpoint (reachable only with allowInsecureHttp)
+            // establishes no TLS connection, and cui-http refuses sslContext(...) on an http:// URI.
+            if (sslContext != null && !isCleartext(endpointUrl)) {
                 builder.sslContext(sslContext);
             }
             return builder.build();
@@ -149,6 +151,10 @@ public final class BackChannelHttp {
             // raw IllegalArgumentException leaking from the handler builder.
             throw new TransportException(failureContext + ": " + e.getMessage(), e);
         }
+    }
+
+    private static boolean isCleartext(String endpointUrl) {
+        return "http".equalsIgnoreCase(URI.create(endpointUrl).getScheme());
     }
 
     private void applyEgressControl(String endpointUrl, String failureContext) {
