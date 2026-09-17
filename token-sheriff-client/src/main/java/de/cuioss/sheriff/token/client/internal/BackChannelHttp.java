@@ -59,7 +59,7 @@ import java.util.concurrent.ConcurrentMap;
  *       server, without a process-global {@code javax.net.ssl.trustStore} override. When absent, the
  *       cui-http / JVM default truststore is used.</li>
  *   <li><strong>Hostname verification:</strong> {@link ClientConfiguration#verifyHostname} is forwarded
- *       onto every endpoint handler this helper produces. It defaults to {@code true}; setting it to
+ *       onto every TLS endpoint handler this helper produces. It defaults to {@code true}; setting it to
  *       {@code false} relaxes hostname matching only, leaving chain trust, expiry, and algorithm
  *       constraints enforced. It is mutually exclusive with the per-client TLS trust above — the two are
  *       rejected together at {@link ClientConfiguration} build time, so that guard, not the
@@ -137,13 +137,17 @@ public final class BackChannelHttp {
                     .url(endpointUrl)
                     .connectionTimeoutSeconds(configuration.getConnectTimeoutSeconds())
                     .readTimeoutSeconds(configuration.getReadTimeoutSeconds())
-                    .allowInsecureHttp(configuration.isAllowInsecureHttp())
-                    .verifyHostname(configuration.isVerifyHostname());
-            SSLContext sslContext = configuration.getSslContext();
-            // The trust material is TLS-only: a cleartext endpoint (reachable only with allowInsecureHttp)
-            // establishes no TLS connection, and cui-http refuses sslContext(...) on an http:// URI.
-            if (sslContext != null && !isCleartext(endpointUrl)) {
-                builder.sslContext(sslContext);
+                    .allowInsecureHttp(configuration.isAllowInsecureHttp());
+            // The TLS knobs apply to TLS endpoints only: a cleartext endpoint (reachable only with
+            // allowInsecureHttp) establishes no TLS connection, and cui-http refuses both sslContext(...)
+            // and verifyHostname(false) on an http:// URI. One configuration may serve endpoints of both
+            // schemes, so the knobs are skipped per endpoint rather than rejected for the configuration.
+            if (!isCleartext(endpointUrl)) {
+                builder.verifyHostname(configuration.isVerifyHostname());
+                SSLContext sslContext = configuration.getSslContext();
+                if (sslContext != null) {
+                    builder.sslContext(sslContext);
+                }
             }
             return builder.build();
         } catch (IllegalArgumentException e) {

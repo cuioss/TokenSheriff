@@ -174,6 +174,26 @@ class BackChannelHttpTlsTrustTest {
     }
 
     @Test
+    @DisplayName("Should build a cleartext handler when hostname verification is relaxed, keeping the relaxation on TLS")
+    void shouldBuildCleartextHandlerWithRelaxedHostnameVerification() {
+        // cui-http refuses verifyHostname(false) on an http:// URI, so the relaxation must only reach
+        // the TLS endpoints of an insecure-http-permitting configuration.
+        var backChannel = new BackChannelHttp(configurationBuilder()
+                .verifyHostname(false)
+                .allowInsecureHttp(true)
+                .build(), MAX_CONTENT_SIZE, BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);
+
+        var cleartextHandler = assertDoesNotThrow(
+                () -> backChannel.validatedHandler("http://as.example.com/token", FAILURE_CONTEXT),
+                "a cleartext endpoint must not be refused because hostname verification is relaxed");
+        var tlsHandler = backChannel.validatedHandler(USERINFO_ENDPOINT, FAILURE_CONTEXT);
+
+        assertAll("the relaxation applies to the TLS endpoint only",
+                () -> assertNotNull(cleartextHandler),
+                () -> assertFalse(tlsHandler.isVerifyHostname()));
+    }
+
+    @Test
     @DisplayName("Should keep hostname verification enabled when a caller-supplied SSL context is configured")
     void shouldKeepHostnameVerificationWithConfiguredSslContext() {
         var backChannel = backChannelWith(freshSslContext());
