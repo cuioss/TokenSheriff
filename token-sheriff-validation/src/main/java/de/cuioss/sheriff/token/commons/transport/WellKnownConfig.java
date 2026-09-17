@@ -129,6 +129,8 @@ public class WellKnownConfig {
          */
         private boolean sslContextSupplied = false;
         private final List<String> allowedEgressHosts = new ArrayList<>();
+        // The configured discovery endpoint, kept to fit the TLS settings to its scheme in build()
+        private String wellKnownEndpoint;
 
         /**
          * Constructor initializing the HttpHandlerBuilder with sensible defaults.
@@ -163,7 +165,8 @@ public class WellKnownConfig {
          * Defaults to {@code true} (secure by default). Setting this to {@code false} relaxes
          * <strong>hostname matching only</strong> — certificate chain trust, expiry, and algorithm
          * constraints all remain fully enforced, so an untrusted or expired certificate is still
-         * rejected.
+         * rejected. It applies to TLS endpoints only and is not applied to a cleartext {@code http://}
+         * endpoint, which performs no hostname verification.
          * <p>
          * This knob cannot be combined with {@link #sslContext(SSLContext)}. The relaxation applies only
          * to the default-trust-store context the underlying HTTP handler derives, so a caller-supplied
@@ -233,6 +236,7 @@ public class WellKnownConfig {
          * @throws IllegalArgumentException if the URL is invalid
          */
         public WellKnownConfigBuilder wellKnownUrl(String wellKnownUrl) {
+            this.wellKnownEndpoint = wellKnownUrl;
             httpHandlerBuilder.url(wellKnownUrl);
             return this;
         }
@@ -244,6 +248,7 @@ public class WellKnownConfig {
          * @return this builder instance
          */
         public WellKnownConfigBuilder wellKnownUri(URI wellKnownUri) {
+            this.wellKnownEndpoint = wellKnownUri != null ? wellKnownUri.toString() : null;
             httpHandlerBuilder.uri(wellKnownUri);
             return this;
         }
@@ -339,7 +344,9 @@ public class WellKnownConfig {
             }
             try {
                 httpHandlerBuilder.allowInsecureHttp(allowInsecureHttp);
-                httpHandlerBuilder.verifyHostname(verifyHostname);
+                // sslContext/tlsVersions already reached the builder as pass-throughs; only verifyHostname is deferred
+                CleartextEndpoints.applyTlsSettings(httpHandlerBuilder, wellKnownEndpoint,
+                        new CleartextEndpoints.TlsSettings(verifyHostname, null, null));
                 HttpHandler httpHandler = httpHandlerBuilder.build();
 
                 // Emit a security warning when the discovery endpoint uses cleartext HTTP,

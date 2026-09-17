@@ -296,4 +296,23 @@ class WellKnownConfigTest {
         assertNull(exception.getCause(),
                 "the conflict must be raised first-class, not rewrapped around a nested cause");
     }
+
+    @Test
+    @DisplayName("Should build a cleartext discovery handler despite TLS-only settings")
+    void shouldBuildCleartextHandlerDespiteTlsSettings() throws Exception {
+        String cleartextUrl = "http://example.com/.well-known/openid-configuration";
+        var relaxed = WellKnownConfig.builder()
+                .wellKnownUrl(cleartextUrl)
+                .allowInsecureHttp(true)
+                .verifyHostname(false)
+                .tlsVersions(new SecureSSLContextProvider());
+        var pinned = WellKnownConfig.builder()
+                .wellKnownUri(URI.create(cleartextUrl))
+                .allowInsecureHttp(true)
+                .sslContext(SSLContext.getDefault());
+
+        assertAll("cui-http refuses TLS-only settings on http://, so they must not reach a cleartext handler",
+                () -> assertDoesNotThrow(relaxed::build),
+                () -> assertDoesNotThrow(pinned::build));
+    }
 }

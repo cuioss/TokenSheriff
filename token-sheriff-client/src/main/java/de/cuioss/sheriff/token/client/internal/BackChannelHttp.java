@@ -54,12 +54,12 @@ import java.util.concurrent.ConcurrentMap;
  *       {@link ClientConfiguration#allowInsecureHttp} is set, via the {@link HttpHandler} builder's
  *       own TLS enforcement.</li>
  *   <li><strong>Per-client TLS trust:</strong> the {@link ClientConfiguration#getSslContext() configured
- *       SSLContext}, when present, is applied to every endpoint handler this helper produces — so all
+ *       SSLContext}, when present, is applied to every TLS endpoint handler this helper produces — so all
  *       five endpoint clients sharing one {@code ClientConfiguration} trust the same authorization
  *       server, without a process-global {@code javax.net.ssl.trustStore} override. When absent, the
  *       cui-http / JVM default truststore is used.</li>
  *   <li><strong>Hostname verification:</strong> {@link ClientConfiguration#verifyHostname} is forwarded
- *       onto every endpoint handler this helper produces. It defaults to {@code true}; setting it to
+ *       onto every TLS endpoint handler this helper produces. It defaults to {@code true}; setting it to
  *       {@code false} relaxes hostname matching only, leaving chain trust, expiry, and algorithm
  *       constraints enforced. It is mutually exclusive with the per-client TLS trust above — the two are
  *       rejected together at {@link ClientConfiguration} build time, so that guard, not the
@@ -137,11 +137,17 @@ public final class BackChannelHttp {
                     .url(endpointUrl)
                     .connectionTimeoutSeconds(configuration.getConnectTimeoutSeconds())
                     .readTimeoutSeconds(configuration.getReadTimeoutSeconds())
-                    .allowInsecureHttp(configuration.isAllowInsecureHttp())
-                    .verifyHostname(configuration.isVerifyHostname());
-            SSLContext sslContext = configuration.getSslContext();
-            if (sslContext != null) {
-                builder.sslContext(sslContext);
+                    .allowInsecureHttp(configuration.isAllowInsecureHttp());
+            // The TLS knobs apply to TLS endpoints only: a cleartext endpoint (reachable only with
+            // allowInsecureHttp) establishes no TLS connection, and cui-http refuses both sslContext(...)
+            // and verifyHostname(false) on an http:// URI. One configuration may serve endpoints of both
+            // schemes, so the knobs are skipped per endpoint rather than rejected for the configuration.
+            if (!isCleartext(endpointUrl)) {
+                builder.verifyHostname(configuration.isVerifyHostname());
+                SSLContext sslContext = configuration.getSslContext();
+                if (sslContext != null) {
+                    builder.sslContext(sslContext);
+                }
             }
             return builder.build();
         } catch (IllegalArgumentException e) {
@@ -149,6 +155,10 @@ public final class BackChannelHttp {
             // raw IllegalArgumentException leaking from the handler builder.
             throw new TransportException(failureContext + ": " + e.getMessage(), e);
         }
+    }
+
+    private static boolean isCleartext(String endpointUrl) {
+        return "http".equalsIgnoreCase(URI.create(endpointUrl).getScheme());
     }
 
     private void applyEgressControl(String endpointUrl, String failureContext) {
