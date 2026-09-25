@@ -46,7 +46,7 @@
     "eslint-plugin-unicorn": "^74.0.0",
     "eslint-plugin-wc": "^3.1.0",
     "jest": "^30.5.2",
-    "jest-environment-jsdom": "^30.5.1",
+    "jest-environment-jsdom": "^30.5.2",
     "license-checker-rseidelsohn": "^5.0.1",
     "lit": "^3.3.3",
     "postcss-lit": "^1.4.1",
