@@ -182,6 +182,9 @@ class ProviderMetadataTest {
                 continue;
             }
             assertEquals(field.get(source), field.get(copy), "field not copied: " + field.getName());
+            if (field.getType() == List.class) {
+                assertNotSame(field.get(source), field.get(copy), "list shared: " + field.getName());
+            }
         }
     }
 
