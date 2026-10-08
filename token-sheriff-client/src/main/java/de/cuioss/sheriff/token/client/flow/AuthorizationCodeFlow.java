@@ -148,8 +148,8 @@ public class AuthorizationCodeFlow {
      * @param metadata the resolved provider metadata; must not be {@code null}
      * @return the authorization redirect (URL + flow context to persist)
      * @throws IllegalArgumentException if the client declares no redirect URI
-     * @throws IllegalStateException    if the AS advertises no authorization endpoint or no PKCE
-     *                                  {@code S256}
+     * @throws de.cuioss.sheriff.token.commons.error.ClientProtocolException if the AS advertises no
+     *         authorization endpoint or no PKCE {@code S256}
      */
     public AuthorizationRedirect authorize(ProviderMetadata metadata) {
         Objects.requireNonNull(metadata, "metadata must not be null");
@@ -176,7 +176,12 @@ public class AuthorizationCodeFlow {
      * @throws de.cuioss.sheriff.token.commons.error.TransportException if the token request fails
      * @throws de.cuioss.sheriff.token.validation.exception.TokenValidationException if a token fails
      *         validation
-     * @throws IllegalStateException if the callback is invalid or no ID token is returned
+     * @throws de.cuioss.sheriff.token.commons.error.ClientProtocolException if the callback is
+     *         invalid (error response, missing or mismatched {@code state}, missing code), the
+     *         RFC 9207 {@code iss} check detects a mix-up, or the ID token's {@code nonce} or
+     *         {@code at_hash} does not bind this flow
+     * @throws IllegalStateException if the provider metadata carries no token endpoint or the
+     *         response carries no ID token
      */
     public AuthenticationResult exchange(ProviderMetadata metadata, FlowContext context,
             CallbackParameters callback, ClientAuthentication clientAuthentication) {

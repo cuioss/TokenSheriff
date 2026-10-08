@@ -18,6 +18,8 @@ package de.cuioss.sheriff.token.client.discovery;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -26,6 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("ProviderMetadata capability flags")
@@ -148,5 +152,70 @@ class ProviderMetadataTest {
                         "an empty end-session endpoint is not a usable logout capability"),
                 () -> assertFalse(emptyDpop.supportsDpop(),
                         "an empty dpop_signing_alg_values_supported advertises no usable algorithm"));
+    }
+
+    @Test
+    @DisplayName("Should copy every instance field, so a newly added field cannot be missed")
+    void shouldCopyEveryField() throws Exception {
+        var source = new ProviderMetadata();
+        // Populated reflectively so a field added later is covered without touching this test.
+        for (var field : ProviderMetadata.class.getDeclaredFields()) {
+            if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
+                continue;
+            }
+            if (field.getType() == String.class) {
+                field.set(source, "value-of-" + field.getName());
+            } else if (field.getType() == List.class) {
+                field.set(source, new ArrayList<>(List.of("entry-of-" + field.getName())));
+            } else if (field.getType() == boolean.class) {
+                field.setBoolean(source, true);
+            } else {
+                throw new AssertionError("extend this test for field type " + field.getType());
+            }
+        }
+
+        var copy = source.copy();
+
+        assertNotSame(source, copy);
+        for (var field : ProviderMetadata.class.getDeclaredFields()) {
+            if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
+                continue;
+            }
+            assertEquals(field.get(source), field.get(copy), "field not copied: " + field.getName());
+            if (field.getType() == List.class) {
+                assertNotSame(field.get(source), field.get(copy), "list shared: " + field.getName());
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Should give the copy lists of its own, so mutating it leaves the source untouched")
+    void shouldCopyListsIndependently() {
+        var source = new ProviderMetadata();
+        source.codeChallengeMethodsSupported = new ArrayList<>(List.of("S256"));
+        source.tokenEndpointAuthMethodsSupported = new ArrayList<>(Arrays.asList("client_secret_basic", null));
+        source.dpopSigningAlgValuesSupported = new ArrayList<>(List.of("ES256"));
+
+        var copy = source.copy();
+        copy.codeChallengeMethodsSupported.clear();
+        copy.tokenEndpointAuthMethodsSupported.add("private_key_jwt");
+        copy.dpopSigningAlgValuesSupported.clear();
+
+        assertAll(
+                () -> assertEquals(List.of("S256"), source.codeChallengeMethodsSupported),
+                () -> assertEquals(Arrays.asList("client_secret_basic", null),
+                        source.tokenEndpointAuthMethodsSupported),
+                () -> assertEquals(List.of("ES256"), source.dpopSigningAlgValuesSupported));
+    }
+
+    @Test
+    @DisplayName("Should keep absent lists absent in the copy")
+    void shouldKeepAbsentListsAbsent() {
+        var copy = new ProviderMetadata().copy();
+
+        assertAll(
+                () -> assertNull(copy.codeChallengeMethodsSupported),
+                () -> assertNull(copy.tokenEndpointAuthMethodsSupported),
+                () -> assertNull(copy.dpopSigningAlgValuesSupported));
     }
 }
