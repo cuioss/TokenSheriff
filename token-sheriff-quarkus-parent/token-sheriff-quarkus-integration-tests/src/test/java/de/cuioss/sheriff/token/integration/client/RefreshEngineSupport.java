@@ -260,31 +260,9 @@ final class RefreshEngineSupport {
      */
     private static ProviderMetadata discoveredProviderMetadata(String issuer, String clientId,
             String clientSecret) {
-        return copyOf(DISCOVERED.computeIfAbsent(issuer, key -> new DiscoveryResolver(
+        return DISCOVERED.computeIfAbsent(issuer, key -> new DiscoveryResolver(
                 clientConfiguration(key, clientId, clientSecret, ClientAuthMethod.CLIENT_SECRET_BASIC))
-                .resolve()));
-    }
-
-    /**
-     * @param source the discovered document
-     * @return a field-by-field copy, so a caller's mutation cannot reach the cached document
-     */
-    private static ProviderMetadata copyOf(ProviderMetadata source) {
-        var copy = new ProviderMetadata();
-        copy.issuer = source.issuer;
-        copy.authorizationEndpoint = source.authorizationEndpoint;
-        copy.tokenEndpoint = source.tokenEndpoint;
-        copy.userinfoEndpoint = source.userinfoEndpoint;
-        copy.jwksUri = source.jwksUri;
-        copy.endSessionEndpoint = source.endSessionEndpoint;
-        copy.revocationEndpoint = source.revocationEndpoint;
-        copy.introspectionEndpoint = source.introspectionEndpoint;
-        copy.pushedAuthorizationRequestEndpoint = source.pushedAuthorizationRequestEndpoint;
-        copy.codeChallengeMethodsSupported = source.codeChallengeMethodsSupported;
-        copy.tokenEndpointAuthMethodsSupported = source.tokenEndpointAuthMethodsSupported;
-        copy.dpopSigningAlgValuesSupported = source.dpopSigningAlgValuesSupported;
-        copy.authorizationResponseIssParameterSupported = source.authorizationResponseIssParameterSupported;
-        return copy;
+                .resolve()).copy();
     }
 
     /**

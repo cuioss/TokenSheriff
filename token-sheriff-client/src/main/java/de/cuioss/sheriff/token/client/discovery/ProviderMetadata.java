@@ -19,6 +19,7 @@ import com.dslplatform.json.CompiledJson;
 import com.dslplatform.json.JsonAttribute;
 import org.jspecify.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -103,6 +104,36 @@ public class ProviderMetadata {
      */
     @JsonAttribute(name = "authorization_response_iss_parameter_supported")
     public boolean authorizationResponseIssParameterSupported;
+
+    /**
+     * Creates an independent copy of this document: every field is carried over and each list is
+     * copied into a list of its own, so a mutation of the copy never reaches this instance.
+     *
+     * @return a new instance equal in content to this one
+     */
+    public ProviderMetadata copy() {
+        var copy = new ProviderMetadata();
+        copy.issuer = issuer;
+        copy.authorizationEndpoint = authorizationEndpoint;
+        copy.tokenEndpoint = tokenEndpoint;
+        copy.userinfoEndpoint = userinfoEndpoint;
+        copy.jwksUri = jwksUri;
+        copy.endSessionEndpoint = endSessionEndpoint;
+        copy.revocationEndpoint = revocationEndpoint;
+        copy.introspectionEndpoint = introspectionEndpoint;
+        copy.pushedAuthorizationRequestEndpoint = pushedAuthorizationRequestEndpoint;
+        copy.codeChallengeMethodsSupported = copyOf(codeChallengeMethodsSupported);
+        copy.tokenEndpointAuthMethodsSupported = copyOf(tokenEndpointAuthMethodsSupported);
+        copy.dpopSigningAlgValuesSupported = copyOf(dpopSigningAlgValuesSupported);
+        copy.authorizationResponseIssParameterSupported = authorizationResponseIssParameterSupported;
+        return copy;
+    }
+
+    // ArrayList rather than List.copyOf: a discovery document may carry JSON null array elements,
+    // which the accessors tolerate and List.copyOf would reject.
+    private static @Nullable List<String> copyOf(@Nullable List<String> values) {
+        return values == null ? null : new ArrayList<>(values);
+    }
 
     /**
      * @return the issuer identifier, or {@link Optional#empty()} if absent

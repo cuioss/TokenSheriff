@@ -321,8 +321,12 @@ public class TokenLifecycleManager {
      *                               refused — the refreshed access token fails validation, the strict
      *                               scope posture refuses the grant, or the token request fails. When
      *                               the authorization server had already redeemed the presented token
-     *                               the session is quarantined first; when it had not, the stored
-     *                               bundle is left untouched because that token is still usable
+     *                               the session is quarantined first; when it refused that token as
+     *                               invalid without redeeming it ({@code CREDENTIAL_REJECTED}) the
+     *                               store entry and rotation family are cleared without a revocation;
+     *                               only when the request never reached redemption
+     *                               ({@code PRE_REDEMPTION}) is the stored bundle left untouched,
+     *                               because that token is still usable
      * @throws IllegalStateException if the refreshed ID token is inconsistent with the refreshed
      *                               access token, or if the refreshed access token names a principal
      *                               other than the one the session is bound to. When the authorization

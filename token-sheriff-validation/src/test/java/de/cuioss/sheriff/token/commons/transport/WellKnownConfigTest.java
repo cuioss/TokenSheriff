@@ -88,9 +88,11 @@ class WellKnownConfigTest {
         WellKnownConfig config = WellKnownConfig.builder()
                 .wellKnownUrl(TEST_WELL_KNOWN_URL)
                 .build();
+        var egressPolicy = config.getEgressPolicy();
         // "localhost" resolves to a loopback address, which the secure-default egress guard blocks.
+        URI loopbackDiscoveryUri = URI.create("https://localhost:8443/.well-known/openid-configuration");
         assertThrows(TransportException.class,
-                () -> config.getEgressPolicy().check(URI.create("https://localhost:8443/.well-known/openid-configuration")),
+                () -> egressPolicy.check(loopbackDiscoveryUri),
                 "A loopback-resolving discovery host must be blocked when no egress opt-in is configured");
     }
 
