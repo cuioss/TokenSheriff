@@ -29,11 +29,12 @@ jobs:
       timeout-minutes: 30
       report-name: token-sheriff-multi-idp-tests
       # The install step derives its module list instead of spelling it out: selecting the
-      # integration-tests module with -am pulls in everything its pom depends on, and the
-      # trailing !-exclusion (applied after -am) drops the module itself, which the verify
-      # step builds. A new upstream module is therefore picked up from the pom's dependencies.
+      # integration-tests module with -am pulls in everything its pom depends on, so a new
+      # upstream module is picked up from the pom's dependencies. The module itself is
+      # installed too (tests skipped); a "!module" exclusion would avoid that, but the
+      # reusable workflow's argument validation rejects the "!" character.
       maven-args-input: |
-        install -DskipTests -DskipITs -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests,!token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
+        install -DskipTests -DskipITs -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
         verify -Pmulti-idp-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
       reports-folder: |
         token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/target/failsafe-reports
