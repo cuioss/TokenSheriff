@@ -16,7 +16,8 @@
 package de.cuioss.sheriff.token.integration.api;
 
 import de.cuioss.sheriff.token.integration.BaseIntegrationTest;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 

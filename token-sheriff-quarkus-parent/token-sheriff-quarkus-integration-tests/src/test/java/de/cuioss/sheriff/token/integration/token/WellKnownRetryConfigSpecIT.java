@@ -21,7 +21,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -30,11 +29,7 @@ import java.util.Map;
 
 import static io.restassured.RestAssured.given;
 import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Proves in a running native application that the configured retry settings reach well-known
@@ -92,7 +87,7 @@ class WellKnownRetryConfigSpecIT extends BaseIntegrationTest {
 
     @Test
     @DisplayName("Should make exactly the configured number of discovery attempts")
-    void shouldMakeTheConfiguredNumberOfDiscoveryAttempts() throws IOException {
+    void shouldMakeTheConfiguredNumberOfDiscoveryAttempts() throws Exception {
         assertNotEquals(DEFAULT_MAX_ATTEMPTS, CONFIGURED_MAX_ATTEMPTS,
                 "the probe must be configured with a maximum other than the default, "
                         + "otherwise a discovery that ignores the setting would pass");
@@ -118,7 +113,7 @@ class WellKnownRetryConfigSpecIT extends BaseIntegrationTest {
                 () -> assertEquals(1, giveUpLines.size(),
                         "discovery must give up exactly once, was: " + giveUpLines),
                 () -> assertTrue(giveUpLines.getFirst().contains(
-                        "GET request failed after " + CONFIGURED_MAX_ATTEMPTS + " attempts"),
+                                "GET request failed after " + CONFIGURED_MAX_ATTEMPTS + " attempts"),
                         "the give-up line must name the configured maximum, was: " + giveUpLines.getFirst()),
                 () -> assertEquals(CONFIGURED_MAX_ATTEMPTS - 1, retryLines.size(),
                         "every attempt but the last must be followed by a retry, was: " + retryLines));
@@ -164,7 +159,7 @@ class WellKnownRetryConfigSpecIT extends BaseIntegrationTest {
     }
 
     private static List<String> probeLogLinesContaining(String identifier) throws IOException {
-        return Files.readAllLines(PROBE_LOG, StandardCharsets.UTF_8).stream()
+        return Files.readAllLines(PROBE_LOG).stream()
                 .filter(line -> line.contains(identifier))
                 .toList();
     }

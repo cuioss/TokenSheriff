@@ -21,7 +21,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -30,10 +29,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Guards the two surefire fork groups that {@code token-sheriff-quarkus-parent/pom.xml} configures
@@ -279,7 +275,7 @@ class SurefireForkGroupGuardTest {
 
     private static String read(Path file) {
         try {
-            return Files.readString(file, StandardCharsets.UTF_8);
+            return Files.readString(file);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

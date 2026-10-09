@@ -72,7 +72,7 @@ class HttpJwksLoaderFailureTest {
 
     @Test
     @DisplayName("Should log JWKS_LOAD_FAILED when HTTP connection cannot be established")
-    void shouldLogJwksLoadFailedWhenHttpConnectionFails() throws IOException {
+    void shouldLogJwksLoadFailedWhenHttpConnectionFails() throws Exception {
         // Default number of attempts, so the retry path is exercised in full, with millisecond delays
         // instead of the default 1 + 2 + 4 + 8 s backoff.
         RetryConfig fastRetry = RetryConfig.builder()

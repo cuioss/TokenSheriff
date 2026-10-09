@@ -696,7 +696,8 @@ class AccessTokenCacheTest {
         private ScheduledFuture<?> capture(Runnable command) {
             periodicTask.set(command);
             // A placeholder that never fires within a test run, so the cache holds a cancellable future
-            return super.schedule(() -> { }, 1, TimeUnit.DAYS);
+            return super.schedule(() -> {
+            }, 1, TimeUnit.DAYS);
         }
 
         void tick() {

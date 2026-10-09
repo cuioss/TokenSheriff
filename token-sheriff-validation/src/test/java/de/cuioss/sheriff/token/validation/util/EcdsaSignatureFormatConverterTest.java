@@ -25,11 +25,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.Signature;
-import java.security.SignatureException;
+import java.security.*;
 import java.security.spec.ECGenParameterSpec;
 import java.util.Arrays;
 import java.util.Map;
