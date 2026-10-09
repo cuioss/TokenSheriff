@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.validation.jwks.http;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
+import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.dispatcher.JwksResolveDispatcher;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
@@ -236,6 +237,7 @@ class HttpJwksLoaderLockFreeStatusTest {
                 CountDownLatch endLatch = new CountDownLatch(initThreadCount + statusCheckThreadCount);
                 AtomicInteger statusCheckSuccesses = new AtomicInteger(0);
                 AtomicInteger initSuccesses = new AtomicInteger(0);
+                AtomicInteger initOkResults = new AtomicInteger(0);
                 AtomicReference<InterruptedException> initInterruptedException = new AtomicReference<>();
 
                 // Launch multiple threads calling initJWKSLoader concurrently
@@ -249,6 +251,9 @@ class HttpJwksLoaderLockFreeStatusTest {
                             assertTrue(result == LoaderStatus.OK || result == LoaderStatus.ERROR,
                                     "Init should complete with OK or ERROR");
                             initSuccesses.incrementAndGet();
+                            if (result == LoaderStatus.OK) {
+                                initOkResults.incrementAndGet();
+                            }
 
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
@@ -295,6 +300,12 @@ class HttpJwksLoaderLockFreeStatusTest {
                 assertTrue(initSuccesses.get() > 0, "Some initializations should succeed");
                 assertEquals(statusCheckThreadCount, statusCheckSuccesses.get(),
                         "All status check threads should complete successfully");
+                assertEquals(initThreadCount, initOkResults.get(),
+                        "Every concurrent initialization should complete with OK");
+                assertEquals(LoaderStatus.OK, loader.getLoaderStatus(),
+                        "Loader status should be OK after concurrent initialization");
+                assertTrue(loader.getKeyInfo(InMemoryJWKSFactory.DEFAULT_KEY_ID).isPresent(),
+                        "Keys should be available after initialization");
             }
         }
     }

@@ -61,34 +61,6 @@ class HttpJwksLoaderSchedulerTest {
 
 
     @Test
-    @DisplayName("Should not start scheduler when no config provided")
-    void shouldNotStartSchedulerWithoutConfig(URIBuilder uriBuilder) {
-        String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-
-        // Ensure dispatcher is in normal mode
-        moduleDispatcher.returnDefault();
-
-        // Create loader without scheduler config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
-                .jwksUrl(jwksEndpoint)
-                .issuerIdentifier("test-issuer")
-                .refreshIntervalSeconds(0) // Disable scheduler
-                .build();
-
-        HttpJwksLoader loader = new HttpJwksLoader(config);
-        loader.initJWKSLoader(securityEventCounter).join();
-
-        // Trigger initial load
-        Optional<KeyInfo> keyInfo = loader.getKeyInfo(TEST_KID);
-        assertTrue(keyInfo.isPresent(), "Initial load should work");
-
-        // Scheduler should not be active without config
-        assertFalse(loader.isBackgroundRefreshActive(), "Background refresh should not be active without refresh interval");
-
-        loader.close();
-    }
-
-    @Test
     @DisplayName("Should not start scheduler when refresh interval is zero")
     void shouldNotStartSchedulerWithZeroInterval(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
