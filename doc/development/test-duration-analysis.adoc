@@ -5,7 +5,7 @@
 :source-highlighter: highlight.js
 
 Analysis date: 2026-10-09. Analysed revision: `b031ec36` (branch `main`).
-Status: analysis only. No test, POM or workflow was changed. The proposals in xref:proposals[Proposed changes] await a decision.
+Status: analysis with a ranked proposal list. Two proposals in the shared organisation workflows are implemented (see xref:implemented[Implemented]); the others await a decision. The baseline and findings chapters describe revision `b031ec36`, before those two changes.
 
 The constraint every proposal is held to: test quality stays the same or improves. No test is removed or weakened unless another named test demonstrably proves the same behaviour, coverage does not drop, no real wait is shortened into a flake, and no gating test moves to a non-gating lane. A speed-up that works by running less is reported as a finding, not proposed.
 
@@ -13,7 +13,7 @@ The constraint every proposal is held to: test quality stays the same or improve
 
 [cols="3,1,1",options="header"]
 |===
-|Pull request until all three required checks are green |Median |p90
+|Pull request until all three required checks are green (analysed revision) |Median |p90
 
 |Contributor pull request (Sonar runs; 10 commits) |32m05s |65m59s
 |Dependabot pull request (Sonar skipped; 12 commits) |11m04s |18m36s
@@ -22,7 +22,7 @@ The constraint every proposal is held to: test quality stays the same or improve
 
 The time is not spent executing tests. It goes to five things:
 
-. *The same 3,119 unit tests run three times per contributor pull request, two of them one after the other.* `sonar-build` (≈10 min) starts only after `build` (≈9.5 min) has finished and repeats the identical `verify`. This ordering lives in the shared organisation workflow.
+. *The same 3,119 unit tests run three times per contributor pull request, and at the analysed revision two of those runs were sequential.* `sonar-build` (≈10 min) started only after `build` (≈9.5 min) had finished and repeated the identical `verify`. This ordering lived in the shared organisation workflow and has since been removed (see xref:implemented[Implemented]); the third run itself remains.
 . *About six minutes pass before the first build leg starts.* On contributor pull requests the median gap between trigger and build start is ≈350 s, almost all of it three chained helper jobs waiting for a runner. Measured, not explained, and addressed by no proposal.
 . *`token-sheriff-validation-quarkus` spends ≈223 of its 273 surefire seconds outside any test.* Every test class runs in its own JVM (`reuseForks=false`), and each of the nine `@QuarkusTest` JVMs then waits in a 10-second `quarkus-jacoco` shutdown timeout for a data file that is never written.
 . *`token-sheriff-validation` spends ≈75 of its 136 surefire seconds in HTTP retry backoff.* Five test methods each wait ≈15 s (1 + 2 + 4 + 8 s) because they hit a failing endpoint with the default retry configuration. No assertion depends on the delay.
@@ -30,7 +30,7 @@ The time is not spent executing tests. It goes to five things:
 
 No proposal removes or weakens a test. The genuine duplicates found cost milliseconds; they are listed in xref:duplicate-pairs[the appendix] for hygiene, not as duration levers.
 
-Estimated effect: the proposals that touch the build chain take one build leg from ≈8m05s to ≈3m15s of Maven time and the job time of `build` plus `sonar-build` from ≈19m40s to ≈10 min; running Sonar beside the build takes that chain to ≈5 min. Time until green cannot fall below the slowest required lane, which is then the integration-test lane at ≈11 min today. All savings are estimates until measured on CI.
+Estimated effect of the open proposals: those that touch the build lane take one build leg from ≈8m05s to ≈3m15s of Maven time, so the build lane's job time falls from ≈10 min to ≈5 min. Time until green cannot fall below the slowest required lane, which is then the integration-test lane at ≈11 min today. All savings are estimates until measured on CI.
 
 == Method and populations
 
@@ -600,12 +600,12 @@ These cost nothing to speak of, but the constraint is that quality stays the sam
 |===
 |Idea |Evaluation |Verdict
 
-|CI caching: Maven repository |Already effective, every sampled run hit. The repository is restored twice per job. |Remove the duplicate (P8)
+|CI caching: Maven repository |Effective, every sampled run hit. The duplicated restore found at the analysed revision is removed. |Done
 |CI caching: native binary |Would save ≈205 s on a hit. The key would have to cover every `src/main` of seven modules, all POMs, the builder image digest and no SNAPSHOT dependency. A stale binary is a silent quality hole. |Not recommended
 |CI caching: Docker images |Five images pull in parallel in 9 s; saving and loading a tarball of that size is unlikely to beat it. |No
 |Keycloak optimised image |Probably 5-10 s of the 25-36 s, but the image would have to be published and it changes hostname behaviour the tests rely on. |Not now
-|Run `sonar-build` beside `build` |Removes one full build from the critical path. No test is dropped; Sonar still gates. Lives in `cuioss-organization`; the sibling project has the identical chain, so one change serves both. |Recommended (P1)
-|Fold the Java 21 leg into `sonar-build` |Same effect on wall-clock, additionally saves one runner per run. Larger change to the shared workflow. |Alternative to P1
+|Run `sonar-build` beside `build` |Removes one full build from the critical path. No test is dropped; Sonar still gates. |Done
+|Fold the Java 21 leg into `sonar-build` |Would additionally save one runner per run; no further wall-clock gain now that the two run side by side. Larger change to the shared workflow. |Possible follow-up
 |Shard the IT suite across runners |Every shard would pay the ≈205 s native build unless the binary is shared. The one natural split is the 22 client-only IT classes, which need Keycloak but not the native application. |Possible (P4)
 |Skip lanes by changed path |The shared workflow already skips docs-only changes. Paths a lane cannot observe exist (for example `benchmarking/**` for both IT and E2E). This is running less. |Finding only
 |Skip the re-test on push to `main` |After the merge queue has passed, all three lanes run again on the same tree, `maven.yml` for 31 minutes, including a native build. Removing it saves runner time and no merge latency. This is running less. |Finding only
@@ -620,18 +620,37 @@ These cost nothing to speak of, but the constraint is that quality stays the sam
 [[proposals]]
 == Proposed changes, ordered by gain
 
-The order is by estimated gain per contributor pull request on the lane the change affects, largest first. On the build lane, `build` and `sonar-build` run in sequence today, so a saving in one Maven leg counts twice there; the "per PR" column shows the doubled figure. Gains on the integration-test and end-to-end lanes save runner time today and start to shorten time until green only once the build chain is faster than those lanes (see xref:expected-result[Expected result]).
+The order is by estimated gain on the lane the change affects, largest first. The "per PR" column was computed while `build` and `sonar-build` ran in sequence, so it counts a saving in one Maven leg twice. Since they run side by side, the gain in time until green on the build lane is the per-leg figure; the doubled figure remains the saving in runner time. The order is unaffected. Gains on the integration-test and end-to-end lanes save runner time today and start to shorten time until green only once the build chain is faster than those lanes (see xref:expected-result[Expected result]).
+
+[[implemented]]
+=== Implemented
+
+Two proposals lived in the shared organisation workflows and were implemented in `cuioss-organization` v0.40.0 (2026-10-09). They are no longer part of the list below. Verified on the first runs with that version; each observation is a single run unless stated.
+
+[cols="3,3,3",options="header"]
+|===
+|Change |Before |Observed with v0.40.0
+
+|`sonar-build` starts without waiting for `build`
+|`maven.yml` on contributor pull requests: median 28m35s (12 runs). Push to `main`: median 31m27s
+|`sonar-build` and both build legs start in the same second (runs 37913628299, 37928610208). Pull request #794: 10m02s. Pull request #793: 18m02s, of which ≈5.5 min was waiting before the first job. Push to `main`: 20m01s. In the merge queue `sonar-build` is still skipped
+
+|One `~/.m2` restore per job instead of two
+|≈571 MB and ≈590 MB restored in every job
+|One 590 MB restore; the JDK set-up step dropped from ≈7 s to under 1 s. `deploy-snapshot`, the one job where the restore order changed, published `0.9.7-SNAPSHOT` successfully
+
+|Chromium-only Playwright set-up (`playwright-browsers: chromium` in `e2e-tests.yml`)
+|"Install Playwright system dependencies": median 45 s, p90 71 s
+|Two runs: 13 s (run 37928610214) and 216 s. In the slow run the package set was the small Chromium one (7 packages, 21.5 MB), but the Ubuntu mirror delivered it at 114 kB/s. The step downloads less, so it is less exposed to that, not immune. The job as a whole took 5m05s and 6m43s against a median of 4m53s before; two runs do not show a gain at job level
+|===
+
+Not observed: `conclusion` turning red when exactly one of `build` and `sonar-build` fails. No run has failed since the change; the behaviour was checked by reading the workflow only.
+
+Consequence for the numbers in this report: the baseline chapters keep the measurements of the analysed revision. The remaining gap between trigger and first job (≈350 s median on contributor pull requests) is unchanged and is now the largest single item on the build lane that no proposal addresses; the three chained helper jobs `gate`, `config` and `check-changes` each wait for their own runner.
 
 [cols="1,5,2,2,1,1",options="header"]
 |===
 |# |Change |Gain per run of the unit |Gain per PR, lane |Effort |Risk
-
-|P1
-|Organisation workflow: start `sonar-build` without waiting for `build`
-|-
-|≈570 s today, ≈280 s after P2-P16; build lane. Nothing on Dependabot pull requests
-|S
-|low, but shared
 
 |P2
 |Stop the `quarkus-jacoco` shutdown timeout in `token-sheriff-validation-quarkus` by disabling the Quarkus-side report
@@ -674,13 +693,6 @@ The order is by estimated gain per contributor pull request on the lane the chan
 |≈60 s, IT lane
 |S
 |low
-
-|P8
-|Organisation workflow: Chromium-only Playwright system dependencies; one `~/.m2` restore instead of two
-|≈40 s E2E; ≈13 s IT; ≈10 s per build job
-|≈40 s, E2E lane
-|S
-|low, shared
 
 |P9
 |Let the 37 s expiry wait overlap other work: run the client-package IT classes concurrently, or hold the sessions of `RefreshProductionPathSpecIT` and `RefreshLifecycleSpecIT` through one wait. No lifetime is changed
@@ -743,13 +755,10 @@ Dependencies between proposals:
 
 * P2 needs a coverage comparison first (see below); P3 should be measured after P2, because their savings overlap.
 * P5 is a production change and needs its own decision; P6 is its test-only half and stands alone.
-* P1 and P8 are changes in `cuioss-organization` and affect every consuming repository.
 * P10's lazy key material changes the `generators` test-jar. Its gain grows for every consumer that forks per class: the sibling project pays the initialisation in 15 classes per `verify`, ≈45-65 s, and would shed it with the next Token-Sheriff release.
 * P4 overlaps with P7 and P9: its 110 s is measured against today's lane. Once forks are reused and the expiry wait overlaps other work, moving the client classes to their own job adds ≈35 s more.
 
 === Why test quality is unchanged or better, per proposal
-
-P1:: Nothing about what is tested or gated changes; `conclusion` still requires both jobs. A failing `build` no longer prevents a Sonar run, which costs runner minutes on broken builds.
 
 P2:: No test is touched. The condition is that coverage does not move: `target/site/jacoco/jacoco.xml` of the module must show the same covered instructions and branches per class before and after, and the SonarCloud figure must not drop. The change is `quarkus.jacoco.report=false`; the extension and its `reuse-data-file` setting stay until the cause of the missing data file is understood. If the comparison shows that `@QuarkusTest` coverage is *not* in `jacoco.exec` today, the right fix is the Quarkus-documented alignment of agent and data file, which raises reported coverage.
 
@@ -762,8 +771,6 @@ P5:: The tests keep every assertion. The production change makes discovery honou
 P6:: Same number of attempts, same failure path, same log assertions. Only the sleep between attempts shrinks. Pointing the DNS-based case at a closed loopback port additionally makes it hermetic.
 
 P7:: The same 135 tests run with 3 skips; JaCoCo is not active in this lane. The static caches involved are a concurrent discovery cache and identical RestAssured configuration.
-
-P8:: Not test-related. All three Playwright projects use Chromium only.
 
 P9:: Every assertion is kept and still observes a real expiry of the declared 35 s. No wait is shortened. `TokenValidationSpecIT#verifySecurityEventCounterMetrics` must stay sequential and last, because it asserts a cumulative count.
 
@@ -801,17 +808,16 @@ P16:: The start script's end-to-end Zitadel validation still runs; it then passe
 |`surefire` @ `token-sheriff-validation-quarkus` |273 s |≈95 s (P2, P3)
 |`surefire` @ `token-sheriff-validation` |136 s |≈35 s (P5, P6, P10, P11, P14, P15)
 |Maven time of one build leg |489 s |≈195 s
-|Job time of `build` + `sonar-build` in sequence |≈19m40s |≈10 min
-|The same with P1 (side by side) |- |≈5 min
-|`integration-tests / test` job |8m28s |≈6m15s with P7, P8, P9, P12, P16; ≈5m40s with P4 as well (its 110 s overlap with P7 and P9)
+|Job time of the build lane (`build` legs and `sonar-build` side by side) |≈10 min |≈5 min
+|`integration-tests / test` job |8m28s |≈6m30s with P7, P9, P12, P16; ≈5m55s with P4 as well (its 110 s overlap with P7 and P9)
 |===
 
 These are job times, not time until green. Time until green also contains the waiting before `build` starts (median ≈6 min on contributor pull requests, addressed by no proposal) and cannot fall below the slowest required lane:
 
-* Today the build chain decides on contributor pull requests.
-* With the build-lane proposals and P1 the chain drops to ≈5 min of job time, below the integration-test lane (10m55s of wall-clock today). From then on the IT lane decides, and P4, P7, P9, P12, P13 and P16 shorten time until green instead of only saving runner time.
-* With everything in place the floor is roughly 8-9 minutes plus runner waiting, set by the integration-test lane (native build ≈3.5 min) and the end-to-end lane (7m18s today, ≈6m20s with P8 and P12).
-* Dependabot pull requests and the merge queue gain from the per-leg savings once, not twice, and nothing from P1. Their `maven.yml` run drops from ≈11 min to ≈6-7 min, which puts it below the integration-test lane, so for them too that lane then decides.
+* At the analysed revision the build chain decided on contributor pull requests. With Sonar beside the build it still does, by a small margin over the integration-test lane.
+* With the build-lane proposals the build lane drops to ≈5 min of job time, below the integration-test lane (10m55s of wall-clock today). From then on the IT lane decides, and P4, P7, P9, P12, P13 and P16 shorten time until green instead of only saving runner time.
+* With everything in place the floor is roughly 8-9 minutes plus runner waiting, set by the integration-test lane (native build ≈3.5 min) and the end-to-end lane (≈5 min of job time today, ≈4m40s with P12).
+* Dependabot pull requests and the merge queue see the same build lane as contributor pull requests apart from Sonar: ≈11 min today, ≈6-7 min after, which puts it below the integration-test lane, so for them too that lane then decides.
 
 == What could not be measured or verified
 
