@@ -27,6 +27,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -42,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * is used in a real application context.
  */
 @QuarkusTest
+@Tag("quarkus-boot")
 @TestProfile(JwtTestProfile.class)
 @EnableTestLogger
 class MetricsIntegrationTest {

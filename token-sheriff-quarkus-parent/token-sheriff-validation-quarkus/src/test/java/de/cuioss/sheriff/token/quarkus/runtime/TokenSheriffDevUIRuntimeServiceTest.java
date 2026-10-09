@@ -30,6 +30,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -48,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * </p>
  */
 @QuarkusTest
+@Tag("quarkus-boot")
 @TestProfile(JwtTestProfile.class)
 @EnableTestLogger
 @DisplayName("TokenSheriffDevUIRuntimeService Tests")

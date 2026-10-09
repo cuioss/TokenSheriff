@@ -26,6 +26,7 @@ import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Liveness;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -35,6 +36,7 @@ import static org.easymock.EasyMock.createNiceMock;
 import static org.junit.jupiter.api.Assertions.*;
 
 @QuarkusTest
+@Tag("quarkus-boot")
 @TestProfile(JwtTestProfile.class)
 @EnableTestLogger
 @DisplayName("TokenValidatorHealthCheck")

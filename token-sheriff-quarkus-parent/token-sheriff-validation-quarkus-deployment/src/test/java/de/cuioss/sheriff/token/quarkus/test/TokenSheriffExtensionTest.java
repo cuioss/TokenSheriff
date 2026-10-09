@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.quarkus.test;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.quarkus.test.QuarkusExtensionTest;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -25,9 +26,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Test to verify the Token-Sheriff extension is properly registered and configured.
- * 
+ *
  * Uses QuarkusExtensionTest to properly test the extension in a Quarkus context.
  */
+@Tag("quarkus-boot")
 @EnableTestLogger
 @DisplayName("Token-Sheriff Extension Registration Test")
 class TokenSheriffExtensionTest {

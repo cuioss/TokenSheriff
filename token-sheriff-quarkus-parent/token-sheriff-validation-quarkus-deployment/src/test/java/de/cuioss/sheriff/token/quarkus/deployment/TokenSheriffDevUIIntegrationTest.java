@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.quarkus.deployment;
 import de.cuioss.sheriff.token.quarkus.runtime.TokenSheriffDevUIRuntimeService;
 import io.quarkus.test.QuarkusExtensionTest;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -29,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * This test verifies that DevUI build items are properly registered
  * when the extension is enabled in development mode.
  */
+@Tag("quarkus-boot")
 class TokenSheriffDevUIIntegrationTest {
 
     @RegisterExtension

@@ -19,6 +19,7 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.quarkus.test.QuarkusExtensionTest;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * The extension is deployed with {@code application-test.properties}; the raw
  * configuration reads are asserted by {@link TokenSheriffIntegrationTest}.
  */
+@Tag("quarkus-boot")
 @EnableTestLogger
 class TokenSheriffProcessorTest {
 

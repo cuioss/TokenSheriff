@@ -22,6 +22,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.Config;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -38,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <li>Overall integration</li>
  * </ul>
  */
+@Tag("quarkus-boot")
 @EnableTestLogger
 class TokenSheriffIntegrationTest {
 
