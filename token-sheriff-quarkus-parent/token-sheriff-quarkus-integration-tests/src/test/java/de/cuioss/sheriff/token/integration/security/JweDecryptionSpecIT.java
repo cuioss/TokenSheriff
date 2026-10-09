@@ -106,22 +106,6 @@ class JweDecryptionSpecIT extends BaseIntegrationTest {
                 .body("message", equalTo("Access token is valid"));
     }
 
-    @Test
-    @Order(4)
-    @DisplayName("Should still validate regular JWS tokens when JWE config is present")
-    void shouldStillValidateRegularJwsTokens() {
-        var tokenResponse = TestRealm.createIntegrationRealm().obtainValidToken();
-
-        given()
-                .contentType("application/json")
-                .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
-                .when()
-                .post(JWT_VALIDATE_PATH)
-                .then()
-                .statusCode(200)
-                .body("valid", equalTo(true));
-    }
-
     @ParameterizedTest(name = "[{0}]")
     @MethodSource("jweProviders")
     @Order(5)

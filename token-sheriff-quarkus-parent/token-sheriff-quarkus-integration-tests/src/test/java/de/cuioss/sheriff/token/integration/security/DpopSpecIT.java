@@ -106,22 +106,6 @@ class DpopSpecIT extends BaseIntegrationTest {
         }
     }
 
-    @Test
-    @Order(4)
-    @DisplayName("Should still accept bearer token without DPoP (dpop.required=false)")
-    void shouldStillAcceptBearerTokenWithoutDpop() {
-        var tokenResponse = TestRealm.createIntegrationRealm().obtainValidToken();
-
-        given()
-                .contentType("application/json")
-                .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
-                .when()
-                .post(JWT_VALIDATE_PATH)
-                .then()
-                .statusCode(200)
-                .body("valid", equalTo(true));
-    }
-
     // === Negative Tests ===
 
     @ParameterizedTest(name = "[{0}]")

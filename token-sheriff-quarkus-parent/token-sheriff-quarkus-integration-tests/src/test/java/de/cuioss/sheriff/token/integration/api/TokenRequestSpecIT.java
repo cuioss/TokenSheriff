@@ -26,30 +26,14 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
- * TokenRequest integration spec — tests TokenRequest record deserialization and isEmpty() logic.
+ * TokenRequest integration spec — tests that a token padded with whitespace is trimmed and reaches
+ * validation instead of being treated as empty. Deserialization of a plain token value is covered by
+ * {@code ApiValidationSpecIT}.
  */
 @DisplayName("TokenRequest Spec")
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TokenRequestSpecIT extends BaseIntegrationTest {
 
-
     @Test
-    @Order(1)
-    @DisplayName("TokenRequest record should be properly deserialized from JSON")
-    void tokenRequestDeserialization() {
-        given()
-                .contentType(CONTENT_TYPE_JSON)
-                .body(Map.of(TOKEN_FIELD_NAME, "test.token.value"))
-                .when()
-                .post("/jwt/validate-explicit")
-                .then()
-                .statusCode(401)
-                .body(VALID, equalTo(false))
-                .body(MESSAGE, containsString("Token validation failed"));
-    }
-
-    @Test
-    @Order(2)
     @DisplayName("TokenRequest.isEmpty() should work correctly with token trimming")
     void tokenRequestIsEmptyWithTokenTrimming() {
         given()

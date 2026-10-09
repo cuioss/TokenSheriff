@@ -41,7 +41,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * {@link de.cuioss.sheriff.token.integration.TestProviders#allProviders()}.
  * <p>
  * Tests cover provider-agnostic JWT validation: access tokens, ID tokens,
- * refresh tokens, basic interceptor, and error cases.
+ * refresh tokens and the basic interceptor. The missing-token and invalid-token
+ * rejections of the validation endpoint are covered by {@code ApiValidationSpecIT}.
  * <p>
  * {@link #verifySecurityEventCounterMetrics()} asserts a cumulative lower bound on the counters of
  * the one running application. The class is therefore the last one of the run and never runs
@@ -179,33 +180,6 @@ class TokenValidationSpecIT extends BaseIntegrationTest {
                 .statusCode(200)
                 .body("valid", equalTo(true))
                 .body("message", equalTo("Interceptor validation successful (basic)"));
-    }
-
-    @Test
-    @Order(10)
-    @DisplayName("Missing token returns 401")
-    void missingTokenReturns401() {
-        given()
-                .contentType(CONTENT_TYPE_JSON)
-                .when()
-                .post(JWT_VALIDATE_PATH)
-                .then()
-                .statusCode(401)
-                .body("valid", equalTo(false));
-    }
-
-    @Test
-    @Order(11)
-    @DisplayName("Invalid token returns 401")
-    void invalidTokenReturns401() {
-        given()
-                .contentType(CONTENT_TYPE_JSON)
-                .header(AUTHORIZATION, BEARER_PREFIX + "invalid.token.here")
-                .when()
-                .post(JWT_VALIDATE_PATH)
-                .then()
-                .statusCode(401)
-                .body("valid", equalTo(false));
     }
 
     @Test
