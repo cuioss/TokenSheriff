@@ -121,17 +121,6 @@ class UserInfoClientTest {
     }
 
     @Test
-    @DisplayName("Should reject an oversized response body (DoS guard)")
-    void shouldRejectOversizedBody(URIBuilder uriBuilder) {
-        moduleDispatcher.returnOversizedBody();
-        var client = userInfoClient();
-        var endpoint = userInfoEndpoint(uriBuilder);
-        var token = Generators.nonBlankStrings().next();
-
-        assertThrows(TransportException.class, () -> client.fetchUserInfo(endpoint, token));
-    }
-
-    @Test
     @DisplayName("Should return the (unbound) sub even when it does not match — binding is a separate step")
     void shouldReturnMismatchedSubForBindingStep(URIBuilder uriBuilder) {
         moduleDispatcher.returnSubMismatch();

@@ -29,14 +29,14 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The PKCE downgrade defence ({@code CLIENT-2}): the interactive {@code authorization_code} flow is
  * refused fail-closed whenever the authorization server does not advertise PKCE {@code S256}, and the
- * {@code plain} transform is never offered.
+ * {@code plain} transform is never offered. That the challenge type itself only ever reports
+ * {@code S256} is asserted by {@link PkceChallengeTest}.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -112,13 +112,5 @@ class PkceDowngradeTest {
         assertTrue(url.contains("code_challenge_method=S256"),
                 "the request always pins code_challenge_method=S256");
         assertTrue(url.contains("code_challenge="), "a code_challenge is always present");
-    }
-
-    @Test
-    @DisplayName("Should never expose a plain PKCE transform on the challenge type")
-    void shouldNeverExposePlainTransform() {
-        var challenge = PkceChallenge.generate();
-
-        assertEquals("S256", challenge.method(), "PkceChallenge only ever reports S256; plain is not implemented");
     }
 }
