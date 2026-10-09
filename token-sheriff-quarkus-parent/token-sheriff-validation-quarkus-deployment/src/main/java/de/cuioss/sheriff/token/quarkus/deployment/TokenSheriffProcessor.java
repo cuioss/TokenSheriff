@@ -16,6 +16,8 @@
 package de.cuioss.sheriff.token.quarkus.deployment;
 
 import de.cuioss.sheriff.token.quarkus.config.AccessLogFilterConfigResolver;
+import de.cuioss.sheriff.token.quarkus.health.JwksEndpointHealthCheck;
+import de.cuioss.sheriff.token.quarkus.health.TokenValidatorHealthCheck;
 import de.cuioss.sheriff.token.quarkus.interceptor.BearerTokenInterceptor;
 import de.cuioss.sheriff.token.quarkus.logging.CustomAccessLogFilter;
 import de.cuioss.sheriff.token.quarkus.mapper.ClaimMapperRegistry;
@@ -161,6 +163,11 @@ public class TokenSheriffProcessor {
                         // Observation target resolution for the metrics, health and DevUI beans
                         ObservedValidatorResolver.class,
                         JwtMetricsCollector.class,
+                        // MicroProfile Health checks. The runtime jar carries no bean archive
+                        // marker, so without this registration SmallRye Health never sees them and
+                        // the application answers its health endpoints with an empty check list.
+                        JwksEndpointHealthCheck.class,
+                        TokenValidatorHealthCheck.class,
                         // CDI-based claim mapper infrastructure
                         ClaimMapperRegistry.class,
                         KeycloakRolesMapperBean.class,

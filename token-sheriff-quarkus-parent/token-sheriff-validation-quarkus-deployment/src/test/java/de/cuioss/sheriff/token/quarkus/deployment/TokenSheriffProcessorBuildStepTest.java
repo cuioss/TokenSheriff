@@ -15,6 +15,8 @@
  */
 package de.cuioss.sheriff.token.quarkus.deployment;
 
+import de.cuioss.sheriff.token.quarkus.health.JwksEndpointHealthCheck;
+import de.cuioss.sheriff.token.quarkus.health.TokenValidatorHealthCheck;
 import de.cuioss.sheriff.token.quarkus.mapper.DiscoverableClaimMapper;
 import de.cuioss.sheriff.token.quarkus.producer.JsonWebTokenAdapter;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -119,6 +121,22 @@ class TokenSheriffProcessorBuildStepTest {
         AdditionalBeanBuildItem beanItem = processor.additionalBeans();
 
         assertNotNull(beanItem);
+    }
+
+    @Test
+    @DisplayName("Should register both health checks as unremovable beans")
+    void shouldRegisterHealthChecksAsBeans() {
+        AdditionalBeanBuildItem beanItem = processor.additionalBeans();
+
+        // The runtime jar is no bean archive: a health check missing here is not discovered at
+        // all, and the consuming application reports an empty, and therefore UP, check list.
+        assertAll("health check registration",
+                () -> assertTrue(beanItem.getBeanClasses().contains(JwksEndpointHealthCheck.class.getName()),
+                        "the readiness check must be registered, was: " + beanItem.getBeanClasses()),
+                () -> assertTrue(beanItem.getBeanClasses().contains(TokenValidatorHealthCheck.class.getName()),
+                        "the liveness check must be registered, was: " + beanItem.getBeanClasses()),
+                () -> assertFalse(beanItem.isRemovable(),
+                        "nothing injects a health check, so a removable one would be dropped"));
     }
 
     @Test

@@ -17,6 +17,9 @@ package de.cuioss.sheriff.token.integration.token;
 
 import de.cuioss.sheriff.token.integration.BaseIntegrationTest;
 import de.cuioss.tools.logging.CuiLogger;
+import io.restassured.path.json.exception.JsonPathException;
+import io.restassured.response.ExtractableResponse;
+import io.restassured.response.Response;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -125,17 +128,26 @@ class WellKnownRetryConfigSpecIT extends BaseIntegrationTest {
      * meaningful — a second failing request would add retry lines of its own.
      */
     private static void assertProbeFinishedLoading() {
-        Map<String, Object> data = given()
+        // No status-code expectation: a readiness answer that is DOWN arrives as HTTP 503, and its
+        // body is exactly what is read here.
+        ExtractableResponse<Response> response = given()
                 .port(PROBE_PORT)
                 .when()
                 .get(READINESS_PATH)
                 .then()
-                .extract()
-                .jsonPath()
-                .getMap(JWKS_CHECK_DATA);
+                .extract();
+        // Carried by every failure message below, so a failing run shows what the probe answered.
+        String answer = "HTTP %s with body: %s".formatted(response.statusCode(), response.body().asString());
 
-        assertNotNull(data, "the probe's readiness response must carry the jwks-endpoints check");
-        assertAll("readiness of the retry probe",
+        Map<String, Object> data;
+        try {
+            data = response.jsonPath().getMap(JWKS_CHECK_DATA);
+        } catch (JsonPathException e) {
+            throw new AssertionError("the probe's readiness response must be JSON, was " + answer, e);
+        }
+
+        assertNotNull(data, "the probe's readiness response must carry the jwks-endpoints check, was " + answer);
+        assertAll("readiness of the retry probe, answered " + answer,
                 () -> assertEquals("COMPLETE", data.get("loading"), "loading must have finished"),
                 () -> assertEquals(STATUS_DOWN, issuerStatus(data, UNREACHABLE_ISSUER),
                         "the issuer with the unreachable well-known URL must be down"),

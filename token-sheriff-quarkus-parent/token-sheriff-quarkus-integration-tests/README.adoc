@@ -260,7 +260,10 @@ All integration-test classes run in one failsafe JVM (`forkCount=1`, `reuseForks
 * The probe's `keycloak` issuer points its well-known URL at a port on which nothing listens, so discovery fails on every attempt. Its `integration` issuer keeps a working JWKS URL.
 * The probe runs with `sheriff.token.retry.max-attempts=3` (the default is 5) and `sheriff.token.retry.initial-delay-ms=200`.
 * The spec counts the discovery attempts from the probe's log (`target/retry-probe/quarkus.log`): the `HTTP-112` lines of the HTTP retry adapter, one per failed attempt that is followed by another, plus the single `HTTP-111` give-up line. Their sum must equal the configured maximum.
+* Before it counts, the spec waits for the probe's `jwks-endpoints` readiness check (`https://localhost:10444/q/health/ready`) to report that loading is over, the `keycloak` issuer `DOWN` and the `integration` issuer `UP`. The answer arrives as HTTP 503, and the spec reads its body. A failing wait prints the HTTP status and the body it received.
 * The probe is a separate container because an issuer that never loads turns the readiness check `DOWN`.
+
+The probe's own output is part of every run that starts it: `dump-app-logs.sh` writes the probe's container log and its log file to `target/app-logs-retry-probe-<timestamp>.txt` and prints the warning, error and retry lines, the container state and the log file to the build output.
 
 The `integration-tests`, `multi-idp-tests` and `jfr` Maven profiles activate the compose profile. `start-integration-container.sh` holds the probe back until Keycloak is ready, and starts it only when `COMPOSE_PROFILES` contains `retry-probe`:
 
@@ -471,6 +474,9 @@ DOCKERFILE=Dockerfile.native.jfr DOCKER_IMAGE_TAG=jfr docker compose build
 ----
 # Dump Keycloak container logs (Quarkus logs are written to target/quarkus.log)
 ./scripts/dump-keycloak-logs.sh target
+
+# Dump the application container log and, when the retry probe was started, the probe's logs
+./scripts/dump-app-logs.sh target
 
 # Manual log inspection
 docker logs token-sheriff-quarkus-integration-tests-token-sheriff-integration-tests-1
