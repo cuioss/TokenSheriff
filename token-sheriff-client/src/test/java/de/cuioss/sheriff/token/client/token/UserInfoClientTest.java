@@ -255,12 +255,6 @@ class UserInfoClientTest {
             return this;
         }
 
-        UserInfoTestDispatcher returnOversizedBody() {
-            signed = false;
-            json.returnOversizedBody();
-            return this;
-        }
-
         UserInfoTestDispatcher returnSubMismatch() {
             signed = false;
             json.returnSubMismatch();
