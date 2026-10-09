@@ -85,29 +85,56 @@ if [[ -n "$COMPOSE_PROFILES" ]]; then
     fi
 fi
 
+# Compose service of the application under test
+APP_SERVICE="token-sheriff-integration-tests"
+
+# Runs `up -d` over the compose file and, when COMPOSE_OVERRIDE is set, its overlay.
+# Arguments are passed on to `up`.
+compose_up() {
+    if [[ -n "$COMPOSE_OVERRIDE" ]]; then
+        (cd "${PROJECT_DIR}" && $COMPOSE_BASE -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE" up -d "$@")
+    else
+        (cd "${PROJECT_DIR}" && $COMPOSE_BASE -f "$COMPOSE_FILE" up -d "$@")
+    fi
+}
+
+# With the multi-IDP profile the application must not start before the Zitadel setup has run:
+# Zitadel publishes its signing key only after the first token issuance, and an application that
+# starts earlier loads an empty key set and waits for its next background refresh. The identity
+# providers are therefore started first and the application follows after the Zitadel key-set check.
+DEFER_APP_START="false"
+if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
+    DEFER_APP_START="true"
+fi
+
 echo "Starting Docker containers (Quarkus $MODE + Keycloak${PROFILE_INFO})..."
 echo "Quarkus logs will be written to: ${LOG_TARGET_DIR}/quarkus.log"
 if [[ -n "$COMPOSE_OVERRIDE" ]]; then
     mkdir -p "${PROJECT_DIR}/target/jfr-output"
     echo "Using compose overlay: $COMPOSE_OVERRIDE"
-    (cd "${PROJECT_DIR}" && $COMPOSE_BASE -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE" up -d)
+fi
+if [[ "$DEFER_APP_START" == "true" ]]; then
+    echo "Starting the identity providers first; ${APP_SERVICE} follows after the Zitadel setup"
+    compose_up --scale "${APP_SERVICE}=0"
 else
-    (cd "${PROJECT_DIR}" && $COMPOSE_BASE -f "$COMPOSE_FILE" up -d)
+    compose_up
 fi
 
-# Wait for Keycloak to be ready first
+# Wait for Keycloak to be ready first. When the application start is deferred, nothing in the
+# `up` call above waits for Keycloak's health check, so this loop covers the whole Keycloak start.
+KEYCLOAK_WAIT_SECONDS=120
 echo "Waiting for Keycloak to be ready..."
-for i in {1..60}; do
+for ((i = 1; i <= KEYCLOAK_WAIT_SECONDS; i++)); do
     if curl -k -s https://localhost:1090/health/ready > /dev/null 2>&1; then
         echo "Keycloak is ready!"
         break
     fi
-    if [ $i -eq 60 ]; then
-        echo "Error: Keycloak failed to start within 60 seconds"
+    if [ $i -eq $KEYCLOAK_WAIT_SECONDS ]; then
+        echo "Error: Keycloak failed to start within ${KEYCLOAK_WAIT_SECONDS} seconds"
         echo "Check logs with: docker compose logs keycloak"
         exit 1
     fi
-    echo "Waiting for Keycloak... (attempt $i/60)"
+    echo "Waiting for Keycloak... (attempt $i/${KEYCLOAK_WAIT_SECONDS})"
     sleep 1
 done
 
@@ -198,6 +225,13 @@ if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
     done
 fi
 
+# Start the application now that the Zitadel key set has been checked. The call repeats the plain
+# `up -d` of the non-deferred path, so the resulting set of containers is the same on both paths.
+if [[ "$DEFER_APP_START" == "true" ]]; then
+    echo "Starting ${APP_SERVICE}..."
+    compose_up
+fi
+
 # Wait for Quarkus service to be ready and measure startup time
 echo "Waiting for Quarkus service to be ready..."
 START_TIME=$(date +%s)
@@ -218,7 +252,9 @@ for i in {1..30}; do
     sleep 1
 done
 
-# Wait for Quarkus app to pick up Zitadel JWKS keys via background refresh
+# Verify end to end that the application validates a Zitadel token. With the application started
+# after the key-set check this normally succeeds on the first attempt; the loop stays as the
+# safety net for a key set that was not yet published when the application loaded it.
 if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
     echo "Verifying Zitadel token validation works end-to-end..."
     TOKEN_RESPONSE=$(curl -s -H "Host: zitadel:8080" -u "${SVC_ID}:${SVC_SECRET}" -X POST http://localhost:3080/oauth/v2/token \
