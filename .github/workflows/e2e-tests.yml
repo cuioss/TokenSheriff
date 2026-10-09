@@ -19,8 +19,12 @@ jobs:
     uses: cuioss/cuioss-organization/.github/workflows/reusable-maven-integration-tests.yml@8e6a0c7cca322b3e3189933a130a1df11e0b08e6 # v0.40.0
     with:
       report-name: e-2-e-playwright
+      # The install step skips the frontend plugin (node/npm download, npm install, lint, format
+      # check, Jest) of the deployment module: none of it produces packaged output, and the Maven
+      # Build workflow keeps enforcing it. The verify step is left alone, because the Playwright
+      # module needs node and npm.
       maven-args-input: |
-        install -DskipTests -DskipITs -T 1C -am -pl bom,token-sheriff-validation,token-sheriff-quarkus-parent,token-sheriff-quarkus-parent/token-sheriff-validation-quarkus,token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment,token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
+        install -DskipTests -DskipITs -Dskip.installnodenpm -Dskip.npm -T 1C -am -pl bom,token-sheriff-validation,token-sheriff-quarkus-parent,token-sheriff-quarkus-parent/token-sheriff-validation-quarkus,token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment,token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
         verify -Pe2e-tests -pl token-sheriff-quarkus-parent/e-2-e-playwright
       install-playwright: true
       # Every Playwright project in e-2-e-playwright runs Desktop Chrome, so only

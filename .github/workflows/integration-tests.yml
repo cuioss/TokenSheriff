@@ -33,8 +33,11 @@ jobs:
       # upstream module is picked up from the pom's dependencies. The module itself is
       # installed too (tests skipped); a "!module" exclusion would avoid that, but the
       # reusable workflow's argument validation rejects the "!" character.
+      # The install step skips the frontend plugin (node/npm download, npm install, lint, format
+      # check, Jest) of the deployment module: none of it produces packaged output, and the Maven
+      # Build workflow keeps enforcing it.
       maven-args-input: |
-        install -DskipTests -DskipITs -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
+        install -DskipTests -DskipITs -Dskip.installnodenpm -Dskip.npm -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
         verify -Pmulti-idp-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
       reports-folder: |
         token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/target/failsafe-reports
