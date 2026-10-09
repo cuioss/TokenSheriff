@@ -18,7 +18,7 @@ package de.cuioss.sheriff.token.client.dpop;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -55,10 +55,14 @@ class SenderConstraintTest {
     private static final String HTU = "https://as.example.com/realms/demo/protocol/openid-connect/token";
     private static final String DPOP_HEADER = "DPoP";
 
-    private KeyPair keyPair;
+    /**
+     * The DPoP proof key, generated once for the class: no test mutates it, and every test builds
+     * its own {@link DpopProofGenerator}, so the replay-defence state stays per test.
+     */
+    private static KeyPair keyPair;
 
-    @BeforeEach
-    void setUp() throws Exception {
+    @BeforeAll
+    static void generateKeyPair() throws Exception {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
         keyPair = generator.generateKeyPair();
