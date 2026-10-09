@@ -107,6 +107,32 @@ if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
     DEFER_APP_START="true"
 fi
 
+# The retry probe is a second container of the application image behind its own compose profile
+# (see docker-compose.yml). It is held back until Keycloak answers its readiness endpoint: the probe
+# counts failed HTTP attempts in its log, so its one working issuer must load at the first attempt.
+PROBE_SERVICE="token-sheriff-retry-probe"
+PROBE_ENABLED="false"
+PROBE_PORT="${RETRY_PROBE_HTTPS_PORT:-10444}"
+if [[ "$COMPOSE_PROFILES" == *"retry-probe"* ]]; then
+    PROBE_ENABLED="true"
+    # The probe writes its own log file. The directory is created here, because a directory that
+    # Docker creates for a bind mount belongs to root and the container user could not write to it.
+    # A log left over from an earlier run is removed: the file is appended to, and the test counts lines.
+    export RETRY_PROBE_LOG_DIR="${RETRY_PROBE_LOG_DIR:-${PROJECT_DIR}/target/retry-probe}"
+    mkdir -p "${RETRY_PROBE_LOG_DIR}"
+    chmod a+rwx "${RETRY_PROBE_LOG_DIR}"
+    rm -f "${RETRY_PROBE_LOG_DIR}/quarkus.log"
+fi
+
+# Services that the first `up` call must not start yet, as `--scale <service>=0` arguments.
+HELD_BACK=()
+if [[ "$DEFER_APP_START" == "true" ]]; then
+    HELD_BACK+=(--scale "${APP_SERVICE}=0")
+fi
+if [[ "$PROBE_ENABLED" == "true" ]]; then
+    HELD_BACK+=(--scale "${PROBE_SERVICE}=0")
+fi
+
 echo "Starting Docker containers (Quarkus $MODE + Keycloak${PROFILE_INFO})..."
 echo "Quarkus logs will be written to: ${LOG_TARGET_DIR}/quarkus.log"
 if [[ -n "$COMPOSE_OVERRIDE" ]]; then
@@ -115,10 +141,8 @@ if [[ -n "$COMPOSE_OVERRIDE" ]]; then
 fi
 if [[ "$DEFER_APP_START" == "true" ]]; then
     echo "Starting the identity providers first; ${APP_SERVICE} follows after the Zitadel setup"
-    compose_up --scale "${APP_SERVICE}=0"
-else
-    compose_up
 fi
+compose_up "${HELD_BACK[@]}"
 
 # Wait for Keycloak to be ready first. When the application start is deferred, nothing in the
 # `up` call above waits for Keycloak's health check, so this loop covers the whole Keycloak start.
@@ -225,10 +249,11 @@ if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
     done
 fi
 
-# Start the application now that the Zitadel key set has been checked. The call repeats the plain
-# `up -d` of the non-deferred path, so the resulting set of containers is the same on both paths.
-if [[ "$DEFER_APP_START" == "true" ]]; then
-    echo "Starting ${APP_SERVICE}..."
+# Start what was held back: the application now that the Zitadel key set has been checked, and the
+# retry probe now that Keycloak is ready. The call is the plain `up -d` of a run that holds nothing
+# back, so the resulting set of containers is the same on every path.
+if [[ ${#HELD_BACK[@]} -gt 0 ]]; then
+    echo "Starting the held-back services..."
     compose_up
 fi
 
@@ -251,6 +276,25 @@ for i in {1..30}; do
     echo "Waiting for Quarkus... (attempt $i/30)"
     sleep 1
 done
+
+# Wait for the retry probe (only when its compose profile is active). Its readiness check is DOWN by
+# design — one of its issuers can never be discovered — so the liveness endpoint is the one to wait for.
+if [[ "$PROBE_ENABLED" == "true" ]]; then
+    echo "Waiting for the retry probe to be ready..."
+    for i in {1..30}; do
+        if curl -k -s "https://localhost:${PROBE_PORT}/q/health/live" > /dev/null 2>&1; then
+            echo "Retry probe is ready! Its log is written to: ${RETRY_PROBE_LOG_DIR}/quarkus.log"
+            break
+        fi
+        if [ $i -eq 30 ]; then
+            echo "Error: Retry probe failed to start within 30 seconds"
+            echo "Check logs with: docker compose logs ${PROBE_SERVICE}"
+            exit 1
+        fi
+        echo "Waiting for the retry probe... (attempt $i/30)"
+        sleep 1
+    done
+fi
 
 # Verify end to end that the application validates a Zitadel token. With the application started
 # after the key-set check this normally succeeds on the first attempt; the loop stays as the

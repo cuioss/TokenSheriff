@@ -128,6 +128,66 @@ services:
     # Production restart policy
     restart: unless-stopped
 
+  # Retry probe: a second container of the application image whose `keycloak` issuer can never be
+  # discovered. WellKnownRetryConfigSpecIT reads its log to prove that the configured retry settings
+  # reach well-known discovery. It is a separate container because an issuer that never loads turns
+  # the readiness check DOWN, which the application under test and the benchmark must not see.
+  # Only starts with: COMPOSE_PROFILES=retry-probe docker compose up -d
+  token-sheriff-retry-probe:
+    # Same image as the application under test; built by the token-sheriff-integration-tests service
+    image: "token-sheriff-integration-tests:${DOCKER_IMAGE_TAG:-distroless}"
+
+    ports:
+      - "${RETRY_PROBE_HTTPS_PORT:-10444}:8443"  # External port of the probe's health endpoints
+
+    environment:
+      # Own log file, so the probe's lines do not mix with the application's
+      - LOG_FILE_PATH=/logs/quarkus.log
+      # Never multi-idp: the probe needs the two Keycloak issuers only
+      - QUARKUS_PROFILE=prod
+      # Nothing listens on port 8444 of the Keycloak container. The host name resolves inside the
+      # compose network and the connection is refused at once, so the failure needs neither DNS
+      # nor a timeout. The `integration` issuer keeps its working JWKS URL.
+      - SHERIFF_TOKEN_ISSUERS_KEYCLOAK_JWKS_HTTP_WELL_KNOWN_URL=https://keycloak:8444/realms/benchmark/.well-known/openid-configuration
+      # A maximum that differs from the default of five, and a short initial delay
+      - SHERIFF_TOKEN_RETRY_MAX_ATTEMPTS=${RETRY_PROBE_MAX_ATTEMPTS:-3}
+      - SHERIFF_TOKEN_RETRY_INITIAL_DELAY_MS=${RETRY_PROBE_INITIAL_DELAY_MS:-200}
+      # Readiness is polled by the test; an answer cached for 30 s would hide the final state
+      - SHERIFF_TOKEN_HEALTH_JWKS_CACHE_SECONDS=0
+
+    depends_on:
+      keycloak:
+        condition: service_healthy
+
+    volumes:
+      - ./src/main/docker/certificates:/app/certificates:ro
+      # Own log directory below target (created by start-integration-container.sh)
+      - ${RETRY_PROBE_LOG_DIR:-./target/retry-probe}:/logs:rw
+
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+    networks:
+      - jwt-integration
+
+    profiles:
+      - retry-probe
+
+    # Never restarted: a second start would append a second set of discovery attempts to the log
+    restart: "no"
+
   # Dex OIDC Provider for Multi-IDP Integration Testing
   # Lightweight, OpenID Certified provider (~30MB, 2s startup)
   # Only starts with: COMPOSE_PROFILES=multi-idp docker compose up -d
