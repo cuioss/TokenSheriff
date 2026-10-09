@@ -125,7 +125,7 @@ On a contributor pull request `maven.yml` decides: `gate` -> `config` -> `check-
 
 The first row ranged from 31 s to 29 min. The three helper jobs in it take 3-7 s each, so almost all of it is waiting for a runner. It was far smaller on Dependabot runs, and the sibling project measured a 2 s queue on the same runners in a two-day sample. The cause was not analysed.
 
-`integration-tests` finishes after a median of 10m55s and `e2e-tests` after 8m18s; neither decides today.
+`integration-tests` finishes after a median of 10m55s and `e2e-tests` after 7m18s (workflow wall-clock, as in the table above); neither decides today.
 
 A merged change is built as follows: pull request (2 build legs + Sonar), merge queue (2 build legs, plus the 5-minute minimum queue wait), push to `main` (2 build legs + Sonar + snapshot deploy, 31m27s). The native image is built up to four times (pull request, merge queue, push, benchmark).
 
