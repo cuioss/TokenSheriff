@@ -20,6 +20,8 @@ import de.cuioss.sheriff.token.integration.TestProviders;
 import de.cuioss.sheriff.token.integration.TestRealm;
 import de.cuioss.tools.logging.CuiLogger;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -40,9 +42,17 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * Tests cover provider-agnostic JWT validation: access tokens, ID tokens,
  * refresh tokens, basic interceptor, and error cases.
+ * <p>
+ * {@link #verifySecurityEventCounterMetrics()} asserts a cumulative lower bound on the counters of
+ * the one running application. The class is therefore the last one of the run and never runs
+ * concurrently, and that method is the last one of the class: the class order comes from
+ * {@link Order} (the failsafe configuration of the module selects the annotation-based class
+ * orderer), the method order from {@link TestMethodOrder}.
  */
 @DisplayName("Token Validation Spec")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@Order(Integer.MAX_VALUE)
+@Execution(ExecutionMode.SAME_THREAD)
 class TokenValidationSpecIT extends BaseIntegrationTest {
 
     private static final CuiLogger LOGGER = new CuiLogger(TokenValidationSpecIT.class);

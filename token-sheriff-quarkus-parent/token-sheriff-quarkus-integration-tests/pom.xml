@@ -139,6 +139,37 @@
     </dependencies>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Failsafe settings shared by the integration-tests, multi-idp-tests and jfr profiles,
+                     which each declare the plugin with their own includes and system properties.
+                     Declared under pluginManagement so that nothing is bound in a build without one of
+                     those profiles; the skip state stays with the skipITs property the profiles set. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <configuration>
+                        <!-- All integration-test classes run in one JVM, overriding the
+                             reuseForks=false inherited from token-sheriff-quarkus-parent. The classes
+                             are plain HTTP clients of one already running application; none boots
+                             Quarkus in the test JVM. -->
+                        <forkCount>1</forkCount>
+                        <reuseForks>true</reuseForks>
+                        <properties>
+                            <!-- One JVM makes the class order a property of the whole run. It is set
+                                 here, not in junit-platform.properties, because a configuration
+                                 parameter passed by the plugin takes precedence over every
+                                 junit-platform.properties on the classpath. Classes are ordered by
+                                 @Order: TokenValidationSpecIT carries the highest value and runs
+                                 last, because it asserts a cumulative count on the application. -->
+                            <configurationParameters>
+                                junit.jupiter.testclass.order.default = org.junit.jupiter.api.ClassOrderer$OrderAnnotation
+                            </configurationParameters>
+                        </properties>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
 
             <!-- Quarkus Maven Plugin: Required for quarkus:dev to properly set up Dev-UI.
