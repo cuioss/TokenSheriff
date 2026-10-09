@@ -15,6 +15,7 @@ Integration tests for the Token-Sheriff Quarkus extensions with native container
 * **Application Internal**: `8443` (HTTPS inside container)
 * **External Test**: `10443` (Docker mapped port)
 * **Keycloak External**: `1443` (Docker mapped HTTPS port)
+* **Retry Probe External**: `10444` (Docker mapped HTTPS port of the second application container, see <<_retry_probe>>)
 
 == Features
 
@@ -79,6 +80,8 @@ DOCKERFILE=Dockerfile.native.distroless DOCKER_IMAGE_TAG=distroless docker compo
 * **Use Case**: Performance analysis, profiling, debugging (local development only)
 * **Features**: Full JFR profiling, debugging tools, monitoring capabilities
 * **Note**: JFR profile is disabled in CI/CD due to container startup issues in GitHub Actions
+
+NOTE: Only the `jfr` Maven profile compiles JFR support into the native executable (it sets `quarkus.native.monitoring=jfr`). The executable that the `integration-tests` and `multi-idp-tests` profiles build has no JFR support, so build the executable with `-Pjfr` before using `Dockerfile.native.jfr`.
 
 [source,bash]
 ----
@@ -181,15 +184,20 @@ token-sheriff-quarkus-integration-tests/
 │   ├── TestConstants.java
 │   ├── TestRealm.java
 │   ├── TestProviders.java
-│   ├── token/TokenValidationSpecIT.java
+│   ├── token/{TokenValidationSpecIT,WellKnownRetryConfigSpecIT}.java
 │   ├── bearer/BearerAuthSpecIT.java
-│   ├── client/{DiscoverySpecIT,ClientCredentialsSpecIT,ClientAuthSpecIT,RefreshSpecIT,
-│   │           AuthCodePkceSpecIT,MixUpSpecIT,ParSpecIT,UserInfoSpecIT,DpopBoundSpecIT,
-│   │           RevocationSpecIT,LogoutSpecIT,StepUpSpecIT,FullFlowE2EIT,
-│   │           FormPostSupport,KeycloakUrlSupport}.java
+│   ├── client/{DiscoverySpecIT,ClientAuthSpecIT,AuthCodePkceSpecIT,MixUpSpecIT,ParSpecIT,
+│   │           UserInfoSpecIT,DpopBoundSpecIT,LogoutSpecIT,StepUpSpecIT,FullFlowE2EIT,
+│   │           RefreshProductionPathSpecIT,RefreshErrorPathSpecIT,RefreshLifecycleSpecIT,
+│   │           RefreshClientAuthSpecIT,RefreshConcurrentRedemptionSpecIT,
+│   │           RefreshConstraintLifecycleSpecIT,RefreshIdentityScopeSpecIT,
+│   │           RefreshSingleFlightSpecIT,RefreshSingleUseSpecIT,
+│   │           RefreshEngineSupport,FormPostSupport,KeycloakAdminSupport,
+│   │           KeycloakUrlSupport}.java
 │   ├── security/{DpopSpecIT,JweDecryptionSpecIT,DpopProofHelper}.java
 │   ├── health/{HealthCheckIntegrationIT,HealthCheckResponsivenessIT}.java
 │   └── api/{ApiValidationSpecIT,TokenRequestSpecIT}.java
+├── src/test/resources/junit-platform.properties
 └── scripts/
     ├── start-integration-container.sh
     ├── stop-integration-container.sh
@@ -222,10 +230,11 @@ This ensures reliable cleanup of native executables and build artifacts without 
 Tests use `@ParameterizedTest` with `@MethodSource` to run against multiple OIDC providers. Each spec declares required capabilities — providers are filtered by `TestProviders`.
 
 * **token/TokenValidationSpecIT**: Access/ID/refresh token validation (parameterized over all providers with matching capabilities)
+* **token/WellKnownRetryConfigSpecIT**: Configured retry settings reach well-known discovery (reads the retry probe, see <<_retry_probe>>)
 * **bearer/BearerAuthSpecIT**: Bearer token producers and interceptors (Keycloak-only — requires ROLES, GROUPS, CUSTOM_SCOPES)
 * **security/DpopSpecIT**: DPoP RFC 9449 validation (parameterized over DPoP-capable providers)
 * **security/JweDecryptionSpecIT**: JWE RFC 7516 decryption (parameterized over JWE-capable providers)
-* `client/**`: Client-engine specs against a real Keycloak — discovery (`DiscoverySpecIT`), `client_credentials` (`ClientCredentialsSpecIT`), client authentication (`ClientAuthSpecIT`), refresh with rotation (`RefreshSpecIT`), authorization-code + PKCE (`AuthCodePkceSpecIT`), mix-up defence (`MixUpSpecIT`), PAR (`ParSpecIT`), userinfo (`UserInfoSpecIT`), DPoP-bound tokens (`DpopBoundSpecIT`), revocation (`RevocationSpecIT`), RP-initiated logout (`LogoutSpecIT`), step-up (`StepUpSpecIT`), and the full-flow E2E (`FullFlowE2EIT`)
+* `client/**`: Client-engine specs against a real Keycloak — discovery (`DiscoverySpecIT`), client authentication with the `client_credentials` grant (`ClientAuthSpecIT`), authorization-code + PKCE (`AuthCodePkceSpecIT`), mix-up defence (`MixUpSpecIT`), PAR (`ParSpecIT`), userinfo (`UserInfoSpecIT`), DPoP-bound tokens (`DpopBoundSpecIT`), RP-initiated logout (`LogoutSpecIT`), step-up (`StepUpSpecIT`), the full-flow E2E (`FullFlowE2EIT`), and the refresh specs (`Refresh*SpecIT`) — among them refresh with rotation through the production `RefreshFlow` (`RefreshProductionPathSpecIT`) and the refusal of an unknown and of a revoked refresh token (`RefreshErrorPathSpecIT`)
 * **health/HealthCheckIntegrationIT**: Health endpoint validation
 * **health/HealthCheckResponsivenessIT**: Health endpoint responsiveness testing
 * **api/ApiValidationSpecIT**: API input validation (provider-independent)
@@ -235,6 +244,32 @@ Tests use `@ParameterizedTest` with `@MethodSource` to run against multiple OIDC
 
 * **TestRealm**: Provider configuration + token acquisition + capability declaration
 * **TestProviders**: Provider registry with capability-based filtering and INFO logging
+
+=== Execution Model
+
+All integration-test classes run in one failsafe JVM (`forkCount=1`, `reuseForks=true`, set in this module's `pom.xml`). The classes are HTTP clients of one already running application; none boots Quarkus in the test JVM.
+
+* **Class order**: classes are ordered by `@Order` (`ClassOrderer$OrderAnnotation`, set in the failsafe configuration). `TokenValidationSpecIT` carries `@Order(Integer.MAX_VALUE)` and runs last, because it asserts a cumulative count on the application.
+* **Concurrency**: `src/test/resources/junit-platform.properties` enables parallel execution with a fixed parallelism of 2 and `same_thread` as the default for classes and methods. `RefreshProductionPathSpecIT` is the one class that opts in with `@Execution(CONCURRENT)`, so that its wait for a real access token to expire overlaps the other classes. It talks to Keycloak only and never to the application under test.
+
+[#_retry_probe]
+=== Retry Probe
+
+`WellKnownRetryConfigSpecIT` does not talk to the application under test. It reads the retry probe: a second container of the same native image (compose service `token-sheriff-retry-probe`, compose profile `retry-probe`, external port `10444`).
+
+* The probe's `keycloak` issuer points its well-known URL at a port on which nothing listens, so discovery fails on every attempt. Its `integration` issuer keeps a working JWKS URL.
+* The probe runs with `sheriff.token.retry.max-attempts=3` (the default is 5) and `sheriff.token.retry.initial-delay-ms=200`.
+* The spec counts the discovery attempts from the probe's log (`target/retry-probe/quarkus.log`): the `HTTP-112` lines of the HTTP retry adapter, one per failed attempt that is followed by another, plus the single `HTTP-111` give-up line. Their sum must equal the configured maximum.
+* The probe is a separate container because an issuer that never loads turns the readiness check `DOWN`.
+
+The `integration-tests`, `multi-idp-tests` and `jfr` Maven profiles activate the compose profile. `start-integration-container.sh` holds the probe back until Keycloak is ready, and starts it only when `COMPOSE_PROFILES` contains `retry-probe`:
+
+[source,bash]
+----
+COMPOSE_PROFILES=retry-probe ./scripts/start-integration-container.sh
+----
+
+With the `multi-idp` compose profile the script also starts the identity providers first and the application only after the Zitadel key-set check, so that the application loads a published Zitadel signing key.
 
 == Configuration
 

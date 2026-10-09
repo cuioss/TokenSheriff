@@ -16,9 +16,10 @@ Technical configuration for optimizing Quarkus native images for JWT validation 
 [source,properties]
 ----
 # application.properties
-quarkus.native.monitoring=jfr
 quarkus.native.additional-build-args=--enable-url-protocols=https,--enable-http,--enable-https,-O2
 ----
+
+`quarkus.native.monitoring` is not set in `application.properties`. The `jfr` Maven profile of the integration-test module sets it, see <<_jfr_monitoring_dual_image_maven_profiles>>.
 
 === GraalVM/Mandrel 25 Features
 
@@ -63,7 +64,10 @@ quarkus.virtual-threads.shutdown-timeout=10s
 public class JwtValidationEndpoint { }
 ----
 
+[#_jfr_monitoring_dual_image_maven_profiles]
 === JFR Monitoring (Dual-Image Maven Profiles)
+
+Only the `jfr` profile compiles JFR support into the native executable. The production build carries none.
 
 [source,xml]
 ----
@@ -91,11 +95,10 @@ public class JwtValidationEndpoint { }
 
 === Production (Example)
 
-NOTE: These are example configurations for reference. The actual project configuration is in `application.properties`.
+NOTE: These are example configurations for reference. The actual project configuration is in `application.properties`; it does not set `quarkus.native.monitoring`, which the `jfr` Maven profile supplies.
 
 [source,properties]
 ----
-quarkus.native.monitoring=jfr
 quarkus.native.additional-build-args=--enable-url-protocols=https,--enable-http,--enable-https,-O2
 quarkus.virtual-threads.name-prefix=jwt-validation
 quarkus.native.resources.includes=**/*.p12,**/*.crt,**/*.key

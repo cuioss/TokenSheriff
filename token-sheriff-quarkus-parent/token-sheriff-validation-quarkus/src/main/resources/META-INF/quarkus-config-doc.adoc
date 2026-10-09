@@ -159,6 +159,8 @@ belongs to this Resource Server.
 
 == Retry
 
+The retry settings apply to the JWKS fetches and, for an issuer configured with `jwks.http.well-known-url`, to the OpenID Connect discovery request as well.
+
 [cols="2,1,1,3", options="header"]
 |===
 |Property |Type |Default |Description

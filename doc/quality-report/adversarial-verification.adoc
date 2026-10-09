@@ -117,6 +117,17 @@ The review's headline claims — "no fail-open token-acceptance path" and "zero 
 |TC-9 |CONFIRMED (all sub-claims) |`useRelaxedHTTPSValidation` (`BaseIntegrationTest.java:52`); `skipITs=true` (pom :19, profiles :195/:359); hidden second class at `FetchPathAttackDatabaseTest.java:150`; PKCE duplicate pair; `@EnableGeneratorController` without generators in `PkceChallengeTest:34`.
 |===
 
+[NOTE]
+====
+2026-10-09 — status after the verification. The evidence above stands as verified on 2026-08-15. Five of the tests it cites have since been removed, each because a test that remains covers it:
+
+* TV-1: `TokenSignatureValidatorTest.shouldRejectAlgorithmConfusionAttack` and `createAlgorithmConfusionToken()`; the confusion attack is covered by `WiredNegativePathAttackTest#shouldRejectHmacRsaAlgorithmConfusion`.
+* TV-5: the pipeline-package `ParserConfigTest`; `commons/transport/ParserConfigTest` remains.
+* TC-1: `RevocationSpecIT`; `RefreshErrorPathSpecIT#shouldSurfaceRevokedRefreshTokenAsTypedFailure` redeems a revoked refresh token and asserts the refusal.
+* TC-2: `RefreshSpecIT`; `RefreshProductionPathSpecIT#shouldRotateThroughProductionRefreshFlow` asserts that the rotated refresh token differs from the redeemed one.
+* TC-9: `PkceDowngradeTest.shouldNeverExposePlainTransform`, one half of the PKCE duplicate pair; `PkceChallengeTest.shouldAlwaysReportS256` remains.
+====
+
 === Documentation (xref:documentation-review.adoc[report])
 
 [cols="1,2,6", options="header"]
