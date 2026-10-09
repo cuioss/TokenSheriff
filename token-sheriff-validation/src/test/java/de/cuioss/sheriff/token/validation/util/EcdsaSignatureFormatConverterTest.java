@@ -25,12 +25,15 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.security.spec.ECGenParameterSpec;
 import java.util.Arrays;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -307,13 +310,26 @@ class EcdsaSignatureFormatConverterTest {
 
         private static final byte[] PAYLOAD = "dpop-proof-payload".getBytes(StandardCharsets.UTF_8);
 
+        /** One key pair per curve for the whole class: the key is fixture material, not the subject. */
+        private static final Map<String, KeyPair> KEY_PAIRS_BY_CURVE = new ConcurrentHashMap<>();
+
+        private static KeyPair keyPairFor(String curve) {
+            return KEY_PAIRS_BY_CURVE.computeIfAbsent(curve, name -> {
+                try {
+                    var generator = KeyPairGenerator.getInstance("EC");
+                    generator.initialize(new ECGenParameterSpec(name));
+                    return generator.generateKeyPair();
+                } catch (GeneralSecurityException e) {
+                    throw new IllegalStateException("Failed to generate an EC key pair for curve " + name, e);
+                }
+            });
+        }
+
         @ParameterizedTest(name = "{0} / {1}")
         @CsvSource({"secp256r1, ES256, 64", "secp384r1, ES384, 96", "secp521r1, ES512, 132"})
         @DisplayName("Should produce a P1363 signature the JDK verifies natively")
         void shouldProduceJdkVerifiableP1363Signature(String curve, String algorithm, int expectedLength) throws Exception {
-            var generator = KeyPairGenerator.getInstance("EC");
-            generator.initialize(new ECGenParameterSpec(curve));
-            KeyPair keyPair = generator.generateKeyPair();
+            KeyPair keyPair = keyPairFor(curve);
 
             var signer = Signature.getInstance("SHA256withECDSA");
             signer.initSign(keyPair.getPrivate());

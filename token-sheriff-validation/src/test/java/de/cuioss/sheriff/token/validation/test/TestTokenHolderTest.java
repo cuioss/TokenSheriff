@@ -418,7 +418,8 @@ class TestTokenHolderTest {
                     .build();
             var tokenHolder = new TestTokenHolder(TokenType.ACCESS_TOKEN, claimControl);
             var customKeyId = "custom-key-id-for-public-key";
-            var customAlgorithm = InMemoryKeyMaterialHandler.Algorithm.RS512;
+            // A non-default algorithm with cheap key generation: the alignment is what is under test
+            var customAlgorithm = InMemoryKeyMaterialHandler.Algorithm.ES256;
             tokenHolder.withKeyId(customKeyId).withSigningAlgorithm(customAlgorithm);
             var publicKey = tokenHolder.getPublicKey();
             var rawToken = tokenHolder.getRawToken();
@@ -461,8 +462,8 @@ class TestTokenHolderTest {
             var fourthToken = tokenHolder.getRawToken();
             assertEquals(thirdToken, fourthToken, "Tokens should be equal");
 
-            // When - change signing algorithm
-            tokenHolder.withSigningAlgorithm(InMemoryKeyMaterialHandler.Algorithm.RS384);
+            // When - change signing algorithm (one with cheap key generation for the new key ID)
+            tokenHolder.withSigningAlgorithm(InMemoryKeyMaterialHandler.Algorithm.ES256);
 
             // Then - get token fifth time (should be regenerated)
             var fifthToken = tokenHolder.getRawToken();
@@ -514,7 +515,8 @@ class TestTokenHolderTest {
                     .build();
             var tokenHolder = new TestTokenHolder(TokenType.ACCESS_TOKEN, claimControl);
             var customKeyId = "custom-key-id-for-jwks-loader";
-            var customAlgorithm = InMemoryKeyMaterialHandler.Algorithm.RS512;
+            // A non-default algorithm with cheap key generation: the alignment is what is under test
+            var customAlgorithm = InMemoryKeyMaterialHandler.Algorithm.ES256;
             tokenHolder.withKeyId(customKeyId).withSigningAlgorithm(customAlgorithm);
             var jwksLoader = tokenHolder.getPublicKeyAsLoader();
             var rawToken = tokenHolder.getRawToken();

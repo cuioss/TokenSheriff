@@ -39,16 +39,20 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("JweDecryptor Tests")
 class JweDecryptorTest {
 
+    /**
+     * The recipient key of every test in which the key itself is not the subject, generated once for
+     * the class. {@code shouldFailWithWrongKey} generates its own, differing key.
+     */
+    private static final KeyPair RSA_ENCRYPTION_KEY_PAIR = JweTestTokenFactory.generateRsaKeyPair();
+
     private JweDecryptor decryptor;
     private SecurityEventCounter counter;
-    private KeyPair rsaEncryptionKeyPair;
     private DslJson<Object> dslJson;
 
     @BeforeEach
     void setUp() {
         decryptor = new JweDecryptor();
         counter = new SecurityEventCounter();
-        rsaEncryptionKeyPair = JweTestTokenFactory.generateRsaKeyPair();
         dslJson = ParserConfig.builder().build().getDslJson();
     }
 
@@ -72,7 +76,7 @@ class JweDecryptorTest {
             // Create a JWE token
             String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
+                    RSA_ENCRYPTION_KEY_PAIR.getPublic(),
                     "RS256", alg, enc, "https://test-issuer.example.com", "test-kid");
 
             String[] parts = jwe.split("\\.");
@@ -84,8 +88,8 @@ class JweDecryptorTest {
 
             // Build config
             JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .decryptionKey("test-kid", rsaEncryptionKeyPair.getPrivate())
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                    .decryptionKey("test-kid", RSA_ENCRYPTION_KEY_PAIR.getPrivate())
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
             // Parse header
@@ -112,7 +116,7 @@ class JweDecryptorTest {
         @DisplayName("Should reject RSA1_5 algorithm")
         void shouldRejectRsa15() {
             JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
             // Create a fake header with RSA1_5
@@ -130,7 +134,7 @@ class JweDecryptorTest {
         @DisplayName("Should reject unsupported enc algorithm")
         void shouldRejectUnsupportedEnc() {
             JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
             JwtHeader header = new JwtHeader("RSA-OAEP", null, null, null, null,
@@ -150,7 +154,7 @@ class JweDecryptorTest {
 
             String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
+                    RSA_ENCRYPTION_KEY_PAIR.getPublic(),
                     "RS256", "RSA-OAEP", "A256GCM", "https://test-issuer.example.com", null);
 
             String[] parts = jwe.split("\\.");
@@ -170,14 +174,14 @@ class JweDecryptorTest {
         void shouldFailWithTamperedAuthTag() {
             String jwe = JweTestTokenFactory.createJweWithTamperedAuthTag(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
+                    RSA_ENCRYPTION_KEY_PAIR.getPublic(),
                     "https://test-issuer.example.com");
 
             String[] parts = jwe.split("\\.");
             JwtHeader header = parseHeader(parts[0]);
 
             JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
             assertThrows(TokenValidationException.class,
@@ -189,14 +193,14 @@ class JweDecryptorTest {
         void shouldFailWithTamperedCiphertext() {
             String jwe = JweTestTokenFactory.createJweWithTamperedCiphertext(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
+                    RSA_ENCRYPTION_KEY_PAIR.getPublic(),
                     "https://test-issuer.example.com");
 
             String[] parts = jwe.split("\\.");
             JwtHeader header = parseHeader(parts[0]);
 
             JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
             assertThrows(TokenValidationException.class,
@@ -208,7 +212,7 @@ class JweDecryptorTest {
         void shouldFailWhenNoKeyMatchesKid() {
             String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
+                    RSA_ENCRYPTION_KEY_PAIR.getPublic(),
                     "RS256", "RSA-OAEP", "A256GCM", "https://test-issuer.example.com", "unknown-kid");
 
             String[] parts = jwe.split("\\.");
@@ -216,7 +220,7 @@ class JweDecryptorTest {
 
             // Config with different kid, no default
             JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .decryptionKey("other-kid", rsaEncryptionKeyPair.getPrivate())
+                    .decryptionKey("other-kid", RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
             assertThrows(TokenValidationException.class,
@@ -234,14 +238,14 @@ class JweDecryptorTest {
         void shouldResolveKeyByKid() {
             String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
+                    RSA_ENCRYPTION_KEY_PAIR.getPublic(),
                     "RS256", "RSA-OAEP", "A256GCM", "https://test-issuer.example.com", "my-kid");
 
             String[] parts = jwe.split("\\.");
             JwtHeader header = parseHeader(parts[0]);
 
             JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .decryptionKey("my-kid", rsaEncryptionKeyPair.getPrivate())
+                    .decryptionKey("my-kid", RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
             String innerJws = decryptor.decrypt(parts, header, config, counter, dslJson);
@@ -254,14 +258,14 @@ class JweDecryptorTest {
         void shouldFallBackToDefaultKey() {
             String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
+                    RSA_ENCRYPTION_KEY_PAIR.getPublic(),
                     "RS256", "RSA-OAEP", "A256GCM", "https://test-issuer.example.com", "unknown-kid");
 
             String[] parts = jwe.split("\\.");
             JwtHeader header = parseHeader(parts[0]);
 
             JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
             String innerJws = decryptor.decrypt(parts, header, config, counter, dslJson);
@@ -323,7 +327,7 @@ class JweDecryptorTest {
 
             // Use RSA key for ECDH-ES — should fail
             JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
             assertThrows(TokenValidationException.class,
@@ -433,14 +437,14 @@ class JweDecryptorTest {
         void shouldDecryptWithDeflateCompression() {
             String jwe = JweTestTokenFactory.createCompressedJwe(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
+                    RSA_ENCRYPTION_KEY_PAIR.getPublic(),
                     "RSA-OAEP", "A256GCM", "https://test-issuer.example.com");
 
             String[] parts = jwe.split("\\.");
             assertEquals(5, parts.length);
 
             JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .compressionEnabled(true)
                     .build();
 
@@ -457,7 +461,7 @@ class JweDecryptorTest {
         @DisplayName("Should reject unsupported compression algorithm")
         void shouldRejectUnsupportedCompression() {
             JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
             JwtHeader header = new JwtHeader("RSA-OAEP", null, null, null, null,
@@ -474,7 +478,7 @@ class JweDecryptorTest {
         @DisplayName("Should reject compression when disabled")
         void shouldRejectCompressionWhenDisabled() {
             JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .compressionEnabled(false)
                     .build();
 

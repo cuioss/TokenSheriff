@@ -43,7 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * This class provides access to private and public keys used for signing and verifying tokens.
  * Unlike KeyMaterialHandler, this class:
  * <ul>
- *   <li>Creates keys on the fly</li>
+ *   <li>Creates keys on the fly, each on its first request</li>
  *   <li>Stores keys in static fields instead of the filesystem</li>
  *   <li>Supports multiple algorithms (RS256, RS384, RS512)</li>
  *   <li>Uses standard JDK providers for key material generation</li>
@@ -95,36 +95,30 @@ public class InMemoryKeyMaterialHandler {
         }
     }
 
-    // Static maps to store key pairs for different algorithms
+    // Key pairs per algorithm and key ID. Nothing is generated up front: a pair is created on first request
     private static final Map<Algorithm, Map<String, KeyPair>> KEY_PAIRS = new ConcurrentHashMap<>();
 
-    // Static initializer
-    static {
-
-        // Initialize key pair maps for each algorithm
-        for (Algorithm alg : Algorithm.values()) {
-            KEY_PAIRS.put(alg, new ConcurrentHashMap<>());
-        }
-
-        // Generate default key pairs for each algorithm
-        for (Algorithm alg : Algorithm.values()) {
-            generateKeyPair(alg, DEFAULT_KEY_ID);
-        }
+    /**
+     * Gets the key pairs of the specified algorithm, keyed by key ID.
+     *
+     * @param algorithm the algorithm
+     * @return the concurrent map holding the key pairs of that algorithm
+     */
+    private static Map<String, KeyPair> keyPairsFor(Algorithm algorithm) {
+        return KEY_PAIRS.computeIfAbsent(algorithm, alg -> new ConcurrentHashMap<>());
     }
 
     /**
-     * Generates a key pair for the specified algorithm and key ID.
+     * Generates a new key pair for the specified algorithm. The pair is not stored.
      *
      * @param algorithm the algorithm to use
-     * @param keyId     the key ID
+     * @param keyId     the key ID, used for logging only
      * @return the generated key pair
      */
     private static KeyPair generateKeyPair(Algorithm algorithm, String keyId) {
         try {
             LOGGER.debug("Generating key pair for algorithm %s with key ID %s", algorithm, keyId);
-            KeyPair keyPair = algorithm.getAlgorithm().keyPair().build();
-            KEY_PAIRS.get(algorithm).put(keyId, keyPair);
-            return keyPair;
+            return algorithm.getAlgorithm().keyPair().build();
         } catch (IllegalArgumentException | IllegalStateException e) {
             throw new IllegalStateException("Failed to generate key pair for algorithm " + algorithm, e);
         }
@@ -154,18 +148,15 @@ public class InMemoryKeyMaterialHandler {
 
     /**
      * Gets the key pair for the specified algorithm and key ID.
-     * If the key pair doesn't exist, it will be generated.
+     * If the key pair doesn't exist, it is generated on this first request. Concurrent requests for
+     * the same algorithm and key ID all receive the same pair.
      *
      * @param algorithm the algorithm
      * @param keyId     the key ID
      * @return the key pair
      */
     private static KeyPair getKeyPair(Algorithm algorithm, String keyId) {
-        Map<String, KeyPair> keyPairsForAlg = KEY_PAIRS.get(algorithm);
-        if (keyPairsForAlg.containsKey(keyId)) {
-            return keyPairsForAlg.get(keyId);
-        }
-        return generateKeyPair(algorithm, keyId);
+        return keyPairsFor(algorithm).computeIfAbsent(keyId, id -> generateKeyPair(algorithm, id));
     }
 
     /**
@@ -610,8 +601,10 @@ public class InMemoryKeyMaterialHandler {
             this.keyId = keyId;
             this.algorithm = algorithm;
 
-            // Generate unique key pair for this issuer
-            KeyPair keyPair = generateKeyPair(algorithm, issuerIdentifier + "-" + keyId);
+            // Generate a fresh key pair for this issuer and register it under the issuer-scoped key ID
+            String issuerKeyId = issuerIdentifier + "-" + keyId;
+            KeyPair keyPair = generateKeyPair(algorithm, issuerKeyId);
+            keyPairsFor(algorithm).put(issuerKeyId, keyPair);
             this.privateKey = keyPair.getPrivate();
             this.publicKey = keyPair.getPublic();
 
