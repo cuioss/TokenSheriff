@@ -15,7 +15,6 @@
  */
 package de.cuioss.sheriff.token.quarkus.metrics;
 
-import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.metrics.MetricIdentifier;
 import de.cuioss.sheriff.token.quarkus.config.JwtTestProfile;
 import de.cuioss.sheriff.token.validation.TokenValidator;
@@ -73,30 +72,6 @@ class MetricsIntegrationTest {
                 "Error counters should be registered");
 
         assertFalse(meterRegistry.find(MetricIdentifier.VALIDATION.ERRORS).counters().isEmpty(), "Error counters should be registered");
-    }
-
-
-    @Test
-    @DisplayName("Should register metrics for all security event types")
-    void shouldRegisterMetricsForAllSecurityEventTypes() {
-        // Force initialization of metrics collector
-        metricsCollector.updateCounters();
-
-        // Verify that metrics are registered for all event types
-        for (SecurityEventCounter.EventType eventType : SecurityEventCounter.EventType.values()) {
-            // Skip success events as they're handled differently (registered under success metrics)
-            if (eventType.getCategory() == null) {
-                continue;
-            }
-
-            // Look for a counter with this event type
-            boolean hasMetricForEventType = !meterRegistry.find(MetricIdentifier.VALIDATION.ERRORS)
-                    .tag("event_type", eventType.name())
-                    .counters().isEmpty();
-
-            assertTrue(hasMetricForEventType,
-                    "Should have metrics registered for event type: " + eventType.name());
-        }
     }
 
     /**

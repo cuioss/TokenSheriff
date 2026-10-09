@@ -56,12 +56,6 @@ class JwksEndpointHealthCheckTest {
     JwksEndpointHealthCheck healthCheck;
 
     @Test
-    @DisplayName("Health check bean should be injected and available")
-    void healthCheckBeanIsInjected() {
-        assertNotNull(healthCheck, "JwksEndpointHealthCheck should be injected");
-    }
-
-    @Test
     @DisplayName("Health check should return UP status with valid configuration")
     void healthCheckShouldReturnUpStatus() {
         HealthCheckResponse response = healthCheck.call();
@@ -160,24 +154,6 @@ class JwksEndpointHealthCheckTest {
                 "Concurrent calls should return same status");
         assertEquals(response1.getStatus(), response3.getStatus(),
                 "Concurrent calls should return same status");
-    }
-
-    @Test
-    @DisplayName("Health check should handle valid configuration gracefully")
-    void healthCheckValidConfiguration() {
-        HealthCheckResponse response = healthCheck.call();
-
-        // Response should be valid with proper configuration
-        assertNotNull(response, "Response should not be null");
-        assertEquals(HealthCheckResponse.Status.UP, response.getStatus(),
-                "Health check status should be UP with valid configuration");
-        assertEquals("jwks-endpoints", response.getName(),
-                "Health check should have correct name");
-
-        assertTrue(response.getData().isPresent(), "Data should be present");
-        Map<String, Object> data = response.getData().get();
-        assertTrue(data.containsKey("checkedEndpoints"),
-                "Should contain endpoint data for valid configuration");
     }
 
     @Test

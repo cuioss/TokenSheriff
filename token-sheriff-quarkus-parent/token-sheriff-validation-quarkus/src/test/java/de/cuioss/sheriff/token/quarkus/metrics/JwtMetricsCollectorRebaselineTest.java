@@ -26,6 +26,8 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
 
@@ -56,52 +58,66 @@ class JwtMetricsCollectorRebaselineTest {
     }
 
     private double counterValue(SimpleMeterRegistry registry) {
-        return registry.find(MetricIdentifier.VALIDATION.SUCCESS)
-                .tag("event_type", EVENT.name())
+        return counterValue(registry, EVENT);
+    }
+
+    /**
+     * Sums the exported counters of one event type. Success events (no category) are exported
+     * under the success meter, every other event under the error meter.
+     */
+    private double counterValue(SimpleMeterRegistry registry, SecurityEventCounter.EventType eventType) {
+        String meterName = eventType.getCategory() == null
+                ? MetricIdentifier.VALIDATION.SUCCESS
+                : MetricIdentifier.VALIDATION.ERRORS;
+        return registry.find(meterName)
+                .tag("event_type", eventType.name())
                 .counters().stream()
                 .mapToDouble(Counter::count)
                 .sum();
     }
 
-    @Test
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(names = {"ACCESS_TOKEN_CREATED", "SIGNATURE_VALIDATION_FAILED"})
     @DisplayName("Events counted before initialization are exported by the initial update")
-    void exportsPreInitializationEvents() {
+    void exportsPreInitializationEvents(SecurityEventCounter.EventType eventType) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         SecurityEventCounter securityEventCounter = new SecurityEventCounter();
-        securityEventCounter.increment(EVENT);
-        securityEventCounter.increment(EVENT);
+        securityEventCounter.increment(eventType);
+        securityEventCounter.increment(eventType);
 
         JwtMetricsCollector collector = new JwtMetricsCollector(registry, observing(securityEventCounter));
         collector.initialize();
 
-        assertEquals(2.0, counterValue(registry),
+        assertEquals(2.0, counterValue(registry, eventType),
                 "pre-init events must not be dropped from the baseline");
     }
 
-    @Test
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(names = {"ACCESS_TOKEN_CREATED", "SIGNATURE_VALIDATION_FAILED"})
     @DisplayName("External counter reset re-baselines instead of under-reporting subsequent events")
-    void rebaselinesAfterExternalReset() {
+    void rebaselinesAfterExternalReset(SecurityEventCounter.EventType eventType) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         SecurityEventCounter securityEventCounter = new SecurityEventCounter();
         JwtMetricsCollector collector = new JwtMetricsCollector(registry, observing(securityEventCounter));
         collector.initialize();
 
         // Normal export: positive delta
-        securityEventCounter.increment(EVENT);
-        securityEventCounter.increment(EVENT);
-        securityEventCounter.increment(EVENT);
+        securityEventCounter.increment(eventType);
+        securityEventCounter.increment(eventType);
+        securityEventCounter.increment(eventType);
         collector.updateCounters();
-        assertEquals(3.0, counterValue(registry));
+        assertEquals(3.0, counterValue(registry, eventType));
 
         // External reset: delta goes negative — must re-baseline, not decrement or ignore
         securityEventCounter.reset();
+        assertEquals(0, securityEventCounter.getCount(eventType), "the security event counter must be reset");
         collector.updateCounters();
-        assertEquals(3.0, counterValue(registry), "reset must not change exported totals");
+        assertEquals(3.0, counterValue(registry, eventType), "reset must not change exported totals");
 
         // Events after the reset are exported against the fresh baseline
-        securityEventCounter.increment(EVENT);
+        securityEventCounter.increment(eventType);
         collector.updateCounters();
-        assertEquals(4.0, counterValue(registry),
+        assertEquals(4.0, counterValue(registry, eventType),
                 "post-reset events must be exported against the re-baselined count");
     }
 

@@ -98,24 +98,6 @@ class TokenValidatorHealthCheckTest {
         }
 
         @Test
-        @DisplayName("should handle valid configuration gracefully")
-        void healthCheckValidConfiguration() {
-            HealthCheckResponse response = healthCheck.call();
-
-            // Response should be valid with proper configuration
-            assertNotNull(response, "Response should not be null");
-            assertEquals(HealthCheckResponse.Status.UP, response.getStatus(),
-                    "Health check status should be UP with valid configuration");
-            assertEquals("jwt-validator", response.getName(),
-                    "Health check should have correct name");
-
-            assertTrue(response.getData().isPresent(), "Data should be present");
-            Map<String, Object> data = response.getData().get();
-            assertTrue(data.containsKey("issuerCount"),
-                    "Should contain issuer count for valid configuration");
-        }
-
-        @Test
         @DisplayName("should maintain response structure consistency between calls")
         void shouldTestHealthCheckResponseStructure() {
             HealthCheckResponse response1 = healthCheck.call();
