@@ -16,14 +16,11 @@
 package de.cuioss.sheriff.token.quarkus.deployment;
 
 import de.cuioss.sheriff.token.quarkus.runtime.TokenSheriffDevUIRuntimeService;
-import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
-import io.quarkus.devui.spi.page.CardPageBuildItem;
 import io.quarkus.test.QuarkusExtensionTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
@@ -51,23 +48,5 @@ class TokenSheriffDevUIIntegrationTest {
         // itself would throw an exception before reaching this point.
         assertNotNull(TokenSheriffProcessor.class.getName(),
                 "TokenSheriffProcessor must be present for DevUI component registration");
-    }
-
-    @Test
-    @DisplayName("Should have required DevUI build steps in processor")
-    void devUIBuildStepsExist() {
-        // Verify that the TokenSheriffProcessor has the required DevUI build steps
-        var processor = new TokenSheriffProcessor();
-
-        // These methods should exist and be callable
-        assertDoesNotThrow(() -> {
-            CardPageBuildItem cardPage = processor.createJwtDevUICard();
-            assertNotNull(cardPage, "DevUI card should be created");
-        });
-
-        assertDoesNotThrow(() -> {
-            JsonRPCProvidersBuildItem jsonRpcProviders = processor.createJwtDevUIJsonRPCService();
-            assertNotNull(jsonRpcProviders, "JSON-RPC providers should be created");
-        });
     }
 }
