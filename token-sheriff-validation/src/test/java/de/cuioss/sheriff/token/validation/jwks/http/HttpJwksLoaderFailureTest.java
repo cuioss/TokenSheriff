@@ -33,6 +33,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.Optional;
 
@@ -57,9 +60,19 @@ class HttpJwksLoaderFailureTest {
         securityEventCounter = new SecurityEventCounter();
     }
 
+    /**
+     * Returns a loopback port that was free a moment ago: an ephemeral port is bound and released again,
+     * so a connection attempt to it is refused.
+     */
+    private static int closedLoopbackPort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            return socket.getLocalPort();
+        }
+    }
+
     @Test
     @DisplayName("Should log JWKS_LOAD_FAILED when HTTP connection cannot be established")
-    void shouldLogJwksLoadFailedWhenHttpConnectionFails() {
+    void shouldLogJwksLoadFailedWhenHttpConnectionFails() throws IOException {
         // Default number of attempts, so the retry path is exercised in full, with millisecond delays
         // instead of the default 1 + 2 + 4 + 8 s backoff.
         RetryConfig fastRetry = RetryConfig.builder()
@@ -67,9 +80,9 @@ class HttpJwksLoaderFailureTest {
                 .maxDelay(Duration.ofMillis(5))
                 .build();
 
-        // Create loader with invalid URL to simulate connection failure
+        // A loopback port nothing listens on: the connection is refused without any DNS lookup
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
-                .jwksUrl("http://invalid-host-that-does-not-exist:9999/jwks")
+                .jwksUrl("http://127.0.0.1:%d/jwks".formatted(closedLoopbackPort()))
                 .issuerIdentifier("test-issuer")
                 .retryConfig(fastRetry)
                 .build();
