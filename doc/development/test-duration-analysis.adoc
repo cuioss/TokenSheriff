@@ -1,0 +1,965 @@
+= Test-Cycle Duration Analysis
+:toc:
+:toclevels: 3
+:sectnums:
+:source-highlighter: highlight.js
+
+Analysis date: 2026-10-09. Analysed revision: `b031ec36` (branch `main`).
+Status: analysis only. No test, POM or workflow was changed. The proposals in xref:proposals[Proposed changes] await a decision.
+
+The constraint every proposal is held to: test quality stays the same or improves. No test is removed or weakened unless another named test demonstrably proves the same behaviour, coverage does not drop, no real wait is shortened into a flake, and no gating test moves to a non-gating lane. A speed-up that works by running less is reported as a finding, not proposed.
+
+== Summary
+
+[cols="3,1,1",options="header"]
+|===
+|Pull request until all three required checks are green |Median |p90
+
+|Contributor pull request (Sonar runs; 10 commits) |32m05s |65m59s
+|Dependabot pull request (Sonar skipped; 12 commits) |11m04s |18m36s
+|Merge queue, second pass (24 commits) |11m03s |17m30s
+|===
+
+The time is not spent executing tests. It goes to five things:
+
+. *The same 3,119 unit tests run three times per contributor pull request, two of them one after the other.* `sonar-build` (≈10 min) starts only after `build` (≈9.5 min) has finished and repeats the identical `verify`. This ordering lives in the shared organisation workflow.
+. *About six minutes pass before the first build leg starts.* On contributor pull requests the median gap between trigger and build start is ≈350 s, almost all of it three chained helper jobs waiting for a runner. Measured, not explained, and addressed by no proposal.
+. *`token-sheriff-validation-quarkus` spends ≈223 of its 273 surefire seconds outside any test.* Every test class runs in its own JVM (`reuseForks=false`), and each of the nine `@QuarkusTest` JVMs then waits in a 10-second `quarkus-jacoco` shutdown timeout for a data file that is never written.
+. *`token-sheriff-validation` spends ≈75 of its 136 surefire seconds in HTTP retry backoff.* Five test methods each wait ≈15 s (1 + 2 + 4 + 8 s) because they hit a failing endpoint with the default retry configuration. No assertion depends on the delay.
+. *The integration-test lane forks one JVM per IT class as well* (≈45 s), and one IT waits ≈37 s for a real token to expire while nothing else runs.
+
+No proposal removes or weakens a test. The genuine duplicates found cost milliseconds; they are listed in xref:duplicate-pairs[the appendix] for hygiene, not as duration levers.
+
+Estimated effect: the proposals that touch the build chain take one build leg from ≈8m05s to ≈3m15s of Maven time and the job time of `build` plus `sonar-build` from ≈19m40s to ≈10 min; running Sonar beside the build takes that chain to ≈5 min. Time until green cannot fall below the slowest required lane, which is then the integration-test lane at ≈11 min today. All savings are estimates until measured on CI.
+
+== Method and populations
+
+[cols="2,5",options="header"]
+|===
+|Source |Population
+
+|Job and step timings
+|GitHub Actions API, the last 25 successful runs per workflow and event; 24 of each carried real work. `pull_request`: 2026-09-27 to 2026-10-08. `merge_group`: 2026-09-25 to 2026-10-08. `push`: `maven.yml` 12 real runs 2026-10-06 to 2026-10-08, others 24 runs from 2026-09-22.
+
+|Pull-request populations
+|Of the 24 `maven.yml` pull-request runs, 12 are Dependabot runs, for which `sonar-build` is skipped (`skip-on-dependabot: true`). The two groups are reported separately throughout; a pooled median would lie between them and describe neither.
+
+|Module, plugin and test-class timings
+|Timestamped job logs of the 8 most recent pull-request runs per job (2026-10-06 to 2026-10-08), median of 8. `deploy-snapshot`: 3 runs.
+
+|IT class and method timings
+|Published failsafe reports of 6 pull-request runs (2026-10-07 to 2026-10-08), median of 6.
+
+|Unit-test method timings
+|*Not available from CI*: `maven.yml` publishes no surefire reports. Taken from one local `./mvnw clean verify` (macOS, 2026-10-08, 12m07s, 3,119 tests, machine under load). Used to attribute time to methods only, never as a CI number.
+
+|Structure
+|All 312 test sources, all POMs, the pinned reusable workflows (`cuioss-organization` v0.39.0), the compose files and scripts. Inherited configuration was checked in `cui-java-parent` 1.7.7.
+
+|Corroboration
+|The sibling project API-Sheriff shares the build scaffolding and the organisation workflows. Where its CI logs show the same effect, this is noted as supporting evidence.
+|===
+
+Every "estimated saving" is arithmetic on these measurements, not a measured result. In the integration-test lane a nested Maven run prints its own plugin banners, which misleads a banner-keyed log parser; the stage boundaries of that lane are therefore taken from script output and native-image progress lines.
+
+Facts of this repository that the analysis relies on:
+
+* Workflows: `maven.yml`, `integration-tests.yml`, `e2e-tests.yml`, `benchmark.yml`.
+* Java matrix: 21 and 25.
+* Required checks: `build / conclusion`, `integration-tests / conclusion`, `e2e-tests / conclusion` (ruleset `main-branch-protection`).
+* One compose stack: Keycloak, Dex, Zitadel with its database, the native application, Prometheus.
+* Heavy behaviour areas: JWKS loading and rotation, the validation pipeline, DPoP, JWE, the Quarkus producer/interceptor/health/metrics layer, the client refresh path.
+
+== Measured baseline
+
+=== Wall-clock per workflow and job
+
+Wall-clock is run creation to completion of the last job. Queue is job creation to job start.
+
+.Workflows
+[cols="4,1,1",options="header"]
+|===
+|Workflow (event) |Median |p90
+
+|`maven.yml` (`pull_request`, Sonar ran, 12 runs) |28m35s |48m12s
+|`maven.yml` (`pull_request`, Dependabot, 12 runs) |11m04s |18m36s
+|`maven.yml` (`merge_group`, no Sonar) |10m52s |17m30s
+|`maven.yml` (`push` to `main`: build, Sonar, snapshot deploy) |31m27s |34m03s
+|`integration-tests.yml` (`pull_request`) |10m55s |13m46s
+|`integration-tests.yml` (`merge_group`) |9m25s |15m57s
+|`e2e-tests.yml` (`pull_request`) |7m18s |11m53s
+|`e2e-tests.yml` (`merge_group`) |6m13s |17m07s
+|`benchmark.yml` (after merge, not gating; 25 runs) |17m31s |29m24s
+|===
+
+.Jobs on pull requests
+[cols="3,1,1,2",options="header"]
+|===
+|Job |Median |p90 |Queue median / p90
+
+|`build / build (21)` |9m34s |9m50s |24 s / 312 s
+|`build / build (25)` |9m14s |9m42s |30 s / 182 s
+|`build / sonar-build` (12 runs) |10m06s |10m35s |8 s / 157 s
+|`build / quarkus-alignment` |1m52s |2m03s |22 s / 271 s
+|`integration-tests / test` |8m28s |9m19s |10 s / 101 s
+|`e2e-tests / test` |4m53s |5m53s |14 s / 92 s
+|`build / deploy-snapshot` (push only, 10 runs) |10m40s |12m03s |2 s / 3 s
+|===
+
+The helper jobs `gate`, `config`, `check-changes` and `conclusion` take 3-7 s each; their p90 queue time is 60-160 s per job, and they are chained.
+
+=== Critical path
+
+On a contributor pull request `maven.yml` decides: `gate` -> `config` -> `check-changes` -> `build` -> `sonar-build` -> `conclusion`. `sonar-build` declares `needs: [config, check-changes, build]` in the reusable workflow, so the two full builds run in sequence. On a Dependabot pull request and in the merge queue Sonar does not run, and `maven.yml` still finishes last (22 of 24 merge-queue commits).
+
+.Where the time of the 12 `maven.yml` runs with Sonar goes (median)
+[cols="4,1",options="header"]
+|===
+|Segment |Seconds
+
+|Trigger until the first `build` leg starts |≈350
+|Slower `build` leg |≈570
+|`build` finished until `sonar-build` starts |≈10 (up to 214)
+|`sonar-build` |≈600
+|===
+
+The first row ranged from 31 s to 29 min. The three helper jobs in it take 3-7 s each, so almost all of it is waiting for a runner. It was far smaller on Dependabot runs, and the sibling project measured a 2 s queue on the same runners in a two-day sample. The cause was not analysed.
+
+`integration-tests` finishes after a median of 10m55s and `e2e-tests` after 7m18s (workflow wall-clock, as in the table above); neither decides today.
+
+A merged change is built as follows: pull request (2 build legs + Sonar), merge queue (2 build legs, plus the 5-minute minimum queue wait), push to `main` (2 build legs + Sonar + snapshot deploy, 31m27s). The native image is built up to four times (pull request, merge queue, push, benchmark).
+
+=== Inside the Maven build leg
+
+.Reactor modules, `build (21)`, median of 8 runs (Maven total 489 s)
+[cols="4,1",options="header"]
+|===
+|Module |Seconds
+
+|Token-Sheriff Quarkus Integration - Runtime (`token-sheriff-validation-quarkus`) |290.0
+|Token-Sheriff Core (`token-sheriff-validation`) |151.0
+|Token-Sheriff Client |46.5
+|Token-Sheriff Quarkus Integration - Deployment |36.4
+|Benchmarking Common Infrastructure |13.7
+|E2E Playwright Tests (lint only in this lane) |11.9
+|Benchmark Core |9.4
+|all others |< 6 each
+|===
+
+The reactor runs with `-T1C`, but Core -> Quarkus Runtime -> Quarkus Deployment is a dependency chain: 151 + 290 + 36 = 477 s of the 489 s. Only savings on this chain shorten the leg. The client module runs beside it.
+
+.Largest executions on the chain
+[cols="4,1",options="header"]
+|===
+|Execution |Seconds
+
+|`surefire:test` @ `token-sheriff-validation-quarkus` |273.0
+|`surefire:test` @ `token-sheriff-validation` |135.7
+|`surefire:test` @ `token-sheriff-validation-quarkus-deployment` |21.2
+|compile, test-compile, code generation, frontend, packaging (remainder of the chain) |≈47
+|===
+
+Off the chain: `surefire:test` @ `token-sheriff-client` 33.1 s, `failsafe:integration-test` @ `token-sheriff-client` 6.9 s, frontend node install and npm 24 s across two modules.
+
+OpenRewrite and javadoc do not run in the `build` legs. The Sonar analysis itself costs ≈39 s; the remaining ≈8m45s of `sonar-build` is the repeated `verify`.
+
+=== Other lanes
+
+.`integration-tests / test`, Maven step ≈7m42s (run 37842455796)
+[cols="4,1",options="header"]
+|===
+|Segment |Seconds
+
+|`install -DskipTests -DskipITs` of the upstream modules |55
+|Native image: nested Maven start, augmentation |9
+|Native image: Mandrel builder image pull (not cached) |15
+|Native image: `native-image` (analysis 70 s, compile 63 s) |182
+|Distroless Docker build |5
+|Stack start: image pulls 9 s, Keycloak healthy 36 s, Zitadel setup 2 s, Zitadel validation loop 9 s |57
+|`failsafe:integration-test`, 135 tests in 30 classes |156
+|Log dump and stack stop |2
+|===
+
+`native-image` took between 2m00s and 3m04s across eight runs on identical inputs.
+
+.`e2e-tests / test`, job ≈4m53s
+[cols="4,1",options="header"]
+|===
+|Segment |Seconds
+
+|Install Playwright system dependencies |45 (p90 71)
+|`install` of the upstream modules |55
+|`start-dev-environment`: Keycloak pull 7 s, Keycloak ready 26 s, `quarkus:dev` ready 16 s |51
+|`run-playwright-tests` |81
+|===
+
+`deploy-snapshot` spends ≈530 s of its ≈590 s in the Sonatype Central upload and wait, with tests skipped. It is not a test-cycle cost.
+
+=== Fixed overhead versus test execution
+
+.Critical chain of `build (21)`, 477 s
+[cols="3,1,4",options="header"]
+|===
+|Part |Seconds |Of which
+
+|`token-sheriff-validation` surefire |136 |≈75 retry backoff, ≈23 real-clock waits, ≈13 key generation, ≈25 everything else
+|`token-sheriff-validation-quarkus` surefire |273 |≈104 Quarkus teardown (90 pure sleep), ≈70 Quarkus JVM start and boot, ≈49 plain JVM starts, ≈45 test bodies
+|`token-sheriff-validation-quarkus-deployment` surefire |21 |four `QuarkusExtensionTest` boots, five JVM starts
+|Compile, code generation, frontend, packaging |≈47 |
+|===
+
+Add ≈85 s per job outside Maven: runner hardening, JDK set-up, two Maven cache restores, npm cache, post steps.
+
+.Other lanes
+[cols="3,1,1,3",options="header"]
+|===
+|Job |Job total |Tests executing |Remainder
+
+|`integration-tests / test` |508 s |≈97 s, of which 42 s are two deliberate waits |Native build 206 s; stack start 57 s; install 55 s; fork overhead 45 s; set-up 46 s
+|`e2e-tests / test` |293 s |81 s |Playwright dependencies 45 s; install 55 s; environment start 51 s; set-up ≈40 s
+|===
+
+All dependency caches hit in the sampled runs (Maven, npm, Playwright browsers). The `~/.m2` directory is restored twice per job (≈571 MB by `setup-java` and ≈590 MB by an explicit `actions/cache` step), ≈9-13 s of duplicated restore. No Docker image and no native binary is cached.
+
+=== The Java 21 + 25 matrix
+
+Both legs run `./mvnw verify -Dmaven.compiler.release=<version>` and execute the identical 3,119 tests in near-identical time (489 s and 484 s). No test in the repository is conditional on the Java version, so the legs are identical by construction. They run in parallel: the second leg costs runner minutes but no wall-clock.
+
+What the second leg proves: the code compiles at release level 25 and the suite passes on a JDK 25 runtime. That is a real, distinct claim.
+
+What is duplicated: `sonar-build` runs on Java 21 and repeats the Java 21 leg completely, adding only the JaCoCo report and the Sonar upload. This third run is the redundant one, and on contributor pull requests it is on the critical path.
+
+=== Slowest test classes and methods
+
+.Top 30 unit-test classes on CI (`build (21)`, median of 8, by display name)
+[cols="1,6",options="header"]
+|===
+|Seconds |Class
+
+|29.86 |HttpJwksLoader Issuer Identifier Tests
+|18.63 |Tests HttpJwksLoader Background Refresh Scheduler
+|15.05 |HttpJwksLoader Failure Tests
+|14.75 |HttpJwksLoader Well-Known Discovery Async Tests
+|8.78 |Tests HttpJwksLoader Key Rotation Grace Period Implementation (Issue #110) - includes the nested class below
+|8.17 |HttpJwksLoader Lock-Free Status Check Tests
+|6.64 |- nested: Key Rotation Behavior Tests
+|5.64 |Tests HttpJwksLoader Key Rotation Grace Period (Issue #110)
+|5.35 |Foreign TokenValidator observability
+|5.29 |Wired-flow scaffold: real flows driven end to end, incl. DPoP wiring (client failsafe)
+|5.08 |BearerTokenResponseFactory Tests
+|5.03 |Token-Sheriff Extension Registration Test
+|4.89 |BearerTokenInterceptorTest
+|4.76 |ClientCredentialsFlow retrieve-then-validate loop
+|4.60 |BearerTokenResult Unit Tests
+|4.46 |DpopProofGenerator DPoP proof + replay defence
+|4.25 |IssuerConfigCacheSynchronizationTest
+|4.22 |TokenSheriffDevUIRuntimeService plain unit tests
+|3.61 |JfrEventTest (benchmark-core; contains a 2 s sleep)
+|3.50 |TokenSheriffIntegrationTest (deployment)
+|3.46 |private_key_jwt client authentication
+|3.46 |TokenSheriffDevUIIntegrationTest (deployment)
+|3.46 |TokenSheriffProcessorTest (deployment)
+|3.23 |VertxServletObjectsResolver CDI Scoping Tests
+|3.22 |Refresh-path coverage gate: the include list is neither inert nor drifted
+|3.06 |TestTokenHolder Tests
+|2.98 |VertxServletObjectsResolver Integration Tests
+|2.83 |JweDecryptor Tests
+|2.80 |QuarkusTokenValidatorProducerTest
+|2.77 |DpopProofValidatorTest
+|===
+
+The sum of all class times on CI is ≈190 s after removing nested double counts. Several entries between 4 s and 5 s are not slow themselves: they are the first class in their JVM to trigger a one-time initialisation (see xref:fixtures[D2]).
+
+.The 30 IT classes on CI (failsafe reports, median of 6)
+[cols="1,1,5",options="header"]
+|===
+|Seconds |Tests |Class
+
+|37.79 |4 |`client.RefreshProductionPathSpecIT`
+|7.94 |4 |`client.RefreshLifecycleSpecIT`
+|6.68 |23 |`token.TokenValidationSpecIT`
+|5.41 |29 |`bearer.BearerAuthSpecIT`
+|4.95 |9 |`security.DpopSpecIT`
+|3.93 |3 |`client.RefreshClientAuthSpecIT`
+|3.93 |6 |`security.JweDecryptionSpecIT`
+|3.44 |22 |`api.ApiValidationSpecIT`
+|2.93 |2 |`client.RefreshConstraintLifecycleSpecIT`
+|2.50 |2 |`client.RefreshSingleUseSpecIT`
+|2.45 |3 |`client.RefreshErrorPathSpecIT`
+|2.44 |2 |`health.HealthCheckResponsivenessIT`
+|2.36 |2 |`client.RefreshIdentityScopeSpecIT`
+|2.28 |1 |`client.RefreshConcurrentRedemptionSpecIT`
+|2.26 |2 |`api.TokenRequestSpecIT`
+|2.22 |1 |`client.FullFlowE2EIT`
+|2.19 |1 |`client.RefreshSingleFlightSpecIT`
+|2.04 |4 |`health.HealthCheckIntegrationIT`
+|1.82 |1 |`client.RefreshSpecIT`
+|1.78 |1 |`client.RevocationSpecIT`
+|1.75 |1 |`client.UserInfoSpecIT`
+|1.24 |1 |`client.StepUpSpecIT`
+|1.06 |2 |`client.AuthCodePkceSpecIT`
+|1.02 |1 |`client.DpopBoundSpecIT`
+|0.89 |2 |`client.ClientAuthSpecIT`
+|0.83 |1 |`client.LogoutSpecIT`
+|0.78 |2 |`client.MixUpSpecIT`
+|0.74 |1 |`client.ParSpecIT`
+|0.70 |1 |`client.DiscoverySpecIT`
+|0.68 |1 |`client.ClientCredentialsSpecIT`
+|===
+
+The sum is 110.6 s against 156 s of failsafe wall time.
+
+.Top 30 methods
+[cols="1,1,5",options="header"]
+|===
+|Seconds |Source |Method
+
+|36.74 |CI (IT) |`RefreshProductionPathSpecIT#shouldRefreshAfterTheAccessTokenHasExpired`
+|19.31 |local |`WiredFlowNegativePathIT#shouldRefuseMissingRequiredIssBeforeTokenCall` - first test in the failsafe JVM; ≈5 s class time on CI
+|17.37 |local |`JwksHostnameVerificationTest#shouldAcceptSanMismatchWhenVerificationDisabled` - not slow on CI; unexplained local artefact
+|15.63 |local |`HttpJwksLoaderWellKnownAsyncTest#wellKnownDiscoveryFailureShouldBeHandledAsync`
+|15.60 |local |`HttpJwksLoaderFailureTest#shouldLogJwksLoadFailedWhenHttpConnectionFails`
+|14.79 |local |`HttpJwksLoaderIssuerTest#shouldReturnEmptyWhenWellKnownConfigUnhealthy`
+|14.55 |local |`HttpJwksLoaderIssuerTest#shouldReturnEmptyWhenConfigReturnsEmptyIssuer`
+|14.23 |local |`HttpJwksLoaderSchedulerTest#shouldNotStartSchedulerIfInitialLoadFails`
+|13.08 |local |`BearerTokenResponseFactoryTest$CreateResponseWithFullyVerifiedStatus#shouldThrowForFullyVerified` - first-use initialisation
+|11.61 |local |`BearerTokenInterceptorTest#shouldHandleAllRequirementsCombined` - first-use initialisation
+|10.57 |local |`TokenSheriffDevUIRuntimeServiceUnitTest#validateTokenRejectsInvalidInput` - first-use initialisation
+|6.56 |local |`IdTokenValidationBridgeTest#shouldRejectMismatchedAtHash` - first-use initialisation
+|6.00 |local |`BearerTokenResultTest$StaticFactoryMethods#builderShouldCreateFullyVerifiedResult` - first-use initialisation
+|5.18 |CI (IT) |`RefreshLifecycleSpecIT#shouldEnterProactiveRefreshWindow`
+|5.09 |local |`HttpJwksLoaderLockFreeStatusTest#statusTransitionsShouldBeAtomicAndConsistent`
+|5.04 |local |`VertxServletObjectsResolverQuarkusTest#shouldHandleRequestUriAndMethod`
+|4.96 |local |`TestTokenHolderTest$HeaderAndAudienceTests#shouldProvidePublicKeyAsLoader`
+|4.89 |local |`ForeignValidatorObservabilityTest#collectorObservesForeignCounters`
+|3.03 |local |`HttpJwksLoaderLockFreeStatusTest#concurrentStatusChecksDuringMultipleInitializationsShouldBeSafe`
+|2.94 |local |`JfrEventTest#shouldRecordJfrEvents`
+|2.70 |local |`HttpJwksLoaderGracePeriodTest$KeyRotationBehaviorTests#shouldCleanupExpiredRetiredKeysBeyondGracePeriod`
+|2.69 |local |`TestTokenHolderTest$HeaderAndAudienceTests#shouldProvidePublicKeyAlignedWithKeyIdAndAlgorithm`
+|2.56 |local |`JwksEndpointHealthCheckTest#healthCheckJwksLoaderError`
+|2.16 |CI (IT) |`RefreshConstraintLifecycleSpecIT#shouldRefuseCoordinatorRefreshThatAppliesNoConfirmedBinding`
+|2.12 |local |`VertxServletObjectsResolverScopingTest#shouldVerifyRequestIsolationConcurrent`
+|2.11 |CI (IT) |`ApiValidationSpecIT#tokenRequestIsEmptyConsistency` - first RestAssured use in its JVM
+|2.09 |local |`HttpJwksLoaderGracePeriodTest$KeyRotationBehaviorTests#shouldRetainOriginalKeyDuringGracePeriodAfterMultipleUnchangedRefreshes`
+|2.03 |CI (IT) |`RefreshLifecycleSpecIT#shouldDetectRefreshTokenReuse`
+|1.95 |CI (IT) |`HealthCheckResponsivenessIT#shouldHandleConcurrentHealthChecksWithoutBlocking`
+|1.91 |CI (IT) |`RefreshConcurrentRedemptionSpecIT#shouldTerminateBothConcurrentRedemptions`
+|===
+
+Local values are roughly 1.0-2.5 times the CI values for CPU-bound work and equal for waits. The five ≈15 s `HttpJwksLoader` methods match their CI class times exactly.
+
+== Findings
+
+Paths are relative to the repository root. `VQ` abbreviates `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus`, `IT` abbreviates `token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests`.
+
+=== A. Technical and architectural problems
+
+==== A1. Retry backoff inside unit tests (≈75 s per build leg)
+
+`RetryConfig.defaults()` of `cui-http` is five attempts with delays of 1, 2, 4 and 8 s. Five test methods run into it:
+
+[cols="4,2,3",options="header"]
+|===
+|Method |Trigger |Fixable
+
+|`HttpJwksLoaderSchedulerTest#shouldNotStartSchedulerIfInitialLoadFails` (`:309-336`) |HTTP 500 on a direct JWKS URL |Test-only: the builder accepts a `retryConfig`
+|`HttpJwksLoaderFailureTest#shouldLogJwksLoadFailedWhenHttpConnectionFails` (`:60-84`) |real DNS lookup of an invalid host |Test-only
+|`HttpJwksLoaderIssuerTest#shouldReturnEmptyWhenWellKnownConfigUnhealthy` (`:89-109`) |HTTP 500 on discovery |Blocked, see below
+|`HttpJwksLoaderIssuerTest#shouldReturnEmptyWhenConfigReturnsEmptyIssuer` (`:208-222`) |real DNS lookup |Blocked
+|`HttpJwksLoaderWellKnownAsyncTest#wellKnownDiscoveryFailureShouldBeHandledAsync` (`:68-100`) |real DNS lookup |Blocked
+|===
+
+None of these asserts the delay. The ones that assert `REQUEST_FAILED_MAX_ATTEMPTS` stay green with a fast configuration, because that message is logged whenever the last attempt fails.
+
+The three discovery cases are blocked by production code: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/transport/HttpJwksLoaderConfig.java:751` hardcodes `.retryConfig(RetryConfig.defaults())` for the well-known configuration, so a caller's `retryConfig` silently does not apply to discovery. That is a finding in its own right: the Quarkus `IssuerConfigResolver` passes a retry configuration that takes effect for JWKS fetches only.
+
+Three of the five tests also depend on real DNS answering NXDOMAIN quickly; they are not hermetic.
+
+==== A2. Real clock where a seam exists (≈23 s per build leg)
+
+* `HttpJwksLoader` schedules its refresh in whole seconds, so every "rotate, then wait for the new key" test costs ≈1.05 s. Eleven such tests exist in `HttpJwksLoaderKeyRotationTest` and `HttpJwksLoaderGracePeriodTest`. `performBackgroundRefresh()` is package-private and callable from the tests; only `HttpJwksLoaderEgressRefreshTest` uses it. ≈13 s.
+* `HttpJwksLoaderLockFreeStatusTest:157` and `:269` let 50 observer threads spin for a fixed 5 s and 3 s although initialisation completes in milliseconds. ≈7.7 s.
+* `HttpJwksLoaderSchedulerTest#shouldHandleBackgroundRefreshCorrectly` waits a fixed 1.2 s and then asserts a log line the initial load already produced (see xref:quality-findings[C5]). ≈1.2 s.
+* `AccessTokenCacheTest:614-667` waits for a real 1 s eviction tick although the scheduler is injectable. ≈1 s.
+* `DpopReplayProtectionTest:66-77` waits out a real 1 s TTL; `DpopReplayProtection` takes whole seconds and has no clock seam. ≈1 s; removing it needs a production seam, so it is left alone.
+
+Inherent and to be kept: `HttpJwksLoaderSchedulerTest#shouldPerformBackgroundRefresh` (the one proof that the real scheduler fires) and one real grace-period expiry wait.
+
+==== A3. Tests at the wrong level
+
+No behaviour was found that is proven *only* through a Quarkus boot, a container or the native image while being unit-level logic. The opposite pattern exists and is harmless in time once forks are shared:
+
+* Container-free logic inside `@QuarkusTest` classes: four of six methods in `JwtMetricsCollectorTest`, six of thirteen in `JwksEndpointHealthCheckTest`, the `ResolutionOutcomeMatrix` in `TokenValidatorHealthCheckTest`, and seven `TestConfigIntegrationTests` in `TokenSheriffDevUIRuntimeServiceTest` that exercise test helpers only.
+* 38 of the 135 integration tests (22 of 30 classes, package `client`) never call the native application. They run production client code in the test JVM against Keycloak, but they wait for the native build like everything else.
+
+==== A4. Environments
+
+The stack is started once and stopped once per run; no test reconfigures it. All services are justified:
+
+* Zitadel (with its database) serves 3 effective tests, Dex 5, all in `TokenValidationSpecIT`. They are the only coverage of a third identity provider, an HTTP JWKS endpoint and `offline_access`. Deliberate, not duplicate.
+* Prometheus is started but unused by the IT lane (only the benchmark lane reads it). It costs no wall-clock, because its pull finishes before Keycloak's.
+
+Two accidental costs in the start sequence:
+
+* The application container starts as soon as Keycloak is healthy, before Zitadel has published its signing key. The application loads an empty key set and waits for its 10 s background refresh. The start script's verification loop succeeded on attempt 9 or 10 in 6 of 8 runs, on attempt 1 in the other two. ≈7 s on average.
+* Keycloak runs `start-dev --import-realm` with four realms: 25-36 s until healthy, quantised by a 5 s health-check interval.
+
+==== A5. Real sockets and TLS
+
+Every real-socket test examined has the socket as its subject: the five real-TLS tests in the client module prove handshake outcomes (the in-memory `BackChannelHttpTlsTrustTest` proves only that configuration is forwarded), and the closed-port test proves classification of a refused connection. Combined cost ≈1.5 s. No change proposed.
+
+`JwksLoaderFactoryTest:67-92` fetches from the real `https://example.com`; cheap (≈0.35 s) but not hermetic.
+
+=== B. Grouping and infrastructure restarts
+
+==== B1. One JVM per test class in every Quarkus module
+
+`token-sheriff-quarkus-parent/pom.xml:179-181` sets `useSystemClassLoader=false` and `reuseForks=false` for surefire, under the comment "Fix for class loading issues"; `:199-201` does the same for failsafe. `forkCount` stays at 1, so the classes run strictly in sequence, each in a fresh JVM. Git history gives no rationale; the sibling project carries the same lines as copied scaffolding.
+
+"Each distinct `@TestProfile` forces a restart" therefore does not describe this build: *every* `@QuarkusTest` class boots its own application regardless of profile.
+
+.Restart map, `token-sheriff-validation-quarkus` (38 test classes)
+[cols="4,2,1",options="header"]
+|===
+|Class |Profile |Tests
+
+|`metrics/MetricsIntegrationTest` |`JwtTestProfile` |7
+|`metrics/JwtMetricsCollectorTest` |`JwtTestProfile` |6
+|`producer/QuarkusTokenValidatorProducerTest` |`JwtTestProfile` |2
+|`health/TokenValidatorHealthCheckTest` |`JwtTestProfile` |7
+|`health/JwksEndpointHealthCheckTest` |`JwtTestProfile` |13
+|`runtime/TokenSheriffDevUIRuntimeServiceTest` |`JwtTestProfile` |30
+|`servlet/VertxServletObjectsResolverQuarkusTest` |`JwtTestProfile` |2
+|`servlet/VertxServletObjectsResolverScopingTest` |`JwtTestProfile` |3
+|`observability/ForeignValidatorObservabilityTest` |`ForeignValidatorProfile` (enables an alternative producer, empty issuer namespace) |6
+|29 plain JUnit classes |none |329
+|===
+
+No class uses `@QuarkusTestResource`, `@WithTestResource`, `@InjectMock`, `@InjectSpy` or `@QuarkusComponentTest`. There are two distinct application configurations, and they cannot be merged: `ForeignValidatorProfile` requires an empty issuer namespace and asserts `EXTERNAL_VALIDATOR`, the others assert a configured issuer.
+
+[cols="3,1",options="header"]
+|===
+| |Count
+
+|Distinct application configurations |2
+|Minimum Quarkus boots |2
+|Actual Quarkus boots per run |9
+|JVMs started per run |38
+|===
+
+In a shared JVM the grouping would be automatic: `quarkus-junit` ships `QuarkusTestProfileAwareClassOrderer` as the default class orderer, and the repository does not override it.
+
+What stands in the way of sharing a JVM, from reading the sources:
+
+* 21 classes of the module use `@EnableTestLogger`, which installs a JVM-global JUL handler. In one shared JVM they would run in the same process as a Quarkus application and its JBoss log manager. Whether that interferes was not observed; it is the main risk.
+* The unexplained "class loading issues" may still exist.
+* Application-scoped state would be shared across the eight `JwtTestProfile` classes: the `SecurityEventCounter`, the 30 s health cache, the meter registry. No absolute-count assertion on injected beans was found.
+* Not a blocker here: no test in this module swaps trust-store system properties, and no port is fixed.
+
+Two reused forks - one for the 29 plain classes, one for the 9 Quarkus classes - avoid the first risk entirely and cost one extra JVM start.
+
+The deployment module boots four `QuarkusExtensionTest` applications, the minimum for four such classes with different configurations.
+
+==== B2. The 10-second `quarkus-jacoco` shutdown timeout
+
+`VQ/pom.xml:88-92` adds `quarkus-jacoco` while `jacoco:prepare-agent` is active as well. The extension registers a shutdown hook that waits for `target/jacoco-quarkus.exec` to change, polling every 100 ms for at most 10 s. The file is never written. After a local run `VQ/target/jacoco-report/error.txt` reads:
+
+----
+Timed out waiting for Jacoco data file .../target/jacoco-quarkus.exec update,
+file size before test run: did not exist, current file size: does not exist
+----
+
+followed by Quarkus's own advice to set `quarkus.jacoco.report=false`. Only `jacoco.exec` exists in `target/`.
+
+The three gap sizes in the CI log between test classes are thereby explained exactly:
+
+[cols="1,2,4",options="header"]
+|===
+|Gap |Transition |Composition
+
+|≈7.7 s |plain class -> `@QuarkusTest` class |new JVM, JaCoCo agent, Quarkus augmentation and boot
+|≈13.3 s |`@QuarkusTest` class -> plain class |teardown 11.5 s (10.0 s of it the timeout) + plain JVM start 1.7 s
+|≈19.2 s |`@QuarkusTest` -> `@QuarkusTest` |teardown 11.5 s + boot 7.7 s
+|===
+
+The sibling project has the same dependency pair and shows the same signature in its CI logs (13 s, 21 s and 2 s) and the same message after a local run.
+
+Why the data file is never written was not established. The module sets `quarkus.jacoco.reuse-data-file=true` in `VQ/pom.xml:173` and in `VQ/src/test/resources/application.properties:11`, so the extension was configured deliberately at some point. The likely explanation is that the instrumented classes resolve the already initialised agent of `jacoco:prepare-agent`, so the data lands in `jacoco.exec`. If so, `@QuarkusTest` coverage is already in the report Sonar reads (`sonar.coverage.jacoco.xmlReportPaths` lists `target/site/jacoco/jacoco.xml` only) and the Quarkus-side report is empty and unused. A comment in `TokenSheriffDevUIRuntimeServiceUnitTest:38-40` assumes the opposite. Only a coverage comparison can settle it.
+
+==== B3. Integration-test lane
+
+* The stack starts once. The native image is built once per run, unconditionally: `IT/scripts/build-native-if-needed.sh:10-12` only checks whether a `*-runner` file exists, which is never the case on a fresh checkout. It is rebuilt when only tests changed, and up to four times per merged change. Nothing is cached or shared between lanes.
+* Failsafe inherits `reuseForks=false`: 30 JVMs for 30 classes. 156.1 s of wall time minus 111.4 s of suite time leaves 44.7 s of pure fork overhead, and each fork repeats its first-use initialisation (RestAssured and Groovy, TLS, discovery), another ≈24-30 s. JaCoCo is not active in this lane.
+* `TokenValidationSpecIT#verifySecurityEventCounterMetrics` asserts a cumulative lower bound on the single application instance. Under `multi-idp-tests` the class produces enough events by itself; under the plain `integration-tests` profile it depends on other classes having run first.
+* The lane already builds the upstream modules with tests skipped and runs `verify` on the IT module alone; it does not repeat the unit suite.
+
+==== B4. Parallelism settings and blockers
+
+Outside the Quarkus parent, surefire runs with defaults: one reused fork, no `parallel`, no `junit-platform.properties`. JUnit parallel execution is off everywhere.
+
+`forkCount > 1` is recorded in the maintainer's project notes as evaluated and rejected (timing flakes, JaCoCo data loss). No commit, issue or document in the repository records that decision; nothing found in this analysis contradicts it.
+
+What prevents in-JVM parallel execution today:
+
+* `@EnableTestLogger` installs one JVM-global log handler and clears it before each test. It is present on ≈86 classes in the validation module alone. Concurrent classes would satisfy each other's positive log assertions and break negative ones. This is the main blocker.
+* `InMemoryKeyMaterialHandler.getKeyPair` is check-then-act on a static map (`:163-169`); two threads asking for the same new key id can receive different pairs.
+* Static shared `SecurityEventCounter` instances with delta assertions (`TokenHeaderValidatorTest:53-56`, `TokenClaimValidatorTest:60-61`).
+* Wall-clock assertions: constructor under 10 ms (`HttpJwksLoaderWellKnownAsyncTest:84`), health check under 100 ms (`JwksEndpointHealthCheckTest:379`), throughput bounds in `TokenValidatorMonitorTest` and the `IssuerConfigCache` performance tests.
+* JVM-global trust-store properties in three TLS test classes of the validation and client modules; these are already `@Isolated`.
+
+Ports are not a blocker: every MockWebServer and Quarkus test port is ephemeral.
+
+After the proposed fixes the validation module is ≈35 s of mostly CPU-bound work. Parallel execution would buy little there and would put the log assertions at risk; it is not proposed.
+
+=== C. Duplicates and overlap
+
+Behaviour-to-test maps were built for JWKS loading and rotation, the validation pipeline (signature, header, claims, token types, claim mapping), JWE, DPoP, the attack tests, the Quarkus layer, the client refresh path and the integration tests. The result in one sentence: *there are genuine duplicates, and removing all of them would save less than five seconds.* No removal is proposed for the sake of duration.
+
+==== C1. Genuine duplicates
+
+62 pairs were found in which one test is covered by another with identical or stronger assertions at the same level. All are named with both tests and the covering assertion in xref:duplicate-pairs[the appendix].
+
+[cols="3,1,3",options="header"]
+|===
+|Area |Pairs |Cost
+
+|JWKS loader, including the two "Grace Period (Issue #110)" classes |10 |≈5.8 s today for four of them; milliseconds once the rotation tests stop polling a 1 s scheduler
+|Validation pipeline, domain, security |21 |milliseconds
+|Quarkus layer and deployment |11 |milliseconds each; one JVM start where a whole class is redundant
+|Client |13 |under 0.1 s in total
+|Integration tests |7 |under 3 s of test time
+|===
+
+Seven of the client pairs involve the named threat tests of `doc/client/specification/test-strategy.adoc` (`MixUpDefenseTest`, `CodeInjectionTest`); removing them would need the traceability re-pointed first.
+
+==== C2. Deliberate defence in depth and different levels (keep)
+
+* Unit, composite and wired proofs of the same rule: `ExpirationValidatorTest` / `TokenClaimValidatorEdgeCaseTest` / `WiredNegativePathAttackTest`; the embedded-JWK rejection with three different input shapes; the algorithm allow-list at catalog, preference, JCA and wired level.
+* All six `ForeignValidatorObservabilityTest` methods have unit twins, but they are the proof that real container wiring never instantiates the default producer (regression for issue #641).
+* Client refresh path: endpoint classification against manager disposition, with the matched negative controls documented in the tests.
+* Integration tests against their unit counterparts: the IT adds the real authorization server (rotation, reuse detection, single flight).
+* The only failsafe IT of the client module, `WiredFlowNegativePathIT`, is not redundant: it carries the only orchestrator-level proof of RFC 9207 `iss` enforcement and of DPoP on the refresh path.
+* Four loader-level discovery-failure tests take the same loader branch with different failure causes (500, DNS, DNS, 404). Overlapping, cheap once the retry is fast, kept.
+
+==== C3. Parameterised tests
+
+No huge argument set exists. The largest are `OAuth2JWTBestPracticesComplianceTest` with `@TestTokenSource(count = 50)` twice (100 invocations, 2.6 s locally, all on one code path) and the client attack corpora (241 invocations, ≈1.3 s locally). Several `@TestTokenSource(count = 2..5)` tests ignore the generated variation. Total cost well under 3 s; a quality note, not a duration lever.
+
+[[quality-findings]]
+==== C4. Tests that do not prove what they claim
+
+These cost nothing to speak of, but the constraint is that quality stays the same *or improves*, so they are recorded:
+
+* `HttpJwksLoaderSchedulerTest#shouldHandleBackgroundRefreshCorrectly` (`:340-381`): the expected message does not exist in production code; the fallback assertion is satisfied by the initial load. The test passes without any background refresh.
+* `JwksEndpointHealthCheckTest#healthCheckCacheExpiration` (`:294-322`): an Awaitility call without `until` never runs, and the constructor argument is seconds, not milliseconds. Cache expiry is never exercised.
+* `JwksEndpointHealthCheckTest#concurrentHealthCheckCalls`: three sequential calls.
+* `EmbeddedJwkAttackTest:91-92`: `assertTrue(count >= 0)`. This is the only test of the real-world JSON-object shape of an embedded JWK.
+* `TokenValidationSecurityTest#shouldRejectTokensWithTamperedPayloads` and `#shouldRejectTokensWithMissingRequiredClaims` both drop the signature and so are rejected by the parser; neither reaches the check its name states.
+* All eleven "warm-up race" methods of the four `IssuerConfigCache` concurrency classes and both `TokenValidatorConcurrencyTest` methods read an already immutable map; the named race is unreachable.
+* `NativeTokenValidatorProducerIT` never runs (its module binds no failsafe execution) and its body is `assert true`.
+* `TokenSheriffDevUIIntegrationTest` probably never runs the Dev-UI build steps it is named for; they are guarded by `IsDevelopment`.
+* Coverage gaps found while mapping: no test performs two key rotations, so the retired-key-set cap and the expired-set cleanup in `HttpJwksLoader` are never exercised; no test sends or asserts an ETag / 304 response; no test asserts that `MISSING_RECOMMENDED_ELEMENT` is ever counted.
+
+=== D. Hotspots
+
+==== D1. Why the top classes are slow
+
+[cols="3,1,3,1",options="header"]
+|===
+|Class |CI s |Cause |Inherent?
+
+|`HttpJwksLoaderIssuerTest` |29.9 |2 x retry backoff (A1) |no
+|`HttpJwksLoaderSchedulerTest` |18.6 |1 x retry backoff, 3 x scheduler tick |1 s yes
+|`HttpJwksLoaderFailureTest` |15.1 |1 x retry backoff |no
+|`HttpJwksLoaderWellKnownAsyncTest` |14.8 |1 x retry backoff |no
+|`HttpJwksLoaderGracePeriodTest` |8.8 |8 scheduler ticks, one 1.5 s fixed wait |≈0.6 s yes
+|`HttpJwksLoaderLockFreeStatusTest` |8.2 |fixed 5 s and 3 s observation windows |no
+|`HttpJwksLoaderKeyRotationTest` |5.6 |5 scheduler ticks |0.2 s yes
+|`RefreshProductionPathSpecIT` |37.8 |waits for a 35 s access token to expire |the wait yes; that nothing else runs meanwhile, no
+|`RefreshLifecycleSpecIT` |7.9 |waits 5 s for the proactive refresh window |yes
+|`DpopProofGeneratorTest` |4.5 |RSA-2048 + EC + Ed25519 in `@BeforeEach`, 34 times |no
+|`PrivateKeyJwtAuthTest` |3.5 |RSA-2048 in `@BeforeEach`, 15 times |no
+|`DpopProofValidatorTest`, `JweDecryptorTest` |2.8 each |27 and 29 RSA-2048 generations |no
+|`TestTokenHolderTest` |3.1 |two RSA-4096 and one RSA-3072 generation for kid/alg alignment tests |no
+|`RefreshPathCoverageGuardTest` |3.2 |ArchUnit import that bypasses the shared class cache; the same classes are imported twice per JVM |half
+|Several classes at 4-5 s |- |first user of the shared key material in their JVM (D2) |no
+|===
+
+[[fixtures]]
+==== D2. Shared fixtures every JVM pays for
+
+* *`InMemoryKeyMaterialHandler`* (validation `generators` test-jar, `:102-113`) eagerly generates ten key pairs in a static initialiser, including two RSA-4096 and two RSA-3072 pairs, although a lazy get-or-generate path exists at `:163-169`. Whichever test touches it first in a JVM pays ≈3-4 s on CI (inferred from first-toucher class times). That is once in the validation module, twice in the client module (surefire and failsafe), and once in each per-class JVM of the Quarkus module that uses test tokens. Consumers of the test-jar pay it too: the sibling project forks per class and measured 3-4.5 s in each of 15 classes. The key sizes follow from JJWT's defaults and were not inspected in the JJWT source.
+* *Per-test RSA key generation*: ≈93 generations in the validation pipeline, JWE, DPoP and attack tests and 58 in three client classes, at ≈0.1 s each on CI. In all of them the key is a fixture, not the subject. `KeyInjectionAttackTest#shouldRejectTokenWithMaliciousKidHeader` hides five generations, because every unknown key id triggers a new pair.
+* MockWebServer is created per test; cost is single-digit milliseconds. Not worth changing.
+* `DecryptionKeyLoaderTest:85-134` spawns `keytool` twice as a subprocess (≈2-4 s, estimated).
+* Integration tests acquire one token per test (≈80 password grants at 0.1-0.3 s). This keeps tests independent and is cheap; no change proposed.
+
+=== E. Other ideas, evaluated
+
+[cols="3,5,1",options="header"]
+|===
+|Idea |Evaluation |Verdict
+
+|CI caching: Maven repository |Already effective, every sampled run hit. The repository is restored twice per job. |Remove the duplicate (P8)
+|CI caching: native binary |Would save ≈205 s on a hit. The key would have to cover every `src/main` of seven modules, all POMs, the builder image digest and no SNAPSHOT dependency. A stale binary is a silent quality hole. |Not recommended
+|CI caching: Docker images |Five images pull in parallel in 9 s; saving and loading a tarball of that size is unlikely to beat it. |No
+|Keycloak optimised image |Probably 5-10 s of the 25-36 s, but the image would have to be published and it changes hostname behaviour the tests rely on. |Not now
+|Run `sonar-build` beside `build` |Removes one full build from the critical path. No test is dropped; Sonar still gates. Lives in `cuioss-organization`; the sibling project has the identical chain, so one change serves both. |Recommended (P1)
+|Fold the Java 21 leg into `sonar-build` |Same effect on wall-clock, additionally saves one runner per run. Larger change to the shared workflow. |Alternative to P1
+|Shard the IT suite across runners |Every shard would pay the ≈205 s native build unless the binary is shared. The one natural split is the 22 client-only IT classes, which need Keycloak but not the native application. |Possible (P4)
+|Skip lanes by changed path |The shared workflow already skips docs-only changes. Paths a lane cannot observe exist (for example `benchmarking/**` for both IT and E2E). This is running less. |Finding only
+|Skip the re-test on push to `main` |After the merge queue has passed, all three lanes run again on the same tree, `maven.yml` for 31 minutes, including a native build. Removing it saves runner time and no merge latency. This is running less. |Finding only
+|Reuse one built artifact across jobs |The IT and E2E lanes rebuild the upstream modules in ≈55 s each. Taking them from `build` would make both lanes wait ≈9 min for it. |No
+|Skip the frontend chain in the IT and E2E `install` |Node install, `npm install` and three lint steps run in five jobs but are consumed by neither lane. `maven.yml` keeps gating them. |Recommended (P12)
+|JVM-mode ITs with a native smoke set |What native uniquely proves was mapped: JCA crypto for JWE and DPoP, native TLS with the PKCS12 trust store, build-time CDI wiring of the producer and interceptor, Micrometer registration, Jackson reflection, the distroless runtime. That is 97 tests in 8 classes. A smoke set cannot be shown to keep that covered. |Not recommended
+|Native build flags |`quarkus.native.monitoring=jfr` sits unprofiled in `IT/src/main/resources/application.properties:154`, so the IT image compiles JFR in although its Dockerfile labels it disabled. Removing it for the IT lane is estimated at 5-15 s; `-Ob` for the IT profile at 35-45 s. Both unmeasured, and `-Ob` leaves optimisation-tier defects unexercised. |Measure first (P13)
+|A shorter-lived token for the expiry test |Would cut ≈27 s by lowering a 35 s lifetime to 10 s. It shortens a real wait and narrows the margin on slow runners. |Rejected in favour of P9
+|Flaky tests |In 14 days: 4 failed and 7 cancelled runs out of 312 across the three gating workflows, 5 re-run attempts. Reruns are not a material cost. The failures were not triaged. |No action
+|===
+
+[[proposals]]
+== Proposed changes, ordered by gain
+
+The order is by estimated gain per contributor pull request on the lane the change affects, largest first. On the build lane, `build` and `sonar-build` run in sequence today, so a saving in one Maven leg counts twice there; the "per PR" column shows the doubled figure. Gains on the integration-test and end-to-end lanes save runner time today and start to shorten time until green only once the build chain is faster than those lanes (see xref:expected-result[Expected result]).
+
+[cols="1,5,2,2,1,1",options="header"]
+|===
+|# |Change |Gain per run of the unit |Gain per PR, lane |Effort |Risk
+
+|P1
+|Organisation workflow: start `sonar-build` without waiting for `build`
+|-
+|≈570 s today, ≈280 s after P2-P16; build lane. Nothing on Dependabot pull requests
+|S
+|low, but shared
+
+|P2
+|Stop the `quarkus-jacoco` shutdown timeout in `token-sheriff-validation-quarkus` by disabling the Quarkus-side report
+|≈90 s per leg
+|≈180 s, build lane
+|S
+|low
+
+|P3
+|Reuse forks in the Quarkus modules' surefire run: one reused fork for the plain classes, one for the `@QuarkusTest` classes, with a guard test that fails when a class is in neither group
+|≈88 s per leg on top of P2 (≈168 s alone)
+|≈176 s, build lane
+|M
+|medium
+
+|P4
+|Run the 22 client-only IT classes in a parallel Keycloak-only job that feeds the required check
+|≈110 s
+|≈110 s, IT lane
+|L
+|medium
+
+|P5
+|Make well-known discovery honour the configured `retryConfig`, then use a fast one in the three discovery failure tests
+|≈45 s per leg
+|≈90 s, build lane
+|S
+|medium (production behaviour)
+
+|P6
+|Fast `RetryConfig` in the two direct-JWKS failure tests
+|≈30 s per leg
+|≈60 s, build lane
+|S
+|low
+
+|P7
+|`reuseForks=true` for failsafe in the integration-test module
+|43-75 s
+|≈60 s, IT lane
+|S
+|low
+
+|P8
+|Organisation workflow: Chromium-only Playwright system dependencies; one `~/.m2` restore instead of two
+|≈40 s E2E; ≈13 s IT; ≈10 s per build job
+|≈40 s, E2E lane
+|S
+|low, shared
+
+|P9
+|Let the 37 s expiry wait overlap other work: run the client-package IT classes concurrently, or hold the sessions of `RefreshProductionPathSpecIT` and `RefreshLifecycleSpecIT` through one wait. No lifetime is changed
+|up to ≈30 s
+|≤30 s, IT lane
+|M
+|low-medium
+
+|P10
+|Key fixtures: lazy `InMemoryKeyMaterialHandler`, shared static keys in the eleven key-generating classes, cheaper keys in `TestTokenHolderTest`
+|≈13 s per leg on the chain; ≈12 s more in the client module
+|≈26 s, build lane
+|M
+|low
+
+|P11
+|Drive the eleven rotation tests through `performBackgroundRefresh()`
+|≈13 s per leg
+|≈26 s, build lane
+|M
+|low
+
+|P12
+|Skip the frontend executions in the `install` lines of the IT and E2E workflows
+|≈26 s IT; ≈19 s E2E
+|≈26 s, IT lane
+|S
+|low
+
+|P13
+|Measure, then decide: no JFR in the IT native image; `-Ob` for the IT profile
+|5-45 s
+|5-45 s, IT lane
+|S
+|medium
+
+|P14
+|End the lock-free observer loops when initialisation completes plus a fixed number of reads
+|≈7.7 s per leg
+|≈15 s, build lane
+|S
+|low
+
+|P15
+|Small waits: repair `shouldHandleBackgroundRefreshCorrectly`, inject the eviction scheduler in `AccessTokenCacheTest`, one ArchUnit import instead of two
+|≈5 s per leg
+|≈10 s, build lane
+|S
+|low
+
+|P16
+|Start the application container after the Zitadel setup
+|≈7 s
+|≈7 s, IT lane
+|S
+|low
+|===
+
+Dependencies between proposals:
+
+* P2 needs a coverage comparison first (see below); P3 should be measured after P2, because their savings overlap.
+* P5 is a production change and needs its own decision; P6 is its test-only half and stands alone.
+* P1 and P8 are changes in `cuioss-organization` and affect every consuming repository.
+* P10's lazy key material changes the `generators` test-jar. Its gain grows for every consumer that forks per class: the sibling project pays the initialisation in 15 classes per `verify`, ≈45-65 s, and would shed it with the next Token-Sheriff release.
+* P4 overlaps with P7 and P9: its 110 s is measured against today's lane. Once forks are reused and the expiry wait overlaps other work, moving the client classes to their own job adds ≈35 s more.
+
+=== Why test quality is unchanged or better, per proposal
+
+P1:: Nothing about what is tested or gated changes; `conclusion` still requires both jobs. A failing `build` no longer prevents a Sonar run, which costs runner minutes on broken builds.
+
+P2:: No test is touched. The condition is that coverage does not move: `target/site/jacoco/jacoco.xml` of the module must show the same covered instructions and branches per class before and after, and the SonarCloud figure must not drop. The change is `quarkus.jacoco.report=false`; the extension and its `reuse-data-file` setting stay until the cause of the missing data file is understood. If the comparison shows that `@QuarkusTest` coverage is *not* in `jacoco.exec` today, the right fix is the Quarkus-documented alignment of agent and data file, which raises reported coverage.
+
+P3:: The same 38 classes and 405 tests run. The nine Quarkus classes boot two applications instead of nine; plain classes never share a JVM with a Quarkus application. Conditions: the test count stays at 405, the coverage report is identical, and no test turns out to depend on a fresh JVM. The guard test turns today's undocumented side effect into a declared rule. If the "class loading issues" resurface, they show as a failing build, not as a silent loss.
+
+P4:: Same classes, same Keycloak image and realms. Quality is unchanged only if the new job feeds a required check; otherwise 38 gating tests would become non-gating.
+
+P5:: The tests keep every assertion. The production change makes discovery honour a retry configuration the caller has set; callers who set none keep today's default. It needs a new test that pins the propagation, which is a gain. It is a behaviour change for the Quarkus integration, whose configured retry settings start applying to discovery.
+
+P6:: Same number of attempts, same failure path, same log assertions. Only the sleep between attempts shrinks. Pointing the DNS-based case at a closed loopback port additionally makes it hermetic.
+
+P7:: The same 135 tests run with 3 skips; JaCoCo is not active in this lane. The static caches involved are a concurrent discovery cache and identical RestAssured configuration.
+
+P8:: Not test-related. All three Playwright projects use Chromium only.
+
+P9:: Every assertion is kept and still observes a real expiry of the declared 35 s. No wait is shortened. `TokenValidationSpecIT#verifySecurityEventCounterMetrics` must stay sequential and last, because it asserts a cumulative count.
+
+P10:: The keys are fixtures. Distinct keys are kept wherever "the wrong key" is the subject (`DpopProofValidatorTest#shouldRejectInvalidSignature`, `JweDecryptorTest#shouldFailWithWrongKey`, `WiredNegativePathAttackTest` VTEST-6/9/14, `JkuX5uAttackTest`), explicit weak key sizes stay in `KeyInjectionAttackTest`, and replay protection stays per test. Lazy generation must become atomic (`computeIfAbsent`), which also removes a latent race. The refresh-path coverage gates are unaffected because no test logic changes.
+
+P11:: Better: the tests become deterministic instead of polling a 1 s scheduler. `HttpJwksLoaderSchedulerTest#shouldPerformBackgroundRefresh` stays on the real scheduler as the proof of wiring, and one real grace-period expiry wait stays. The synchronous seam also makes it cheap to add the missing two-rotation test for the retired-set cap.
+
+P12:: Lint, format check and Jest stay enforced by all three `maven.yml` jobs, which are a required check. The two lanes consume no generated frontend output; the Dev-UI sources are served from `src/main/resources`.
+
+P13:: Nothing in the IT lane asserts JFR. `-Ob` keeps reachability and reflection analysis identical but changes the optimisation tier; whether that is acceptable for the gating image is a judgement call, hence "measure, then decide".
+
+P14:: Better: observers run until the initialisation future completes and then perform a fixed number of extra reads, which covers the whole status transition by construction instead of by timing. All existing assertions stay.
+
+P15:: The scheduler test starts asserting a real background refresh instead of the initial load: better. The eviction test becomes deterministic. The ArchUnit guard keeps a byte-identical import scope and its non-vacuity check.
+
+P16:: The start script's end-to-end Zitadel validation still runs; it then passes on the first attempt instead of the tenth.
+
+=== Explicitly not proposed
+
+* Removing any duplicate for the sake of time (less than 5 s in total).
+* Reducing parameter counts (less than 3 s; a judgement call on generator variation).
+* `forkCount > 1` or JUnit parallel execution in the unit modules (blocked by the shared log handler; little to gain after P5, P6, P10, P11).
+* Native binary caching, JVM-mode integration tests on pull requests, path-based lane skipping, skipping the re-test on push to `main` (see E).
+* A shorter token lifetime for the expiry test (shortens a real wait; P9 reaches most of the time without it).
+* Moving `WiredFlowNegativePathIT` into surefire: 2-3 s after P10, and it reverses a documented decision.
+
+[[expected-result]]
+=== Expected result
+
+.Job times (estimates)
+[cols="4,1,2",options="header"]
+|===
+| |Today |After
+
+|`surefire` @ `token-sheriff-validation-quarkus` |273 s |≈95 s (P2, P3)
+|`surefire` @ `token-sheriff-validation` |136 s |≈35 s (P5, P6, P10, P11, P14, P15)
+|Maven time of one build leg |489 s |≈195 s
+|Job time of `build` + `sonar-build` in sequence |≈19m40s |≈10 min
+|The same with P1 (side by side) |- |≈5 min
+|`integration-tests / test` job |8m28s |≈6m15s with P7, P8, P9, P12, P16; ≈5m40s with P4 as well (its 110 s overlap with P7 and P9)
+|===
+
+These are job times, not time until green. Time until green also contains the waiting before `build` starts (median ≈6 min on contributor pull requests, addressed by no proposal) and cannot fall below the slowest required lane:
+
+* Today the build chain decides on contributor pull requests.
+* With the build-lane proposals and P1 the chain drops to ≈5 min of job time, below the integration-test lane (10m55s of wall-clock today). From then on the IT lane decides, and P4, P7, P9, P12, P13 and P16 shorten time until green instead of only saving runner time.
+* With everything in place the floor is roughly 8-9 minutes plus runner waiting, set by the integration-test lane (native build ≈3.5 min) and the end-to-end lane (7m18s today, ≈6m20s with P8 and P12).
+* Dependabot pull requests and the merge queue gain from the per-leg savings once, not twice, and nothing from P1. Their `maven.yml` run drops from ≈11 min to ≈6-7 min, which puts it below the integration-test lane, so for them too that lane then decides.
+
+== What could not be measured or verified
+
+Stated separately from what was measured and found fine.
+
+=== Not measured
+
+* Per-method unit-test durations on CI. `maven.yml` publishes no surefire reports; the method ranking comes from one local macOS run under load.
+* Every gain in xref:proposals[Proposed changes]. They are arithmetic on measured components.
+* The cause of the ≈350 s between trigger and build start on contributor pull requests.
+* The split of the first-use initialisation cost between key generation and other one-time work.
+* Native build flags (P13) and the Keycloak optimised image: estimates without a run.
+* The cause of the four failed runs in the 14-day window.
+
+=== Not verified
+
+* Why `jacoco-quarkus.exec` is never written, and therefore whether `@QuarkusTest` coverage already reaches `jacoco.exec`. P2 depends on this.
+* Whether the "class loading issues" behind `reuseForks=false` still exist, and whether a Quarkus application interferes with `@EnableTestLogger` classes in the same JVM. Only a build can tell.
+* Absence of cross-class state coupling under a shared JVM (read, not run).
+* JJWT default key sizes per algorithm (taken from documented behaviour).
+* Internals of `@EnableTestLogger` and `@EnableGeneratorController` (library code).
+* The default ignore globs of the shared workflow's path filter.
+* That `-Dskip.installnodenpm -Dskip.npm` skip the frontend chain as documented by the plugin.
+* `JwksHostnameVerificationTest#shouldAcceptSanMismatchWhenVerificationDisabled` took 17.4 s locally and is not slow on CI. Unexplained; treated as a local artefact.
+* In `token-sheriff-validation-quarkus`, 21 plain test classes were read at inventory level (annotations, sources, waits, statics), not line by line; the duplicate analysis inside them is not exhaustive.
+* The E2E Playwright specs were not compared with the Jest component tests for overlap.
+* `benchmark.yml` was measured but not analysed structurally; it is not gating.
+
+=== Measured and found fine
+
+* Dependency caches hit on every sampled run.
+* The compose stack starts once and is never reconfigured.
+* The integration-test lane does not repeat the unit suite.
+* The Java 25 leg costs no wall-clock, and no test is conditional on the Java version.
+* Flaky-test reruns are not a material cost (5 re-run attempts in 312 runs).
+* No `Thread.sleep` exists in any test of the validation, client or Quarkus modules or in the integration tests; the waits are Awaitility polls, latches and production retry.
+* The real-socket and real-TLS tests are cheap and have the socket as their subject.
+
+[[duplicate-pairs]]
+[appendix]
+== Genuine duplicate pairs
+
+Each row names the redundant test, the test that covers it, and the covering assertion. No removal is proposed; the list exists so that a removal, if ever wanted, can be checked. Line numbers refer to revision `b031ec36`.
+
+=== JWKS loader
+
+`KR` = `HttpJwksLoaderKeyRotationTest`, `GP` = `HttpJwksLoaderGracePeriodTest`, `Sched` = `HttpJwksLoaderSchedulerTest`, `Core` = `HttpJwksLoaderTest`.
+
+[cols="3,3,3",options="header"]
+|===
+|Redundant |Covered by |Covering assertion
+
+|KR `#shouldFindOriginalKeyInRetiredKeysWithinGracePeriod` (`:105`) |GP `#shouldKeepRetiredKeysAccessibleWithinGracePeriod` (`:237`) |same configuration and steps; original key present, rotated key present
+|KR `#shouldFindKeyInCurrentKeysAfterRotation` (`:67`) |GP `:237`, lines `:267-268` |rotated key present (strict subset)
+|KR `#shouldDisableGracePeriodWhenDurationIsZero` (`:218`) |GP `#shouldImmediatelyInvalidateRetiredKeysWithZeroGracePeriod` (`:191`) |original absent; GP additionally asserts rotated present
+|GP `#shouldCleanupExpiredRetiredKeysBeyondGracePeriod` (`:281`) |KR `#shouldNotFindKeyInRetiredKeysAfterGracePeriodExpires` (`:148`) |original absent after grace, rotated present. GP's extra refresh returns early on unchanged content and cleans nothing
+|KR `#shouldUseDefaultGracePeriodOf5Minutes` (`:257`) |GP `ConfigurationTests#shouldUseDefaultGracePeriodOf5Minutes` (`:86`) |same getter assertion; GP also checks the maximum of 3
+|KR `#shouldRespectMaximumRetiredKeySetsLimit` (`:196`), GP `#shouldEnforceMaxRetiredKeySetsLimit` (`:334`) |GP `ConfigurationTests` (`:100-112`) |all three assert only `getMaxRetiredKeySets() == 2`; none tests enforcement
+|Sched `#shouldNotStartSchedulerWithoutConfig` (`:63`) |Sched `#shouldNotStartSchedulerWithZeroInterval` (`:91`) |both use `refreshIntervalSeconds(0)` with identical assertions
+|Core `#shouldGetKeyInfoForTestKid` (`:104`), `#shouldVerifyKeyLoadingWorks` (`:112`), `#shouldVerifyTestKeyExists` (`:120`) |Core `#shouldGetKeyInfoById` (`:81`) |the same key lookup is present
+|`SimpleHttpJwksLoaderTest#caching` |Core `#shouldLoadKeysOnFirstAccess` (`:127`) |call counter unchanged on second access
+|`HttpJwksLoaderAsyncInitializationTest#multipleConcurrentInitCallsShouldBeSafe` (`:155`, three sequential calls) |`HttpJwksLoaderLockFreeStatusTest:222` |the same safety property with real concurrency
+|===
+
+=== Validation pipeline, domain and security
+
+[cols="3,3,3",options="header"]
+|===
+|Redundant |Covered by |Covering assertion
+
+|`TokenHeaderValidatorTest$EmbeddedJwkProtectionTests#shouldAcceptTokenWithoutEmbeddedJwk` (`:404-436`) |`$TokenTypeValidationTests#shouldAcceptTokenWhenNoExpectedTokenTypeConfigured` (`:443-467`) |identical config, header and `assertDoesNotThrow`
+|`TokenHeaderValidatorTest$KeyIdValidationTests#shouldRejectTokenWithMissingKidAndAllHeadersMissing` (`:295-334`) |`$AlgorithmValidationTests#shouldRejectTokenWithMissingAlgorithm` (`:167-198`) |`MISSING_CLAIM`, log and counter; move the one extra message assertion into the survivor
+|`AudienceValidatorTest#shouldPassWhenAudienceClaimIsSingleStringEvenIfUnexpectedValue` (`:130-144`) |`#shouldFailWhenSingleStringAudienceDoesNotMatch` (`:97-111`) |four identical assertions on a non-matching single string
+|`IdTokenValidationPipelineTest#shouldThrowExceptionForMissingIssuerWithDifferentToken` (`:100-117`) |`#shouldThrowExceptionWhenIssuerClaimIsMissing` (`:73-98`) |event type, message, log (survivor is stronger)
+|`RefreshTokenValidationPipelineTest#shouldHandleJwtWithMinimalClaims` (`:91-102`) |`#shouldValidateJwtRefreshTokenAndExtractClaims` (`:51-63`) |same generator; only `assertNotNull`
+|`TokenSignatureValidatorTest#shouldRejectAlgorithmConfusionAttack` (`:218-252`) |`#shouldRejectTokenWhenKeyNotFound` (`:155-189`) |`KEY_NOT_FOUND`, counter, log; keep the kid-specific log assertion `:248`
+|`TokenClaimValidatorEdgeCaseTest$NetworkFailureSimulationTests#shouldHandleNetworkFailuresDuringKeyRetrieval` (`:195-215`) |`TokenSignatureValidatorTest#shouldRejectTokenWhenKeyNotFound` |loader returns empty: key-not-found, generic `assertThrows` only
+|`TokenSignatureValidatorES256FormatTest#jjwtES256TokensNowWork` (`:85-98`) |`TokenSignatureValidatorAlgorithmTest#shouldValidateTokenWithValidSignatureForEcAlgorithms[ES256]` (`:151-164`) |JJWT ES256 token validates
+|`TokenSignatureValidatorTest#shouldValidateTokenWithValidSignature` (`:84-104`) |`TokenSignatureValidatorAlgorithmTest#shouldValidateTokenWithValidSignature[RS256]` (`:99-110`) |RS256 happy path
+|`pipeline/ParserConfigTest` (both tests) |`commons/transport/ParserConfigTest#shouldUseDefaultValues`, `#shouldAcceptCustomValues`, `#shouldCreateDslJsonWithSecuritySettings` |strict subset, same literals
+|`NonValidatingJwtParserTest$BuilderTests#shouldCreateBuilderWithDefaults` (`:260-270`), `$SecurityMeasuresTest#shouldUseCachedJsonReaderFactory` (`:457-473`) |`$ValidTokenTests#shouldDecodeValidToken` (`:70-105`) |same builder and token; assertions are a subset
+|`NonValidatingJwtParserJweTest$EdgeCases#shouldTrackSecurityEventsForJweWithoutConfig` (`:229-243`) |`$JweTokenHandling#shouldThrowWhenJweReceivedButNoConfig` (`:85-101`) |identical input; carry the counter assertion over
+|`#shouldHandleEmptyJsonObject` in `IdentityMapperTest` (`:150`), `JsonCollectionMapperTest` (`:193`), `ScopeMapperTest` (`:243`), `OffsetDateTimeMapperTest` (`:158`) |the `#shouldHandleMissingClaim` directly above each |byte-identical bodies, `assertNull`
+|`ClaimNameTest#shouldFindClaimNameByString` (`:319-326`) |`#shouldFindAllClaimNamesByString` (`:328-336`) |the loop includes the same constant and assertions
+|`ValidationContextTest$IsTokenAgeValidationEnabled#shouldReturnFalseWhenDisabled` (`:128-133`) |`$Constructors#threeArgWithNullMaxAge` (`:85-91`) |same constructor call and `assertFalse`
+|`BaseTokenContentTest#shouldReturnClaimOptionCorrectly`, `#shouldReturnEmptyClaimOptionWhenClaimIsNotPresent` and its inherited object-contract tests |`TokenContentTest#shouldGetClaimByName` (`:61-71`); contract tests in `AccessTokenContentTest` (`:55`, `:418`) |the "base" tests instantiate `AccessTokenContent`; the contract runs twice on one class
+|`MinimalTokenContentTest#shouldProvideRawTokenAccess`, `#shouldProvideTokenTypeAccess`, `#shouldHandleLongRawToken`, `#shouldMaintainConsistencyAcrossCalls` |`UnvalidatedRefreshTokenTest#shouldCreateUnvalidatedRefreshTokenWithValidToken` (`:48-49`) |getter returns the constructor argument
+|`TokenValidationRuleTest#shouldSupportLambdaAsFunctionalInterface` (`:157-178`) |`#shouldAcceptTokenWhenRulePasses` (`:65-80`) |one passing lambda rule, `assertNotNull`
+|`EventCategoryTest#shouldProvideConsistentOrdinalValues` |`#shouldContainAllExpectedValues` (`:37-41`) |`assertArrayEquals` on `values()` implies the ordinals
+|`MandatoryClaimsValidatorTest#shouldContrastClaimSubOptionalBehavior` (`:254-290`) |`#shouldFailValidationWhenSubjectClaimIsMissing` (`:89`) and `#shouldSkipSubjectClaimValidationWhenClaimSubOptionalIsTrue` (`:200`) |union of the two existing tests
+|`TokenValidationSecurityTest#shouldRejectTokensWithMissingRequiredClaims` (`:128-155`) |`#shouldRejectTokensWithTamperedPayloads` (`:78-97`) |both submit a token without signature and assert a generic exception
+|===
+
+=== Quarkus layer and deployment
+
+`DevUI` = `TokenSheriffDevUIRuntimeServiceTest`.
+
+[cols="3,3,3",options="header"]
+|===
+|Redundant |Covered by |Covering assertion
+
+|`TokenValidatorHealthCheckTest#healthCheckValidConfiguration` (`:98-114`) |`#healthCheckShouldReturnUpStatus`, `#healthCheckName`, `#healthCheckDataForUpStatus` (`:52-96`) |UP, name `jwt-validator`, `issuerCount` present
+|`JwksEndpointHealthCheckTest#healthCheckValidConfiguration` (`:163-179`) |`#healthCheckShouldReturnUpStatus`, `#healthCheckName`, `#healthCheckDataForUpStatus` (`:62-108`) |UP, name, `checkedEndpoints`
+|`JwksEndpointHealthCheckTest#healthCheckBeanIsInjected` (`:56-60`) |every other injected-bean test of the class |non-null bean
+|`MetricsIntegrationTest#shouldRegisterMetricsForAllSecurityEventTypes` (`:77-98`) |`JwtMetricsCollectorTest#shouldInitializeMetrics` (`:69-99`) |error counter per event type; survivor also checks success counters
+|`JwtMetricsCollectorTest#shouldRebaselineOnExternalCounterReset` (`:127-164`) |`JwtMetricsCollectorRebaselineTest#rebaselinesAfterExternalReset` (`:82-106`) |export, reset, unchanged total, +1. They differ in event family; the survivor must cover both
+|`JwtMetricsCollectorTest#shouldExportEventsRecordedBeforeInitialization` (`:166-185`) |`JwtMetricsCollectorRebaselineTest#exportsPreInitializationEvents` (`:67-79`) |two pre-initialisation events exported; same caveat
+|DevUI `#shouldCorrectlyDetermineJwtEnabledStatus...` (`:104-119`) |DevUI `#shouldReturnValidationStatusWithCurrentConfiguration` (`:84-102`) |enabled, message, validator present
+|DevUI `#shouldReturnJwksStatusWithCurrentConfiguration` (`:156-167`), `#shouldHandleGetJwksStatusEdgeCases` (`:506-517`) |DevUI `#shouldCorrectlyListConfiguredIssuersWithDetails` (`:170-189`) |status and issuers present
+|DevUI `#shouldReturnConfigurationInformation` (`:198-208`), `#shouldHandleGetConfigurationEdgeCases` (`:489-502`) |DevUI `#shouldHaveConsistentConfigurationStructure` (`:211-233`) |key presence; keep `maxTokenSize > 0` (`:501`)
+|DevUI `#shouldReturnErrorForEmptyToken` (`:252-259`) |DevUI `#shouldHandleWhitespaceOnlyToken` (`:428-438`) |blank token gives "Token is empty or null"
+|`TokenSheriffProcessorTest#jwtConfigAvailable` (`:53-64`); `TokenSheriffDevUIIntegrationTest#devUIBuildStepsExist` (`:56-72`) |`TokenSheriffIntegrationTest#multipleIssuersConfiguration` (`:55-74`); `TokenSheriffProcessorBuildStepTest#shouldCreateDevUICard`, `#shouldCreateDevUIJsonRPCService` (`:124-140`) |raw `Config` reads of the default issuer; direct calls to the same two processor methods
+|===
+
+=== Client
+
+Paths under `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/`.
+
+[cols="3,3,3",options="header"]
+|===
+|Redundant |Covered by |Covering assertion
+
+|`flow/MixUpDefenseTest:52` |`flow/IssValidatorTest:73` |`assertThrows(ClientProtocolException)` `:76`, WARN `:77`
+|`flow/MixUpDefenseTest:62` |`flow/IssValidatorTest:52` |`assertDoesNotThrow` `:55`
+|`flow/MixUpDefenseTest:71` |`flow/IssValidatorTest:82` |`:85`, WARN `:86`
+|`flow/MixUpDefenseTest:81` (`@RepeatedTest(20)`) |`flow/IssValidatorTest:73` |`:76`; repetitions vary only a random host label
+|`flow/CodeInjectionTest:48` (`@RepeatedTest(20)`) |`flow/CallbackHandlerTest:89` |`:93`
+|`flow/CodeInjectionTest:72` |`flow/CallbackHandlerTest:98` |`:102`
+|`flow/CodeInjectionTest:82` |`flow/CallbackHandlerTest:53` |`:60`
+|`flow/PkceDowngradeTest:119` |`flow/PkceChallengeTest:42` |`:46`
+|`auth/WeakAuthRefusedTest:93` |`auth/ClientAuthenticationSelectorTest:92` |`assertSame(basic, selected)` `:99`
+|`auth/WeakAuthRefusedTest:119` |`auth/ClientAuthenticationSelectorTest:80` |`assertSame(privateKeyJwt, selected)` `:87`
+|`discovery/DiscoveryAdversarialTest:67` |`discovery/DiscoveryResolverTest:129` |`TransportException` `:135`, call counter 0 `:137`, WARN `:139`
+|`token/UserInfoClientTest:125` |`hardening/RetrievalParsingAttackDatabaseTest:91` |`:100` and message checks `:105-109`; not confirmed that both bodies trip the same limit
+|`flow/WiredFlowNegativePathIT:206` |`token/RefreshAdversarialTest:87` |`revoked(rt1)` `:114`, session cleared `:119`; differs only in phase and packaged jar
+|===
+
+=== Integration tests
+
+[cols="3,3,3",options="header"]
+|===
+|Redundant |Covered by |Covering assertion
+
+|`TokenRequestSpecIT#tokenRequestDeserialization` (`:39-49`) |`ApiValidationSpecIT$InvalidTokenFormatTests#validateExplicitTokenInvalidFormat` (`:300-310`) |same endpoint, body shape and three assertions
+|`ApiValidationSpecIT#tokenRequestIsEmptyConsistency` (`:396-433`) |`$EmptyTokenTests` (`:96-136`), `$WhitespaceTokenTests` (`:147-187`) |same endpoints, inputs and messages
+|`TokenValidationSpecIT#missingTokenReturns401`, `#invalidTokenReturns401` (`:177-199`) |`ApiValidationSpecIT#validateTokenMissingAuthorizationHeader`, `#validateTokenInvalidAuthorizationToken` (`:351-390`) |401; the survivor also asserts the message
+|`ClientCredentialsSpecIT#shouldIssueClientCredentialsToken` (`:58-80`) |`ClientAuthSpecIT#shouldAuthenticateWithClientSecretPost` (`:81-94`) |same grant, realm and client; the redundant one uses no production class
+|`RefreshSpecIT#shouldRefreshAndRotate` |`RefreshProductionPathSpecIT#shouldRotateThroughProductionRefreshFlow` (`:88-120`) |rotation through production `RefreshFlow` with validation; different realm
+|`RevocationSpecIT#shouldRevokeRefreshToken` |`RefreshErrorPathSpecIT#shouldSurfaceRevokedRefreshTokenAsTypedFailure` (`:92-112`) |production `RevocationClient`; proves the revocation took effect
+|`DpopSpecIT#shouldStillAcceptBearerTokenWithoutDpop` (`:112-123`), `JweDecryptionSpecIT#shouldStillValidateRegularJwsTokens` (`:112-123`) |`TokenValidationSpecIT#validateAccessToken[Keycloak/integration]` (`:58-70`) |identical request against the one application configuration
+|===
