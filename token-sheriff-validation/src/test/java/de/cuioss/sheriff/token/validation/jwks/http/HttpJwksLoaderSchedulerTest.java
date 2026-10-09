@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.jwks.http;
 
+import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Optional;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -312,10 +314,18 @@ class HttpJwksLoaderSchedulerTest {
         // Make all requests fail from the start
         moduleDispatcher.returnError();
 
+        // Default number of attempts, so the retry path is exercised in full, with millisecond delays
+        // instead of the default 1 + 2 + 4 + 8 s backoff.
+        RetryConfig fastRetry = RetryConfig.builder()
+                .initialDelay(Duration.ofMillis(1))
+                .maxDelay(Duration.ofMillis(5))
+                .build();
+
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .refreshIntervalSeconds(1)
+                .retryConfig(fastRetry)
                 .build();
 
         HttpJwksLoader loader = new HttpJwksLoader(config);

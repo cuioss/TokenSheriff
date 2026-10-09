@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.validation.jwks.http;
 
 import de.cuioss.http.client.HttpLogMessages;
+import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -39,6 +41,15 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("HttpJwksLoader Issuer Identifier Tests")
 @EnableMockWebServer
 class HttpJwksLoaderIssuerTest {
+
+    /**
+     * Retry configuration for the failure tests: the default number of attempts, so the retry path is
+     * exercised in full, with millisecond delays instead of the default 1 + 2 + 4 + 8 s backoff.
+     */
+    private static final RetryConfig FAST_RETRY = RetryConfig.builder()
+            .initialDelay(Duration.ofMillis(1))
+            .maxDelay(Duration.ofMillis(5))
+            .build();
 
     @Getter
     private final WellKnownDispatcher moduleDispatcher = new WellKnownDispatcher();
@@ -93,6 +104,7 @@ class HttpJwksLoaderIssuerTest {
         // Create HttpJwksLoader with well-known config
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
+                .retryConfig(FAST_RETRY)
                 .build();
 
         jwksLoader = new HttpJwksLoader(config);
@@ -210,6 +222,7 @@ class HttpJwksLoaderIssuerTest {
         // This will cause the config to fail and return empty issuer
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl("https://invalid.example.com/.well-known/openid-configuration")
+                .retryConfig(FAST_RETRY)
                 .build();
 
         jwksLoader = new HttpJwksLoader(config);

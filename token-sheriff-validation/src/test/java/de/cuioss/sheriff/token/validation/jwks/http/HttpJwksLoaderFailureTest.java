@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.validation.jwks.http;
 
 import de.cuioss.http.client.HttpLogMessages;
+import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -58,10 +60,18 @@ class HttpJwksLoaderFailureTest {
     @Test
     @DisplayName("Should log JWKS_LOAD_FAILED when HTTP connection cannot be established")
     void shouldLogJwksLoadFailedWhenHttpConnectionFails() {
+        // Default number of attempts, so the retry path is exercised in full, with millisecond delays
+        // instead of the default 1 + 2 + 4 + 8 s backoff.
+        RetryConfig fastRetry = RetryConfig.builder()
+                .initialDelay(Duration.ofMillis(1))
+                .maxDelay(Duration.ofMillis(5))
+                .build();
+
         // Create loader with invalid URL to simulate connection failure
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl("http://invalid-host-that-does-not-exist:9999/jwks")
                 .issuerIdentifier("test-issuer")
+                .retryConfig(fastRetry)
                 .build();
 
         try (HttpJwksLoader failingLoader = new HttpJwksLoader(config)) {

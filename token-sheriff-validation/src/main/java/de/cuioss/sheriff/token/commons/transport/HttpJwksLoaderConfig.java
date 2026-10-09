@@ -662,10 +662,15 @@ public class HttpJwksLoaderConfig {
 
         /**
          * Sets the retry configuration for HTTP operations.
+         * <p>
+         * The setting applies on both configuration branches: to the JWKS fetches and, for a
+         * discovery-configured endpoint, to the well-known discovery request as well — it is forwarded
+         * to the {@link WellKnownConfig} created in {@link #build()}. If not set, or set to {@code null},
+         * {@link RetryConfig#defaults()} is used for both.
          *
-         * @param retryConfig the retry configuration to use for HTTP requests
+         * @param retryConfig the retry configuration to use for the JWKS and the well-known discovery
+         *                    requests; {@code null} selects {@link RetryConfig#defaults()}
          * @return this builder instance
-         * @throws IllegalArgumentException if retryConfig is null
          */
         public HttpJwksLoaderConfigBuilder retryConfig(RetryConfig retryConfig) {
             this.retryConfig = retryConfig;
@@ -749,7 +754,7 @@ public class HttpJwksLoaderConfig {
             if (endpointSource == EndpointSource.WELL_KNOWN_URL || endpointSource == EndpointSource.WELL_KNOWN_URI) {
                 // Build WellKnownConfig with the resolved ParserConfig
                 var wkBuilder = WellKnownConfig.builder()
-                        .retryConfig(RetryConfig.defaults())
+                        .retryConfig(retryConfig)
                         .parserConfig(resolvedParserConfig)
                         .allowInsecureHttp(allowInsecureHttp)
                         .allowLoopbackEgress(allowLoopbackEgress)
