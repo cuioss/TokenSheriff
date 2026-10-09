@@ -98,6 +98,7 @@ class NonValidatingJwtParserJweTest {
             TokenValidationException ex = assertThrows(TokenValidationException.class,
                     () -> parser.decode(jwe));
             assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_NOT_CONFIGURED, ex.getEventType());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_NOT_CONFIGURED));
         }
 
         @Test
@@ -224,22 +225,6 @@ class NonValidatingJwtParserJweTest {
             assertEquals("RS256", decoded.header().alg());
             assertTrue(decoded.getIssuer().isPresent());
             assertEquals(ISSUER, decoded.getIssuer().get());
-        }
-
-        @Test
-        @DisplayName("Should track security events for JWE without config")
-        void shouldTrackSecurityEventsForJweWithoutConfig() {
-            String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
-                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
-                    "RS256", "RSA-OAEP", "A256GCM", ISSUER, null);
-
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .build();
-
-            assertThrows(TokenValidationException.class, () -> parser.decode(jwe));
-            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_NOT_CONFIGURED));
         }
     }
 }

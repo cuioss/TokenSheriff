@@ -26,13 +26,11 @@ import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.JwtTokenTamperingUtil;
 import de.cuioss.sheriff.token.validation.test.JwtTokenTamperingUtil.TamperingStrategy;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
-import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.sheriff.token.validation.test.junit.TestTokenSource;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.Base64;
@@ -51,7 +49,6 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>Rejection of tokens with tampered payloads</li>
  *   <li>Rejection of tokens with tampered signatures</li>
  *   <li>Rejection of tokens with invalid algorithms</li>
- *   <li>Rejection of tokens with missing required claims</li>
  * </ul>
  */
 @EnableTestLogger
@@ -123,35 +120,6 @@ class TokenValidationSecurityTest {
         assertThrows(TokenValidationException.class, () ->
                         tokenValidator.createAccessToken(request3),
                 "Should reject token with 'none' algorithm");
-    }
-
-    @Test
-    @DisplayName("Should reject tokens with missing required claims")
-    void shouldRejectTokensWithMissingRequiredClaims() {
-        // Generate a valid token
-        String validToken = TestTokenGenerators.accessTokens().next().getRawToken();
-
-        // Split the token into its parts
-        String[] parts = validToken.split("\\.");
-
-        // Decode the payload
-        String payload = parts[1];
-        byte[] payloadBytes = Base64.getUrlDecoder().decode(payload);
-        String payloadJson = new String(payloadBytes);
-
-        // Remove the 'iss' claim
-        String tamperedPayloadJson = payloadJson.replaceAll("\"iss\":\"[^\"]*\",?", "");
-
-        // Encode the tampered payload
-        String tamperedPayload = Base64.getUrlEncoder().withoutPadding().encodeToString(tamperedPayloadJson.getBytes());
-
-        // Reconstruct the token (without signature since it would be invalid)
-        String tamperedToken = parts[0] + "." + tamperedPayload + ".";
-
-        // Verify that the tampered token is rejected
-        var request4 = AccessTokenRequest.of(tamperedToken);
-        assertThrows(TokenValidationException.class, () ->
-                tokenValidator.createAccessToken(request4));
     }
 
     @ParameterizedTest

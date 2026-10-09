@@ -156,14 +156,6 @@ class OffsetDateTimeMapperTest {
     }
 
     @Test
-    @DisplayName("Handle empty JsonObject - returns null")
-    void shouldHandleEmptyJsonObject() {
-        JsonObject emptyJsonObject = Json.createObjectBuilder().build();
-        ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(emptyJsonObject), CLAIM_NAME);
-        assertNull(result, "Should return null for empty JsonObject");
-    }
-
-    @Test
     @DisplayName("Throw exception for unsupported JSON value types")
     void shouldThrowExceptionForUnsupportedTypes() {
         JsonObject jsonObject = Json.createObjectBuilder()

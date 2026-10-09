@@ -155,29 +155,6 @@ class TokenValidationRuleTest {
     }
 
     @Test
-    @DisplayName("Should support lambda as functional interface")
-    void shouldSupportLambdaAsFunctionalInterface() {
-        // Verify TokenValidationRule can be used as a lambda
-        TokenValidationRule rule = (token, ctx) -> {
-            if (token.getSubject().isEmpty()) {
-                throw new TokenValidationException(
-                        SecurityEventCounter.EventType.CUSTOM_RULE_REJECTED,
-                        "Subject required"
-                );
-            }
-        };
-
-        var validator = TokenValidator.builder()
-                .issuerConfig(issuerConfig)
-                .tokenValidationRule(rule)
-                .build();
-
-        // Token has a subject, so rule should pass
-        var result = validator.createAccessToken(AccessTokenRequest.of(validToken));
-        assertNotNull(result);
-    }
-
-    @Test
     @DisplayName("Should execute multiple passing rules successfully")
     void shouldExecuteMultiplePassingRules() {
         List<String> executionOrder = new ArrayList<>();

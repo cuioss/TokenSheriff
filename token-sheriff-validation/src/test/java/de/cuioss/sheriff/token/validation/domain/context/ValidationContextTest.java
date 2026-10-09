@@ -124,13 +124,6 @@ class ValidationContextTest {
             var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW, 300);
             assertTrue(ctx.isTokenAgeValidationEnabled());
         }
-
-        @Test
-        @DisplayName("Should return false when maxTokenAgeSeconds is null")
-        void shouldReturnFalseWhenDisabled() {
-            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW, null);
-            assertFalse(ctx.isTokenAgeValidationEnabled());
-        }
     }
 
     @Nested

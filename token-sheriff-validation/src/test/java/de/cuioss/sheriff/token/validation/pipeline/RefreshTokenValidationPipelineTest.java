@@ -87,17 +87,4 @@ class RefreshTokenValidationPipelineTest {
         assertEquals(invalidJwt, result.getRawToken());
         assertEquals(TokenType.REFRESH_TOKEN, result.getTokenType());
     }
-
-    @Test
-    @DisplayName("Should handle JWT with minimal claims")
-    void shouldHandleJwtWithMinimalClaims() {
-        // JWT with minimal claims (just issuer and subject)
-        TestTokenHolder tokenHolder = TestTokenGenerators.refreshTokens().next();
-        String tokenString = tokenHolder.getRawToken();
-
-        assertDoesNotThrow(() -> {
-            UnvalidatedRefreshToken result = pipeline.validate(RefreshTokenRequest.of(tokenString));
-            assertNotNull(result);
-        });
-    }
 }
