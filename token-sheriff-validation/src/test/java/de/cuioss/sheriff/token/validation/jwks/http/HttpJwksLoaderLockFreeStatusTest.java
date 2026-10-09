@@ -41,6 +41,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnableMockWebServer
 class HttpJwksLoaderLockFreeStatusTest {
 
+    /** Status reads an observer thread still performs once the initialisation has completed. */
+    private static final int READS_AFTER_COMPLETION = 20;
+
     @Getter
     private final JwksResolveDispatcher moduleDispatcher = new JwksResolveDispatcher();
 
@@ -142,6 +145,8 @@ class HttpJwksLoaderLockFreeStatusTest {
             int observerThreadCount = 50;
             try (ExecutorService observerExecutor = Executors.newFixedThreadPool(observerThreadCount)) {
                 CountDownLatch observerLatch = new CountDownLatch(observerThreadCount);
+                CountDownLatch observersStarted = new CountDownLatch(observerThreadCount);
+                CompletableFuture<LoaderStatus> initCompleted = new CompletableFuture<>();
                 AtomicInteger undefinedObservations = new AtomicInteger(0);
                 AtomicInteger loadingObservations = new AtomicInteger(0);
                 AtomicInteger okObservations = new AtomicInteger(0);
@@ -154,10 +159,15 @@ class HttpJwksLoaderLockFreeStatusTest {
                         try {
                             LoaderStatus previousStatus = null;
 
-                            // Observe status changes for up to 5 seconds
-                            long endTime = System.currentTimeMillis() + 5000;
-                            while (System.currentTimeMillis() < endTime) {
+                            // Observe status changes until the initialisation has completed, then
+                            // perform a fixed number of further reads
+                            int readsAfterCompletion = 0;
+                            while (readsAfterCompletion < READS_AFTER_COMPLETION) {
+                                if (initCompleted.isDone()) {
+                                    readsAfterCompletion++;
+                                }
                                 LoaderStatus currentStatus = loader.getLoaderStatus();
+                                observersStarted.countDown();
 
                                 // Count observations of each status
                                 switch (currentStatus) {
@@ -187,12 +197,13 @@ class HttpJwksLoaderLockFreeStatusTest {
                     });
                 }
 
-                // Start async initialization after observers are running
-                Awaitility.await().pollDelay(Duration.ofMillis(100)).until(() -> true); // Give observers time to start
+                // Start async initialization once every observer has read the status at least once
+                assertTrue(observersStarted.await(10, TimeUnit.SECONDS), "All observer threads should start");
                 CompletableFuture<LoaderStatus> initFuture = loader.initJWKSLoader(counter);
 
-                // Wait for initialization to complete
+                // Wait for initialization to complete and let the observers finish their further reads
                 LoaderStatus finalStatus = initFuture.join();
+                initCompleted.complete(finalStatus);
 
                 // Wait for all observer threads to complete
                 boolean observersCompleted = observerLatch.await(10, TimeUnit.SECONDS);
@@ -235,6 +246,7 @@ class HttpJwksLoaderLockFreeStatusTest {
             try (ExecutorService executor = Executors.newFixedThreadPool(initThreadCount + statusCheckThreadCount)) {
                 CountDownLatch startLatch = new CountDownLatch(1);
                 CountDownLatch endLatch = new CountDownLatch(initThreadCount + statusCheckThreadCount);
+                CountDownLatch initDone = new CountDownLatch(initThreadCount);
                 AtomicInteger statusCheckSuccesses = new AtomicInteger(0);
                 AtomicInteger initSuccesses = new AtomicInteger(0);
                 AtomicInteger initOkResults = new AtomicInteger(0);
@@ -259,6 +271,7 @@ class HttpJwksLoaderLockFreeStatusTest {
                             Thread.currentThread().interrupt();
                             initInterruptedException.compareAndSet(null, e);
                         } finally {
+                            initDone.countDown();
                             endLatch.countDown();
                         }
                     });
@@ -270,9 +283,13 @@ class HttpJwksLoaderLockFreeStatusTest {
                         try {
                             startLatch.await();
 
-                            // Check status repeatedly for 3 seconds
-                            long endTime = System.currentTimeMillis() + 3000;
-                            while (System.currentTimeMillis() < endTime) {
+                            // Check status repeatedly until every initialisation has completed, then
+                            // perform a fixed number of further reads
+                            int readsAfterCompletion = 0;
+                            while (readsAfterCompletion < READS_AFTER_COMPLETION) {
+                                if (initDone.getCount() == 0) {
+                                    readsAfterCompletion++;
+                                }
                                 LoaderStatus status = loader.getLoaderStatus();
                                 assertNotNull(status, "Status should never be null");
 

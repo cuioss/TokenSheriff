@@ -33,9 +33,9 @@ import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 
-import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 @EnableTestLogger
@@ -613,17 +613,26 @@ class AccessTokenCacheTest {
 
     @Test
     void evictionExecutorRemovesExpiredTokens() {
-        // Given - cache with eviction interval of 1 second
+        // Given - cache whose eviction task is handed to an injected scheduler, so the test runs the
+        // tick itself instead of waiting for a real one
         cache.shutdown();
-        AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
-                .maxSize(10) // Reduced size
-                .evictionIntervalSeconds(1L) // Run eviction every second
-                .build();
-        cache = new AccessTokenCache(config, securityEventCounter, 0);
+        TickCapturingScheduler scheduler = new TickCapturingScheduler();
+        try {
+            AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
+                    .maxSize(10) // Reduced size
+                    .evictionIntervalSeconds(300L)
+                    .scheduledExecutorService(scheduler)
+                    .build();
+            cache = new AccessTokenCache(config, securityEventCounter, 0);
 
-        // Pre-expire the tokens (TTL already in the past) so the background eviction executor removes
-        // them on its next scheduled tick without any ~2 s wall-clock wait for the expiry transition.
-        // Only the executor's 1 s scheduling interval remains — not a token-TTL sleep.
+            assertEvictionTickRemovesExpiredTokens(scheduler);
+        } finally {
+            scheduler.shutdownNow();
+        }
+    }
+
+    private void assertEvictionTickRemovesExpiredTokens(TickCapturingScheduler scheduler) {
+        // Pre-expire the tokens (TTL already in the past) so one eviction tick removes them
         OffsetDateTime expirationTime = OffsetDateTime.now().minusSeconds(1);
         for (int i = 0; i < 5; i++) {
             String rawToken = "raw-token-" + i;
@@ -641,13 +650,9 @@ class AccessTokenCacheTest {
         // Then - verify all 5 tokens are in cache
         assertEquals(5, cache.size());
 
-        // Await only the background executor's next scheduled tick (interval 1 s); the tokens are
-        // already past their TTL, so there is no wall-clock wait for the expiry transition itself.
-        await()
-                .atMost(4, TimeUnit.SECONDS)
-                .pollInterval(200, TimeUnit.MILLISECONDS)
-                .untilAsserted(() ->
-                        assertEquals(0, cache.size(), "All expired tokens should be evicted"));
+        // One eviction tick, run by the test: the tokens are already past their TTL
+        scheduler.tick();
+        assertEquals(0, cache.size(), "All expired tokens should be evicted");
 
         // Verify we can still add new tokens after eviction
         String newToken = "new-token-after-eviction";
@@ -666,6 +671,40 @@ class AccessTokenCacheTest {
         assertEquals(1, cache.size());
     }
 
+    /**
+     * A scheduler that keeps the periodic task it is handed instead of running it on a timer, so a test
+     * triggers each tick itself.
+     */
+    private static final class TickCapturingScheduler extends ScheduledThreadPoolExecutor {
+
+        private final AtomicReference<Runnable> periodicTask = new AtomicReference<>();
+
+        TickCapturingScheduler() {
+            super(1);
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
+            return capture(command);
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
+            return capture(command);
+        }
+
+        private ScheduledFuture<?> capture(Runnable command) {
+            periodicTask.set(command);
+            // A placeholder that never fires within a test run, so the cache holds a cancellable future
+            return super.schedule(() -> { }, 1, TimeUnit.DAYS);
+        }
+
+        void tick() {
+            Runnable task = periodicTask.get();
+            assertNotNull(task, "The cache should have scheduled its eviction task");
+            task.run();
+        }
+    }
 
     @Test
     void shutdownDoesNotStopCallerSuppliedExecutor() {

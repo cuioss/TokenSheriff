@@ -33,8 +33,6 @@ import java.util.Optional;
 import java.util.concurrent.locks.LockSupport;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -72,7 +70,7 @@ class HttpJwksLoaderKeyRotationTest {
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .keyRotationGracePeriod(Duration.ofMillis(100)) // 100ms grace period
-                .refreshIntervalSeconds(1) // Enable background refresh for testing
+                .refreshIntervalSeconds(0) // No scheduler: the test drives the refresh itself
                 .build();
 
         HttpJwksLoader loader = new HttpJwksLoader(config);
@@ -83,19 +81,14 @@ class HttpJwksLoaderKeyRotationTest {
         Optional<KeyInfo> originalKey = loader.getKeyInfo(ORIGINAL_KEY_ID);
         assertTrue(originalKey.isPresent(), "Original key should be found initially");
 
-        // Rotate keys
+        // Rotate keys and pick the rotation up with one refresh cycle
         moduleDispatcher.switchToOtherPublicKey();
+        loader.performBackgroundRefresh();
+        assertTrue(loader.getKeyInfo(ROTATED_KEY_ID).isPresent(), "Rotated key should be found after the refresh");
 
-        // Wait for rotation
-        await("Key rotation to complete")
-                .atMost(10, SECONDS)
-                .until(() -> {
-                    Optional<KeyInfo> newKey = loader.getKeyInfo(ROTATED_KEY_ID);
-                    return newKey.isPresent();
-                });
-
-        // Wait (longer than the grace period) for the retired key to expire. A lightweight park
-        // rather than Awaitility, whose polling machinery is unnecessary for a fixed pause.
+        // Wait (longer than the grace period) for the retired key to expire. This is a real expiry
+        // wait: a lightweight park rather than Awaitility, whose polling machinery is unnecessary
+        // for a fixed pause.
         LockSupport.parkNanos(MILLISECONDS.toNanos(200));
 
         // Original key should no longer be accessible
@@ -119,7 +112,7 @@ class HttpJwksLoaderKeyRotationTest {
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .keyRotationGracePeriod(Duration.ofMinutes(5))
-                .refreshIntervalSeconds(1) // Enable background refresh for testing
+                .refreshIntervalSeconds(0) // No scheduler: the test drives the refresh itself
                 .build();
 
         HttpJwksLoader loader = new HttpJwksLoader(config);
@@ -133,10 +126,10 @@ class HttpJwksLoaderKeyRotationTest {
         int callsBefore = moduleDispatcher.getCallCounter();
         moduleDispatcher.returnEmptyJwks();
 
-        // Wait until at least one background refresh has actually fetched the empty JWKS.
-        await("At least one refresh against the empty endpoint")
-                .atMost(10, SECONDS)
-                .until(() -> moduleDispatcher.getCallCounter() > callsBefore);
+        // One refresh cycle fetches the empty JWKS.
+        loader.performBackgroundRefresh();
+        assertTrue(moduleDispatcher.getCallCounter() > callsBefore,
+                "The refresh should have fetched the empty JWKS");
 
         // The empty refresh must NOT have retired the previously-good key set.
         assertTrue(loader.getKeyInfo(ORIGINAL_KEY_ID).isPresent(),
