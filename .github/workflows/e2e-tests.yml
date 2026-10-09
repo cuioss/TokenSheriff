@@ -23,6 +23,10 @@ jobs:
         install -DskipTests -DskipITs -T 1C -am -pl bom,token-sheriff-validation,token-sheriff-quarkus-parent,token-sheriff-quarkus-parent/token-sheriff-validation-quarkus,token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment,token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
         verify -Pe2e-tests -pl token-sheriff-quarkus-parent/e-2-e-playwright
       install-playwright: true
+      # Every Playwright project in e-2-e-playwright runs Desktop Chrome, so only
+      # Chromium and its system packages are installed. Without this the workflow
+      # installs the system dependencies of all three browser engines.
+      playwright-browsers: chromium
       npm-cache: true
       timeout-minutes: 30
       reports-folder: |
