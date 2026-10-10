@@ -29,6 +29,13 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+/**
+ * Unit tests for {@link IssValidator}, the authorization-server mix-up defence ({@code CLIENT-8},
+ * {@code T-MIXUP}): when a client trusts more than one authorization server, an attacker AS cannot
+ * make the client redeem a code at the honest AS. The validator rejects, before the code is ever
+ * exchanged, any callback whose RFC 9207 {@code iss} does not identify the AS the flow was started
+ * with, and treats a dropped {@code iss} as a mix-up signal when the AS is known to stamp it.
+ */
 @EnableTestLogger
 @EnableGeneratorController
 @DisplayName("IssValidator RFC 9207 mix-up defence")
