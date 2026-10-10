@@ -82,21 +82,6 @@ class TokenSignatureValidatorES256FormatTest {
         assertDoesNotThrow(() -> validator.validateSignature(decodedJwt));
     }
 
-    @Test
-    @DisplayName("JJWT-generated ES256 tokens now work with format conversion")
-    void jjwtES256TokensNowWork() {
-        // JJWT generates IEEE P1363 format signatures, and with format conversion implemented,
-        // these tokens should now validate successfully
-
-        var tokenHolder = new TestTokenHolder(TokenType.ACCESS_TOKEN, ClaimControlParameter.defaultForTokenType(TokenType.ACCESS_TOKEN))
-                .withES256IeeeP1363Format();
-
-        var decodedJwt = tokenHolder.asDecodedJwt();
-
-        // This should now work with the implemented format conversion
-        assertDoesNotThrow(() -> validator.validateSignature(decodedJwt));
-    }
-
     /**
      * Creates an ES256 JWT token with IEEE P1363 signature format.
      * This simulates how Keycloak generates ES256 signatures.

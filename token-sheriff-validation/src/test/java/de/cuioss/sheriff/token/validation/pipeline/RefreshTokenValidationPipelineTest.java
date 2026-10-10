@@ -25,7 +25,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Tests for {@link RefreshTokenValidationPipeline}.
@@ -86,18 +87,5 @@ class RefreshTokenValidationPipelineTest {
         assertNotNull(result);
         assertEquals(invalidJwt, result.getRawToken());
         assertEquals(TokenType.REFRESH_TOKEN, result.getTokenType());
-    }
-
-    @Test
-    @DisplayName("Should handle JWT with minimal claims")
-    void shouldHandleJwtWithMinimalClaims() {
-        // JWT with minimal claims (just issuer and subject)
-        TestTokenHolder tokenHolder = TestTokenGenerators.refreshTokens().next();
-        String tokenString = tokenHolder.getRawToken();
-
-        assertDoesNotThrow(() -> {
-            UnvalidatedRefreshToken result = pipeline.validate(RefreshTokenRequest.of(tokenString));
-            assertNotNull(result);
-        });
     }
 }

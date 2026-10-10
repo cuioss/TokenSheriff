@@ -57,6 +57,12 @@ class DpopProofValidatorTest {
 
     private static final String TEST_ISSUER = "https://test-issuer.example.com";
 
+    /**
+     * The proof key of every test in which the key itself is not the subject, generated once for the
+     * class. Replay protection stays per test, and every proof carries its own {@code jti}.
+     */
+    private static final KeyPair FIXTURE_KEY_PAIR = newRsaKeyPair();
+
     private SecurityEventCounter securityEventCounter;
     private DpopReplayProtection replayProtection;
     private DpopProofValidator validator;
@@ -94,7 +100,7 @@ class DpopProofValidatorTest {
 
     @Test
     void shouldPassWithValidDpopProof() {
-        KeyPair keyPair = generateRsaKeyPair();
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
         String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -165,7 +171,7 @@ class DpopProofValidatorTest {
 
     @Test
     void shouldRejectWrongTypHeader() {
-        KeyPair keyPair = generateRsaKeyPair();
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
         String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -185,7 +191,7 @@ class DpopProofValidatorTest {
 
     @Test
     void shouldRejectReplayedJti() {
-        KeyPair keyPair = generateRsaKeyPair();
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
         String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -246,7 +252,7 @@ class DpopProofValidatorTest {
     @ValueSource(strings = {"DPoP", "DPOP", "dpop", "Dpop"})
     @DisplayName("Should honor a DPoP proof regardless of header-name casing (M4)")
     void shouldHonorDpopHeaderRegardlessOfCasing(String headerName) {
-        KeyPair keyPair = generateRsaKeyPair();
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
         String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -268,7 +274,7 @@ class DpopProofValidatorTest {
 
     @Test
     void shouldRejectExpiredIat() {
-        KeyPair keyPair = generateRsaKeyPair();
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
         String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -289,7 +295,7 @@ class DpopProofValidatorTest {
 
     @Test
     void shouldRejectWrongAth() {
-        KeyPair keyPair = generateRsaKeyPair();
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
         String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -309,7 +315,7 @@ class DpopProofValidatorTest {
 
     @Test
     void shouldRejectThumbprintMismatch() {
-        KeyPair keyPair = generateRsaKeyPair();
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
 
         String rawAccessToken = "some.access.token";
@@ -330,8 +336,8 @@ class DpopProofValidatorTest {
 
     @Test
     void shouldRejectInvalidSignature() {
-        KeyPair keyPairForHeader = generateRsaKeyPair();
-        KeyPair keyPairForSigning = generateRsaKeyPair(); // Different key!
+        KeyPair keyPairForHeader = FIXTURE_KEY_PAIR;
+        KeyPair keyPairForSigning = newRsaKeyPair(); // Different key: the wrong key is the subject here
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPairForHeader.getPublic());
         String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -396,7 +402,7 @@ class DpopProofValidatorTest {
 
     @Test
     void shouldRejectFutureIat() {
-        KeyPair keyPair = generateRsaKeyPair();
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
         String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -447,7 +453,7 @@ class DpopProofValidatorTest {
 
     @Test
     void shouldAcceptCaseInsensitiveTyp() {
-        KeyPair keyPair = generateRsaKeyPair();
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
         String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -558,7 +564,7 @@ class DpopProofValidatorTest {
         @MethodSource("missingClaimProvider")
         void shouldRejectProofWithMissingRequiredClaim(boolean includeJti, boolean includeIat,
                 boolean includeAth, String expectedClaim) {
-            KeyPair keyPair = generateRsaKeyPair();
+            KeyPair keyPair = FIXTURE_KEY_PAIR;
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -596,7 +602,7 @@ class DpopProofValidatorTest {
                     new SignatureTemplateManager(issuerConfig.getAlgorithmPreferences()), tightConfig,
                     tightConfig.getDslJson());
 
-            KeyPair keyPair = generateRsaKeyPair();
+            KeyPair keyPair = FIXTURE_KEY_PAIR;
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
             String rawAccessToken = "some.access.token";
@@ -617,7 +623,7 @@ class DpopProofValidatorTest {
         @Test
         @DisplayName("L5: an htu differing only by case, default port, and dot-segments normalizes equal")
         void shouldAcceptHtuDifferingOnlyByCasePortAndDotSegments() {
-            KeyPair keyPair = generateRsaKeyPair();
+            KeyPair keyPair = FIXTURE_KEY_PAIR;
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
             String rawAccessToken = "some.access.token";
@@ -637,7 +643,7 @@ class DpopProofValidatorTest {
         @Test
         @DisplayName("L5: an htu with a genuinely different host is still rejected")
         void shouldRejectHtuWithDifferentHost() {
-            KeyPair keyPair = generateRsaKeyPair();
+            KeyPair keyPair = FIXTURE_KEY_PAIR;
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
             String rawAccessToken = "some.access.token";
@@ -836,7 +842,7 @@ class DpopProofValidatorTest {
         return sb.toString();
     }
 
-    private KeyPair generateRsaKeyPair() {
+    private static KeyPair newRsaKeyPair() {
         try {
             KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
             gen.initialize(2048);
@@ -926,7 +932,7 @@ class DpopProofValidatorTest {
         @Test
         @DisplayName("Should reject when requestUri is null (htu/htm required for DPoP)")
         void shouldRejectWhenRequestUriIsNull() {
-            KeyPair keyPair = generateRsaKeyPair();
+            KeyPair keyPair = FIXTURE_KEY_PAIR;
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -948,7 +954,7 @@ class DpopProofValidatorTest {
         @Test
         @DisplayName("Should reject when requestMethod is blank (htu/htm required for DPoP)")
         void shouldRejectWhenRequestMethodIsBlank() {
-            KeyPair keyPair = generateRsaKeyPair();
+            KeyPair keyPair = FIXTURE_KEY_PAIR;
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -970,7 +976,7 @@ class DpopProofValidatorTest {
         @Test
         @DisplayName("Should reject proof with missing htm claim when request has URI and method")
         void shouldRejectMissingHtmClaim() {
-            KeyPair keyPair = generateRsaKeyPair();
+            KeyPair keyPair = FIXTURE_KEY_PAIR;
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -993,7 +999,7 @@ class DpopProofValidatorTest {
         @Test
         @DisplayName("Should reject proof with mismatched htm (POST vs GET)")
         void shouldRejectMismatchedHtm() {
-            KeyPair keyPair = generateRsaKeyPair();
+            KeyPair keyPair = FIXTURE_KEY_PAIR;
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -1016,7 +1022,7 @@ class DpopProofValidatorTest {
         @Test
         @DisplayName("Should reject proof with mismatched htu")
         void shouldRejectMismatchedHtu() {
-            KeyPair keyPair = generateRsaKeyPair();
+            KeyPair keyPair = FIXTURE_KEY_PAIR;
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -1039,7 +1045,7 @@ class DpopProofValidatorTest {
         @Test
         @DisplayName("Should accept proof with matching htm and htu")
         void shouldAcceptMatchingHtmAndHtu() {
-            KeyPair keyPair = generateRsaKeyPair();
+            KeyPair keyPair = FIXTURE_KEY_PAIR;
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
@@ -1059,7 +1065,7 @@ class DpopProofValidatorTest {
         @Test
         @DisplayName("Should strip query string from htu for comparison")
         void shouldStripQueryStringFromHtu() {
-            KeyPair keyPair = generateRsaKeyPair();
+            KeyPair keyPair = FIXTURE_KEY_PAIR;
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
             String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 

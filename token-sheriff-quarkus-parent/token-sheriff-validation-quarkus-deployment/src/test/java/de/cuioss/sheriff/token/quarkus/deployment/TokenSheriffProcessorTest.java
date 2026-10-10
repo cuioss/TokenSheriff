@@ -15,27 +15,24 @@
  */
 package de.cuioss.sheriff.token.quarkus.deployment;
 
-import de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.quarkus.test.QuarkusExtensionTest;
-import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.Config;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Test for verifying the auto-configuration of the Token-Sheriff Quarkus extension.
  * <p>
- * This test checks:
- * <ul>
- * <li>The configuration is properly available</li>
- * <li>The extension can be deployed and used</li>
- * </ul>
+ * The extension is deployed with {@code application-test.properties}; the raw
+ * configuration reads are asserted by {@link TokenSheriffIntegrationTest}.
  */
+@Tag("quarkus-boot")
 @EnableTestLogger
 class TokenSheriffProcessorTest {
 
@@ -46,22 +43,6 @@ class TokenSheriffProcessorTest {
     static final QuarkusExtensionTest unitTest = new QuarkusExtensionTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class))
             .withConfigurationResource("application-test.properties");
-
-    @Inject
-    Config config;
-
-    @Test
-    void jwtConfigAvailable() {
-        assertNotNull(config, "Config should be injected");
-
-        // Verify the default issuer is configured
-        assertTrue(config.getOptionalValue(JwtPropertyKeys.ISSUERS.ENABLED.formatted("default"), Boolean.class).orElse(false),
-                "Default issuer should be enabled");
-        assertTrue(config.getOptionalValue(JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("default"), String.class).isPresent(),
-                "Default issuer should have identifier");
-        assertTrue(config.getOptionalValue(JwtPropertyKeys.PARSER.MAX_TOKEN_SIZE, Integer.class).isPresent(),
-                "Parser config should be present");
-    }
 
     @Test
     void shouldTestProcessorBasicFunctionality() {

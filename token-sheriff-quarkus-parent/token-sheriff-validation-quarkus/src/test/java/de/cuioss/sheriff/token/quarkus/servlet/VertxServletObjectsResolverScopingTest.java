@@ -27,6 +27,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -51,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author Oliver Wolff
  */
 @QuarkusTest
+@Tag("quarkus-boot")
 @TestProfile(JwtTestProfile.class)
 @DisplayName("VertxServletObjectsResolver CDI Scoping Tests")
 class VertxServletObjectsResolverScopingTest {

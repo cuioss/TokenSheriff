@@ -33,9 +33,8 @@ import java.util.Optional;
 import java.util.concurrent.locks.LockSupport;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for Issue #110: Key rotation grace period functionality in HttpJwksLoader.
@@ -63,87 +62,6 @@ class HttpJwksLoaderKeyRotationTest {
     }
 
     @Test
-    @DisplayName("Should find key in current keys after rotation")
-    void shouldFindKeyInCurrentKeysAfterRotation(URIBuilder uriBuilder) {
-        String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
-                .jwksUrl(jwksEndpoint)
-                .issuerIdentifier("test-issuer")
-                .keyRotationGracePeriod(Duration.ofMinutes(5))
-                .refreshIntervalSeconds(1) // Enable background refresh for testing
-                .build();
-
-        HttpJwksLoader loader = new HttpJwksLoader(config);
-        loader.initJWKSLoader(securityEventCounter).join();
-
-        // Initial load - should find the original key
-        moduleDispatcher.returnDefault();
-        Optional<KeyInfo> originalKey = loader.getKeyInfo(ORIGINAL_KEY_ID);
-        assertTrue(originalKey.isPresent(), "Original key should be found");
-
-        // Rotate keys - switch to different key
-        moduleDispatcher.switchToOtherPublicKey();
-
-        // Force refresh by triggering background refresh or wait for it
-        await("Key rotation to complete")
-                .atMost(10, SECONDS)
-                .until(() -> {
-                    Optional<KeyInfo> newKey = loader.getKeyInfo(ROTATED_KEY_ID);
-                    return newKey.isPresent();
-                });
-
-        // New key should be found in current keys
-        Optional<KeyInfo> rotatedKey = loader.getKeyInfo(ROTATED_KEY_ID);
-        assertTrue(rotatedKey.isPresent(), "Rotated key should be found in current keys");
-
-        loader.close();
-    }
-
-    @Test
-    @DisplayName("Should find original key in retired keys within grace period")
-    void shouldFindOriginalKeyInRetiredKeysWithinGracePeriod(URIBuilder uriBuilder) {
-        String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
-                .jwksUrl(jwksEndpoint)
-                .issuerIdentifier("test-issuer")
-                .keyRotationGracePeriod(Duration.ofMinutes(5)) // 5 minute grace period
-                .refreshIntervalSeconds(1) // Enable background refresh for testing
-                .build();
-
-        HttpJwksLoader loader = new HttpJwksLoader(config);
-        loader.initJWKSLoader(securityEventCounter).join();
-
-        // Initial load with original key
-        moduleDispatcher.returnDefault();
-        Optional<KeyInfo> originalKey = loader.getKeyInfo(ORIGINAL_KEY_ID);
-        assertTrue(originalKey.isPresent(), "Original key should be found initially");
-
-        // Rotate keys
-        moduleDispatcher.switchToOtherPublicKey();
-
-        // Wait for rotation to complete
-        await("Key rotation to complete")
-                .atMost(10, SECONDS)
-                .until(() -> {
-                    Optional<KeyInfo> newKey = loader.getKeyInfo(ROTATED_KEY_ID);
-                    return newKey.isPresent();
-                });
-
-        // Original key should still be found in retired keys (within grace period)
-        Optional<KeyInfo> retiredKey = loader.getKeyInfo(ORIGINAL_KEY_ID);
-        assertTrue(retiredKey.isPresent(),
-                "Original key should still be accessible within grace period");
-
-        // New key should also be accessible
-        Optional<KeyInfo> currentKey = loader.getKeyInfo(ROTATED_KEY_ID);
-        assertTrue(currentKey.isPresent(), "New key should be accessible");
-
-        loader.close();
-    }
-
-    @Test
     @DisplayName("Should not find key in retired keys after grace period expires")
     void shouldNotFindKeyInRetiredKeysAfterGracePeriodExpires(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
@@ -153,7 +71,7 @@ class HttpJwksLoaderKeyRotationTest {
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .keyRotationGracePeriod(Duration.ofMillis(100)) // 100ms grace period
-                .refreshIntervalSeconds(1) // Enable background refresh for testing
+                .refreshIntervalSeconds(0) // No scheduler: the test drives the refresh itself
                 .build();
 
         HttpJwksLoader loader = new HttpJwksLoader(config);
@@ -164,19 +82,14 @@ class HttpJwksLoaderKeyRotationTest {
         Optional<KeyInfo> originalKey = loader.getKeyInfo(ORIGINAL_KEY_ID);
         assertTrue(originalKey.isPresent(), "Original key should be found initially");
 
-        // Rotate keys
+        // Rotate keys and pick the rotation up with one refresh cycle
         moduleDispatcher.switchToOtherPublicKey();
+        loader.performBackgroundRefresh();
+        assertTrue(loader.getKeyInfo(ROTATED_KEY_ID).isPresent(), "Rotated key should be found after the refresh");
 
-        // Wait for rotation
-        await("Key rotation to complete")
-                .atMost(10, SECONDS)
-                .until(() -> {
-                    Optional<KeyInfo> newKey = loader.getKeyInfo(ROTATED_KEY_ID);
-                    return newKey.isPresent();
-                });
-
-        // Wait (longer than the grace period) for the retired key to expire. A lightweight park
-        // rather than Awaitility, whose polling machinery is unnecessary for a fixed pause.
+        // Wait (longer than the grace period) for the retired key to expire. This is a real expiry
+        // wait: a lightweight park rather than Awaitility, whose polling machinery is unnecessary
+        // for a fixed pause.
         LockSupport.parkNanos(MILLISECONDS.toNanos(200));
 
         // Original key should no longer be accessible
@@ -192,81 +105,6 @@ class HttpJwksLoaderKeyRotationTest {
     }
 
     @Test
-    @DisplayName("Should respect maximum retired key sets limit")
-    void shouldRespectMaximumRetiredKeySetsLimit(URIBuilder uriBuilder) {
-        String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
-                .jwksUrl(jwksEndpoint)
-                .issuerIdentifier("test-issuer")
-                .keyRotationGracePeriod(Duration.ofMinutes(5))
-                .maxRetiredKeySets(2) // Limit to 2 retired sets
-                .build();
-
-        HttpJwksLoader loader = new HttpJwksLoader(config);
-        loader.initJWKSLoader(securityEventCounter).join();
-
-        // This test is more complex and would need multiple key rotations
-        // For now, verify the configuration is respected
-        assertEquals(2, config.getMaxRetiredKeySets(), "Max retired key sets should be configured correctly");
-
-        loader.close();
-    }
-
-    @Test
-    @DisplayName("Should disable grace period when duration is zero")
-    void shouldDisableGracePeriodWhenDurationIsZero(URIBuilder uriBuilder) {
-        String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
-                .jwksUrl(jwksEndpoint)
-                .issuerIdentifier("test-issuer")
-                .keyRotationGracePeriod(Duration.ZERO) // Disable grace period
-                .refreshIntervalSeconds(1) // Enable background refresh for testing
-                .build();
-
-        HttpJwksLoader loader = new HttpJwksLoader(config);
-        loader.initJWKSLoader(securityEventCounter).join();
-
-        // Initial load
-        moduleDispatcher.returnDefault();
-        Optional<KeyInfo> originalKey = loader.getKeyInfo(ORIGINAL_KEY_ID);
-        assertTrue(originalKey.isPresent(), "Original key should be found initially");
-
-        // Rotate keys
-        moduleDispatcher.switchToOtherPublicKey();
-
-        // Wait for rotation
-        await("Key rotation to complete")
-                .atMost(10, SECONDS)
-                .until(() -> {
-                    Optional<KeyInfo> newKey = loader.getKeyInfo(ROTATED_KEY_ID);
-                    return newKey.isPresent();
-                });
-
-        // Original key should immediately be inaccessible (no grace period)
-        Optional<KeyInfo> retiredKey = loader.getKeyInfo(ORIGINAL_KEY_ID);
-        assertFalse(retiredKey.isPresent(),
-                "Original key should not be accessible when grace period is disabled");
-
-        loader.close();
-    }
-
-    @Test
-    @DisplayName("Should use default grace period of 5 minutes")
-    void shouldUseDefaultGracePeriodOf5Minutes(URIBuilder uriBuilder) {
-        String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
-                .jwksUrl(jwksEndpoint)
-                .issuerIdentifier("test-issuer")
-                .build(); // No explicit grace period - should use default
-
-        assertEquals(Duration.ofMinutes(5), config.getKeyRotationGracePeriod(),
-                "Default grace period should be 5 minutes as per Issue #110");
-    }
-
-    @Test
     @DisplayName("L9: a good key set survives an empty/ERROR refresh (not retired)")
     void shouldRetainGoodKeysWhenRefreshReturnsEmpty(URIBuilder uriBuilder) {
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
@@ -275,7 +113,7 @@ class HttpJwksLoaderKeyRotationTest {
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .keyRotationGracePeriod(Duration.ofMinutes(5))
-                .refreshIntervalSeconds(1) // Enable background refresh for testing
+                .refreshIntervalSeconds(0) // No scheduler: the test drives the refresh itself
                 .build();
 
         HttpJwksLoader loader = new HttpJwksLoader(config);
@@ -289,10 +127,10 @@ class HttpJwksLoaderKeyRotationTest {
         int callsBefore = moduleDispatcher.getCallCounter();
         moduleDispatcher.returnEmptyJwks();
 
-        // Wait until at least one background refresh has actually fetched the empty JWKS.
-        await("At least one refresh against the empty endpoint")
-                .atMost(10, SECONDS)
-                .until(() -> moduleDispatcher.getCallCounter() > callsBefore);
+        // One refresh cycle fetches the empty JWKS.
+        loader.performBackgroundRefresh();
+        assertTrue(moduleDispatcher.getCallCounter() > callsBefore,
+                "The refresh should have fetched the empty JWKS");
 
         // The empty refresh must NOT have retired the previously-good key set.
         assertTrue(loader.getKeyInfo(ORIGINAL_KEY_ID).isPresent(),

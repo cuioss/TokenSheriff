@@ -82,6 +82,7 @@ class HttpJwksLoaderTest {
         Optional<KeyInfo> keyInfo = httpJwksLoader.getKeyInfo(TEST_KID);
         assertTrue(keyInfo.isPresent(), "Key info should be present");
         assertEquals(TEST_KID, keyInfo.get().keyId(), "Key ID should match");
+        assertNotNull(keyInfo.get().key(), "Public key should not be null");
         assertEquals(1, moduleDispatcher.getCallCounter(), "JWKS endpoint should be called once");
     }
 
@@ -100,29 +101,6 @@ class HttpJwksLoaderTest {
     }
 
     @Test
-    @DisplayName("Should get key info for test kid")
-    void shouldGetKeyInfoForTestKid() {
-        Optional<KeyInfo> keyInfo = httpJwksLoader.getKeyInfo(TEST_KID);
-        assertTrue(keyInfo.isPresent(), "Key info should be present for test kid");
-        assertEquals(TEST_KID, keyInfo.get().keyId(), "Key ID should match test kid");
-    }
-
-    @Test
-    @DisplayName("Should verify key loading works")
-    void shouldVerifyKeyLoadingWorks() {
-        Optional<KeyInfo> keyInfo = httpJwksLoader.getKeyInfo(TEST_KID);
-        assertTrue(keyInfo.isPresent(), "Key info should be present");
-        assertNotNull(keyInfo.get().key(), "Public key should not be null");
-    }
-
-    @Test
-    @DisplayName("Should verify test key exists")
-    void shouldVerifyTestKeyExists() {
-        assertTrue(httpJwksLoader.getKeyInfo(TEST_KID).isPresent(),
-                "Test key with ID '" + TEST_KID + "' should exist");
-    }
-
-    @Test
     @DisplayName("Should load keys on first access and cache in memory")
     void shouldLoadKeysOnFirstAccess() {
         // First call should load
@@ -134,6 +112,12 @@ class HttpJwksLoaderTest {
         keyInfo = httpJwksLoader.getKeyInfo(TEST_KID);
         assertTrue(keyInfo.isPresent(), "Key info should still be present");
         assertEquals(1, moduleDispatcher.getCallCounter(), "JWKS endpoint should still be called only once");
+
+        // Neither a lookup of an unknown key nor a status read triggers another HTTP call
+        httpJwksLoader.getKeyInfo("another-key-id");
+        httpJwksLoader.getLoaderStatus();
+        assertEquals(1, moduleDispatcher.getCallCounter(),
+                "An unknown key ID and a status read should not trigger another JWKS call");
     }
 
     @Test

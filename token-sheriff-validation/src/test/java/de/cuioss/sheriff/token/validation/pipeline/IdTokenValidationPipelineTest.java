@@ -97,23 +97,4 @@ class IdTokenValidationPipelineTest {
                 JWTValidationLogMessages.WARN.MISSING_CLAIM.resolveIdentifierString());
     }
 
-    @Test
-    @DisplayName("Should throw TokenValidationException when issuer claim is missing - alternative token")
-    void shouldThrowExceptionForMissingIssuerWithDifferentToken() {
-        // Given - create another token without issuer claim
-        ClaimControlParameter params = ClaimControlParameter.builder()
-                .missingIssuer(true)
-                .build();
-        TestTokenHolder tokenHolder = new TestTokenHolder(TokenType.ID_TOKEN, params);
-        String tokenString = tokenHolder.getRawToken();
-
-        // When/Then
-        var idTokenRequest = IdTokenRequest.of(tokenString);
-        assertThrows(
-                TokenValidationException.class,
-                () -> tokenValidator.createIdToken(idTokenRequest),
-                "Should consistently throw TokenValidationException for missing issuer"
-        );
-    }
-
 }

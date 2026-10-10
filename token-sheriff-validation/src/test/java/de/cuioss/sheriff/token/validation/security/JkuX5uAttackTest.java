@@ -62,6 +62,12 @@ class JkuX5uAttackTest {
     private static final String ATTACKER_JKU = "https://attacker-controlled-site.com/jwks.json";
     private static final String ATTACKER_X5U = "https://attacker-controlled-site.com/keys.pem";
 
+    /**
+     * The attacker's key, generated once for the class. It differs from the configured issuer key,
+     * which is the property both tests rest on; it does not have to differ between the two tests.
+     */
+    private static final KeyPair ATTACKER_KEY_PAIR = generateRsaKeyPair();
+
     private TokenValidator tokenValidator;
 
     @BeforeEach
@@ -112,12 +118,12 @@ class JkuX5uAttackTest {
     }
 
     /**
-     * Builds a well-formed RS256 access token signed with a freshly generated attacker key and carrying
+     * Builds a well-formed RS256 access token signed with the attacker key and carrying
      * a {@code jku}/{@code x5u} header pointing at the attacker's advertised key set. The configured
      * {@code kid} and issuer are used so validation reaches (and fails at) the signature check.
      */
     private String forgeAttackerToken(String headerName, String attackerUrl) {
-        KeyPair attackerKeyPair = generateRsaKeyPair();
+        KeyPair attackerKeyPair = ATTACKER_KEY_PAIR;
         return Jwts.builder()
                 .header().keyId(DEFAULT_KEY_ID).add(headerName, attackerUrl).and()
                 .issuer(TEST_ISSUER)

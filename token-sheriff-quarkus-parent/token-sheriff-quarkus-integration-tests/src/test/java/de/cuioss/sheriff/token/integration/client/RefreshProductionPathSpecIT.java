@@ -31,6 +31,8 @@ import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.tools.logging.CuiLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -55,6 +57,12 @@ import static org.junit.jupiter.api.Assertions.*;
  * A failure is deliberately surfaced with the production stack frame that raised it (see
  * {@link RefreshEngineSupport#productionFrame}), so a red run names the engine class at fault instead
  * of collapsing into an opaque transport error.
+ * <p>
+ * This is the one class of the module that runs concurrently with the others: it waits for a real
+ * 35-second access token to expire, and that wait would otherwise hold the whole run. It can do so
+ * because it talks to Keycloak only and never to the application under test, and because every test
+ * acquires its own tokens and therefore its own Keycloak session — nothing it reads or changes is
+ * shared with another class or with another test of this class.
  */
 // cui-rewrite:disable InvalidExceptionUsageRecipe
 // drive(...) catches RuntimeException deliberately: it is the elimination test's failure funnel, and
@@ -62,6 +70,7 @@ import static org.junit.jupiter.api.Assertions.*;
 // specific types would let an unanticipated engine exception escape as an opaque error instead of an
 // AssertionError naming the production frame, which is the one thing this spec exists to report.
 @DisplayName("Production RefreshFlow against real Keycloak")
+@Execution(ExecutionMode.CONCURRENT)
 class RefreshProductionPathSpecIT extends BaseIntegrationTest {
 
     private static final CuiLogger LOGGER = new CuiLogger(RefreshProductionPathSpecIT.class);

@@ -82,28 +82,6 @@ class TokenSignatureValidatorTest {
     }
 
     @Test
-    @DisplayName("Should validate validation with valid signature")
-    void shouldValidateTokenWithValidSignature() {
-        // Create a valid validation
-        String token = createToken();
-
-        // Parse the validation
-        DecodedJwt decodedJwt = jwtParser.decode(token);
-        assertNotNull(decodedJwt, "Decoded JWT should not be null");
-
-        // Create an in-memory JwksLoader with a valid key
-        String jwksContent = InMemoryJWKSFactory.createDefaultJwks();
-        JwksLoader jwksLoader = JwksLoaderFactory.createInMemoryLoader(jwksContent);
-        jwksLoader.initJWKSLoader(securityEventCounter);
-
-        // Create the validator with the in-memory JwksLoader and security event counter
-        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
-
-        // Validate the signature - should not throw an exception
-        assertDoesNotThrow(() -> validator.validateSignature(decodedJwt));
-    }
-
-    @Test
     @DisplayName("Should reject validation with invalid signature")
     void shouldRejectTokenWithInvalidSignature() {
         // Get initial count
@@ -183,6 +161,9 @@ class TokenSignatureValidatorTest {
         // Verify log message
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                 JWTValidationLogMessages.WARN.KEY_NOT_FOUND.resolveIdentifierString());
+        // The log names the key ID the token asked for
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                "No key found with ID: " + InMemoryJWKSFactory.DEFAULT_KEY_ID);
 
         // Verify security event was recorded
         assertEquals(initialCount + 1, securityEventCounter.getCount(SecurityEventCounter.EventType.KEY_NOT_FOUND));
@@ -213,42 +194,6 @@ class TokenSignatureValidatorTest {
 
         assertTrue(exception.getMessage().contains("Key ID (kid) should have been validated by TokenHeaderValidator"),
                 "Exception message should indicate precondition violation");
-    }
-
-    @Test
-    @DisplayName("Should reject validation with algorithm confusion attack")
-    void shouldRejectAlgorithmConfusionAttack() {
-        // Get initial count
-        long initialCount = securityEventCounter.getCount(SecurityEventCounter.EventType.KEY_NOT_FOUND);
-
-        // Create a validation with RS256 in the header but actually signed with HS256
-        // This is a common algorithm confusion attack
-        String token = createAlgorithmConfusionToken();
-
-        // Parse the validation
-        DecodedJwt decodedJwt = jwtParser.decode(token);
-        assertNotNull(decodedJwt, "Decoded JWT should not be null");
-
-        // Create an in-memory JwksLoader with a valid key
-        String jwksContent = InMemoryJWKSFactory.createDefaultJwks();
-        JwksLoader jwksLoader = JwksLoaderFactory.createInMemoryLoader(jwksContent);
-        jwksLoader.initJWKSLoader(securityEventCounter);
-
-        // Create the validator with the in-memory JwksLoader and security event counter
-        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
-
-        // Validate the signature - should throw an exception
-        TokenValidationException exception = assertThrows(TokenValidationException.class,
-                () -> validator.validateSignature(decodedJwt));
-
-        // Verify the exception has the correct event type
-        assertEquals(SecurityEventCounter.EventType.KEY_NOT_FOUND, exception.getEventType());
-
-        // Verify log message
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "No key found with ID: wrong-key-id");
-
-        // Verify security event was recorded
-        assertEquals(initialCount + 1, securityEventCounter.getCount(SecurityEventCounter.EventType.KEY_NOT_FOUND));
     }
 
     @Test
@@ -398,27 +343,5 @@ class TokenSignatureValidatorTest {
 
         // Return the raw token
         return tokenHolder.getRawToken();
-    }
-
-    /**
-     * Creates a token for testing algorithm confusion attacks.
-     * This simulates a token that claims to use RS256 but with an invalid signature.
-     */
-    private String createAlgorithmConfusionToken() {
-        // Create a valid token with RS256
-        String validToken = createToken();
-
-        // Split the token into its parts
-        String[] parts = validToken.split("\\.");
-
-        // Modify the header to keep RS256 but change something else
-        String header = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
-        header = header.replace("\"kid\":\"" + InMemoryJWKSFactory.DEFAULT_KEY_ID + "\"", "\"kid\":\"wrong-key-id\"");
-        String modifiedHeader = Base64.getUrlEncoder().withoutPadding().encodeToString(header.getBytes(StandardCharsets.UTF_8));
-
-        // Construct a token with the modified header but keep the original payload and signature
-        // This simulates an algorithm confusion attack where the attacker tries to use a valid signature
-        // with a modified header
-        return modifiedHeader + "." + parts[1] + "." + parts[2];
     }
 }

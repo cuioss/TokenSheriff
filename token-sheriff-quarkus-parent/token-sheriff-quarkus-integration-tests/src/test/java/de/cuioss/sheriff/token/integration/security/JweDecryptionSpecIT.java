@@ -17,7 +17,10 @@ package de.cuioss.sheriff.token.integration.security;
 
 import de.cuioss.sheriff.token.integration.BaseIntegrationTest;
 import de.cuioss.sheriff.token.integration.TestRealm;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -104,22 +107,6 @@ class JweDecryptionSpecIT extends BaseIntegrationTest {
                 .statusCode(200)
                 .body("valid", equalTo(true))
                 .body("message", equalTo("Access token is valid"));
-    }
-
-    @Test
-    @Order(4)
-    @DisplayName("Should still validate regular JWS tokens when JWE config is present")
-    void shouldStillValidateRegularJwsTokens() {
-        var tokenResponse = TestRealm.createIntegrationRealm().obtainValidToken();
-
-        given()
-                .contentType("application/json")
-                .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
-                .when()
-                .post(JWT_VALIDATE_PATH)
-                .then()
-                .statusCode(200)
-                .body("valid", equalTo(true));
     }
 
     @ParameterizedTest(name = "[{0}]")

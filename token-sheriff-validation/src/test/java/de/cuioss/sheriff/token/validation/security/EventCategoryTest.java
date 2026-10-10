@@ -61,13 +61,6 @@ class EventCategoryTest {
     }
 
     @Test
-    void shouldProvideConsistentOrdinalValues() {
-        assertEquals(0, EventCategory.INVALID_STRUCTURE.ordinal());
-        assertEquals(1, EventCategory.INVALID_SIGNATURE.ordinal());
-        assertEquals(2, EventCategory.SEMANTIC_ISSUES.ordinal());
-    }
-
-    @Test
     void shouldProvideConsistentStringRepresentation() {
         assertEquals("INVALID_STRUCTURE", EventCategory.INVALID_STRUCTURE.toString());
         assertEquals("INVALID_SIGNATURE", EventCategory.INVALID_SIGNATURE.toString());

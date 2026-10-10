@@ -191,14 +191,6 @@ class JsonCollectionMapperTest {
     }
 
     @Test
-    @DisplayName("Handle empty JSON object - returns null")
-    void shouldHandleEmptyJsonObject() {
-        JsonObject emptyJsonObject = Json.createObjectBuilder().build();
-        ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(emptyJsonObject), CLAIM_NAME);
-        assertNull(result, "Should return null for empty JSON object");
-    }
-
-    @Test
     @DisplayName("Handle non-string array elements")
     void shouldHandleNonStringArrayElements() {
         JsonArrayBuilder arrayBuilder = Json.createArrayBuilder();

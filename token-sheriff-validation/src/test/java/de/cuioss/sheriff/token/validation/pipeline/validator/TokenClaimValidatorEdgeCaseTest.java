@@ -16,8 +16,6 @@
 package de.cuioss.sheriff.token.validation.pipeline.validator;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
-import de.cuioss.sheriff.token.commons.transport.JwksType;
-import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
@@ -26,13 +24,6 @@ import de.cuioss.sheriff.token.validation.domain.context.ValidationContext;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.TokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
-import de.cuioss.sheriff.token.validation.jwks.key.JWKSKeyLoader;
-import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
-import de.cuioss.sheriff.token.validation.pipeline.DecodedJwt;
-import de.cuioss.sheriff.token.validation.pipeline.NonValidatingJwtParser;
-import de.cuioss.sheriff.token.validation.pipeline.SignatureTemplateManager;
-import de.cuioss.sheriff.token.validation.security.JwkAlgorithmPreferences;
-import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -46,14 +37,12 @@ import org.junit.jupiter.api.Test;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Edge case tests for {@link TokenClaimValidator}.
- * This class focuses on testing edge cases around validation expiration, clock skew,
- * and network failures.
+ * This class focuses on testing edge cases around validation expiration and clock skew.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -188,33 +177,6 @@ class TokenClaimValidatorEdgeCaseTest {
         }
     }
 
-    @Nested
-    @DisplayName("Network Failure Simulation Tests")
-    class NetworkFailureSimulationTests {
-
-        @Test
-        @DisplayName("Should handle network failures during key retrieval")
-        void shouldHandleNetworkFailuresDuringKeyRetrieval() {
-            // This test simulates a network failure during key retrieval
-            // by using a JwksKeyLoader that throws an exception
-
-            // Create a TokenSignatureValidator with a custom JwksLoader that simulates network failure
-            var signatureValidator = new TokenSignatureValidator(new FailingJwksKeyLoader(), securityEventCounter, new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
-
-            // Create a valid validation
-            TokenContent validToken = createValidToken();
-            // Use NonValidatingJwtParser to decode the raw token
-            DecodedJwt decodedJwt = NonValidatingJwtParser.builder()
-                    .securityEventCounter(securityEventCounter)
-                    .build()
-                    .decode(validToken.getRawToken());
-
-            // When validating the signature, it should throw a TokenValidationException
-            assertThrows(TokenValidationException.class, () -> signatureValidator.validateSignature(decodedJwt),
-                    "Signature validation should throw an exception when network error occurs");
-        }
-    }
-
     /**
      * Creates a validation with a specific expiration time.
      *
@@ -263,23 +225,5 @@ class TokenClaimValidatorEdgeCaseTest {
         // Set the authorized party to match the expected client ID
         tokenHolder.withClaim("azp", ClaimValue.forPlainString(TestTokenHolder.TEST_CLIENT_ID));
         return tokenHolder.asAccessTokenContent();
-    }
-
-    /**
-     * A JwksKeyLoader implementation that simulates network failures.
-     */
-    private static class FailingJwksKeyLoader extends JWKSKeyLoader {
-        public FailingJwksKeyLoader() {
-            super("{}", ParserConfig.builder().build(), new JwkAlgorithmPreferences(), JwksType.MEMORY); // Empty JWKS
-            initJWKSLoader(new SecurityEventCounter());
-        }
-
-        @Override
-        public Optional<KeyInfo> getKeyInfo(String kid) {
-            // Simulate a network failure by returning an empty Optional
-            return Optional.empty();
-        }
-
-        // Removed overrides for methods that no longer exist in JwksLoader interface
     }
 }

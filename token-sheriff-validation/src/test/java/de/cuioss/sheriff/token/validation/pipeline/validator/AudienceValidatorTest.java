@@ -128,22 +128,6 @@ class AudienceValidatorTest {
     }
 
     @Test
-    @DisplayName("Should pass when audience claim is single string even if unexpected value")
-    void shouldPassWhenAudienceClaimIsSingleStringEvenIfUnexpectedValue() {
-        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
-        tokenHolder.withClaim(ClaimName.AUDIENCE.getName(), ClaimValue.forPlainString("123"));
-        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
-
-        TokenValidationException exception = assertThrows(TokenValidationException.class,
-                () -> validator.validateAudience(token));
-        assertEquals(SecurityEventCounter.EventType.AUDIENCE_MISMATCH, exception.getEventType());
-        assertTrue(exception.getMessage().contains("Audience mismatch"));
-        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.AUDIENCE_MISMATCH));
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
-                JWTValidationLogMessages.WARN.AUDIENCE_MISMATCH.resolveIdentifierString());
-    }
-
-    @Test
     @DisplayName("Should accept azp claim as fallback for missing audience in access token")
     void shouldAcceptAzpClaimAsFallbackForMissingAudienceInAccessToken() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();

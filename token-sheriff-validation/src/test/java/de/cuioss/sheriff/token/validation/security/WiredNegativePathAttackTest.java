@@ -86,6 +86,13 @@ class WiredNegativePathAttackTest {
     private static final String RESOURCE_URI = "https://resource.example.org/protectedresource";
     private static final String RESOURCE_METHOD = "GET";
 
+    /**
+     * The JWE recipient key and DPoP proof key of the cases in which the key itself is not the subject
+     * (VTEST-3, 7, 8, 13), generated once for the class. VTEST-6, VTEST-9 and VTEST-14 generate their
+     * own keys, because a key that differs from the trusted one is what they test.
+     */
+    private static final KeyPair FIXTURE_KEY_PAIR = generateRsaKeyPair();
+
     @Test
     @DisplayName("VTEST-2: HMAC/RSA algorithm confusion is rejected as UNSUPPORTED_ALGORITHM")
     void shouldRejectHmacRsaAlgorithmConfusion() {
@@ -112,7 +119,7 @@ class WiredNegativePathAttackTest {
     @Test
     @DisplayName("VTEST-3: JWE decompression bomb is rejected as JWE_DECRYPTION_FAILED")
     void shouldRejectJweDecompressionBomb() {
-        KeyPair jweKeyPair = JweTestTokenFactory.generateRsaKeyPair();
+        KeyPair jweKeyPair = FIXTURE_KEY_PAIR;
         // A tiny compressed payload that inflates to 512 KB — past the decryptor's 256 KB ceiling.
         byte[] bomb = new byte[512 * 1024];
         Arrays.fill(bomb, (byte) 'A');
@@ -152,7 +159,7 @@ class WiredNegativePathAttackTest {
     @Test
     @DisplayName("VTEST-7: unsupported JWE key-management algorithm is rejected as JWE_UNSUPPORTED_ALGORITHM")
     void shouldRejectUnsupportedJweAlgorithm() {
-        KeyPair jweKeyPair = JweTestTokenFactory.generateRsaKeyPair();
+        KeyPair jweKeyPair = FIXTURE_KEY_PAIR;
         // RSA1_5 (RSAES-PKCS1-v1_5) is off the allow-list; the alg check fires before any decryption.
         String header = base64Url("{\"alg\":\"RSA1_5\",\"enc\":\"A256GCM\"}".getBytes(StandardCharsets.UTF_8));
         String jwe = header + ".AAAA.AAAA.AAAA.AAAA";
@@ -169,7 +176,7 @@ class WiredNegativePathAttackTest {
     // each lambda's non-assertion calls (dpopValidator()/dpopRequest()) are pure factories that never throw
     @DisplayName("VTEST-8: DPoP sender-binding violations are each rejected with their specific event")
     void shouldRejectDpopSenderBindingViolations() {
-        KeyPair dpopKeyPair = generateRsaKeyPair();
+        KeyPair dpopKeyPair = FIXTURE_KEY_PAIR;
         Map<String, Object> dpopJwk = rsaPublicKeyToJwkMap((RSAPublicKey) dpopKeyPair.getPublic());
         String boundThumbprint = JwkThumbprintUtil.computeThumbprint(dpopJwk);
         long now = System.currentTimeMillis() / 1000;
@@ -294,7 +301,7 @@ class WiredNegativePathAttackTest {
         // jose4j GHSA-jgvc-jfgh-rjvv: the attacker rewrites an RSA-OAEP header to RSA1_5 to reach a
         // padding oracle. Token-Sheriff validates the header alg against the allow-list before any
         // decryption, so the downgrade is refused rather than silently honored.
-        KeyPair jweKeyPair = JweTestTokenFactory.generateRsaKeyPair();
+        KeyPair jweKeyPair = FIXTURE_KEY_PAIR;
         String oaepJwe = JweTestTokenFactory.createJweWrappedAccessToken(
                 InMemoryKeyMaterialHandler.getDefaultPrivateKey(), jweKeyPair.getPublic(),
                 "RS256", "RSA-OAEP", "A256GCM", TEST_ISSUER, null);

@@ -95,7 +95,7 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.2[VALIDATION-8.2: Safe Pars
 |T4
 |Algorithm substitution (RS256→HS256)
 |HMAC rejected; algorithm-key type matching enforced; explicit `alg` validation against allowed set
-|`TokenSignatureValidatorTest.shouldRejectAlgorithmConfusionAttack()`
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/WiredNegativePathAttackTest.java[WiredNegativePathAttackTest] (`shouldRejectHmacRsaAlgorithmConfusion`, VTEST-2)
 
 |T5
 |Header manipulation

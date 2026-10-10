@@ -27,6 +27,7 @@ import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -38,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Configuration validation is covered in the config package tests.
  */
 @QuarkusTest
+@Tag("quarkus-boot")
 @TestProfile(JwtTestProfile.class)
 @EnableTestLogger
 class QuarkusTokenValidatorProducerTest {

@@ -13,11 +13,22 @@ Technical instructions for configuring and analyzing Java Flight Recorder (JFR) 
 
 === Native Image JFR Support
 
-[source,properties]
+JFR support is compiled into a native executable only when the build enables it. The Quarkus configuration path is the build-time property `quarkus.native.monitoring=jfr`; any build that sets it gets JFR support, wherever the value comes from. The integration-test module does not set the property in `application.properties`; its `jfr` Maven profile sets it:
+
+[source,xml]
 ----
-# application.properties
-quarkus.native.monitoring=jfr
+<!-- token-sheriff-quarkus-integration-tests/pom.xml -->
+<profile>
+    <id>jfr</id>
+    <properties>
+        <quarkus.native.enabled>true</quarkus.native.enabled>
+        <quarkus.native.monitoring>jfr</quarkus.native.monitoring>
+        <quarkus.jfr.enabled>true</quarkus.jfr.enabled>
+    </properties>
+</profile>
 ----
+
+The `integration-tests` and `multi-idp-tests` profiles do not set the property, so the executable they build has no JFR support.
 
 **Separate Dockerfile Approach**:
 

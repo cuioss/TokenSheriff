@@ -190,6 +190,9 @@ class TokenHeaderValidatorTest {
             // Verify the exception has the correct event type
             assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
 
+            // And the exception names alg, which is checked before kid
+            assertTrue(exception.getMessage().contains("alg"));
+
             // And a warning should be logged
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "Token is missing required claim: alg");
 
@@ -291,47 +294,6 @@ class TokenHeaderValidatorTest {
             // Verify the exception message includes available header info (only alg)
             assertTrue(exception.getMessage().contains("alg=RS256"));
         }
-
-        @Test
-        @DisplayName("Should reject token with missing kid and all other headers also missing")
-        void shouldRejectTokenWithMissingKidAndAllHeadersMissing() {
-            // Given a validator
-            var issuerConfig = IssuerConfig.builder()
-                    .issuerIdentifier("test-issuer")
-                    .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
-                    .audienceValidationDisabled(true)
-                    .build();
-            TokenHeaderValidator validator = createValidator(issuerConfig);
-
-            // And a token with ALL headers missing (including alg)
-            var headerWithNothing = new JwtHeader(
-                    null,     // alg - missing
-                    null,     // typ - missing
-                    null,     // kid - missing
-                    null,     // jwk
-                    null,     // cty
-                    null, null, null, null, null // JWE fields
-            );
-
-            // Create a DecodedJwt
-            DecodedJwt decodedJwt = new DecodedJwt(
-                    headerWithNothing,
-                    new MapRepresentation(Map.of()),
-                    "fake-signature",
-                    new String[]{"header", "payload", "signature"},
-                    "header.payload.signature"
-            );
-
-            // When validating the token, it should throw an exception for missing alg first
-            // (alg validation comes before kid validation)
-            var request = AccessTokenRequest.of("test");
-            var exception = assertThrows(TokenValidationException.class,
-                    () -> validator.validate(decodedJwt, request));
-
-            // Verify the exception is for missing alg (not kid, since alg is checked first)
-            assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
-            assertTrue(exception.getMessage().contains("alg"));
-        }
     }
 
     @Nested
@@ -399,40 +361,6 @@ class TokenHeaderValidatorTest {
 
             // Verify security event was recorded
             assertEquals(initialCount + 1, SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM));
-        }
-
-        @Test
-        @DisplayName("Should accept token without embedded JWK")
-        void shouldAcceptTokenWithoutEmbeddedJwk() {
-            // Given a validator
-            var issuerConfig = IssuerConfig.builder()
-                    .issuerIdentifier("test-issuer")
-                    .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
-                    .audienceValidationDisabled(true)
-                    .build();
-            TokenHeaderValidator validator = createValidator(issuerConfig);
-
-            // And a token without an embedded JWK in the header
-            var headerWithoutJwk = new JwtHeader(
-                    "RS256",  // alg
-                    "JWT",    // typ
-                    "key-1",  // kid
-                    null,     // jwk - no embedded JWK
-                    null,     // cty
-                    null, null, null, null, null // JWE fields
-            );
-
-            // Create a DecodedJwt without embedded JWK
-            DecodedJwt decodedJwt = new DecodedJwt(
-                    headerWithoutJwk,
-                    new MapRepresentation(Map.of()),
-                    "fake-signature",
-                    new String[]{"header", "payload", "signature"},
-                    "header.payload.signature"
-            );
-
-            // When validating the token, it should not throw an exception for embedded JWK
-            assertDoesNotThrow(() -> validator.validate(decodedJwt, AccessTokenRequest.of("test")));
         }
     }
 

@@ -40,21 +40,6 @@ import static org.junit.jupiter.api.Assertions.*;
 class MinimalTokenContentTest {
 
     @Test
-    @DisplayName("Should provide raw token access")
-    void shouldProvideRawTokenAccess() {
-        MinimalTokenContent content = new UnvalidatedRefreshToken("test-token", Map.of());
-
-        assertEquals("test-token", content.getRawToken());
-    }
-
-    @Test
-    @DisplayName("Should provide token type access")
-    void shouldProvideTokenTypeAccess() {
-        MinimalTokenContent refreshToken = new UnvalidatedRefreshToken("token3", Map.of());
-        assertEquals(TokenType.REFRESH_TOKEN, refreshToken.getTokenType());
-    }
-
-    @Test
     @DisplayName("Should handle null raw token")
     void shouldHandleNullRawToken() {
         MinimalTokenContent content = new UnvalidatedRefreshToken(null, Map.of());
@@ -69,21 +54,6 @@ class MinimalTokenContentTest {
         MinimalTokenContent content = new UnvalidatedRefreshToken("", Map.of());
 
         assertEquals("", content.getRawToken());
-        assertEquals(TokenType.REFRESH_TOKEN, content.getTokenType());
-    }
-
-    @Test
-    @DisplayName("Should handle long raw token")
-    void shouldHandleLongRawToken() {
-        String longToken = """
-                eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3Qta2V5LWlkIn0\
-                .eyJpc3MiOiJodHRwczovL2V4YW1wbGUuY29tIiwic3ViIjoidGVzdC11c2VyIiwiYXVkIjoiY2xpZW50LWlkIiwi\
-                ZXhwIjoxNjQwOTk1MjAwLCJpYXQiOjE2NDA5OTE2MDBdfQ\
-                .signature-part-here""";
-
-        MinimalTokenContent content = new UnvalidatedRefreshToken(longToken, Map.of());
-
-        assertEquals(longToken, content.getRawToken());
         assertEquals(TokenType.REFRESH_TOKEN, content.getTokenType());
     }
 
@@ -107,21 +77,6 @@ class MinimalTokenContentTest {
         // Verify
         assertEquals(original.getRawToken(), deserialized.getRawToken());
         assertEquals(original.getTokenType(), deserialized.getTokenType());
-    }
-
-    @Test
-    @DisplayName("Should maintain consistency across calls")
-    void shouldMaintainConsistencyAcrossCalls() {
-        MinimalTokenContent content = new UnvalidatedRefreshToken("consistent-token", Map.of());
-
-        // Multiple calls should return the same values
-        assertEquals("consistent-token", content.getRawToken());
-        assertEquals("consistent-token", content.getRawToken());
-        assertEquals("consistent-token", content.getRawToken());
-
-        assertEquals(TokenType.REFRESH_TOKEN, content.getTokenType());
-        assertEquals(TokenType.REFRESH_TOKEN, content.getTokenType());
-        assertEquals(TokenType.REFRESH_TOKEN, content.getTokenType());
     }
 
     @Test

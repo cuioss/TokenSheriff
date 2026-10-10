@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.jwks.http;
 
+import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
@@ -32,9 +33,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Optional;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
@@ -57,34 +58,6 @@ class HttpJwksLoaderSchedulerTest {
         securityEventCounter = new SecurityEventCounter();
     }
 
-
-    @Test
-    @DisplayName("Should not start scheduler when no config provided")
-    void shouldNotStartSchedulerWithoutConfig(URIBuilder uriBuilder) {
-        String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-
-        // Ensure dispatcher is in normal mode
-        moduleDispatcher.returnDefault();
-
-        // Create loader without scheduler config
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
-                .jwksUrl(jwksEndpoint)
-                .issuerIdentifier("test-issuer")
-                .refreshIntervalSeconds(0) // Disable scheduler
-                .build();
-
-        HttpJwksLoader loader = new HttpJwksLoader(config);
-        loader.initJWKSLoader(securityEventCounter).join();
-
-        // Trigger initial load
-        Optional<KeyInfo> keyInfo = loader.getKeyInfo(TEST_KID);
-        assertTrue(keyInfo.isPresent(), "Initial load should work");
-
-        // Scheduler should not be active without config
-        assertFalse(loader.isBackgroundRefreshActive(), "Background refresh should not be active without refresh interval");
-
-        loader.close();
-    }
 
     @Test
     @DisplayName("Should not start scheduler when refresh interval is zero")
@@ -201,7 +174,7 @@ class HttpJwksLoaderSchedulerTest {
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
-                .refreshIntervalSeconds(1) // 1 second for testing
+                .refreshIntervalSeconds(0) // No scheduler: the test drives the refresh itself
                 .build();
 
         HttpJwksLoader loader = new HttpJwksLoader(config);
@@ -216,18 +189,12 @@ class HttpJwksLoaderSchedulerTest {
         // Invalid JSON causes ResilientHttpHandler to return failure result
         moduleDispatcher.returnInvalidJson();
 
-        // Wait for background refresh to encounter the error and log BACKGROUND_REFRESH_FAILED
-        // Content conversion errors result in HttpResult with isSuccess()=false,
-        // which triggers the else branch (lines 324-327) in startBackgroundRefresh()
-        await("Background refresh to encounter error and log BACKGROUND_REFRESH_FAILED")
-                .atMost(3, SECONDS)
-                .pollInterval(100, MILLISECONDS)
-                .ignoreExceptions()
-                .untilAsserted(() -> {
-                    LogAsserts.assertLogMessagePresentContaining(
-                            TestLogLevel.WARN,
-                            JWTValidationLogMessages.WARN.BACKGROUND_REFRESH_FAILED.resolveIdentifierString());
-                });
+        // One refresh cycle encounters the error. Content conversion errors result in an HttpResult
+        // with isSuccess()=false, which performBackgroundRefresh() logs as BACKGROUND_REFRESH_FAILED
+        loader.performBackgroundRefresh();
+        LogAsserts.assertLogMessagePresentContaining(
+                TestLogLevel.WARN,
+                JWTValidationLogMessages.WARN.BACKGROUND_REFRESH_FAILED.resolveIdentifierString());
 
         // Loader should still be healthy if it has existing keys
         assertEquals(LoaderStatus.OK, loader.getLoaderStatus(), "Loader should remain healthy with cached keys even if background refresh fails");
@@ -312,10 +279,18 @@ class HttpJwksLoaderSchedulerTest {
         // Make all requests fail from the start
         moduleDispatcher.returnError();
 
+        // Default number of attempts, so the retry path is exercised in full, with millisecond delays
+        // instead of the default 1 + 2 + 4 + 8 s backoff.
+        RetryConfig fastRetry = RetryConfig.builder()
+                .initialDelay(Duration.ofMillis(1))
+                .maxDelay(Duration.ofMillis(5))
+                .build();
+
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
                 .refreshIntervalSeconds(1)
+                .retryConfig(fastRetry)
                 .build();
 
         HttpJwksLoader loader = new HttpJwksLoader(config);
@@ -346,7 +321,7 @@ class HttpJwksLoaderSchedulerTest {
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .jwksUrl(jwksEndpoint)
                 .issuerIdentifier("test-issuer")
-                .refreshIntervalSeconds(1)
+                .refreshIntervalSeconds(0) // No scheduler: the test drives the refresh itself
                 .build();
 
         HttpJwksLoader loader = new HttpJwksLoader(config);
@@ -355,27 +330,18 @@ class HttpJwksLoaderSchedulerTest {
         // Trigger initial load
         Optional<KeyInfo> keyInfo = loader.getKeyInfo(TEST_KID);
         assertTrue(keyInfo.isPresent(), "Initial load should work");
+        int callsAfterInitialLoad = moduleDispatcher.getCallCounter();
 
-        // Wait for background refresh to execute - scheduler runs every 1 second
-        await("At least one background refresh cycle to complete")
-                .atMost(3, SECONDS)
-                .pollDelay(1200, MILLISECONDS) // Give scheduler time to run at least once
-                .until(() -> true); // Just wait for the time period
+        // One refresh cycle against unchanged content
+        loader.performBackgroundRefresh();
 
-        // Verify that background refresh executed - it should have logged either:
-        // - "Background refresh completed, no changes detected" if 304 Not Modified
-        // - "Keys updated due to data change" if data changed
-        // Both are valid outcomes depending on mock server behavior
-        try {
-            LogAsserts.assertLogMessagePresentContaining(
-                    TestLogLevel.DEBUG,
-                    "Background refresh completed, no changes detected");
-        } catch (AssertionError e) {
-            // If not no-changes, then it should have updated
-            LogAsserts.assertLogMessagePresentContaining(
-                    TestLogLevel.INFO,
-                    "Keys updated due to data change");
-        }
+        // Only a refresh issues a further request to the JWKS endpoint: lookups never do
+        assertEquals(callsAfterInitialLoad + 1, moduleDispatcher.getCallCounter(),
+                "The background refresh should have fetched the JWKS endpoint exactly once more");
+        assertTrue(loader.getKeyInfo(TEST_KID).isPresent(),
+                "The key should still be available after a refresh with unchanged content");
+        assertEquals(LoaderStatus.OK, loader.getLoaderStatus(),
+                "Loader should stay healthy after a refresh with unchanged content");
 
         loader.close();
     }

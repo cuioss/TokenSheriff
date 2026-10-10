@@ -17,7 +17,7 @@ package de.cuioss.sheriff.token.validation.jwks.key;
 
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -44,11 +44,12 @@ class KeyInfoTest {
     private static final String EC_ALGORITHM = "ES256";
     private static final String KEY_ID = "test-key-1";
 
-    private PublicKey rsaPublicKey;
-    private PublicKey ecPublicKey;
+    // KeyInfo only carries the key: no test depends on a key of its own, so one pair per class suffices
+    private static PublicKey rsaPublicKey;
+    private static PublicKey ecPublicKey;
 
-    @BeforeEach
-    void setup() throws Exception {
+    @BeforeAll
+    static void setup() throws Exception {
         // Generate RSA key pair using standard JDK providers
         KeyPairGenerator rsaGenerator = KeyPairGenerator.getInstance("RSA");
         rsaGenerator.initialize(2048);

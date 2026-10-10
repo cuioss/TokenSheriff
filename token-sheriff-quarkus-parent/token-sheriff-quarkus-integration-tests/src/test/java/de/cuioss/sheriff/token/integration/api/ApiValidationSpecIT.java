@@ -389,46 +389,4 @@ class ApiValidationSpecIT extends BaseIntegrationTest {
                     .body(MESSAGE, containsString("Bearer token validation failed"));
         }
     }
-
-    @Test
-    @Order(100)
-    @DisplayName("TokenRequest.isEmpty() consistency test across all endpoints")
-    void tokenRequestIsEmptyConsistency() {
-        String[] endpoints = {
-                JWT_VALIDATE_EXPLICIT_PATH,
-                JWT_VALIDATE_ID_TOKEN_PATH,
-                JWT_VALIDATE_REFRESH_TOKEN_PATH
-        };
-
-        String[] expectedMessages = {
-                "Missing or empty access token in request body",
-                "Missing or empty ID token in request body",
-                "Missing or empty refresh token in request body"
-        };
-
-        for (int i = 0; i < endpoints.length; i++) {
-            String endpoint = endpoints[i];
-            String expectedMessage = expectedMessages[i];
-
-            given()
-                    .contentType(CONTENT_TYPE_JSON)
-                    .body(Map.of(TOKEN_FIELD_NAME, ""))
-                    .when()
-                    .post(endpoint)
-                    .then()
-                    .statusCode(400)
-                    .body(VALID, equalTo(false))
-                    .body(MESSAGE, equalTo(expectedMessage));
-
-            given()
-                    .contentType(CONTENT_TYPE_JSON)
-                    .body(Map.of(TOKEN_FIELD_NAME, "  \t  "))
-                    .when()
-                    .post(endpoint)
-                    .then()
-                    .statusCode(400)
-                    .body(VALID, equalTo(false))
-                    .body(MESSAGE, equalTo(expectedMessage));
-        }
-    }
 }

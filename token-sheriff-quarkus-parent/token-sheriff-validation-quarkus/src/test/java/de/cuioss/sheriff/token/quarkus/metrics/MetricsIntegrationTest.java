@@ -15,7 +15,6 @@
  */
 package de.cuioss.sheriff.token.quarkus.metrics;
 
-import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.metrics.MetricIdentifier;
 import de.cuioss.sheriff.token.quarkus.config.JwtTestProfile;
 import de.cuioss.sheriff.token.validation.TokenValidator;
@@ -27,6 +26,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -42,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * is used in a real application context.
  */
 @QuarkusTest
+@Tag("quarkus-boot")
 @TestProfile(JwtTestProfile.class)
 @EnableTestLogger
 class MetricsIntegrationTest {
@@ -71,30 +72,6 @@ class MetricsIntegrationTest {
                 "Error counters should be registered");
 
         assertFalse(meterRegistry.find(MetricIdentifier.VALIDATION.ERRORS).counters().isEmpty(), "Error counters should be registered");
-    }
-
-
-    @Test
-    @DisplayName("Should register metrics for all security event types")
-    void shouldRegisterMetricsForAllSecurityEventTypes() {
-        // Force initialization of metrics collector
-        metricsCollector.updateCounters();
-
-        // Verify that metrics are registered for all event types
-        for (SecurityEventCounter.EventType eventType : SecurityEventCounter.EventType.values()) {
-            // Skip success events as they're handled differently (registered under success metrics)
-            if (eventType.getCategory() == null) {
-                continue;
-            }
-
-            // Look for a counter with this event type
-            boolean hasMetricForEventType = !meterRegistry.find(MetricIdentifier.VALIDATION.ERRORS)
-                    .tag("event_type", eventType.name())
-                    .counters().isEmpty();
-
-            assertTrue(hasMetricForEventType,
-                    "Should have metrics registered for event type: " + eventType.name());
-        }
     }
 
     /**

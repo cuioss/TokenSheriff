@@ -25,6 +25,15 @@
         <!-- HTTPS configuration for testing (Docker external port) -->
         <test.https.port>10443</test.https.port>
 
+        <!-- Retry probe: a second container of the application image whose keycloak issuer cannot be
+             discovered (see docker-compose.yml). The values reach the container through the start
+             script's environment and WellKnownRetryConfigSpecIT through failsafe system properties,
+             so the configured maximum has one source. -->
+        <test.retry-probe.https.port>10444</test.retry-probe.https.port>
+        <test.retry-probe.max-attempts>3</test.retry-probe.max-attempts>
+        <test.retry-probe.log.dir>${project.build.directory}/retry-probe</test.retry-probe.log.dir>
+        <test.retry-probe.log.file>${test.retry-probe.log.dir}/quarkus.log</test.retry-probe.log.file>
+
         <!-- Skip Sonar analysis for integration tests -->
         <sonar.skip>true</sonar.skip>
     </properties>
@@ -139,6 +148,37 @@
     </dependencies>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Failsafe settings shared by the integration-tests, multi-idp-tests and jfr profiles,
+                     which each declare the plugin with their own includes and system properties.
+                     Declared under pluginManagement so that nothing is bound in a build without one of
+                     those profiles; the skip state stays with the skipITs property the profiles set. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <configuration>
+                        <!-- All integration-test classes run in one JVM, overriding the
+                             reuseForks=false inherited from token-sheriff-quarkus-parent. The classes
+                             are plain HTTP clients of one already running application; none boots
+                             Quarkus in the test JVM. -->
+                        <forkCount>1</forkCount>
+                        <reuseForks>true</reuseForks>
+                        <properties>
+                            <!-- One JVM makes the class order a property of the whole run. It is set
+                                 here, not in junit-platform.properties, because a configuration
+                                 parameter passed by the plugin takes precedence over every
+                                 junit-platform.properties on the classpath. Classes are ordered by
+                                 @Order: TokenValidationSpecIT carries the highest value and runs
+                                 last, because it asserts a cumulative count on the application. -->
+                            <configurationParameters>
+                                junit.jupiter.testclass.order.default = org.junit.jupiter.api.ClassOrderer$OrderAnnotation
+                            </configurationParameters>
+                        </properties>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
 
             <!-- Quarkus Maven Plugin: Required for quarkus:dev to properly set up Dev-UI.
@@ -246,6 +286,9 @@
                                         <test.https.port>${test.https.port}</test.https.port>
                                         <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                                         <quarkus.native.enabled>false</quarkus.native.enabled>
+                                        <test.retry-probe.https.port>${test.retry-probe.https.port}</test.retry-probe.https.port>
+                                        <test.retry-probe.log.file>${test.retry-probe.log.file}</test.retry-probe.log.file>
+                                        <test.retry-probe.max-attempts>${test.retry-probe.max-attempts}</test.retry-probe.max-attempts>
                                     </systemPropertyVariables>
                                     <skipITs>${skipITs}</skipITs>
                                 </configuration>
@@ -305,6 +348,11 @@
                                     <environmentVariables>
                                         <!-- Pass target directory for Quarkus file logging -->
                                         <LOG_TARGET_DIR>${project.build.directory}</LOG_TARGET_DIR>
+                                        <!-- Start the retry probe that WellKnownRetryConfigSpecIT reads -->
+                                        <COMPOSE_PROFILES>retry-probe</COMPOSE_PROFILES>
+                                        <RETRY_PROBE_HTTPS_PORT>${test.retry-probe.https.port}</RETRY_PROBE_HTTPS_PORT>
+                                        <RETRY_PROBE_LOG_DIR>${test.retry-probe.log.dir}</RETRY_PROBE_LOG_DIR>
+                                        <RETRY_PROBE_MAX_ATTEMPTS>${test.retry-probe.max-attempts}</RETRY_PROBE_MAX_ATTEMPTS>
                                     </environmentVariables>
                                 </configuration>
                             </execution>
@@ -412,6 +460,9 @@
                                         <quarkus.native.enabled>false</quarkus.native.enabled>
                                         <dex.enabled>true</dex.enabled>
                                         <zitadel.enabled>true</zitadel.enabled>
+                                        <test.retry-probe.https.port>${test.retry-probe.https.port}</test.retry-probe.https.port>
+                                        <test.retry-probe.log.file>${test.retry-probe.log.file}</test.retry-probe.log.file>
+                                        <test.retry-probe.max-attempts>${test.retry-probe.max-attempts}</test.retry-probe.max-attempts>
                                     </systemPropertyVariables>
                                     <skipITs>${skipITs}</skipITs>
                                 </configuration>
@@ -470,8 +521,13 @@
                                     <workingDirectory>${project.basedir}</workingDirectory>
                                     <environmentVariables>
                                         <LOG_TARGET_DIR>${project.build.directory}</LOG_TARGET_DIR>
-                                        <COMPOSE_PROFILES>multi-idp</COMPOSE_PROFILES>
+                                        <!-- multi-idp starts Dex and Zitadel; retry-probe starts the probe
+                                             that WellKnownRetryConfigSpecIT reads -->
+                                        <COMPOSE_PROFILES>multi-idp,retry-probe</COMPOSE_PROFILES>
                                         <QUARKUS_PROFILE>multi-idp</QUARKUS_PROFILE>
+                                        <RETRY_PROBE_HTTPS_PORT>${test.retry-probe.https.port}</RETRY_PROBE_HTTPS_PORT>
+                                        <RETRY_PROBE_LOG_DIR>${test.retry-probe.log.dir}</RETRY_PROBE_LOG_DIR>
+                                        <RETRY_PROBE_MAX_ATTEMPTS>${test.retry-probe.max-attempts}</RETRY_PROBE_MAX_ATTEMPTS>
                                     </environmentVariables>
                                 </configuration>
                             </execution>
@@ -573,6 +629,9 @@
                                         <test.https.port>${test.https.port}</test.https.port>
                                         <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                                         <quarkus.native.enabled>false</quarkus.native.enabled>
+                                        <test.retry-probe.https.port>${test.retry-probe.https.port}</test.retry-probe.https.port>
+                                        <test.retry-probe.log.file>${test.retry-probe.log.file}</test.retry-probe.log.file>
+                                        <test.retry-probe.max-attempts>${test.retry-probe.max-attempts}</test.retry-probe.max-attempts>
                                     </systemPropertyVariables>
                                     <skipITs>${skipITs}</skipITs>
                                 </configuration>
@@ -620,6 +679,11 @@
                                     <environmentVariables>
                                         <!-- Pass target directory for Quarkus file logging -->
                                         <LOG_TARGET_DIR>${project.build.directory}</LOG_TARGET_DIR>
+                                        <!-- Start the retry probe that WellKnownRetryConfigSpecIT reads -->
+                                        <COMPOSE_PROFILES>retry-probe</COMPOSE_PROFILES>
+                                        <RETRY_PROBE_HTTPS_PORT>${test.retry-probe.https.port}</RETRY_PROBE_HTTPS_PORT>
+                                        <RETRY_PROBE_LOG_DIR>${test.retry-probe.log.dir}</RETRY_PROBE_LOG_DIR>
+                                        <RETRY_PROBE_MAX_ATTEMPTS>${test.retry-probe.max-attempts}</RETRY_PROBE_MAX_ATTEMPTS>
                                     </environmentVariables>
                                 </configuration>
                             </execution>

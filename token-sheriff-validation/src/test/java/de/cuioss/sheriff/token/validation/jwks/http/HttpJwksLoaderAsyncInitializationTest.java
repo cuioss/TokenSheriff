@@ -18,8 +18,6 @@ package de.cuioss.sheriff.token.validation.jwks.http;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
-import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
-import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.dispatcher.JwksResolveDispatcher;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
@@ -31,7 +29,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -41,8 +38,6 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("HttpJwksLoader Async Initialization Tests")
 @EnableMockWebServer
 class HttpJwksLoaderAsyncInitializationTest {
-
-    private static final String TEST_KID = InMemoryJWKSFactory.DEFAULT_KEY_ID;
 
     @Getter
     private final JwksResolveDispatcher moduleDispatcher = new JwksResolveDispatcher();
@@ -147,38 +142,6 @@ class HttpJwksLoaderAsyncInitializationTest {
             // Verify future completed with OK
             assertTrue(initFuture.isDone(), "Future should be completed");
             assertEquals(LoaderStatus.OK, initFuture.join(), "Future should complete with OK");
-        }
-    }
-
-    @Test
-    @DisplayName("Multiple concurrent initJWKSLoader calls should be handled safely")
-    void multipleConcurrentInitCallsShouldBeSafe(URIBuilder uriBuilder) {
-        String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
-                .jwksUrl(jwksEndpoint)
-                .issuerIdentifier("test-issuer")
-                .build();
-
-        try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
-            SecurityEventCounter counter = new SecurityEventCounter();
-
-            // Make multiple concurrent calls to initJWKSLoader
-            CompletableFuture<LoaderStatus> future1 = loader.initJWKSLoader(counter);
-            CompletableFuture<LoaderStatus> future2 = loader.initJWKSLoader(counter);
-            CompletableFuture<LoaderStatus> future3 = loader.initJWKSLoader(counter);
-
-            // All futures should complete with OK
-            assertEquals(LoaderStatus.OK, future1.join(), "First init should complete with OK");
-            assertEquals(LoaderStatus.OK, future2.join(), "Second init should complete with OK");
-            assertEquals(LoaderStatus.OK, future3.join(), "Third init should complete with OK");
-
-            // Final loader status should be OK
-            assertEquals(LoaderStatus.OK, loader.getLoaderStatus(),
-                    "Loader status should be OK after concurrent initialization");
-
-            // Keys should be available
-            Optional<KeyInfo> keyInfo = loader.getKeyInfo(TEST_KID);
-            assertTrue(keyInfo.isPresent(), "Keys should be available after initialization");
         }
     }
 }

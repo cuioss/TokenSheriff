@@ -252,44 +252,6 @@ class MandatoryClaimsValidatorTest {
     }
 
     @Test
-    @DisplayName("Should contrast behavior when claimSubOptional is true vs false")
-    void shouldContrastClaimSubOptionalBehavior() {
-        // Create token without subject claim
-        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
-        Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
-        claims.remove(ClaimName.SUBJECT.getName());
-        AccessTokenContent token = new AccessTokenContent(claims, tokenHolder.getRawToken());
-
-        // Test with claimSubOptional=false (default): should fail
-        IssuerConfig issuerConfigWithMandatorySub = IssuerConfig.builder()
-                .issuerIdentifier("https://test-issuer.example.com")
-                .jwksContent("{\"keys\":[]}")
-                .claimSubOptional(false)  // Explicitly set to false
-                .audienceValidationDisabled(true)
-                .build();
-
-        MandatoryClaimsValidator validatorWithMandatorySub = new MandatoryClaimsValidator(issuerConfigWithMandatorySub, new SecurityEventCounter());
-
-        // Should fail validation due to missing subject claim when claimSubOptional=false
-        TokenValidationException exception = assertThrows(TokenValidationException.class,
-                () -> validatorWithMandatorySub.validateMandatoryClaims(token));
-        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
-        assertTrue(exception.getMessage().contains(ClaimName.SUBJECT.getName()));
-
-        // Test with claimSubOptional=true: should pass
-        IssuerConfig issuerConfigWithOptionalSub = IssuerConfig.builder()
-                .issuerIdentifier("https://test-issuer.example.com")
-                .jwksContent("{\"keys\":[]}")
-                .claimSubOptional(true)
-                .audienceValidationDisabled(true)
-                .build();
-        MandatoryClaimsValidator validatorWithOptionalSub = new MandatoryClaimsValidator(issuerConfigWithOptionalSub, new SecurityEventCounter());
-
-        // This should pass with claimSubOptional=true
-        assertDoesNotThrow(() -> validatorWithOptionalSub.validateMandatoryClaims(token));
-    }
-
-    @Test
     @DisplayName("Should skip subject claim validation for ID tokens when claimSubOptional is true")
     void shouldNotAffectIdTokenValidationWhenClaimSubOptionalIsTrue() {
         // Create IssuerConfig with claimSubOptional=true

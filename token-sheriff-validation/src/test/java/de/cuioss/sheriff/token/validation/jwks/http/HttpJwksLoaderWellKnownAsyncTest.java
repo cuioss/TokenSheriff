@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.jwks.http;
 
+import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
@@ -26,6 +27,7 @@ import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -69,8 +71,16 @@ class HttpJwksLoaderWellKnownAsyncTest {
         // Create configuration with invalid well-known URL
         String invalidWellKnownUrl = "https://invalid-host.example.com/.well-known/openid_configuration";
 
+        // Default number of attempts, so the retry path is exercised in full, with millisecond delays
+        // instead of the default 1 + 2 + 4 + 8 s backoff.
+        RetryConfig fastRetry = RetryConfig.builder()
+                .initialDelay(Duration.ofMillis(1))
+                .maxDelay(Duration.ofMillis(5))
+                .build();
+
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(invalidWellKnownUrl)
+                .retryConfig(fastRetry)
                 .build();
 
         try (HttpJwksLoader loader = new HttpJwksLoader(config)) {

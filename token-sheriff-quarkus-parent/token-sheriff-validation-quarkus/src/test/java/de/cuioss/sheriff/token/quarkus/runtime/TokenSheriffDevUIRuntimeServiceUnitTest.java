@@ -36,8 +36,12 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Plain unit tests for {@link TokenSheriffDevUIRuntimeService}, independent of the
  * Quarkus container. The sibling {@code @QuarkusTest} exercises the service through
- * CDI, but its coverage is not visible to the surefire JaCoCo report — these tests
- * make the service's behavior measurable there as well.
+ * CDI; these tests cover the service's behavior without starting the container.
+ * <p>
+ * The module's coverage report ({@code target/site/jacoco}) is built by the
+ * {@code jacoco-maven-plugin} from the data its agent records in the surefire JVMs.
+ * The Quarkus-side report is switched off ({@code quarkus.jacoco.report=false}):
+ * covered instructions and branches per class are identical with and without it.
  */
 @DisplayName("TokenSheriffDevUIRuntimeService plain unit tests")
 class TokenSheriffDevUIRuntimeServiceUnitTest {

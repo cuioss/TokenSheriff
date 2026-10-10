@@ -30,6 +30,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -48,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * </p>
  */
 @QuarkusTest
+@Tag("quarkus-boot")
 @TestProfile(JwtTestProfile.class)
 @EnableTestLogger
 @DisplayName("TokenSheriffDevUIRuntimeService Tests")
@@ -99,23 +101,8 @@ class TokenSheriffDevUIRuntimeServiceTest {
             assertEquals("ACTIVE", result.get("status"), "Status should be ACTIVE when enabled");
             assertEquals("JWT validation is active and ready", statusMessage,
                     "Status message should indicate active validation when enabled");
-        }
-
-        @Test
-        @DisplayName("Should correctly determine JWT enabled status based on issuer configuration")
-        void shouldCorrectlyDetermineJwtEnabledStatusBasedOnIssuerConfiguration() {
-            Map<String, Object> result = service.getValidationStatus();
-
-            assertNotNull(result, "Result should not be null");
-
-            // Test the actual configuration state - JWT is enabled in current test profile
-            boolean enabled = (Boolean) result.get("enabled");
-            assertTrue(enabled, "JWT should be enabled with current test configuration");
-
-            String statusMessage = (String) result.get("statusMessage");
-            assertEquals("JWT validation is active and ready", statusMessage,
-                    "Status message should indicate active validation when enabled");
-            assertTrue(Boolean.parseBoolean(result.get("validatorPresent").toString()), "Validator present status should be reported");
+            assertTrue(Boolean.parseBoolean(result.get("validatorPresent").toString()),
+                    "Validator present status should be reported");
         }
 
         @Test
@@ -153,20 +140,6 @@ class TokenSheriffDevUIRuntimeServiceTest {
     class JwksStatusTests {
 
         @Test
-        @DisplayName("Should return JWKS status with current configuration")
-        void shouldReturnJwksStatusWithCurrentConfiguration() {
-            Map<String, Object> result = service.getJwksStatus();
-
-            assertNotNull(result, "Result should not be null");
-            assertNotNull(result.get("status"), "Status should be present");
-            assertNotNull(result.get("issuers"), "Issuers list should be present");
-
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> issuers = (List<Map<String, Object>>) result.get("issuers");
-            assertTrue(issuers.size() >= 0, "Issuers count should be non-negative");
-        }
-
-        @Test
         @DisplayName("Should correctly list configured issuers with details")
         void shouldCorrectlyListConfiguredIssuersWithDetails() {
             Map<String, Object> result = service.getJwksStatus();
@@ -195,19 +168,6 @@ class TokenSheriffDevUIRuntimeServiceTest {
     class ConfigurationTests {
 
         @Test
-        @DisplayName("Should return configuration information with nested structure")
-        void shouldReturnConfigurationInformation() {
-            Map<String, Object> result = service.getConfiguration();
-
-            assertNotNull(result, "Result should not be null");
-            assertNotNull(result.get("enabled"), "Enabled status should be present");
-            assertNotNull(result.get("logLevel"), "Log level should be present");
-            assertNotNull(result.get("parser"), "Parser config should be present");
-            assertNotNull(result.get("httpJwksLoader"), "HTTP JWKS loader config should be present");
-            assertNotNull(result.get("issuers"), "Issuers config should be present");
-        }
-
-        @Test
         @DisplayName("Should have consistent configuration structure")
         void shouldHaveConsistentConfigurationStructure() {
             Map<String, Object> result = service.getConfiguration();
@@ -230,6 +190,7 @@ class TokenSheriffDevUIRuntimeServiceTest {
             @SuppressWarnings("unchecked")
             Map<String, Object> parser = (Map<String, Object>) result.get("parser");
             assertNotNull(parser.get("maxTokenSize"), "Parser should have maxTokenSize");
+            assertTrue((Integer) parser.get("maxTokenSize") > 0, "Max token size should be positive");
         }
 
     }
@@ -242,16 +203,6 @@ class TokenSheriffDevUIRuntimeServiceTest {
         @DisplayName("Should return error for null token")
         void shouldReturnErrorForNullToken() {
             Map<String, Object> result = service.validateToken(null);
-
-            assertNotNull(result, "Result should not be null");
-            assertEquals(false, result.get("valid"), "Should be invalid");
-            assertEquals("Token is empty or null", result.get("error"), "Should have correct error message");
-        }
-
-        @Test
-        @DisplayName("Should return error for empty token")
-        void shouldReturnErrorForEmptyToken() {
-            Map<String, Object> result = service.validateToken("   ");
 
             assertNotNull(result, "Result should not be null");
             assertEquals(false, result.get("valid"), "Should be invalid");
@@ -483,37 +434,6 @@ class TokenSheriffDevUIRuntimeServiceTest {
             // JWKS status consistency
             assertEquals(jwks1.get("status"), jwks2.get("status"), "JWKS status should be consistent");
             assertEquals(jwks1.get("issuers"), jwks2.get("issuers"), "JWKS issuers should be consistent");
-        }
-
-        @Test
-        @DisplayName("Should handle getConfiguration method edge cases")
-        void shouldHandleGetConfigurationEdgeCases() {
-            Map<String, Object> result = service.getConfiguration();
-
-            assertNotNull(result, "Result should not be null");
-            assertNotNull(result.get("enabled"), "Enabled should be present");
-            assertNotNull(result.get("parser"), "Parser config should be present");
-            assertNotNull(result.get("issuers"), "Issuers should be present");
-
-            @SuppressWarnings("unchecked")
-            Map<String, Object> parser = (Map<String, Object>) result.get("parser");
-            assertNotNull(parser.get("maxTokenSize"), "Max token size should be present");
-            assertTrue((Integer) parser.get("maxTokenSize") > 0, "Max token size should be positive");
-        }
-
-
-        @Test
-        @DisplayName("Should handle getJwksStatus method edge cases")
-        void shouldHandleGetJwksStatusEdgeCases() {
-            Map<String, Object> result = service.getJwksStatus();
-
-            assertNotNull(result, "Result should not be null");
-            assertNotNull(result.get("status"), "Status should be present");
-            assertNotNull(result.get("issuers"), "Issuers list should be present");
-
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> issuers = (List<Map<String, Object>>) result.get("issuers");
-            assertNotNull(issuers, "Issuers should not be null");
         }
     }
 

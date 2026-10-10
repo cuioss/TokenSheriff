@@ -64,6 +64,8 @@ class TokenContentTest {
 
         Optional<ClaimValue> issuerClaim = token.getClaimOption(ClaimName.ISSUER);
         assertTrue(issuerClaim.isPresent());
+        assertEquals(ClaimValue.forPlainString("test-issuer"), issuerClaim.get(),
+                "The whole claim value must be returned, not only its original string");
         assertEquals("test-issuer", issuerClaim.get().getOriginalString());
 
         Optional<ClaimValue> nonExistentClaim = token.getClaimOption(ClaimName.AUDIENCE);

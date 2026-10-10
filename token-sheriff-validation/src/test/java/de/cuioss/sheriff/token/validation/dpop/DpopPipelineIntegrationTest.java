@@ -24,7 +24,7 @@ import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.util.JwkThumbprintUtil;
 import io.jsonwebtoken.Jwts;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -54,12 +54,14 @@ class DpopPipelineIntegrationTest {
     private static final String RESOURCE_URI = "https://resource.example.org/protectedresource";
     private static final String RESOURCE_METHOD = "GET";
 
-    private KeyPair dpopClientKeyPair;
-    private Map<String, Object> dpopJwkMap;
-    private String dpopThumbprint;
+    // The DPoP client key is not the subject of any test here, so it is generated once for the class.
+    // Every test builds its own TokenValidator, and with it its own replay protection.
+    private static KeyPair dpopClientKeyPair;
+    private static Map<String, Object> dpopJwkMap;
+    private static String dpopThumbprint;
 
-    @BeforeEach
-    void setUp() {
+    @BeforeAll
+    static void setUpDpopClientKey() {
         dpopClientKeyPair = generateRsaKeyPair();
         dpopJwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) dpopClientKeyPair.getPublic());
         dpopThumbprint = JwkThumbprintUtil.computeThumbprint(dpopJwkMap);
@@ -259,7 +261,7 @@ class DpopPipelineIntegrationTest {
         return sb.toString();
     }
 
-    private KeyPair generateRsaKeyPair() {
+    private static KeyPair generateRsaKeyPair() {
         try {
             KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
             gen.initialize(2048);
@@ -269,7 +271,7 @@ class DpopPipelineIntegrationTest {
         }
     }
 
-    private Map<String, Object> rsaPublicKeyToJwkMap(RSAPublicKey publicKey) {
+    private static Map<String, Object> rsaPublicKeyToJwkMap(RSAPublicKey publicKey) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("kty", "RSA");
         map.put("n", Base64.getUrlEncoder().withoutPadding()
@@ -279,7 +281,7 @@ class DpopPipelineIntegrationTest {
         return map;
     }
 
-    private byte[] toUnsignedBytes(BigInteger bigInteger) {
+    private static byte[] toUnsignedBytes(BigInteger bigInteger) {
         byte[] bytes = bigInteger.toByteArray();
         if (bytes[0] == 0) {
             return Arrays.copyOfRange(bytes, 1, bytes.length);

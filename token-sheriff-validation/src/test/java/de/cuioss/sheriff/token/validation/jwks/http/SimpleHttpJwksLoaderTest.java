@@ -83,17 +83,6 @@ class SimpleHttpJwksLoaderTest {
     }
 
     @Test
-    void caching() {
-        // Multiple calls should only hit endpoint once
-        httpJwksLoader.getKeyInfo(InMemoryKeyMaterialHandler.DEFAULT_KEY_ID);
-        httpJwksLoader.getKeyInfo(InMemoryKeyMaterialHandler.DEFAULT_KEY_ID);
-        httpJwksLoader.getKeyInfo("another-key-id");
-        httpJwksLoader.getLoaderStatus();
-
-        assertEquals(1, moduleDispatcher.getCallCounter());
-    }
-
-    @Test
     void retryOnLoad() {
         // The RetryUtil should handle transient failures automatically
         // This test verifies basic functionality works

@@ -15,10 +15,12 @@
  */
 package de.cuioss.sheriff.token.commons.transport;
 
+import de.cuioss.http.client.adapter.RetryConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
+import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -109,5 +111,40 @@ class HttpJwksLoaderConfigWellKnownTest {
                 .build();
 
         assertNotNull(config.getScheduledExecutorService());
+    }
+
+    @Test
+    @DisplayName("Should hand the configured retry configuration to well-known discovery")
+    void shouldPropagateConfiguredRetryConfigToWellKnownDiscovery() {
+        RetryConfig configured = RetryConfig.builder()
+                .maxAttempts(2)
+                .initialDelay(Duration.ofMillis(7))
+                .maxDelay(Duration.ofMillis(11))
+                .build();
+
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                .retryConfig(configured)
+                .build();
+
+        assertAll("configured retry configuration",
+                () -> assertSame(configured, config.getRetryConfig(),
+                        "The JWKS fetch must use the configured retry configuration"),
+                () -> assertSame(configured, config.getWellKnownConfig().getRetryConfig(),
+                        "Well-known discovery must use the configured retry configuration, not the defaults"));
+    }
+
+    @Test
+    @DisplayName("Should fall back to the default retry configuration for well-known discovery")
+    void shouldUseDefaultRetryConfigForWellKnownDiscoveryWhenNoneConfigured() {
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                .build();
+
+        assertAll("default retry configuration",
+                () -> assertEquals(RetryConfig.defaults(), config.getRetryConfig(),
+                        "The JWKS fetch must default to RetryConfig.defaults()"),
+                () -> assertEquals(RetryConfig.defaults(), config.getWellKnownConfig().getRetryConfig(),
+                        "Well-known discovery must default to RetryConfig.defaults()"));
     }
 }

@@ -40,6 +40,9 @@ import de.cuioss.sheriff.token.validation.test.junit.TestTokenSource;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.tools.logging.CuiLogger;
+import jakarta.json.Json;
+import jakarta.json.JsonObject;
+import jakarta.json.JsonReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +52,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.StringReader;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -148,17 +152,22 @@ class KeyInjectionAttackTest {
      * @return a JWT token string with the malicious KID header
      */
     private String createTokenWithMaliciousKid(String maliciousKid) {
-        // Create a new token with the malicious kid
-        // This approach is more reliable than trying to modify an existing token
+        // A valid token, signed with the default key. Only its kid header is replaced: the validator
+        // must reject the kid during key lookup, before any signature is checked, so no key pair has
+        // to be generated for the malicious key ID.
+        String[] parts = TestTokenGenerators.accessTokens().next().getRawToken().split("\\.");
+        String headerJson = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
 
-        // Get a new token holder
-        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        JsonObject originalHeader;
+        try (JsonReader reader = Json.createReader(new StringReader(headerJson))) {
+            originalHeader = reader.readObject();
+        }
+        String maliciousHeader = Json.createObjectBuilder(originalHeader)
+                .add("kid", maliciousKid)
+                .build()
+                .toString();
 
-        // Set the malicious kid
-        tokenHolder.withKeyId(maliciousKid);
-
-        // Get the raw token
-        return tokenHolder.getRawToken();
+        return base64Url(maliciousHeader.getBytes(StandardCharsets.UTF_8)) + "." + parts[1] + "." + parts[2];
     }
 
     /**

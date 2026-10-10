@@ -28,6 +28,8 @@ import okhttp3.Headers;
 
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static jakarta.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 import static jakarta.servlet.http.HttpServletResponse.SC_OK;
@@ -44,6 +46,9 @@ public class JwksResolveDispatcher implements ModuleDispatcherElement {
      */
     public static final String LOCAL_PATH = "/oidc/jwks.json";
 
+    /** Longest time a response waits for the release of a {@linkplain #setResponseGate response gate}. */
+    public static final int RESPONSE_GATE_TIMEOUT_SECONDS = 10;
+
     @Getter
     @Setter
     private int callCounter = 0;
@@ -51,6 +56,15 @@ public class JwksResolveDispatcher implements ModuleDispatcherElement {
     private boolean useAlternativeKey = false;
     @Getter
     private String customResponse = null;
+
+    /**
+     * Optional gate that holds every response back until it is released. {@code null}, the default,
+     * means that responses are not held back. A test that needs the caller to stay in its loading
+     * state sets a latch, and counts it down to let the response through. The wait is bounded by
+     * {@link #RESPONSE_GATE_TIMEOUT_SECONDS}; a gate that is not released in time fails the request.
+     */
+    @Setter
+    private volatile CountDownLatch responseGate;
 
     public JwksResolveDispatcher() {
         // No initialization needed
@@ -119,6 +133,7 @@ public class JwksResolveDispatcher implements ModuleDispatcherElement {
     @Override
     public Optional<MockResponse> handleGet(@NonNull RecordedRequest request) {
         callCounter++;
+        awaitResponseGate();
 
         // Return custom response if set
         if (customResponse != null) {
@@ -161,6 +176,22 @@ public class JwksResolveDispatcher implements ModuleDispatcherElement {
                     return Optional.of(new MockResponse(SC_OK, Headers.of("Content-Type", "application/json"),
                             InMemoryKeyMaterialHandler.createJwks(InMemoryKeyMaterialHandler.Algorithm.RS384, "alternative-key-id")));
                 }
+        }
+    }
+
+    private void awaitResponseGate() {
+        CountDownLatch gate = responseGate;
+        if (gate == null) {
+            return;
+        }
+        try {
+            if (!gate.await(RESPONSE_GATE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("The response gate was not released within "
+                        + RESPONSE_GATE_TIMEOUT_SECONDS + " seconds");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for the response gate", e);
         }
     }
 

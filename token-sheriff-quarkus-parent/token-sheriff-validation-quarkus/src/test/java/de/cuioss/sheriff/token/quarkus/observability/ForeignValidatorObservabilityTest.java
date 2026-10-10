@@ -38,6 +38,7 @@ import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Liveness;
 import org.eclipse.microprofile.health.Readiness;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.lang.annotation.Retention;
@@ -65,6 +66,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * with that {@code IllegalStateException} instead of degrading honestly.
  */
 @QuarkusTest
+@Tag("quarkus-boot")
 @TestProfile(ForeignValidatorObservabilityTest.ForeignValidatorProfile.class)
 @EnableTestLogger
 @DisplayName("Foreign TokenValidator observability")

@@ -26,6 +26,7 @@ import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Liveness;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -35,6 +36,7 @@ import static org.easymock.EasyMock.createNiceMock;
 import static org.junit.jupiter.api.Assertions.*;
 
 @QuarkusTest
+@Tag("quarkus-boot")
 @TestProfile(JwtTestProfile.class)
 @EnableTestLogger
 @DisplayName("TokenValidatorHealthCheck")
@@ -93,24 +95,6 @@ class TokenValidatorHealthCheckTest {
 
             assertEquals("configured", data.get("status"),
                     "status should report the property-configured outcome");
-        }
-
-        @Test
-        @DisplayName("should handle valid configuration gracefully")
-        void healthCheckValidConfiguration() {
-            HealthCheckResponse response = healthCheck.call();
-
-            // Response should be valid with proper configuration
-            assertNotNull(response, "Response should not be null");
-            assertEquals(HealthCheckResponse.Status.UP, response.getStatus(),
-                    "Health check status should be UP with valid configuration");
-            assertEquals("jwt-validator", response.getName(),
-                    "Health check should have correct name");
-
-            assertTrue(response.getData().isPresent(), "Data should be present");
-            Map<String, Object> data = response.getData().get();
-            assertTrue(data.containsKey("issuerCount"),
-                    "Should contain issuer count for valid configuration");
         }
 
         @Test

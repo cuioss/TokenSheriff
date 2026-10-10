@@ -176,10 +176,37 @@
                         <!-- Stability configurations -->
                         <forkedProcessTimeoutInSeconds>0</forkedProcessTimeoutInSeconds>
                         <forkedProcessExitTimeoutInSeconds>60</forkedProcessExitTimeoutInSeconds>
-                        <!-- Fix for class loading issues -->
+                        <!-- Two fork groups, each run in one reused JVM. The default execution runs the
+                             plain test classes and excludes the JUnit tag "quarkus-boot"; the execution
+                             "quarkus-boot-test" runs only the classes carrying that tag, that is, the
+                             classes that boot a Quarkus application (@QuarkusTest or a
+                             QuarkusExtensionTest field). A plain class therefore never shares a JVM with
+                             a Quarkus application. SurefireForkGroupGuardTest fails when a class is in
+                             the wrong group. The two executions run one after the other and write to
+                             the same JaCoCo data file. A run with -Dtest is the one exception: the
+                             profile "focused-test-selection" below then runs the selection in a single
+                             execution. -->
                         <useSystemClassLoader>false</useSystemClassLoader>
-                        <reuseForks>false</reuseForks>
+                        <reuseForks>true</reuseForks>
                     </configuration>
+                    <executions>
+                        <execution>
+                            <id>default-test</id>
+                            <configuration>
+                                <excludedGroups>quarkus-boot</excludedGroups>
+                            </configuration>
+                        </execution>
+                        <execution>
+                            <id>quarkus-boot-test</id>
+                            <phase>test</phase>
+                            <goals>
+                                <goal>test</goal>
+                            </goals>
+                            <configuration>
+                                <groups>quarkus-boot</groups>
+                            </configuration>
+                        </execution>
+                    </executions>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -220,6 +247,54 @@
     </build>
 
     <profiles>
+        <!-- Active whenever the user property "test" is set, that is, for a hand-started
+             -Dtest=... run; never for a run without a selection, so CI keeps both fork groups.
+
+             A -Dtest selection matches classes of one fork group only. With two executions the
+             other one would run nothing, and surefire fails an execution whose selection matched
+             nothing. Switching that check off would also let a mistyped -Dtest=MisspelledTest end
+             in BUILD SUCCESS with zero tests run. So the selection runs in ONE execution instead:
+             default-test drops its tag filter and quarkus-boot-test is skipped. The check stays at
+             its strict default, and a selection that matches nothing fails the build.
+
+             Trade-off: a selection that names plain classes and Quarkus-boot classes together runs
+             them in one JVM. The fork-group separation holds for full runs only.
+
+             With -pl <module> -am the upstream modules match nothing and fail for it. Pass
+             -Dsurefire.failIfNoSpecifiedTests=false for such a run; the pom does not set the
+             value, so the command line decides. -->
+        <profile>
+            <id>focused-test-selection</id>
+            <activation>
+                <property>
+                    <name>test</name>
+                </property>
+            </activation>
+            <build>
+                <pluginManagement>
+                    <plugins>
+                        <plugin>
+                            <groupId>org.apache.maven.plugins</groupId>
+                            <artifactId>maven-surefire-plugin</artifactId>
+                            <executions>
+                                <execution>
+                                    <id>default-test</id>
+                                    <configuration>
+                                        <excludedGroups combine.self="override" />
+                                    </configuration>
+                                </execution>
+                                <execution>
+                                    <id>quarkus-boot-test</id>
+                                    <configuration>
+                                        <skip>true</skip>
+                                    </configuration>
+                                </execution>
+                            </executions>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
+            </build>
+        </profile>
         <profile>
             <id>coverage</id>
             <build>

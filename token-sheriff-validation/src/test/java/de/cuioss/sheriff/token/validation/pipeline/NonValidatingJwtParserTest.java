@@ -256,18 +256,6 @@ class NonValidatingJwtParserTest {
             var builder = NonValidatingJwtParser.builder();
             assertThrows(NullPointerException.class, builder::build);
         }
-
-        @Test
-        @DisplayName("Should create builder with defaults")
-        void shouldCreateBuilderWithDefaults() {
-            NonValidatingJwtParser defaultParser = NonValidatingJwtParser.builder().securityEventCounter(new SecurityEventCounter()).build();
-            assertNotNull(defaultParser, "Should create a parser with default settings");
-
-            // Verify it works with a valid validation
-            DecodedJwt result = defaultParser.decode(VALID_TOKEN);
-            assertNotNull(result, "Default parser should decode a valid validation");
-            assertEquals(VALID_TOKEN, result.rawToken(), "Raw validation should match the original validation");
-        }
     }
 
     @Nested
@@ -452,24 +440,6 @@ class NonValidatingJwtParserTest {
                     "Over-size arrays must fail closed with a typed structural-bounds rejection");
             assertEquals(1, counter.getCount(EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED),
                     "Should count the structural-bounds rejection exactly once");
-        }
-
-        @Test
-        @DisplayName("Should use cached JsonReaderFactory")
-        void shouldUseCachedJsonReaderFactory() {
-            // This test verifies that the JsonReaderFactory is cached and reused
-            // We can't directly test the caching behavior, but we can verify that
-            // the parser works correctly after the JsonReaderFactory is created
-
-            // First decode should create and cache the JsonReaderFactory
-            DecodedJwt result1 = parser.decode(VALID_TOKEN);
-
-            // Second decode should use the cached JsonReaderFactory
-            DecodedJwt result2 = parser.decode(VALID_TOKEN);
-
-            // Both results should be equal
-            assertEquals(result1.rawToken(), result2.rawToken(),
-                    "Both decodes should produce the same result");
         }
     }
 }

@@ -317,15 +317,6 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
     }
 
     @Test
-    @DisplayName("Should find ClaimName by string name")
-    void shouldFindClaimNameByString() {
-        String issuerName = "iss";
-        Optional<ClaimName> result = ClaimName.fromString(issuerName);
-        assertTrue(result.isPresent(), "Should find ClaimName for valid string");
-        assertEquals(ClaimName.ISSUER, result.get(), "Should return correct ClaimName");
-    }
-
-    @Test
     @DisplayName("Should find all ClaimName values by their string names")
     void shouldFindAllClaimNamesByString() {
         for (ClaimName claimName : ClaimName.values()) {

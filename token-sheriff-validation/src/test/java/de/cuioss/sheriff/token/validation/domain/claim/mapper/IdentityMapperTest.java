@@ -147,14 +147,6 @@ class IdentityMapperTest {
         assertNull(result, "Should return null for missing claim");
     }
 
-    @Test
-    @DisplayName("Should handle empty JsonObject - returns null")
-    void shouldHandleEmptyJsonObject() {
-        JsonObject emptyJsonObject = Json.createObjectBuilder().build();
-        ClaimValue result = underTest.map(convertJsonObjectToMapRepresentation(emptyJsonObject), CLAIM_NAME);
-        assertNull(result, "Should return null for empty JsonObject");
-    }
-
     // Helper methods
 
     private JsonObject createJsonObjectWithStringClaim(String claimName, String value) {
