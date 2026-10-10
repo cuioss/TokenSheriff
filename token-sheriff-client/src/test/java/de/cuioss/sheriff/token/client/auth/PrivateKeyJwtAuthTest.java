@@ -20,7 +20,7 @@ import de.cuioss.sheriff.token.validation.security.JwsAlgorithm;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -66,20 +66,16 @@ class PrivateKeyJwtAuthTest {
             "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
     private static final Base64.Decoder BASE64_URL = Base64.getUrlDecoder();
 
-    /**
-     * The client's RSA key pair, generated once for the class: no test mutates it, and the tests that
-     * need a different key (the ECDSA suite) generate their own.
-     */
-    private static KeyPair keyPair;
+    private KeyPair keyPair;
 
-    @BeforeAll
-    static void generateKeyPair() throws Exception {
+    @BeforeEach
+    void generateKeyPair() throws Exception {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
         keyPair = generator.generateKeyPair();
     }
 
-    private static PrivateKeyJwtAuth auth(String clientId, String audience, String keyId, String algorithm) {
+    private PrivateKeyJwtAuth auth(String clientId, String audience, String keyId, String algorithm) {
         return new PrivateKeyJwtAuth(clientId, audience, keyPair.getPrivate(), keyId, algorithm);
     }
 

@@ -29,14 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * Unit tests for {@link CallbackHandler}, which carries the {@code state} half of the
- * authorization-code-injection defence ({@code CLIENT-2}): a code is returned for redemption only
- * when the callback echoes the exact {@code state} of the originating {@link FlowContext}. A forged,
- * guessed or absent {@code state} is refused fail-closed. That each flow mints a fresh {@code state}
- * and PKCE verifier, and that another flow's {@code state} is refused, is asserted by
- * {@link CodeInjectionTest}.
- */
 @EnableTestLogger
 @EnableGeneratorController
 @DisplayName("CallbackHandler authorization_code redirect validation (RFC 6749 §4.1.2)")

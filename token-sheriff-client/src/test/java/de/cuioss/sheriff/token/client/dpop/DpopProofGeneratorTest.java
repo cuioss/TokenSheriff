@@ -21,7 +21,7 @@ import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -81,14 +81,12 @@ class DpopProofGeneratorTest {
     /** The proof-key types the generator classifies, over which the mismatch matrix is computed. */
     private static final Set<String> KEY_TYPES = Set.of("RSA", "EC", "OKP");
 
-    // The three proof keys are generated once for the class: no test mutates them. Replay-defence
-    // state lives in the DpopProofGenerator, which every test constructs for itself.
-    private static KeyPair keyPair;
-    private static KeyPair ecKeyPair;
-    private static KeyPair okpKeyPair;
+    private KeyPair keyPair;
+    private KeyPair ecKeyPair;
+    private KeyPair okpKeyPair;
 
-    @BeforeAll
-    static void generateProofKeys() throws Exception {
+    @BeforeEach
+    void setUp() throws Exception {
         KeyPairGenerator rsa = KeyPairGenerator.getInstance("RSA");
         rsa.initialize(2048);
         keyPair = rsa.generateKeyPair();
@@ -296,7 +294,7 @@ class DpopProofGeneratorTest {
                         .map(keyType -> Arguments.of(algorithm.getJwaName(), keyType)));
     }
 
-    private static KeyPair proofKeyFor(String algorithm) {
+    private KeyPair proofKeyFor(String algorithm) {
         return switch (algorithm) {
             case "RS256", "RS384", "RS512", "PS256" -> keyPair;
             case "ES256" -> ecKeyPair;
@@ -305,7 +303,7 @@ class DpopProofGeneratorTest {
         };
     }
 
-    private static KeyPair keyPairOfType(String keyType) {
+    private KeyPair keyPairOfType(String keyType) {
         return switch (keyType) {
             case "RSA" -> keyPair;
             case "EC" -> ecKeyPair;

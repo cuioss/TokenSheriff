@@ -35,8 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Fail-closed adversarial cases for {@link DiscoveryResolver}: every rejected condition surfaces a
- * {@link TransportException} rather than a partially-trusted result. The refusal of a non-TLS issuer
- * before any network call is asserted by {@link DiscoveryResolverTest}.
+ * {@link TransportException} rather than a partially-trusted result.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -53,21 +52,31 @@ class DiscoveryAdversarialTest {
         moduleDispatcher.returnDefault();
     }
 
-    private static ClientConfiguration configFor(String issuer) {
+    private static ClientConfiguration configFor(String issuer, boolean allowInsecureHttp) {
         return ClientConfiguration.builder()
                 .issuer(issuer)
                 .clientId(Generators.nonBlankStrings().next())
                 .clientSecret(Generators.nonBlankStrings().next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
-                .allowInsecureHttp(true)
+                .allowInsecureHttp(allowInsecureHttp)
                 .build();
+    }
+
+    @Test
+    @DisplayName("Should reject a non-TLS issuer when cleartext is not permitted")
+    void shouldRejectNonTlsIssuer() {
+        var config = configFor("http://internal.example.com", false);
+        var resolver = new DiscoveryResolver(config);
+
+        assertThrows(TransportException.class, resolver::resolve);
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "Rejecting non-TLS issuer");
     }
 
     @Test
     @DisplayName("Should reject an HTTP error response from the discovery endpoint")
     void shouldRejectServerError(URIBuilder uriBuilder) {
         moduleDispatcher.returnError();
-        var config = configFor(uriBuilder.buildAsString());
+        var config = configFor(uriBuilder.buildAsString(), true);
         var resolver = new DiscoveryResolver(config);
 
         assertThrows(TransportException.class, resolver::resolve);
@@ -77,7 +86,7 @@ class DiscoveryAdversarialTest {
     @DisplayName("Should reject an unparseable discovery document")
     void shouldRejectInvalidJson(URIBuilder uriBuilder) {
         moduleDispatcher.returnInvalidJson();
-        var config = configFor(uriBuilder.buildAsString());
+        var config = configFor(uriBuilder.buildAsString(), true);
         var resolver = new DiscoveryResolver(config);
 
         assertThrows(TransportException.class, resolver::resolve);
@@ -87,7 +96,7 @@ class DiscoveryAdversarialTest {
     @DisplayName("Should reject a document whose issuer does not match the configured issuer")
     void shouldRejectIssuerMismatch(URIBuilder uriBuilder) {
         moduleDispatcher.returnInvalidIssuer();
-        var config = configFor(uriBuilder.buildAsString());
+        var config = configFor(uriBuilder.buildAsString(), true);
         var resolver = new DiscoveryResolver(config);
 
         assertThrows(TransportException.class, resolver::resolve);

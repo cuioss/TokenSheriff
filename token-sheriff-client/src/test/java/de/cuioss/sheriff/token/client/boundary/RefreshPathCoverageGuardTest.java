@@ -18,9 +18,11 @@ package de.cuioss.sheriff.token.client.boundary;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaModifier;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
-import com.tngtech.archunit.junit.AnalyzeClasses;
-import com.tngtech.archunit.junit.ArchTest;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -62,51 +64,38 @@ import static org.junit.jupiter.api.Assertions.fail;
  * soon as <em>either</em> one fails on its own: a refresh-path class named outside that shape,
  * <em>or</em> placed in a package the list does not name, is the accepted residual gap (see
  * ADR-0003); leg (a) is unaffected by it.
- * <p>
- * The production classes are imported once, by {@link AnalyzeClasses}, and handed to every leg.
  */
-@AnalyzeClasses(packages = RefreshPathCoverageGuardTest.PRODUCTION_ROOT_PACKAGE,
-        importOptions = ImportOption.DoNotIncludeTests.class)
+@DisplayName("Refresh-path coverage gate: the include list is neither inert nor drifted")
 class RefreshPathCoverageGuardTest {
 
-    /**
-     * The import scope. It is the scope {@link ClientArchitectureTest} and
-     * {@link CommonsTransportReuseTest} declare, so the three classes share one import through
-     * ArchUnit's class cache instead of scanning the production classes once more.
-     */
-    static final String PRODUCTION_ROOT_PACKAGE = "de.cuioss.sheriff.token.client";
-
     private static final String EXECUTION_ID = "refresh-path-coverage-check";
+    private static final String PRODUCTION_ROOT_PACKAGE = "de.cuioss.sheriff.token.client";
     private static final String JACOCO_GROUP_ID = "org.jacoco";
     private static final String JACOCO_ARTIFACT_ID = "jacoco-maven-plugin";
 
-    /**
-     * What every leg judges.
-     *
-     * @param includeEntries  the {@code <include>} entries of the guarded execution, in pom order
-     * @param productionTypes every top-level production class, keyed by its dotted qualified name
-     *                        (JaCoCo's own form)
-     */
-    private record GuardInput(List<String> includeEntries, Map<String, JavaClass> productionTypes) {
+    /** The {@code <include>} entries of the guarded execution, in pom order. */
+    private static List<String> includeEntries;
 
-        static GuardInput of(JavaClasses imported) throws Exception {
-            Map<String, JavaClass> productionTypes = new LinkedHashMap<>();
-            for (JavaClass type : imported) {
-                if (isTopLevelProductionType(type)) {
-                    productionTypes.put(dottedQualifiedName(type), type);
-                }
+    /** Every top-level production class, keyed by its dotted qualified name (JaCoCo's own form). */
+    private static Map<String, JavaClass> productionTypes;
+
+    @BeforeAll
+    static void importPomAndProductionClasses() throws Exception {
+        includeEntries = readIncludeEntries(moduleBaseDir().resolve("pom.xml"));
+        JavaClasses imported = new ClassFileImporter()
+                .withImportOption(new ImportOption.DoNotIncludeTests())
+                .importPackages(PRODUCTION_ROOT_PACKAGE);
+        productionTypes = new LinkedHashMap<>();
+        for (JavaClass type : imported) {
+            if (isTopLevelProductionType(type)) {
+                productionTypes.put(dottedQualifiedName(type), type);
             }
-            return new GuardInput(readIncludeEntries(moduleBaseDir().resolve("pom.xml")), productionTypes);
         }
     }
 
-    /** The guarded execution is found and contributes at least one include entry. */
-    @ArchTest
-    static void shouldExtractANonEmptyIncludeList(JavaClasses imported) throws Exception {
-        GuardInput input = GuardInput.of(imported);
-        List<String> includeEntries = input.includeEntries();
-        Map<String, JavaClass> productionTypes = input.productionTypes();
-
+    @Test
+    @DisplayName("the guarded execution is found and contributes at least one include entry")
+    void shouldExtractANonEmptyIncludeList() {
         assertFalse(includeEntries.isEmpty(),
                 "no <include> entry was extracted for execution id '" + EXECUTION_ID + "' in "
                         + moduleBaseDir().resolve("pom.xml")
@@ -116,13 +105,9 @@ class RefreshPathCoverageGuardTest {
                         + " — the guard cannot judge the include list against an empty universe");
     }
 
-    /** Leg (a): every include entry binds to a type that carries executable code. */
-    @ArchTest
-    static void shouldRejectAnInertIncludeEntry(JavaClasses imported) throws Exception {
-        GuardInput input = GuardInput.of(imported);
-        List<String> includeEntries = input.includeEntries();
-        Map<String, JavaClass> productionTypes = input.productionTypes();
-
+    @Test
+    @DisplayName("leg (a): every include entry binds to a type that carries executable code")
+    void shouldRejectAnInertIncludeEntry() {
         List<String> unresolved = new ArrayList<>();
         List<String> withoutExecutableCode = new ArrayList<>();
         for (String entry : includeEntries) {
@@ -146,13 +131,9 @@ class RefreshPathCoverageGuardTest {
                         + " while measuring nothing.");
     }
 
-    /** Leg (b): no refresh-path sibling is missing from the include list. */
-    @ArchTest
-    static void shouldRejectARefreshPathClassMissingFromTheIncludeList(JavaClasses imported) throws Exception {
-        GuardInput input = GuardInput.of(imported);
-        List<String> includeEntries = input.includeEntries();
-        Map<String, JavaClass> productionTypes = input.productionTypes();
-
+    @Test
+    @DisplayName("leg (b): no refresh-path sibling is missing from the include list")
+    void shouldRejectARefreshPathClassMissingFromTheIncludeList() {
         Set<String> guardedPackages = new TreeSet<>();
         Set<String> guardedWords = new TreeSet<>();
         for (String entry : includeEntries) {
@@ -199,7 +180,7 @@ class RefreshPathCoverageGuardTest {
      *
      * @return the {@code <include>} texts of the {@link #EXECUTION_ID} execution, in document order, or
      *         an empty list when the plugin, the execution, or its rules cannot be resolved — which
-     *         {@link #shouldExtractANonEmptyIncludeList(JavaClasses)} turns into a build failure
+     *         {@link #shouldExtractANonEmptyIncludeList()} turns into a build failure
      */
     private static List<String> readIncludeEntries(Path pom) throws Exception {
         assertTrue(Files.isRegularFile(pom), "module pom not found at " + pom);

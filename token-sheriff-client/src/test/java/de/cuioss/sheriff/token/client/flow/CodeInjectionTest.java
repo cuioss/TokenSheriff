@@ -20,9 +20,11 @@ import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -31,10 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * code in their own session cannot redeem it inside a victim's flow, because {@link CallbackHandler}
  * binds the code to the exact high-entropy {@code state} of the originating {@link FlowContext} and
  * every flow mints a fresh {@code state}, {@code nonce}, and PKCE verifier.
- * <p>
- * This class holds the two cases that need more than one flow. The single-flow cases — a forged
- * {@code state}, an absent {@code state}, and the genuine {@code state} — are asserted by
- * {@link CallbackHandlerTest}.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -44,6 +42,18 @@ class CodeInjectionTest {
     private static final String REDIRECT_URI = "https://rp.example.com/callback";
 
     private final CallbackHandler handler = new CallbackHandler();
+
+    @RepeatedTest(20)
+    @DisplayName("Should reject an injected code paired with a forged/guessed state")
+    void shouldRejectInjectedCodeWithForgedState() {
+        var victimContext = FlowContext.create(REDIRECT_URI);
+        String attackerCode = Generators.nonBlankStrings().next();
+        String forgedState = Generators.nonBlankStrings().next();
+        var injected = new CallbackParameters(attackerCode, forgedState, null, null, null);
+
+        assertThrows(ClientProtocolException.class, () -> handler.handle(victimContext, injected),
+                "an injected code with a state the attacker cannot forge must be rejected");
+    }
 
     @Test
     @DisplayName("Should reject an injected code carrying another flow's state (cross-session injection)")
@@ -55,6 +65,28 @@ class CodeInjectionTest {
 
         assertThrows(ClientProtocolException.class, () -> handler.handle(victimContext, injected),
                 "a code bound to the attacker's own flow state cannot be replayed onto the victim's context");
+    }
+
+    @Test
+    @DisplayName("Should reject an injected code that omits the state entirely")
+    void shouldRejectInjectedCodeWithoutState() {
+        var victimContext = FlowContext.create(REDIRECT_URI);
+        var injected = new CallbackParameters(Generators.nonBlankStrings().next(), null, null, null, null);
+
+        assertThrows(ClientProtocolException.class, () -> handler.handle(victimContext, injected),
+                "a code injection that drops the state must fail closed");
+    }
+
+    @Test
+    @DisplayName("Should redeem only the code that carries the victim's own genuine state")
+    void shouldAcceptOnlyGenuineState() {
+        var victimContext = FlowContext.create(REDIRECT_URI);
+        String genuineCode = Generators.nonBlankStrings().next();
+        var genuine = new CallbackParameters(genuineCode, victimContext.state(), null, null, null);
+
+        String result = handler.handle(victimContext, genuine);
+
+        assertEquals(genuineCode, result, "the legitimate callback with the matching state is accepted");
     }
 
     @Test
