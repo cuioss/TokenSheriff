@@ -266,8 +266,8 @@ The fetch/retrieval sweeps serve SQLi/XSS/traversal strings as HTTP-200 response
 
 . State replay/single-use: second presentation of a consumed `FlowContext` against `CallbackHandler.handle` (TC-5).
 . Family-eviction reuse escape: replay of a superseded refresh token after LRU eviction (TC-6).
-. Keycloak refresh-token reuse (rotated-token replay → AS error) and actual rotation assertion (`newRT != oldRT`) in `RefreshSpecIT` (TC-2; the class has since been deleted, see the note there).
-. Post-revocation token use in `RevocationSpecIT` (revoked RT redeemed → `invalid_grant`) (TC-1; the class has since been deleted, see the note there).
+. Keycloak refresh-token reuse and rotation (TC-2). 2026-10-10: no longer missing. `RefreshProductionPathSpecIT#shouldRotateThroughProductionRefreshFlow` asserts the rotation (`newRT != oldRT`). `RefreshSingleUseSpecIT#shouldRefuseAnAlreadyRedeemedRefreshToken` replays an already rotated refresh token against the `single-use-refresh` realm and asserts Keycloak's 400 refusal and its classification as a rejected credential; `RefreshSingleUseSpecIT#shouldRevokeTheWholeFamilyOnReuseDetection` asserts that the rotated replacement is refused as well. The `client-engine` realm accepts a superseded refresh token by configuration; `RefreshErrorPathSpecIT#shouldRecordThatTheRealmAcceptsASupersededRefreshToken` records that.
+. Post-revocation token use (TC-1). 2026-10-10: the refusal is covered. `RefreshErrorPathSpecIT#shouldSurfaceRevokedRefreshTokenAsTypedFailure` revokes a refresh token through the production `RevocationClient`, redeems it through `RefreshFlow` and asserts Keycloak's 400. Still missing: an assertion of the error code `invalid_grant`; the test checks the status only.
 . Keycloak-side logout negative (unregistered `post_logout_redirect_uri` → error page) plus positive discrimination beyond "200 or 302" (TC-3).
 . Wrong client secret / missing auth → Keycloak 401 (TC-8).
 . Valid-JSON adversarial token/userinfo responses: HTTP 200 with missing `access_token`, wrong-typed `expires_in`, duplicate JSON keys (TC-7).

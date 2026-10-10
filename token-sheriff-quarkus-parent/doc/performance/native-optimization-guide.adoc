@@ -67,7 +67,7 @@ public class JwtValidationEndpoint { }
 [#_jfr_monitoring_dual_image_maven_profiles]
 === JFR Monitoring (Dual-Image Maven Profiles)
 
-Only the `jfr` profile compiles JFR support into the native executable. The production build carries none.
+`jfr` is the only predefined project profile that compiles JFR support into the native executable. The production build carries none.
 
 [source,xml]
 ----

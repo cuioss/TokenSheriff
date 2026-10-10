@@ -123,7 +123,7 @@ quarkus.native.debug.enabled=false
 quarkus.native.enable-reports=true
 ----
 
-JFR support is compiled into the native executable only when the build sets `quarkus.native.monitoring=jfr`. The integration-test module does not set the property in `application.properties`; its `jfr` Maven profile sets it, so only a build with `-Pjfr` produces a JFR-capable executable. See xref:../performance/jfr-profiling-guide.adoc[JFR Profiling Guide] for building and using the JFR image.
+JFR support is compiled into the native executable only when the build enables it. The Quarkus way is the build-time property `quarkus.native.monitoring=jfr`; passing `--enable-monitoring=jfr` to `native-image` as an additional build argument enables it as well. The integration-test module does not set the property in `application.properties`; its `jfr` Maven profile sets it. Of the module's predefined profile-based builds, only the one with `-Pjfr` therefore produces a JFR-capable executable. See xref:../performance/jfr-profiling-guide.adoc[JFR Profiling Guide] for building and using the JFR image.
 
 == Production Configuration Examples
 
