@@ -17,8 +17,10 @@ package de.cuioss.sheriff.token.validation.test;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
+import de.cuioss.sheriff.token.validation.jwks.JwksLoaderFactory;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
+import de.cuioss.test.generator.Generators;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.jsonwebtoken.Jwts;
@@ -33,6 +35,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import java.io.StringReader;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.interfaces.ECPublicKey;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -188,6 +191,32 @@ class InMemoryKeyHandlingTest {
         assertNotNull(jws, "JWS should not be null");
         assertEquals(tokenHolder.getSubject().orElse(null), jws.getPayload().getSubject(), "Subject should match");
         assertEquals(tokenHolder.getIssuer(), jws.getPayload().getIssuer(), "Issuer should match");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = InMemoryKeyMaterialHandler.Algorithm.class, names = {"ES256", "ES384", "ES512"})
+    @DisplayName("Should publish the issuer's own EC public key in its JWKS")
+    void shouldPublishIssuerOwnEcPublicKeyInJwks(InMemoryKeyMaterialHandler.Algorithm algorithm) {
+        String keyId = "ec-issuer-key-" + algorithm;
+        var keyMaterial = new InMemoryKeyMaterialHandler.IssuerKeyMaterial("https://ec-issuer.example.com", keyId,
+                algorithm);
+        JwksLoader jwksLoader = JwksLoaderFactory.createInMemoryLoader(keyMaterial.getJwks());
+        jwksLoader.initJWKSLoader(new SecurityEventCounter());
+        String subject = Generators.letterStrings(5, 10).next();
+        String token = Jwts.builder().subject(subject)
+                .signWith(keyMaterial.getPrivateKey(), algorithm.getAlgorithm())
+                .compact();
+
+        PublicKey publishedKey = jwksLoader.getKeyInfo(keyId).orElseThrow().key();
+
+        assertAll("JWKS of the issuer key material",
+                () -> assertEquals(((ECPublicKey) keyMaterial.getPublicKey()).getW(),
+                        assertInstanceOf(ECPublicKey.class, publishedKey).getW(),
+                        "The JWKS should carry the coordinates of the issuer's own public key"),
+                () -> assertEquals(subject,
+                        Jwts.parser().verifyWith(publishedKey).build().parseSignedClaims(token).getPayload()
+                                .getSubject(),
+                        "A token signed with the issuer's private key should verify against its JWKS"));
     }
 
     @Test

@@ -240,7 +240,10 @@ public class InMemoryKeyMaterialHandler {
         if (publicKey instanceof RSAPublicKey key) {
             return createJwksFromRsaKey(key, keyId, algorithm);
         } else if (algorithm.startsWith("ES")) {
-            return createJwksFromEcKey(keyId, algorithm);
+            if (!(publicKey instanceof ECPublicKey ecPublicKey)) {
+                throw new IllegalArgumentException("Expected ECPublicKey for algorithm: " + algorithm);
+            }
+            return createJwksFromEcKey(ecPublicKey, keyId, algorithm);
         } else if (algorithm.startsWith("PS")) {
             // PS algorithms use RSA keys with RSASSA-PSS signature scheme
             return createJwksFromRsaKey((RSAPublicKey) publicKey, keyId, algorithm);
@@ -281,22 +284,15 @@ public class InMemoryKeyMaterialHandler {
     }
 
     /**
-     * Creates a JWKS string from an EC public key.
+     * Creates a JWKS string from an EC public key. The coordinates are taken from the given key and
+     * from no other: the JWKS must describe the key whose private part signs the tokens.
      *
-     * @param keyId     the key ID
-     * @param algorithm the algorithm name (e.g., "ES256")
+     * @param ecPublicKey the EC public key
+     * @param keyId       the key ID
+     * @param algorithm   the algorithm name (e.g., "ES256")
      * @return a JWKS string
      */
-    private static String createJwksFromEcKey(String keyId, String algorithm) {
-        // Get the actual EC public key to extract coordinates
-        PublicKey publicKey = getPublicKey(Algorithm.valueOf(algorithm), keyId);
-
-        if (!(publicKey instanceof ECPublicKey)) {
-            throw new IllegalArgumentException("Expected ECPublicKey for algorithm: " + algorithm);
-        }
-
-        ECPublicKey ecPublicKey = (ECPublicKey) publicKey;
-
+    private static String createJwksFromEcKey(ECPublicKey ecPublicKey, String keyId, String algorithm) {
         // Extract the x and y coordinates from the EC public key point
         ECPoint w = ecPublicKey.getW();
         byte[] xBytes = w.getAffineX().toByteArray();
