@@ -41,7 +41,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * stronger method ({@code private_key_jwt}) is <em>both</em> configured and advertised, and must
  * fail closed rather than fall back to a configured secret the AS does not advertise. Mutual-TLS
  * ({@code tls_client_auth}) is a separate case: it is an alpha method the transport cannot honor,
- * so a working shared secret is preferred over it rather than treated as a downgrade (H4).
+ * so a working shared secret is preferred over it rather than treated as a downgrade (H4); that
+ * preference, and the selection of {@code private_key_jwt} over a shared secret configured ahead of
+ * it, are asserted by {@link ClientAuthenticationSelectorTest}.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -89,20 +91,6 @@ class WeakAuthRefusedTest {
     }
 
     @Test
-    @DisplayName("Should prefer a working client_secret_basic over the alpha tls_client_auth (H4)")
-    void shouldPreferWorkingSecretOverNonFunctionalMtls() {
-        var metadata = advertising(List.of("client_secret_basic", "tls_client_auth"));
-
-        ClientAuthentication selected = selector.select(
-                List.of(auth(ClientAuthMethod.CLIENT_SECRET_BASIC), auth(ClientAuthMethod.TLS_CLIENT_AUTH)),
-                metadata);
-
-        assertEquals(ClientAuthMethod.CLIENT_SECRET_BASIC, selected.method(),
-                "tls_client_auth is an alpha method the transport cannot honor, so the working shared "
-                        + "secret is used rather than producing an unauthenticated request");
-    }
-
-    @Test
     @DisplayName("Should fail closed when the AS advertises only the alpha tls_client_auth")
     void shouldFailClosedRatherThanUseUnadvertisedSecret() {
         ClientAuthentication basic = auth(ClientAuthMethod.CLIENT_SECRET_BASIC);
@@ -112,18 +100,5 @@ class WeakAuthRefusedTest {
         assertThrows(ClientProtocolException.class, () -> selector.select(configured, metadata),
                 "a configured secret that the AS does not advertise must not be silently used, and the "
                         + "advertised alpha tls_client_auth is never a fallback");
-    }
-
-    @Test
-    @DisplayName("Should select the strongest method even when the weaker one appears first in the configured list")
-    void shouldSelectStrongestRegardlessOfConfigurationOrder() {
-        var metadata = advertising(List.of("client_secret_basic", "private_key_jwt"));
-
-        ClientAuthentication selected = selector.select(
-                List.of(auth(ClientAuthMethod.CLIENT_SECRET_BASIC), auth(ClientAuthMethod.PRIVATE_KEY_JWT)),
-                metadata);
-
-        assertEquals(ClientAuthMethod.PRIVATE_KEY_JWT, selected.method(),
-                "selection strength must not depend on the configuration order");
     }
 }
