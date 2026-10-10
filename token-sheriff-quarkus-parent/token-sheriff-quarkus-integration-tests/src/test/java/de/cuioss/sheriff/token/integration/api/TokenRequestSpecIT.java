@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.integration.api;
 
 import de.cuioss.sheriff.token.integration.BaseIntegrationTest;
+import de.cuioss.sheriff.token.integration.TestRealm;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -27,21 +28,59 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
- * TokenRequest integration spec — tests that a token padded with whitespace is trimmed and reaches
- * validation instead of being treated as empty. Deserialization of a plain token value is covered by
- * {@code ApiValidationSpecIT}.
+ * TokenRequest integration spec — tests how {@code /jwt/validate-explicit} treats a token value that
+ * is padded with whitespace.
+ * <p>
+ * {@link #paddedValidTokenIsTrimmedBeforeValidation()} proves the trimming: a valid access token is
+ * accepted with and without padding. An endpoint that passed the padded value on untrimmed would
+ * reject it. {@link #paddedNonTokenReachesValidation()} proves only that a padded value is not
+ * treated as empty; its {@code 401} is the same with and without trimming. Deserialization of a
+ * plain token value is covered by {@code ApiValidationSpecIT}.
  */
 @DisplayName("TokenRequest Spec")
 class TokenRequestSpecIT extends BaseIntegrationTest {
 
+    private static final String VALIDATE_EXPLICIT_PATH = "/jwt/validate-explicit";
+    private static final String ACCESS_TOKEN_VALID_MESSAGE = "Access token is valid";
+    private static final String SUBJECT = "data.subject";
+
     @Test
-    @DisplayName("TokenRequest.isEmpty() should work correctly with token trimming")
-    void tokenRequestIsEmptyWithTokenTrimming() {
+    @DisplayName("A valid access token padded with whitespace is trimmed and accepted")
+    void paddedValidTokenIsTrimmedBeforeValidation() {
+        String accessToken = TestRealm.createIntegrationRealm().obtainValidToken().accessToken();
+
+        String subject = given()
+                .contentType(CONTENT_TYPE_JSON)
+                .body(Map.of(TOKEN_FIELD_NAME, accessToken))
+                .when()
+                .post(VALIDATE_EXPLICIT_PATH)
+                .then()
+                .statusCode(200)
+                .body(VALID, equalTo(true))
+                .body(MESSAGE, equalTo(ACCESS_TOKEN_VALID_MESSAGE))
+                .extract()
+                .path(SUBJECT);
+
+        given()
+                .contentType(CONTENT_TYPE_JSON)
+                .body(Map.of(TOKEN_FIELD_NAME, "  " + accessToken + " \t"))
+                .when()
+                .post(VALIDATE_EXPLICIT_PATH)
+                .then()
+                .statusCode(200)
+                .body(VALID, equalTo(true))
+                .body(MESSAGE, equalTo(ACCESS_TOKEN_VALID_MESSAGE))
+                .body(SUBJECT, equalTo(subject));
+    }
+
+    @Test
+    @DisplayName("A padded value that is no token is not treated as empty and reaches validation")
+    void paddedNonTokenReachesValidation() {
         given()
                 .contentType(CONTENT_TYPE_JSON)
                 .body(Map.of(TOKEN_FIELD_NAME, "  valid.token.value  "))
                 .when()
-                .post("/jwt/validate-explicit")
+                .post(VALIDATE_EXPLICIT_PATH)
                 .then()
                 .statusCode(401)
                 .body(VALID, equalTo(false))

@@ -144,12 +144,17 @@ if [[ "$DEFER_APP_START" == "true" ]]; then
 fi
 compose_up "${HELD_BACK[@]}"
 
+# Every readiness wait below calls curl with --fail, so only an HTTP success status ends the wait:
+# without it curl exits 0 on a 503, and an endpoint that answers DOWN would count as ready. curl is
+# the condition of an `if`, so its non-zero exit does not trip `set -e`; the loop polls on until its
+# own timeout.
+
 # Wait for Keycloak to be ready first. When the application start is deferred, nothing in the
 # `up` call above waits for Keycloak's health check, so this loop covers the whole Keycloak start.
 KEYCLOAK_WAIT_SECONDS=120
 echo "Waiting for Keycloak to be ready..."
 for ((i = 1; i <= KEYCLOAK_WAIT_SECONDS; i++)); do
-    if curl -k -s https://localhost:1090/health/ready > /dev/null 2>&1; then
+    if curl -k -s --fail https://localhost:1090/health/ready > /dev/null 2>&1; then
         echo "Keycloak is ready!"
         break
     fi
@@ -166,7 +171,7 @@ done
 if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
     echo "Waiting for Dex to be ready..."
     for i in {1..30}; do
-        if curl -k -s https://localhost:2556/dex/.well-known/openid-configuration > /dev/null 2>&1; then
+        if curl -k -s --fail https://localhost:2556/dex/.well-known/openid-configuration > /dev/null 2>&1; then
             echo "Dex is ready!"
             break
         fi
@@ -184,7 +189,7 @@ fi
 if [[ "$COMPOSE_PROFILES" == *"multi-idp"* ]]; then
     echo "Waiting for Zitadel to be ready..."
     for i in {1..60}; do
-        if curl -s -H "Host: zitadel:8080" http://localhost:3080/debug/ready > /dev/null 2>&1; then
+        if curl -s --fail -H "Host: zitadel:8080" http://localhost:3080/debug/ready > /dev/null 2>&1; then
             echo "Zitadel is ready!"
             break
         fi
@@ -261,7 +266,7 @@ fi
 echo "Waiting for Quarkus service to be ready..."
 START_TIME=$(date +%s)
 for i in {1..30}; do
-    if curl -k -s https://localhost:10443/q/health/live > /dev/null 2>&1; then
+    if curl -k -s --fail https://localhost:10443/q/health/live > /dev/null 2>&1; then
         END_TIME=$(date +%s)
         TOTAL_TIME=$((END_TIME - START_TIME))
         echo "Quarkus service is ready!"
@@ -282,7 +287,7 @@ done
 if [[ "$PROBE_ENABLED" == "true" ]]; then
     echo "Waiting for the retry probe to be ready..."
     for i in {1..30}; do
-        if curl -k -s "https://localhost:${PROBE_PORT}/q/health/live" > /dev/null 2>&1; then
+        if curl -k -s --fail "https://localhost:${PROBE_PORT}/q/health/live" > /dev/null 2>&1; then
             echo "Retry probe is ready! Its log is written to: ${RETRY_PROBE_LOG_DIR}/quarkus.log"
             break
         fi
