@@ -137,6 +137,16 @@ class SurefireForkGroupGuardTest {
                     () -> assertTrue(pom.contains("<groups>" + GROUP_TAG + "</groups>"),
                             "A second surefire execution must select the tag " + GROUP_TAG));
         }
+
+        @Test
+        @DisplayName("Should not switch off the check for a test selection that matches nothing")
+        void shouldKeepNoMatchingTestCheckStrict() {
+            String pom = read(moduleDirectory().resolveSibling("pom.xml"));
+
+            assertFalse(pom.contains("<failIfNoSpecifiedTests>"),
+                    "The parent pom must not set failIfNoSpecifiedTests: with the check switched off a mistyped "
+                            + "-Dtest selection ends in BUILD SUCCESS with zero tests run");
+        }
     }
 
     @Nested

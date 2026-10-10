@@ -83,7 +83,20 @@ class MyEndpointTest {
 
 `SurefireForkGroupGuardTest` in `token-sheriff-validation-quarkus` enforces the rule. It reads the test sources of every Quarkus module and the surefire configuration of the parent pom, and fails when a class is in the wrong group. A build limited to a sibling module does not run the guard; the full build does.
 
-The two executions run one after the other and write to the same JaCoCo data file. A `-Dtest=...` selection matches classes of one group only, so the parent pom sets `failIfNoSpecifiedTests=false` for the execution that then runs nothing.
+The two executions run one after the other and write to the same JaCoCo data file.
+
+=== Running a Selection with -Dtest
+
+A `-Dtest=...` selection matches classes of one group only. With two executions the other one would run nothing, and surefire fails an execution whose selection matched nothing. The parent pom therefore has the profile `focused-test-selection`, which is active whenever the property `test` is set:
+
+* `default-test` drops its tag filter and runs the selection, whatever group the classes belong to.
+* `quarkus-boot-test` is skipped.
+
+The pom does not set `failIfNoSpecifiedTests`, so surefire keeps its strict default: a selection that matches no class, for example a mistyped class name, fails the build. `SurefireForkGroupGuardTest` fails when the pom sets the parameter.
+
+A selection that names plain classes and Quarkus-boot classes together runs them in one JVM. The separation of the two groups holds for runs without `-Dtest` only, which includes every CI run.
+
+With `-pl <module> -am` the selection is also applied to the upstream modules, where it matches nothing and fails the build. Add `-Dsurefire.failIfNoSpecifiedTests=false` to such a run. The check is then off for the selected module as well, so a mistyped name is no longer reported.
 
 == Test Framework Usage
 
