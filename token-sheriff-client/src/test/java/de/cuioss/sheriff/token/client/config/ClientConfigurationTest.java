@@ -654,16 +654,35 @@ class ClientConfigurationTest {
                     "the message must name backChannelOrigin, but was: " + exception.getMessage());
         }
 
-        @Test
-        @DisplayName("Should not echo a user-info credential in the rejection message")
-        void shouldNotEchoUserInfoCredential() {
+        @ParameterizedTest(name = "does not echo the secret of \"{0}\"")
+        @ValueSource(strings = {
+                "https://user:%s@keycloak.internal",
+                "ftp://user:%s@keycloak.internal",
+                "https://user:%s@keycloak.internal/path",
+                "https://user:%s@keycloak.internal?x=1",
+                "https://user:%s@keycloak.internal#f",
+                "https://user:%s@keycloak.internal/ a path",
+                "https://keycloak.internal?token=%s",
+                "https://keycloak.internal#%s",
+                "https://keycloak.internal/%s"
+        })
+        @DisplayName("Should never echo the configured value, whichever check rejects it")
+        void shouldNotEchoConfiguredValue(String template) {
             var secret = Generators.letterStrings(12, 20).next();
-            var builder = builderWithOrigin("https://user:" + secret + "@keycloak.internal");
+            var builder = builderWithOrigin(template.formatted(secret));
 
             var exception = assertThrows(IllegalArgumentException.class, builder::build);
 
-            assertFalse(exception.getMessage().contains(secret),
-                    "user-info may carry a credential and must never reach an exception message");
+            var messages = new ArrayList<String>();
+            for (Throwable current = exception; current != null; current = current.getCause()) {
+                messages.add(String.valueOf(current.getMessage()));
+            }
+            assertAll("the rejection names the field but never the value",
+                    () -> assertTrue(exception.getMessage().contains("backChannelOrigin"),
+                            "the message must name backChannelOrigin, but was: " + exception.getMessage()),
+                    () -> assertTrue(messages.stream().noneMatch(message -> message.contains(secret)),
+                            "the value may carry a credential and must never reach an exception message"
+                                    + " or its cause chain"));
         }
 
         @Test

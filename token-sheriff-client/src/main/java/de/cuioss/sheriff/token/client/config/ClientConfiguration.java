@@ -400,38 +400,37 @@ public class ClientConfiguration {
         if (backChannelOrigin.isBlank()) {
             throw new IllegalArgumentException("backChannelOrigin must not be blank when provided");
         }
+        // No rejection below echoes the configured value: it may carry a credential in its
+        // user-info, and the user-info check is not the first check that can reject it.
         final URI uri;
         try {
             uri = new URI(backChannelOrigin);
         } catch (URISyntaxException e) {
+            // The exception is not chained: its message repeats the input verbatim.
             throw new IllegalArgumentException(
-                    "backChannelOrigin must be a valid absolute URL, but was: " + backChannelOrigin, e);
+                    "backChannelOrigin must be a valid absolute URL (" + e.getReason() + " at index " + e.getIndex()
+                            + ")");
         }
         String scheme = uri.getScheme();
         if (!uri.isAbsolute() || uri.getHost() == null
                 || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
-            throw new IllegalArgumentException(
-                    "backChannelOrigin must be an absolute http(s) URL with a host, but was: " + backChannelOrigin);
+            throw new IllegalArgumentException("backChannelOrigin must be an absolute http(s) URL with a host");
         }
         if (uri.getRawUserInfo() != null) {
-            // The value is deliberately not echoed: user-info may carry a credential.
             throw new IllegalArgumentException("backChannelOrigin must not carry user-info");
         }
         if (uri.getRawQuery() != null) {
-            throw new IllegalArgumentException(
-                    "backChannelOrigin must not carry a query, but was: " + backChannelOrigin);
+            throw new IllegalArgumentException("backChannelOrigin must not carry a query");
         }
         if (uri.getRawFragment() != null) {
-            throw new IllegalArgumentException(
-                    "backChannelOrigin must not carry a fragment, but was: " + backChannelOrigin);
+            throw new IllegalArgumentException("backChannelOrigin must not carry a fragment");
         }
         String path = uri.getRawPath();
         if ("/".equals(path)) {
             return backChannelOrigin.substring(0, backChannelOrigin.length() - 1);
         }
         if (path != null && !path.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "backChannelOrigin must be an origin without a path, but was: " + backChannelOrigin);
+            throw new IllegalArgumentException("backChannelOrigin must be an origin without a path");
         }
         return backChannelOrigin;
     }
