@@ -249,13 +249,51 @@ public class ClientConfiguration {
     boolean strictScopeReconciliation = false;
 
     /**
+     * The origin ({@code scheme://host[:port]}) the client uses to <em>reach</em> the authorization
+     * server on the back channel, or {@code null} to contact every endpoint at the URL the
+     * authorization server advertised (the behaviour when the field is not configured).
+     * <p>
+     * It exists for split-horizon deployments, where the issuer identity is a public URL (for example
+     * {@code https://idp.example.com/realms/demo}) but this client can only reach the authorization
+     * server under an internal address (for example {@code http://keycloak:8080}).
+     * <p>
+     * <strong>Mapping rule:</strong> every back-channel call — discovery, token, PAR, userinfo and
+     * revocation — whose advertised endpoint URL has the same origin as {@link #issuer} (compared on
+     * lower-cased scheme, lower-cased host and effective port, so {@code https://idp} and
+     * {@code https://idp:443} are equal) is sent to this origin instead, with the raw path and raw query
+     * kept verbatim. An endpoint advertised on any other origin is contacted unchanged. The target is
+     * derived from configuration alone — neither the request nor the authorization server's discovery
+     * data can steer a call to a third origin.
+     * <p>
+     * <strong>Identity is unaffected:</strong> {@link #issuer} stays the issuer identifier, and every
+     * exact-match check against it (the discovery document {@code issuer}, the token {@code iss}), the
+     * published provider metadata, the DPoP {@code htu} claim and the front-channel authorization and
+     * end-session URLs keep the advertised public values.
+     * <p>
+     * <strong>Transport policy follows the contacted host:</strong> {@link #allowInsecureHttp},
+     * {@link #verifyHostname} and {@link #sslContext} are evaluated against the back-channel origin, so
+     * an {@code http://} back-channel origin requires {@link #allowInsecureHttp}, and the certificate the
+     * back-channel host presents must match that host and be trusted.
+     * <p>
+     * <strong>Scope:</strong> the validation-side JWKS URL ({@code HttpJwksLoaderConfig}) is configured
+     * separately and is not rewritten by this setting.
+     * <p>
+     * When present it must be a well-formed absolute {@code http}/{@code https} URL with a host and
+     * nothing beyond the origin — no user-info, no path, no query and no fragment. A single trailing
+     * {@code /} is accepted and normalised away, so the stored value never ends with {@code /}.
+     */
+    @Nullable
+    String backChannelOrigin;
+
+    /**
      * All-args constructor invoked by the Lombok-generated builder. It validates the configuration at
      * construction so a malformed client can never be built and later fail obscurely on the wire:
      * {@code issuer} and {@code clientId} must be non-blank, {@code issuer} must be a well-formed
-     * absolute {@code http}/{@code https} URL with a host, and every {@code scope} must be non-blank
+     * absolute {@code http}/{@code https} URL with a host, every {@code scope} must be non-blank
      * (a {@code null}/blank scope would otherwise serialise as the literal {@code "null"} in the
-     * {@code scope} request parameter). This mirrors {@code PostLogoutRedirectValidator}, which
-     * validates every entry it accepts (L14).
+     * {@code scope} request parameter), and a provided {@code backChannelOrigin} must be a bare
+     * absolute {@code http}/{@code https} origin. This mirrors {@code PostLogoutRedirectValidator},
+     * which validates every entry it accepts (L14).
      *
      * @throws IllegalArgumentException if any field is blank, malformed, or otherwise invalid
      */
@@ -268,7 +306,7 @@ public class ClientConfiguration {
             @NonNull ClientAuthMethod authMethod, List<String> scopes, @Nullable String redirectUri,
             boolean allowInsecureHttp, boolean verifyHostname, int connectTimeoutSeconds, int readTimeoutSeconds,
             int discoveryDocumentMaxSize, @Nullable SSLContext sslContext,
-            boolean strictScopeReconciliation) {
+            boolean strictScopeReconciliation, @Nullable String backChannelOrigin) {
         this.issuer = requireNonBlank(issuer, "issuer");
         validateIssuerUrl(this.issuer);
         this.clientId = requireNonBlank(clientId, "clientId");
@@ -297,6 +335,7 @@ public class ClientConfiguration {
         this.sslContext = sslContext;
         // No validation: a boolean has no invalid value.
         this.strictScopeReconciliation = strictScopeReconciliation;
+        this.backChannelOrigin = validateBackChannelOrigin(backChannelOrigin);
     }
 
     /**
@@ -341,6 +380,60 @@ public class ClientConfiguration {
             throw new IllegalArgumentException(
                     "issuer must be an absolute http(s) URL with a host, but was: " + issuer);
         }
+    }
+
+    /**
+     * Validates a provided back-channel origin and normalises it.
+     * <p>
+     * An absent ({@code null}) value is preserved. A provided value must be a well-formed absolute
+     * {@code http}/{@code https} URL with a host and nothing beyond the origin: no user-info, no query,
+     * no fragment, and an empty path — a single trailing {@code /} is accepted and stripped.
+     *
+     * @param backChannelOrigin the configured back-channel origin, may be {@code null}
+     * @return the normalised origin (without trailing {@code /}), or {@code null} when absent
+     * @throws IllegalArgumentException if the value is blank or is not a bare http(s) origin
+     */
+    private static @Nullable String validateBackChannelOrigin(@Nullable String backChannelOrigin) {
+        if (backChannelOrigin == null) {
+            return null;
+        }
+        if (backChannelOrigin.isBlank()) {
+            throw new IllegalArgumentException("backChannelOrigin must not be blank when provided");
+        }
+        final URI uri;
+        try {
+            uri = new URI(backChannelOrigin);
+        } catch (URISyntaxException e) {
+            throw new IllegalArgumentException(
+                    "backChannelOrigin must be a valid absolute URL, but was: " + backChannelOrigin, e);
+        }
+        String scheme = uri.getScheme();
+        if (!uri.isAbsolute() || uri.getHost() == null
+                || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
+            throw new IllegalArgumentException(
+                    "backChannelOrigin must be an absolute http(s) URL with a host, but was: " + backChannelOrigin);
+        }
+        if (uri.getRawUserInfo() != null) {
+            // The value is deliberately not echoed: user-info may carry a credential.
+            throw new IllegalArgumentException("backChannelOrigin must not carry user-info");
+        }
+        if (uri.getRawQuery() != null) {
+            throw new IllegalArgumentException(
+                    "backChannelOrigin must not carry a query, but was: " + backChannelOrigin);
+        }
+        if (uri.getRawFragment() != null) {
+            throw new IllegalArgumentException(
+                    "backChannelOrigin must not carry a fragment, but was: " + backChannelOrigin);
+        }
+        String path = uri.getRawPath();
+        if ("/".equals(path)) {
+            return backChannelOrigin.substring(0, backChannelOrigin.length() - 1);
+        }
+        if (path != null && !path.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "backChannelOrigin must be an origin without a path, but was: " + backChannelOrigin);
+        }
+        return backChannelOrigin;
     }
 
     /**
