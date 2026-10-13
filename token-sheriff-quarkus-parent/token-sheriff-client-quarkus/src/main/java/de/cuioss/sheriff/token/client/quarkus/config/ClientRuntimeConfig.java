@@ -118,4 +118,18 @@ public final class ClientRuntimeConfig {
      * opt-in carries.
      */
     public static final String STRICT_SCOPE_RECONCILIATION = PREFIX + ".strict-scope-reconciliation";
+
+    /**
+     * The origin ({@code scheme://host[:port]}) under which this client reaches the authorization server
+     * on the back channel, for split-horizon deployments where the issuer is a public URL the
+     * application cannot reach. Property: {@code sheriff.client.back-channel-origin}. Optional; absent
+     * by default, in which case every endpoint is contacted at its advertised URL.
+     * <p>
+     * Every back-channel call (discovery, token, PAR, userinfo, revocation) whose advertised endpoint
+     * shares the issuer's origin is sent to this origin with its path and query kept, while the issuer,
+     * the {@code iss} checks, the published metadata and the front-channel URLs stay unchanged.
+     *
+     * @see de.cuioss.sheriff.token.client.config.ClientConfiguration#getBackChannelOrigin()
+     */
+    public static final String BACK_CHANNEL_ORIGIN = PREFIX + ".back-channel-origin";
 }

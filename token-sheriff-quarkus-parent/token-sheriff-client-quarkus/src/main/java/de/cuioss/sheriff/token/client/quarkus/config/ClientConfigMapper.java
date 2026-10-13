@@ -65,7 +65,9 @@ public final class ClientConfigMapper {
      * @throws IllegalArgumentException when {@link ClientRuntimeConfig#AUTH_METHOD} names an
      *                                  unrecognised authentication method, or when
      *                                  {@link ClientRuntimeConfig#DISCOVERY_DOCUMENT_MAX_SIZE} is not
-     *                                  positive
+     *                                  positive, or when {@link ClientRuntimeConfig#BACK_CHANNEL_ORIGIN}
+     *                                  is not a bare absolute {@code http}/{@code https} origin (the
+     *                                  engine {@link ClientConfiguration} rejects it at build time)
      */
     public static ClientConfiguration map(Config config) {
         String issuer = requiredValue(config, ClientRuntimeConfig.ISSUER);
@@ -90,6 +92,8 @@ public final class ClientConfigMapper {
                 .ifPresent(builder::discoveryDocumentMaxSize);
         config.getOptionalValue(ClientRuntimeConfig.CLIENT_SECRET, String.class).ifPresent(builder::clientSecret);
         config.getOptionalValue(ClientRuntimeConfig.REDIRECT_URI, String.class).ifPresent(builder::redirectUri);
+        config.getOptionalValue(ClientRuntimeConfig.BACK_CHANNEL_ORIGIN, String.class)
+                .ifPresent(builder::backChannelOrigin);
         resolveScopes(config).forEach(builder::scope);
 
         return builder.build();

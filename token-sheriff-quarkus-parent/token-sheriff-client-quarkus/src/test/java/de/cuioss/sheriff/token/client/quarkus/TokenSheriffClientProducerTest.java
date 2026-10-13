@@ -181,6 +181,41 @@ class TokenSheriffClientProducerTest {
                     "sheriff.client.verify-hostname=false must reach the engine configuration");
         }
 
+        // The back-channel origin is a matched pair too: omitting the property must leave every
+        // endpoint at its advertised URL, and setting it must reach the engine in its normalised form.
+
+        @Test
+        @DisplayName("Should leave the back-channel origin absent when the property is not configured")
+        void shouldDefaultBackChannelOriginToAbsent() {
+            ClientConfiguration configuration =
+                    new TokenSheriffClientProducer(configOf(minimalClientProperties())).clientConfiguration();
+
+            assertNull(configuration.getBackChannelOrigin(),
+                    "omitting the property must leave the back-channel origin absent, so no URL is rewritten");
+        }
+
+        @Test
+        @DisplayName("Should map the back-channel origin onto the engine configuration in its normalised form")
+        void shouldMapBackChannelOrigin() {
+            Map<String, String> plain = minimalClientProperties();
+            plain.put(ClientRuntimeConfig.BACK_CHANNEL_ORIGIN, "http://keycloak:8080");
+            Map<String, String> trailingSlash = minimalClientProperties();
+            trailingSlash.put(ClientRuntimeConfig.BACK_CHANNEL_ORIGIN, "https://idp.internal:8443/");
+
+            ClientConfiguration plainConfiguration =
+                    new TokenSheriffClientProducer(configOf(plain)).clientConfiguration();
+            ClientConfiguration trailingSlashConfiguration =
+                    new TokenSheriffClientProducer(configOf(trailingSlash)).clientConfiguration();
+
+            assertAll("mapped back-channel origin",
+                    () -> assertEquals("http://keycloak:8080", plainConfiguration.getBackChannelOrigin(),
+                            "a bare origin is carried through verbatim"),
+                    () -> assertEquals("https://idp.internal:8443", trailingSlashConfiguration.getBackChannelOrigin(),
+                            "a single trailing slash is normalised away by the engine"),
+                    () -> assertEquals(ISSUER, plainConfiguration.getIssuer(),
+                            "the issuer identity is unchanged when a back-channel origin is set"));
+        }
+
         @Test
         @DisplayName("Should fail loud when the client extension is present but not configured")
         void shouldFailWhenUnconfigured() {
@@ -264,6 +299,20 @@ class TokenSheriffClientProducerTest {
                             "an unrecognised auth-method must be rejected");
             assertTrue(failure.getMessage().contains(ClientRuntimeConfig.AUTH_METHOD),
                     "the failure names the auth-method property");
+        }
+
+        @Test
+        @DisplayName("Should reject a back-channel origin that carries a path")
+        void shouldRejectBackChannelOriginWithPath() {
+            Map<String, String> properties = minimalClientProperties();
+            properties.put(ClientRuntimeConfig.BACK_CHANNEL_ORIGIN, "http://keycloak:8080/realms/demo");
+            Config config = configOf(properties);
+
+            IllegalArgumentException failure =
+                    assertThrows(IllegalArgumentException.class, () -> ClientConfigMapper.map(config),
+                            "a back-channel origin with a path must fail the mapping");
+            assertTrue(failure.getMessage().contains("backChannelOrigin"),
+                    "the failure names the back-channel origin");
         }
 
         @Test

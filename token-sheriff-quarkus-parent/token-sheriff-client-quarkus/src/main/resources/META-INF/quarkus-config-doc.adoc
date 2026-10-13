@@ -34,7 +34,21 @@ sheriff.client.client-secret=${MY_SERVICE_CLIENT_SECRET}
 |`sheriff.client.discovery-document-max-size` |int |`65536` |Max size in bytes of the authorization server's discovery document. Must be positive. Raise only for a server whose `.well-known/openid-configuration` exceeds the ceiling
 |`sheriff.client.strict-scope-reconciliation` |boolean |`false` |Refuse a refresh whose granted scope is *broader* than the requested scope (see NOTE below)
 |`sheriff.client.verify-hostname` |boolean |`true` |Enforce TLS hostname verification on this client's outbound calls. Set to `false` only for SAN-mismatched development certificates (see NOTE below)
+|`sheriff.client.back-channel-origin` |String |— (absent) |Origin (`scheme://host[:port]`) under which the client reaches the authorization server on the back channel, for split-horizon deployments. Must be a bare `http`/`https` origin — no path, query, fragment or user-info; an invalid value fails the mapping (see NOTE below)
 |===
+
+NOTE: `sheriff.client.back-channel-origin` serves deployments where the issuer is a public URL (for
+example `https://idp.example.com/realms/demo`) that the application can only reach under an internal
+address (for example `http://keycloak:8080`). Every back-channel call — discovery, token, PAR,
+userinfo, revocation — whose advertised endpoint has the *same origin* as the issuer is sent to the
+configured origin with its path and query kept verbatim; an endpoint advertised on any other origin is
+contacted unchanged. The issuer stays the identity: the discovery-document `issuer` check and the
+token `iss` checks are untouched, the published provider metadata and the DPoP `htu` keep the public
+URLs, and the front channel (authorization-request and end-session URLs sent to the browser) keeps
+the public origin. Transport policy follows the host actually contacted: `verify-hostname` and the
+configured trust apply to the back-channel host, and an `http://` back-channel origin requires
+`sheriff.client.allow-insecure-http=true`. The validation-side JWKS URL
+(`sheriff.token.issuers.<name>.jwks.http.url`) is configured separately and is not affected by this setting.
 
 NOTE: `sheriff.client.verify-hostname` defaults to `true` — it is the one switch in this table whose
 secure value is the *enabled* one. Setting it to `false` relaxes *hostname matching only*:
