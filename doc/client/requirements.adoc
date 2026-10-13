@@ -284,6 +284,42 @@ trust material MUST steer the JVM default trust store instead.
 
 * Source: xref:../commons/requirements.adoc[commons] (`COMMONS-2`, `cui-http` `HttpHandler.sslContext()`), https://www.rfc-editor.org/rfc/rfc9700#section-2.6[RFC 9700 §2.6] (TLS on every outbound request), xref:../adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008] (hostname-verification knob and its mutual exclusion with per-client trust).
 
+[#CLIENT-24]
+=== CLIENT-24: Optional back-channel origin, kept apart from the issuer identity
+
+The engine MUST accept an *optional back-channel origin* on its client configuration
+(`backChannelOrigin`; under Quarkus `sheriff.client.back-channel-origin`) for split-horizon
+deployments, in which the issuer identity is a public URL but the client reaches the authorization
+server only under an internal address. When it is absent, every endpoint MUST be contacted at its
+advertised URL. A provided value MUST be a bare absolute `http`/`https` origin
+(`scheme://host[:port]`) — no user-info, path, query or fragment, with a single trailing `/`
+normalised away — and any other value MUST be refused at configuration-build time.
+
+*Mapping rule.* Every back-channel call — discovery, token, PAR, userinfo and revocation — whose
+advertised endpoint has the same origin as the configured issuer (lower-cased scheme, lower-cased
+host, effective port) MUST be sent to the back-channel origin with its path and query kept
+verbatim. An endpoint advertised on any other origin MUST be contacted unchanged. The target MUST be
+derived from configuration alone, so no request input or advertised data can steer a call to a third
+origin (xref:threat-model.adoc#T-SSRF-ADVERTISED[T-SSRF-ADVERTISED]).
+
+*Identity is unchanged.* The configured issuer stays the issuer identifier: the discovery-document
+`issuer` check, the token `iss` checks and the RFC 9207 `iss` check (<<CLIENT-8>>) MUST keep
+comparing against it exactly. The resolved provider metadata keeps the advertised public endpoint
+URLs, the DPoP `htu` claim (<<CLIENT-11>>) names the public advertised URL, and the front-channel
+authorization and end-session URLs keep the public origin.
+
+*Transport policy follows the contacted host.* The egress path validation runs on the advertised URL;
+the scheme policy (`allowInsecureHttp`), the per-client trust (<<CLIENT-23>>) and hostname
+verification MUST be applied to the back-channel origin — the host actually contacted — so the
+back-channel host's certificate is validated against its own name. The setting relaxes no TLS,
+hostname, issuer or `iss` check.
+
+The scope is the client engine's own back-channel calls. The validation-side JWKS URL
+(`HttpJwksLoaderConfig`) is configured separately and is not rewritten; a split-horizon deployment
+points it at the reachable address itself.
+
+* Source: xref:../commons/specification/transport.adoc#client_back_channel_origin[Transport specification — client back-channel origin], https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation[OIDC Discovery 1.0 §4.3] (issuer identity), xref:../adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008] (hostname verification applies to the host contacted).
+
 == Token requirements
 
 _The server-side lifecycle delta on top of the validation module — storage, refresh,
@@ -476,6 +512,7 @@ sourced xref:best-practices.adoc[best-practices] checklist, and realized in a sp
 | CLIENT-13 | T-LOGOUT | step-up-and-logout
 | CLIENT-14 | T-URL-LEAK, T-TLS-TOKEN (delegated) | retrieval-flow
 | CLIENT-23 | T-TLS-TOKEN (per-client trust material for the delegated TLS primitive) | retrieval-flow
+| CLIENT-24 | T-SSRF-ADVERTISED, T-TLS-TOKEN (back-channel routing without identity or TLS relaxation) | xref:../commons/specification/transport.adoc#client_back_channel_origin[transport (client back-channel origin)]
 | CLIENT-15 | T-AUD-CONFUSION | xref:specification/token-handling.adoc[token-handling]
 | CLIENT-16 | T-IDTOKEN-INTEGRITY | token-handling
 | CLIENT-17 | T-REFRESH-THEFT, T-LOGOUT | token-handling

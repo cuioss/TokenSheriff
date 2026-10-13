@@ -57,6 +57,54 @@ every back-channel call the client engine makes). Both exist for SAN-mismatched 
 test topologies, never production; see
 xref:../../adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008].
 
+=== [[client_back_channel_origin]] Client back-channel origin
+
+The client engine accepts one further, optional transport knob next to `sheriff.client.verify-hostname`:
+the *back-channel origin* — `ClientConfiguration.backChannelOrigin`, under Quarkus
+`sheriff.client.back-channel-origin`. It serves split-horizon deployments, in which the issuer
+identity is a public URL but the application reaches the authorization server only under an internal
+address. It changes *where* back-channel calls are sent, never *who* the issuer is
+(xref:../../client/requirements.adoc#CLIENT-24[CLIENT-24]).
+
+* *Configuration.* Absent by default; when absent, every endpoint is contacted at its advertised URL.
+  A provided value MUST be a bare absolute `http`/`https` origin (`scheme://host[:port]`) with no
+  user-info, path, query or fragment; a single trailing `/` is accepted and normalised away. Any
+  other value is refused when the configuration is built.
+* *Rewrite seam.* The rewrite happens in exactly one place, `BackChannelHttp.validatedHandler`, the
+  seam every client back-channel call already passes through. The endpoint clients compute no URL
+  past it.
+* *Origin comparison.* An advertised endpoint is rewritten when its origin equals the issuer
+  origin, compared on lower-cased scheme, lower-cased host and effective port — an absent port is the
+  scheme default (`443` for `https`, `80` for `http`), so `https://idp` and `https://idp:443` are the
+  same origin. An endpoint on any other origin is contacted unchanged.
+* *Path and query preservation.* A rewritten request keeps the advertised raw path and raw query
+  verbatim; only scheme, host and port are taken from the back-channel origin.
+* *Configuration-only derivation.* Both origins in the comparison — the issuer and the back-channel
+  origin — come from configuration. The advertised URL can decide only *whether* it is rewritten,
+  never *where to*, so the rewrite adds no SSRF primitive: no request input or discovery data can
+  steer a call to a third origin.
+* *Order of controls.* The client's egress path validation
+  (xref:../../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]) runs on
+  the advertised URL before the rewrite; the scheme policy (`allowInsecureHttp`), the per-client trust
+  (`sslContext`) and hostname verification are then evaluated against the rewritten target, i.e. the
+  host actually contacted. With `https://`, the back-channel host's certificate is therefore
+  validated against the back-channel host name.
+
+[cols="1,2", options="header"]
+|===
+| Retargeted (when the endpoint shares the issuer origin) | Not retargeted
+
+| Discovery (`.well-known/openid-configuration`), token, PAR, userinfo, revocation
+| Front-channel URLs sent to the browser (authorization request, end-session); validation-side
+  JWKS retrieval, whose URL is configured separately on `HttpJwksLoaderConfig`; introspection and
+  device authorization, which the client engine does not implement
+|===
+
+The setting leaves the published data and every identity check untouched: the resolved provider
+metadata keeps the advertised public endpoint URLs, the discovery-document `issuer` and the token
+`iss` are still compared exactly against the configured issuer, and a DPoP proof carries the public
+advertised URL as its `htu` claim, not the rewritten one.
+
 === SSRF defence (COMMONS-3)
 
 Any URL from an IdP-controlled source (`jwks_uri`, discovery, `userinfo`, or any advertised

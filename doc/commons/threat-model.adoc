@@ -103,6 +103,15 @@ The transport controls above leave one residual exposure, recorded here rather t
   the deployment that opts in, which is why the default is ON. See
   xref:../adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008].
 
+The client engine's optional back-channel origin (`sheriff.client.back-channel-origin`, see
+xref:specification/transport.adoc#client_back_channel_origin[Transport spec]) adds no further
+residual exposure to T-TLS, T-SSRF or T-DISCOVERY. It is operator-configured only, and an advertised
+endpoint is retargeted to it only when the endpoint shares the configured issuer's origin, so
+advertised discovery data cannot steer a call to a third origin. The issuer identity and the
+`issuer` / `iss` checks stay intact, and `sheriff.client.verify-hostname` together with the
+configured trust then validates the certificate of the back-channel host — the host actually
+contacted. The validation-side JWKS URL is configured separately and is not rewritten.
+
 == Adversarial test coverage
 
 Each transport threat is exercised by the `generators` test artifact's dispatchers in an
