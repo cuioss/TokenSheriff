@@ -217,6 +217,20 @@ class JWKSKeyLoaderTest {
                     WARN.DUPLICATE_JWKS_KID.resolveIdentifierString());
         }
 
+        @Test
+        @DisplayName("Should omit a blank key id that getKeyInfo cannot resolve")
+        void shouldOmitBlankKeyId() {
+            JWKSKeyLoader loader = initializedLoader(combineJwks(
+                    InMemoryJWKSFactory.createValidJwksWithKeyId(FIRST_KID),
+                    InMemoryJWKSFactory.createValidJwksWithKeyId(InMemoryKeyMaterialHandler.Algorithm.RS384, " ")));
+
+            Set<String> keyIds = loader.getKeyIds();
+
+            assertEquals(Set.of(FIRST_KID), keyIds, "A blank key id must not be reported");
+            assertTrue(keyIds.stream().allMatch(kid -> loader.getKeyInfo(kid).isPresent()),
+                    "Every reported key id must be resolvable via getKeyInfo");
+        }
+
         private JWKSKeyLoader initializedLoader(String content) {
             JWKSKeyLoader loader = JWKSKeyLoader.builder()
                     .jwksContent(content)

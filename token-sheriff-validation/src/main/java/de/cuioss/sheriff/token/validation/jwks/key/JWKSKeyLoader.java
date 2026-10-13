@@ -38,6 +38,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
 
@@ -302,7 +303,8 @@ public class JWKSKeyLoader implements JwksLoader {
      * {@inheritDoc}
      * <p>
      * Unlike {@link #getKeyInfo(String)}, this accessor does not require initialization: before
-     * {@link #initJWKSLoader(SecurityEventCounter)} has run it returns an empty set.
+     * {@link #initJWKSLoader(SecurityEventCounter)} has run it returns an empty set. Blank key ids
+     * are omitted, because {@link #getKeyInfo(String)} never resolves them.
      *
      * @return an immutable snapshot of the loaded key ids, empty before initialization
      */
@@ -311,7 +313,9 @@ public class JWKSKeyLoader implements JwksLoader {
         if (!initialized.get()) {
             return Set.of();
         }
-        return Set.copyOf(keyInfoMap.keySet());
+        return keyInfoMap.keySet().stream()
+                .filter(kid -> !MoreStrings.isBlank(kid))
+                .collect(Collectors.toUnmodifiableSet());
     }
 
 
