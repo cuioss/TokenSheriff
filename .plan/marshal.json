@@ -84,8 +84,10 @@
         "default:finalize-step-security-audit": {
           "lane": "full"
         },
-        "default:pre-submission-self-review": {
-          "drop_review_on_scope_gate": false,
+        "default:functional-review": {
+          "lane": "standard"
+        },
+        "default:code-review": {
           "lane": "standard"
         },
         "default:architecture-refresh": {
@@ -340,7 +342,7 @@
       "no_plan_body_days": 7,
       "build_results_days": 5
     },
-    "provisioned_version": "0.1.1868",
-    "config_seed_fingerprint": "605fa294"
+    "provisioned_version": "0.1.1916",
+    "config_seed_fingerprint": "a2efc4ac"
   }
 }
