@@ -90,6 +90,8 @@ The `JwksLoader` interface handles retrieval, caching, and rotation of cryptogra
 * **JWKSKeyLoader** - In-memory and file-based key loading.
 * **JwksLoaderFactory** - Factory for creating loader instances.
 
+`getKeyIds()` returns an immutable snapshot of the key ids in the active key set; it is empty until keys are loaded. Retired grace-period keys are excluded, so `getKeyInfo()` may still resolve a key id that the snapshot does not list. Callers use the snapshot to compare key sets before and after a refresh.
+
 Key features:
 
 * **Key rotation grace period** (default 5 min) - Retired keys remain valid during transition

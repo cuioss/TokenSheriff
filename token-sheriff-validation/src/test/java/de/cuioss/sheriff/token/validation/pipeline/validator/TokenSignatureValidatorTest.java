@@ -47,6 +47,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -219,7 +220,10 @@ class TokenSignatureValidatorTest {
                 return Optional.empty();
             }
 
-            // Removed overrides for methods that no longer exist in JwksLoader interface
+            @Override
+            public Set<String> getKeyIds() {
+                return Set.of(InMemoryJWKSFactory.DEFAULT_KEY_ID);
+            }
 
             @Override
             public JwksType getJwksType() {

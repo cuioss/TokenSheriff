@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -61,6 +62,11 @@ class IssuerConfigCacheRecoveryTest {
         @Override
         public Optional<KeyInfo> getKeyInfo(String kid) {
             return Optional.empty();
+        }
+
+        @Override
+        public Set<String> getKeyIds() {
+            return Set.of();
         }
 
         @Override

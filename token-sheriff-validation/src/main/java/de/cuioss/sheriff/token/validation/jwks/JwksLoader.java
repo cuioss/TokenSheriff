@@ -22,6 +22,7 @@ import de.cuioss.sheriff.token.commons.transport.LoadingStatusProvider;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -38,6 +39,9 @@ import java.util.concurrent.CompletableFuture;
  *
  * // Later, after initialization completes
  * Optional&lt;KeyInfo&gt; keyInfo = loader.getKeyInfo("key-id");
+ *
+ * // Snapshot of the key ids in the active key set, e.g. to compare before and after a refresh
+ * Set&lt;String&gt; keyIds = loader.getKeyIds();
  * </pre>
  *
  * @since 1.0
@@ -56,6 +60,22 @@ public interface JwksLoader extends LoadingStatusProvider {
      * @return an Optional containing the key info if found, empty otherwise
      */
     Optional<KeyInfo> getKeyInfo(String kid);
+
+    /**
+     * Returns the key ids of the currently active key set.
+     * <p>
+     * The result is an immutable snapshot taken at the moment of the call: later key loads or
+     * refreshes do not change a set that was already returned. Every id in the snapshot is resolved
+     * by {@link #getKeyInfo(String)} for the active key set at the time of the read.
+     * <p>
+     * Key sets retired during a key-rotation grace period are <em>not</em> included. While the grace
+     * period lasts, {@link #getKeyInfo(String)} may therefore still resolve a key id that is absent
+     * from this snapshot.
+     *
+     * @return an immutable set of the active key set's key ids, empty if no keys are loaded yet,
+     *         never {@code null}
+     */
+    Set<String> getKeyIds();
 
     /**
      * Gets the type of JWKS source used by this loader.
