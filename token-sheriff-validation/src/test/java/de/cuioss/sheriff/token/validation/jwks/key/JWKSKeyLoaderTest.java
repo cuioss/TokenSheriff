@@ -29,8 +29,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.ERROR;
 import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.ERROR.JWKS_CONTENT_SIZE_EXCEEDED;
@@ -156,6 +159,81 @@ class JWKSKeyLoaderTest {
                     .build();
             emptyLoader.initJWKSLoader(new SecurityEventCounter());
             assertEquals(LoaderStatus.ERROR, emptyLoader.getLoaderStatus(), "Loader should report empty when no keys are present");
+        }
+    }
+
+    @Nested
+    @DisplayName("Key Id Snapshot")
+    class KeyIdSnapshotTests {
+
+        private static final String FIRST_KID = "first-kid";
+        private static final String SECOND_KID = "second-kid";
+
+        @Test
+        @DisplayName("Should report the key ids of all loaded keys")
+        void shouldReportKeyIdsOfAllLoadedKeys() {
+            JWKSKeyLoader loader = initializedLoader(combineJwks(
+                    InMemoryJWKSFactory.createValidJwksWithKeyId(FIRST_KID),
+                    InMemoryJWKSFactory.createValidJwksWithKeyId(SECOND_KID)));
+
+            Set<String> keyIds = loader.getKeyIds();
+
+            assertEquals(Set.of(FIRST_KID, SECOND_KID), keyIds, "Every loaded key id should be reported");
+        }
+
+        @Test
+        @DisplayName("Should return an unmodifiable set")
+        void shouldReturnUnmodifiableSet() {
+            Set<String> keyIds = keyLoader.getKeyIds();
+
+            assertThrows(UnsupportedOperationException.class, () -> keyIds.add(SECOND_KID),
+                    "The key id snapshot must not be modifiable");
+            assertEquals(Set.of(TEST_KID), keyLoader.getKeyIds(), "The loaded key ids should be unchanged");
+        }
+
+        @Test
+        @DisplayName("Should return an empty set before initialization")
+        void shouldReturnEmptySetBeforeInitialization() {
+            JWKSKeyLoader uninitializedLoader = JWKSKeyLoader.builder()
+                    .jwksContent(jwksContent)
+                    .build();
+
+            Set<String> keyIds = uninitializedLoader.getKeyIds();
+
+            assertTrue(keyIds.isEmpty(), "No key ids should be reported before initialization");
+        }
+
+        @Test
+        @DisplayName("Should report a duplicate key id once")
+        void shouldReportDuplicateKeyIdOnce() {
+            JWKSKeyLoader loader = initializedLoader(combineJwks(
+                    InMemoryJWKSFactory.createValidJwksWithKeyId(InMemoryKeyMaterialHandler.Algorithm.RS256, FIRST_KID),
+                    InMemoryJWKSFactory.createValidJwksWithKeyId(InMemoryKeyMaterialHandler.Algorithm.RS384, FIRST_KID)));
+
+            Set<String> keyIds = loader.getKeyIds();
+
+            assertEquals(Set.of(FIRST_KID), keyIds, "A duplicate key id should be reported exactly once");
+            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                    WARN.DUPLICATE_JWKS_KID.resolveIdentifierString());
+        }
+
+        private JWKSKeyLoader initializedLoader(String content) {
+            JWKSKeyLoader loader = JWKSKeyLoader.builder()
+                    .jwksContent(content)
+                    .build();
+            loader.initJWKSLoader(new SecurityEventCounter());
+            return loader;
+        }
+
+        /**
+         * Merges the key arrays of single-key JWKS documents into one JWKS document.
+         */
+        private String combineJwks(String... jwksDocuments) {
+            String prefix = "{\"keys\":[";
+            String suffix = "]}";
+            return Arrays.stream(jwksDocuments)
+                    .map(document -> document.substring(prefix.length(), document.length() - suffix.length()))
+                    .collect(Collectors.joining(",", prefix, suffix));
         }
     }
 

@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -310,6 +311,11 @@ class JwksEndpointHealthCheckTest {
             }
 
             @Override
+            public Set<String> getKeyIds() {
+                return Set.of();
+            }
+
+            @Override
             public JwksType getJwksType() {
                 return JwksType.MEMORY;
             }
@@ -436,6 +442,11 @@ class JwksEndpointHealthCheckTest {
         }
 
         @Override
+        public Set<String> getKeyIds() {
+            return Set.of();
+        }
+
+        @Override
         public JwksType getJwksType() {
             throw new IllegalStateException("Simulated error in JwksLoader");
         }
@@ -468,6 +479,11 @@ class JwksEndpointHealthCheckTest {
         }
 
         @Override
+        public Set<String> getKeyIds() {
+            return Set.of();
+        }
+
+        @Override
         public JwksType getJwksType() {
             return JwksType.MEMORY;
         }
@@ -497,6 +513,11 @@ class JwksEndpointHealthCheckTest {
         @Override
         public Optional<KeyInfo> getKeyInfo(String kid) {
             return Optional.empty();
+        }
+
+        @Override
+        public Set<String> getKeyIds() {
+            return Set.of();
         }
 
         @Override

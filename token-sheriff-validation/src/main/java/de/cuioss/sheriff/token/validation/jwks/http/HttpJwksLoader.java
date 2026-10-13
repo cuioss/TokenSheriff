@@ -39,6 +39,7 @@ import de.cuioss.tools.logging.CuiLogger;
 import java.net.URI;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -291,6 +292,25 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Reads the active key set exactly once, so the snapshot cannot mix key ids from before and
+     * after a concurrent key rotation. Retired key sets that {@link #getKeyInfo(String)} still
+     * consults during the grace period are not included.
+     *
+     * @return an immutable snapshot of the active key set's key ids, empty before the first
+     *         successful load
+     */
+    @Override
+    public Set<String> getKeyIds() {
+        JWKSKeyLoader current = currentKeys.get();
+        if (current == null) {
+            return Set.of();
+        }
+        return current.getKeyIds();
     }
 
     @Override

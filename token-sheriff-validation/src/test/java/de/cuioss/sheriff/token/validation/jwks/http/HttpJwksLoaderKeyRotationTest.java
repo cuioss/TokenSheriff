@@ -30,9 +30,12 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.locks.LockSupport;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -135,6 +138,57 @@ class HttpJwksLoaderKeyRotationTest {
         // The empty refresh must NOT have retired the previously-good key set.
         assertTrue(loader.getKeyInfo(ORIGINAL_KEY_ID).isPresent(),
                 "A good key set must survive an empty/ERROR refresh and remain accessible");
+
+        loader.close();
+    }
+
+    @Test
+    @DisplayName("Should report no key ids before the first load")
+    void shouldReportNoKeyIdsBeforeFirstLoad(URIBuilder uriBuilder) {
+        String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
+
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                .jwksUrl(jwksEndpoint)
+                .issuerIdentifier("test-issuer")
+                .refreshIntervalSeconds(0)
+                .build();
+
+        HttpJwksLoader loader = new HttpJwksLoader(config);
+
+        Set<String> keyIds = loader.getKeyIds();
+
+        assertTrue(keyIds.isEmpty(), "No key ids should be reported before the first load");
+        loader.close();
+    }
+
+    @Test
+    @DisplayName("Should report only the active key set's ids after a rotation, as a snapshot")
+    void shouldReportOnlyActiveKeyIdsAfterRotation(URIBuilder uriBuilder) {
+        String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
+
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                .jwksUrl(jwksEndpoint)
+                .issuerIdentifier("test-issuer")
+                .keyRotationGracePeriod(Duration.ofMinutes(5))
+                .refreshIntervalSeconds(0) // No scheduler: the test drives the refresh itself
+                .build();
+
+        moduleDispatcher.returnDefault();
+        HttpJwksLoader loader = new HttpJwksLoader(config);
+        loader.initJWKSLoader(securityEventCounter).join();
+        Set<String> keyIdsBeforeRotation = loader.getKeyIds();
+        assertEquals(Set.of(ORIGINAL_KEY_ID), keyIdsBeforeRotation, "The initial key set's id should be reported");
+
+        moduleDispatcher.switchToOtherPublicKey();
+        loader.performBackgroundRefresh();
+
+        assertAll("Key id snapshot after rotation",
+                () -> assertEquals(Set.of(ROTATED_KEY_ID), loader.getKeyIds(),
+                        "Only the active key set's ids should be reported; retired ids are excluded"),
+                () -> assertTrue(loader.getKeyInfo(ORIGINAL_KEY_ID).isPresent(),
+                        "The retired key should still resolve within the grace period"),
+                () -> assertEquals(Set.of(ORIGINAL_KEY_ID), keyIdsBeforeRotation,
+                        "A snapshot taken before the rotation should be unchanged by it"));
 
         loader.close();
     }
