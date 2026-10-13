@@ -431,6 +431,14 @@ an isolated-component or server-capability test alone does not qualify the row a
 | The configured `SSLContext` reaches *every* endpoint handler `BackChannelHttp` produces; absent
   one, the JVM default truststore is used; a rejected context still surfaces as `TransportException`
 | — (needs a private-CA / self-signed IdP fixture; not in the current provider set) | all
+
+| xref:../requirements.adoc#CLIENT-24[CLIENT-24] | T-SSRF-ADVERTISED
+| `ClientConfigurationTest` (`BackChannelOriginValidation`): only a bare http(s) origin is accepted
+  and no rejection echoes the value; `BackChannelOriginMappingTest`: same-origin endpoints are
+  rewritten with path and query kept, other origins untouched; `BackChannelOriginRoutingTest`:
+  the back-channel calls reach the configured origin;
+  `TokenSheriffClientProducerTest`: `sheriff.client.back-channel-origin` maps onto the configuration
+| — (needs a split-horizon IdP fixture; not in the current provider set) | all
 |===
 
 == Per-increment definition of done (test view)

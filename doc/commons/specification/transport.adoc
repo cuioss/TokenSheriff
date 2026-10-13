@@ -88,7 +88,9 @@ address. It changes *where* back-channel calls are sent, never *who* the issuer 
   the advertised URL before the rewrite; the scheme policy (`allowInsecureHttp`), the per-client trust
   (`sslContext`) and hostname verification are then evaluated against the rewritten target, i.e. the
   host actually contacted. With `https://`, the back-channel host's certificate is therefore
-  validated against the back-channel host name.
+  validated against the back-channel host name. The issuer-scheme check at discovery is separate
+  and still applies to the configured issuer: an `http` issuer requires `allowInsecureHttp`
+  whatever the scheme of the back-channel origin.
 
 [cols="1,2", options="header"]
 |===

@@ -311,7 +311,9 @@ authorization and end-session URLs keep the public origin.
 *Transport policy follows the contacted host.* The egress path validation runs on the advertised URL;
 the scheme policy (`allowInsecureHttp`), the per-client trust (<<CLIENT-23>>) and hostname
 verification MUST be applied to the back-channel origin — the host actually contacted — so the
-back-channel host's certificate is validated against its own name. The setting relaxes no TLS,
+back-channel host's certificate is validated against its own name. The issuer-scheme check at
+discovery is separate and MUST still apply to the configured issuer: an `http` issuer requires
+`allowInsecureHttp` whatever the scheme of the back-channel origin. The setting relaxes no TLS,
 hostname, issuer or `iss` check.
 
 The scope is the client engine's own back-channel calls. The validation-side JWKS URL
