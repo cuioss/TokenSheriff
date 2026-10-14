@@ -20,6 +20,8 @@ import de.cuioss.test.generator.junit.EnableGeneratorController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.net.ssl.SSLContext;
 import java.util.ArrayList;
@@ -564,6 +566,138 @@ class ClientConfigurationTest {
 
             assertEquals(List.of("openid", "read", "write"), config.getScopes(),
                     "single scope-token entries stay accepted unchanged");
+        }
+    }
+
+    @Nested
+    @DisplayName("Back-channel origin (backChannelOrigin)")
+    class BackChannelOriginValidation {
+
+        private ClientConfiguration.ClientConfigurationBuilder builderWithOrigin(String origin) {
+            return ClientConfiguration.builder()
+                    .issuer(issuer())
+                    .clientId(Generators.nonBlankStrings().next())
+                    .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                    .backChannelOrigin(origin);
+        }
+
+        @Test
+        @DisplayName("Should leave the back-channel origin absent when the builder never sets one")
+        void shouldDefaultToAbsentOrigin() {
+            var config = ClientConfiguration.builder()
+                    .issuer(issuer()).clientId(Generators.nonBlankStrings().next())
+                    .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC).build();
+
+            assertNull(config.getBackChannelOrigin(),
+                    "an unconfigured back-channel origin means 'contact every endpoint where it is advertised'");
+        }
+
+        @ParameterizedTest(name = "accepts {0}")
+        @ValueSource(strings = {"https://keycloak.internal", "http://keycloak:8080", "https://10.0.0.7:8443"})
+        @DisplayName("Should accept a bare http(s) origin and keep it unchanged")
+        void shouldAcceptBareOrigin(String origin) {
+            var config = builderWithOrigin(origin).build();
+
+            assertEquals(origin, config.getBackChannelOrigin());
+        }
+
+        @Test
+        @DisplayName("Should accept a single trailing slash and normalise it away")
+        void shouldNormaliseSingleTrailingSlash() {
+            var config = builderWithOrigin("http://keycloak:8080/").build();
+
+            assertEquals("http://keycloak:8080", config.getBackChannelOrigin(),
+                    "the root path is not a path; the stored origin never ends with '/'");
+        }
+
+        @Test
+        @DisplayName("Should keep the issuer unchanged when a back-channel origin is set")
+        void shouldKeepIssuerUnchanged() {
+            var issuer = issuer() + "/realms/demo";
+
+            var config = ClientConfiguration.builder()
+                    .issuer(issuer).clientId(Generators.nonBlankStrings().next())
+                    .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                    .backChannelOrigin("http://keycloak:8080")
+                    .build();
+
+            assertAll("identity and reachability are separate values",
+                    () -> assertEquals(issuer, config.getIssuer(),
+                            "the issuer identity must not be rewritten by the back-channel origin"),
+                    () -> assertEquals("http://keycloak:8080", config.getBackChannelOrigin()));
+        }
+
+        @ParameterizedTest(name = "rejects \"{0}\"")
+        @ValueSource(strings = {
+                "",
+                "   ",
+                "keycloak:8080",
+                "/realms/demo",
+                "ftp://keycloak.internal",
+                "urn:example:keycloak",
+                "https:///no-host",
+                "https://keycloak.internal/realms/demo",
+                "https://keycloak.internal//",
+                "https://keycloak.internal?x=1",
+                "https://keycloak.internal#frag",
+                "https://user:secret@keycloak.internal",
+                "https://keycloak.internal/ a path"
+        })
+        @DisplayName("Should reject every value that is not a bare absolute http(s) origin, naming the field")
+        void shouldRejectNonOriginValue(String origin) {
+            var builder = builderWithOrigin(origin);
+
+            var exception = assertThrows(IllegalArgumentException.class, builder::build,
+                    "a malformed back-channel origin must fail at build(), not on the wire");
+
+            assertTrue(exception.getMessage().contains("backChannelOrigin"),
+                    "the message must name backChannelOrigin, but was: " + exception.getMessage());
+        }
+
+        @ParameterizedTest(name = "does not echo the secret of \"{0}\"")
+        @ValueSource(strings = {
+                "https://user:%s@keycloak.internal",
+                "ftp://user:%s@keycloak.internal",
+                "https://user:%s@keycloak.internal/path",
+                "https://user:%s@keycloak.internal?x=1",
+                "https://user:%s@keycloak.internal#f",
+                "https://user:%s@keycloak.internal/ a path",
+                "https://keycloak.internal?token=%s",
+                "https://keycloak.internal#%s",
+                "https://keycloak.internal/%s"
+        })
+        @DisplayName("Should never echo the configured value, whichever check rejects it")
+        void shouldNotEchoConfiguredValue(String template) {
+            var secret = Generators.letterStrings(12, 20).next();
+            var builder = builderWithOrigin(template.formatted(secret));
+
+            var exception = assertThrows(IllegalArgumentException.class, builder::build);
+
+            var messages = new ArrayList<String>();
+            for (Throwable current = exception; current != null; current = current.getCause()) {
+                messages.add(String.valueOf(current.getMessage()));
+            }
+            assertAll("the rejection names the field but never the value",
+                    () -> assertTrue(exception.getMessage().contains("backChannelOrigin"),
+                            "the message must name backChannelOrigin, but was: " + exception.getMessage()),
+                    () -> assertTrue(messages.stream().noneMatch(message -> message.contains(secret)),
+                            "the value may carry a credential and must never reach an exception message"
+                                    + " or its cause chain"));
+        }
+
+        @Test
+        @DisplayName("Should take the back-channel origin into value equality")
+        void shouldIncludeOriginInEquality() {
+            var issuer = issuer();
+            var clientId = Generators.nonBlankStrings().next();
+            var withOrigin = ClientConfiguration.builder()
+                    .issuer(issuer).clientId(clientId).authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                    .backChannelOrigin("http://keycloak:8080").build();
+            var withoutOrigin = ClientConfiguration.builder()
+                    .issuer(issuer).clientId(clientId).authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC).build();
+
+            assertNotEquals(withOrigin, withoutOrigin,
+                    "a configuration that reaches the AS elsewhere is a different configuration");
         }
     }
 }

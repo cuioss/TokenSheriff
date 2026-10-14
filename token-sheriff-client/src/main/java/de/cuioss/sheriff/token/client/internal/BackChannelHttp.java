@@ -24,6 +24,7 @@ import de.cuioss.http.security.pipeline.PipelineFactory;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
 import javax.net.ssl.SSLContext;
 import java.net.URI;
@@ -64,6 +65,14 @@ import java.util.concurrent.ConcurrentMap;
  *       constraints enforced. It is mutually exclusive with the per-client TLS trust above — the two are
  *       rejected together at {@link ClientConfiguration} build time, so that guard, not the
  *       {@code catch} / {@link TransportException} path below, is what refuses the combination.</li>
+ *   <li><strong>Back-channel origin:</strong> when {@link ClientConfiguration#backChannelOrigin} is set,
+ *       an advertised endpoint whose origin (lower-cased scheme, lower-cased host, effective port) equals
+ *       the issuer origin is contacted at the back-channel origin, with its raw path and raw query kept
+ *       verbatim; an endpoint on any other origin is contacted unchanged. Both origins are read from
+ *       configuration only, so neither the request nor the advertised data can steer a call to a third
+ *       origin — the rewrite adds no SSRF primitive. The egress path validation runs on the advertised
+ *       URL before the rewrite, and the scheme, TLS-trust and hostname controls above are applied to
+ *       the rewritten target, i.e. to the host actually contacted.</li>
  *   <li><strong>Consistent transport typing (M9):</strong> a malformed or non-TLS endpoint surfaces as
  *       the declared {@link TransportException}, never a raw {@link IllegalArgumentException} leaking
  *       from {@code HttpHandler.build()}.</li>
@@ -102,10 +111,12 @@ public final class BackChannelHttp {
     private final int maxContentSize;
     private final String boundOrigin;
     private final ConcurrentMap<String, HttpClient> sharedClients = new ConcurrentHashMap<>();
+    private final @Nullable String issuerOriginKey;
+    private final @Nullable URI backChannelOrigin;
 
     /**
-     * @param configuration  the client configuration carrying the TLS policy and timeout knobs; must
-     *                       not be {@code null}
+     * @param configuration  the client configuration carrying the TLS policy, timeout knobs and the
+     *                       optional back-channel origin; must not be {@code null}
      * @param maxContentSize the maximum response body size, in bytes, enforced during read
      * @param boundOrigin    the human-readable provenance of {@code maxContentSize} — the knob that set
      *                       it, and whether it is settable; reported in the over-limit failure message
@@ -116,25 +127,32 @@ public final class BackChannelHttp {
         this.boundOrigin = Objects.requireNonNull(boundOrigin, "boundOrigin must not be null");
         this.egressValidator = PipelineFactory.createUrlPathPipeline(
                 SecurityConfiguration.defaults(), new SecurityEventCounter());
+        this.issuerOriginKey = originKey(URI.create(configuration.getIssuer()));
+        String configuredOrigin = configuration.getBackChannelOrigin();
+        this.backChannelOrigin = configuredOrigin == null ? null : URI.create(configuredOrigin);
     }
 
     /**
-     * Applies the egress / SSRF and scheme controls to an advertised endpoint URL and returns a
-     * per-endpoint {@link HttpHandler} configured with the client's timeout policy.
+     * Applies the egress / SSRF and scheme controls to an advertised endpoint URL, maps it onto the
+     * configured back-channel origin when it shares the issuer origin, and returns a per-endpoint
+     * {@link HttpHandler} for the URL actually contacted, configured with the client's timeout and TLS
+     * policy.
      *
      * @param endpointUrl    the absolute, discovery-advertised endpoint URL to fetch
      * @param failureContext a short, caller-safe prefix identifying the endpoint for exception messages
      *                       (for example {@code "token endpoint request failed"})
-     * @return a configured {@link HttpHandler} for {@code endpointUrl}
-     * @throws TransportException if the URL is malformed, fails the egress security validation, or is a
-     *                            non-TLS endpoint while cleartext is not permitted
+     * @return a configured {@link HttpHandler} for the target URL — {@code endpointUrl} itself, or its
+     *         back-channel-origin rewrite
+     * @throws TransportException if the URL is malformed, fails the egress security validation, or the
+     *                            target is a non-TLS endpoint while cleartext is not permitted
      */
     public HttpHandler validatedHandler(String endpointUrl, String failureContext) {
         Objects.requireNonNull(endpointUrl, "endpointUrl must not be null");
-        applyEgressControl(endpointUrl, failureContext);
+        URI endpointUri = applyEgressControl(endpointUrl, failureContext);
+        String targetUrl = targetUrl(endpointUri, endpointUrl);
         try {
             HttpHandler.HttpHandlerBuilder builder = HttpHandler.builder()
-                    .url(endpointUrl)
+                    .url(targetUrl)
                     .connectionTimeoutSeconds(configuration.getConnectTimeoutSeconds())
                     .readTimeoutSeconds(configuration.getReadTimeoutSeconds())
                     .allowInsecureHttp(configuration.isAllowInsecureHttp());
@@ -142,7 +160,7 @@ public final class BackChannelHttp {
             // allowInsecureHttp) establishes no TLS connection, and cui-http refuses both sslContext(...)
             // and verifyHostname(false) on an http:// URI. One configuration may serve endpoints of both
             // schemes, so the knobs are skipped per endpoint rather than rejected for the configuration.
-            if (!isCleartext(endpointUrl)) {
+            if (!isCleartext(targetUrl)) {
                 builder.verifyHostname(configuration.isVerifyHostname());
                 SSLContext sslContext = configuration.getSslContext();
                 if (sslContext != null) {
@@ -161,7 +179,7 @@ public final class BackChannelHttp {
         return "http".equalsIgnoreCase(URI.create(endpointUrl).getScheme());
     }
 
-    private void applyEgressControl(String endpointUrl, String failureContext) {
+    private URI applyEgressControl(String endpointUrl, String failureContext) {
         URI uri;
         try {
             uri = URI.create(endpointUrl);
@@ -170,7 +188,7 @@ public final class BackChannelHttp {
         }
         String path = uri.getRawPath();
         if (path == null || path.isEmpty()) {
-            return;
+            return uri;
         }
         try {
             egressValidator.validate(path);
@@ -179,6 +197,56 @@ public final class BackChannelHttp {
             throw new TransportException(failureContext
                     + ": endpoint URL failed egress security validation (" + e.getFailureType() + ")", e);
         }
+        return uri;
+    }
+
+    /**
+     * Computes the URL actually contacted for an advertised endpoint. When a back-channel origin is
+     * configured and the endpoint's origin equals the issuer origin, scheme, host and port are replaced
+     * by the back-channel origin while the raw path and raw query are kept verbatim; otherwise the
+     * advertised URL is returned unchanged. Both origins come from configuration only, so the advertised
+     * URL can select <em>whether</em> it is rewritten, never <em>where</em> to.
+     */
+    private String targetUrl(URI endpointUri, String endpointUrl) {
+        if (backChannelOrigin == null || !Objects.equals(issuerOriginKey, originKey(endpointUri))) {
+            return endpointUrl;
+        }
+        StringBuilder target = new StringBuilder(backChannelOrigin.getScheme())
+                .append("://")
+                .append(backChannelOrigin.getRawAuthority());
+        String rawPath = endpointUri.getRawPath();
+        if (rawPath != null) {
+            target.append(rawPath);
+        }
+        String rawQuery = endpointUri.getRawQuery();
+        if (rawQuery != null) {
+            target.append('?').append(rawQuery);
+        }
+        return target.toString();
+    }
+
+    /**
+     * Derives the normalised origin key of a URI: lower-cased scheme, lower-cased host and the effective
+     * port, with an absent port mapped to the scheme default ({@code 443} for {@code https}, {@code 80}
+     * for {@code http}). Returns {@code null} for a URI without scheme or host, which therefore never
+     * matches the issuer origin.
+     */
+    private static @Nullable String originKey(URI uri) {
+        String scheme = uri.getScheme();
+        String host = uri.getHost();
+        if (scheme == null || host == null) {
+            return null;
+        }
+        String normalisedScheme = scheme.toLowerCase(Locale.ROOT);
+        int port = uri.getPort();
+        if (port == -1) {
+            port = switch (normalisedScheme) {
+                case "https" -> 443;
+                case "http" -> 80;
+                default -> -1;
+            };
+        }
+        return normalisedScheme + "://" + host.toLowerCase(Locale.ROOT) + ":" + port;
     }
 
     /**

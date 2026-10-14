@@ -43,7 +43,7 @@ no signature policy (the seam is detailed in xref:architecture.adoc[Architecture
 | Document | Purpose
 
 | xref:requirements.adoc[Requirements]
-| `CLIENT-1`–`CLIENT-22`, grouped by aspect; each sourced and threat-driven.
+| `CLIENT-1`–`CLIENT-24`, grouped by aspect; each sourced and threat-driven.
 
 | xref:architecture.adoc[Architecture]
 | The engine seam, its commons / validation boundaries, the auth-code + PKCE sequence, and the BFF binding shapes it must keep viable.

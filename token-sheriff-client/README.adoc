@@ -142,6 +142,65 @@ constraint; against such a server, configure both. See
 xref:../doc/adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008]
 for the decision and its rationale.
 
+=== Reaching the authorization server under an internal address (back-channel origin)
+
+In a split-horizon deployment the issuer identity is a public URL — the one browsers are redirected
+to and the one tokens carry in `iss` — while the application can only reach the authorization server
+under an internal address, for example a container-network name. `backChannelOrigin` routes the
+back-channel calls to that internal address without changing the issuer:
+
+[source,java]
+----
+ClientConfiguration config = ClientConfiguration.builder()
+    .issuer("https://idp.example.com/realms/demo") // <1>
+    .clientId("my-confidential-client")
+    .clientSecret(secret)
+    .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+    .scope("openid")
+    .backChannelOrigin("http://keycloak:8080") // <2>
+    .allowInsecureHttp(true) // <3>
+    .build();
+----
+<1> The issuer stays the public identity. The discovery-document `issuer` check, the token `iss`
+checks and the RFC 9207 `iss` response check all compare against this value, unchanged. The
+discovery request itself (`{issuer}/.well-known/openid-configuration`) shares the issuer origin and
+is therefore sent to the back-channel origin under the rule below.
+<2> Optional, absent by default. The value must be a bare `http`/`https` origin
+(`scheme://host[:port]`) — no path, query, fragment or user-info; a single trailing `/` is accepted
+and dropped. Any other form fails `build()` with an `IllegalArgumentException` naming
+`backChannelOrigin`.
+<3> Needed here because this back-channel origin uses `http://`: the per-request scheme check is
+evaluated against the host actually contacted. An `https://` back-channel origin does not require
+the flag on its own account, but the flag is still required whenever the issuer itself is an
+`http://` URL, because discovery checks the scheme of the configured issuer before any request is
+sent.
+
+*Mapping rule.* Every back-channel call — discovery, token, PAR, userinfo and revocation — whose
+advertised endpoint URL has the *same origin* as the issuer is sent to the back-channel origin, with
+its path and query kept verbatim. Origins are compared on lower-cased scheme, lower-cased host and
+effective port, so `https://idp.example.com` and `https://idp.example.com:443` are the same origin.
+An endpoint the authorization server advertises on any other origin is contacted unchanged. The
+target is derived from configuration alone: neither the request nor the discovery document can
+steer a call to a third origin.
+
+*What is not rewritten.* The resolved provider metadata keeps the advertised public endpoint URLs,
+the DPoP proof's `htu` claim names the public URL, and the front-channel URLs sent to the browser
+(authorization request, end-session) keep the public origin.
+
+*Transport policy follows the contacted host.* The per-request controls — the `allowInsecureHttp`
+scheme check, `verifyHostname` and `sslContext` — are applied to the back-channel origin. With
+`https://`, the certificate the internal host presents must be trusted and must match the internal
+host name — supply matching certificates or trust material rather than relaxing hostname
+verification. The issuer-scheme check at discovery is separate and still applies to the configured
+issuer: an `http://` issuer requires `allowInsecureHttp` even when the back-channel origin is
+`https://`. See `CLIENT-24` in the
+xref:../doc/client/requirements.adoc#CLIENT-24[client requirements].
+
+NOTE: The scope is this client engine only. JWKS retrieval for token *validation* runs through
+`HttpJwksLoaderConfig`, whose JWKS URL is configured separately and is not rewritten by
+`backChannelOrigin`. In a split-horizon deployment, point that JWKS URL at the reachable address
+yourself. Under Quarkus the same knob is `sheriff.client.back-channel-origin`.
+
 Endpoints are resolved via OIDC discovery against
 `{issuer}/.well-known/openid-configuration`. See the
 xref:../doc/client/specification/retrieval-flow.adoc[Retrieval & Flow specification] for the

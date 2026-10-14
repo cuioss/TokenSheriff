@@ -158,9 +158,13 @@ The client engine:
   call (token, userinfo, revocation, PAR). Relaxing it narrows hostname matching only — chain
   trust, expiry and algorithm constraints stay enforced — and the residual exposure is recorded
   with the delegated control, in the commons threat model's
-  xref:../commons/threat-model.adoc#_residual_risks[residual risks].
+  xref:../commons/threat-model.adoc#_residual_risks[residual risks]. When the optional
+  `sheriff.client.back-channel-origin` is set, `sheriff.client.verify-hostname` and the per-client
+  trust apply to the host actually contacted: the certificate presented by the back-channel host
+  is validated against the back-channel host name, not the public issuer name. The back-channel
+  origin therefore never widens what a certificate is accepted for.
 | https://www.rfc-editor.org/rfc/rfc9700#section-2.6[RFC 9700 §2.6], xref:../commons/threat-model.adoc#T-TLS[commons T-TLS]
-| xref:requirements.adoc#CLIENT-14[CLIENT-14] (relies on xref:../commons/requirements.adoc#COMMONS-2[COMMONS-2])
+| xref:requirements.adoc#CLIENT-14[CLIENT-14] (relies on xref:../commons/requirements.adoc#COMMONS-2[COMMONS-2]), xref:requirements.adoc#CLIENT-24[CLIENT-24]
 
 | [[T-SSRF-ADVERTISED]]T-SSRF-ADVERTISED
 | *Back-channel request steered by a hostile discovery document (SSRF / egress).* A hostile or
@@ -171,9 +175,14 @@ The client engine:
   advertised endpoint URL is run through the `de.cuioss.http.security` URL-path validation pipeline
   and refused if it fails; a non-TLS endpoint is refused; response reads are size-bounded. Scope is
   *path-structure and scheme* — host-address reachability filtering stays a network / deployment
-  concern.
+  concern. The optional back-channel origin (`sheriff.client.back-channel-origin`) adds no steering
+  primitive: it is operator-configured only, and an advertised endpoint is retargeted to it only
+  when the endpoint shares the configured issuer's origin — advertised data selects *whether* a
+  call is rewritten, never *where to*, so it cannot steer a call to a third origin. An endpoint
+  advertised on a foreign origin is contacted unchanged and still faces the controls above. The
+  issuer identity, the discovery-document `issuer` check and the token `iss` checks stay intact.
 | https://www.rfc-editor.org/rfc/rfc9700#section-2.6[RFC 9700 §2.6], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180]
-| xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]
+| xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP], xref:requirements.adoc#CLIENT-24[CLIENT-24]
 |===
 
 == Token aspect
@@ -306,7 +315,7 @@ integration suite covers only threats reproducible against real providers:
 | T-REFRESH-IDENTITY | `TokenDispatcher` refresh mode returns an access token carrying a substituted `sub`; the refresh is refused and, since the dispatcher has already rotated, the session asserted quarantined. A matched positive control — a refresh whose `sub` matches — is asserted to be accepted and to rotate the bundle, so deleting the guard turns a test red rather than merely leaving one green.
 | T-SCOPE-DRIFT | `TokenDispatcher` refresh mode returns broadened, narrowed, equal and absent `scope` values; each is asserted to resolve to the matching `scopeDelta`, and the broadened case is asserted accepted-and-`WARN`-logged in the default posture and refused with `ClientProtocolException` under `strictScopeReconciliation`.
 | T-IDTOKEN-INTEGRITY / T-AUD-CONFUSION | `TokenDispatcher` / `UserInfoDispatcher` emit tampered claims and `sub` mismatches; validation pipeline rejects; userinfo `sub` binding enforced.
-| T-SSRF-ADVERTISED | The `de.cuioss.http.security` attack-database corpora are driven through the back-channel egress-path validation; traversal / injection / encoding-evasion advertised paths are refused before any fetch, and a non-TLS endpoint is refused per client.
+| T-SSRF-ADVERTISED | The `de.cuioss.http.security` attack-database corpora are driven through the back-channel egress-path validation; traversal / injection / encoding-evasion advertised paths are refused before any fetch, and a non-TLS endpoint is refused per client. With a back-channel origin configured, a same-origin endpoint is asserted retargeted with path and query kept, a foreign-origin endpoint is asserted contacted unchanged, and a traversal path on a retargeted endpoint is still refused.
 |===
 
 == [[_out_of_scope_delegated]] Out of scope (delegated)

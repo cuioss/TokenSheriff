@@ -63,6 +63,16 @@ that opts out accepts a narrowed mitigation. It is reachable from two configurat
 `sheriff.client.verify-hostname` (client-wide, client engine). See
 xref:../adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008].
 
+*Client back-channel origin.* When the client engine's optional back-channel origin
+(`sheriff.client.back-channel-origin`, xref:../client/requirements.adoc#CLIENT-24[CLIENT-24]) is set,
+back-channel calls whose advertised endpoint shares the issuer's origin are sent to that configured
+origin with path and query kept, and every other endpoint is contacted unchanged. The TLS
+requirements above — including hostname matching under `sheriff.client.verify-hostname` — then
+apply to the back-channel host actually contacted, so its certificate is validated against its own
+name. The setting relaxes no part of certificate validation and leaves the issuer identity and the
+`issuer` / `iss` checks unchanged; the validation-side JWKS URL is configured separately and is not
+rewritten. See xref:specification/transport.adoc#client_back_channel_origin[Transport specification].
+
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §2.6], https://www.rfc-editor.org/rfc/rfc8414[RFC 8414 §2] (metadata retrieved over TLS).
 
 [#COMMONS-3]

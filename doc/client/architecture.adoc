@@ -153,8 +153,17 @@ target. The engine therefore *owns* an in-module egress control, applied uniform
   `de.cuioss.http.security` URL-path validation pipeline, so a traversal / injection /
   encoding-evasion / malformed advertised path is *rejected before it is fetched*, surfacing as
   a `TransportException`.
+| *Back-channel origin rewrite* | When a back-channel origin is configured
+  (`backChannelOrigin`, xref:requirements.adoc#CLIENT-24[CLIENT-24]), an advertised endpoint
+  whose origin equals the issuer origin is rewritten to the back-channel origin, keeping its raw
+  path and query verbatim; an endpoint on any other origin is contacted unchanged. The egress /
+  path validation above runs on the advertised URL *before* the rewrite. Both origins in the
+  comparison come from configuration alone, so the advertised URL decides only *whether* it is
+  rewritten, never *where to*.
 | *Scheme / TLS enforcement* | A non-TLS (`http://`) endpoint is refused unless cleartext is
-  explicitly enabled, via the `HttpHandler` builder's TLS enforcement.
+  explicitly enabled, via the `HttpHandler` builder's TLS enforcement. This control, the
+  per-client trust (`sslContext`) and hostname verification are applied to the host actually
+  contacted — the rewritten target when a back-channel origin applies.
 | *Bounded reads & timeouts* | Response bodies are size-capped *during* the read
   (`BoundedContentBodyHandler`); connect / read timeouts come from `ClientConfiguration`.
 |===
