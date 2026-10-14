@@ -33,6 +33,8 @@ import de.cuioss.sheriff.token.client.token.UserInfoClient;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
+import de.cuioss.test.juli.LogAsserts;
+import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
@@ -60,6 +62,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,6 +96,9 @@ class BackChannelOriginRoutingTest {
     private static final String END_SESSION_PATH = REALM_PATH + "/protocol/openid-connect/logout";
     private static final String REDIRECT_URI = "https://rp.example.com/callback";
     private static final String POST_LOGOUT_REDIRECT = "https://rp.example.com/postlogout";
+    private static final String HTTP_ISSUER = "http://idp.invalid" + REALM_PATH;
+    private static final String UNREACHABLE_HTTPS_ORIGIN = "https://127.0.0.1:1";
+    private static final String NON_TLS_ISSUER_REFUSAL = "Rejecting non-TLS issuer";
 
     @Getter
     private final RealmDispatcher moduleDispatcher = new RealmDispatcher();
@@ -141,6 +147,33 @@ class BackChannelOriginRoutingTest {
                 "the back-channel origin must not relax the OpenID Connect Discovery §4.3 issuer check");
         assertEquals(List.of(WELL_KNOWN_PATH), moduleDispatcher.paths(),
                 "the document was fetched from the back-channel origin and then refused");
+    }
+
+    @Test
+    @DisplayName("An http issuer is refused at discovery without allowInsecureHttp, even with an https back-channel origin")
+    void shouldRefuseHttpIssuerDespiteHttpsBackChannelOrigin() {
+        var resolver = new DiscoveryResolver(httpIssuerWithHttpsBackChannel(false));
+
+        var thrown = assertThrows(TransportException.class, resolver::resolve,
+                "the issuer-scheme check applies to the configured issuer, not the back-channel origin");
+        assertTrue(thrown.getMessage().contains(NON_TLS_ISSUER_REFUSAL),
+                "discovery must fail on the non-TLS issuer check, but the message was: " + thrown.getMessage());
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, NON_TLS_ISSUER_REFUSAL);
+    }
+
+    @Test
+    @DisplayName("An http issuer with allowInsecureHttp and an https back-channel origin passes the issuer-scheme check")
+    void shouldPassIssuerSchemeCheckForHttpIssuerWhenInsecureHttpAllowed() {
+        // Same setup as the refusal case, with allowInsecureHttp=true: discovery now goes past the
+        // issuer-scheme check and fails only when the unreachable back-channel origin refuses the
+        // connection.
+        var resolver = new DiscoveryResolver(httpIssuerWithHttpsBackChannel(true));
+
+        var thrown = assertThrows(TransportException.class, resolver::resolve,
+                "the unreachable back-channel origin must fail the discovery request");
+        assertFalse(thrown.getMessage().contains(NON_TLS_ISSUER_REFUSAL),
+                "with allowInsecureHttp the issuer-scheme check must pass, but the message was: "
+                        + thrown.getMessage());
     }
 
     @Test
@@ -249,6 +282,22 @@ class BackChannelOriginRoutingTest {
 
     private static String publicUrl(String path) {
         return PUBLIC_ORIGIN + path;
+    }
+
+    /**
+     * An {@code http://} issuer whose back channel is an {@code https://} origin on loopback port 1,
+     * which refuses the connection at once — a discovery that gets past the issuer-scheme check fails
+     * fast on the connection attempt instead.
+     */
+    private static ClientConfiguration httpIssuerWithHttpsBackChannel(boolean allowInsecureHttp) {
+        return ClientConfiguration.builder()
+                .issuer(HTTP_ISSUER)
+                .clientId(Generators.letterStrings(8, 16).next())
+                .clientSecret(Generators.letterStrings(16, 32).next())
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                .backChannelOrigin(UNREACHABLE_HTTPS_ORIGIN)
+                .allowInsecureHttp(allowInsecureHttp)
+                .build();
     }
 
     private ClientSecretBasicAuth clientAuthentication() {

@@ -47,7 +47,9 @@ token `iss` checks are untouched, the published provider metadata and the DPoP `
 URLs, and the front channel (authorization-request and end-session URLs sent to the browser) keeps
 the public origin. Transport policy follows the host actually contacted: `verify-hostname` and the
 configured trust apply to the back-channel host, and an `http://` back-channel origin requires
-`sheriff.client.allow-insecure-http=true`. The validation-side JWKS URL
+`sheriff.client.allow-insecure-http=true`. The issuer-scheme check at discovery is the one exception:
+it still applies to the configured issuer, so an `http://` issuer requires
+`sheriff.client.allow-insecure-http=true` even when the back-channel origin is `https://`. The validation-side JWKS URL
 (`sheriff.token.issuers.<name>.jwks.http.url`) is configured separately and is not affected by this setting.
 
 NOTE: `sheriff.client.verify-hostname` defaults to `true` — it is the one switch in this table whose

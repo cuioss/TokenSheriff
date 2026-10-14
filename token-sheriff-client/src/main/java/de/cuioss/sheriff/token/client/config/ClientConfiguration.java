@@ -273,7 +273,10 @@ public class ClientConfiguration {
      * <strong>Transport policy follows the contacted host:</strong> {@link #allowInsecureHttp},
      * {@link #verifyHostname} and {@link #sslContext} are evaluated against the back-channel origin, so
      * an {@code http://} back-channel origin requires {@link #allowInsecureHttp}, and the certificate the
-     * back-channel host presents must match that host and be trusted.
+     * back-channel host presents must match that host and be trusted. The issuer-scheme check at
+     * discovery is the one exception: it still applies to the configured {@link #issuer}, so an
+     * {@code http://} issuer requires {@link #allowInsecureHttp} even when the back-channel origin is
+     * {@code https://}.
      * <p>
      * <strong>Scope:</strong> the validation-side JWKS URL ({@code HttpJwksLoaderConfig}) is configured
      * separately and is not rewritten by this setting.
