@@ -139,8 +139,9 @@ public class HttpJwksLoaderConfig {
      * <p>
      * An explicit identifier is the default and recommended form. It is mandatory for direct JWKS
      * configuration. With well-known discovery the {@code issuer} advertised by the discovery document is
-     * checked against it, and a mismatch is reported as a security event. Only at this loader level may it
-     * be omitted for well-known discovery, in which case the loader uses the discovered issuer internally;
+     * checked against it, and a mismatch is a hard failure: no keys are loaded and every token for that
+     * issuer is rejected. Only at this loader level may it be omitted for well-known discovery, in which
+     * case the loader uses the discovered issuer internally and performs no comparison;
      * issuer configuration ({@code IssuerConfig}) always requires it.
      */
     @Getter
@@ -458,9 +459,9 @@ public class HttpJwksLoaderConfig {
          * <p>
          * An explicit identifier is the default and recommended form. It is mandatory for direct JWKS
          * configuration. With well-known discovery the {@code issuer} advertised by the discovery document
-         * is checked against it, and a mismatch is reported as a security event. Only at this loader level
-         * may it be omitted for well-known discovery, in which case the loader uses the discovered issuer
-         * internally; issuer configuration ({@code IssuerConfig}) always requires it.
+         * is checked against it, and a mismatch is a hard failure: no keys are loaded and every token for
+         * that issuer is rejected. Only at this loader level may it be omitted for well-known discovery,
+         * in which case the loader uses the discovered issuer internally and performs no comparison; issuer configuration ({@code IssuerConfig}) always requires it.
          *
          * @param issuerIdentifier the issuer identifier
          * @return this builder instance
