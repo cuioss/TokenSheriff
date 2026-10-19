@@ -145,6 +145,10 @@ class UncheckedThrowBoundaryTest {
                     CONSTRUCTION_TIME),
             Map.entry("de.cuioss.sheriff.token.validation.IssuerConfig$IssuerConfigBuilder#validateConfiguration",
                     CONSTRUCTION_TIME),
+            Map.entry("de.cuioss.sheriff.token.validation.IssuerConfig$IssuerConfigBuilder#propagateIssuerIdentifier",
+                    CONSTRUCTION_TIME + " (called only from IssuerConfigBuilder.build)"),
+            Map.entry("de.cuioss.sheriff.token.validation.IssuerConfig$IssuerConfigBuilder#validatePreBuiltLoader",
+                    CONSTRUCTION_TIME + " (called only from IssuerConfigBuilder.build)"),
             Map.entry("de.cuioss.sheriff.token.validation.TokenValidator#<init>", CONSTRUCTION_TIME
                     + " (the @Builder constructor's issuer-configuration argument checks)"),
             Map.entry("de.cuioss.sheriff.token.validation.TokenValidator$TokenValidatorBuilder#issuerConfigs",

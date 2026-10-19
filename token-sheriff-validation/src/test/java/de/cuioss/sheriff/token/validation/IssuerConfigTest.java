@@ -16,8 +16,10 @@
 package de.cuioss.sheriff.token.validation;
 
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
+import de.cuioss.sheriff.token.commons.transport.JwksType;
 import de.cuioss.sheriff.token.validation.domain.claim.mapper.IdentityMapper;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
+import de.cuioss.sheriff.token.validation.jwks.JwksLoaderFactory;
 import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
@@ -32,6 +34,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -390,6 +393,141 @@ class IssuerConfigTest implements ShouldImplementToString<IssuerConfig>, ShouldI
             // Verify the warning was logged
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                     JWTValidationLogMessages.WARN.CLAIM_SUB_OPTIONAL_WARNING.resolveIdentifierString());
+        }
+    }
+
+    @Nested
+    @DisplayName("Tests for the issuer identifier of the JWKS loader")
+    class LoaderIssuerIdentifierTests {
+
+        private static final String TEST_WELL_KNOWN_URL = "https://test-issuer.example.com/.well-known/openid-configuration";
+
+        @Test
+        @DisplayName("Should propagate the IssuerConfig identifier into a well-known loader configuration without one")
+        void shouldPropagateIdentifierIntoWellKnownLoader() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
+                            .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                            .build())
+                    .audienceValidationDisabled(true)
+                    .build();
+
+            JwksLoader loader = config.getJwksLoader();
+            assertNotNull(loader);
+            assertAll("the loader compares the advertised issuer with the IssuerConfig identifier",
+                    () -> assertEquals(JwksType.WELL_KNOWN, loader.getJwksType()),
+                    () -> assertEquals(Optional.of(TEST_ISSUER), loader.getIssuerIdentifier(),
+                            "the loader must carry the IssuerConfig identifier before initialization"));
+        }
+
+        @Test
+        @DisplayName("Should build when the loader configuration repeats the identical identifier")
+        void shouldBuildWithIdenticalIdentifiers() {
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
+                            .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                            .issuerIdentifier(TEST_ISSUER)
+                            .build())
+                    .audienceValidationDisabled(true)
+                    .build();
+
+            JwksLoader loader = config.getJwksLoader();
+            assertNotNull(loader);
+            assertEquals(Optional.of(TEST_ISSUER), loader.getIssuerIdentifier());
+        }
+
+        @Test
+        @DisplayName("Should reject a well-known loader configuration carrying a different identifier")
+        void shouldRejectDifferingIdentifierForWellKnown() {
+            var builder = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
+                            .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                            .issuerIdentifier(TEST_ISSUER + "/")
+                            .build())
+                    .audienceValidationDisabled(true);
+
+            var exception = assertThrows(IllegalArgumentException.class, builder::build);
+            assertAll("the message names both identifiers",
+                    () -> assertTrue(exception.getMessage().contains("'" + TEST_ISSUER + "/'")),
+                    () -> assertTrue(exception.getMessage().contains("'" + TEST_ISSUER + "'")));
+        }
+
+        @Test
+        @DisplayName("Should reject a direct JWKS loader configuration carrying a different identifier")
+        void shouldRejectDifferingIdentifierForDirectJwks() {
+            var builder = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
+                            .jwksUrl(TEST_JWKS_URL)
+                            .issuerIdentifier("https://other-issuer.example.com")
+                            .build())
+                    .audienceValidationDisabled(true);
+
+            assertThrows(IllegalArgumentException.class, builder::build);
+        }
+
+        @Test
+        @DisplayName("Should reject a pre-built well-known loader without an identifier")
+        void shouldRejectPreBuiltWellKnownLoaderWithoutIdentifier() {
+            JwksLoader preBuilt = JwksLoaderFactory.createHttpLoader(HttpJwksLoaderConfig.builder()
+                    .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                    .build());
+            var builder = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksLoader(preBuilt)
+                    .audienceValidationDisabled(true);
+
+            var exception = assertThrows(IllegalArgumentException.class, builder::build);
+            assertTrue(exception.getMessage().contains("WELL_KNOWN"));
+        }
+
+        @Test
+        @DisplayName("Should reject a pre-built well-known loader carrying a different identifier")
+        void shouldRejectPreBuiltWellKnownLoaderWithDifferingIdentifier() {
+            JwksLoader preBuilt = JwksLoaderFactory.createHttpLoader(HttpJwksLoaderConfig.builder()
+                    .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                    .issuerIdentifier("https://other-issuer.example.com")
+                    .build());
+            var builder = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksLoader(preBuilt)
+                    .audienceValidationDisabled(true);
+
+            assertThrows(IllegalArgumentException.class, builder::build);
+        }
+
+        @Test
+        @DisplayName("Should build with a pre-built well-known loader carrying the same identifier")
+        void shouldBuildWithPreBuiltWellKnownLoaderWithSameIdentifier() {
+            JwksLoader preBuilt = JwksLoaderFactory.createHttpLoader(HttpJwksLoaderConfig.builder()
+                    .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                    .issuerIdentifier(TEST_ISSUER)
+                    .build());
+
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksLoader(preBuilt)
+                    .audienceValidationDisabled(true)
+                    .build();
+
+            assertSame(preBuilt, config.getJwksLoader());
+        }
+
+        @Test
+        @DisplayName("Should build with a pre-built in-memory loader regardless of its identifier")
+        void shouldBuildWithPreBuiltInMemoryLoader() {
+            JwksLoader preBuilt = JwksLoaderFactory.createInMemoryLoader(TEST_JWKS_CONTENT);
+
+            var config = IssuerConfig.builder()
+                    .issuerIdentifier(TEST_ISSUER)
+                    .jwksLoader(preBuilt)
+                    .audienceValidationDisabled(true)
+                    .build();
+
+            assertSame(preBuilt, config.getJwksLoader());
         }
     }
 }

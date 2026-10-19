@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.validation;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
+import de.cuioss.sheriff.token.commons.transport.JwksType;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.commons.transport.LoadingStatusProvider;
 import de.cuioss.sheriff.token.validation.domain.claim.mapper.ClaimMapper;
@@ -57,10 +58,10 @@ import java.util.*;
  *     .expectedAudience("my-client")
  *     .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
  *         .wellKnownUrl("https://example.com/.well-known/openid-configuration")
- *         .issuerIdentifier("https://example.com") // checked against the discovered issuer
  *         .refreshIntervalSeconds(60)
  *         .build())
- *     .build(); // Validation happens automatically during build()
+ *     .build(); // Validation happens automatically during build(); the identifier is
+ *               // compared with the issuer advertised by the discovery document
  *
  * // Initialize the security event counter -> This is usually done by TokenValidator
  * issuerConfig.initJWKSLoader(new SecurityEventCounter());
@@ -112,9 +113,10 @@ public class IssuerConfig implements LoadingStatusProvider {
      * The issuer identifier for token validation.
      * <p>
      * This field is required for all enabled issuer configurations, regardless of the
-     * JWKS loading variant. For well-known discovery, the discovered issuer is compared
-     * against this value and a mismatch is logged as a security event, but this configured
-     * value is always authoritative.
+     * JWKS loading variant. For well-known discovery, the issuer advertised by the discovery
+     * document is always compared against this value; a mismatch is a hard loader failure:
+     * no keys are loaded and an {@code ISSUER_MISMATCH} security event is counted. This
+     * configured value is always authoritative.
      * </p>
      * <p>
      * This identifier must match the "iss" claim in validated tokens.
@@ -350,7 +352,8 @@ public class IssuerConfig implements LoadingStatusProvider {
      * Returns the configured issuer identifier, which is required for all enabled
      * configurations and validated during {@link IssuerConfigBuilder#build()}.
      * For well-known discovery, the discovered issuer never overrides this value;
-     * a mismatch is surfaced as a {@code ISSUER_MISMATCH} security event by the loader.
+     * a mismatch is a hard loader failure: no keys are loaded and the loader counts an
+     * {@code ISSUER_MISMATCH} security event.
      *
      * @return the issuer identifier, never null
      * @throws IllegalStateException if called on a disabled configuration that was
@@ -466,8 +469,10 @@ public class IssuerConfig implements LoadingStatusProvider {
          * <p>
          * This identifier must match the "iss" claim in validated tokens. It is required for
          * all enabled issuer configurations, regardless of the JWKS loading variant. For
-         * well-known discovery, set it to the issuer URL of the discovery document; a mismatch
-         * with the discovered issuer is reported as a security event.
+         * well-known discovery, set it to the issuer URL of the discovery document. It is propagated
+         * into the loader configuration and always compared with the discovered issuer; a mismatch is
+         * a hard loader failure: no keys are loaded and an {@code ISSUER_MISMATCH} security event is
+         * counted.
          * </p>
          * <p>
          * Examples:
@@ -816,7 +821,16 @@ public class IssuerConfig implements LoadingStatusProvider {
          *   <li>The loader implements proper error handling and retry logic</li>
          *   <li>The loader's {@link JwksLoader#getJwksType()} method returns an appropriate type</li>
          *   <li>{@link #issuerIdentifier(String)} is set — it is required for all enabled configurations</li>
+         *   <li>A loader whose {@link JwksLoader#getJwksType()} is {@link JwksType#WELL_KNOWN} reports the same
+         *       identifier from {@link JwksLoader#getIssuerIdentifier()}; {@link #build()} rejects a missing or
+         *       differing identifier with an {@link IllegalArgumentException}, because the identifier cannot be
+         *       propagated into an already built loader</li>
          * </ul>
+         * <p>
+         * A third-party {@link JwksLoader} implementation that reports {@link JwksType#WELL_KNOWN} is responsible
+         * for comparing the issuer advertised by the discovery document with its identifier itself; this builder
+         * can only verify the identifier it reports.
+         * </p>
          * <p>
          * Note: If a custom JwksLoader is provided, the other JWKS configuration methods
          * ({@link #httpJwksLoaderConfig}, {@link #jwksFilePath}, {@link #jwksContent}) will be ignored.
@@ -859,7 +873,6 @@ public class IssuerConfig implements LoadingStatusProvider {
          * // Well-Known Discovery
          * HttpJwksLoaderConfig discoveryConfig = HttpJwksLoaderConfig.builder()
          *     .wellKnownUrl("https://auth.example.com/.well-known/openid-configuration")
-         *     .issuerIdentifier("https://auth.example.com") // checked against the discovered issuer
          *     .refreshIntervalSeconds(600) // 10 minutes
          *     .build();
          *
@@ -868,10 +881,11 @@ public class IssuerConfig implements LoadingStatusProvider {
          * <p>
          * <strong>Important:</strong> The {@link #issuerIdentifier(String)} is required for
          * well-known discovery as well: set it to the issuer URL of the discovery document.
-         * Set the same identifier on the {@link HttpJwksLoaderConfig} too: the loader compares the
-         * issuer advertised by the discovery document against it, and a mismatch is a hard failure -
-         * no keys are loaded and every token for that issuer is rejected. Without an identifier on the
-         * loader configuration, no such comparison takes place.
+         * {@link #build()} propagates it into the loader configuration, so the loader always compares
+         * the issuer advertised by the discovery document against it. A mismatch is a hard failure:
+         * no keys are loaded, an {@code ISSUER_MISMATCH} security event is counted and every token for
+         * that issuer is rejected. The identifier need not be repeated on the {@link HttpJwksLoaderConfig};
+         * if it is, it must be identical, otherwise {@link #build()} throws an {@link IllegalArgumentException}.
          * </p>
          *
          * @param httpJwksLoaderConfig the HTTP JWKS loader configuration
@@ -981,6 +995,10 @@ public class IssuerConfig implements LoadingStatusProvider {
          * <ul>
          *   <li><strong>JWKS Configuration:</strong> At least one JWKS loading method must be configured for enabled issuers</li>
          *   <li><strong>Issuer Identifier:</strong> Required for all enabled issuer configurations</li>
+         *   <li><strong>Loader Identifier:</strong> An identifier set on the {@link HttpJwksLoaderConfig} must be
+         *       identical to the issuer identifier; an absent one is propagated from the issuer identifier</li>
+         *   <li><strong>Pre-built Well-Known Loader:</strong> A {@link JwksLoader} of type {@link JwksType#WELL_KNOWN}
+         *       supplied via {@link #jwksLoader(JwksLoader)} must report the same issuer identifier</li>
          *   <li><strong>Algorithm Preferences:</strong> Initialized with secure defaults if not explicitly set</li>
          *   <li><strong>Claim Mappers:</strong> Initialized as empty map if not explicitly set</li>
          * </ul>
@@ -999,8 +1017,8 @@ public class IssuerConfig implements LoadingStatusProvider {
         public IssuerConfig build() {
             // If enabled, validate and create JwksLoader if needed
             if (enabled) {
-                validateConfiguration();
-                createJwksLoaderIfNeeded();
+                String configuredIssuer = validateConfiguration();
+                createJwksLoaderIfNeeded(configuredIssuer);
 
                 // Validate audience configuration: either set expectedAudience or explicitly disable
                 if (!audienceValidationDisabled
@@ -1027,7 +1045,13 @@ public class IssuerConfig implements LoadingStatusProvider {
                     claimMappers != null ? claimMappers : Map.of(), jwksLoader);
         }
 
-        private void validateConfiguration() {
+        /**
+         * Validates the configuration of an enabled issuer.
+         *
+         * @return the validated, non-blank issuer identifier
+         * @throws IllegalArgumentException if no JWKS source is configured or the identifier is missing
+         */
+        private String validateConfiguration() {
             // Validate that at least one JWKS loading method is configured
             if (httpJwksLoaderConfig == null && jwksFilePath == null &&
                     jwksContent == null && jwksLoader == null) {
@@ -1045,19 +1069,69 @@ public class IssuerConfig implements LoadingStatusProvider {
                         issuerIdentifier is required (non-blank) for enabled issuer configurations. \
                         For well-known discovery, set it to the issuer URL of the discovery document.""");
             }
+            return issuerIdentifier;
         }
 
-        private void createJwksLoaderIfNeeded() {
-            if (jwksLoader == null) {
-                // Create JwksLoader based on the first available configuration
-                // SecurityEventCounter will be set later via initJWKSLoader()
-                if (httpJwksLoaderConfig != null) {
-                    jwksLoader = JwksLoaderFactory.createHttpLoader(httpJwksLoaderConfig);
-                } else if (jwksFilePath != null) {
-                    jwksLoader = JwksLoaderFactory.createFileLoader(jwksFilePath);
-                } else if (jwksContent != null) {
-                    jwksLoader = JwksLoaderFactory.createInMemoryLoader(jwksContent);
-                }
+        private void createJwksLoaderIfNeeded(String configuredIssuer) {
+            if (jwksLoader != null) {
+                validatePreBuiltLoader(jwksLoader, configuredIssuer);
+                return;
+            }
+            // Create JwksLoader based on the first available configuration
+            // SecurityEventCounter will be set later via initJWKSLoader()
+            if (httpJwksLoaderConfig != null) {
+                jwksLoader = JwksLoaderFactory.createHttpLoader(
+                        propagateIssuerIdentifier(httpJwksLoaderConfig, configuredIssuer));
+            } else if (jwksFilePath != null) {
+                jwksLoader = JwksLoaderFactory.createFileLoader(jwksFilePath);
+            } else if (jwksContent != null) {
+                jwksLoader = JwksLoaderFactory.createInMemoryLoader(jwksContent);
+            }
+        }
+
+        /**
+         * Returns the loader configuration that carries the configured issuer identifier, so that the
+         * issuer advertised by a discovery document is always compared with it.
+         *
+         * @param loaderConfig     the caller's loader configuration
+         * @param configuredIssuer the identifier of this issuer configuration
+         * @return {@code loaderConfig} itself when it already carries the identifier, otherwise a copy
+         *         carrying it
+         * @throws IllegalArgumentException if {@code loaderConfig} carries a different identifier
+         */
+        private static HttpJwksLoaderConfig propagateIssuerIdentifier(HttpJwksLoaderConfig loaderConfig,
+                String configuredIssuer) {
+            String loaderIssuer = loaderConfig.getIssuerIdentifier();
+            if (loaderIssuer == null) {
+                return loaderConfig.withIssuerIdentifier(configuredIssuer);
+            }
+            if (!loaderIssuer.equals(configuredIssuer)) {
+                throw new IllegalArgumentException(
+                        "The issuer identifier '%s' of the HttpJwksLoaderConfig differs from the issuer identifier '%s' of the IssuerConfig. Set it once on the IssuerConfig, or set the identical value on both."
+                                .formatted(loaderIssuer, configuredIssuer));
+            }
+            return loaderConfig;
+        }
+
+        /**
+         * Rejects a pre-built well-known loader that does not carry the configured issuer identifier,
+         * because such a loader would skip the comparison with the issuer advertised by the discovery
+         * document.
+         *
+         * @param loader           the pre-built loader
+         * @param configuredIssuer the identifier of this issuer configuration
+         * @throws IllegalArgumentException if the loader is of type {@link JwksType#WELL_KNOWN} and its
+         *                                  identifier is missing or differs
+         */
+        private static void validatePreBuiltLoader(JwksLoader loader, String configuredIssuer) {
+            if (loader.getJwksType() != JwksType.WELL_KNOWN) {
+                return;
+            }
+            Optional<String> loaderIssuer = loader.getIssuerIdentifier();
+            if (loaderIssuer.isEmpty() || !loaderIssuer.get().equals(configuredIssuer)) {
+                throw new IllegalArgumentException(
+                        "The pre-built WELL_KNOWN JwksLoader must carry the issuer identifier '%s' of the IssuerConfig, but carries '%s'. Without it the issuer advertised by the discovery document is not compared."
+                                .formatted(configuredIssuer, loaderIssuer.orElse("none")));
             }
         }
     }

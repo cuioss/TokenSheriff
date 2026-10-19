@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import javax.net.ssl.SSLContext;
 import java.net.URI;
+import java.time.Duration;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -739,5 +740,64 @@ class HttpJwksLoaderConfigTest {
                         "a TLS jwks_uri behind cleartext discovery must still use the configured SSL context"),
                 () -> assertDoesNotThrow(() -> tlsDiscovery.getHttpHandler(INSECURE_JWKS_URL),
                         "a cleartext jwks_uri must not inherit the TLS-only settings"));
+    }
+
+    @Test
+    @DisplayName("withIssuerIdentifier should return a copy carrying the identifier and every other setting")
+    void withIssuerIdentifierShouldCopyAllOtherSettings() {
+        var retryConfig = RetryConfig.builder().initialDelay(Duration.ofMillis(1)).build();
+        HttpJwksLoaderConfig original = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl(WELL_KNOWN_URL)
+                .refreshIntervalSeconds(REFRESH_INTERVAL)
+                .retryConfig(retryConfig)
+                .allowLoopbackEgress(true)
+                .build();
+
+        HttpJwksLoaderConfig copy = original.withIssuerIdentifier("https://example.com");
+
+        assertAll("only the issuer identifier differs",
+                () -> assertNotSame(original, copy, "a new instance must be returned"),
+                () -> assertNull(original.getIssuerIdentifier(), "the original must stay unchanged"),
+                () -> assertEquals("https://example.com", copy.getIssuerIdentifier()),
+                () -> assertEquals(REFRESH_INTERVAL, copy.getRefreshIntervalSeconds()),
+                () -> assertSame(original.getWellKnownConfig(), copy.getWellKnownConfig()),
+                () -> assertEquals(JwksType.WELL_KNOWN, copy.getJwksType()),
+                () -> assertSame(retryConfig, copy.getRetryConfig()),
+                () -> assertSame(original.getEgressPolicy(), copy.getEgressPolicy()),
+                () -> assertSame(original.getScheduledExecutorService(), copy.getScheduledExecutorService()),
+                () -> assertEquals(original.isOwnsExecutor(), copy.isOwnsExecutor()),
+                () -> assertSame(original.getParserConfig(), copy.getParserConfig()),
+                () -> assertEquals(original.getKeyRotationGracePeriod(), copy.getKeyRotationGracePeriod()),
+                () -> assertEquals(original.getMaxRetiredKeySets(), copy.getMaxRetiredKeySets()));
+    }
+
+    @Test
+    @DisplayName("withIssuerIdentifier should replace an identifier already present")
+    void withIssuerIdentifierShouldReplaceExistingIdentifier() {
+        HttpJwksLoaderConfig original = HttpJwksLoaderConfig.builder()
+                .jwksUrl(VALID_URL)
+                .issuerIdentifier("test-issuer")
+                .build();
+
+        HttpJwksLoaderConfig copy = original.withIssuerIdentifier("other-issuer");
+
+        assertAll(
+                () -> assertEquals("other-issuer", copy.getIssuerIdentifier()),
+                () -> assertSame(original.getHttpHandler(), copy.getHttpHandler(),
+                        "the direct JWKS handler must be shared"),
+                () -> assertEquals("test-issuer", original.getIssuerIdentifier()));
+    }
+
+    @Test
+    @DisplayName("withIssuerIdentifier should reject a null or blank identifier")
+    void withIssuerIdentifierShouldRejectNullOrBlank() {
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl(WELL_KNOWN_URL)
+                .build();
+
+        assertAll(
+                () -> assertThrows(IllegalArgumentException.class, () -> config.withIssuerIdentifier(null)),
+                () -> assertThrows(IllegalArgumentException.class, () -> config.withIssuerIdentifier("")),
+                () -> assertThrows(IllegalArgumentException.class, () -> config.withIssuerIdentifier("  ")));
     }
 }
