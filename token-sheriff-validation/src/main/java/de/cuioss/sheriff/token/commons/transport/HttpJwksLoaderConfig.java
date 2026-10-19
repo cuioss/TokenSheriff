@@ -136,7 +136,13 @@ public class HttpJwksLoaderConfig {
 
     /**
      * The issuer identifier for this JWKS configuration.
-     * Used for logging and identification purposes.
+     * <p>
+     * An explicit identifier is the default and recommended form. It is mandatory for direct JWKS
+     * configuration. With well-known discovery the {@code issuer} advertised by the discovery document is
+     * checked against it, and a mismatch is a hard failure: no keys are loaded and every token for that
+     * issuer is rejected. Only at this loader level may it be omitted for well-known discovery, in which
+     * case the loader uses the discovered issuer internally and performs no comparison;
+     * issuer configuration ({@code IssuerConfig}) always requires it.
      */
     @Getter
     private final String issuerIdentifier;
@@ -450,7 +456,12 @@ public class HttpJwksLoaderConfig {
 
         /**
          * Sets the issuer identifier for this JWKS configuration.
-         * Used for logging and identification purposes.
+         * <p>
+         * An explicit identifier is the default and recommended form. It is mandatory for direct JWKS
+         * configuration. With well-known discovery the {@code issuer} advertised by the discovery document
+         * is checked against it, and a mismatch is a hard failure: no keys are loaded and every token for
+         * that issuer is rejected. Only at this loader level may it be omitted for well-known discovery,
+         * in which case the loader uses the discovered issuer internally and performs no comparison; issuer configuration ({@code IssuerConfig}) always requires it.
          *
          * @param issuerIdentifier the issuer identifier
          * @return this builder instance
@@ -692,8 +703,8 @@ public class HttpJwksLoaderConfig {
          * Validates that the proposed endpoint source doesn't conflict with an already configured one.
          * <p>
          * This validation ensures mutual exclusivity between direct JWKS endpoint configuration
-         * and well-known discovery configuration. When using well-known discovery, the issuer identifier
-         * is automatically provided by the discovery document and cannot be manually configured.
+         * and well-known discovery configuration. When using well-known discovery, the JWKS endpoint is
+         * resolved from the discovery document.
          * </p>
          *
          * @param proposedSource the endpoint source that is being configured
@@ -705,7 +716,7 @@ public class HttpJwksLoaderConfig {
                         """
                                 Cannot use %s endpoint configuration when %s was already configured. \
                                 Methods jwksUri(), jwksUrl(), wellKnownUrl(), and wellKnownUri() are mutually exclusive. \
-                                When using well-known discovery, the issuer identifier is automatically provided by the discovery document."""
+                                When using well-known discovery, the JWKS endpoint is resolved from the discovery document."""
                                 .formatted(proposedSource.name().toLowerCase().replace("_", ""), endpointSource.name().toLowerCase().replace("_", "")));
             }
         }
@@ -811,7 +822,9 @@ public class HttpJwksLoaderConfig {
                 throw new IllegalArgumentException("Issuer identifier is mandatory when using direct JWKS configuration");
             }
 
-            // For well-known, issuer will be discovered dynamically during resolution (optional in config)
+            // For well-known, an omitted identifier is internal loader behaviour only: the loader then uses the
+            // discovered issuer. A configured identifier is checked against the discovered one. IssuerConfig
+            // always supplies an explicit identifier.
 
             EgressPolicy.EgressPolicyBuilder egressPolicyBuilder = EgressPolicy.builder()
                     .allowLoopback(allowLoopbackEgress);

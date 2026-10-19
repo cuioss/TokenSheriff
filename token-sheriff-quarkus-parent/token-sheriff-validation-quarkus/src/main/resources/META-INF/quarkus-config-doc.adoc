@@ -13,8 +13,11 @@ All `sheriff.token.*` properties for the Quarkus extension. For the core library
 ----
 # Issuers must be explicitly enabled (default is disabled)
 sheriff.token.issuers.keycloak.enabled=true
-# OpenID Connect Discovery (recommended) — issuer, JWKS, and algorithms auto-discovered
+# Explicit issuer identifier (default and recommended form, also with well-known-url)
+sheriff.token.issuers.keycloak.issuer-identifier=https://keycloak.example.com/realms/master
+# OpenID Connect Discovery (recommended) — JWKS endpoint discovered; the explicit issuer-identifier is checked against the discovered issuer
 sheriff.token.issuers.keycloak.jwks.http.well-known-url=https://keycloak.example.com/realms/master/.well-known/openid-configuration
+sheriff.token.issuers.keycloak.expected-audience=your-client-id
 ----
 
 == Issuer Configuration
@@ -25,7 +28,7 @@ Properties under `sheriff.token.issuers.<name>.*` — one block per issuer.
 |===
 |Property |Type |Default |Description
 |`enabled` |boolean |`false` |Enable/disable this issuer. Must be explicitly set to `true` to activate the issuer.
-|`issuer-identifier` |String |— |Matched against `iss` claim. Auto-discovered when using well-known.
+|`issuer-identifier` |String |— |Required for every enabled issuer (default and recommended form, also with `well-known-url`). Matched against the `iss` claim and checked against the discovery document's `issuer`.
 |`expected-audience` |String (csv) |— |Expected `aud` claim values
 |`expected-client-id` |String (csv) |— |Expected `azp` / `client_id` claim values
 |`algorithm-preferences` |String (csv) |— |Allowed signature algorithms (default: all supported)

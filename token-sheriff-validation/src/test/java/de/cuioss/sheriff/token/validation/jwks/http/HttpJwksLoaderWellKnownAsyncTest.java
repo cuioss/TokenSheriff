@@ -47,6 +47,7 @@ class HttpJwksLoaderWellKnownAsyncTest {
 
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(invalidWellKnownUrl)
+                .issuerIdentifier("https://invalid-host.example.com")
                 .build();
 
         // Measure constructor time
@@ -80,6 +81,7 @@ class HttpJwksLoaderWellKnownAsyncTest {
 
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(invalidWellKnownUrl)
+                .issuerIdentifier("https://invalid-host.example.com")
                 .retryConfig(fastRetry)
                 .build();
 

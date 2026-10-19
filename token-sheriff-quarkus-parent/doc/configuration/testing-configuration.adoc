@@ -46,9 +46,11 @@ public class MultiIssuerTestProfile implements QuarkusTestProfile {
     @Override
     public Map<String, String> getConfigOverrides() {
         Map<String, String> config = new HashMap<>();
+        config.put("sheriff.token.issuers.primary.issuer-identifier", "https://primary-auth.example.com");
         config.put("sheriff.token.issuers.primary.jwks.http.well-known-url", "https://primary-auth.example.com/.well-known/openid-configuration");
         config.put("sheriff.token.issuers.primary.enabled", "true");
         config.put("sheriff.token.issuers.primary.expected-audience", "primary-app");
+        config.put("sheriff.token.issuers.secondary.issuer-identifier", "https://secondary-auth.example.com");
         config.put("sheriff.token.issuers.secondary.jwks.http.well-known-url", "https://secondary-auth.example.com/.well-known/openid-configuration");
         config.put("sheriff.token.issuers.secondary.enabled", "true");
         config.put("sheriff.token.issuers.secondary.expected-audience", "secondary-app");

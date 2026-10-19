@@ -115,6 +115,7 @@ public final class TestConfigurations {
     public static TestConfig withWellKnownUrl() {
         return new TestConfig(Map.of(
                 JwtPropertyKeys.ISSUERS.ENABLED.formatted("test"), "true",
+                JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted("test"), "https://test.example.com",
                 JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted("test"), "https://test.example.com/.well-known/openid_configuration",
                 JwtPropertyKeys.ISSUERS.CONNECT_TIMEOUT_SECONDS.formatted("test"), "5",
                 JwtPropertyKeys.ISSUERS.READ_TIMEOUT_SECONDS.formatted("test"), "5",

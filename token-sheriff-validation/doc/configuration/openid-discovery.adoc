@@ -14,10 +14,11 @@ The library supports automatic configuration through OpenID Connect Discovery, a
 ----
 HttpJwksLoaderConfig jwksConfig = HttpJwksLoaderConfig.builder()
     .wellKnownUrl("https://accounts.google.com/.well-known/openid-configuration")
+    .issuerIdentifier("https://accounts.google.com")
     .build();
 
-// Issuer identifier is automatically discovered from the well-known endpoint
 IssuerConfig issuerConfig = IssuerConfig.builder()
+    .issuerIdentifier("https://accounts.google.com")
     .expectedAudience("your-client-id")
     .httpJwksLoaderConfig(jwksConfig)
     .build();
@@ -26,6 +27,8 @@ TokenValidator validator = TokenValidator.builder()
     .issuerConfig(issuerConfig)
     .build();
 ----
+
+The explicit `issuerIdentifier` is the default and recommended form, also together with `wellKnownUrl`. `IssuerConfig` requires it for every enabled issuer. Set the same value on the `HttpJwksLoaderConfig` as well: the loader compares the `issuer` advertised by the discovery document only against the identifier configured on the `HttpJwksLoaderConfig`. A mismatch is a hard failure: no keys are loaded and every token for that issuer is rejected.
 
 == Discovery Document
 
@@ -67,6 +70,7 @@ Optional<String> issuer = wellKnownResolver.getIssuer();
 ----
 HttpJwksLoaderConfig jwksConfig = HttpJwksLoaderConfig.builder()
     .wellKnownUrl("https://your-issuer.com/.well-known/openid-configuration")
+    .issuerIdentifier("https://your-issuer.com")
     .refreshIntervalSeconds(300)    // Refresh keys every 5 minutes
     .connectTimeoutSeconds(30)
     .readTimeoutSeconds(60)
@@ -82,6 +86,7 @@ supply `sslContext`, because the two cannot be combined:
 ----
 HttpJwksLoaderConfig jwksConfig = HttpJwksLoaderConfig.builder()
     .wellKnownUrl("https://keycloak:8443/.well-known/openid-configuration")
+    .issuerIdentifier("https://keycloak:8443")
     .refreshIntervalSeconds(300)
     .connectTimeoutSeconds(30)
     .readTimeoutSeconds(60)
@@ -117,10 +122,12 @@ public class OpenIDConnectValidator {
     public static TokenValidator createFromDiscovery(String issuerUrl, String clientId) {
         HttpJwksLoaderConfig jwksConfig = HttpJwksLoaderConfig.builder()
             .wellKnownUrl(issuerUrl + "/.well-known/openid-configuration")
+            .issuerIdentifier(issuerUrl)
             .refreshIntervalSeconds(300)
             .build();
 
         IssuerConfig issuerConfig = IssuerConfig.builder()
+            .issuerIdentifier(issuerUrl)
             .expectedAudience(clientId)
             .expectedClientId(clientId)
             .httpJwksLoaderConfig(jwksConfig)
@@ -153,9 +160,11 @@ public class MultiProviderDiscovery {
             TokenValidator.TokenValidatorBuilder builder, String issuerUrl, String clientId) {
         try {
             IssuerConfig issuerConfig = IssuerConfig.builder()
+                .issuerIdentifier(issuerUrl)
                 .expectedAudience(clientId)
                 .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
                     .wellKnownUrl(issuerUrl + "/.well-known/openid-configuration")
+                    .issuerIdentifier(issuerUrl)
                     .build())
                 .build();
             builder.issuerConfig(issuerConfig);
@@ -176,5 +185,5 @@ public class MultiProviderDiscovery {
 
 * Always use HTTPS for discovery endpoints
 * Validate the discovery document structure
-* Verify issuer consistency (automatic in library)
+* Configure the issuer identifier explicitly on both `IssuerConfig` and `HttpJwksLoaderConfig`; the loader compares the `HttpJwksLoaderConfig` identifier against the discovered `issuer`
 * Pin certificates for known providers if possible
