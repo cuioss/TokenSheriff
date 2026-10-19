@@ -513,14 +513,17 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * <p>
      * Design Decision (M7): The configured issuer is the operator's trust anchor. When a configured
      * issuer is present, the advertised (discovered) issuer must be present and must match it. An
-     * advertised issuer that does not match, or a discovery document that advertises no issuer at
-     * all, is a <em>hard discovery failure</em> — this method returns empty,
+     * advertised issuer that does not match, or an absent advertised issuer, is a
+     * <em>hard discovery failure</em> — this method returns empty,
      * {@link #resolveJWKSAdapter()} aborts, and the advertised {@code jwks_uri} is never fetched.
      * Gating here, before the advertised URL is fetched, closes the SSRF-relevant window (COMMONS-5):
      * a tampered discovery document cannot steer the loader to fetch key material from an
-     * attacker-chosen endpoint under the authority of an issuer we do not trust. Both failures are
-     * audited (WARN log + ISSUER_MISMATCH counter); an absent advertised issuer is logged as
-     * {@code <absent>}. Comparison tolerates a trailing-slash difference, which is a common,
+     * attacker-chosen endpoint under the authority of an issuer we do not trust. A mismatch is
+     * audited (WARN log + ISSUER_MISMATCH counter). A discovery document that omits {@code issuer}
+     * is already rejected by the well-known document parser before this method is reached, so that
+     * case produces no ISSUER_MISMATCH event; the absent-issuer branch here is a defensive gate
+     * (reached directly in unit tests) that logs the advertised value as {@code <absent>} and
+     * counts ISSUER_MISMATCH. Comparison tolerates a trailing-slash difference, which is a common,
      * benign formatting variance in real IdP deployments (e.g., Keycloak) and not a genuine issuer
      * mismatch.
      * <p>

@@ -83,7 +83,7 @@ IssuerConfig issuerConfig = IssuerConfig.builder()
     .build();
 ----
 
-See xref:configuration/openid-discovery.adoc#discovery-issuer-check[Discovery issuer check and migration] for how the advertised issuer is checked.
+See xref:configuration/openid-discovery.adoc#discovery-issuer-check[Discovery issuer check] for how the advertised issuer is checked.
 
 === Configuring TokenValidator
 

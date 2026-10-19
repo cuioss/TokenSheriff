@@ -29,7 +29,7 @@ TokenValidator validator = TokenValidator.builder()
 
 The explicit `issuerIdentifier` is the default and recommended form, also together with `wellKnownUrl`. `IssuerConfig` requires it for every enabled issuer and propagates it into the loader configuration when it is built, so it is configured once and need not be repeated on the `HttpJwksLoaderConfig`. The `issuer` advertised by the discovery document is always compared with it. A mismatch is a hard failure: no keys are loaded, an `ISSUER_MISMATCH` security event is counted, and every token for that issuer is rejected.
 
-If the `HttpJwksLoaderConfig` carries an identifier as well, it must be identical to the `IssuerConfig` identifier; a differing value makes `IssuerConfig.build()` fail with an `IllegalArgumentException`. A standalone `HttpJwksLoaderConfig` used without `IssuerConfig` may omit the identifier for discovery; no comparison with the advertised issuer takes place then (see xref:#discovery-issuer-check[Discovery issuer check and migration]).
+If the `HttpJwksLoaderConfig` carries an identifier as well, it must be identical to the `IssuerConfig` identifier; a differing value makes `IssuerConfig.build()` fail with an `IllegalArgumentException`. A standalone `HttpJwksLoaderConfig` used without `IssuerConfig` may omit the identifier for discovery; no comparison with the advertised issuer takes place then (see xref:#discovery-issuer-check[Discovery issuer check]).
 
 == Discovery Document
 
@@ -150,7 +150,7 @@ public class MultiProviderDiscovery {
         TokenValidator.TokenValidatorBuilder builder = TokenValidator.builder();
 
         addProviderFromDiscovery(builder, "https://accounts.google.com", "google-client-id");
-        addProviderFromDiscovery(builder, "https://login.microsoftonline.com/common/v2.0", "microsoft-client-id");
+        addProviderFromDiscovery(builder, "https://login.microsoftonline.com/tenant-id/v2.0", "microsoft-client-id");
         addProviderFromDiscovery(builder, "https://dev-123456.okta.com", "okta-client-id");
 
         return builder.build();
@@ -173,6 +173,8 @@ public class MultiProviderDiscovery {
     }
 }
 ----
+
+NOTE: Use the tenant-specific Microsoft endpoint. The multi-tenant `common` endpoint advertises a templated issuer (`+https://login.microsoftonline.com/{tenantid}/v2.0+`), which never equals a fixed `issuerIdentifier`, so the discovery issuer check rejects it.
 
 == Considerations
 
