@@ -20,8 +20,8 @@ services:
       - jwt-integration
 
   keycloak:
-    # NOTE: Dependabot cannot automatically update this image version.
-    # Manual updates required. Check: https://quay.io/keycloak/keycloak
+    # Tag and digest are bumped together by Dependabot (docker-compose entry in
+    # .github/dependabot.yml); the bump PR runs the integration and e2e suites.
     image: quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244
     command:
       - start-dev

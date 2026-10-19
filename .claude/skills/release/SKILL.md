@@ -314,6 +314,34 @@ collapsed into a chain, or intentionally dropped (only the mechanical version-bu
 OpenRewrite bumps should be dropped outright), and that no PR appears in the new file that was
 not in the original.
 
+#### Derive the Keycloak version the release was verified against
+
+The integration and end-to-end suites run against the Keycloak image pinned in the two compose
+files, so those pins — not a README, not memory — are the version a release was verified against.
+Read them from the **release tag** (not the working tree, which may already carry a later bump) and
+from `$PREV_VERSION` for the "previously" half:
+
+```bash
+kc_pin() {  # $1 = git ref, $2 = compose file; prints the pinned Keycloak tag
+  git show "$1:$2" 2>/dev/null \
+    | sed -nE 's#^[[:space:]]*image:[[:space:]]*quay\.io/keycloak/keycloak:([0-9][^@[:space:]]*).*#\1#p'
+}
+kc_version() {  # $1 = git ref; prints the Keycloak tag pinned in both compose files, or fails
+  local base=token-sheriff-quarkus-parent
+  local it e2e
+  it=$(kc_pin "$1" "$base/token-sheriff-quarkus-integration-tests/docker-compose.yml")
+  e2e=$(kc_pin "$1" "$base/e-2-e-playwright/docker-compose.yml")
+  [ -n "$it" ] && [ "$it" = "$e2e" ] && echo "$it"
+}
+KEYCLOAK_VERSION=$(kc_version "$RELEASE_VERSION") || { echo "STOP - no single Keycloak pin at $RELEASE_VERSION"; false; }
+KEYCLOAK_PREV=$(kc_version "$PREV_VERSION" || true)
+echo "Keycloak: $KEYCLOAK_VERSION (previously ${KEYCLOAK_PREV:-unknown})"
+```
+
+A failure here is a stop, not a reason to omit the line: it means the two compose files disagree or
+no longer pin a Keycloak tag, and the release would otherwise claim a verification it cannot name.
+Tags are bare versions (`26.8.1`); the `@sha256:` digest is not part of the statement.
+
 #### House format rules (apply exactly)
 
 1. **Three top-level groups, in this order:** `## Quarkus`,
@@ -328,11 +356,19 @@ not in the original.
 
    This release targets **Quarkus <new>** (previously <old>).
 
+   Verified against **Keycloak <KEYCLOAK_VERSION>** (previously <KEYCLOAK_PREV>).
+
    * <PR line(s)>
    ```
 
    If Quarkus did **not** change in this cycle, state the unchanged version in the same
    one-line form and omit the PR line. Never also list Quarkus under `### Java`.
+
+   The Keycloak line sits directly beneath the Quarkus statement, so every release names the
+   identity provider it was verified against. Use `KEYCLOAK_VERSION` and `KEYCLOAK_PREV` from the
+   derivation above. When they are equal, or `KEYCLOAK_PREV` is unknown, drop the "(previously …)"
+   part: `Verified against **Keycloak <KEYCLOAK_VERSION>**.` A Keycloak bump PR is a dependency PR
+   like any other and is listed under `### Infra`; it does not move into the Quarkus section.
 3. **Features & Enhancements** — group functional PRs by theme with `###` subheadings, e.g.:
    - `### API & Code Quality` — also the home for refactor/standards/cleanup recipes
      (e.g. `refactor-to-profile-standards`, requirement-ID renames), **not** under build/tooling
@@ -404,10 +440,17 @@ Every count must be `1`. Any count `>1` is an unmerged duplicate — collapse it
 5 and re-run. Also confirm that no dependency line is missing a version range
 (rule 6).
 
+Finally, confirm the Keycloak statement is present and names the derived version:
+
+```bash
+grep -F "Verified against **Keycloak ${KEYCLOAK_VERSION}**" ".plan/temp/release-${RELEASE_VERSION}.md" \
+  || { echo "STOP - Keycloak line missing or wrong"; false; }
+```
+
 
 ### Step 14 — Done
 
-Report: released version, release URL, the PR number, a short summary of how many
+Report: released version, the Keycloak version it was verified against, release URL, the PR number, a short summary of how many
 dependency PRs were collapsed/removed during note reformatting, and the outcome of Step 12b
 — naming any consumer that reported `no_changes` because it pins a SNAPSHOT and therefore
 still needs a manual bump.
