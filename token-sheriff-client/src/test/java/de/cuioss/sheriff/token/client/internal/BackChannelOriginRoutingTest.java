@@ -75,8 +75,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * reserved {@code .invalid} TLD that can never be resolved, while the back-channel origin points at
  * the mock server. A request recorded by the mock server is therefore proof that the call was
  * retargeted; the recorded path proves the advertised path was kept. The assertions on the resolved
- * metadata, the DPoP {@code htu} and the front-channel URLs pin the other half of the contract: the
- * public identity is never rewritten.
+ * metadata and the front-channel URLs pin the other half of the contract: the public identity is never
+ * rewritten. A DPoP proof is the exception by design: its {@code htu} names the target URI of the request
+ * it travels with (RFC 9449 §4.2), so on a mapped call it carries the back-channel origin with the
+ * advertised path.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -104,11 +106,13 @@ class BackChannelOriginRoutingTest {
     private final RealmDispatcher moduleDispatcher = new RealmDispatcher();
 
     private ClientConfiguration configuration;
+    private String backChannelOrigin;
 
     @BeforeEach
     void setUp(URIBuilder uriBuilder) {
         moduleDispatcher.reset();
         URI server = URI.create(uriBuilder.buildAsString());
+        backChannelOrigin = server.getScheme() + "://" + server.getHost() + ":" + server.getPort();
         configuration = ClientConfiguration.builder()
                 .issuer(ISSUER)
                 .clientId(Generators.letterStrings(8, 16).next())
@@ -116,7 +120,7 @@ class BackChannelOriginRoutingTest {
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .scope("openid")
                 .redirectUri(REDIRECT_URI)
-                .backChannelOrigin(server.getScheme() + "://" + server.getHost() + ":" + server.getPort())
+                .backChannelOrigin(backChannelOrigin)
                 .allowInsecureHttp(true)
                 .build();
     }
@@ -190,22 +194,26 @@ class BackChannelOriginRoutingTest {
     }
 
     @Test
-    @DisplayName("A DPoP proof sent to the rewritten token endpoint binds the public advertised URL as htu")
-    void shouldKeepPublicUrlAsDpopHtu() throws Exception {
-        var keyPairGenerator = KeyPairGenerator.getInstance("EC");
-        keyPairGenerator.initialize(new ECGenParameterSpec("secp256r1"));
-        var constraint = SenderConstraint.dpop(new DpopProofGenerator(keyPairGenerator.generateKeyPair(), "ES256"));
+    @DisplayName("A DPoP proof sent to the rewritten token endpoint names the back-channel URL actually contacted as htu")
+    void shouldUseBackChannelUrlAsDpopHtuForTokenRequest() throws Exception {
         var client = new TokenEndpointClient(configuration);
 
         client.requestToken(publicUrl(TOKEN_PATH), Map.of("grant_type", "client_credentials"), Map.of(),
-                constraint);
+                dpopConstraint());
 
-        RecordedRequest request = moduleDispatcher.requests().getFirst();
-        String proof = request.getHeaders().get("DPoP");
-        assertNotNull(proof, "the DPoP proof must be sent with the token request");
-        String payload = new String(Base64.getUrlDecoder().decode(proof.split("\\.")[1]), StandardCharsets.UTF_8);
-        assertTrue(payload.contains("\"htu\":\"" + publicUrl(TOKEN_PATH) + "\""),
-                "htu must name the advertised public URL, not the host contacted, but the payload was: " + payload);
+        assertProofNamesBackChannelUrl(TOKEN_PATH);
+    }
+
+    @Test
+    @DisplayName("A DPoP proof sent to the rewritten userinfo endpoint names the back-channel URL actually contacted as htu")
+    void shouldUseBackChannelUrlAsDpopHtuForUserInfoRequest() throws Exception {
+        var client = new UserInfoClient(configuration);
+
+        var userInfo = client.fetchUserInfo(publicUrl(USERINFO_PATH), Generators.letterStrings(20, 40).next(),
+                dpopConstraint());
+
+        assertEquals("alice", userInfo.getSub().orElseThrow());
+        assertProofNamesBackChannelUrl(USERINFO_PATH);
     }
 
     @Test
@@ -282,6 +290,30 @@ class BackChannelOriginRoutingTest {
 
     private static String publicUrl(String path) {
         return PUBLIC_ORIGIN + path;
+    }
+
+    private static SenderConstraint dpopConstraint() throws Exception {
+        var keyPairGenerator = KeyPairGenerator.getInstance("EC");
+        keyPairGenerator.initialize(new ECGenParameterSpec("secp256r1"));
+        return SenderConstraint.dpop(new DpopProofGenerator(keyPairGenerator.generateKeyPair(), "ES256"));
+    }
+
+    /**
+     * Asserts that the single recorded request arrived at {@code path} and carried a DPoP proof whose
+     * {@code htu} is the back-channel origin plus {@code path} — the URL actually contacted — and never
+     * the advertised public URL (RFC 9449 §4.2).
+     */
+    private void assertProofNamesBackChannelUrl(String path) {
+        assertEquals(List.of(path), moduleDispatcher.paths(), "the request must reach the back-channel origin");
+        RecordedRequest request = moduleDispatcher.requests().getFirst();
+        String proof = request.getHeaders().get("DPoP");
+        assertNotNull(proof, "the DPoP proof must be sent with the request");
+        String payload = new String(Base64.getUrlDecoder().decode(proof.split("\\.")[1]), StandardCharsets.UTF_8);
+        assertAll("htu names the URL actually contacted",
+                () -> assertTrue(payload.contains("\"htu\":\"" + backChannelOrigin + path + "\""),
+                        "htu must name the back-channel URL actually contacted, but the payload was: " + payload),
+                () -> assertFalse(payload.contains(PUBLIC_ORIGIN),
+                        "htu must not name the advertised public URL, but the payload was: " + payload));
     }
 
     /**

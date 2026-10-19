@@ -61,6 +61,10 @@ import java.util.function.Supplier;
  * ({@link #jkt()}), so a stolen bearer token cannot be replayed without the private key
  * ({@code CLIENT-11}, {@code T-TOKEN-REPLAY}).
  * <p>
+ * The {@code htu} is the target URI of the request the proof is attached to (RFC 9449 §4.2): the URL
+ * actually dialled, after any back-channel mapping, not the endpoint URL the authorization server
+ * advertised. The generator signs whatever {@code htu} its caller supplies.
+ * <p>
  * The generator signs with a JDK {@link Signature} — the engine adds no cryptographic library of its
  * own — and mirrors the {@code DpopProofHelper} conventions already used by the integration harness.
  * The supported proof-key and algorithm matrix is:

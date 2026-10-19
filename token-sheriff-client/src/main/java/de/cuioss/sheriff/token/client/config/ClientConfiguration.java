@@ -267,8 +267,12 @@ public class ClientConfiguration {
      * <p>
      * <strong>Identity is unaffected:</strong> {@link #issuer} stays the issuer identifier, and every
      * exact-match check against it (the discovery document {@code issuer}, the token {@code iss}), the
-     * published provider metadata, the DPoP {@code htu} claim and the front-channel authorization and
-     * end-session URLs keep the advertised public values.
+     * published provider metadata and the front-channel authorization and end-session URLs keep the
+     * advertised public values.
+     * <p>
+     * <strong>DPoP proofs name the URL actually contacted:</strong> a DPoP proof's {@code htu} is the
+     * target URI of the request it is attached to (RFC 9449 §4.2), so on a mapped call it carries this
+     * back-channel origin with the advertised path, not the advertised public URL.
      * <p>
      * <strong>Transport policy follows the contacted host:</strong> {@link #allowInsecureHttp},
      * {@link #verifyHostname} and {@link #sslContext} are evaluated against the back-channel origin, so
