@@ -57,6 +57,7 @@ import java.util.*;
  *     .expectedAudience("my-client")
  *     .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
  *         .wellKnownUrl("https://example.com/.well-known/openid-configuration")
+ *         .issuerIdentifier("https://example.com") // checked against the discovered issuer
  *         .refreshIntervalSeconds(60)
  *         .build())
  *     .build(); // Validation happens automatically during build()
@@ -851,12 +852,14 @@ public class IssuerConfig implements LoadingStatusProvider {
          * // Direct JWKS URL
          * HttpJwksLoaderConfig directConfig = HttpJwksLoaderConfig.builder()
          *     .jwksUrl("https://auth.example.com/.well-known/jwks.json")
+         *     .issuerIdentifier("https://auth.example.com") // mandatory for direct JWKS configuration
          *     .refreshIntervalSeconds(300) // 5 minutes
          *     .build();
          *
          * // Well-Known Discovery
          * HttpJwksLoaderConfig discoveryConfig = HttpJwksLoaderConfig.builder()
          *     .wellKnownUrl("https://auth.example.com/.well-known/openid-configuration")
+         *     .issuerIdentifier("https://auth.example.com") // checked against the discovered issuer
          *     .refreshIntervalSeconds(600) // 10 minutes
          *     .build();
          *
@@ -865,8 +868,10 @@ public class IssuerConfig implements LoadingStatusProvider {
          * <p>
          * <strong>Important:</strong> The {@link #issuerIdentifier(String)} is required for
          * well-known discovery as well: set it to the issuer URL of the discovery document.
-         * The discovered issuer is compared against it and a mismatch is reported as a
-         * security event, but the configured value is authoritative.
+         * Set the same identifier on the {@link HttpJwksLoaderConfig} too: the loader compares the
+         * issuer advertised by the discovery document against it, and a mismatch is a hard failure -
+         * no keys are loaded and every token for that issuer is rejected. Without an identifier on the
+         * loader configuration, no such comparison takes place.
          * </p>
          *
          * @param httpJwksLoaderConfig the HTTP JWKS loader configuration
