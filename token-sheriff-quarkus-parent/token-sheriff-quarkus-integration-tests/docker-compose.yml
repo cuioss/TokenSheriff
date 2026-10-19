@@ -22,7 +22,7 @@ services:
   keycloak:
     # NOTE: Dependabot cannot automatically update this image version.
     # Manual updates required. Check: https://quay.io/keycloak/keycloak
-    image: quay.io/keycloak/keycloak:26.4.0
+    image: quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244
     command:
       - start-dev
       - --import-realm
@@ -41,13 +41,14 @@ services:
       - KC_HEALTH_ENABLED=true
       - KC_METRICS_ENABLED=true
       - KC_LOG_LEVEL=INFO
-      # Hostname configuration v2 for well-known discovery endpoint (research-based)
+      # Static public hostname: every URL Keycloak emits (issuer, endpoints, redirects) names
+      # https://localhost:1443, whichever side of the port mapping a request comes from. This is the
+      # scenario under test; hostname-backchannel-dynamic is deliberately not set.
       - KC_HOSTNAME_STRICT=false
       - KC_HTTP_ENABLED=false
       - KC_HTTPS_PORT=8443
-      - KC_HOSTNAME=localhost
-      # External hostname for Docker container well-known discovery
-      
+      - KC_HOSTNAME=https://localhost:1443
+
       # HTTP Access Logging Configuration (Quarkus-based)
       # Enable comprehensive request/response logging for JWKS endpoint diagnostics
       - QUARKUS_HTTP_ACCESS_LOG_ENABLED=true
@@ -147,7 +148,9 @@ services:
       - QUARKUS_PROFILE=prod
       # Nothing listens on port 8444 of the Keycloak container. The host name resolves inside the
       # compose network and the connection is refused at once, so the failure needs neither DNS
-      # nor a timeout. The `integration` issuer keeps its working JWKS URL.
+      # nor a timeout. The base direct JWKS URL is cleared, because an issuer may not carry both a
+      # JWKS URL and a well-known URL. The `integration` issuer keeps its working JWKS URL.
+      - SHERIFF_TOKEN_ISSUERS_KEYCLOAK_JWKS_HTTP_URL=
       - SHERIFF_TOKEN_ISSUERS_KEYCLOAK_JWKS_HTTP_WELL_KNOWN_URL=https://keycloak:8444/realms/benchmark/.well-known/openid-configuration
       # A maximum that differs from the default of five, and a short initial delay
       - SHERIFF_TOKEN_RETRY_MAX_ATTEMPTS=${RETRY_PROBE_MAX_ATTEMPTS:-3}

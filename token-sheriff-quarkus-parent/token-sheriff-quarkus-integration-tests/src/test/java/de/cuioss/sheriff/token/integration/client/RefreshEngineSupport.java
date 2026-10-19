@@ -50,18 +50,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * application performs — no hand-rolled {@code HttpRequest} to the token endpoint.
  *
  * <h2>Endpoints come from discovery, not from constants</h2>
- * The engine addresses the {@code client-engine} realm, which is imported with a {@code frontendUrl}
- * of {@link KeycloakUrlSupport#EXTERNAL_BASE} — the very authority the test JVM reaches Keycloak on.
+ * The engine addresses the {@code client-engine} realm. Keycloak runs with the static hostname
+ * {@link KeycloakUrlSupport#EXTERNAL_BASE} — the very authority the test JVM reaches Keycloak on.
  * Issuer identity and endpoint authority therefore coincide, which is what lets the support run a real
  * discovery round trip: {@link #discoveredProviderMetadata()} fetches the realm's
  * {@code .well-known/openid-configuration} through the production {@link DiscoveryResolver} and every
  * endpoint the flows use (token, revocation, JWKS) is the one the authorization server itself
  * advertises. No endpoint is assembled by hand, so a realm that moved an endpoint breaks the specs
  * instead of being silently papered over by a stale constant.
- * <p>
- * The {@code integration} realm is unsuitable for this: it advertises the Docker-internal
- * {@link KeycloakUrlSupport#INTERNAL_BASE} authority, which the test JVM cannot connect to, so a
- * discovery round trip against it would resolve endpoints that are unreachable from here.
  *
  * <h2>TLS posture</h2>
  * The container serves a self-signed certificate. Rather than disabling server authentication with a
@@ -71,14 +67,14 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 final class RefreshEngineSupport {
 
-    /** Name of the realm whose {@code frontendUrl} is the externally reachable base. */
+    /** Name of the realm the client engine addresses. */
     static final String REALM = "client-engine";
 
     /** Realm path shared by every endpoint this support addresses. */
     static final String REALM_PATH = "/realms/" + REALM;
 
     /**
-     * Issuer the {@code client-engine} realm advertises. Because the realm's {@code frontendUrl} is the
+     * Issuer the {@code client-engine} realm advertises. Because Keycloak's static hostname is the
      * externally reachable base, this is simultaneously the {@code iss} claim of every token it signs
      * and the prefix of the {@code .well-known} document discovery fetches.
      */

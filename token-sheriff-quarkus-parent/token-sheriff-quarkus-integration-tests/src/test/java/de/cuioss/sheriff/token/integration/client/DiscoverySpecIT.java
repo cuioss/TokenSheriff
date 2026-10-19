@@ -46,11 +46,11 @@ class DiscoverySpecIT extends BaseIntegrationTest {
 
     private static final CuiLogger LOGGER = new CuiLogger(DiscoverySpecIT.class);
 
-    // The discovery document is fetched over the host-mapped external base (reachable from the CI
-    // runner), but Keycloak advertises the issuer under the realm frontendUrl (Docker-internal base).
+    // The discovery document is fetched over the host-mapped public base, which is also the static
+    // KC_HOSTNAME Keycloak advertises the issuer under.
     private static final String WELL_KNOWN =
             KeycloakUrlSupport.EXTERNAL_BASE + "/realms/integration/.well-known/openid-configuration";
-    private static final String EXPECTED_ISSUER = KeycloakUrlSupport.INTERNAL_ISSUER;
+    private static final String EXPECTED_ISSUER = KeycloakUrlSupport.EXTERNAL_BASE + "/realms/integration";
 
     @Test
     @DisplayName("Should serve a discovery document with the expected endpoints and S256 support")
@@ -64,7 +64,7 @@ class DiscoverySpecIT extends BaseIntegrationTest {
         assertAll("discovery document contents",
                 () -> assertTrue(body.contains("\"issuer\""), "issuer present"),
                 () -> assertTrue(body.contains(EXPECTED_ISSUER),
-                        "issuer matches the integration realm frontendUrl (" + EXPECTED_ISSUER + ")"),
+                        "issuer names the static public hostname (" + EXPECTED_ISSUER + ")"),
                 () -> assertTrue(body.contains("\"token_endpoint\""), "token_endpoint present"),
                 () -> assertTrue(body.contains("\"authorization_endpoint\""), "authorization_endpoint present"),
                 () -> assertTrue(body.contains("\"jwks_uri\""), "jwks_uri present"),

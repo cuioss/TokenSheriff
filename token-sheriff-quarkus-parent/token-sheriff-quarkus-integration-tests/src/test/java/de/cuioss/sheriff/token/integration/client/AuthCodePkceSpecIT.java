@@ -177,11 +177,10 @@ class AuthCodePkceSpecIT extends BaseIntegrationTest {
 
         Matcher matcher = FORM_ACTION.matcher(loginPage.body());
         assertTrue(matcher.find(), "the Keycloak login page must expose a form action URL");
-        // Keycloak builds the login-actions action URL from the realm frontendUrl
-        // (https://keycloak:8443), which is unreachable from the CI runner. Rewrite it to the
-        // host-mapped external base so the login POST reaches Keycloak (and keeps the localhost
-        // session cookies valid).
-        String actionUrl = KeycloakUrlSupport.toExternal(matcher.group(1).replace("&amp;", "&"));
+        // Keycloak builds the login-actions action URL from its static public hostname
+        // (https://localhost:1443), which the CI runner reaches through the host port mapping, so the
+        // login POST follows it as emitted (and the localhost session cookies stay valid).
+        String actionUrl = matcher.group(1).replace("&amp;", "&");
 
         String form = param("username", USERNAME) + "&" + param("password", PASSWORD);
         HttpRequest loginRequest = HttpRequest.newBuilder().uri(URI.create(actionUrl))

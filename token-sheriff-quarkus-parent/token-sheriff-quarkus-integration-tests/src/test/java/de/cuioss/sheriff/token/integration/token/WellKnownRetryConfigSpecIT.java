@@ -66,9 +66,9 @@ class WellKnownRetryConfigSpecIT extends BaseIntegrationTest {
             Path.of(System.getProperty("test.retry-probe.log.file", "target/retry-probe/quarkus.log"));
 
     /** Issuer whose well-known URL the probe points at a closed port. */
-    private static final String UNREACHABLE_ISSUER = "https://keycloak:8443/realms/benchmark";
+    private static final String UNREACHABLE_ISSUER = "https://localhost:1443/realms/benchmark";
     /** Issuer the probe leaves untouched; it loads its key set from the running Keycloak. */
-    private static final String REACHABLE_ISSUER = "https://keycloak:8443/realms/integration";
+    private static final String REACHABLE_ISSUER = "https://localhost:1443/realms/integration";
 
     private static final String READINESS_PATH = "/q/health/ready";
     private static final String JWKS_CHECK_DATA = "checks.find { it.name == 'jwks-endpoints' }.data";

@@ -81,9 +81,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * with {@code invalid_client} instead of silently passing against the wrong key.
  *
  * <h2>The {@code private_key_jwt} assertion audience</h2>
- * Keycloak matches the assertion's {@code aud} against the endpoint URL it derives from its own
- * {@code frontendUrl}. In the {@code client-engine} realm that URL is the one the request is actually
- * sent to, so the assertion is audienced at the discovery-resolved
+ * Keycloak matches the assertion's {@code aud} against the endpoint URL it derives from its static
+ * public hostname ({@code KC_HOSTNAME}). That URL is the one the request is actually sent to, so the
+ * assertion is audienced at the discovery-resolved
  * {@code token_endpoint} — the single URL that is both advertised and connected to. No second,
  * unreachable audience has to be reconciled here.
  */

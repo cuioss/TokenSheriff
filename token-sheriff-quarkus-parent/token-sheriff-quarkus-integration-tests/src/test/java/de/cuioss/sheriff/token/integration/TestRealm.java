@@ -88,9 +88,9 @@ public class TestRealm {
     private static final String JWE_CLIENT_ID = "jwe-client";
     private static final String JWE_CLIENT_SECRET = "jwe-secret";
 
-    // Client-engine realm constants — the realm whose frontendUrl is the externally reachable base, so
-    // the client-engine specs can resolve their endpoints from a real discovery round trip. It mirrors
-    // the integration realm's clients; only the advertised authority differs.
+    // Client-engine realm constants — the realm the client-engine specs resolve their endpoints from
+    // through a real discovery round trip; the static KC_HOSTNAME makes every advertised endpoint the
+    // externally reachable base. It mirrors the integration realm's clients.
     private static final String CLIENT_ENGINE_REALM_ID = "client-engine";
 
     /** {@code client-jwt} client of the client-engine realm; authenticates by signed assertion, not by secret. */
@@ -276,9 +276,10 @@ public class TestRealm {
     /**
      * Client-engine counterpart of {@link #createIntegrationRealm()}.
      * <p>
-     * Same client and user, but in the {@code client-engine} realm, whose {@code frontendUrl} is the
-     * externally reachable base — so a spec acquiring here can drive the refresh leg against endpoints
-     * resolved from the realm's own discovery document rather than from hand-maintained constants.
+     * Same client and user, but in the {@code client-engine} realm. The static {@code KC_HOSTNAME} makes
+     * the realm advertise the externally reachable base — so a spec acquiring here can drive the refresh
+     * leg against endpoints resolved from the realm's own discovery document rather than from
+     * hand-maintained constants.
      */
     public static TestRealm createClientEngineRealm() {
         return new TestRealm(
