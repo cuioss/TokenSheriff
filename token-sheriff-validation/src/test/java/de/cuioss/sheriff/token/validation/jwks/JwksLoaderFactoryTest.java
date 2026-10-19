@@ -86,6 +86,7 @@ class JwksLoaderFactoryTest {
 
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
                 .wellKnownUrl("https://example.com/.well-known/openid-configuration")
+                .issuerIdentifier("https://example.com")
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build()) // No retry to avoid delays - HTTP functionality tested in ResilientHttpAdapter
                 .build();
         JwksLoader loader = JwksLoaderFactory.createHttpLoader(config);

@@ -115,6 +115,7 @@ class HttpJwksLoaderFailureTest {
 
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(invalidWellKnownUrl)
+                .issuerIdentifier("test-issuer")
                 .build();
 
         try (HttpJwksLoader failingLoader = new HttpJwksLoader(config)) {

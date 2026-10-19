@@ -533,6 +533,7 @@ class HttpJwksLoaderConfigTest {
     void shouldGuaranteeWellKnownConfigNonNullForWellKnownConfigurations() {
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
                 .wellKnownUrl("https://example.com/.well-known/openid-configuration")
+                .issuerIdentifier("test-issuer")
                 .refreshIntervalSeconds(REFRESH_INTERVAL)
                 .build();
 
@@ -574,6 +575,7 @@ class HttpJwksLoaderConfigTest {
         ParserConfig customParserConfig = ParserConfig.builder().build();
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
                 .wellKnownUrl("https://example.com/.well-known/openid-configuration")
+                .issuerIdentifier("test-issuer")
                 .parserConfig(customParserConfig)
                 .build();
 
@@ -600,6 +602,7 @@ class HttpJwksLoaderConfigTest {
     void shouldEnableHostnameVerificationByDefaultOnWellKnownBranch() {
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
                 .wellKnownUrl(WELL_KNOWN_URL)
+                .issuerIdentifier("test-issuer")
                 .build();
 
         assertTrue(config.getHttpHandler().isVerifyHostname(),
@@ -624,6 +627,7 @@ class HttpJwksLoaderConfigTest {
     void shouldForwardExplicitVerifyHostnameOnWellKnownBranch() {
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
                 .wellKnownUrl(WELL_KNOWN_URL)
+                .issuerIdentifier("test-issuer")
                 .verifyHostname(false)
                 .build();
 
@@ -676,6 +680,7 @@ class HttpJwksLoaderConfigTest {
     void shouldBuildCleartextWellKnownHandlerWithRelaxedHostnameVerification() {
         var builder = HttpJwksLoaderConfig.builder()
                 .wellKnownUrl("http://example.com/.well-known/openid-configuration")
+                .issuerIdentifier("test-issuer")
                 .allowInsecureHttp(true)
                 .verifyHostname(false);
 
@@ -687,11 +692,13 @@ class HttpJwksLoaderConfigTest {
     void shouldFitTlsSettingsToAdvertisedJwksScheme() {
         HttpJwksLoaderConfig tlsDiscovery = HttpJwksLoaderConfig.builder()
                 .wellKnownUrl(WELL_KNOWN_URL)
+                .issuerIdentifier("test-issuer")
                 .allowInsecureHttp(true)
                 .verifyHostname(false)
                 .build();
         HttpJwksLoaderConfig cleartextDiscovery = HttpJwksLoaderConfig.builder()
                 .wellKnownUrl("http://example.com/.well-known/openid-configuration")
+                .issuerIdentifier("test-issuer")
                 .allowInsecureHttp(true)
                 .verifyHostname(false)
                 .build();
@@ -711,12 +718,14 @@ class HttpJwksLoaderConfigTest {
         configured.init(null, null, null);
         HttpJwksLoaderConfig tlsDiscovery = HttpJwksLoaderConfig.builder()
                 .wellKnownUrl(WELL_KNOWN_URL)
+                .issuerIdentifier("test-issuer")
                 .allowInsecureHttp(true)
                 .sslContext(configured)
                 .tlsVersions(new SecureSSLContextProvider())
                 .build();
         HttpJwksLoaderConfig cleartextDiscovery = HttpJwksLoaderConfig.builder()
                 .wellKnownUrl("http://example.com/.well-known/openid-configuration")
+                .issuerIdentifier("test-issuer")
                 .allowInsecureHttp(true)
                 .sslContext(configured)
                 .build();
