@@ -14,7 +14,6 @@ The library supports automatic configuration through OpenID Connect Discovery, a
 ----
 HttpJwksLoaderConfig jwksConfig = HttpJwksLoaderConfig.builder()
     .wellKnownUrl("https://accounts.google.com/.well-known/openid-configuration")
-    .issuerIdentifier("https://accounts.google.com")
     .build();
 
 IssuerConfig issuerConfig = IssuerConfig.builder()
@@ -28,7 +27,9 @@ TokenValidator validator = TokenValidator.builder()
     .build();
 ----
 
-The explicit `issuerIdentifier` is the default and recommended form, also together with `wellKnownUrl`. `IssuerConfig` requires it for every enabled issuer. Set the same value on the `HttpJwksLoaderConfig` as well: the loader compares the `issuer` advertised by the discovery document only against the identifier configured on the `HttpJwksLoaderConfig`. A mismatch is a hard failure: no keys are loaded and every token for that issuer is rejected.
+The explicit `issuerIdentifier` is the default and recommended form, also together with `wellKnownUrl`. `IssuerConfig` requires it for every enabled issuer and propagates it into the loader configuration when it is built, so it is configured once and need not be repeated on the `HttpJwksLoaderConfig`. The `issuer` advertised by the discovery document is always compared with it. A mismatch is a hard failure: no keys are loaded, an `ISSUER_MISMATCH` security event is counted, and every token for that issuer is rejected.
+
+If the `HttpJwksLoaderConfig` carries an identifier as well, it must be identical to the `IssuerConfig` identifier; a differing value makes `IssuerConfig.build()` fail with an `IllegalArgumentException`. A standalone `HttpJwksLoaderConfig` used without `IssuerConfig` may omit the identifier for discovery; no comparison with the advertised issuer takes place then (see xref:#discovery-issuer-check[Discovery issuer check and migration]).
 
 == Discovery Document
 
@@ -122,7 +123,6 @@ public class OpenIDConnectValidator {
     public static TokenValidator createFromDiscovery(String issuerUrl, String clientId) {
         HttpJwksLoaderConfig jwksConfig = HttpJwksLoaderConfig.builder()
             .wellKnownUrl(issuerUrl + "/.well-known/openid-configuration")
-            .issuerIdentifier(issuerUrl)
             .refreshIntervalSeconds(300)
             .build();
 
@@ -164,7 +164,6 @@ public class MultiProviderDiscovery {
                 .expectedAudience(clientId)
                 .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
                     .wellKnownUrl(issuerUrl + "/.well-known/openid-configuration")
-                    .issuerIdentifier(issuerUrl)
                     .build())
                 .build();
             builder.issuerConfig(issuerConfig);
@@ -185,5 +184,18 @@ public class MultiProviderDiscovery {
 
 * Always use HTTPS for discovery endpoints
 * Validate the discovery document structure
-* Configure the issuer identifier explicitly on both `IssuerConfig` and `HttpJwksLoaderConfig`; the loader compares the `HttpJwksLoaderConfig` identifier against the discovered `issuer`
+* Configure the issuer identifier explicitly on `IssuerConfig`; the advertised `issuer` is always compared with it, and an identifier repeated on `HttpJwksLoaderConfig` must be identical
 * Pin certificates for known providers if possible
+
+[#discovery-issuer-check]
+== Discovery issuer check and migration
+
+Every `IssuerConfig` that loads its keys through well-known discovery compares its configured `issuerIdentifier` with the `issuer` advertised by the discovery document. A single trailing slash difference is tolerated. On a mismatch the loader stops before it fetches the advertised `jwks_uri`: no keys are loaded, an `ISSUER_MISMATCH` security event is counted, and every token for that issuer is rejected.
+
+Previously the comparison only ran when the identifier was repeated on `HttpJwksLoaderConfig`. A configuration that stated it only on `IssuerConfig` accepted whatever issuer the discovery document advertised, so a tampered discovery document could steer key loading.
+
+When upgrading:
+
+* Check that the `issuer` advertised by your discovery document equals your configured `issuerIdentifier`. A configuration whose discovery document advertises a different issuer now fails with `ISSUER_MISMATCH` and loads no keys.
+* Repeating the identifier on `HttpJwksLoaderConfig` is no longer needed. If you keep it, it must be identical to the `IssuerConfig` identifier, otherwise `IssuerConfig.build()` fails.
+* A pre-built loader of type `WELL_KNOWN` passed via `IssuerConfig.builder().jwksLoader(...)` must carry the same identifier, otherwise `IssuerConfig.build()` fails.
