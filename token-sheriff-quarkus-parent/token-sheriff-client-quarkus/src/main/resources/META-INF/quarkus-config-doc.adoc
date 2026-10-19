@@ -43,9 +43,13 @@ address (for example `http://keycloak:8080`). Every back-channel call — discov
 userinfo, revocation — whose advertised endpoint has the *same origin* as the issuer is sent to the
 configured origin with its path and query kept verbatim; an endpoint advertised on any other origin is
 contacted unchanged. The issuer stays the identity: the discovery-document `issuer` check and the
-token `iss` checks are untouched, the published provider metadata and the DPoP `htu` keep the public
-URLs, and the front channel (authorization-request and end-session URLs sent to the browser) keeps
-the public origin. Transport policy follows the host actually contacted: `verify-hostname` and the
+token `iss` checks are untouched, the published provider metadata keeps the public URLs, and the
+front channel (authorization-request and end-session URLs sent to the browser) keeps the public
+origin. A DPoP proof's `htu` names the back-channel URL actually contacted — the configured origin
+with the advertised path — because `htu` is the target URI of the request the proof travels with
+(RFC 9449 §4.2); see
+xref:../../../../../../doc/adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015].
+Transport policy follows the host actually contacted: `verify-hostname` and the
 configured trust apply to the back-channel host, and an `http://` back-channel origin requires
 `sheriff.client.allow-insecure-http=true`. The issuer-scheme check at discovery is the one exception:
 it still applies to the configured issuer, so an `http://` issuer requires

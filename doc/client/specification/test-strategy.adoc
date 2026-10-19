@@ -436,9 +436,15 @@ an isolated-component or server-capability test alone does not qualify the row a
 | `ClientConfigurationTest` (`BackChannelOriginValidation`): only a bare http(s) origin is accepted
   and no rejection echoes the value; `BackChannelOriginMappingTest`: same-origin endpoints are
   rewritten with path and query kept, other origins untouched; `BackChannelOriginRoutingTest`:
-  the back-channel calls reach the configured origin;
+  the back-channel calls reach the configured origin, and a DPoP proof on a mapped token or
+  userinfo request names the back-channel URL actually contacted as `htu`, never the advertised
+  public URL;
   `TokenSheriffClientProducerTest`: `sheriff.client.back-channel-origin` maps onto the configuration
-| — (needs a split-horizon IdP fixture; not in the current provider set) | all
+| `DpopBackChannelOriginSpecIT`: real Keycloak with a static public hostname
+  (`KC_HOSTNAME=https://localhost:1443`) reached over a mapped back channel
+  (`backChannelOrigin=https://127.0.0.1:1443`); a DPoP-constrained `authorization_code` exchange
+  and a refresh both succeed and both access tokens carry `cnf.jkt`
+  (xref:../../adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015]) | all
 |===
 
 == Per-increment definition of done (test view)

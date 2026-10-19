@@ -104,8 +104,14 @@ address. It changes *where* back-channel calls are sent, never *who* the issuer 
 
 The setting leaves the published data and every identity check untouched: the resolved provider
 metadata keeps the advertised public endpoint URLs, the discovery-document `issuer` and the token
-`iss` are still compared exactly against the configured issuer, and a DPoP proof carries the public
-advertised URL as its `htu` claim, not the rewritten one.
+`iss` are still compared exactly against the configured issuer, so the issuer identity stays public.
+
+A DPoP proof is the one transport artefact that follows the contacted URL: its `htu` claim is the
+target URI of the request it travels with (RFC 9449 §4.2), so on a rewritten call it names the
+rewritten target — the back-channel origin with the advertised path — not the advertised public URL.
+`BackChannelHttp.validatedHandler` returns a handler whose URI is that target, and the token and
+userinfo clients sign it as `htu`
+(xref:../../adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015]).
 
 === SSRF defence (COMMONS-3)
 

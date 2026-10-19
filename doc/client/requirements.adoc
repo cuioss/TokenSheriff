@@ -305,8 +305,14 @@ origin (xref:threat-model.adoc#T-SSRF-ADVERTISED[T-SSRF-ADVERTISED]).
 *Identity is unchanged.* The configured issuer stays the issuer identifier: the discovery-document
 `issuer` check, the token `iss` checks and the RFC 9207 `iss` check (<<CLIENT-8>>) MUST keep
 comparing against it exactly. The resolved provider metadata keeps the advertised public endpoint
-URLs, the DPoP `htu` claim (<<CLIENT-11>>) names the public advertised URL, and the front-channel
-authorization and end-session URLs keep the public origin.
+URLs, and the front-channel authorization and end-session URLs keep the public origin.
+
+*DPoP proofs name the request sent.* The DPoP `htu` claim (<<CLIENT-11>>) MUST be the target URI of
+the request the proof is attached to (RFC 9449 §4.2): on a mapped call it MUST name the back-channel
+origin with the advertised path — the URL actually contacted — and MUST NOT name the advertised public
+URL. An authorization server compares `htu` with the URL of the request it received, so a proof that
+named the public URL would be refused
+(xref:../adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015]).
 
 *Transport policy follows the contacted host.* The egress path validation runs on the advertised URL;
 the scheme policy (`allowInsecureHttp`), the per-client trust (<<CLIENT-23>>) and hostname
@@ -320,7 +326,7 @@ The scope is the client engine's own back-channel calls. The validation-side JWK
 (`HttpJwksLoaderConfig`) is configured separately and is not rewritten; a split-horizon deployment
 points it at the reachable address itself.
 
-* Source: xref:../commons/specification/transport.adoc#client_back_channel_origin[Transport specification — client back-channel origin], https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation[OIDC Discovery 1.0 §4.3] (issuer identity), xref:../adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008] (hostname verification applies to the host contacted).
+* Source: xref:../commons/specification/transport.adoc#client_back_channel_origin[Transport specification — client back-channel origin], https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation[OIDC Discovery 1.0 §4.3] (issuer identity), https://www.rfc-editor.org/rfc/rfc9449#section-4.2[RFC 9449 §4.2] (`htu` is the target URI of the request), xref:../adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008] (hostname verification applies to the host contacted).
 
 == Token requirements
 
