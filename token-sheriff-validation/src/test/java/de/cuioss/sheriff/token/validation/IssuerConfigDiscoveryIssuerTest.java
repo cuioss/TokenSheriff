@@ -36,13 +36,14 @@ import java.io.IOException;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Regression test for the discovery issuer check of an {@link IssuerConfig} that states its issuer
- * identifier only once, on the {@code IssuerConfig} itself.
+ * Pins the discovery issuer check of an {@link IssuerConfig} that states its issuer identifier only
+ * once, on the {@code IssuerConfig} itself.
  * <p>
- * Before the fix, such a configuration built a well-known loader that never compared the issuer
- * advertised by the discovery document, so a tampered discovery document could steer key loading. The
- * loader is therefore built through {@link IssuerConfig} here, never directly, with no identifier on the
- * {@link HttpJwksLoaderConfig}.
+ * Invariant: the well-known loader built by such a configuration loads keys only when the discovery
+ * document advertises the configured issuer (a trailing-slash difference aside). A discovery document
+ * that advertises another issuer, or none, yields no keys, and the advertised {@code jwks_uri} is never
+ * fetched. The loader is therefore built through {@link IssuerConfig} here, never directly, with no
+ * identifier on the {@link HttpJwksLoaderConfig}.
  * <p>
  * Supports requirement <a href="../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-3.1">VALIDATION-3.1: Issuer Configuration</a>.
  */
@@ -91,6 +92,22 @@ class IssuerConfigDiscoveryIssuerTest {
                 () -> assertEquals(0, jwksDispatcher.getCallCounter(), "the advertised jwks_uri must never be fetched"));
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                 JWTValidationLogMessages.WARN.ISSUER_MISMATCH.resolveIdentifierString());
+    }
+
+    @Test
+    @DisplayName("Should load no keys and never fetch jwks_uri when the discovery document omits the issuer")
+    void shouldRejectDiscoveryDocumentWithoutIssuer() {
+        wellKnownDispatcher.returnMissingIssuer();
+        JwksLoader loader = buildLoaderWithIdentifierOnlyOnIssuerConfig(advertisedIssuer);
+
+        LoaderStatus status = loader.initJWKSLoader(securityEventCounter).join();
+
+        assertAll("a discovery document without issuer is a hard failure",
+                () -> assertEquals(LoaderStatus.ERROR, status),
+                () -> assertTrue(loader.getKeyIds().isEmpty(), "no keys may be loaded"),
+                () -> assertTrue(wellKnownDispatcher.getCallCounter() >= 1, "the discovery document must be fetched"),
+                () -> assertEquals(0, jwksDispatcher.getCallCounter(), "the advertised jwks_uri must never be fetched"));
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR, "Missing required field: issuer");
     }
 
     @Test

@@ -744,18 +744,34 @@ class HttpJwksLoaderConfigTest {
 
     @Test
     @DisplayName("withIssuerIdentifier should return a copy carrying the identifier and every other setting")
-    void withIssuerIdentifierShouldCopyAllOtherSettings() {
+    void withIssuerIdentifierShouldCopyAllOtherSettings() throws Exception {
         var retryConfig = RetryConfig.builder().initialDelay(Duration.ofMillis(1)).build();
+        var gracePeriod = Duration.ofMinutes(7);
+        int maxRetiredKeySets = 5;
+        SSLContext configured = SSLContext.getInstance("TLS");
+        configured.init(null, null, null);
+        // A cleartext discovery handler carries no TLS settings, so the SSL context of a handler derived
+        // for a TLS jwks_uri can only come from the copied TLS settings.
         HttpJwksLoaderConfig original = HttpJwksLoaderConfig.builder()
-                .wellKnownUrl(WELL_KNOWN_URL)
+                .wellKnownUrl("http://example.com/.well-known/openid-configuration")
+                .allowInsecureHttp(true)
+                .sslContext(configured)
                 .refreshIntervalSeconds(REFRESH_INTERVAL)
                 .retryConfig(retryConfig)
+                .keyRotationGracePeriod(gracePeriod)
+                .maxRetiredKeySets(maxRetiredKeySets)
                 .allowLoopbackEgress(true)
                 .build();
 
         HttpJwksLoaderConfig copy = original.withIssuerIdentifier("https://example.com");
 
         assertAll("only the issuer identifier differs",
+                () -> assertSame(configured, original.getHttpHandler(VALID_URL).getSslContext(),
+                        "the original must carry the configured TLS settings"),
+                () -> assertSame(configured, copy.getHttpHandler(VALID_URL).getSslContext(),
+                        "the copy must carry the TLS settings of the original"),
+                () -> assertEquals(gracePeriod, copy.getKeyRotationGracePeriod()),
+                () -> assertEquals(maxRetiredKeySets, copy.getMaxRetiredKeySets()),
                 () -> assertNotSame(original, copy, "a new instance must be returned"),
                 () -> assertNull(original.getIssuerIdentifier(), "the original must stay unchanged"),
                 () -> assertEquals("https://example.com", copy.getIssuerIdentifier()),

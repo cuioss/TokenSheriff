@@ -99,7 +99,7 @@ TokenValidator tokenValidator = TokenValidator.builder()
     .build();
 ----
 
-The issuer identifier is configured once, on `IssuerConfig`. For every issuer using well-known discovery, the `issuer` advertised by the discovery document is always compared with that identifier; a mismatch loads no keys, so every token for that issuer is rejected. See link:openid-discovery.adoc#discovery-issuer-check[Discovery issuer check and migration].
+The issuer identifier is configured once, on `IssuerConfig`. For every issuer using well-known discovery, the `issuer` advertised by the discovery document is always compared with that identifier; a mismatch or an omitted advertised issuer loads no keys, so every token for that issuer is rejected. See xref:openid-discovery.adoc#discovery-issuer-check[Discovery issuer check].
 
 == Dynamic Issuer Loading
 
@@ -141,7 +141,7 @@ If tokens are rejected with "unknown issuer": check the exact `iss` claim value 
 
 === Discovery Issuer Mismatch (`ISSUER_MISMATCH`)
 
-If an issuer using well-known discovery loads no keys and an `ISSUER_MISMATCH` security event is counted: the `issuer` advertised by the discovery document differs from the configured `issuerIdentifier`. Compare both values (a single trailing slash difference is tolerated) and see link:openid-discovery.adoc#discovery-issuer-check[Discovery issuer check and migration].
+If an issuer using well-known discovery loads no keys and an `ISSUER_MISMATCH` security event is counted: the `issuer` advertised by the discovery document differs from the configured `issuerIdentifier`. Compare both values (a single trailing slash difference is tolerated) and see xref:openid-discovery.adoc#discovery-issuer-check[Discovery issuer check].
 
 === Key Resolution Failures
 

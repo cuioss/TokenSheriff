@@ -76,6 +76,12 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     private static final CuiLogger LOGGER = new CuiLogger(HttpJwksLoader.class);
     private static final String ISSUER_NOT_CONFIGURED = "not-configured";
 
+    /**
+     * Rendering of the advertised issuer in the ISSUER_MISMATCH warning when the discovery document
+     * advertises no issuer.
+     */
+    static final String ISSUER_ABSENT = "<absent>";
+
     private final HttpJwksLoaderConfig config;
 
     /**
@@ -230,7 +236,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             Optional<String> discoveredIssuer = resolver.getIssuer();
             String configuredIssuer = config.getIssuerIdentifier();
 
-            Optional<String> issuer = resolveIssuer(discoveredIssuer.orElse(null), configuredIssuer);
+            Optional<String> issuer = resolveIssuer(discoveredIssuer.orElse(null), configuredIssuer, securityEventCounter);
             if (issuer.isEmpty()) {
                 return Optional.empty();
             }
@@ -504,34 +510,47 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     /**
      * Resolves the issuer identifier from discovered and configured sources.
      * Implements the issuer resolution logic with precedence rules.
-     *
+     * <p>
      * Design Decision (M7): The configured issuer is the operator's trust anchor. When a configured
-     * issuer is present, an advertised (discovered) issuer that does not match it is a <em>hard
-     * discovery failure</em> — this method returns empty, {@link #resolveJWKSAdapter()} aborts, and
-     * the advertised {@code jwks_uri} is never fetched. Gating here, before the advertised URL is
-     * fetched, closes the SSRF-relevant window (COMMONS-5): a tampered discovery document cannot
-     * steer the loader to fetch key material from an attacker-chosen endpoint under the authority of
-     * an issuer we do not trust. The mismatch is also audited (WARN log + ISSUER_MISMATCH counter).
-     * Comparison tolerates a trailing-slash difference, which is a common, benign formatting variance
-     * in real IdP deployments (e.g., Keycloak) and not a genuine issuer mismatch.
+     * issuer is present, the advertised (discovered) issuer must be present and must match it. An
+     * advertised issuer that does not match, or a discovery document that advertises no issuer at
+     * all, is a <em>hard discovery failure</em> — this method returns empty,
+     * {@link #resolveJWKSAdapter()} aborts, and the advertised {@code jwks_uri} is never fetched.
+     * Gating here, before the advertised URL is fetched, closes the SSRF-relevant window (COMMONS-5):
+     * a tampered discovery document cannot steer the loader to fetch key material from an
+     * attacker-chosen endpoint under the authority of an issuer we do not trust. Both failures are
+     * audited (WARN log + ISSUER_MISMATCH counter); an absent advertised issuer is logged as
+     * {@code <absent>}. Comparison tolerates a trailing-slash difference, which is a common,
+     * benign formatting variance in real IdP deployments (e.g., Keycloak) and not a genuine issuer
+     * mismatch.
+     * <p>
+     * Without a configured issuer (standalone use of the loader) the advertised issuer is adopted
+     * as-is, and the absence of both is a failure.
+     * <p>
+     * Package-private so the gate can be exercised directly in tests.
      *
      * @param discoveredIssuer the issuer from well-known discovery (nullable)
      * @param configuredIssuer the configured issuer from configuration (nullable)
-     * @return Optional containing the resolved issuer, or empty if no issuer is available or the
-     *         advertised issuer does not match the configured trust anchor
+     * @param counter          the security event counter that records an ISSUER_MISMATCH, never null
+     * @return Optional containing the resolved issuer, or empty if no issuer is available, the
+     *         advertised issuer is absent while an issuer is configured, or the advertised issuer does
+     *         not match the configured trust anchor
      */
-    private Optional<String> resolveIssuer(String discoveredIssuer, String configuredIssuer) {
+    static Optional<String> resolveIssuer(String discoveredIssuer, String configuredIssuer,
+            SecurityEventCounter counter) {
         // Case 1: No issuer at all - fail
         if (discoveredIssuer == null && configuredIssuer == null) {
             LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, "No issuer identifier found", "well-known");
             return Optional.empty();
         }
 
-        // Case 2: Configured issuer is the trust anchor — an advertised mismatch is a hard failure (M7)
+        // Case 2: Configured issuer is the trust anchor — an absent or mismatching advertised
+        // issuer is a hard failure (M7)
         if (configuredIssuer != null) {
-            if (discoveredIssuer != null && !issuersMatch(configuredIssuer, discoveredIssuer)) {
-                LOGGER.warn(WARN.ISSUER_MISMATCH, configuredIssuer, discoveredIssuer);
-                securityEventCounter.increment(SecurityEventCounter.EventType.ISSUER_MISMATCH);
+            if (discoveredIssuer == null || !issuersMatch(configuredIssuer, discoveredIssuer)) {
+                LOGGER.warn(WARN.ISSUER_MISMATCH, configuredIssuer,
+                        discoveredIssuer == null ? ISSUER_ABSENT : discoveredIssuer);
+                counter.increment(SecurityEventCounter.EventType.ISSUER_MISMATCH);
                 return Optional.empty();
             }
             return Optional.of(configuredIssuer);

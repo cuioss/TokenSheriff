@@ -188,14 +188,14 @@ public class MultiProviderDiscovery {
 * Pin certificates for known providers if possible
 
 [#discovery-issuer-check]
-== Discovery issuer check and migration
+== Discovery issuer check
 
 Every `IssuerConfig` that loads its keys through well-known discovery compares its configured `issuerIdentifier` with the `issuer` advertised by the discovery document. A single trailing slash difference is tolerated. On a mismatch the loader stops before it fetches the advertised `jwks_uri`: no keys are loaded, an `ISSUER_MISMATCH` security event is counted, and every token for that issuer is rejected.
 
-Previously the comparison only ran when the identifier was repeated on `HttpJwksLoaderConfig`. A configuration that stated it only on `IssuerConfig` accepted whatever issuer the discovery document advertised, so a tampered discovery document could steer key loading.
+A discovery document that advertises no `issuer` is a hard failure as well: no keys are loaded, the advertised `jwks_uri` is never fetched, and every token for that issuer is rejected.
 
-When upgrading:
+Troubleshooting an `ISSUER_MISMATCH`:
 
-* Check that the `issuer` advertised by your discovery document equals your configured `issuerIdentifier`. A configuration whose discovery document advertises a different issuer now fails with `ISSUER_MISMATCH` and loads no keys.
-* Repeating the identifier on `HttpJwksLoaderConfig` is no longer needed. If you keep it, it must be identical to the `IssuerConfig` identifier, otherwise `IssuerConfig.build()` fails.
+* Check that the `issuer` advertised by your discovery document equals your configured `issuerIdentifier`, apart from a single trailing slash.
+* The identifier is configured once, on `IssuerConfig`. If you also set it on `HttpJwksLoaderConfig`, it must be identical to the `IssuerConfig` identifier, otherwise `IssuerConfig.build()` fails.
 * A pre-built loader of type `WELL_KNOWN` passed via `IssuerConfig.builder().jwksLoader(...)` must carry the same identifier, otherwise `IssuerConfig.build()` fails.

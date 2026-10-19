@@ -138,12 +138,16 @@ public class HttpJwksLoaderConfig {
      * The issuer identifier for this JWKS configuration.
      * <p>
      * With well-known discovery the {@code issuer} advertised by the discovery document is checked against
-     * it, and a mismatch is a hard failure: no keys are loaded and every token for that issuer is rejected.
-     * When this configuration is used through {@code IssuerConfig}, the identifier comes from
-     * {@code IssuerConfig} and need not be repeated here; {@code IssuerConfig} propagates it into the loader
-     * configuration, and a value repeated here must be identical to it. Outside {@code IssuerConfig} the
-     * identifier is mandatory for direct JWKS configuration and may be omitted for standalone well-known
-     * discovery, in which case the loader uses the discovered issuer internally and performs no comparison.
+     * it, and a mismatch or an absent advertised issuer is a hard failure: no keys are loaded and every
+     * token for that issuer is rejected.
+     * <p>
+     * For direct JWKS configuration the identifier is mandatory, whether or not this configuration is
+     * used through {@code IssuerConfig}; {@link HttpJwksLoaderConfigBuilder#build()} rejects a direct
+     * JWKS configuration without it. Only well-known discovery relieves it: used through
+     * {@code IssuerConfig}, the identifier comes from {@code IssuerConfig} and need not be repeated here,
+     * because {@code IssuerConfig} propagates it into the loader configuration; used standalone, it may be
+     * omitted, in which case the loader uses the discovered issuer internally and performs no comparison.
+     * A value set here must be identical to the {@code IssuerConfig} identifier.
      */
     @Getter
     private final String issuerIdentifier;
@@ -490,13 +494,16 @@ public class HttpJwksLoaderConfig {
          * Sets the issuer identifier for this JWKS configuration.
          * <p>
          * With well-known discovery the {@code issuer} advertised by the discovery document is checked
-         * against it, and a mismatch is a hard failure: no keys are loaded and every token for that issuer
-         * is rejected. When the configuration is used through {@code IssuerConfig}, the identifier comes
-         * from {@code IssuerConfig} and need not be set here; a value set here must be identical to the
-         * {@code IssuerConfig} identifier, otherwise building the {@code IssuerConfig} fails. Outside
-         * {@code IssuerConfig} the identifier is mandatory for direct JWKS configuration and may be omitted
-         * for standalone well-known discovery, in which case the loader uses the discovered issuer
-         * internally and performs no comparison.
+         * against it, and a mismatch or an absent advertised issuer is a hard failure: no keys are loaded
+         * and every token for that issuer is rejected.
+         * <p>
+         * For direct JWKS configuration the identifier is mandatory, also when the configuration is used
+         * through {@code IssuerConfig}: {@link #build()} rejects a direct JWKS configuration without it.
+         * Only well-known discovery relieves it: used through {@code IssuerConfig}, the identifier comes
+         * from {@code IssuerConfig} and need not be set here; used standalone, it may be omitted, in which
+         * case the loader uses the discovered issuer internally and performs no comparison. A value set
+         * here must be identical to the {@code IssuerConfig} identifier, otherwise building the
+         * {@code IssuerConfig} fails.
          *
          * @param issuerIdentifier the issuer identifier
          * @return this builder instance
