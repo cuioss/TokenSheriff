@@ -122,7 +122,9 @@ public class UserInfoClient {
      * When {@code senderConstraint} is a DPoP constraint, the token is presented as an
      * {@code Authorization: DPoP <token>} credential (RFC 9449 §7.1) accompanied by a fresh
      * protected-resource DPoP proof whose {@code ath} claim binds the proof to this exact token
-     * (RFC 9449 §4.3). Otherwise — no constraint, or an mTLS constraint that binds at the TLS layer —
+     * (RFC 9449 §4.3) and whose {@code htu} names the URL actually contacted — {@code userInfoEndpoint}
+     * itself or, when {@link ClientConfiguration#backChannelOrigin} applied, its back-channel rewrite
+     * (RFC 9449 §4.2). Otherwise — no constraint, or an mTLS constraint that binds at the TLS layer —
      * the token is presented as a plain {@code Bearer} credential.
      *
      * @param userInfoEndpoint the absolute userinfo endpoint URL (from discovery); must be TLS unless
@@ -172,7 +174,7 @@ public class UserInfoClient {
         HttpRequest.Builder requestBuilder = handler.requestBuilder()
                 .setHeader(ACCEPT, ACCEPT_JSON_OR_JWT)
                 .GET();
-        authorize(requestBuilder, userInfoEndpoint, accessToken, senderConstraint);
+        authorize(requestBuilder, handler.getUri().toString(), accessToken, senderConstraint);
         HttpRequest request = requestBuilder.build();
 
         HttpClient client = backChannel.sharedClient(handler);
@@ -222,15 +224,17 @@ public class UserInfoClient {
 
     /**
      * Sets the {@code Authorization} header under the scheme the sender-constraint requires, and — for
-     * a DPoP constraint — adds the accompanying {@code ath}-bound protected-resource proof header.
+     * a DPoP constraint — adds the accompanying {@code ath}-bound protected-resource proof header, whose
+     * {@code htu} is {@code targetUri}: the URL actually contacted, after any back-channel mapping
+     * (RFC 9449 §4.2).
      */
-    private static void authorize(HttpRequest.Builder requestBuilder, String userInfoEndpoint,
+    private static void authorize(HttpRequest.Builder requestBuilder, String targetUri,
             String accessToken, @Nullable SenderConstraint senderConstraint) {
         String scheme = senderConstraint == null ? BEARER_SCHEME : senderConstraint.authorizationScheme();
         requestBuilder.setHeader(AUTHORIZATION, scheme + " " + accessToken);
         if (senderConstraint != null) {
             Map<String, String> proofHeaders = new HashMap<>();
-            senderConstraint.applyProtectedResource(HTTP_GET, userInfoEndpoint, accessToken, null, proofHeaders);
+            senderConstraint.applyProtectedResource(HTTP_GET, targetUri, accessToken, null, proofHeaders);
             proofHeaders.forEach(requestBuilder::setHeader);
         }
     }

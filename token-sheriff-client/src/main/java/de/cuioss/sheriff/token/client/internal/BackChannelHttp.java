@@ -72,7 +72,8 @@ import java.util.concurrent.ConcurrentMap;
  *       configuration only, so neither the request nor the advertised data can steer a call to a third
  *       origin — the rewrite adds no SSRF primitive. The egress path validation runs on the advertised
  *       URL before the rewrite, and the scheme, TLS-trust and hostname controls above are applied to
- *       the rewritten target, i.e. to the host actually contacted.</li>
+ *       the rewritten target, i.e. to the host actually contacted. The returned handler's URI is the
+ *       URL actually contacted, and it is what a DPoP proof names as {@code htu} (RFC 9449 §4.2).</li>
  *   <li><strong>Consistent transport typing (M9):</strong> a malformed or non-TLS endpoint surfaces as
  *       the declared {@link TransportException}, never a raw {@link IllegalArgumentException} leaking
  *       from {@code HttpHandler.build()}.</li>
@@ -137,6 +138,10 @@ public final class BackChannelHttp {
      * configured back-channel origin when it shares the issuer origin, and returns a per-endpoint
      * {@link HttpHandler} for the URL actually contacted, configured with the client's timeout and TLS
      * policy.
+     * <p>
+     * The handler's URI ({@code getUri()}) is the URL actually contacted. Callers that attach
+     * a DPoP proof use it as the proof's {@code htu}, so the proof names the target URI of the request
+     * it travels with (RFC 9449 §4.2) rather than the advertised URL.
      *
      * @param endpointUrl    the absolute, discovery-advertised endpoint URL to fetch
      * @param failureContext a short, caller-safe prefix identifying the endpoint for exception messages

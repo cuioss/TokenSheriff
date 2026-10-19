@@ -1,0 +1,227 @@
+= ADR-0015: DPoP htu names the back-channel URL actually contacted
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: A DPoP proof's htu names the URL the client actually dials, so on a back-channel call that backChannelOrigin rewrote it carries the back-channel origin rather than the advertised public endpoint; no Host-header override and no setting choose between the two
+// tags: security, dpop, transport
+// affects: token-sheriff-client, token-sheriff-quarkus-integration-tests
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Accepted
+
+== Context
+
+`token-sheriff-client` supports split-horizon deployments through `ClientConfiguration.backChannelOrigin`.
+The issuer identity is a public URL, but the client reaches the authorization server under a different
+origin. Every back-channel call whose advertised endpoint shares the issuer's origin is sent to the
+back-channel origin instead, with path and query unchanged. Identity stays on the public values: the
+issuer exact-match checks, the published provider metadata and the front-channel URLs all keep what the
+authorization server advertised.
+
+A DPoP proof (RFC 9449) carries an `htu` claim naming the URI of the request the proof is attached to.
+The authorization server compares that claim with a URL of its own and refuses the request with
+`invalid_dpop_proof` when they differ. On a mapped call there are two candidate URLs for `htu`: the
+advertised public endpoint, or the back-channel URL the request is actually sent to. They differ by
+construction, so at most one of them can match whatever the server compares against. Treating `htu` as
+part of identity means the proof names the advertised URL. That only works if the server compares
+against its configured public hostname. If the server compares against the URL it was called on, every
+DPoP-constrained token request through a mapping fails.
+
+The structural choice point is therefore which URL `htu` names when a mapping applied. Three options
+exist:
+
+(a):: `htu` follows the dialled URL.
+(b):: `htu` keeps the advertised URL, and the request carries a `Host` header naming the public
+authority, so the server derives the public URL from the request.
+(c):: A setting selects between (a) and the advertised-URL behaviour.
+
+The right choice depends on an empirical question: how the authorization server derives the URL it
+compares `htu` with. This ADR records that evidence alongside the decision.
+
+== Evidence
+
+The evidence was gathered against Keycloak running with a static public hostname. This is the topology
+in which the advertised URL and the dialled URL can actually differ. Both images were exercised with
+identical results:
+
+* `quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244`,
+  the latest GA release, pinned in the integration-test topology.
+* `quay.io/keycloak/keycloak:26.5.7@sha256:45ae20191531eb608ddb0b775d012b40d3e4f942697f3214694887dd7c108d13`,
+  run through a temporary local image override that is not part of the topology.
+
+Keycloak was configured with `KC_HOSTNAME=https://localhost:1443`, `KC_HOSTNAME_STRICT=false`, no
+`hostname-backchannel-dynamic` and no realm `frontendUrl`. Both `https://localhost:1443` and
+`https://127.0.0.1:1443` reach the same container. `127.0.0.1` is an IP subject alternative name of the
+test certificate, so TLS was chain-validated with hostname verification on throughout.
+
+=== Discovery honours the static hostname
+
+Discovery fetched via `https://localhost:1443` and via `https://127.0.0.1:1443` reports `issuer` and
+`token_endpoint` on `https://localhost:1443` on both images. The advertised URL is therefore the public
+one, whichever origin the client dials.
+
+=== Keycloak compares htu with the URL it was called on
+
+A token-endpoint probe used the `dpop-client` realm client, RS256 proofs and a fresh `jti` per request.
+It sent proofs with each combination of dialled origin and `htu` origin:
+
+[cols="1,2,2,3",options="header"]
+|===
+| Case | Dialled | `htu` | Result
+
+| A | `localhost` | `localhost` | 200, access token bound (`cnf.jkt`)
+| B | `127.0.0.1` | `localhost` (advertised URL on a mapped call) | 400 `invalid_request`, `DPoP HTTP URL mismatch`
+| C | `127.0.0.1` | `127.0.0.1` (option a) | 200, access token bound (`cnf.jkt`)
+| D | `localhost` | `127.0.0.1` | 400 `DPoP HTTP URL mismatch`
+| E | `127.0.0.1` with `Host: localhost:1443` | `localhost` (option b) | 200
+| F | refresh, `127.0.0.1` | `localhost` | 400 `DPoP HTTP URL mismatch`
+| G | refresh, `127.0.0.1` | `127.0.0.1` | 200, access token bound (`cnf.jkt`)
+|===
+
+On both images every refused case logs the same Keycloak event:
+
+----
+WARN [org.keycloak.events] type=LOGIN_ERROR, clientId=dpop-client, error=invalid_dpop_proof, reason='DPoP HTTP URL mismatch'
+----
+
+On the refresh, the event type is `REFRESH_TOKEN_ERROR`.
+
+Cases B and D are mirror images, and case E succeeds only because the `Host` header changes the
+authority of the received request. Together they show that Keycloak derives the URL it compares `htu`
+with from the request it received: its scheme, the `Host`/authority it was called on, and its path. It
+does not compare `htu` with its configured static hostname, even though that hostname is what discovery
+advertises.
+
+=== The spec is red against the advertised-URL behaviour
+
+`DpopBackChannelOriginSpecIT` drives the production engine through a mapped back channel. The issuer is
+`https://localhost:1443/realms/integration` and `backChannelOrigin` is `https://127.0.0.1:1443`. The
+spec runs discovery, an `authorization_code` exchange and a refresh, all DPoP-constrained, and asserts
+`cnf.jkt` on both access tokens. On the client whose proofs name the advertised URL, the spec fails on
+both images at the DPoP-bound code exchange. The client reports
+`Token endpoint returned unexpected HTTP status 400`. The request has the shape of probe case B, which
+Keycloak refuses with the event shown above.
+
+=== A realm frontendUrl overrides the static hostname
+
+Setting the realm attribute `frontendUrl=https://keycloak:8443` at runtime overrides `KC_HOSTNAME` for
+every advertised URL on both images. Issuer and `token_endpoint` become `https://keycloak:8443`,
+whichever origin is dialled. The `htu` comparison stays request-derived: the probe matrix is unchanged.
+A static `KC_HOSTNAME` is therefore the single source of the public authority only when no realm sets
+`frontendUrl`. That is why the test realms carry none.
+
+=== Normative and platform constraints
+
+* RFC 9449 §4.2 defines `htu` as the HTTP target URI of the request to which the JWT is attached,
+  without query and fragment parts. The URL the client actually sends the request to is that target URI.
+* The JDK `HttpClient` treats `Host` as a restricted header. A caller can set it only when the JVM-wide
+  system property `jdk.httpclient.allowRestrictedHeaders` includes `host`, and that property applies to
+  every `HttpClient` in the process.
+
+== Decision
+
+A DPoP proof's `htu` names the URL the client actually contacts.
+
+When no mapping applies, that URL is the advertised endpoint, so behaviour is unchanged. When
+`backChannelOrigin` rewrote the call, `htu` carries the back-channel origin with the advertised path. Both
+DPoP-constrained back-channel callers follow the rule: the token endpoint client (code exchange, client
+credentials and refresh, including the `use_dpop_nonce` retry) and the userinfo client. Each takes `htu`
+from the URI of the validated handler it sends the request through, so the proof and the request cannot
+name different targets.
+
+The rule is unconditional. No `Host` header is set, and no setting selects the advertised-URL behaviour.
+
+Everything else about `backChannelOrigin` is unchanged:
+
+* The issuer exact-match checks (discovery `issuer`, token `iss`) still compare against the configured
+  public issuer.
+* `backChannelOrigin` still accepts a bare origin only.
+* No `discoveryUrl` and no per-endpoint override exist.
+
+This aligns with ADR-0008 and with the transport policy `backChannelOrigin` already follows:
+`allowInsecureHttp`, `verifyHostname` and `sslContext` are evaluated against the host actually contacted,
+and now so is the DPoP `htu`. TLS SNI, hostname verification and the proof all refer to one host, the
+one dialled.
+
+== Consequences
+
+=== Positive
+
+* DPoP-constrained token and userinfo requests succeed through a mapped back channel against an
+  authorization server that checks `htu` against the received request. Keycloak behaves this way on both
+  releases exercised, and RFC 9449 §4.2 requires it.
+* The proof binds to the request it is attached to, which is what the claim exists to do. A proof
+  captured on the back channel names the back-channel URL and is not replayable as-is against the public
+  endpoint.
+* No process-global state is touched and no configuration surface is added. The behaviour is fully
+  determined by `backChannelOrigin`, which a reviewer already reads.
+* Unmapped deployments see no change: there, the dialled URL and the advertised URL are the same.
+
+=== Negative
+
+* This is a breaking change to the documented `backChannelOrigin` contract. The 0.9.7 Javadoc of
+  `ClientConfiguration.backChannelOrigin` lists the DPoP `htu` claim among the values that keep the
+  advertised public URL. That statement no longer holds. A caller that relied on it, for instance an
+  authorization server or gateway in front of it that compares `htu` with the public hostname, now sees
+  the back-channel origin.
+* `htu` is the one identity-adjacent value that departs from the "identity stays public" rule. The
+  Javadoc and the documentation have to state the exception explicitly.
+
+=== Risks
+
+* An authorization server that compares `htu` with its configured public hostname would refuse
+  DPoP-constrained requests through a mapping, and this decision gives such a deployment no switch. The
+  evidence shows Keycloak does not behave that way. RFC 9449 §4.2 points the other way. No deployment
+  needing the other behaviour is known. If one appears, adding an opt-in is the remedy, and the decision
+  to add it belongs to a successor ADR.
+* The evidence was gathered on two Keycloak releases. A future release that switched to comparing against
+  the configured hostname would turn `DpopBackChannelOriginSpecIT` red. That spec runs against the pinned
+  latest release in the integration-test topology, so such a change fails as a named spec rather than
+  silently.
+
+== Alternatives Considered
+
+**(b) Keep the advertised URL in `htu` and send a `Host` header naming the public authority.** Probe case
+E shows Keycloak accepts this, because the server derives the compared URL from the `Host` it receives.
+The client's identity statement would stay intact. It was rejected because the JDK `HttpClient` lets a
+caller set `Host` only when the JVM-wide `jdk.httpclient.allowRestrictedHeaders` property permits it.
+A library must not require a process-global restricted-header switch. That switch silently changes what
+every other `HttpClient` in the process may send, and it lives in launch arguments that configuration
+review never sees. The option also makes the `Host` header disagree with the TLS SNI and with the host
+whose certificate is verified, which splits one request across two authorities. RFC 9449 §4.2 does not
+support it either: it names the target URI of the request, not an authority the request pretends to have.
+
+**(c) A setting that selects between the dialled URL and the advertised URL.** This would serve both
+kinds of authorization server. It was rejected because it adds configuration surface, documentation and a
+test matrix for a branch no known deployment needs. The evidence shows the primary target compares
+against the received request, and the RFC prescribes the same. An unused toggle is maintenance cost and a
+misconfiguration vector: choosing the advertised branch against a request-comparing server reproduces the
+`DPoP HTTP URL mismatch` failure this decision removes.
+
+**Keep the advertised-URL behaviour.** This is the contract as documented before this decision. It was
+rejected on the evidence: it fails every DPoP-constrained request through a mapping against Keycloak
+(probe cases B and F, and the red spec). It also contradicts the RFC definition of `htu`.
+
+The rejected options share one flaw. Each makes the proof name something other than the request it is
+attached to, or keeps that possibility alive through a switch. The decision taken lets the request and
+the proof name the same URL, the one the client contacted.
+
+== References
+
+* ADR-0008 — outbound transport policy follows the host actually contacted. This decision extends the
+  same rule to the DPoP `htu` claim.
+* ADR-0012 — DPoP as the sender-constraining and client-authentication direction.
+* `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/config/ClientConfiguration.java` —
+  the `backChannelOrigin` contract.
+* `token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/src/test/java/de/cuioss/sheriff/token/integration/client/DpopBackChannelOriginSpecIT.java`
+  — the executable proof against real Keycloak.
+* `token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/docker-compose.yml` — the
+  integration-test Keycloak with its pinned image and static public hostname.
+* https://www.rfc-editor.org/rfc/rfc9449#section-4.2[RFC 9449 §4.2 — DPoP Proof JWT Syntax], which defines the `htu` claim

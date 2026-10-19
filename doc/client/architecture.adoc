@@ -159,7 +159,11 @@ target. The engine therefore *owns* an in-module egress control, applied uniform
   path and query verbatim; an endpoint on any other origin is contacted unchanged. The egress /
   path validation above runs on the advertised URL *before* the rewrite. Both origins in the
   comparison come from configuration alone, so the advertised URL decides only *whether* it is
-  rewritten, never *where to*.
+  rewritten, never *where to*. A DPoP proof attached to a rewritten call names the rewritten
+  target as its `htu`: the claim is the target URI of the request the proof travels with
+  (RFC 9449 §4.2), so the token and userinfo clients sign the URL actually contacted, not the
+  advertised one. The issuer identity, the published metadata and the front-channel URLs stay
+  public (xref:../adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015]).
 | *Scheme / TLS enforcement* | A non-TLS (`http://`) endpoint is refused unless cleartext is
   explicitly enabled, via the `HttpHandler` builder's TLS enforcement. This control, the
   per-client trust (`sslContext`) and hostname verification are applied to the host actually

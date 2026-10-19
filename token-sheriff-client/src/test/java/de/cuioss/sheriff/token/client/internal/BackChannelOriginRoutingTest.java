@@ -58,6 +58,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -75,8 +76,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * reserved {@code .invalid} TLD that can never be resolved, while the back-channel origin points at
  * the mock server. A request recorded by the mock server is therefore proof that the call was
  * retargeted; the recorded path proves the advertised path was kept. The assertions on the resolved
- * metadata, the DPoP {@code htu} and the front-channel URLs pin the other half of the contract: the
- * public identity is never rewritten.
+ * metadata and the front-channel URLs pin the other half of the contract: the public identity is never
+ * rewritten. A DPoP proof is the exception by design: its {@code htu} names the target URI of the request
+ * it travels with (RFC 9449 §4.2), so on a mapped call it carries the back-channel origin with the
+ * advertised path.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -104,11 +107,13 @@ class BackChannelOriginRoutingTest {
     private final RealmDispatcher moduleDispatcher = new RealmDispatcher();
 
     private ClientConfiguration configuration;
+    private String backChannelOrigin;
 
     @BeforeEach
     void setUp(URIBuilder uriBuilder) {
         moduleDispatcher.reset();
         URI server = URI.create(uriBuilder.buildAsString());
+        backChannelOrigin = server.getScheme() + "://" + server.getHost() + ":" + server.getPort();
         configuration = ClientConfiguration.builder()
                 .issuer(ISSUER)
                 .clientId(Generators.letterStrings(8, 16).next())
@@ -116,7 +121,7 @@ class BackChannelOriginRoutingTest {
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .scope("openid")
                 .redirectUri(REDIRECT_URI)
-                .backChannelOrigin(server.getScheme() + "://" + server.getHost() + ":" + server.getPort())
+                .backChannelOrigin(backChannelOrigin)
                 .allowInsecureHttp(true)
                 .build();
     }
@@ -190,22 +195,57 @@ class BackChannelOriginRoutingTest {
     }
 
     @Test
-    @DisplayName("A DPoP proof sent to the rewritten token endpoint binds the public advertised URL as htu")
-    void shouldKeepPublicUrlAsDpopHtu() throws Exception {
-        var keyPairGenerator = KeyPairGenerator.getInstance("EC");
-        keyPairGenerator.initialize(new ECGenParameterSpec("secp256r1"));
-        var constraint = SenderConstraint.dpop(new DpopProofGenerator(keyPairGenerator.generateKeyPair(), "ES256"));
+    @DisplayName("A DPoP proof sent to the rewritten token endpoint names the back-channel URL actually contacted as htu")
+    void shouldUseBackChannelUrlAsDpopHtuForTokenRequest() throws Exception {
         var client = new TokenEndpointClient(configuration);
 
         client.requestToken(publicUrl(TOKEN_PATH), Map.of("grant_type", "client_credentials"), Map.of(),
-                constraint);
+                dpopConstraint());
 
-        RecordedRequest request = moduleDispatcher.requests().getFirst();
-        String proof = request.getHeaders().get("DPoP");
-        assertNotNull(proof, "the DPoP proof must be sent with the token request");
-        String payload = new String(Base64.getUrlDecoder().decode(proof.split("\\.")[1]), StandardCharsets.UTF_8);
-        assertTrue(payload.contains("\"htu\":\"" + publicUrl(TOKEN_PATH) + "\""),
-                "htu must name the advertised public URL, not the host contacted, but the payload was: " + payload);
+        assertProofNamesBackChannelUrl(TOKEN_PATH);
+    }
+
+    @Test
+    @DisplayName("Both DPoP proofs of a use_dpop_nonce retry on a rewritten token endpoint name the back-channel URL as htu")
+    void shouldUseBackChannelUrlAsDpopHtuForNonceRetry() throws Exception {
+        var nonce = Generators.letterStrings(16, 32).next();
+        moduleDispatcher.challengeNextTokenRequestWithNonce(nonce);
+        var client = new TokenEndpointClient(configuration);
+
+        var response = client.requestToken(publicUrl(TOKEN_PATH), Map.of("grant_type", "client_credentials"),
+                Map.of(), dpopConstraint());
+
+        assertNotNull(response, "the retried request must succeed");
+        assertEquals(List.of(TOKEN_PATH, TOKEN_PATH), moduleDispatcher.paths(),
+                "the first attempt and the nonce retry must both reach the back-channel origin");
+        String firstPayload = proofPayload(moduleDispatcher.requests().getFirst());
+        String retryPayload = proofPayload(moduleDispatcher.requests().get(1));
+        String expectedHtu = "\"htu\":\"" + backChannelOrigin + TOKEN_PATH + "\"";
+        assertAll("both proofs name the URL actually contacted",
+                () -> assertTrue(firstPayload.contains(expectedHtu),
+                        "the first proof's htu must name the back-channel URL, but the payload was: " + firstPayload),
+                () -> assertFalse(firstPayload.contains(PUBLIC_ORIGIN),
+                        "the first proof's htu must not name the advertised public URL, but the payload was: "
+                                + firstPayload),
+                () -> assertTrue(retryPayload.contains(expectedHtu),
+                        "the retry proof's htu must name the back-channel URL, but the payload was: " + retryPayload),
+                () -> assertFalse(retryPayload.contains(PUBLIC_ORIGIN),
+                        "the retry proof's htu must not name the advertised public URL, but the payload was: "
+                                + retryPayload),
+                () -> assertTrue(retryPayload.contains("\"nonce\":\"" + nonce + "\""),
+                        "the retry proof must echo the challenged nonce, but the payload was: " + retryPayload));
+    }
+
+    @Test
+    @DisplayName("A DPoP proof sent to the rewritten userinfo endpoint names the back-channel URL actually contacted as htu")
+    void shouldUseBackChannelUrlAsDpopHtuForUserInfoRequest() throws Exception {
+        var client = new UserInfoClient(configuration);
+
+        var userInfo = client.fetchUserInfo(publicUrl(USERINFO_PATH), Generators.letterStrings(20, 40).next(),
+                dpopConstraint());
+
+        assertEquals("alice", userInfo.getSub().orElseThrow());
+        assertProofNamesBackChannelUrl(USERINFO_PATH);
     }
 
     @Test
@@ -284,6 +324,36 @@ class BackChannelOriginRoutingTest {
         return PUBLIC_ORIGIN + path;
     }
 
+    private static SenderConstraint dpopConstraint() throws Exception {
+        var keyPairGenerator = KeyPairGenerator.getInstance("EC");
+        keyPairGenerator.initialize(new ECGenParameterSpec("secp256r1"));
+        return SenderConstraint.dpop(new DpopProofGenerator(keyPairGenerator.generateKeyPair(), "ES256"));
+    }
+
+    /**
+     * Asserts that the single recorded request arrived at {@code path} and carried a DPoP proof whose
+     * {@code htu} is the back-channel origin plus {@code path} — the URL actually contacted — and never
+     * the advertised public URL (RFC 9449 §4.2).
+     */
+    private void assertProofNamesBackChannelUrl(String path) {
+        assertEquals(List.of(path), moduleDispatcher.paths(), "the request must reach the back-channel origin");
+        String payload = proofPayload(moduleDispatcher.requests().getFirst());
+        assertAll("htu names the URL actually contacted",
+                () -> assertTrue(payload.contains("\"htu\":\"" + backChannelOrigin + path + "\""),
+                        "htu must name the back-channel URL actually contacted, but the payload was: " + payload),
+                () -> assertFalse(payload.contains(PUBLIC_ORIGIN),
+                        "htu must not name the advertised public URL, but the payload was: " + payload));
+    }
+
+    /**
+     * @return the decoded JSON payload of the DPoP proof the recorded request carried
+     */
+    private static String proofPayload(RecordedRequest request) {
+        String proof = request.getHeaders().get("DPoP");
+        assertNotNull(proof, "the DPoP proof must be sent with the request");
+        return new String(Base64.getUrlDecoder().decode(proof.split("\\.")[1]), StandardCharsets.UTF_8);
+    }
+
     /**
      * An {@code http://} issuer whose back channel is an {@code https://} origin on loopback port 1,
      * which refuses the connection at once — a discovery that gets past the issuer-scheme check fails
@@ -317,14 +387,24 @@ class BackChannelOriginRoutingTest {
 
         private final List<RecordedRequest> recorded = new CopyOnWriteArrayList<>();
         private volatile String advertisedIssuer = ISSUER;
+        private final AtomicReference<String> pendingNonceChallenge = new AtomicReference<>();
 
         void reset() {
             recorded.clear();
             advertisedIssuer = ISSUER;
+            pendingNonceChallenge.set(null);
         }
 
         void advertiseIssuer(String issuer) {
             advertisedIssuer = issuer;
+        }
+
+        /**
+         * Answers the next token request — and only that one — with an RFC 9449 §8 {@code use_dpop_nonce}
+         * challenge carrying {@code nonce} in the {@code DPoP-Nonce} header.
+         */
+        void challengeNextTokenRequestWithNonce(String nonce) {
+            pendingNonceChallenge.set(nonce);
         }
 
         List<RecordedRequest> requests() {
@@ -358,6 +438,13 @@ class BackChannelOriginRoutingTest {
         @Override
         public Optional<MockResponse> handlePost(RecordedRequest request) {
             recorded.add(request);
+            String nonce = TOKEN_PATH.equals(request.getUrl().encodedPath())
+                    ? pendingNonceChallenge.getAndSet(null) : null;
+            if (nonce != null) {
+                return Optional.of(new MockResponse(400,
+                        Headers.of(CONTENT_TYPE, APPLICATION_JSON, "DPoP-Nonce", nonce),
+                        "{\"error\":\"use_dpop_nonce\"}"));
+            }
             return switch (request.getUrl().encodedPath()) {
                 case TOKEN_PATH -> json("{\"access_token\":\"opaque-access-token\",\"token_type\":\"Bearer\","
                         + "\"expires_in\":300}");

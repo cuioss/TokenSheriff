@@ -82,7 +82,8 @@ public final class SenderConstraint {
      * proof header; for mTLS the binding is transport-level and no header is added.
      *
      * @param htm            the request HTTP method (e.g. {@code POST}); must not be {@code null} or blank
-     * @param htu            the request URI (e.g. the token endpoint); must not be {@code null} or blank
+     * @param htu            the URI actually contacted, after any back-channel mapping; must not be
+     *                       {@code null} or blank
      * @param requestHeaders the mutable request headers to decorate; must not be {@code null}
      */
     public void apply(String htm, String htu, Map<String, String> requestHeaders) {
@@ -95,7 +96,8 @@ public final class SenderConstraint {
      * {@code use_dpop_nonce} (RFC 9449 §8). For mTLS no header is added and the nonce is irrelevant.
      *
      * @param htm            the request HTTP method; must not be {@code null} or blank
-     * @param htu            the request URI; must not be {@code null} or blank
+     * @param htu            the URI actually contacted, after any back-channel mapping; must not be
+     *                       {@code null} or blank
      * @param nonce          the server-provided DPoP nonce to echo, or {@code null} when none was challenged
      * @param requestHeaders the mutable request headers to decorate; must not be {@code null}
      */
@@ -112,7 +114,8 @@ public final class SenderConstraint {
      * added and the binding is transport-level.
      *
      * @param htm            the request HTTP method; must not be {@code null} or blank
-     * @param htu            the request URI; must not be {@code null} or blank
+     * @param htu            the URI actually contacted, after any back-channel mapping; must not be
+     *                       {@code null} or blank
      * @param accessToken    the access token whose {@code ath} hash the proof carries; must not be
      *                       {@code null} or blank
      * @param nonce          the server-provided DPoP nonce to echo, or {@code null} when none was challenged

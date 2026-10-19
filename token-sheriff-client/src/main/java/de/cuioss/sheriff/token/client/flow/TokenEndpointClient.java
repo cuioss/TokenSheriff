@@ -118,12 +118,15 @@ public class TokenEndpointClient {
      * Performs a form-encoded {@code POST} to the token endpoint, attaching a DPoP proof when a
      * sender-constraint is supplied, and normalizes the response.
      * <p>
-     * When {@code senderConstraint} is a DPoP constraint, a proof is generated for the token endpoint
-     * and added as the {@code DPoP} header. If the authorization server rejects the first attempt with
-     * a {@code use_dpop_nonce} challenge — a non-success status carrying a {@code DPoP-Nonce} response
-     * header (RFC 9449 §8) — the nonce is echoed into a fresh proof and the request is retried once,
-     * rather than surfacing the recoverable challenge as an opaque transport failure. mTLS constraints
-     * add no header (the binding is transport-level) and never trigger a nonce retry.
+     * When {@code senderConstraint} is a DPoP constraint, a proof is generated and added as the
+     * {@code DPoP} header. The proof's {@code htu} names the target URI of the request (RFC 9449 §4.2):
+     * the URL actually contacted, which is {@code tokenEndpoint} itself or, when
+     * {@link ClientConfiguration#backChannelOrigin} applied, its back-channel rewrite. If the
+     * authorization server rejects the first attempt with a {@code use_dpop_nonce} challenge — a
+     * non-success status carrying a {@code DPoP-Nonce} response header (RFC 9449 §8) — the nonce is
+     * echoed into a fresh proof and the request is retried once, rather than surfacing the recoverable
+     * challenge as an opaque transport failure. mTLS constraints add no header (the binding is
+     * transport-level) and never trigger a nonce retry.
      *
      * @param tokenEndpoint    the absolute token endpoint URL (from discovery); must be TLS unless
      *                         {@link ClientConfiguration#allowInsecureHttp} is set
@@ -152,14 +155,15 @@ public class TokenEndpointClient {
         HttpHandler handler = backChannel.validatedHandler(tokenEndpoint, FAILURE_CONTEXT);
         HttpClient client = backChannel.sharedClient(handler);
         String body = FormEncoder.encode(formParameters);
+        String targetUri = handler.getUri().toString();
 
         HttpResponse<String> response = send(handler, client, body,
-                proofHeaders(tokenEndpoint, requestHeaders, senderConstraint, null));
+                proofHeaders(targetUri, requestHeaders, senderConstraint, null));
         if (!HttpStatusFamily.isSuccess(response.statusCode())) {
             Optional<String> nonce = dpopNonceChallenge(response, senderConstraint);
             if (nonce.isPresent()) {
                 response = send(handler, client, body,
-                        proofHeaders(tokenEndpoint, requestHeaders, senderConstraint, nonce.get()));
+                        proofHeaders(targetUri, requestHeaders, senderConstraint, nonce.get()));
             }
         }
         if (!HttpStatusFamily.isSuccess(response.statusCode())) {
@@ -229,15 +233,16 @@ public class TokenEndpointClient {
 
     /**
      * Composes the request headers for one attempt: the caller-supplied headers plus, when a DPoP
-     * constraint is present, a fresh single-use {@code DPoP} proof for the token endpoint (optionally
-     * echoing a challenged {@code nonce}). A fresh map is returned per attempt so the caller's header
-     * map is never mutated and each retry carries its own single-use proof.
+     * constraint is present, a fresh single-use {@code DPoP} proof whose {@code htu} is
+     * {@code targetUri}, the URL actually contacted (optionally echoing a challenged {@code nonce}). A
+     * fresh map is returned per attempt so the caller's header map is never mutated and each retry
+     * carries its own single-use proof.
      */
-    private static Map<String, String> proofHeaders(String tokenEndpoint, Map<String, String> requestHeaders,
+    private static Map<String, String> proofHeaders(String targetUri, Map<String, String> requestHeaders,
             @Nullable SenderConstraint senderConstraint, @Nullable String nonce) {
         Map<String, String> headers = new HashMap<>(requestHeaders);
         if (senderConstraint != null) {
-            senderConstraint.apply(HTTP_POST, tokenEndpoint, nonce, headers);
+            senderConstraint.apply(HTTP_POST, targetUri, nonce, headers);
         }
         return headers;
     }
