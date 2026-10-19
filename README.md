@@ -93,7 +93,10 @@ The [Quarkus Extension](token-sheriff-quarkus-parent/README.adoc) provides:
 
 ```properties
 # application.properties
+sheriff.token.issuers.keycloak.enabled=true
+sheriff.token.issuers.keycloak.issuer-identifier=https://keycloak.example.com/realms/master
 sheriff.token.issuers.keycloak.jwks.http.well-known-url=https://keycloak.example.com/realms/master/.well-known/openid-configuration
+sheriff.token.issuers.keycloak.expected-audience=your-client-id
 ```
 
 ```java
@@ -141,6 +144,7 @@ For non-Quarkus applications, use the core validation library:
 // Create validator with OIDC Discovery
 TokenValidator validator = TokenValidator.builder()
     .issuerConfig(IssuerConfig.builder()
+        .issuerIdentifier("https://your-issuer.com") // Checked against the discovered issuer
         .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
             .wellKnownUrl("https://your-issuer.com/.well-known/openid-configuration")
             .build())

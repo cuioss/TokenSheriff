@@ -189,6 +189,10 @@ _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
 
 Support configuration of multiple token issuers with different validation parameters.
 
+An explicit `issuer-identifier` is the default and recommended form for every issuer, also together with `well-known-url`.
+
+NOTE: Enforcement: issuer configuration (`IssuerConfig`) and the Quarkus `IssuerConfigResolver` currently require an explicit `issuer-identifier` for every enabled issuer. When the issuer uses `well-known-url`, the `issuer` advertised by the OpenID Connect discovery document is checked against the configured value, and a mismatch is reported as a security event. The configured identifier stays authoritative.
+
 _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
 
 [#VALIDATION-3.2]
@@ -201,7 +205,7 @@ _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
 [#VALIDATION-3.3]
 ==== VALIDATION-3.3: Issuer Validation
 
-Validate that tokens come from trusted issuers.
+Validate that tokens come from trusted issuers. The `iss` claim is matched against the explicitly configured `issuer-identifier` (the default and recommended form, see xref:#VALIDATION-3.1[VALIDATION-3.1] for the enforcement note).
 
 _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
 

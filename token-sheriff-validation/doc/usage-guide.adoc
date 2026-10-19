@@ -75,6 +75,7 @@ AccessTokenContent token = tokenValidator.createAccessToken(AccessTokenRequest.o
 [source,java]
 ----
 IssuerConfig issuerConfig = IssuerConfig.builder()
+    .issuerIdentifier("https://accounts.google.com")
     .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
         .wellKnownUrl("https://accounts.google.com/.well-known/openid-configuration")
         .build())

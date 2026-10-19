@@ -175,7 +175,7 @@ The following capabilities have no equivalent in MP-JWT 2.1:
 
 |`mp.jwt.verify.issuer`
 |`sheriff.token.issuers.<name>.issuer-identifier`
-|Per-issuer in TokenSheriff
+|Per-issuer in TokenSheriff; the explicit `issuer-identifier` is the default and recommended form, also together with `well-known-url`, and is enforced per issuer (see xref:../requirements.adoc#VALIDATION-3.1[VALIDATION-3.1])
 
 |`mp.jwt.verify.audiences`
 |`sheriff.token.issuers.<name>.expected-audience`
