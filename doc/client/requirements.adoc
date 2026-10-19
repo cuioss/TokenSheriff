@@ -310,9 +310,12 @@ URLs, and the front-channel authorization and end-session URLs keep the public o
 *DPoP proofs name the request sent.* The DPoP `htu` claim (<<CLIENT-11>>) MUST be the target URI of
 the request the proof is attached to (RFC 9449 §4.2): on a mapped call it MUST name the back-channel
 origin with the advertised path — the URL actually contacted — and MUST NOT name the advertised public
-URL. An authorization server compares `htu` with the URL of the request it received, so a proof that
-named the public URL would be refused
-(xref:../adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015]).
+URL. This was verified against Keycloak 26.8.1 and 26.5.7, which compare `htu` with the URL of the
+request they received. An authorization server that instead compares `htu` with a configured public
+URL is not covered by this release, and a deployment behind such a server MUST NOT map the token
+endpoint through `backChannelOrigin`
+(xref:../adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015] records the
+evidence and this open risk).
 
 *Transport policy follows the contacted host.* The egress path validation runs on the advertised URL;
 the scheme policy (`allowInsecureHttp`), the per-client trust (<<CLIENT-23>>) and hostname

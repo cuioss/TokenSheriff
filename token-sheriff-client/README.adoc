@@ -187,13 +187,16 @@ steer a call to a third origin.
 and the front-channel URLs sent to the browser (authorization request, end-session) keep the public
 origin.
 
-*DPoP proofs name the URL actually contacted.* A DPoP proof's `htu` claim is the target URI of the
-request it travels with (RFC 9449 §4.2). On a mapped call the proof therefore names the back-channel
-origin with the advertised path — `http://keycloak:8080/realms/demo/protocol/openid-connect/token`
-in the example above — not the advertised public URL. An authorization server compares `htu` with
-the URL of the request it received, so a proof that named the public URL would be refused. See
+*DPoP proofs name the URL actually contacted.* The client signs a DPoP proof's `htu` claim with the
+URL it actually contacts, as RFC 9449 §4.2 requires of the target URI of the request. On a mapped
+call the proof therefore names the back-channel origin with the advertised path —
+`http://keycloak:8080/realms/demo/protocol/openid-connect/token` in the example above — not the
+advertised public URL. This was verified against Keycloak 26.8.1 and 26.5.7, which compare `htu`
+with the URL of the request they received. An authorization server that instead compares `htu` with
+a configured public URL is not covered by this release: a deployment behind such a server must not
+map the token endpoint through `backChannelOrigin`. See
 xref:../doc/adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015] for the
-decision and the evidence behind it.
+evidence and this open risk.
 
 *Transport policy follows the contacted host.* The per-request controls — the `allowInsecureHttp`
 scheme check, `verifyHostname` and `sslContext` — are applied to the back-channel origin. With
