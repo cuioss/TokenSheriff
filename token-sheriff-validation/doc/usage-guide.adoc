@@ -75,14 +75,15 @@ AccessTokenContent token = tokenValidator.createAccessToken(AccessTokenRequest.o
 [source,java]
 ----
 IssuerConfig issuerConfig = IssuerConfig.builder()
-    .issuerIdentifier("https://accounts.google.com")
+    .issuerIdentifier("https://accounts.google.com") // compared with the issuer advertised by discovery
     .httpJwksLoaderConfig(HttpJwksLoaderConfig.builder()
         .wellKnownUrl("https://accounts.google.com/.well-known/openid-configuration")
-        .issuerIdentifier("https://accounts.google.com")
         .build())
     .expectedAudience("your-google-client-id")
     .build();
 ----
+
+See xref:configuration/openid-discovery.adoc#discovery-issuer-check[Discovery issuer check] for how the advertised issuer is checked.
 
 === Configuring TokenValidator
 

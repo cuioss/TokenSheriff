@@ -265,6 +265,33 @@ class HttpJwksLoaderIssuerTest {
     }
 
     @Test
+    @DisplayName("Should hard-fail the issuer gate when an issuer is configured but none is advertised (M7)")
+    void shouldHardFailWhenAdvertisedIssuerIsAbsent() {
+        Optional<String> issuer = HttpJwksLoader.resolveIssuer(null, "https://trusted-issuer.example.com",
+                securityEventCounter);
+
+        assertAll("absent advertised issuer (M7)",
+                () -> assertTrue(issuer.isEmpty(),
+                        "An absent advertised issuer must not resolve while an issuer is configured"),
+                () -> assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.ISSUER_MISMATCH),
+                        "An absent advertised issuer must be recorded exactly once as ISSUER_MISMATCH"));
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                JWTValidationLogMessages.WARN.ISSUER_MISMATCH.resolveIdentifierString());
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, HttpJwksLoader.ISSUER_ABSENT);
+    }
+
+    @Test
+    @DisplayName("Should adopt the advertised issuer when no issuer is configured (standalone use)")
+    void shouldAdoptAdvertisedIssuerWithoutConfiguredIssuer() {
+        Optional<String> issuer = HttpJwksLoader.resolveIssuer("https://advertised.example.com", null,
+                securityEventCounter);
+
+        assertAll("standalone use performs no comparison",
+                () -> assertEquals(Optional.of("https://advertised.example.com"), issuer),
+                () -> assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.ISSUER_MISMATCH)));
+    }
+
+    @Test
     @DisplayName("Should tolerate a trailing-slash difference between advertised and configured issuer (M7)")
     void shouldTolerateTrailingSlashIssuerDifference(URIBuilder uriBuilder) {
         // The discovery document advertises issuer == base URL (no trailing slash); configuring the

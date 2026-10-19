@@ -137,12 +137,17 @@ public class HttpJwksLoaderConfig {
     /**
      * The issuer identifier for this JWKS configuration.
      * <p>
-     * An explicit identifier is the default and recommended form. It is mandatory for direct JWKS
-     * configuration. With well-known discovery the {@code issuer} advertised by the discovery document is
-     * checked against it, and a mismatch is a hard failure: no keys are loaded and every token for that
-     * issuer is rejected. Only at this loader level may it be omitted for well-known discovery, in which
-     * case the loader uses the discovered issuer internally and performs no comparison;
-     * issuer configuration ({@code IssuerConfig}) always requires it.
+     * With well-known discovery the {@code issuer} advertised by the discovery document is checked against
+     * it, and a mismatch or an absent advertised issuer is a hard failure: no keys are loaded and every
+     * token for that issuer is rejected.
+     * <p>
+     * For direct JWKS configuration the identifier is mandatory, whether or not this configuration is
+     * used through {@code IssuerConfig}; {@link HttpJwksLoaderConfigBuilder#build()} rejects a direct
+     * JWKS configuration without it. Only well-known discovery relieves it: used through
+     * {@code IssuerConfig}, the identifier comes from {@code IssuerConfig} and need not be repeated here,
+     * because {@code IssuerConfig} propagates it into the loader configuration; used standalone, it may be
+     * omitted, in which case the loader uses the discovered issuer internally and performs no comparison.
+     * A value set here must be identical to the {@code IssuerConfig} identifier.
      */
     @Getter
     private final String issuerIdentifier;
@@ -290,6 +295,37 @@ public class HttpJwksLoaderConfig {
    
     public JwksType getJwksType() {
         return wellKnownConfig != null ? JwksType.WELL_KNOWN : JwksType.HTTP;
+    }
+
+    /**
+     * Creates a copy of this configuration that carries the given issuer identifier.
+     * <p>
+     * Every other setting is copied unchanged: the copy shares the HTTP handler, the
+     * {@link WellKnownConfig}, the retry configuration, the scheduled executor (together with its
+     * ownership flag), the parser configuration, the egress policy and the TLS settings of this
+     * instance. {@code IssuerConfig} uses this method to propagate its identifier into the loader
+     * configuration, so that the issuer advertised by a discovery document is always compared with it.
+     *
+     * @param issuerIdentifier the issuer identifier for the copy, must not be {@code null} or blank
+     * @return a new configuration equal to this one except for the issuer identifier
+     * @throws IllegalArgumentException if {@code issuerIdentifier} is {@code null} or blank
+     */
+    public HttpJwksLoaderConfig withIssuerIdentifier(String issuerIdentifier) {
+        Preconditions.checkArgument(issuerIdentifier != null && !issuerIdentifier.isBlank(),
+                "issuerIdentifier must not be null or blank");
+        return new HttpJwksLoaderConfig(
+                refreshIntervalSeconds,
+                httpHandler,
+                wellKnownConfig,
+                retryConfig,
+                scheduledExecutorService,
+                ownsExecutor,
+                issuerIdentifier,
+                keyRotationGracePeriod,
+                maxRetiredKeySets,
+                parserConfig,
+                egressPolicy,
+                tlsSettings);
     }
 
     /**
@@ -457,11 +493,17 @@ public class HttpJwksLoaderConfig {
         /**
          * Sets the issuer identifier for this JWKS configuration.
          * <p>
-         * An explicit identifier is the default and recommended form. It is mandatory for direct JWKS
-         * configuration. With well-known discovery the {@code issuer} advertised by the discovery document
-         * is checked against it, and a mismatch is a hard failure: no keys are loaded and every token for
-         * that issuer is rejected. Only at this loader level may it be omitted for well-known discovery,
-         * in which case the loader uses the discovered issuer internally and performs no comparison; issuer configuration ({@code IssuerConfig}) always requires it.
+         * With well-known discovery the {@code issuer} advertised by the discovery document is checked
+         * against it, and a mismatch or an absent advertised issuer is a hard failure: no keys are loaded
+         * and every token for that issuer is rejected.
+         * <p>
+         * For direct JWKS configuration the identifier is mandatory, also when the configuration is used
+         * through {@code IssuerConfig}: {@link #build()} rejects a direct JWKS configuration without it.
+         * Only well-known discovery relieves it: used through {@code IssuerConfig}, the identifier comes
+         * from {@code IssuerConfig} and need not be set here; used standalone, it may be omitted, in which
+         * case the loader uses the discovered issuer internally and performs no comparison. A value set
+         * here must be identical to the {@code IssuerConfig} identifier, otherwise building the
+         * {@code IssuerConfig} fails.
          *
          * @param issuerIdentifier the issuer identifier
          * @return this builder instance
@@ -822,9 +864,9 @@ public class HttpJwksLoaderConfig {
                 throw new IllegalArgumentException("Issuer identifier is mandatory when using direct JWKS configuration");
             }
 
-            // For well-known, an omitted identifier is internal loader behaviour only: the loader then uses the
-            // discovered issuer. A configured identifier is checked against the discovered one. IssuerConfig
-            // always supplies an explicit identifier.
+            // For well-known, a configured identifier is checked against the discovered one. An omitted
+            // identifier is left to the caller: IssuerConfig propagates its own identifier via
+            // withIssuerIdentifier(...), while standalone use falls back to the discovered issuer.
 
             EgressPolicy.EgressPolicyBuilder egressPolicyBuilder = EgressPolicy.builder()
                     .allowLoopback(allowLoopbackEgress);
