@@ -160,12 +160,15 @@ class JwksEndpointHealthCheckTest {
     @Test
     @DisplayName("Health check should handle error in JwksLoader")
     void healthCheckJwksLoaderError() {
-        // Create a mock IssuerConfig with a JwksLoader that throws an exception
+        // Create a mock IssuerConfig with a JwksLoader that throws an exception once the
+        // configuration is built: IssuerConfig.build() itself reads the loader type
+        ErrorJwksLoader errorJwksLoader = new ErrorJwksLoader();
         IssuerConfig errorIssuerConfig = IssuerConfig.builder()
                 .issuerIdentifier("error-issuer")
-                .jwksLoader(new ErrorJwksLoader())
+                .jwksLoader(errorJwksLoader)
                 .audienceValidationDisabled(true)
                 .build();
+        errorJwksLoader.startFailing();
 
         // Create a health check with the error issuer config
         JwksEndpointHealthCheck errorHealthCheck = new JwksEndpointHealthCheck(
@@ -433,9 +436,15 @@ class JwksEndpointHealthCheckTest {
     // Mock JwksLoader implementations for testing
 
     /**
-     * JwksLoader that throws an exception when getJwksType() is called.
+     * JwksLoader that throws an exception when getJwksType() is called after {@link #startFailing()}.
      */
     private static class ErrorJwksLoader implements JwksLoader {
+        private boolean failing;
+
+        void startFailing() {
+            failing = true;
+        }
+
         @Override
         public Optional<KeyInfo> getKeyInfo(String kid) {
             return Optional.empty();
@@ -448,7 +457,10 @@ class JwksEndpointHealthCheckTest {
 
         @Override
         public JwksType getJwksType() {
-            throw new IllegalStateException("Simulated error in JwksLoader");
+            if (failing) {
+                throw new IllegalStateException("Simulated error in JwksLoader");
+            }
+            return JwksType.MEMORY;
         }
 
         @Override
