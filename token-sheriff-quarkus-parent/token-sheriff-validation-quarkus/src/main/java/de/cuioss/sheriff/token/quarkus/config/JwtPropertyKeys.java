@@ -82,7 +82,7 @@ public final class JwtPropertyKeys {
      * Only one JWKS source may be configured per issuer:
      * <ul>
      *   <li>{@link #JWKS_URL} - Direct JWKS endpoint (requires {@link #ISSUER_IDENTIFIER})</li>
-     *   <li>{@link #WELL_KNOWN_URL} - Well-known discovery (provides issuer identifier automatically)</li>
+     *   <li>{@link #WELL_KNOWN_URL} - Well-known discovery (requires {@link #ISSUER_IDENTIFIER}; the discovered issuer is checked against it)</li>
      *   <li>{@link #JWKS_FILE_PATH} - Local file (requires {@link #ISSUER_IDENTIFIER})</li>
      *   <li>{@link #JWKS_CONTENT} - Inline content (requires {@link #ISSUER_IDENTIFIER})</li>
      * </ul>
@@ -125,14 +125,14 @@ public final class JwtPropertyKeys {
          * The issuer identifier that will be matched against the "iss" claim in JWT tokens.
          * Template: "sheriff.token.issuers.%s.issuer-identifier"
          * <p>
-         * This field is required for all JWKS loading variants except well-known discovery.
-         * For well-known discovery, the issuer identifier is automatically extracted from
-         * the discovery document and this field is optional.
+         * This field is required for every enabled issuer. An explicit identifier is the default
+         * and recommended form, also together with {@link #WELL_KNOWN_URL}, where the {@code issuer}
+         * advertised by the discovery document is checked against it.
          * This identifier must match the "iss" claim in validated tokens.
          * </p>
          * <p>
-         * <strong>Required</strong> for {@link #JWKS_URL}, {@link #JWKS_FILE_PATH}, and {@link #JWKS_CONTENT}.
-         * <strong>Optional</strong> for {@link #WELL_KNOWN_URL} (extracted from discovery document).
+         * <strong>Required</strong> for {@link #JWKS_URL}, {@link #WELL_KNOWN_URL}, {@link #JWKS_FILE_PATH},
+         * and {@link #JWKS_CONTENT}.
          * </p>
          *
          * @see de.cuioss.sheriff.token.validation.IssuerConfig
@@ -353,7 +353,7 @@ public final class JwtPropertyKeys {
          * </p>
          * <p>
          * <strong>Mutually exclusive</strong> with {@link #JWKS_URL}, {@link #JWKS_FILE_PATH}, and {@link #JWKS_CONTENT}.
-         * Provides {@link #ISSUER_IDENTIFIER} automatically from discovery document.
+         * <strong>Requires</strong> {@link #ISSUER_IDENTIFIER}; the discovered issuer is checked against it.
          * </p>
          *
          * @see de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig

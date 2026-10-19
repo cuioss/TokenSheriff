@@ -214,8 +214,8 @@ public class IssuerConfigResolver {
     /**
      * Configures the issuer identifier from properties.
      * <p>
-     * The issuer identifier is required for most JWKS sources except well-known discovery.
-     * The builder will validate this requirement.
+     * The issuer identifier is required for every enabled issuer, including well-known discovery.
+     * The requirement is enforced by the builder and by {@code createHttpJwksLoaderConfig}.
      * </p>
      */
     private Optional<String> configureIssuerIdentifier(IssuerConfig.IssuerConfigBuilder builder, String issuerName) {
