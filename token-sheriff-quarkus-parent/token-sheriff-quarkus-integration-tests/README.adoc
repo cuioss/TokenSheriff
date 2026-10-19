@@ -21,7 +21,7 @@ Integration tests for the Token-Sheriff Quarkus extensions with native container
 
 * Native container testing with production-like behavior
 * HTTPS with self-signed certificates
-* Keycloak `26.8.1` (pinned by image digest in `docker-compose.yml`; Dependabot cannot update it) with a static public hostname and four test realms
+* Keycloak (pinned by tag and digest in `docker-compose.yml`, bumped by Dependabot) with a static public hostname and four test realms
 * Multi-IDP testing with Dex (via Docker Compose profile)
 * Health check and metrics validation
 * Automated build and test scripts
@@ -370,9 +370,7 @@ The integration tests use HTTPS throughout with proper certificate validation:
 
 `KeycloakUrlSupport` holds the single public base, `EXTERNAL_BASE = https://localhost:1443`. Because
 Keycloak advertises that base itself, a test follows a Keycloak-emitted URL — a form action, a
-discovery-advertised endpoint, a redirect — as it is. No URL rewrite is needed, and the former
-`toExternal` rewrite from the Docker-internal `keycloak:8443` authority to the external base, together
-with the `INTERNAL_BASE` / `INTERNAL_ISSUER` constants, has been removed. The session cookies Keycloak
+discovery-advertised endpoint, a redirect — as it is, with no URL rewrite. The session cookies Keycloak
 sets on the `localhost` domain during the authorization request stay valid for the follow-up login
 POST without further adaptation.
 
@@ -386,8 +384,8 @@ sent to `127.0.0.1:1443`, while the browser leg stays on the public front channe
 IP subject alternative name of the test certificate, so hostname verification stays on. The spec
 redeems a DPoP-constrained authorization code and refreshes, and asserts that both access tokens
 carry `cnf.jkt`. It passes because the DPoP proof names the URL actually contacted as `htu`; Keycloak
-compares `htu` with the URL of the request it received and refused the former public-URL `htu` with
-`invalid_dpop_proof`. See
+compares `htu` with the URL of the request it received and refuses a proof that names the public URL
+with `invalid_dpop_proof`. See
 link:../../doc/adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015].
 
 ==== Key Points

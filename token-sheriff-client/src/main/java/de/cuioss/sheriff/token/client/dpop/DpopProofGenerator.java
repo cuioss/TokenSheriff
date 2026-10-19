@@ -377,7 +377,7 @@ public class DpopProofGenerator {
         long now = Instant.now().getEpochSecond();
         String header = "{\"typ\":\"" + DPOP_TYP + "\",\"alg\":\"" + algorithm.getJwaName()
                 + "\",\"jwk\":" + jwkJson + "}";
-        // htu is the request URI, sourced from the AS's own discovery metadata; strip its query and
+        // htu is the URL the request is actually sent to, as the caller passes it; strip its query and
         // fragment (RFC 9449 §4.2) then escape every JSON control character per RFC 8259.
         StringBuilder payload = new StringBuilder("{\"jti\":\"").append(JsonEscaper.escape(jti))
                 .append("\",\"htm\":\"").append(JsonEscaper.escape(htm))

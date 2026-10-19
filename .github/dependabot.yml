@@ -36,13 +36,30 @@ updates:
     directory: "/token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests"
     schedule:
       interval: "weekly"
-    # Note: This tracks Dockerfiles only. For docker-compose.yml images,
-    # manual updates are required as dependabot's Docker ecosystem
-    # doesn't scan compose files. Current versions in docker-compose.yml:
-    # - quay.io/keycloak/keycloak:26.4.0
-    # - prom/prometheus:v3.6.0
+    # This ecosystem reads Dockerfiles only; images in docker-compose files are covered by the
+    # docker-compose entry below.
     # Only `default-days`: as with github-actions above, the `semver-*-days` keys
     # are rejected for the docker ecosystem and would invalidate the whole file.
+    cooldown:
+      default-days: 3
+
+  # Keycloak, pinned by tag and digest in both compose files. Only Keycloak is tracked: the other
+  # compose images (Prometheus, Dex, Postgres, Zitadel) stay manually pinned. Both compose files
+  # mount the same realm imports, so one group keeps them on the same version in a single PR. The
+  # bump PR runs the integration and e2e suites, which is what verifies the new release.
+  - package-ecosystem: docker-compose
+    directories:
+      - "/token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests"
+      - "/token-sheriff-quarkus-parent/e-2-e-playwright"
+    schedule:
+      interval: "weekly"
+    allow:
+      - dependency-name: "quay.io/keycloak/keycloak"
+    groups:
+      keycloak:
+        patterns:
+          - "quay.io/keycloak/keycloak"
+    # Only `default-days`, for the same reason as the docker ecosystem above.
     cooldown:
       default-days: 3
 

@@ -194,7 +194,8 @@ call the proof therefore names the back-channel origin with the advertised path 
 advertised public URL. This was verified against Keycloak 26.8.1 and 26.5.7, which compare `htu`
 with the URL of the request they received. An authorization server that instead compares `htu` with
 a configured public URL is not covered by this release: a deployment behind such a server must not
-map the token endpoint through `backChannelOrigin`. See
+set `backChannelOrigin` for a DPoP-constrained client, because it maps every endpoint on the issuer
+origin, userinfo included. See
 xref:../doc/adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015] for the
 evidence and this open risk.
 

@@ -74,9 +74,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * tokens. The spec redeems the authorization code and then refreshes, both through the production
  * engine with a {@link SenderConstraint#dpop(DpopProofGenerator) DPoP sender-constraint}, and asserts
  * that both legs succeed and that both access tokens are bound ({@code cnf.jkt}) to the proof key.
- * Before the {@code htu} change of the DPoP back-channel-origin plan, this spec failed with
- * {@code invalid_dpop_proof} / {@code DPoP HTTP URL mismatch}: the proof named the advertised public
- * token endpoint while the request was sent to the back-channel origin (see ADR-0015).
+ * A proof that names the advertised public token endpoint while the request is sent to the back-channel
+ * origin is refused with {@code invalid_dpop_proof} / {@code DPoP HTTP URL mismatch}; the spec passes
+ * because the proof names the URL actually contacted (see ADR-0015).
  */
 @DisplayName("DPoP authorization_code + refresh through a mapped back-channel origin against real Keycloak")
 class DpopBackChannelOriginSpecIT extends BaseIntegrationTest {
