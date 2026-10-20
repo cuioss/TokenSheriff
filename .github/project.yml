@@ -47,8 +47,3 @@ dependency-propagation:
   group-id: de.cuioss.sheriff.token
   artifact-id: token-sheriff-validation
   scope: dependency
-
-cuioss-review-bot:
-  enabled: true
-  packs: [java, javascript]
-  additional_rules: []
