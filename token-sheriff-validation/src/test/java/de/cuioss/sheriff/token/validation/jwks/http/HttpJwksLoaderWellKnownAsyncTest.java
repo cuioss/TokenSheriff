@@ -20,24 +20,37 @@ import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
+import de.cuioss.sheriff.token.validation.test.dispatcher.JwksResolveDispatcher;
+import de.cuioss.sheriff.token.validation.test.dispatcher.WellKnownDispatcher;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
+import de.cuioss.test.mockwebserver.dispatcher.CombinedDispatcher;
+import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 @EnableTestLogger
 @DisplayName("HttpJwksLoader Well-Known Discovery Async Tests")
 @EnableMockWebServer
 class HttpJwksLoaderWellKnownAsyncTest {
+
+    /**
+     * The default number of attempts, so the retry path is exercised in full, with millisecond delays
+     * instead of the default 1 + 2 + 4 + 8 s backoff.
+     */
+    private static final RetryConfig FAST_RETRY = RetryConfig.builder()
+            .initialDelay(Duration.ofMillis(1))
+            .maxDelay(Duration.ofMillis(5))
+            .build();
 
     @Test
     @DisplayName("Constructor should not perform well-known discovery")
@@ -67,30 +80,18 @@ class HttpJwksLoaderWellKnownAsyncTest {
     }
 
     @Test
-    @DisplayName("Well-known discovery failure should be handled in async context")
+    @DisplayName("Transient well-known discovery failure with background refresh leaves UNDEFINED and schedules the refresh")
     void wellKnownDiscoveryFailureShouldBeHandledAsync() {
-        // Create configuration with invalid well-known URL
-        String invalidWellKnownUrl = "https://invalid-host.example.com/.well-known/openid_configuration";
-
-        // Default number of attempts, so the retry path is exercised in full, with millisecond delays
-        // instead of the default 1 + 2 + 4 + 8 s backoff.
-        RetryConfig fastRetry = RetryConfig.builder()
-                .initialDelay(Duration.ofMillis(1))
-                .maxDelay(Duration.ofMillis(5))
-                .build();
-
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
-                .wellKnownUrl(invalidWellKnownUrl)
-                .issuerIdentifier("https://invalid-host.example.com")
-                .retryConfig(fastRetry)
-                .build();
+        HttpJwksLoaderConfig config = unreachableWellKnownConfig().build();
 
         try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
             SecurityEventCounter counter = new SecurityEventCounter();
 
-            // Constructor should still be fast even with invalid well-known URL
+            // Constructor should still be fast even with invalid well-known URL. A config of its own:
+            // closing a loader shuts down the executor its config owns.
+            HttpJwksLoaderConfig probeConfig = unreachableWellKnownConfig().build();
             long startTime = System.nanoTime();
-            try (HttpJwksLoader ignored = new HttpJwksLoader(config)) {
+            try (HttpJwksLoader ignored = new HttpJwksLoader(probeConfig)) {
                 long constructorDuration = System.nanoTime() - startTime;
 
                 assertTrue(constructorDuration < TimeUnit.MILLISECONDS.toNanos(10),
@@ -100,14 +101,68 @@ class HttpJwksLoaderWellKnownAsyncTest {
             // Async initialization should handle the failure
             CompletableFuture<LoaderStatus> initFuture = loader.initJWKSLoader(counter);
 
-            // Wait for completion - should fail gracefully
             LoaderStatus status = initFuture.join();
-            assertEquals(LoaderStatus.ERROR, status, "Initialization should fail with well-known discovery error");
-            assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus(), "Loader should be in ERROR status");
+            assertAll("a transient discovery failure is retried by the background refresh",
+                    () -> assertEquals(LoaderStatus.UNDEFINED, status),
+                    () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
+                    () -> assertTrue(loader.isBackgroundRefreshActive(), "the background refresh must be scheduled"));
 
-            // Verify appropriate error logging
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                     JWTValidationLogMessages.WARN.JWKS_URI_RESOLUTION_FAILED.resolveIdentifierString());
         }
+    }
+
+    @Test
+    @DisplayName("Well-known discovery failure without background refresh is a terminal ERROR")
+    void wellKnownDiscoveryFailureWithoutRefreshShouldBeError() {
+        HttpJwksLoaderConfig config = unreachableWellKnownConfig().refreshIntervalSeconds(0).build();
+
+        try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+            LoaderStatus status = loader.initJWKSLoader(new SecurityEventCounter()).join();
+
+            assertAll("without refresh nothing can recover the loader",
+                    () -> assertEquals(LoaderStatus.ERROR, status),
+                    () -> assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus()),
+                    () -> assertFalse(loader.isBackgroundRefreshActive(), "no background refresh may be scheduled"));
+        }
+    }
+
+    @Test
+    @DisplayName("Background refresh resolves the adapter once discovery recovers and reaches OK")
+    void backgroundRefreshShouldRecoverFromTransientDiscoveryFailure() throws IOException {
+        WellKnownDispatcher wellKnownDispatcher = new WellKnownDispatcher();
+        JwksResolveDispatcher jwksDispatcher = new JwksResolveDispatcher();
+        try (MockWebServer server = new MockWebServer()) {
+            server.setDispatcher(new CombinedDispatcher(wellKnownDispatcher, jwksDispatcher));
+            server.start();
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .wellKnownUrl(server.url(WellKnownDispatcher.LOCAL_PATH).toString())
+                    .retryConfig(FAST_RETRY)
+                    .build();
+            SecurityEventCounter counter = new SecurityEventCounter();
+            wellKnownDispatcher.returnError();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                assertEquals(LoaderStatus.UNDEFINED, loader.initJWKSLoader(counter).join(),
+                        "a discovery endpoint that is down at init leaves the loader UNDEFINED");
+                assertTrue(loader.isBackgroundRefreshActive(), "the background refresh must be scheduled");
+
+                wellKnownDispatcher.returnDefault();
+                loader.performBackgroundRefresh();
+
+                assertAll("the refresh cycle resolves the adapter and loads the keys",
+                        () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                        () -> assertFalse(loader.getKeyIds().isEmpty(), "keys must be loaded"),
+                        () -> assertTrue(jwksDispatcher.getCallCounter() >= 1, "the advertised jwks_uri must be fetched"),
+                        () -> assertEquals(0, counter.getCount(SecurityEventCounter.EventType.ISSUER_MISMATCH)));
+            }
+        }
+    }
+
+    private static HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder unreachableWellKnownConfig() {
+        return HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                .wellKnownUrl("https://invalid-host.example.com/.well-known/openid_configuration")
+                .issuerIdentifier("https://invalid-host.example.com")
+                .retryConfig(FAST_RETRY);
     }
 }

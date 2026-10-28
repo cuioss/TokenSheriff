@@ -29,8 +29,17 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -142,6 +151,76 @@ class HttpJwksLoaderAsyncInitializationTest {
             // Verify future completed with OK
             assertTrue(initFuture.isDone(), "Future should be completed");
             assertEquals(LoaderStatus.OK, initFuture.join(), "Future should complete with OK");
+        }
+    }
+
+    @Test
+    @DisplayName("Concurrent initJWKSLoader calls share one future and start exactly one init fetch and one refresh task")
+    void concurrentInitShouldStartExactlyOneInitialization(URIBuilder uriBuilder) throws Exception {
+        int callers = 8;
+        CountingScheduledExecutor executor = new CountingScheduledExecutor();
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                .jwksUrl(uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString())
+                .issuerIdentifier("test-issuer")
+                .scheduledExecutorService(executor)
+                .refreshIntervalSeconds(60)
+                .build();
+        // Holding the init fetch keeps every caller inside the initialization window.
+        CountDownLatch responseGate = new CountDownLatch(1);
+        moduleDispatcher.setResponseGate(responseGate);
+        ExecutorService callerPool = Executors.newFixedThreadPool(callers);
+
+        try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<CompletableFuture<LoaderStatus>>> calls = new ArrayList<>();
+            for (int i = 0; i < callers; i++) {
+                calls.add(callerPool.submit(() -> {
+                    start.await();
+                    return loader.initJWKSLoader(counter);
+                }));
+            }
+            start.countDown();
+            List<CompletableFuture<LoaderStatus>> futures = new ArrayList<>();
+            for (Future<CompletableFuture<LoaderStatus>> call : calls) {
+                futures.add(call.get(10, TimeUnit.SECONDS));
+            }
+            responseGate.countDown();
+
+            CompletableFuture<LoaderStatus> first = futures.getFirst();
+            assertEquals(LoaderStatus.OK, first.get(10, TimeUnit.SECONDS));
+            assertAll("one initialization serves every concurrent caller",
+                    () -> assertTrue(futures.stream().allMatch(future -> future == first),
+                            "every caller must receive the same future"),
+                    () -> assertEquals(1, moduleDispatcher.getCallCounter(), "exactly one init fetch"),
+                    () -> assertEquals(1, executor.getFixedRateSchedules(), "exactly one refresh task"));
+        } finally {
+            responseGate.countDown();
+            moduleDispatcher.setResponseGate(null);
+            callerPool.shutdownNow();
+            executor.shutdownNow();
+        }
+    }
+
+    /**
+     * Scheduled executor that counts the fixed-rate tasks scheduled on it.
+     */
+    private static final class CountingScheduledExecutor extends ScheduledThreadPoolExecutor {
+
+        private final AtomicInteger fixedRateSchedules = new AtomicInteger();
+
+        CountingScheduledExecutor() {
+            super(1);
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
+            fixedRateSchedules.incrementAndGet();
+            return super.scheduleAtFixedRate(command, initialDelay, period, unit);
+        }
+
+        int getFixedRateSchedules() {
+            return fixedRateSchedules.get();
         }
     }
 }

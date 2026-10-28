@@ -88,6 +88,7 @@ class JwksLoaderFactoryTest {
                 .wellKnownUrl("https://example.com/.well-known/openid-configuration")
                 .issuerIdentifier("https://example.com")
                 .retryConfig(RetryConfig.builder().maxAttempts(1).build()) // No retry to avoid delays - HTTP functionality tested in ResilientHttpAdapter
+                .refreshIntervalSeconds(0) // Background refresh disabled, so a failed discovery is permanent
                 .build();
         JwksLoader loader = JwksLoaderFactory.createHttpLoader(config);
         loader.initJWKSLoader(securityEventCounter).join();
@@ -96,7 +97,7 @@ class JwksLoaderFactoryTest {
         assertEquals(JwksType.WELL_KNOWN, loader.getJwksType(), "Loader should have WELL_KNOWN type");
         // Trigger loading by attempting to get a key, then check health status
         loader.getKeyInfo("test-key-id"); // This triggers loading attempt
-        // Without background refresh enabled (no refresh interval), failed loads set ERROR status
+        // With background refresh disabled, a failed discovery sets ERROR status
         assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus(), "Well-known loader should have ERROR status without background refresh");
     }
 

@@ -28,6 +28,7 @@ import de.cuioss.sheriff.token.validation.dpop.DpopProofValidator;
 import de.cuioss.sheriff.token.validation.dpop.DpopReplayProtection;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
+import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
 import de.cuioss.sheriff.token.validation.metrics.*;
 import de.cuioss.sheriff.token.validation.pipeline.*;
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenClaimValidator;
@@ -64,6 +65,11 @@ import java.util.Map;
  * <p>
  * This class is thread-safe after construction.
  * All validation methods can be called concurrently from multiple threads.
+ * <p>
+ * <strong>Lifecycle:</strong> the validator takes ownership of the JWKS loaders of the enabled issuer
+ * configurations passed to it. {@link #close()} closes them, stopping their background refresh, so an
+ * {@link IssuerConfig} (or a pre-built JWKS loader set on it) must not be shared with a validator that
+ * outlives this one.
  * <p>
  * <strong>Design Note:</strong> This class intentionally implements the facade/factory pattern,
  * orchestrating the creation and wiring of all JWT validation components. The higher dependency
@@ -187,6 +193,11 @@ public class TokenValidator implements Closeable {
     @Nullable
     private final DpopReplayProtection dpopReplayProtection;
 
+    /**
+     * The JWKS loaders of the enabled issuer configurations. The validator owns them: {@link #close()}
+     * closes every loader that is {@link AutoCloseable}.
+     */
+    private final List<JwksLoader> jwksLoaders;
 
     /**
      * Private constructor used by builder.
@@ -216,6 +227,9 @@ public class TokenValidator implements Closeable {
         if (enabledIssuerConfigs.isEmpty()) {
             throw new IllegalArgumentException("At least one enabled issuer configuration must be provided");
         }
+        this.jwksLoaders = enabledIssuerConfigs.stream()
+                .map(IssuerConfig::getJwksLoader)
+                .toList();
 
         // Use default ParserConfig if not provided
         if (parserConfig == null) {
@@ -453,14 +467,41 @@ public class TokenValidator implements Closeable {
     }
 
     /**
-     * Shuts down internal resources (cache eviction executor, DPoP replay protection).
+     * Shuts down internal resources (cache eviction executor, DPoP replay protection) and closes the
+     * JWKS loaders of the enabled issuer configurations.
+     * <p>
+     * Every JWKS loader that is {@link AutoCloseable} is closed, which stops its background refresh
+     * and releases an executor it owns. Ownership of those loaders is transferred to this validator:
+     * an {@link IssuerConfig} (or a pre-built JWKS loader set on it) must not be shared with a
+     * validator that outlives this one. A failure closing one loader is logged and neither stops the
+     * remaining loaders nor the shutdown of the other resources.
+     * <p>
      * This should be called when the TokenValidator is no longer needed.
      */
     @Override
     public void close() {
-        accessTokenPipeline.shutdown();
-        if (dpopReplayProtection != null) {
-            dpopReplayProtection.close();
+        try {
+            accessTokenPipeline.shutdown();
+            if (dpopReplayProtection != null) {
+                dpopReplayProtection.close();
+            }
+        } finally {
+            closeJwksLoaders();
+        }
+    }
+
+    private void closeJwksLoaders() {
+        for (JwksLoader loader : jwksLoaders) {
+            if (loader instanceof AutoCloseable closeable) {
+                try {
+                    closeable.close();
+                } catch (Exception e) {
+                    // cui-rewrite:disable InvalidExceptionUsageRecipe
+                    // Intentional catch-all: one failing loader must not keep the others running.
+                    LOGGER.debug(e, "Failed to close JWKS loader %s for issuer %s",
+                            loader.getClass().getSimpleName(), loader.getIssuerIdentifier().orElse("unknown"));
+                }
+            }
         }
     }
 }

@@ -35,6 +35,7 @@ import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
 import de.cuioss.sheriff.token.validation.jwks.key.JWKSKeyLoader;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
 import java.net.URI;
 import java.time.Instant;
@@ -42,6 +43,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.ERROR;
 import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.INFO;
@@ -52,7 +54,17 @@ import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
  * Supports both direct HTTP endpoints and well-known discovery.
  * Uses HttpAdapter composition (ETagAwareHttpAdapter + ResilientHttpAdapter) for bandwidth
  * optimization via ETag caching and resilient retry behavior with optional scheduled background refresh.
- * Background refresh is automatically started after the first successful key load.
+ * Background refresh, when enabled, is started after the initial load attempt regardless of its
+ * outcome, so a loader whose first load failed recovers on its own.
+ * <p>
+ * <strong>Status contract:</strong> {@link LoaderStatus#OK} is reported only while a usable key set
+ * is installed. A fetch that succeeds at the HTTP level but yields no usable key is not a successful
+ * load. A failed initial load or a transient well-known discovery failure leaves the status
+ * {@link LoaderStatus#UNDEFINED} when background refresh is enabled (a later refresh cycle that
+ * installs usable keys publishes {@code OK}) and {@link LoaderStatus#ERROR} when it is disabled.
+ * A security rejection (issuer mismatch, absent advertised issuer, egress block) is a terminal
+ * {@code ERROR}. A failed refresh never downgrades an existing {@code OK}, since the installed keys
+ * remain usable. After {@link #close()} no refresh still in flight publishes {@code OK}.
  * <p>
  * This implementation follows a clean architecture with:
  * <ul>
@@ -110,6 +122,21 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     private final AtomicReference<Jwks> currentJwksContent = new AtomicReference<>();
 
     /**
+     * Lifecycle monitor. {@link #close()} marks the loader closed and resets it while holding this
+     * lock; every key installation, status publication and refresh scheduling holds it too and is
+     * skipped once {@link #closed} is set. This makes "not closed" and "publish {@code OK}" one
+     * atomic step, so a refresh that is still in flight when the loader closes cannot re-publish
+     * {@code OK}.
+     */
+    private final ReentrantLock lifecycleLock = new ReentrantLock();
+
+    /**
+     * Set by {@link #close()}, cleared when {@link #initJWKSLoader(SecurityEventCounter)} starts a
+     * new initialization. Guarded by {@link #lifecycleLock}.
+     */
+    private boolean closed;
+
+    /**
      * Constructor using HttpJwksLoaderConfig.
      * Simple constructor with no I/O operations - all loading happens asynchronously in initJWKSLoader.
      *
@@ -135,71 +162,102 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         this.egressPolicy = egressPolicy;
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Idempotent and race-free: the caller first reserves an uncompleted future by winning the
+     * {@code initFuture} compare-and-set, and only the winner starts the asynchronous initialization,
+     * whose outcome (including an exceptional one) completes the reserved future. Every concurrent or
+     * later caller receives the same future and starts no work, so at most one initial fetch and one
+     * background refresh task are started per initialization. Winning the reservation also clears a
+     * previous {@link #close()}, so a closed loader can be initialized again.
+     */
     @Override
     public CompletableFuture<LoaderStatus> initJWKSLoader(SecurityEventCounter counter) {
         this.securityEventCounter = counter;
 
-        // Idempotency guard: if already initialized or loading, return existing future
-        CompletableFuture<LoaderStatus> existing = initFuture.get();
-        if (existing != null) {
-            LOGGER.debug("initJWKSLoader already called, returning existing future (status: %s)", status.get());
-            return existing;
+        // Claim before acting (V-16): reserve the future first, start the work only if we won.
+        CompletableFuture<LoaderStatus> reserved = new CompletableFuture<>();
+        while (!initFuture.compareAndSet(null, reserved)) {
+            CompletableFuture<LoaderStatus> existing = initFuture.get();
+            if (existing != null) {
+                LOGGER.debug("initJWKSLoader already called, returning existing future (status: %s)", status.get());
+                return existing;
+            }
+            // A concurrent close() reset the reservation between the failed CAS and the read; retry.
         }
 
-        // Execute initialization asynchronously
-        CompletableFuture<LoaderStatus> future = CompletableFuture.supplyAsync(() -> {
-            status.set(LoaderStatus.LOADING);
+        lifecycleLock.lock();
+        try {
+            closed = false;
+        } finally {
+            lifecycleLock.unlock();
+        }
 
-            // Resolve the adapter (may involve well-known discovery)
-            Optional<HttpAdapter<Jwks>> adapterOpt = resolveJWKSAdapter();
-            if (adapterOpt.isEmpty()) {
-                return handleAdapterResolutionFailure();
+        CompletableFuture.supplyAsync(this::initialize).whenComplete((loaderStatus, failure) -> {
+            if (failure != null) {
+                reserved.completeExceptionally(failure);
+            } else {
+                reserved.complete(loaderStatus);
             }
+        });
+        return reserved;
+    }
 
-            HttpAdapter<Jwks> adapter = adapterOpt.get();
-            httpAdapter.set(adapter);
+    /**
+     * Initialization body, run asynchronously by the single winner of
+     * {@link #initJWKSLoader(SecurityEventCounter)}: resolves the adapter, performs the initial fetch,
+     * starts the background refresh when enabled and publishes the resulting status.
+     *
+     * @return the status this initialization reached
+     */
+    private LoaderStatus initialize() {
+        publishStatus(LoaderStatus.LOADING);
 
-            // Load JWKS via HttpAdapter (blocking for initialization)
-            HttpResult<Jwks> result = adapter.getBlocking();
+        // Resolve the adapter (may involve well-known discovery)
+        AdapterResolution resolution = resolveJWKSAdapter();
+        HttpAdapter<Jwks> adapter = resolution.adapter();
+        if (adapter == null) {
+            return handleAdapterResolutionFailure(resolution);
+        }
+        httpAdapter.set(adapter);
 
-            // Start background refresh if configured (regardless of initial load status to enable retries)
-            boolean backgroundRefreshEnabled = config.isBackgroundRefreshEnabled();
-            if (backgroundRefreshEnabled) {
-                startBackgroundRefresh();
-            }
+        // Load JWKS via HttpAdapter (blocking for initialization)
+        HttpResult<Jwks> result = adapter.getBlocking();
 
-            if (result.isSuccess()) {
-                result.getContent().ifPresent(this::updateKeys);
+        // Start background refresh if configured (regardless of initial load status to enable retries)
+        boolean backgroundRefreshEnabled = config.isBackgroundRefreshEnabled();
+        if (backgroundRefreshEnabled) {
+            startBackgroundRefresh();
+        }
 
-                // Log successful HTTP load
-                LOGGER.info(INFO.JWKS_LOADED, getResolvedIssuer());
-
-                status.set(LoaderStatus.OK);
+        if (result.isSuccess()) {
+            if (installKeysAndPublishOk(result.getContent().orElse(null), true)) {
                 return LoaderStatus.OK;
             }
-
-            // Load failed - log error
+        } else {
             LOGGER.error(ERROR.JWKS_LOAD_FAILED, result.getErrorMessage().orElse("Unknown error"), getResolvedIssuer());
-
-            // If background refresh is enabled, keep status as UNDEFINED to allow retries
-            // Otherwise set to ERROR for permanent failure
-            LoaderStatus finalStatus = backgroundRefreshEnabled ? LoaderStatus.UNDEFINED : LoaderStatus.ERROR;
-            status.set(finalStatus);
-            return finalStatus;
-        });
-
-        // Store the future atomically; if another thread beat us, return theirs
-        if (initFuture.compareAndSet(null, future)) {
-            return future;
         }
-        return initFuture.get();
+
+        // Failed load (HTTP failure or no usable keys): UNDEFINED keeps the loader retrying through
+        // the background refresh, ERROR marks a permanent failure when no refresh will run.
+        LoaderStatus finalStatus = backgroundRefreshEnabled ? LoaderStatus.UNDEFINED : LoaderStatus.ERROR;
+        publishStatus(finalStatus);
+        return finalStatus;
     }
 
     /**
      * Handles the case where JWKS adapter resolution failed (well-known discovery or HTTP handler).
+     * <p>
+     * A retryable well-known discovery failure with background refresh enabled leaves the status
+     * {@link LoaderStatus#UNDEFINED} and schedules the background refresh, which re-attempts the
+     * discovery. Every other failure (a security rejection, or any failure without background
+     * refresh) is a terminal {@link LoaderStatus#ERROR} and schedules nothing.
+     *
+     * @param resolution the failed resolution
+     * @return the status this initialization reached
      */
-    private LoaderStatus handleAdapterResolutionFailure() {
-        status.set(LoaderStatus.ERROR);
+    private LoaderStatus handleAdapterResolutionFailure(AdapterResolution resolution) {
         boolean isWellKnownFailure = config.getWellKnownConfig() != null;
         String errorDetail = isWellKnownFailure
                 ? "Well-known discovery failed"
@@ -209,6 +267,13 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
         }
         LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, errorDetail, getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
+
+        if (resolution.retryable() && config.isBackgroundRefreshEnabled()) {
+            publishStatus(LoaderStatus.UNDEFINED);
+            startBackgroundRefresh();
+            return LoaderStatus.UNDEFINED;
+        }
+        publishStatus(LoaderStatus.ERROR);
         return LoaderStatus.ERROR;
     }
 
@@ -217,9 +282,11 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * For well-known: performs discovery to get JWKS URL and validates issuer
      * For direct: uses the configured HTTP handler
      *
-     * @return Optional containing the adapter, or empty if resolution failed
+     * @return the resolution: the adapter on success; on failure no adapter, flagged retryable when
+     *         the well-known discovery yielded no JWKS URI (a transient condition) and not retryable
+     *         for a security rejection (issuer mismatch, absent issuer, egress block)
      */
-    private Optional<HttpAdapter<Jwks>> resolveJWKSAdapter() {
+    private AdapterResolution resolveJWKSAdapter() {
         HttpHandler handler;
 
         if (config.getWellKnownConfig() != null) {
@@ -229,7 +296,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             // This call may block but we're in async context
             Optional<String> jwksUri = resolver.getJwksUri();
             if (jwksUri.isEmpty()) {
-                return Optional.empty();
+                return AdapterResolution.RETRYABLE_FAILURE;
             }
 
             // Resolve issuer from well-known document
@@ -238,7 +305,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
             Optional<String> issuer = resolveIssuer(discoveredIssuer.orElse(null), configuredIssuer, securityEventCounter);
             if (issuer.isEmpty()) {
-                return Optional.empty();
+                return AdapterResolution.REJECTED;
             }
             resolvedIssuerIdentifier.set(issuer.get());
 
@@ -262,7 +329,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         } catch (TransportException e) {
             LOGGER.error(e, ERROR.JWKS_INITIALIZATION_FAILED, e.getMessage(),
                     getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
-            return Optional.empty();
+            return AdapterResolution.REJECTED;
         }
 
         // Create base adapter with ETag caching
@@ -273,7 +340,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                 .build();
 
         // Wrap with retry behavior
-        return Optional.of(ResilientHttpAdapter.wrap(baseAdapter, config.getRetryConfig()));
+        return new AdapterResolution(ResilientHttpAdapter.wrap(baseAdapter, config.getRetryConfig()), false);
     }
 
     @Override
@@ -339,12 +406,67 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         return Optional.ofNullable(config.getIssuerIdentifier());
     }
 
-    private void updateKeys(Jwks newJwks) {
+    /**
+     * Installs the keys of a freshly fetched JWKS and publishes {@link LoaderStatus#OK} when a usable
+     * key set is installed, as one atomic step under {@link #lifecycleLock}. Nothing is installed or
+     * published once the loader is closed.
+     *
+     * @param newJwks          the fetched JWKS, {@code null} when the response carried no content
+     *                         (counts as not usable)
+     * @param logInitialLoad   whether a successful outcome is logged as the initial load
+     * @return {@code true} if a usable key set is installed and {@code OK} was published
+     */
+    private boolean installKeysAndPublishOk(@Nullable Jwks newJwks, boolean logInitialLoad) {
+        lifecycleLock.lock();
+        try {
+            if (closed || newJwks == null || !updateKeys(newJwks)) {
+                return false;
+            }
+            if (logInitialLoad) {
+                LOGGER.info(INFO.JWKS_LOADED, getResolvedIssuer());
+            }
+            status.set(LoaderStatus.OK);
+            return true;
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    /**
+     * Publishes a status unless the loader has been closed, so a closed loader stays
+     * {@link LoaderStatus#UNDEFINED}.
+     *
+     * @param newStatus the status to publish
+     */
+    private void publishStatus(LoaderStatus newStatus) {
+        lifecycleLock.lock();
+        try {
+            if (!closed) {
+                status.set(newStatus);
+            }
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    /**
+     * Installs the key set of the given JWKS if it is usable.
+     * <p>
+     * A JWKS whose content equals the installed one is not re-parsed. A JWKS that yields no usable key
+     * never replaces the installed key set (L9): the current keys stay active and the content
+     * reference is left unchanged so the next refresh retries.
+     *
+     * @param newJwks the fetched JWKS
+     * @return {@code true} if a usable key set is installed after this call — either installed by
+     *         this call or, for unchanged content, already installed; {@code false} if the JWKS
+     *         yielded no usable key
+     */
+    private boolean updateKeys(Jwks newJwks) {
         // Check if content has actually changed (Issue #110)
         Jwks currentJwks = currentJwksContent.get();
         if (currentJwks != null && currentJwks.equals(newJwks)) {
             LOGGER.debug("JWKS content unchanged, skipping key rotation");
-            return; // Content unchanged, no need to update
+            return currentKeys.get() != null;
         }
 
         JWKSKeyLoader newLoader = JWKSKeyLoader.builder()
@@ -358,7 +480,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         // unchanged so the next scheduled refresh retries against the same content.
         if (newLoader.getLoaderStatus() != LoaderStatus.OK) {
             LOGGER.warn(WARN.JWKS_REFRESH_RETURNED_NO_KEYS, getResolvedIssuer());
-            return;
+            return false;
         }
 
         // Content has changed and the new key set is usable — commit the reference.
@@ -384,14 +506,27 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
         // Log keys update
         LOGGER.info(INFO.JWKS_KEYS_UPDATED, status.get());
+        return true;
     }
 
+    /**
+     * Schedules the background refresh, unless the loader has been closed in the meantime (an
+     * initialization still in flight when {@link #close()} ran must not leave a running task behind).
+     */
     private void startBackgroundRefresh() {
-        refreshTask.set(config.getScheduledExecutorService().scheduleAtFixedRate(
-                this::performBackgroundRefresh,
-                config.getRefreshIntervalSeconds(),
-                config.getRefreshIntervalSeconds(),
-                TimeUnit.SECONDS));
+        lifecycleLock.lock();
+        try {
+            if (closed) {
+                return;
+            }
+            refreshTask.set(config.getScheduledExecutorService().scheduleAtFixedRate(
+                    this::performBackgroundRefresh,
+                    config.getRefreshIntervalSeconds(),
+                    config.getRefreshIntervalSeconds(),
+                    TimeUnit.SECONDS));
+        } finally {
+            lifecycleLock.unlock();
+        }
 
         LOGGER.info(INFO.JWKS_BACKGROUND_REFRESH_STARTED, config.getRefreshIntervalSeconds());
     }
@@ -417,6 +552,16 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * Executes one background refresh cycle: re-validates SSRF egress against the resolved JWKS URI,
      * fetches the JWKS, and rotates keys on success.
      * <p>
+     * Status contract: a cycle that installs a usable key set publishes {@link LoaderStatus#OK}, which
+     * lets a loader whose first load failed recover. A failed cycle never downgrades an existing
+     * {@code OK}, since the installed keys remain usable. Once the loader is closed, a cycle that is
+     * still in flight neither installs keys nor publishes {@code OK}.
+     * <p>
+     * When no adapter is available because the initial well-known discovery failed transiently, the
+     * cycle re-attempts the discovery and, on success, continues with the fetch in the same cycle. A
+     * security rejection on that re-attempt is terminal: the status becomes {@link LoaderStatus#ERROR}
+     * and the refresh task is cancelled.
+     * <p>
      * The egress re-check (C1 follow-up) is the crux: the cached {@link HttpAdapter} is reused across
      * every scheduled refresh, so without re-resolving and re-checking the fetch URI here, a DNS answer
      * that rebinds an initially-public host into an internal/loopback/metadata range after the first
@@ -430,8 +575,10 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         try {
             HttpAdapter<Jwks> adapter = httpAdapter.get();
             if (adapter == null) {
-                LOGGER.warn(WARN.BACKGROUND_REFRESH_NO_HANDLER);
-                return;
+                adapter = reResolveAdapter();
+                if (adapter == null) {
+                    return;
+                }
             }
 
             // Re-validate egress on every refresh (C1 follow-up): reject a rebound host before fetching.
@@ -444,7 +591,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             HttpResult<Jwks> result = adapter.getBlocking();
 
             if (result.isSuccess()) {
-                result.getContent().ifPresent(this::updateKeys);
+                installKeysAndPublishOk(result.getContent().orElse(null), false);
             } else {
                 // Handle error (network, server, etc.)
                 String statusDesc = result.getErrorMessage()
@@ -468,22 +615,71 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         }
     }
 
+    /**
+     * Re-attempts the adapter resolution for a refresh cycle that found no adapter.
+     * <p>
+     * Only a well-known configuration can lack an adapter after initialization (its discovery failed
+     * transiently); in direct mode the cycle is skipped as before. A retryable failure is logged and
+     * leaves the status unchanged for the next cycle. A security rejection is terminal: the status
+     * becomes {@link LoaderStatus#ERROR} and the refresh task is cancelled, so the rejection is not
+     * re-evaluated (and not re-counted) on every cycle.
+     *
+     * @return the resolved adapter, already stored for later cycles, or {@code null} if this cycle has
+     *         nothing to fetch from
+     */
+    private @Nullable HttpAdapter<Jwks> reResolveAdapter() {
+        if (config.getWellKnownConfig() == null) {
+            LOGGER.warn(WARN.BACKGROUND_REFRESH_NO_HANDLER);
+            return null;
+        }
+        AdapterResolution resolution = resolveJWKSAdapter();
+        HttpAdapter<Jwks> adapter = resolution.adapter();
+        if (adapter != null) {
+            httpAdapter.set(adapter);
+            return adapter;
+        }
+        LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
+        if (!resolution.retryable()) {
+            publishStatus(LoaderStatus.ERROR);
+            ScheduledFuture<?> task = refreshTask.get();
+            if (task != null) {
+                task.cancel(false);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Stops the background refresh, releases a loader-owned executor and resets the loader to
+     * {@link LoaderStatus#UNDEFINED} with no installed keys.
+     * <p>
+     * The loader is marked closed and reset under the same lifecycle lock that guards every key
+     * installation and {@code OK} publication, so a refresh cycle still in flight cannot re-publish
+     * {@code OK} afterwards. A later {@link #initJWKSLoader(SecurityEventCounter)} starts a fresh
+     * initialization.
+     */
     @Override
     public void close() {
-        ScheduledFuture<?> task = refreshTask.get();
-        if (task != null) {
-            task.cancel(false);
+        lifecycleLock.lock();
+        try {
+            closed = true;
+            ScheduledFuture<?> task = refreshTask.get();
+            if (task != null) {
+                task.cancel(false);
+            }
+            if (config.isOwnsExecutor() && config.getScheduledExecutorService() != null) {
+                config.getScheduledExecutorService().shutdownNow();
+            }
+            currentKeys.set(null);
+            retiredKeys.clear();
+            httpAdapter.set(null);
+            jwksFetchUri.set(null);
+            currentJwksContent.set(null);
+            initFuture.set(null);
+            status.set(LoaderStatus.UNDEFINED);
+        } finally {
+            lifecycleLock.unlock();
         }
-        if (config.isOwnsExecutor() && config.getScheduledExecutorService() != null) {
-            config.getScheduledExecutorService().shutdownNow();
-        }
-        currentKeys.set(null);
-        retiredKeys.clear();
-        httpAdapter.set(null);
-        jwksFetchUri.set(null);
-        currentJwksContent.set(null);
-        initFuture.set(null);
-        status.set(LoaderStatus.UNDEFINED);
     }
 
     /**
@@ -595,5 +791,19 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * Private record to hold retired key sets with their retirement timestamp.
      */
     private record RetiredKeySet(JWKSKeyLoader loader, Instant retiredAt) {
+    }
+
+    /**
+     * Outcome of {@link #resolveJWKSAdapter()}.
+     *
+     * @param adapter   the resolved adapter, {@code null} if the resolution failed
+     * @param retryable for a failed resolution, whether the failure is transient (the well-known
+     *                  discovery yielded no JWKS URI) and may succeed on a later refresh cycle, as
+     *                  opposed to a security rejection
+     */
+    private record AdapterResolution(@Nullable HttpAdapter<Jwks> adapter, boolean retryable) {
+
+        static final AdapterResolution RETRYABLE_FAILURE = new AdapterResolution(null, true);
+        static final AdapterResolution REJECTED = new AdapterResolution(null, false);
     }
 }
