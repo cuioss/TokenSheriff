@@ -1,0 +1,11 @@
+{
+  "id": "PLAN-16",
+  "slug": "keycloak-it-assertions",
+  "workstream": "WS-03",
+  "status": "staged",
+  "lane": "plan-marshall",
+  "plan_marshall_plan_id": "",
+  "pr": "",
+  "landing": "",
+  "seq": 16
+}

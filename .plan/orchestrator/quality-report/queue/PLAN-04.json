@@ -1,0 +1,11 @@
+{
+  "id": "PLAN-04",
+  "slug": "quarkus-startup-health",
+  "workstream": "WS-03",
+  "status": "staged",
+  "lane": "plan-marshall",
+  "plan_marshall_plan_id": "",
+  "pr": "",
+  "landing": "",
+  "seq": 4
+}

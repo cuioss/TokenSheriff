@@ -28,6 +28,11 @@ __pycache__/
 !.plan/marshal.json
 !.plan/project-architecture/
 !.plan/plugin-doctor.yml
+# Orchestrator epic ledgers are git-tracked; only their logs/ stay local
+!.plan/orchestrator/
+!.plan/archived-orchestrators/
+.plan/orchestrator/*/logs/
+.plan/archived-orchestrators/*/logs/
 .plan/local/worktrees/
 
 !.plan/project-structure.toon
