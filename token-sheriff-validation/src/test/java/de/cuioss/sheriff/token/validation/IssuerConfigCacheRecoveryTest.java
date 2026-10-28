@@ -36,7 +36,6 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
@@ -46,9 +45,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Verifies that an issuer whose initial JWKS load fails becomes resolvable again
@@ -131,7 +128,7 @@ class IssuerConfigCacheRecoveryTest {
 
     @Test
     @DisplayName("Token validates without restart once a real HttpJwksLoader recovers from a failed first load")
-    void recoversIssuerThroughRealHttpJwksLoader() throws IOException {
+    void recoversIssuerThroughRealHttpJwksLoader() throws Exception {
         JwksResolveDispatcher jwksDispatcher = new JwksResolveDispatcher();
         jwksDispatcher.returnError();
         try (MockWebServer server = new MockWebServer()) {
@@ -150,12 +147,12 @@ class IssuerConfigCacheRecoveryTest {
             String token = signedAccessToken();
 
             try (TokenValidator validator = TokenValidator.builder()
-                    .issuerConfig(IssuerConfig.builder()
-                            .issuerIdentifier(ISSUER)
-                            .expectedAudience(AUDIENCE)
-                            .jwksLoader(loader)
-                            .build())
-                    .build()) {
+                         .issuerConfig(IssuerConfig.builder()
+                                 .issuerIdentifier(ISSUER)
+                                 .expectedAudience(AUDIENCE)
+                                 .jwksLoader(loader)
+                                 .build())
+                         .build()) {
                 AccessTokenRequest request = AccessTokenRequest.of(token);
                 assertThrows(TokenValidationException.class, () -> validator.createAccessToken(request),
                         "the token must be rejected while the IdP serves no keys");
