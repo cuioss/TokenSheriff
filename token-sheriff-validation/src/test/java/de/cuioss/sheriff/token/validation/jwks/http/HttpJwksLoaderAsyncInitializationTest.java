@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Handler;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -341,7 +342,7 @@ class HttpJwksLoaderAsyncInitializationTest {
             AtomicInteger failureLogs = new AtomicInteger();
             Handler closeOnSecondFailureLog = new Handler() {
                 @Override
-                public void publish(java.util.logging.LogRecord logRecord) {
+                public void publish(LogRecord logRecord) {
                     String message = logRecord.getMessage();
                     if (message != null && message.contains(failureIdentifier) && failureLogs.incrementAndGet() == 2) {
                         loader.close();
