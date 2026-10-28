@@ -211,15 +211,15 @@ class RotationReuseDetectionTest {
         void shouldTrackCurrentAndSupersededAcrossRotationChain() {
             List<String> tokens = distinctTokens(3);
             String unknown = Generators.letterStrings(20, 40).next() + "-unknown";
-            var family = new RefreshTokenFamily(tokens.get(0));
+            var family = new RefreshTokenFamily(tokens.getFirst());
 
-            family.rotate(tokens.get(0), tokens.get(1));
+            family.rotate(tokens.getFirst(), tokens.get(1));
             family.rotate(tokens.get(1), tokens.get(2));
 
             assertAll("family state after two rotations",
                     () -> assertTrue(family.isCurrent(tokens.get(2)), "the last rotated token is current"),
-                    () -> assertFalse(family.isCurrent(tokens.get(0)), "a superseded token is not current"),
-                    () -> assertTrue(family.isSuperseded(tokens.get(0)), "the initial token is superseded"),
+                    () -> assertFalse(family.isCurrent(tokens.getFirst()), "a superseded token is not current"),
+                    () -> assertTrue(family.isSuperseded(tokens.getFirst()), "the initial token is superseded"),
                     () -> assertTrue(family.isSuperseded(tokens.get(1)), "the middle token is superseded"),
                     () -> assertFalse(family.isSuperseded(tokens.get(2)), "the current token is not superseded"),
                     () -> assertFalse(family.isSuperseded(unknown), "an unknown token is not superseded"),
@@ -242,8 +242,8 @@ class RotationReuseDetectionTest {
             List<String> tokens = distinctTokens(4);
             String newGrant = tokens.get(2);
             String successorRotation = tokens.get(3);
-            var family = new RefreshTokenFamily(tokens.get(0));
-            family.rotate(tokens.get(0), tokens.get(1));
+            var family = new RefreshTokenFamily(tokens.getFirst());
+            family.rotate(tokens.getFirst(), tokens.get(1));
 
             var successor = family.reseededWith(newGrant);
 
@@ -251,7 +251,7 @@ class RotationReuseDetectionTest {
                     () -> assertTrue(successor.isCurrent(newGrant), "the new grant is the successor's current"),
                     () -> assertTrue(successor.isSuperseded(tokens.get(1)),
                             "the predecessor's current token is superseded in the successor"),
-                    () -> assertTrue(successor.isSuperseded(tokens.get(0)),
+                    () -> assertTrue(successor.isSuperseded(tokens.getFirst()),
                             "the predecessor's history is carried forward"),
                     () -> assertFalse(successor.isRevoked(), "the successor starts non-revoked"),
                     () -> assertTrue(family.isCurrent(tokens.get(1)), "the predecessor is left untouched"),
@@ -269,12 +269,12 @@ class RotationReuseDetectionTest {
         @DisplayName("Should treat a replay of a predecessor-family token as reuse on the successor")
         void shouldDetectPredecessorReplayOnSuccessor() {
             List<String> tokens = distinctTokens(4);
-            var family = new RefreshTokenFamily(tokens.get(0));
-            family.rotate(tokens.get(0), tokens.get(1));
+            var family = new RefreshTokenFamily(tokens.getFirst());
+            family.rotate(tokens.getFirst(), tokens.get(1));
             var successor = family.reseededWith(tokens.get(2));
 
             var thrown = assertThrows(RefreshTokenFamilyRevokedException.class,
-                    () -> successor.rotate(tokens.get(0), tokens.get(3)),
+                    () -> successor.rotate(tokens.getFirst(), tokens.get(3)),
                     "a token the predecessor superseded must be reuse on the successor");
 
             assertAll("the successor fails closed",
@@ -287,13 +287,13 @@ class RotationReuseDetectionTest {
         @DisplayName("Should refuse to reseed with a token the family already knows or a blank token")
         void shouldRefuseReseedWithKnownToken() {
             List<String> tokens = distinctTokens(2);
-            var family = new RefreshTokenFamily(tokens.get(0));
-            family.rotate(tokens.get(0), tokens.get(1));
+            var family = new RefreshTokenFamily(tokens.getFirst());
+            family.rotate(tokens.getFirst(), tokens.get(1));
 
             assertAll("a known token is never a new grant",
                     () -> assertThrows(IllegalArgumentException.class, () -> family.reseededWith(tokens.get(1)),
                             "the current token must not reseed"),
-                    () -> assertThrows(IllegalArgumentException.class, () -> family.reseededWith(tokens.get(0)),
+                    () -> assertThrows(IllegalArgumentException.class, () -> family.reseededWith(tokens.getFirst()),
                             "a superseded token must not reseed"),
                     () -> assertThrows(IllegalArgumentException.class, () -> family.reseededWith("  ")),
                     () -> assertThrows(NullPointerException.class, () -> family.reseededWith(null)),
@@ -304,17 +304,17 @@ class RotationReuseDetectionTest {
         @DisplayName("Should keep exactly the newest sixteen superseded tokens, dropping the oldest first")
         void shouldBoundHistoryDroppingOldestFirst() {
             List<String> tokens = distinctTokens(HISTORY_BOUND + 2);
-            var family = new RefreshTokenFamily(tokens.get(0));
+            var family = new RefreshTokenFamily(tokens.getFirst());
             for (int i = 0; i < HISTORY_BOUND; i++) {
                 family.rotate(tokens.get(i), tokens.get(i + 1));
             }
-            assertTrue(family.isSuperseded(tokens.get(0)),
+            assertTrue(family.isSuperseded(tokens.getFirst()),
                     "at exactly the bound every superseded token is still remembered");
 
             family.rotate(tokens.get(HISTORY_BOUND), tokens.get(HISTORY_BOUND + 1));
 
             assertAll("one past the bound",
-                    () -> assertFalse(family.isSuperseded(tokens.get(0)), "the oldest digest is dropped first"),
+                    () -> assertFalse(family.isSuperseded(tokens.getFirst()), "the oldest digest is dropped first"),
                     () -> assertTrue(family.isSuperseded(tokens.get(1)), "the next-oldest digest is kept"),
                     () -> assertTrue(family.isSuperseded(tokens.get(HISTORY_BOUND)),
                             "the newest superseded digest is kept"),
@@ -325,7 +325,7 @@ class RotationReuseDetectionTest {
         @DisplayName("Should bound the reseeded successor's history, dropping the predecessor's oldest token")
         void shouldBoundReseededHistory() {
             List<String> tokens = distinctTokens(HISTORY_BOUND + 2);
-            var family = new RefreshTokenFamily(tokens.get(0));
+            var family = new RefreshTokenFamily(tokens.getFirst());
             for (int i = 0; i < HISTORY_BOUND; i++) {
                 family.rotate(tokens.get(i), tokens.get(i + 1));
             }
@@ -333,12 +333,12 @@ class RotationReuseDetectionTest {
             var successor = family.reseededWith(tokens.get(HISTORY_BOUND + 1));
 
             assertAll("the successor's inherited history is bounded",
-                    () -> assertFalse(successor.isSuperseded(tokens.get(0)),
+                    () -> assertFalse(successor.isSuperseded(tokens.getFirst()),
                             "the predecessor's oldest token ages out when its current token is appended"),
                     () -> assertTrue(successor.isSuperseded(tokens.get(1))),
                     () -> assertTrue(successor.isSuperseded(tokens.get(HISTORY_BOUND)),
                             "the predecessor's current token is remembered"),
-                    () -> assertTrue(family.isSuperseded(tokens.get(0)),
+                    () -> assertTrue(family.isSuperseded(tokens.getFirst()),
                             "the predecessor's own history is unchanged"));
         }
 
@@ -346,9 +346,9 @@ class RotationReuseDetectionTest {
         @DisplayName("Should let a revoked family's successor accept the new grant")
         void shouldReseedRevokedFamily() {
             List<String> tokens = distinctTokens(5);
-            var family = new RefreshTokenFamily(tokens.get(0));
-            family.rotate(tokens.get(0), tokens.get(1));
-            assertThrows(RefreshTokenFamilyRevokedException.class, () -> family.rotate(tokens.get(0), tokens.get(2)));
+            var family = new RefreshTokenFamily(tokens.getFirst());
+            family.rotate(tokens.getFirst(), tokens.get(1));
+            assertThrows(RefreshTokenFamilyRevokedException.class, () -> family.rotate(tokens.getFirst(), tokens.get(2)));
             assertTrue(family.isCurrent(tokens.get(1)),
                     "a revoked family still reports the token it was revoked on as current");
 
