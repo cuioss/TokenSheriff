@@ -242,11 +242,14 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     /**
      * Initialization body, run asynchronously by the single winner of
      * {@link #initJWKSLoader(SecurityEventCounter)}: resolves the adapter, performs the initial fetch,
-     * starts the background refresh when enabled and publishes the resulting status.
+     * starts the background refresh when enabled and publishes the resulting status. A failed initial
+     * fetch does not overwrite an {@link LoaderStatus#OK} that a background refresh cycle published
+     * in the meantime (see {@link #publishFailedLoadStatus(LoaderStatus, long)}).
      *
      * @param startEpoch the {@link #epoch} this initialization was claimed under; once a
      *                   {@link #close()} moved it on, this initialization publishes and schedules nothing
-     * @return the status this initialization reached
+     * @return the status in effect when this initialization finished, which is what
+     *         {@link #getLoaderStatus()} reports while the initialization is still live
      */
     private LoaderStatus initialize(long startEpoch) {
         publishStatus(LoaderStatus.LOADING, startEpoch);
@@ -277,10 +280,11 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         }
 
         // Failed load (HTTP failure or no usable keys): UNDEFINED keeps the loader retrying through
-        // the background refresh, ERROR marks a permanent failure when no refresh will run.
-        LoaderStatus finalStatus = backgroundRefreshEnabled ? LoaderStatus.UNDEFINED : LoaderStatus.ERROR;
-        publishStatus(finalStatus, startEpoch);
-        return finalStatus;
+        // the background refresh, ERROR marks a permanent failure when no refresh will run. The refresh
+        // is already scheduled at this point, so a cycle may have installed keys and published OK in
+        // the meantime; that OK is kept.
+        LoaderStatus failedStatus = backgroundRefreshEnabled ? LoaderStatus.UNDEFINED : LoaderStatus.ERROR;
+        return publishFailedLoadStatus(failedStatus, startEpoch);
     }
 
     /**
@@ -484,6 +488,37 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             if (isLive(startEpoch)) {
                 status.set(newStatus);
             }
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    /**
+     * Publishes the status of a failed initial load, as one atomic step under {@link #lifecycleLock}.
+     * <p>
+     * The background refresh is scheduled before the failed-load status is published, so a refresh
+     * cycle may already have installed a usable key set and published {@link LoaderStatus#OK}. That
+     * {@code OK} is kept rather than overwritten: only {@link #installKeysAndPublishOk} ever sets
+     * {@code OK}, so keeping it never reports a loader without usable keys as {@code OK}. Nothing is
+     * published once the loader is closed or the caller's epoch has passed.
+     *
+     * @param failedStatus the status of the failed load, {@link LoaderStatus#UNDEFINED} or
+     *                     {@link LoaderStatus#ERROR}
+     * @param startEpoch   the {@link #epoch} the calling initialization was claimed under
+     * @return the status in effect for this initialization: {@code OK} when a refresh cycle installed
+     *         usable keys first, otherwise {@code failedStatus}
+     */
+    private LoaderStatus publishFailedLoadStatus(LoaderStatus failedStatus, long startEpoch) {
+        lifecycleLock.lock();
+        try {
+            if (!isLive(startEpoch)) {
+                return failedStatus;
+            }
+            if (status.get() == LoaderStatus.OK) {
+                return LoaderStatus.OK;
+            }
+            status.set(failedStatus);
+            return failedStatus;
         } finally {
             lifecycleLock.unlock();
         }

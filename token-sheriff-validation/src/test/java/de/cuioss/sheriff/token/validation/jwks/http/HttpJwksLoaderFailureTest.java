@@ -43,7 +43,10 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -260,12 +263,44 @@ class HttpJwksLoaderFailureTest {
         void unchangedContentRefreshKeepsOk(URIBuilder uriBuilder) {
             try (HttpJwksLoader loader = new HttpJwksLoader(config(uriBuilder, 60))) {
                 assertEquals(LoaderStatus.OK, loader.initJWKSLoader(securityEventCounter).join());
+                int callsBeforeRefresh = moduleDispatcher.getCallCounter();
 
                 loader.performBackgroundRefresh();
 
                 assertAll("unchanged content keeps the usable key set",
+                        () -> assertTrue(moduleDispatcher.getCallCounter() > callsBeforeRefresh,
+                                "the refresh must have fetched the JWKS again"),
                         () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
                         () -> assertTrue(loader.getKeyInfo(TEST_KID).isPresent()));
+            }
+        }
+
+        @Test
+        @DisplayName("A refresh that installs keys before the failed initial load publishes its status keeps OK")
+        void refreshInstallingKeysBeforeFailedLoadStatusKeepsOk(URIBuilder uriBuilder) {
+            moduleDispatcher.returnError();
+            // Runs the first refresh cycle synchronously when it is scheduled, i.e. after the failed
+            // initial fetch and before initialization publishes the failed-load status; the IdP has
+            // recovered by then.
+            RefreshOnScheduleExecutor executor = new RefreshOnScheduleExecutor(moduleDispatcher::returnDefault);
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .jwksUrl(uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString())
+                    .issuerIdentifier("test-issuer")
+                    .retryConfig(fastRetry)
+                    .refreshIntervalSeconds(60)
+                    .scheduledExecutorService(executor)
+                    .build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                LoaderStatus initStatus = loader.initJWKSLoader(securityEventCounter).join();
+
+                assertAll("the OK installed by the refresh is not overwritten by the failed initial load",
+                        () -> assertEquals(1, executor.getImmediateRuns(), "the refresh ran during initialization"),
+                        () -> assertEquals(LoaderStatus.OK, initStatus, "the init future reports the status in effect"),
+                        () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                        () -> assertTrue(loader.getKeyInfo(TEST_KID).isPresent()));
+            } finally {
+                executor.shutdownNow();
             }
         }
 
@@ -332,6 +367,34 @@ class HttpJwksLoaderFailureTest {
             assertAll("a refresh in flight during close() must not re-publish OK",
                     () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
                     () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed after close()"));
+        }
+    }
+
+    /**
+     * Scheduled executor that, when a fixed-rate task is scheduled, first runs the given preparation and
+     * then the task itself once on the scheduling thread, before scheduling it as usual. Lets a test
+     * place one refresh cycle deterministically inside the initialization that schedules it.
+     */
+    private static final class RefreshOnScheduleExecutor extends ScheduledThreadPoolExecutor {
+
+        private final Runnable beforeImmediateRun;
+        private final AtomicInteger immediateRuns = new AtomicInteger();
+
+        RefreshOnScheduleExecutor(Runnable beforeImmediateRun) {
+            super(1);
+            this.beforeImmediateRun = beforeImmediateRun;
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
+            beforeImmediateRun.run();
+            command.run();
+            immediateRuns.incrementAndGet();
+            return super.scheduleAtFixedRate(command, initialDelay, period, unit);
+        }
+
+        int getImmediateRuns() {
+            return immediateRuns.get();
         }
     }
 }
