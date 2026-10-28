@@ -168,20 +168,25 @@ public class TokenLifecycleManager {
 
     /**
      * Striped per-session locks that make the two writes of {@link #store} — the token slot in the store
-     * and the family slot in {@link #families} — one unit with respect to other {@code store} calls and
-     * to {@link #captureHeldRefresh}. Without them, two concurrent grants for the same session can
-     * interleave so that the store ends up holding one grant while the family has the other as current,
-     * and the next refresh of the held, legitimate grant is read as reuse.
+     * and the family slot in {@link #families} — one unit with respect to other {@code store} calls, to
+     * {@link #captureHeldRefresh}, and to {@link #applyRefresh}. Without them, two concurrent grants for
+     * the same session can interleave so that the store ends up holding one grant while the family has
+     * the other as current, and the next refresh of the held, legitimate grant is read as reuse.
+     * {@code applyRefresh} holds the stripe across its atomic update <em>and</em> its fail-closed reuse
+     * teardown, because the store releases its key lock before that teardown runs: without the stripe a
+     * concurrent {@code store} could write a new grant in between, and the teardown would clear it.
      * <p>
      * A fixed array indexed by the session id's hash, rather than a per-session map, keeps memory
      * bounded and needs no cleanup; two sessions sharing a stripe only serialize, never conflict.
      * <p>
      * <strong>Lock order.</strong> A caller takes exactly one stripe and never nests two, so stripes
      * cannot deadlock with each other. The order is <em>stripe &rarr; store key &rarr; families</em> on
-     * the {@code store} and capture paths, and <em>store key &rarr; families</em> on the
-     * {@link #applyRefresh} path, which runs its family advance inside the store's atomic update and
-     * therefore must never take a stripe; equally, the capture must never call {@code applyRefresh} while
-     * holding one. Keeping both rules leaves the order acyclic.
+     * every path that takes a stripe — {@code store}, the capture, and {@code applyRefresh}. The stripe is
+     * always taken before the store's atomic update is entered and is never taken inside it, so no path
+     * acquires a stripe while holding a store key or the family map. The capture must never call
+     * {@code applyRefresh} while holding the stripe — {@link #doRefresh} releases it before the exchange
+     * and the apply — so an overridden {@code applyRefresh} that hands the call to another thread cannot
+     * block on a stripe its caller holds. Keeping both rules leaves the order acyclic.
      */
     private final ReentrantLock[] grantLocks = newGrantLocks();
 
@@ -282,10 +287,12 @@ public class TokenLifecycleManager {
      * <p>
      * When the bundle carries a refresh token, the session's rotation family is brought in line with it.
      * The token write and the family update run under the session's grant lock, so they are atomic per
-     * session with respect to other {@code store} calls and to the refresh's read of the held token — two
-     * concurrent grants can never leave the store holding one and the family tracking the other. They are
-     * not atomic with respect to {@link #applyRefresh}, which never takes that lock; the refresh path's
-     * capture covers that writer by adopting and re-reading.
+     * session with respect to other {@code store} calls, to the refresh's read of the held token, and to
+     * {@link #applyRefresh}, which takes the same lock around its update and its fail-closed reuse
+     * teardown — two concurrent grants can never leave the store holding one and the family tracking the
+     * other, and a reuse refusal can never clear a grant stored while it was being torn down. Writers that
+     * bypass this manager, such as a {@link TokenStore} shared with another node, take no such lock; the
+     * refresh path's capture covers them by adopting and re-reading.
      * <ul>
      *   <li>no family tracks the session — a family is seeded with that token;</li>
      *   <li>the token is the family's current token or one it remembers as superseded — the family is
@@ -293,7 +300,9 @@ public class TokenLifecycleManager {
      *       stale refresh token is still reuse on the next refresh;</li>
      *   <li>otherwise the token is a new grant (a re-login or step-up) — the family is replaced by its
      *       {@linkplain RefreshTokenFamily#reseededWith(String) reseeded successor}, which starts at the
-     *       new token and remembers every token of the old family as superseded. A revoked family is
+     *       new token and remembers as superseded the old family's current token and the superseded tokens
+     *       it still holds, up to the fixed number of digests {@link RefreshTokenFamily} keeps — a token
+     *       already aged out of the old family's history is not carried over. A revoked family is
      *       replaced the same way, so a fresh login recovers a session a detected reuse had ended.</li>
      * </ul>
      *
@@ -440,6 +449,14 @@ public class TokenLifecycleManager {
         // the family advance are checked inside the same transform for the same reason: doing either
         // before the update would reopen the check-then-act window the atomic update exists to close.
         // The binding check runs first, so a refused binding never advances the family.
+        //
+        // The session's grant stripe is held across the update AND the reuse teardown below. The store
+        // releases its key lock when the transform throws, before the catch runs; without the stripe a
+        // concurrent store() could write a new grant in that window and the teardown would clear it.
+        // The stripe is taken before the update is entered and never inside the transform, so the
+        // stripe -> store key -> families order store() uses holds here too.
+        ReentrantLock grantLock = grantLockFor(sessionId);
+        grantLock.lock();
         try {
             return tokenStore.update(sessionId, current -> {
                 if (supersededByNewerGrant(sessionId, current, newRefreshToken)) {
@@ -455,6 +472,8 @@ public class TokenLifecycleManager {
             tokenStore.remove(sessionId);
             families.remove(sessionId);
             throw reuse;
+        } finally {
+            grantLock.unlock();
         }
     }
 
@@ -472,7 +491,8 @@ public class TokenLifecycleManager {
     /**
      * Advances the session's rotation family from {@code previousRefreshToken} (the token the store
      * held) to {@code newRefreshToken}; idempotent when the family already has it as current. Runs
-     * inside the store's atomic update, so the store &rarr; families lock order holds.
+     * inside the store's atomic update, which {@link #applyRefresh} enters holding the session's grant
+     * stripe, so the stripe &rarr; store key &rarr; families lock order holds.
      *
      * @throws RefreshTokenFamilyRevokedException if the family refuses the advance as reuse
      */
@@ -633,10 +653,11 @@ public class TokenLifecycleManager {
      * Reads the session's held refresh token and captures its rotation family as one consistent pair.
      * <p>
      * Each read-and-capture attempt runs under the session's grant lock, so it never observes a
-     * {@link #store} half applied. The store and the family map are nevertheless two slots, and writers
-     * that do not take that lock — {@link #applyRefresh}, or a {@link TokenStore} shared with another
-     * node — can still be seen half applied in either order. Either way a mismatched pair would make the
-     * exchange's rotation look like reuse and destroy the session the user just established:
+     * {@link #store} or {@link #applyRefresh} half applied. The store and the family map are nevertheless
+     * two slots, and writers that do not take that lock — a {@link TokenStore} shared with another node,
+     * or anything else that writes the store directly — can still be seen half applied in either order.
+     * Either way a mismatched pair would make the exchange's rotation look like reuse and destroy the
+     * session the user just established:
      * <ul>
      *   <li><strong>The grant is stored but its family is not reseeded yet.</strong> The read token is one
      *       the family has never heard of. That is the signature of a new grant, so the capture adopts it

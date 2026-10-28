@@ -286,9 +286,12 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
         ExecutorService pool = Executors.newSingleThreadExecutor();
         try {
             // The hook runs on the first store's thread, after its token write and before its family
-            // update. Only then is the second store started, so the crossing needs no timing assumption:
-            // without the grant lock the second store completes inside the gap; with it, it blocks until
-            // the first store is done and the bounded wait below simply times out.
+            // update, and only then starts the second store. This is a timing-bounded guard: the hook
+            // waits at most a bounded time for the second store. Without the grant lock the second store
+            // normally completes inside the gap and the test turns red; with it, it blocks until the first
+            // store is done and the bounded wait simply times out. The bound can only weaken the red
+            // check (a second store slower than the bound leaves a broken lock undetected), never make
+            // the green check flaky.
             racingStore.afterNextStore(() -> {
                 secondStore.set(pool.submit(() -> {
                     racingManager.store(session, bearerBundle(secondGrant, null));
@@ -363,6 +366,57 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
     }
 
     @Test
+    @DisplayName("Should keep a grant stored while an external applyRefresh tears the session down on reuse")
+    void shouldKeepGrantStoredDuringApplyRefreshReuseTeardown() throws Exception {
+        var racingStore = new RacingTokenStore();
+        var racingManager = new TokenLifecycleManager(racingStore, new RefreshScheduler());
+        String rt1 = token();
+        String rt2 = token();
+        String newGrant = token();
+        String replaySuccessor = token();
+        String nextSuccessor = token();
+        racingManager.store(session, bearerBundle(rt1, null));
+        racingManager.applyRefresh(session, token(), rt2, null, null, null);
+        // A stale re-store puts the superseded rt1 back, so the next applyRefresh rotating from it is reuse.
+        racingManager.store(session, bearerBundle(rt1, null));
+        var concurrentStoreReturned = new CountDownLatch(1);
+        var concurrentStore = new AtomicReference<Future<?>>();
+        var concurrentStoreInsideTeardown = new AtomicBoolean();
+
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            // The hook runs on the applyRefresh thread after the refused update has returned and before
+            // the reuse teardown clears the session, and only then starts a store() of a new grant. This
+            // is a timing-bounded guard: without the grant lock around the teardown the store normally
+            // completes inside the window and the teardown wipes the new grant; with it, the store blocks
+            // until the teardown is done and the bounded wait simply times out. The bound can only weaken
+            // the red check, never make the green check flaky.
+            racingStore.afterNextUpdate(() -> {
+                concurrentStore.set(pool.submit(() -> {
+                    racingManager.store(session, bearerBundle(newGrant, null));
+                    concurrentStoreReturned.countDown();
+                }));
+                concurrentStoreInsideTeardown.set(awaitBounded(concurrentStoreReturned));
+            });
+            String replayAccessToken = token();
+            assertThrows(RefreshTokenFamilyRevokedException.class,
+                    () -> racingManager.applyRefresh(session, replayAccessToken, replaySuccessor, null, null, null));
+            concurrentStore.get().get(10, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertEquals(Optional.of(newGrant), racingManager.get(session).map(StoredToken::refreshToken),
+                "the grant stored during the teardown survives it (store inside the teardown window: "
+                        + concurrentStoreInsideTeardown.get() + ")");
+        Optional<StoredToken> advanced = racingManager.applyRefresh(session, token(), nextSuccessor, null, null,
+                null);
+        assertEquals(Optional.of(nextSuccessor), advanced.map(StoredToken::refreshToken),
+                "the surviving grant has its own family, so rotating from it is not reuse");
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "Refresh token reuse detected");
+    }
+
+    @Test
     @DisplayName("Should store a bundle with no expiry when the refresh carries an absurd expires_in")
     void shouldStoreNoExpiryForAbsurdExpiresIn(URIBuilder uriBuilder) {
         ProviderMetadata metadata = metadata(uriBuilder);
@@ -426,14 +480,17 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
      * An in-memory store that runs one registered action right after the next {@code retrieve} has taken
      * its snapshot and before it returns — the point at which a re-login lands between a refresh reading
      * the held token and capturing its family — or right after the next {@code store} write has returned,
-     * the point between the manager's token write and its family update. Each action fires once, on the
-     * calling thread, so the race needs no timing assumption.
+     * the point between the manager's token write and its family update — or right after the next
+     * {@code update} has returned or thrown, the point between a refused applyRefresh transform and its
+     * fail-closed teardown. Each action fires once, on the calling thread, so the interleaving point is
+     * deterministic; only the concurrent-writer tests add a bounded wait on top of it.
      */
     private static final class RacingTokenStore implements TokenStore {
 
         private final InMemoryTokenStore delegate = new InMemoryTokenStore();
         private final AtomicReference<Runnable> afterNextRetrieve = new AtomicReference<>();
         private final AtomicReference<Runnable> afterNextStore = new AtomicReference<>();
+        private final AtomicReference<Runnable> afterNextUpdate = new AtomicReference<>();
 
         void afterNextRetrieve(Runnable action) {
             afterNextRetrieve.set(action);
@@ -441,6 +498,10 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
 
         void afterNextStore(Runnable action) {
             afterNextStore.set(action);
+        }
+
+        void afterNextUpdate(Runnable action) {
+            afterNextUpdate.set(action);
         }
 
         @Override
@@ -469,7 +530,14 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
 
         @Override
         public Optional<StoredToken> update(String sessionId, UnaryOperator<StoredToken> updater) {
-            return delegate.update(sessionId, updater);
+            try {
+                return delegate.update(sessionId, updater);
+            } finally {
+                Runnable action = afterNextUpdate.getAndSet(null);
+                if (action != null) {
+                    action.run();
+                }
+            }
         }
     }
 }
