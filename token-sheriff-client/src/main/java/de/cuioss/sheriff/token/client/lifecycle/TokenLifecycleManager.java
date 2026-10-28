@@ -486,8 +486,12 @@ public class TokenLifecycleManager {
             families.compute(sessionId, (key, existing) -> familyForGrant(existing, newRefreshToken));
             return;
         }
-        RefreshTokenFamily family = families.computeIfAbsent(sessionId,
-                key -> new RefreshTokenFamily(previousRefreshToken));
+        // A previous token the family has never seen is a grant that store() has written to the
+        // token store but not reseeded yet; it is adopted exactly as store() is about to adopt it, so the
+        // rotation below starts from a token the family knows. A superseded previous token is kept as
+        // it is and still reads as reuse.
+        RefreshTokenFamily family = families.compute(sessionId,
+                (key, existing) -> familyForGrant(existing, previousRefreshToken));
         if (!family.isCurrent(newRefreshToken)) {
             family.rotate(previousRefreshToken, newRefreshToken);
         }

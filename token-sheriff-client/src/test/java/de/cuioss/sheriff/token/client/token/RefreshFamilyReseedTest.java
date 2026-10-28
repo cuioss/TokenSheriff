@@ -318,6 +318,29 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
     }
 
     @Test
+    @DisplayName("Should adopt a stored-but-not-yet-reseeded grant when an external applyRefresh rotates from it")
+    void shouldAdoptGrantStoredBeforeFamilyReseedOnExternalApplyRefresh() {
+        var racingStore = new RacingTokenStore();
+        var racingManager = new TokenLifecycleManager(racingStore, new RefreshScheduler());
+        String rt1 = token();
+        String grant = token();
+        String rotated = token();
+        racingManager.store(session, bearerBundle(rt1, null));
+        // store() writes the token store first and reseeds the family second; an external applyRefresh
+        // running between the two sees the new grant held while its family is not reseeded yet.
+        racingStore.store(session, bearerBundle(grant, null));
+
+        Optional<StoredToken> applied = racingManager.applyRefresh(session, token(), rotated, null, null, null);
+
+        assertAll("the half-applied grant is adopted, then rotated, not read as a replay",
+                () -> assertEquals(Optional.of(rotated), applied.map(StoredToken::refreshToken)),
+                () -> assertEquals(Optional.of(rotated), racingManager.get(session).map(StoredToken::refreshToken),
+                        "the session survives with the rotated grant"),
+                () -> assertFalse(revocationClient.revokedAny(), "nothing is revoked"));
+        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, RefreshTokenFamily.class);
+    }
+
+    @Test
     @DisplayName("Should store a bundle with no expiry when the refresh carries an absurd expires_in")
     void shouldStoreNoExpiryForAbsurdExpiresIn(URIBuilder uriBuilder) {
         ProviderMetadata metadata = metadata(uriBuilder);
