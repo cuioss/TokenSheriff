@@ -184,7 +184,11 @@ public class TokenValidatorProducer {
         }
         // cui-rewrite:disable InvalidExceptionUsageRecipe
         // Intentional catch-all: a failure while releasing the validator must not abort the
-        // container shutdown that triggered this callback.
+        // container shutdown that triggered this callback. TokenValidator.close() already isolates
+        // failures of the (open-set) JwksLoader closeables itself; the remaining unchecked failure
+        // sources are its pipeline and replay-protection resources. This site does NOT fall under
+        // the AGENTS.md SPI carve-out for InvalidExceptionUsageRecipe: the suppression is a
+        // recorded, accepted deviation (review advisory F3).
         catch (RuntimeException e) {
             LOGGER.debug(e, "Failed to close the TokenValidator on producer destruction");
         }

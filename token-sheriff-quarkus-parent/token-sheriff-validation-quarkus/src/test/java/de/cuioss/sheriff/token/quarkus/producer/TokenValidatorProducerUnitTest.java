@@ -116,6 +116,19 @@ class TokenValidatorProducerUnitTest {
         }
 
         @Test
+        @DisplayName("Should not propagate a failure while closing, and attempt the close exactly once")
+        void shouldNotPropagateFailureWhileClosing() {
+            RecordingJwksLoader loader = new RecordingJwksLoader(true);
+            TokenValidatorProducer producer = new TokenValidatorProducer(new TestConfig(Map.of()), null, null);
+            producer.tokenValidator = validatorOwning(loader);
+
+            assertDoesNotThrow(producer::destroy, "a failure while closing must not abort the container shutdown");
+            assertDoesNotThrow(producer::destroy, "a repeated destruction must not abort the container shutdown either");
+
+            assertEquals(1, loader.getCloseCount(), "the failing close must have been attempted exactly once, not retried");
+        }
+
+        @Test
         @DisplayName("Should do nothing when init() never created a TokenValidator")
         void shouldIgnoreDestroyWithoutValidator() {
             Map<String, String> props = Map.of(
@@ -141,13 +154,22 @@ class TokenValidatorProducerUnitTest {
 
     /**
      * An {@link AutoCloseable} JWKS loader that counts how often it was closed, always reporting
-     * {@link LoaderStatus#OK} without keys.
+     * {@link LoaderStatus#OK} without keys. It can be told to fail every close.
      */
     private static final class RecordingJwksLoader implements JwksLoader, AutoCloseable {
 
         static final String ISSUER = "https://recording-issuer.example.com";
 
         private final AtomicInteger closeCount = new AtomicInteger();
+        private final boolean failOnClose;
+
+        RecordingJwksLoader() {
+            this(false);
+        }
+
+        RecordingJwksLoader(boolean failOnClose) {
+            this.failOnClose = failOnClose;
+        }
 
         int getCloseCount() {
             return closeCount.get();
@@ -156,6 +178,9 @@ class TokenValidatorProducerUnitTest {
         @Override
         public void close() {
             closeCount.incrementAndGet();
+            if (failOnClose) {
+                throw new IllegalStateException("close failed on purpose");
+            }
         }
 
         @Override

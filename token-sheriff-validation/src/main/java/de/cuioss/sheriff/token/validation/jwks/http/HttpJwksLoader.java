@@ -54,16 +54,18 @@ import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
  * Supports both direct HTTP endpoints and well-known discovery.
  * Uses HttpAdapter composition (ETagAwareHttpAdapter + ResilientHttpAdapter) for bandwidth
  * optimization via ETag caching and resilient retry behavior with optional scheduled background refresh.
- * Background refresh, when enabled, is started after the initial load attempt regardless of its
- * outcome, so a loader whose first load failed recovers on its own.
+ * Background refresh, when enabled, is started after the initial load attempt, also when the load
+ * failed, so a loader whose first load failed recovers on its own. A terminal security rejection
+ * of the endpoint resolution (see below) starts no refresh.
  * <p>
  * <strong>Status contract:</strong> {@link LoaderStatus#OK} is reported only while a usable key set
  * is installed. A fetch that succeeds at the HTTP level but yields no usable key is not a successful
  * load. A failed initial load or a transient well-known discovery failure leaves the status
  * {@link LoaderStatus#UNDEFINED} when background refresh is enabled (a later refresh cycle that
  * installs usable keys publishes {@code OK}) and {@link LoaderStatus#ERROR} when it is disabled.
- * A security rejection (issuer mismatch, absent advertised issuer, egress block) is a terminal
- * {@code ERROR}. A failed refresh never downgrades an existing {@code OK}, since the installed keys
+ * A security rejection (issuer mismatch, absent advertised issuer, or an egress block of the JWKS
+ * fetch URI) is a terminal {@code ERROR}. A blocked discovery endpoint is not terminal: it is an
+ * unavailable discovery and is handled like a transient discovery failure. A failed refresh never downgrades an existing {@code OK}, since the installed keys
  * remain usable. After {@link #close()} no refresh still in flight publishes {@code OK}.
  * <p>
  * This implementation follows a clean architecture with:
@@ -194,7 +196,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * is ordered strictly before or strictly after the claim and is never silently undone. An
      * initialization that is still in flight when {@code close()} runs belongs to the closed
      * generation: it publishes no endpoint, status or task and its future completes with
-     * {@link LoaderStatus#UNDEFINED} once its endpoint resolution returns.
+     * {@link LoaderStatus#UNDEFINED}, with background refresh enabled or disabled, once its running
+     * endpoint resolution or initial fetch returns.
      * <p>
      * <strong>Re-initialization after {@link #close()}:</strong> a closed loader can be initialized
      * again, with one exception. When background refresh is enabled and the refresh executor has been
@@ -262,7 +265,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * @return the status in effect when this initialization finished, which is what
      *         {@link #getLoaderStatus()} reports while the initialization is still live, or
      *         {@link LoaderStatus#UNDEFINED} when it was superseded by {@code close()} during the
-     *         endpoint resolution
+     *         endpoint resolution or the initial fetch, whether background refresh is enabled or not
      */
     private LoaderStatus initialize(long startEpoch) {
         publishStatus(LoaderStatus.LOADING, startEpoch);
@@ -309,8 +312,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * A retryable well-known discovery failure (the discovery was unavailable: a transport failure or
      * a document without a {@code jwks_uri}) with background refresh enabled leaves the status
      * {@link LoaderStatus#UNDEFINED} and schedules the background refresh, which re-attempts the
-     * discovery. Every other failure (a security rejection — an absent advertised issuer, an issuer
-     * mismatch or an egress block — or any failure without background refresh) is a terminal
+     * discovery. A blocked discovery endpoint is such an unavailable discovery and therefore retryable.
+     * Every other failure (a security rejection — an absent advertised issuer, an issuer mismatch or
+     * an egress block of the JWKS fetch URI — or any failure without background refresh) is a terminal
      * {@link LoaderStatus#ERROR} and schedules nothing.
      *
      * @param resolution the failed resolution
@@ -578,13 +582,16 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      *                     {@link LoaderStatus#ERROR}
      * @param startEpoch   the {@link #epoch} the calling initialization was claimed under
      * @return the status in effect for this initialization: {@code OK} when a refresh cycle installed
-     *         usable keys first, otherwise {@code failedStatus}
+     *         usable keys first, {@link LoaderStatus#UNDEFINED} when a {@link #close()} superseded the
+     *         initialization (whatever {@code failedStatus} is, as that is what a closed loader
+     *         reports), otherwise {@code failedStatus}
      */
     private LoaderStatus publishFailedLoadStatus(LoaderStatus failedStatus, long startEpoch) {
         lifecycleLock.lock();
         try {
             if (!isLive(startEpoch)) {
-                return failedStatus;
+                // Superseded by close(): the loader reports UNDEFINED, so the future must not claim ERROR
+                return LoaderStatus.UNDEFINED;
             }
             if (status.get() == LoaderStatus.OK) {
                 return LoaderStatus.OK;
@@ -820,7 +827,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * Re-attempts the endpoint resolution for a refresh cycle that found no endpoint.
      * <p>
      * Only a well-known configuration can lack an endpoint after initialization (its discovery failed
-     * transiently); in direct mode the cycle is skipped as before. The resolved endpoint and issuer are
+     * transiently); in direct mode there is nothing to re-resolve, so the cycle is skipped with a
+     * warning and fetches nothing. The resolved endpoint and issuer are
      * published only while the cycle's generation is still live. A retryable failure is logged and
      * leaves the status unchanged for the next cycle. A security rejection is terminal: the status
      * becomes {@link LoaderStatus#ERROR} and the refresh task is cancelled, so the rejection is not

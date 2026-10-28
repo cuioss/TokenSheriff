@@ -235,7 +235,8 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
             if (document.isPresent() && document.get().getIssuer().isEmpty()) {
                 // A document without an issuer is a failed load for every accessor: its jwks_uri is
                 // never handed out, and the distinct reason lets a caller treat it as terminal.
-                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "Missing required field: issuer");
+                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "well-known discovery document",
+                        "Missing required field: issuer");
                 return failLoad(FailureReason.ISSUER_ABSENT);
             }
             // Publish the cache entry BEFORE flipping status to OK so a fast-path reader that observes

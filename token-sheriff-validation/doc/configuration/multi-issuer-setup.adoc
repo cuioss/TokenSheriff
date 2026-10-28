@@ -143,7 +143,9 @@ If tokens are rejected with "unknown issuer": check the exact `iss` claim value 
 
 If an issuer using well-known discovery loads no keys and an `ISSUER_MISMATCH` security event is counted: the `issuer` advertised by the discovery document differs from the configured `issuerIdentifier`. Compare both values (a single trailing slash difference is tolerated) and see xref:openid-discovery.adoc#discovery-issuer-check[Discovery issuer check].
 
-If an issuer using well-known discovery loads no keys and *no* `ISSUER_MISMATCH` event is counted, check the log for an error containing `Missing required field: issuer`: the discovery document does not advertise an `issuer` at all. It is refused while the document is parsed, before the issuer comparison runs, so no `ISSUER_MISMATCH` event is recorded for it. Fix the discovery document or point `wellKnownUrl` at the correct endpoint.
+An `ISSUER_MISMATCH` event is also counted, once, when the discovery document advertises a `jwks_uri` but no `issuer` (or a blank one): the advertised issuer is then logged as `<absent>` and the issuer is rejected as a terminal failure. The log additionally contains an error with `Missing required field: issuer`. The rejection is not retried by the background refresh, and the advertised `jwks_uri` is never fetched. Fix the discovery document or point `wellKnownUrl` at the correct endpoint.
+
+If a discovery document lacks *both* `issuer` and `jwks_uri`, it is an unusable response rather than a security rejection: no `ISSUER_MISMATCH` event is counted and the discovery stays retryable, so with background refresh enabled the loader tries again on the next refresh cycle.
 
 === Key Resolution Failures
 

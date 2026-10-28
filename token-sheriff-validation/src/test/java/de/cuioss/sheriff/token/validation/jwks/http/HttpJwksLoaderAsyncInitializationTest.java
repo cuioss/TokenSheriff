@@ -295,6 +295,31 @@ class HttpJwksLoaderAsyncInitializationTest {
     }
 
     @Test
+    @DisplayName("close() during an initial fetch without background refresh completes the future with UNDEFINED, not ERROR")
+    void closeDuringInitialFetchWithoutRefreshCompletesUndefined(URIBuilder uriBuilder) throws Exception {
+        CountDownLatch responseGate = new CountDownLatch(1);
+        moduleDispatcher.setResponseGate(responseGate);
+
+        try (HttpJwksLoader loader = new HttpJwksLoader(baseConfig(uriBuilder, 0).build())) {
+            CompletableFuture<LoaderStatus> inFlight = loader.initJWKSLoader(new SecurityEventCounter());
+            Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> moduleDispatcher.getCallCounter() >= 1);
+
+            loader.close();
+            responseGate.countDown();
+            LoaderStatus completed = inFlight.get(10, TimeUnit.SECONDS);
+
+            assertAll("the superseded initialization reports what the closed loader reports",
+                    () -> assertEquals(LoaderStatus.UNDEFINED, completed, "the future must not claim ERROR"),
+                    () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
+                    () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed after close()"),
+                    () -> assertFalse(loader.isBackgroundRefreshActive()));
+        } finally {
+            responseGate.countDown();
+            moduleDispatcher.setResponseGate(null);
+        }
+    }
+
+    @Test
     @DisplayName("A second initialization after close() mid-initialization leaves exactly one refresh task")
     void initAfterCloseDuringInitializationLeavesOneRefreshTask(URIBuilder uriBuilder) throws Exception {
         CountingScheduledExecutor executor = new CountingScheduledExecutor();
