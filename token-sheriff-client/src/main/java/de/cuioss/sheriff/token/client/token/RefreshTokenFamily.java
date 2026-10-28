@@ -19,6 +19,11 @@ import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.tools.logging.CuiLogger;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -30,6 +35,18 @@ import java.util.concurrent.locks.ReentrantLock;
  * superseded token again is the signature of a stolen-token replay — the family is then
  * <em>revoked</em> and every further redemption fails closed, so an attacker who captured an old
  * refresh token cannot ride it into a valid session.
+ * <p>
+ * <strong>The family remembers what it superseded.</strong> Besides the current token it keeps a
+ * bounded, insertion-ordered history of the tokens it has superseded — by rotation and by
+ * {@link #reseededWith(String) reseeding} — so a caller can tell a stale re-store of a superseded token
+ * ({@link #isSuperseded(String)}) from a genuinely new grant. The history holds SHA-256 digests, never
+ * the raw tokens, so it adds no credential material to the heap. It is capped at a fixed bound of
+ * sixteen entries and the oldest digest is dropped first. <em>Accepted residual
+ * risk:</em> a token aged out of the history is no longer recognised as superseded by this client;
+ * replaying it is then caught only by the authorization server's own reuse detection.
+ * <p>
+ * Reuse semantics do not depend on the history: in {@link #rotate(String, String)} any presented token
+ * that is not the current one is reuse, whether or not it is still remembered.
  * <p>
  * The family is thread-safe: concurrent redemptions of the same current token are serialized so
  * that exactly one wins the rotation and every loser is treated as a reuse of the now-superseded
@@ -49,7 +66,17 @@ public class RefreshTokenFamily {
 
     private static final String REVOKED_MESSAGE = "refresh token family is revoked";
 
+    /**
+     * Upper bound on the superseded-token history. Sixteen 32-byte digests per family keep the memory
+     * cost bounded across every tracked family while still covering every rotation a realistic stale
+     * re-store could lag behind.
+     */
+    private static final int MAX_SUPERSEDED_HISTORY = 16;
+
     private final ReentrantLock lock = new ReentrantLock();
+
+    /** SHA-256 digests of the superseded tokens, oldest first; guarded by {@link #lock}. */
+    private final Deque<byte[]> supersededDigests;
 
     private String currentToken;
     private boolean revoked;
@@ -59,7 +86,12 @@ public class RefreshTokenFamily {
      *                            {@code null} or blank
      */
     public RefreshTokenFamily(String initialRefreshToken) {
-        this.currentToken = requireNonBlank(initialRefreshToken);
+        this(requireNonBlank(initialRefreshToken), new ArrayDeque<>());
+    }
+
+    private RefreshTokenFamily(String currentToken, Deque<byte[]> supersededDigests) {
+        this.currentToken = currentToken;
+        this.supersededDigests = supersededDigests;
     }
 
     /**
@@ -100,7 +132,84 @@ public class RefreshTokenFamily {
         lock.lock();
         try {
             assertRedeemable(presentedToken, rotatedToken);
+            recordSuperseded(digest(presentedToken));
             currentToken = rotatedToken;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Whether {@code token} is this family's current token. The answer is about the family's state
+     * only: a revoked family still reports the token it was revoked on as current, so a caller can keep
+     * the revoked family — and its fail-closed refusal — when that token is presented again.
+     *
+     * @param token the refresh token to test; must not be {@code null}
+     * @return {@code true} if {@code token} is the current token
+     */
+    public boolean isCurrent(String token) {
+        Objects.requireNonNull(token, "token must not be null");
+        lock.lock();
+        try {
+            return constantTimeEquals(digest(currentToken), digest(token));
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Whether {@code token} is one this family has superseded and still remembers. A token aged out of
+     * the bounded history (see the class Javadoc) answers {@code false}.
+     *
+     * @param token the refresh token to test; must not be {@code null}
+     * @return {@code true} if {@code token} is in the superseded-token history
+     */
+    public boolean isSuperseded(String token) {
+        Objects.requireNonNull(token, "token must not be null");
+        byte[] candidate = digest(token);
+        lock.lock();
+        try {
+            for (byte[] superseded : supersededDigests) {
+                if (constantTimeEquals(superseded, candidate)) {
+                    return true;
+                }
+            }
+            return false;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Returns the successor family for a new grant: its current token is {@code newToken}, and its
+     * superseded history is this family's history followed by this family's current token, bounded to
+     * the newest entries the history cap allows (see the class Javadoc). A replay of any token this family knew is
+     * therefore still recognised by the successor.
+     * <p>
+     * The successor is a fresh, non-revoked instance; this family is left untouched, so a caller still
+     * holding it — an in-flight rotation, for example — keeps a consistent view. A revoked family may be
+     * reseeded: the new grant starts a clean family that still remembers the revoked one's tokens.
+     *
+     * @param newToken the refresh token of the new grant; must not be {@code null} or blank, and must be
+     *                 neither the current nor a remembered superseded token
+     * @return the successor family; never {@code null}
+     * @throws IllegalArgumentException if {@code newToken} is blank, or is already known to this family —
+     *                                  a known token is never a new grant, so it can never launder a
+     *                                  replay into a fresh family
+     */
+    public RefreshTokenFamily reseededWith(String newToken) {
+        requireNonBlank(newToken);
+        lock.lock();
+        try {
+            // Checked under the (reentrant) lock, so a concurrent rotation cannot slip between the
+            // known-token check and the snapshot the successor is built from.
+            if (isCurrent(newToken) || isSuperseded(newToken)) {
+                throw new IllegalArgumentException("a token already known to the family cannot reseed it");
+            }
+            Deque<byte[]> successorHistory = new ArrayDeque<>(supersededDigests);
+            RefreshTokenFamily successor = new RefreshTokenFamily(newToken, successorHistory);
+            successor.recordSuperseded(digest(currentToken));
+            return successor;
         } finally {
             lock.unlock();
         }
@@ -150,6 +259,30 @@ public class RefreshTokenFamily {
             LOGGER.warn(ClientLogMessages.WARN.REFRESH_TOKEN_REUSE);
             throw new RefreshTokenFamilyRevokedException(
                     "refresh token reuse detected; the refresh token family has been revoked", rotatedToken);
+        }
+    }
+
+    /**
+     * Appends a superseded digest and drops the oldest once the history exceeds its bound. The caller
+     * holds {@link #lock}, or owns the instance exclusively before publishing it.
+     */
+    private void recordSuperseded(byte[] supersededDigest) {
+        supersededDigests.addLast(supersededDigest);
+        while (supersededDigests.size() > MAX_SUPERSEDED_HISTORY) {
+            supersededDigests.removeFirst();
+        }
+    }
+
+    private static boolean constantTimeEquals(byte[] left, byte[] right) {
+        return MessageDigest.isEqual(left, right);
+    }
+
+    private static byte[] digest(String token) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 is mandatory on every Java platform (java.security.MessageDigest Javadoc).
+            throw new IllegalStateException("SHA-256 is not available", e);
         }
     }
 

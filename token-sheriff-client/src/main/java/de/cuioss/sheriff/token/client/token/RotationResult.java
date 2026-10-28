@@ -53,8 +53,10 @@ import java.util.Objects;
  * @param refreshToken              the refresh token to use on the next refresh; never {@code null}
  *                                  or blank
  * @param idToken                   the raw refreshed ID token, or {@code null} when the AS omitted it
- * @param accessTokenExpiresInSeconds the access token lifetime in seconds ({@code 0} when the AS
- *                                  omits {@code expires_in})
+ * @param accessTokenExpiresInSeconds the access token lifetime in seconds; {@code 0} means no known
+ *                                  expiry — the AS omitted {@code expires_in}, or sent a non-positive
+ *                                  value or an implausible one beyond {@link TokenResponse}'s
+ *                                  plausibility cap ({@link TokenResponse#getExpiresInSeconds()})
  * @param rotated                   whether the refresh token was rotated by this exchange
  * @param grantedScope              the raw {@code scope} value the authorization server returned, or
  *                                  {@code null} when it omitted the parameter. {@code null} does
@@ -122,7 +124,8 @@ String grantedScope, ScopeDelta scopeDelta) {
      * @param accessToken               the validated access token content; must not be {@code null}
      * @param refreshToken              the refresh token to use next; must not be {@code null} or blank
      * @param idToken                   the raw refreshed ID token, or {@code null} when the AS omitted it
-     * @param accessTokenExpiresInSeconds the access token lifetime in seconds
+     * @param accessTokenExpiresInSeconds the access token lifetime in seconds; {@code 0} when unknown
+     *                                  (omitted, non-positive or implausible {@code expires_in})
      * @param rotated                   whether the refresh token was rotated
      * @param grantedScope              the raw granted {@code scope} value, or {@code null} when the AS
      *                                  omitted it

@@ -233,8 +233,10 @@ public class RefreshFlow {
         ScopeDelta scopeDelta = classifyScopeDelta(grantedScope);
         reportScopeDelta(scopeDelta, grantedScope, redemption);
 
+        // The plausibility-capped lifetime, never the raw field: an absent, non-positive or absurd
+        // expires_in maps to 0 ("no known expiry") instead of an overflowing or immortal expiry.
         return new RotationResult(accessToken, rotatedRefreshToken, tokenResponse.idToken,
-                tokenResponse.expiresIn, rotated, grantedScope, scopeDelta);
+                tokenResponse.getExpiresInSeconds().orElse(0L), rotated, grantedScope, scopeDelta);
     }
 
     /**

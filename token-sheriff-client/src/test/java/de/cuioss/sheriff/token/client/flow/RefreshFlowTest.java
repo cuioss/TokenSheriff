@@ -73,6 +73,9 @@ class RefreshFlowTest {
     /** The rendering of {@link #REQUESTED_SCOPES} the reconciliation WARN records interpolate. */
     private static final String REQUESTED_RENDERED = "openid profile";
 
+    /** The ten-year plausibility cap {@code TokenResponse} applies to {@code expires_in}. */
+    private static final long PLAUSIBLE_LIFETIME_CAP_SECONDS = 315_360_000L;
+
     @Getter
     private final TokenDispatcher moduleDispatcher = new TokenDispatcher();
 
@@ -135,6 +138,40 @@ class RefreshFlowTest {
                 () -> assertTrue(result.rotated(), "a newly issued refresh token must be reported as rotated"),
                 () -> assertEquals(rotated, result.refreshToken(), "the rotated refresh token must be surfaced"),
                 () -> assertEquals(300, result.accessTokenExpiresInSeconds(), "the access token lifetime must be surfaced"));
+    }
+
+    @Test
+    @DisplayName("Should surface an absurd expires_in as an unknown lifetime rather than trusting it")
+    void shouldCapAbsurdExpiresIn(URIBuilder uriBuilder) {
+        long beyondCap = PLAUSIBLE_LIFETIME_CAP_SECONDS + Generators.integers(1, 1_000_000).next();
+        var flow = flow(config());
+        var metadata = metadata(uriBuilder);
+
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(holder.getRawToken(),
+                Generators.letterStrings(20, 40).next(), null, Long.MAX_VALUE));
+        RotationResult maxValue = flow.refresh(metadata, Generators.letterStrings(20, 40).next());
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(holder.getRawToken(),
+                Generators.letterStrings(20, 40).next(), null, beyondCap));
+        RotationResult justBeyond = flow.refresh(metadata, Generators.letterStrings(20, 40).next());
+
+        assertAll("an implausible lifetime maps to 0, meaning no known expiry",
+                () -> assertEquals(0L, maxValue.accessTokenExpiresInSeconds(),
+                        "Long.MAX_VALUE must not become an overflowing or immortal expiry"),
+                () -> assertEquals(0L, justBeyond.accessTokenExpiresInSeconds(),
+                        "a value beyond the ten-year cap must not be trusted"));
+    }
+
+    @Test
+    @DisplayName("Should pass a plausible expires_in through unchanged")
+    void shouldPassPlausibleExpiresInThrough(URIBuilder uriBuilder) {
+        long plausible = Generators.integers(60, 86_400).next();
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(holder.getRawToken(),
+                Generators.letterStrings(20, 40).next(), null, plausible));
+
+        RotationResult result = flow(config()).refresh(metadata(uriBuilder), Generators.letterStrings(20, 40).next());
+
+        assertEquals(plausible, result.accessTokenExpiresInSeconds(),
+                "a lifetime inside the plausibility cap is surfaced as sent");
     }
 
     @Test

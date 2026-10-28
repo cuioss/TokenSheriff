@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.Serial;
 import java.math.BigInteger;
@@ -50,6 +51,7 @@ import java.util.Base64;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -208,6 +210,60 @@ class DpopProofGeneratorTest {
         state[0] = "distinct-jti-49";
         assertThrows(IllegalStateException.class, () -> proofGenerator.generateProof(HTM, HTU),
                 "a jti still tracked in the bounded LRU window is detected as reuse and fails closed");
+    }
+
+    @Test
+    @DisplayName("Should evict the least-recently-used jti, not the first-inserted one, still refusing a tracked one")
+    void shouldEvictLeastRecentlyUsedJtiBeyondConfiguredWindow() {
+        String[] state = {"j1"};
+        var proofGenerator = new DpopProofGenerator(keyPair, "RS256", () -> state[0], 2);
+        proofGenerator.generateProof(HTM, HTU);
+        state[0] = "j2";
+        proofGenerator.generateProof(HTM, HTU);
+        // The rejected repeat touches j1, so under access order j2 becomes the least recently used entry.
+        state[0] = "j1";
+        assertThrows(IllegalStateException.class, () -> proofGenerator.generateProof(HTM, HTU),
+                "j1 is inside the window, so repeating it fails closed as reuse");
+        state[0] = "j3";
+        proofGenerator.generateProof(HTM, HTU);
+
+        state[0] = "j2";
+        String reissued = proofGenerator.generateProof(HTM, HTU);
+
+        assertEquals("j2", extractJti(decode(reissued.split("\\.")[1])),
+                "j2 was the least recently used entry when j3 was issued, so it fell out of the two-entry "
+                        + "window and a proof carrying it is emitted again; under insertion order j1 would "
+                        + "have been evicted instead and j2 would still be refused");
+        state[0] = "j3";
+        assertThrows(IllegalStateException.class, () -> proofGenerator.generateProof(HTM, HTU),
+                "j3 is still inside the window, so presenting it again fails closed as reuse");
+    }
+
+    @Test
+    @DisplayName("Should track a default window wider than two jtis through the public jti-source constructor")
+    void shouldTrackDefaultWindowWiderThanTwo() {
+        String[] state = {"early-jti"};
+        var proofGenerator = new DpopProofGenerator(keyPair, "RS256", () -> state[0]);
+        proofGenerator.generateProof(HTM, HTU);
+        for (int i = 0; i < 5; i++) {
+            state[0] = "later-jti-" + i;
+            proofGenerator.generateProof(HTM, HTU);
+        }
+
+        state[0] = "early-jti";
+        assertThrows(IllegalStateException.class, () -> proofGenerator.generateProof(HTM, HTU),
+                "the default window still tracks a jti issued five proofs earlier, so replaying it fails closed");
+    }
+
+    @ParameterizedTest(name = "maxTrackedJtis = {0}")
+    @ValueSource(ints = {0, -1})
+    @DisplayName("Should reject a non-positive bound on the tracked jti window")
+    void shouldRejectNonPositiveMaxTrackedJtis(int maxTrackedJtis) {
+        Supplier<String> jtiSource = () -> "jti";
+
+        assertThrows(IllegalArgumentException.class,
+                () -> new DpopProofGenerator(keyPair, "RS256", jtiSource, maxTrackedJtis),
+                "a window that tracks no jti could not detect any reuse, so it is refused at construction");
     }
 
     @ParameterizedTest(name = "{0} with a {1} key")
