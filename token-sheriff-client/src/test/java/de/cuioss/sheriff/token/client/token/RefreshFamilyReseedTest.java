@@ -43,6 +43,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 
@@ -270,6 +271,53 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
     }
 
     @Test
+    @DisplayName("Should keep the token slot and the family slot paired when two grants are stored concurrently")
+    void shouldPairSlotsUnderConcurrentStore(URIBuilder uriBuilder) throws Exception {
+        ProviderMetadata metadata = metadata(uriBuilder);
+        var racingStore = new RacingTokenStore();
+        var racingManager = new TokenLifecycleManager(racingStore, new RefreshScheduler());
+        String firstGrant = token();
+        String secondGrant = token();
+        String successor = token();
+        var secondStoreReturned = new CountDownLatch(1);
+        var secondStore = new AtomicReference<Future<?>>();
+        var secondStoreInsideGap = new AtomicBoolean();
+
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            // The hook runs on the first store's thread, after its token write and before its family
+            // update. Only then is the second store started, so the crossing needs no timing assumption:
+            // without the grant lock the second store completes inside the gap; with it, it blocks until
+            // the first store is done and the bounded wait below simply times out.
+            racingStore.afterNextStore(() -> {
+                secondStore.set(pool.submit(() -> {
+                    racingManager.store(session, bearerBundle(secondGrant, null));
+                    secondStoreReturned.countDown();
+                }));
+                secondStoreInsideGap.set(awaitBounded(secondStoreReturned));
+            });
+            racingManager.store(session, bearerBundle(firstGrant, null));
+            secondStore.get().get(10, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+        getModuleDispatcher().respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), successor,
+                null, 300));
+
+        Optional<StoredToken> refreshed = racingManager.refresh(session, metadata, refreshFlow(config),
+                revocationClient, idBridge, clientAuth(config));
+
+        assertAll("the surviving grant refreshes with its own family (second store inside the gap: "
+                        + secondStoreInsideGap.get() + ")",
+                () -> assertEquals(Optional.of(successor), refreshed.map(StoredToken::refreshToken),
+                        "the stored grant is refreshed, not read as a replay"),
+                () -> assertFalse(revocationClient.revokedAny(), "nothing is revoked"),
+                () -> assertEquals(Optional.of(successor), racingManager.get(session).map(StoredToken::refreshToken),
+                        "the session survives with the refreshed grant"));
+        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, RefreshTokenFamily.class);
+    }
+
+    @Test
     @DisplayName("Should store a bundle with no expiry when the refresh carries an absurd expires_in")
     void shouldStoreNoExpiryForAbsurdExpiresIn(URIBuilder uriBuilder) {
         ProviderMetadata metadata = metadata(uriBuilder);
@@ -315,23 +363,48 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
     }
 
     /**
+     * Waits a short, bounded time for {@code latch}. The bound can only weaken the red check (the crossing
+     * is not provoked when the second store is slower than the bound), never make the green flaky.
+     *
+     * @return whether the latch fired inside the bound
+     */
+    private static boolean awaitBounded(CountDownLatch latch) {
+        try {
+            return latch.await(500, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /**
      * An in-memory store that runs one registered action right after the next {@code retrieve} has taken
      * its snapshot and before it returns — the point at which a re-login lands between a refresh reading
-     * the held token and capturing its family. The action fires on the calling thread, so the race needs
-     * no timing assumption.
+     * the held token and capturing its family — or right after the next {@code store} write has returned,
+     * the point between the manager's token write and its family update. Each action fires once, on the
+     * calling thread, so the race needs no timing assumption.
      */
     private static final class RacingTokenStore implements TokenStore {
 
         private final InMemoryTokenStore delegate = new InMemoryTokenStore();
         private final AtomicReference<Runnable> afterNextRetrieve = new AtomicReference<>();
+        private final AtomicReference<Runnable> afterNextStore = new AtomicReference<>();
 
         void afterNextRetrieve(Runnable action) {
             afterNextRetrieve.set(action);
         }
 
+        void afterNextStore(Runnable action) {
+            afterNextStore.set(action);
+        }
+
         @Override
         public void store(String sessionId, StoredToken token) {
             delegate.store(sessionId, token);
+            Runnable action = afterNextStore.getAndSet(null);
+            if (action != null) {
+                action.run();
+            }
         }
 
         @Override

@@ -50,6 +50,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Orchestrates the server-side token lifecycle over a {@link TokenStore}: store, retrieve, proactive
@@ -162,6 +163,28 @@ public class TokenLifecycleManager {
      */
     private static final int MAX_TRACKED_FAMILIES = 10_000;
 
+    /** Number of stripes in {@link #grantLocks}; a fixed bound, so the lock array never grows. */
+    private static final int GRANT_LOCK_STRIPES = 64;
+
+    /**
+     * Striped per-session locks that make the two writes of {@link #store} — the token slot in the store
+     * and the family slot in {@link #families} — one unit with respect to other {@code store} calls and
+     * to {@link #captureHeldRefresh}. Without them, two concurrent grants for the same session can
+     * interleave so that the store ends up holding one grant while the family has the other as current,
+     * and the next refresh of the held, legitimate grant is read as reuse.
+     * <p>
+     * A fixed array indexed by the session id's hash, rather than a per-session map, keeps memory
+     * bounded and needs no cleanup; two sessions sharing a stripe only serialize, never conflict.
+     * <p>
+     * <strong>Lock order.</strong> A caller takes exactly one stripe and never nests two, so stripes
+     * cannot deadlock with each other. The order is <em>stripe &rarr; store key &rarr; families</em> on
+     * the {@code store} and capture paths, and <em>store key &rarr; families</em> on the
+     * {@link #applyRefresh} path, which runs its family advance inside the store's atomic update and
+     * therefore must never take a stripe; equally, the capture must never call {@code applyRefresh} while
+     * holding one. Keeping both rules leaves the order acyclic.
+     */
+    private final ReentrantLock[] grantLocks = newGrantLocks();
+
     private final TokenStore tokenStore;
     private final RefreshScheduler refreshScheduler;
 
@@ -257,8 +280,12 @@ public class TokenLifecycleManager {
     /**
      * Stores (or replaces) the token bundle for a session.
      * <p>
-     * When the bundle carries a refresh token, the session's rotation family is brought in line with it
-     * in one atomic step:
+     * When the bundle carries a refresh token, the session's rotation family is brought in line with it.
+     * The token write and the family update run under the session's grant lock, so they are atomic per
+     * session with respect to other {@code store} calls and to the refresh's read of the held token — two
+     * concurrent grants can never leave the store holding one and the family tracking the other. They are
+     * not atomic with respect to {@link #applyRefresh}, which never takes that lock; the refresh path's
+     * capture covers that writer by adopting and re-reading.
      * <ul>
      *   <li>no family tracks the session — a family is seeded with that token;</li>
      *   <li>the token is the family's current token or one it remembers as superseded — the family is
@@ -274,13 +301,33 @@ public class TokenLifecycleManager {
      * @param token     the token bundle; must not be {@code null}
      */
     public void store(String sessionId, StoredToken token) {
-        tokenStore.store(sessionId, token);
-        String refreshToken = token.refreshToken();
-        if (refreshToken != null && !refreshToken.isBlank()) {
-            // One atomic compute, never a read followed by a put: a concurrent rotation of the same
-            // family cannot slip between the reseed decision and the install.
-            families.compute(sessionId, (key, existing) -> familyForGrant(existing, refreshToken));
+        ReentrantLock grantLock = grantLockFor(sessionId);
+        grantLock.lock();
+        try {
+            tokenStore.store(sessionId, token);
+            String refreshToken = token.refreshToken();
+            if (refreshToken != null && !refreshToken.isBlank()) {
+                // One atomic compute, never a read followed by a put: a concurrent rotation of the same
+                // family cannot slip between the reseed decision and the install.
+                families.compute(sessionId, (key, existing) -> familyForGrant(existing, refreshToken));
+            }
+        } finally {
+            grantLock.unlock();
         }
+    }
+
+    /** The stripe of {@link #grantLocks} guarding {@code sessionId}. */
+    private ReentrantLock grantLockFor(String sessionId) {
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        return grantLocks[Math.floorMod(sessionId.hashCode(), GRANT_LOCK_STRIPES)];
+    }
+
+    private static ReentrantLock[] newGrantLocks() {
+        ReentrantLock[] locks = new ReentrantLock[GRANT_LOCK_STRIPES];
+        for (int stripe = 0; stripe < locks.length; stripe++) {
+            locks[stripe] = new ReentrantLock();
+        }
+        return locks;
     }
 
     /**
@@ -581,44 +628,72 @@ public class TokenLifecycleManager {
     /**
      * Reads the session's held refresh token and captures its rotation family as one consistent pair.
      * <p>
-     * The store and the family map are two slots, and {@link #store} writes them one after the other. A
-     * re-login can therefore be seen half applied in either order, and either way a mismatched pair would
-     * make the exchange's rotation look like reuse and destroy the session the user just established:
+     * Each read-and-capture attempt runs under the session's grant lock, so it never observes a
+     * {@link #store} half applied. The store and the family map are nevertheless two slots, and writers
+     * that do not take that lock — {@link #applyRefresh}, or a {@link TokenStore} shared with another
+     * node — can still be seen half applied in either order. Either way a mismatched pair would make the
+     * exchange's rotation look like reuse and destroy the session the user just established:
      * <ul>
      *   <li><strong>The grant is stored but its family is not reseeded yet.</strong> The read token is one
      *       the family has never heard of. That is the signature of a new grant, so the capture adopts it
-     *       exactly as {@link #store} is about to — one atomic {@code compute} over the same
-     *       {@link #familyForGrant} rule — and the later {@code store} finds the token already current.</li>
+     *       exactly as {@link #store} would — one atomic {@code compute} over the same
+     *       {@link #familyForGrant} rule — and a later {@code store} finds the token already current.</li>
      *   <li><strong>The family is reseeded after the token was read.</strong> The family no longer holds
      *       the read token as its current one, so the store is read again, up to
      *       {@value #MAX_CAPTURE_ATTEMPTS} times.</li>
      * </ul>
      * A token the family has genuinely superseded — a stale re-store — is neither adopted nor current
      * after any re-read, so it falls through to reuse detection exactly as before once the bound is
-     * spent. Nothing here can make a token acceptable that {@link #store} would not.
+     * spent. The adoption applies exactly the {@link #familyForGrant} rule {@link #store} applies, so it
+     * never treats a token the family knows as superseded as a new grant.
+     * <p>
+     * The grant lock is taken per attempt and released before the exchange; this method never calls
+     * {@link #applyRefresh} while holding it, which keeps the lock order documented on
+     * {@link #grantLocks} acyclic.
      *
      * @return the presented token with its family, or {@link Optional#empty()} when the session holds no
      *         refresh token
      */
     private Optional<HeldRefresh> captureHeldRefresh(String sessionId) {
+        ReentrantLock grantLock = grantLockFor(sessionId);
         HeldRefresh capture = null;
         for (int attempt = 0; attempt < MAX_CAPTURE_ATTEMPTS; attempt++) {
-            Optional<StoredToken> held = tokenStore.retrieve(sessionId);
-            if (held.isEmpty()) {
-                return Optional.empty();
+            grantLock.lock();
+            try {
+                Optional<HeldRefresh> attemptCapture = captureOnce(sessionId);
+                if (attemptCapture.isEmpty()) {
+                    return Optional.empty();
+                }
+                capture = attemptCapture.get();
+            } finally {
+                grantLock.unlock();
             }
-            String presentedRefreshToken = held.get().refreshToken();
-            if (presentedRefreshToken == null || presentedRefreshToken.isBlank()) {
-                return Optional.empty();
-            }
-            RefreshTokenFamily family = families.compute(sessionId,
-                    (key, existing) -> familyForGrant(existing, presentedRefreshToken));
-            capture = new HeldRefresh(presentedRefreshToken, family);
-            if (family.isCurrent(presentedRefreshToken)) {
+            if (capture.family().isCurrent(capture.presentedRefreshToken())) {
                 break;
             }
         }
         return Optional.ofNullable(capture);
+    }
+
+    /**
+     * One read-and-capture attempt of {@link #captureHeldRefresh}; the caller holds the session's grant
+     * lock.
+     *
+     * @return the held token paired with its (possibly adopted) family, or {@link Optional#empty()} when
+     *         the session holds no refresh token
+     */
+    private Optional<HeldRefresh> captureOnce(String sessionId) {
+        Optional<StoredToken> held = tokenStore.retrieve(sessionId);
+        if (held.isEmpty()) {
+            return Optional.empty();
+        }
+        String presentedRefreshToken = held.get().refreshToken();
+        if (presentedRefreshToken == null || presentedRefreshToken.isBlank()) {
+            return Optional.empty();
+        }
+        RefreshTokenFamily family = families.compute(sessionId,
+                (key, existing) -> familyForGrant(existing, presentedRefreshToken));
+        return Optional.of(new HeldRefresh(presentedRefreshToken, family));
     }
 
     private Optional<StoredToken> doRefresh(String sessionId, ProviderMetadata metadata,
