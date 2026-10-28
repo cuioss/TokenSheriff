@@ -19,6 +19,7 @@ import de.cuioss.http.client.HttpLogMessages;
 import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
+import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
@@ -29,17 +30,24 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
 import lombok.Getter;
+import mockwebserver3.MockWebServer;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
+import java.net.URI;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.*;
 
 @EnableTestLogger
 @DisplayName("HttpJwksLoader Failure Tests")
@@ -172,6 +180,261 @@ class HttpJwksLoaderFailureTest {
         } finally {
             // Restore dispatcher state
             moduleDispatcher.setCustomResponse(previousResponse);
+        }
+    }
+
+    @Test
+    @DisplayName("An initialization resolving its endpoint after close() and a re-initialization publishes and fetches nothing")
+    void staleInitializationKeepsTheNewGenerationEndpoint() throws Exception {
+        String staleJwksPath = "/jwks-stale.json";
+        String currentJwksPath = "/jwks-current.json";
+        DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(staleJwksPath, currentJwksPath));
+        CountDownLatch firstDiscoveryGate = new CountDownLatch(1);
+        dispatcher.holdFirstDiscovery(firstDiscoveryGate);
+
+        try (MockWebServer server = new MockWebServer()) {
+            server.setDispatcher(dispatcher);
+            server.start();
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .wellKnownUrl(server.url(DiscoveryGenerationDispatcher.WELL_KNOWN_PATH).toString())
+                    .refreshIntervalSeconds(0)
+                    .build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                CompletableFuture<LoaderStatus> stale = loader.initJWKSLoader(securityEventCounter);
+                Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> dispatcher.discoveryRequests() >= 1);
+                loader.close();
+                assertEquals(LoaderStatus.OK, loader.initJWKSLoader(securityEventCounter).get(10, TimeUnit.SECONDS),
+                        "the re-initialization resolves and loads the current endpoint");
+
+                firstDiscoveryGate.countDown();
+                LoaderStatus staleStatus = stale.get(10, TimeUnit.SECONDS);
+                loader.performBackgroundRefresh();
+
+                assertAll("the stale initialization leaves the new generation untouched",
+                        () -> assertEquals(LoaderStatus.UNDEFINED, staleStatus, "a superseded initialization reports UNDEFINED"),
+                        () -> assertEquals(0, dispatcher.jwksFetches(staleJwksPath), "the stale endpoint must never be fetched"),
+                        () -> assertEquals(Optional.of(currentJwksPath), loader.getJwksFetchUri().map(URI::getPath)),
+                        () -> assertEquals(2, dispatcher.jwksFetches(currentJwksPath),
+                                "the initial load and the refresh fetch the current endpoint"),
+                        () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()));
+            }
+        } finally {
+            firstDiscoveryGate.countDown();
+        }
+    }
+
+    /**
+     * Pins the status contract: {@link LoaderStatus#OK} only while a usable key set is installed.
+     */
+    @Nested
+    @DisplayName("Status reflects usable keys")
+    class StatusContract {
+
+        private static final String UNSUPPORTED_KEYS_ONLY_JWKS = """
+                {
+                    "keys": [{
+                        "kty": "oct",
+                        "use": "sig",
+                        "kid": "symmetric-key-1",
+                        "k": "GawgguFyGrWKav7AX4VKUg",
+                        "alg": "HS256"
+                    }]
+                }
+                """;
+
+        private final RetryConfig fastRetry = RetryConfig.builder()
+                .initialDelay(Duration.ofMillis(1))
+                .maxDelay(Duration.ofMillis(5))
+                .build();
+
+        /**
+         * Exposes the enclosing class's dispatcher to the MockWebServer extension, which resolves the
+         * module dispatcher on the nested test instance.
+         *
+         * @return the shared JWKS dispatcher
+         */
+        public JwksResolveDispatcher getModuleDispatcher() {
+            return moduleDispatcher;
+        }
+
+        private HttpJwksLoaderConfig config(URIBuilder uriBuilder, int refreshIntervalSeconds) {
+            return HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .jwksUrl(uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString())
+                    .issuerIdentifier("test-issuer")
+                    .retryConfig(fastRetry)
+                    .refreshIntervalSeconds(refreshIntervalSeconds)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("First load without usable keys is UNDEFINED with background refresh enabled, never OK")
+        void firstLoadWithoutUsableKeysIsUndefinedWithRefresh(URIBuilder uriBuilder) {
+            moduleDispatcher.setCustomResponse(UNSUPPORTED_KEYS_ONLY_JWKS);
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config(uriBuilder, 60))) {
+                LoaderStatus initStatus = loader.initJWKSLoader(securityEventCounter).join();
+
+                assertAll("no usable key is not a successful load",
+                        () -> assertEquals(LoaderStatus.UNDEFINED, initStatus),
+                        () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
+                        () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed"));
+                LogAsserts.assertNoLogMessagePresent(TestLogLevel.INFO,
+                        JWTValidationLogMessages.INFO.JWKS_LOADED.resolveIdentifierString());
+            }
+        }
+
+        @Test
+        @DisplayName("First load without usable keys is ERROR with background refresh disabled")
+        void firstLoadWithoutUsableKeysIsErrorWithoutRefresh(URIBuilder uriBuilder) {
+            moduleDispatcher.setCustomResponse(UNSUPPORTED_KEYS_ONLY_JWKS);
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config(uriBuilder, 0))) {
+                LoaderStatus initStatus = loader.initJWKSLoader(securityEventCounter).join();
+
+                assertAll("no usable key without refresh is a permanent failure",
+                        () -> assertEquals(LoaderStatus.ERROR, initStatus),
+                        () -> assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus()));
+            }
+        }
+
+        @Test
+        @DisplayName("Refresh with unchanged content keeps OK")
+        void unchangedContentRefreshKeepsOk(URIBuilder uriBuilder) {
+            try (HttpJwksLoader loader = new HttpJwksLoader(config(uriBuilder, 60))) {
+                assertEquals(LoaderStatus.OK, loader.initJWKSLoader(securityEventCounter).join());
+                int callsBeforeRefresh = moduleDispatcher.getCallCounter();
+
+                loader.performBackgroundRefresh();
+
+                assertAll("unchanged content keeps the usable key set",
+                        () -> assertTrue(moduleDispatcher.getCallCounter() > callsBeforeRefresh,
+                                "the refresh must have fetched the JWKS again"),
+                        () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                        () -> assertTrue(loader.getKeyInfo(TEST_KID).isPresent()));
+            }
+        }
+
+        @Test
+        @DisplayName("A refresh that installs keys before the failed initial load publishes its status keeps OK")
+        void refreshInstallingKeysBeforeFailedLoadStatusKeepsOk(URIBuilder uriBuilder) {
+            moduleDispatcher.returnError();
+            // Runs the first refresh cycle synchronously when it is scheduled, i.e. after the failed
+            // initial fetch and before initialization publishes the failed-load status; the IdP has
+            // recovered by then.
+            RefreshOnScheduleExecutor executor = new RefreshOnScheduleExecutor(moduleDispatcher::returnDefault);
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .jwksUrl(uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString())
+                    .issuerIdentifier("test-issuer")
+                    .retryConfig(fastRetry)
+                    .refreshIntervalSeconds(60)
+                    .scheduledExecutorService(executor)
+                    .build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                LoaderStatus initStatus = loader.initJWKSLoader(securityEventCounter).join();
+
+                assertAll("the OK installed by the refresh is not overwritten by the failed initial load",
+                        () -> assertEquals(1, executor.getImmediateRuns(), "the refresh ran during initialization"),
+                        () -> assertEquals(LoaderStatus.OK, initStatus, "the init future reports the status in effect"),
+                        () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                        () -> assertTrue(loader.getKeyInfo(TEST_KID).isPresent()));
+            } finally {
+                executor.shutdownNow();
+            }
+        }
+
+        @Test
+        @DisplayName("Background refresh recovers a failed first load to OK")
+        void backgroundRefreshRecoversFailedFirstLoad(URIBuilder uriBuilder) {
+            moduleDispatcher.returnError();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config(uriBuilder, 60))) {
+                assertEquals(LoaderStatus.UNDEFINED, loader.initJWKSLoader(securityEventCounter).join());
+
+                moduleDispatcher.returnDefault();
+                loader.performBackgroundRefresh();
+
+                assertAll("the recovered IdP brings the loader to OK",
+                        () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                        () -> assertTrue(loader.getKeyInfo(TEST_KID).isPresent()));
+            }
+        }
+
+        @Test
+        @DisplayName("Background refresh returning unusable keys never sets OK")
+        void refreshWithUnusableKeysNeverSetsOk(URIBuilder uriBuilder) {
+            moduleDispatcher.returnError();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config(uriBuilder, 60))) {
+                assertEquals(LoaderStatus.UNDEFINED, loader.initJWKSLoader(securityEventCounter).join());
+
+                moduleDispatcher.setCustomResponse(UNSUPPORTED_KEYS_ONLY_JWKS);
+                loader.performBackgroundRefresh();
+
+                assertAll("unusable keys do not recover the loader",
+                        () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
+                        () -> assertTrue(loader.getKeyIds().isEmpty()));
+                LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                        JWTValidationLogMessages.WARN.JWKS_REFRESH_RETURNED_NO_KEYS.resolveIdentifierString());
+            }
+        }
+
+        @Test
+        @DisplayName("Refresh completing after close() leaves the loader UNDEFINED")
+        void refreshCompletingAfterCloseDoesNotPublishOk(URIBuilder uriBuilder) throws Exception {
+            moduleDispatcher.returnError();
+            HttpJwksLoader loader = new HttpJwksLoader(config(uriBuilder, 60));
+            assertEquals(LoaderStatus.UNDEFINED, loader.initJWKSLoader(securityEventCounter).join());
+
+            moduleDispatcher.returnDefault();
+            int callsBeforeRefresh = moduleDispatcher.getCallCounter();
+            CountDownLatch gate = new CountDownLatch(1);
+            moduleDispatcher.setResponseGate(gate);
+            try {
+                CompletableFuture<Void> refresh = CompletableFuture.runAsync(loader::performBackgroundRefresh);
+                Awaitility.await().atMost(Duration.ofSeconds(5))
+                        .until(() -> moduleDispatcher.getCallCounter() > callsBeforeRefresh);
+
+                loader.close();
+                gate.countDown();
+                refresh.get(10, TimeUnit.SECONDS);
+            } finally {
+                gate.countDown();
+                moduleDispatcher.setResponseGate(null);
+            }
+
+            assertAll("a refresh in flight during close() must not re-publish OK",
+                    () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
+                    () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed after close()"));
+        }
+    }
+
+    /**
+     * Scheduled executor that, when a fixed-rate task is scheduled, first runs the given preparation and
+     * then the task itself once on the scheduling thread, before scheduling it as usual. Lets a test
+     * place one refresh cycle deterministically inside the initialization that schedules it.
+     */
+    private static final class RefreshOnScheduleExecutor extends ScheduledThreadPoolExecutor {
+
+        private final Runnable beforeImmediateRun;
+        private final AtomicInteger immediateRuns = new AtomicInteger();
+
+        RefreshOnScheduleExecutor(Runnable beforeImmediateRun) {
+            super(1);
+            this.beforeImmediateRun = beforeImmediateRun;
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
+            beforeImmediateRun.run();
+            command.run();
+            immediateRuns.incrementAndGet();
+            return super.scheduleAtFixedRate(command, initialDelay, period, unit);
+        }
+
+        int getImmediateRuns() {
+            return immediateRuns.get();
         }
     }
 }

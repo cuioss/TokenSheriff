@@ -190,6 +190,11 @@ class UncheckedThrowBoundaryTest {
                     + " (constructed only by KeyProcessor; the request path only reads existing records)"),
             Map.entry("de.cuioss.sheriff.token.validation.jwks.parser.KeyProcessor#determineEcAlgorithm",
                     LOADER_THREAD_ONLY),
+            Map.entry("de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader#initJWKSLoader",
+                    "not thrown: the IllegalStateException is carried in an already-failed"
+                            + " CompletableFuture that the caller observes when it re-initializes a loader"
+                            + " whose refresh executor is shut down (for example after close()). The method"
+                            + " belongs to loader initialization, never to a create*Token call stack"),
 
             // --- request path, already translated by an existing narrow catch ---
             Map.entry("de.cuioss.sheriff.token.validation.domain.claim.mapper.OffsetDateTimeMapper#map",

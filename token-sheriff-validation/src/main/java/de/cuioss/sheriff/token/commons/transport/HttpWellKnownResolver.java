@@ -50,6 +50,13 @@ import java.util.concurrent.atomic.AtomicReference;
  * TTL elapses the next lookup revalidates against the endpoint, so discovery metadata cannot be
  * pinned indefinitely. A <em>failed</em> discovery is never cached — it is retried on the next call
  * rather than being pinned as a permanent negative result.
+ * <p>
+ * <strong>Issuer-less documents:</strong> a discovery document that carries a {@code jwks_uri} but no
+ * {@code issuer} is a failed load for every accessor — not cached, status {@link LoaderStatus#ERROR},
+ * and {@link #getJwksUri()}, {@link #getIssuer()} and {@link #getWellKnownResult()} stay empty — so no
+ * caller obtains a {@code jwks_uri} from it. {@link #getFailureReason()} reports it as
+ * {@link FailureReason#ISSUER_ABSENT}, distinct from {@link FailureReason#UNAVAILABLE} for every other
+ * failure, so a caller can treat it as a terminal rejection.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -83,6 +90,31 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
 
     private final AtomicReference<CachedDiscovery> cachedResult = new AtomicReference<>();
     private final AtomicReference<LoaderStatus> status = new AtomicReference<>(LoaderStatus.UNDEFINED);
+
+    /**
+     * Why the most recent load failed, {@code null} before the first load and after a successful one.
+     * Written only inside {@link #loadDiscovery()}.
+     */
+    private final AtomicReference<FailureReason> failureReason = new AtomicReference<>();
+
+    /**
+     * Why a discovery load failed.
+     */
+    public enum FailureReason {
+
+        /**
+         * No usable discovery document was obtained: a transport failure, an error response, a
+         * blocked discovery endpoint, or a document that is unreadable or lacks a {@code jwks_uri}.
+         * May succeed on a later load.
+         */
+        UNAVAILABLE,
+
+        /**
+         * The discovery document carries a {@code jwks_uri} but no {@code issuer}. Its
+         * {@code jwks_uri} is not handed out; a caller treats this as a terminal rejection.
+         */
+        ISSUER_ABSENT
+    }
 
     /**
      * Holds a cached successful discovery result together with the {@link System#nanoTime()}
@@ -195,23 +227,55 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
         } catch (TransportException e) {
             LOGGER.warn(e, TransportLogMessages.WARN.SSRF_EGRESS_BLOCKED_DISCOVERY, e.getMessage());
             // Do not cache failures (M2): clear any expired entry so the next call retries discovery.
-            cachedResult.set(null);
-            status.set(LoaderStatus.ERROR);
-            return Optional.empty();
+            return failLoad(FailureReason.UNAVAILABLE);
         }
         HttpResult<WellKnownResult> loaded = wellKnownAdapter.getBlocking();
         if (loaded.isSuccess()) {
+            Optional<WellKnownResult> document = loaded.getContent();
+            if (document.isPresent() && document.get().getIssuer().isEmpty()) {
+                // A document without an issuer is a failed load for every accessor: its jwks_uri is
+                // never handed out, and the distinct reason lets a caller treat it as terminal.
+                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "well-known discovery document",
+                        "Missing required field: issuer");
+                return failLoad(FailureReason.ISSUER_ABSENT);
+            }
             // Publish the cache entry BEFORE flipping status to OK so a fast-path reader that observes
             // OK also observes the fresh entry.
             cachedResult.set(new CachedDiscovery(loaded, System.nanoTime() + successTtlNanos));
+            failureReason.set(null);
             status.set(LoaderStatus.OK);
             return loaded.getContent();
         }
-        // Do not cache failures (M2): clearing the cache lets the next call retry discovery instead of
-        // pinning a permanent negative result.
+        return failLoad(FailureReason.UNAVAILABLE);
+    }
+
+    /**
+     * Records a failed load. Failures are never cached (M2): clearing the cache lets the next call
+     * retry discovery instead of pinning a permanent negative result.
+     *
+     * @param reason why the load failed
+     * @return an empty result
+     */
+    private Optional<WellKnownResult> failLoad(FailureReason reason) {
         cachedResult.set(null);
+        failureReason.set(reason);
         status.set(LoaderStatus.ERROR);
         return Optional.empty();
+    }
+
+    /**
+     * Returns why the most recent discovery load failed.
+     * <p>
+     * Every load resets the reason: a successful load clears it and a failed load records its own.
+     * A caller that received an empty {@link #getJwksUri()} reads it to tell a terminal rejection
+     * ({@link FailureReason#ISSUER_ABSENT}) from a failure that may succeed later
+     * ({@link FailureReason#UNAVAILABLE}).
+     *
+     * @return the reason of the most recent failed load, empty before the first load and after a
+     *         successful one
+     */
+    public Optional<FailureReason> getFailureReason() {
+        return Optional.ofNullable(failureReason.get());
     }
 
     /**

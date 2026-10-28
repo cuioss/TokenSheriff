@@ -1,0 +1,115 @@
+= ADR-0018: A JWKS loader fences stale work with one lifecycle lock and a generation epoch
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: HttpJwksLoader guards its lifecycle with one lock and a generation epoch captured when work is scheduled, publishes the adapter and fetch URI as one immutable snapshot, and lets work of a closed generation publish nothing
+// tags: concurrency, lifecycle, jwks, epoch
+// affects: token-sheriff-validation
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+An `HttpJwksLoader` runs work on threads the caller does not control: an asynchronous initialization and a
+scheduled refresh that repeats for the life of the loader. This work performs blocking network calls, so it
+is in flight for a long time compared with the operations that change the loader's lifecycle: `close()`,
+and a later initialization of the same loader.
+
+Each piece of that work ends by publishing something: installed keys, a status, a resolved endpoint, or a
+newly scheduled task. Between the moment the work starts and the moment it publishes, the loader can have
+been closed and even initialized again. Publishing then is a check-then-act hazard in its pure form. The work
+checked "I am live" before its blocking call and acts on that answer after it. The harm is concrete: a
+refresh that finishes after `close()` re-installs keys and re-publishes `OK` on a loader that was reset to
+`UNDEFINED`, and work of a closed generation can write into a later initialization of the same loader.
+
+The structural choice point is how work that belongs to a past lifecycle is recognised and kept from
+publishing, and how the fields it would publish are kept consistent with each other.
+
+== Decision
+
+One lock serialises every lifecycle transition and every publication, and each piece of work carries the
+generation it belongs to.
+
+* **A single lifecycle lock.** `close()`, the initialization claim, key installation, status publication,
+  endpoint publication and refresh scheduling all hold the same lock. "Still live" and "publish" are
+  therefore one atomic step, and `close()` is ordered strictly before or strictly after any publication,
+  never in between.
+* **A generation epoch.** `close()` increments an epoch under the lock. An initialization captures the epoch
+  it was claimed under. The refresh task it schedules is created with that same value, fixed when the task is
+  scheduled, not read when a cycle begins. Work is live only while the loader is not closed and its captured
+  epoch equals the current one. A cycle that starts after `close()` and a later re-initialization therefore
+  still belongs to the old generation and is skipped.
+* **An immutable endpoint snapshot.** The adapter and the fetch URI of one successful resolution are held in
+  a single immutable record and published with one reference write. A refresh cycle reads the record once,
+  so the URI it re-checks against the egress guard is the URI its adapter fetches. The record is `null`
+  before the first successful resolution and after `close()`.
+* **Stale work publishes nothing.** Work whose epoch has passed installs no keys, publishes no status or
+  endpoint, schedules no task and, where it can be told before the blocking call, issues no fetch. An
+  initialization superseded by `close()` completes its future with `UNDEFINED`, the status `close()` leaves.
+* **Claim before acting.** The initialization reservation is claimed under the same lock, and only the
+  winner starts the asynchronous work. Concurrent callers receive the same future and start nothing, so at
+  most one initial fetch and one refresh task exist per initialization.
+
+The guarantee is bounded, not absolute. A `close()` that lands after the liveness check and before a
+blocking fetch lets that one fetch go out. Its result is discarded by the epoch check, so it changes nothing.
+
+== Consequences
+
+=== Positive
+
+* A closed loader stays `UNDEFINED` with no keys, whatever is still running when it closes.
+* A loader can be closed and initialized again without work of the earlier generation leaking into the new
+  one.
+* The adapter and the fetch URI cannot be observed from different resolutions, so the egress re-check
+  always applies to the endpoint that is fetched.
+* The lifecycle rules sit in one lock and one comparison, which makes them testable by driving a refresh
+  cycle directly after `close()`.
+
+=== Negative
+
+* Publications contend on one lock. The lock is held only for in-memory state changes and never across a
+  network call, so the cost is small, but it is not lock-free.
+* The correctness argument depends on every publication going through the lock. A new publishing path added
+  without it silently reopens the hazard.
+
+=== Risks
+
+* One fetch of a closed generation can still reach the network, as described above. Its result is
+  discarded, but the request is made.
+* A loader that owns its refresh executor cannot be initialized again after `close()` because the executor is
+  shut down. That initialization is rejected explicitly rather than left in `LOADING`. The epoch protects the
+  state, not the executor.
+
+== Alternatives Considered
+
+**Per-field atomics with no generation.** Each field stays an `AtomicReference`, and each piece of work
+checks a `closed` flag before it publishes. This is lock-free on the hot path. It was rejected because the
+check and the write are two separate steps, so `close()` can run between them and the stale write lands after
+the reset. A flag also cannot distinguish a cycle of the closed generation from a cycle of a later
+initialization once the loader is initialized again. The adapter and the fetch URI would additionally be two
+fields, so a reader could pair an adapter with the URI of another resolution.
+
+**Cancel the in-flight work on close.** `close()` would cancel the running tasks and rely on that alone to
+stop them. It was rejected as the only barrier because cancellation is a request: a blocking fetch is not
+stopped by cancelling the schedule, and a cancelled task can still reach its publication step. `close()`
+does cancel the refresh task, but the lock and the epoch are what keep the result of work already running
+from being published.
+
+The rejected options share one flaw. Each leaves a window between establishing that work is live and
+publishing its result, or leaves no way to tell which lifecycle the work belongs to. The decision taken closes
+the window with the lock and names the lifecycle with the epoch.
+
+== References
+
+* ADR-0016 — the validator that closes the loader, which is the event the epoch fences against.
+* ADR-0017 — the status contract that stale work is kept from violating.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java`
+  — the lifecycle lock, the epoch and the endpoint record.

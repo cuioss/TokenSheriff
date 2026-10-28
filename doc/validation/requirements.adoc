@@ -199,7 +199,7 @@ For an enabled `IssuerConfig` that loads its keys through `well-known-url` disco
 
 * The configured `issuer-identifier` is always compared with the `issuer` advertised by the OpenID Connect discovery document.
 * A mismatch is a hard failure: no keys are loaded, the `ISSUER_MISMATCH` security event is counted, the `jwks_uri` of the discovery document is never fetched, and every token for that issuer is rejected.
-* A discovery document that advertises no `issuer` is a hard failure as well: no keys are loaded, the `jwks_uri` of the discovery document is never fetched, and every token for that issuer is rejected.
+* A discovery document that advertises a `jwks_uri` but no `issuer` is a terminal rejection as well: no keys are loaded, the `ISSUER_MISMATCH` security event is counted once, the `jwks_uri` of the discovery document is never fetched, and every token for that issuer is rejected. A document missing both `issuer` and `jwks_uri` is an unusable response and stays retryable.
 * The identifier is configured once, on `IssuerConfig`. It need not be repeated on `HttpJwksLoaderConfig`: `IssuerConfig` propagates it into the loader configuration when it is built.
 * An identifier set on `HttpJwksLoaderConfig` that differs from the `IssuerConfig` identifier is a build error: building the `IssuerConfig` fails instead of choosing one of the two values.
 * A pre-built loader of type `WELL_KNOWN` passed via `jwksLoader(...)` must carry the same identifier as the `IssuerConfig`; a missing or differing identifier is a build error.

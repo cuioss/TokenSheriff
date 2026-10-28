@@ -1,0 +1,119 @@
+= ADR-0016: TokenValidator owns and closes the JWKS loaders of its issuer configs
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: TokenValidator takes ownership of the JWKS loaders of the enabled issuer configs it is built from and closes every AutoCloseable one in close(); loaders and issuer configs are therefore not shared with a validator that outlives it
+// tags: ownership, lifecycle, resource-management, jwks
+// affects: token-sheriff-validation, token-sheriff-validation-quarkus
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+A JWKS loader that refreshes in the background holds resources that outlive any single call: a scheduled
+refresh task and, depending on configuration, an executor it created itself. Nothing about the loader
+ends that work on its own. Something has to call its `close()`.
+
+`TokenValidator` is built from `IssuerConfig` instances, and each enabled issuer config carries a JWKS
+loader, either built from configuration or supplied pre-built. The validator is the only component that
+holds all of them together and the only one with a defined end of life, its own `close()`. Without a rule
+for who releases the loaders, one of two things happens:
+
+* Nobody closes them. Refresh tasks keep running against the identity provider after the validator that
+  needed the keys is gone, and a loader-owned executor is never released.
+* Whoever happens to hold a reference closes them. The validator cannot then rely on its loaders staying
+  usable, and a loader shared between two validators is stopped under the one still serving traffic.
+
+The structural choice point is who owns the loader lifecycle once a loader has been handed to a validator:
+the validator that consumes the keys, or the code that built the configuration.
+
+== Decision
+
+The validator owns the JWKS loaders of the enabled issuer configs it is built from, and
+`TokenValidator.close()` closes them.
+
+The mechanism:
+
+* At construction the validator retains the JWKS loaders of the enabled issuer configs it was given.
+* `close()` shuts down the access-token pipeline and the DPoP replay protection, and in a `finally` it
+  then closes every retained loader that is `AutoCloseable`. Closing a loader stops its background refresh
+  and releases an executor the loader owns.
+* A failure while closing one loader is logged and does not stop the remaining loaders or the other
+  shutdown work. An interrupted close restores the calling thread's interrupt flag and still closes the
+  remaining loaders.
+* A loader that is not `AutoCloseable` is skipped.
+* The contract is stated on the class and on `close()`: an `IssuerConfig`, or a pre-built JWKS loader set
+  on it, must not be shared with a validator that outlives the validator it was passed to.
+
+Containers that create the validator inherit the rule instead of re-implementing it. The CDI producer of
+`token-sheriff-validation-quarkus` closes the validator it created when the producer is destroyed, at most
+once and without propagating a close failure into the container shutdown. That single call releases the
+loaders.
+
+== Consequences
+
+=== Positive
+
+* The end of life of a validator is also the end of life of every background refresh it depends on. A
+  stopped validator leaves no refresh task running against the identity provider.
+* There is one owner and one place that releases loaders, so no caller has to track loader instances
+  separately from the validator.
+* One misbehaving custom loader cannot keep the others running, because each close is isolated.
+
+=== Negative
+
+* Closing a validator has a side effect on its inputs. The `IssuerConfig` and any pre-built loader passed
+  to a validator are no longer reusable once that validator is closed, and a loader owning its executor
+  cannot be initialized again after `close()`.
+* The ownership rule is a documented contract, not a type-system guarantee. Nothing in the API prevents a
+  caller from passing the same config to two validators.
+
+=== Risks
+
+* A caller that shares an `IssuerConfig` or a pre-built loader across validators closes the loader under
+  the validator that is still live when the other one closes. Closing a loader stops its refresh, clears
+  its installed keys and resets its status to `UNDEFINED`, so the surviving validator can no longer
+  verify signatures against that issuer. The risk is accepted and documented because a shared loader
+  would otherwise need reference counting, which the loader contract does not carry.
+* A failure closing a loader is reported at debug level only, so a loader that leaks its refresh task is
+  visible only with debug logging enabled.
+
+== Alternatives Considered
+
+**The caller that built the configuration closes the loaders.** This keeps the validator free of side
+effects on its inputs and allows several validators to share one loader. It was rejected because the
+validator then cannot guarantee that the loaders it depends on stay usable or that they are ever released.
+Every embedding, including the CDI producer, would have to rediscover and track the loader instances behind
+the issuer configs it handed over, and forgetting to do so leaks a refresh task per loader.
+
+**Reference-counted shared loaders.** Each validator would acquire a loader and release it, and the loader
+would stop when the last holder released it. It would permit sharing safely. It was rejected because it adds
+an acquire/release protocol to the loader contract and a failure mode, the unbalanced release, for a
+sharing pattern no production embedding uses. The ownership transfer costs one sentence of documentation.
+
+**Leave loader shutdown to executor and JVM exit.** The refresh executor would be released only when the
+process ends. It was rejected because it leaves refresh tasks running through every validator restart
+within a process, such as an application-context restart, and gives no way to stop a loader deterministically.
+
+The rejected options share one flaw. Each separates the party that depends on a loader from the party that
+releases it, which leaves the release unowned or conditional on caller discipline. The decision taken puts
+both on the validator.
+
+== References
+
+* ADR-0017 — the loader status contract, which the validator relies on while it holds the loader.
+* ADR-0018 — how a loader keeps work that is still in flight when it is closed from changing its state.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/TokenValidator.java` — the
+  ownership contract and `close()`.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java`
+  — the loader whose refresh and executor `close()` releases.
+* `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/producer/TokenValidatorProducer.java`
+  — the CDI producer that closes the validator on destruction.

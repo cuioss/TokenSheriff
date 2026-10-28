@@ -36,6 +36,12 @@ import java.util.Optional;
  * for ResilientHttpHandler integration.
  * <p>
  * Path: HttpResponse.BodyHandler → DSL-JSON → WellKnownResult
+ * <p>
+ * A document without a usable {@code jwks_uri} is rejected (empty result). A document that carries a
+ * {@code jwks_uri} but no (or a blank) {@code issuer} is converted with a {@code null} issuer, so that
+ * {@link HttpWellKnownResolver} can reject it as a distinct, terminal
+ * {@link HttpWellKnownResolver.FailureReason#ISSUER_ABSENT} failure; it never exposes such a document's
+ * {@code jwks_uri} to a caller. A document lacking both is the missing-{@code jwks_uri} case.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -50,6 +56,12 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
      */
     private static final String BOUND_ORIGIN =
             "WellKnownConfig.parserConfig.maxPayloadSize; settable via WellKnownConfig.builder().parserConfig(...)";
+
+    /**
+     * Constant description of the parsed source, filled into the first placeholder of
+     * {@link TransportLogMessages.ERROR#JSON_PARSE_FAILED}; no document content is ever logged.
+     */
+    private static final String WELL_KNOWN_DOCUMENT = "well-known discovery document";
 
     private final DslJson<Object> dslJson;
     private final SecurityEventCounter securityEventCounter;
@@ -79,7 +91,7 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
         }
 
         if (stringContent.trim().isEmpty()) {
-            LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "Empty well-known response");
+            LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT, "Empty well-known response");
             return Optional.empty();
         }
 
@@ -100,18 +112,21 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
             WellKnownResult config = dslJson.deserialize(WellKnownResult.class, contentBytes, contentBytes.length);
 
             if (config == null) {
-                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "Failed to deserialize well-known configuration");
+                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT,
+                        "Failed to deserialize well-known configuration");
                 return Optional.empty();
             }
 
-            // Validate required fields
-            if (config.issuer == null || config.issuer.trim().isEmpty()) {
-                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "Missing required field: issuer");
+            // A document without a usable jwks_uri is rejected, whether or not it carries an issuer
+            if (config.jwksUri == null || config.jwksUri.trim().isEmpty()) {
+                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT,
+                        "Missing required field: jwks_uri");
                 return Optional.empty();
             }
-            if (config.jwksUri == null || config.jwksUri.trim().isEmpty()) {
-                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "Missing required field: jwks_uri");
-                return Optional.empty();
+            // An absent or blank issuer is normalized to null and passed on: HttpWellKnownResolver
+            // turns it into a terminal ISSUER_ABSENT rejection, distinct from an unreadable document
+            if (config.issuer != null && config.issuer.trim().isEmpty()) {
+                config.issuer = null;
             }
 
             return Optional.of(config);

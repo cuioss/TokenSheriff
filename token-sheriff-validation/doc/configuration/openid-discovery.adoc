@@ -194,7 +194,7 @@ NOTE: Use the tenant-specific Microsoft endpoint. The multi-tenant `common` endp
 
 Every `IssuerConfig` that loads its keys through well-known discovery compares its configured `issuerIdentifier` with the `issuer` advertised by the discovery document. A single trailing slash difference is tolerated. On a mismatch the loader stops before it fetches the advertised `jwks_uri`: no keys are loaded, an `ISSUER_MISMATCH` security event is counted, and every token for that issuer is rejected.
 
-A discovery document that advertises no `issuer` is a hard failure as well: no keys are loaded, the advertised `jwks_uri` is never fetched, and every token for that issuer is rejected.
+A discovery document that advertises a `jwks_uri` but no `issuer` (or a blank one) is a terminal rejection as well: no keys are loaded, the advertised `jwks_uri` is never fetched, an `ISSUER_MISMATCH` security event is counted once, the rejection is not retried by the background refresh, and every token for that issuer is rejected. A document that lacks both `issuer` and `jwks_uri` is an unusable response instead and stays retryable.
 
 Troubleshooting an `ISSUER_MISMATCH`:
 

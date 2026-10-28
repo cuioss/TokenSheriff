@@ -1,0 +1,133 @@
+= ADR-0017: A JWKS loader reports OK only with usable keys and retries only transient discovery failures
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: A JWKS loader reports OK exactly while a usable key set is installed, recovers a failed first load through its background refresh, and retries only transient discovery failures; security rejections of the endpoint resolution stay terminal
+// tags: jwks, fail-closed, health, lifecycle
+// affects: token-sheriff-validation, token-sheriff-validation-quarkus
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+The status of a JWKS loader is consumed by two parties. The issuer cache admits an issuer for token
+validation only while its loader reports `OK`. The readiness health check reports the application ready
+only while every loader reports `OK`. A status that does not match the real state of the loader therefore
+changes either what is accepted or whether the application receives traffic.
+
+Two properties of a loader pull in opposite directions:
+
+* The status must be truthful. An `OK` that is reported without a usable key set, for example after an HTTP
+  fetch that succeeded but returned a JWKS with no supported key, makes the loader look healthy while it can
+  verify nothing. A loader that never leaves a non-`OK` status after a failed first load never recovers,
+  although the identity provider may come back at any time.
+* Not every failure is worth retrying. Failing to reach the discovery endpoint is a property of the moment.
+  An advertised issuer that does not match the configured trust anchor, or that is absent, is a property of
+  the document and of who controls it. Retrying a rejection of the second kind adds no information, repeats
+  an audited security event on every cycle, and keeps trying a document that cannot become trustworthy.
+
+The structural choice points are what `OK` is allowed to mean, and which resolution failures leave the
+loader retrying and which end it.
+
+== Decision
+
+`LoaderStatus.OK` is reported exactly while a usable key set is installed, and only transient discovery
+failures are retried.
+
+Status:
+
+* The first load publishes `OK` only when a usable key set is installed. A fetch that succeeds at the HTTP
+  level but yields no usable key, or no content, is a failed load.
+* A failed first load leaves the status `UNDEFINED` when background refresh is enabled and `ERROR` when it
+  is disabled. The background refresh is started in both the success and the failure case, so a loader whose
+  first load failed recovers on its own: a refresh cycle that installs a usable key set publishes `OK`.
+* A failed refresh cycle never downgrades an existing `OK`, because the installed keys remain usable. A
+  refresh that yields no usable key never publishes `OK`.
+
+Endpoint resolution, for a loader configured with well-known discovery:
+
+* A discovery that is unavailable is retryable: a transport failure, an error response, a blocked
+  discovery endpoint, or a document that is unreadable or has no `jwks_uri`, including when it has no
+  issuer either. With background refresh enabled the status stays `UNDEFINED` and the refresh re-attempts
+  the discovery on each cycle. When it succeeds, the same cycle goes on to fetch the keys.
+* A security rejection is terminal and ends in `ERROR` without scheduling a retry: an issuer that is
+  advertised but does not match the configured issuer, a document that carries a `jwks_uri` but advertises
+  no issuer, and a JWKS fetch URI rejected by the egress guard. If such a rejection first appears on a
+  later refresh cycle, the status becomes `ERROR` and the refresh task is cancelled.
+* With background refresh disabled, every resolution failure is a terminal `ERROR`.
+
+The readiness health check reads the status as it is. A loader is healthy only with `OK`. While any loader
+is `UNDEFINED` the check reports the application not ready and `loading` as `IN_PROGRESS`; a terminal `ERROR`
+reports not ready with `loading` `COMPLETE`.
+
+== Consequences
+
+=== Positive
+
+* `OK` is a statement about key material, not about network success. The issuer cache and the readiness
+  probe therefore act on the same fact.
+* A temporary identity-provider or discovery outage heals without a restart. The issuer is re-admitted once
+  its loader reports `OK`.
+* Nothing is accepted that was rejected before: the retry only changes when a loader reaches `OK`, and `OK`
+  still requires a usable key set. The terminal rejections of the issuer gate and the egress guard are
+  unchanged.
+* A rejection is evaluated, audited and counted once, not on every refresh cycle.
+
+=== Negative
+
+* While discovery is retrying, the readiness probe shows `IN_PROGRESS` instead of a terminal failure. An
+  operator or an orchestrator cannot tell a discovery that will recover from one that is permanently down
+  by the status alone; both are `UNDEFINED` until a cycle succeeds.
+* Each retry cycle re-runs discovery and logs the resolution failure again, at the configured refresh
+  interval.
+
+=== Risks
+
+* A permanently unreachable discovery endpoint keeps the application not ready indefinitely, with the
+  status never reaching a terminal value. Readiness depends on the refresh interval to notice recovery.
+* The split between retryable and terminal is decided in the discovery layer and the loader together. A new
+  resolution failure that is classified as retryable by default is retried forever, so each new failure
+  kind needs an explicit classification.
+
+== Alternatives Considered
+
+**Retry every resolution failure.** One rule, no classification. It was rejected because a security
+rejection would then be re-evaluated on every cycle: the issuer-mismatch audit event would be re-counted
+without bound, and the loader would keep fetching a discovery document that is the source of the
+rejection. Retrying a document that is untrustworthy by construction is not recovery.
+
+**Treat every resolution failure as terminal.** A discovery failure at start-up would then permanently
+disable the issuer until a restart, even though the identity provider recovers on its own. It was rejected
+because it turns a transient outage into a standing one and contradicts the self-recovery already granted
+to a failed key fetch.
+
+**Report `OK` after a successful fetch regardless of the key set.** The status would mean "the endpoint
+answered". It was rejected because the issuer cache would admit an issuer that has no key to verify with,
+and the readiness probe would report ready for an application that rejects every token.
+
+**Report `ERROR` immediately for a failed first load with refresh enabled.** This gives a faster terminal
+signal. It was rejected because the refresh is going to retry, so `ERROR` would be wrong the moment a cycle
+succeeds, and `ERROR` is reserved for failures nothing will retry.
+
+The rejected options share one flaw. Each lets the reported status diverge from what the loader can
+actually do next: either `OK` without keys, or a terminal status for something that will recover, or a retry
+of something that cannot.
+
+== References
+
+* ADR-0016 — the validator that holds the loader and releases it.
+* ADR-0018 — how a loader keeps stale work from publishing this status after it is closed.
+* ADR-0002 — the observability beans, including the readiness check, resolve against the validator actually
+  in use.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java`
+  — the status contract and the endpoint resolution classification.
+* `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/health/JwksEndpointHealthCheck.java`
+  — the readiness check that reports `READY`, `NOT_READY` and `loading`.
