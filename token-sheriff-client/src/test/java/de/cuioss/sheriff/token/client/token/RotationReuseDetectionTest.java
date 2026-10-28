@@ -272,9 +272,11 @@ class RotationReuseDetectionTest {
             var family = new RefreshTokenFamily(tokens.getFirst());
             family.rotate(tokens.getFirst(), tokens.get(1));
             var successor = family.reseededWith(tokens.get(2));
+            String predecessorToken = tokens.getFirst();
+            String replayRotation = tokens.get(3);
 
             var thrown = assertThrows(RefreshTokenFamilyRevokedException.class,
-                    () -> successor.rotate(tokens.getFirst(), tokens.get(3)),
+                    () -> successor.rotate(predecessorToken, replayRotation),
                     "a token the predecessor superseded must be reuse on the successor");
 
             assertAll("the successor fails closed",
@@ -289,11 +291,13 @@ class RotationReuseDetectionTest {
             List<String> tokens = distinctTokens(2);
             var family = new RefreshTokenFamily(tokens.getFirst());
             family.rotate(tokens.getFirst(), tokens.get(1));
+            String currentToken = tokens.get(1);
+            String supersededToken = tokens.getFirst();
 
             assertAll("a known token is never a new grant",
-                    () -> assertThrows(IllegalArgumentException.class, () -> family.reseededWith(tokens.get(1)),
+                    () -> assertThrows(IllegalArgumentException.class, () -> family.reseededWith(currentToken),
                             "the current token must not reseed"),
-                    () -> assertThrows(IllegalArgumentException.class, () -> family.reseededWith(tokens.getFirst()),
+                    () -> assertThrows(IllegalArgumentException.class, () -> family.reseededWith(supersededToken),
                             "a superseded token must not reseed"),
                     () -> assertThrows(IllegalArgumentException.class, () -> family.reseededWith("  ")),
                     () -> assertThrows(NullPointerException.class, () -> family.reseededWith(null)),
@@ -348,7 +352,9 @@ class RotationReuseDetectionTest {
             List<String> tokens = distinctTokens(5);
             var family = new RefreshTokenFamily(tokens.getFirst());
             family.rotate(tokens.getFirst(), tokens.get(1));
-            assertThrows(RefreshTokenFamilyRevokedException.class, () -> family.rotate(tokens.getFirst(), tokens.get(2)));
+            String supersededToken = tokens.getFirst();
+            String replayRotation = tokens.get(2);
+            assertThrows(RefreshTokenFamilyRevokedException.class, () -> family.rotate(supersededToken, replayRotation));
             assertTrue(family.isCurrent(tokens.get(1)),
                     "a revoked family still reports the token it was revoked on as current");
 

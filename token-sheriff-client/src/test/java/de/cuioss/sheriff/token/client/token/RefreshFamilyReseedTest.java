@@ -351,8 +351,9 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
         manager.store(session, bearerBundle(rt1, null));
 
         String replaySuccessor = token();
+        String replayAccessToken = token();
         var reuse = assertThrows(RefreshTokenFamilyRevokedException.class,
-                () -> manager.applyRefresh(session, token(), replaySuccessor, null, null, null));
+                () -> manager.applyRefresh(session, replayAccessToken, replaySuccessor, null, null, null));
 
         assertAll("the adoption path never launders a superseded token into a fresh grant",
                 () -> assertEquals(Optional.of(replaySuccessor), reuse.getRotatedRefreshToken(),
