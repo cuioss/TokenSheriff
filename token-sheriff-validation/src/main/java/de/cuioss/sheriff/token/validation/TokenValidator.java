@@ -474,7 +474,8 @@ public class TokenValidator implements Closeable {
      * and releases an executor it owns. Ownership of those loaders is transferred to this validator:
      * an {@link IssuerConfig} (or a pre-built JWKS loader set on it) must not be shared with a
      * validator that outlives this one. A failure closing one loader is logged and neither stops the
-     * remaining loaders nor the shutdown of the other resources.
+     * remaining loaders nor the shutdown of the other resources. A loader whose close is interrupted
+     * does not stop the remaining loaders either; the calling thread's interrupt flag is restored.
      * <p>
      * This should be called when the TokenValidator is no longer needed.
      */
@@ -495,13 +496,17 @@ public class TokenValidator implements Closeable {
             if (loader instanceof AutoCloseable closeable) {
                 try {
                     closeable.close();
+                } catch (InterruptedException e) {
+                    // Restore the interrupt flag for the caller, but keep closing the remaining loaders.
+                    Thread.currentThread().interrupt();
+                    LOGGER.debug(e, "Interrupted while closing JWKS loader %s", loader.getClass().getSimpleName());
                 }
                 // cui-rewrite:disable InvalidExceptionUsageRecipe
                 // Intentional catch-all: AutoCloseable.close() declares Exception, and one failing
-                // loader must not keep the others running.
+                // loader must not keep the others running. Only the class name is logged: a custom
+                // loader's accessors may themselves throw and must not escape this block.
                 catch (Exception e) {
-                    LOGGER.debug(e, "Failed to close JWKS loader %s for issuer %s",
-                            loader.getClass().getSimpleName(), loader.getIssuerIdentifier().orElse("unknown"));
+                    LOGGER.debug(e, "Failed to close JWKS loader %s", loader.getClass().getSimpleName());
                 }
             }
         }

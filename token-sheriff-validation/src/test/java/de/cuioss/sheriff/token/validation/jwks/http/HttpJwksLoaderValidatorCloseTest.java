@@ -41,7 +41,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Verifies that {@link TokenValidator#close()} releases the JWKS loaders of its issuer configurations:
  * the background refresh of an {@link HttpJwksLoader} stops, and a loader that is not
- * {@link AutoCloseable} does not break the close.
+ * {@link AutoCloseable} does not break the close. A loader failing to close — by throwing, or by being
+ * interrupted — neither breaks the close nor stops the remaining loaders.
  * <p>
  * Lives in the {@code jwks.http} package to read the package-private
  * {@link HttpJwksLoader#isBackgroundRefreshActive()}.
@@ -97,10 +98,121 @@ class HttpJwksLoaderValidatorCloseTest {
                 () -> assertTrue(httpLoader.getKeyIds().isEmpty(), "no key may remain installed"));
     }
 
+    @Test
+    @DisplayName("A loader whose close() and accessors throw does not stop the remaining loaders")
+    void closeShouldContinueWhenLoaderCloseAndAccessorThrow() {
+        RecordingCloseableLoader recordingLoader = new RecordingCloseableLoader(STUB_ISSUER);
+        TokenValidator validator = TokenValidator.builder()
+                .issuerConfig(IssuerConfig.builder()
+                        .issuerIdentifier(HTTP_ISSUER)
+                        .expectedAudience("test-audience")
+                        .jwksLoader(new FailingCloseableLoader(HTTP_ISSUER, new IllegalStateException("close failed"), true))
+                        .build())
+                .issuerConfig(IssuerConfig.builder()
+                        .issuerIdentifier(STUB_ISSUER)
+                        .expectedAudience("test-audience")
+                        .jwksLoader(recordingLoader)
+                        .build())
+                .build();
+
+        assertDoesNotThrow(validator::close, "a loader failing to close must not break close()");
+
+        assertTrue(recordingLoader.isClosed(), "the loader after the failing one must still be closed");
+    }
+
+    @Test
+    @DisplayName("An interrupted loader close restores the interrupt flag and does not stop the remaining loaders")
+    void closeShouldRestoreInterruptFlagAndContinue() {
+        RecordingCloseableLoader recordingLoader = new RecordingCloseableLoader(STUB_ISSUER);
+        TokenValidator validator = TokenValidator.builder()
+                .issuerConfig(IssuerConfig.builder()
+                        .issuerIdentifier(HTTP_ISSUER)
+                        .expectedAudience("test-audience")
+                        .jwksLoader(new FailingCloseableLoader(HTTP_ISSUER, new InterruptedException("close interrupted"), false))
+                        .build())
+                .issuerConfig(IssuerConfig.builder()
+                        .issuerIdentifier(STUB_ISSUER)
+                        .expectedAudience("test-audience")
+                        .jwksLoader(recordingLoader)
+                        .build())
+                .build();
+
+        try {
+            assertDoesNotThrow(validator::close, "an interrupted loader close must not break close()");
+
+            assertAll("the interrupt is preserved and the remaining loaders are closed",
+                    () -> assertTrue(Thread.currentThread().isInterrupted(), "the interrupt flag must be restored"),
+                    () -> assertTrue(recordingLoader.isClosed(), "the loader after the interrupted one must still be closed"));
+        } finally {
+            // Clear the flag so it does not leak into other tests on this thread
+            Thread.interrupted();
+        }
+    }
+
+    /**
+     * An {@link AutoCloseable} JWKS loader whose {@code close()} throws the given exception. When
+     * {@code accessorFailsAfterClose} is set, {@link #getIssuerIdentifier()} throws once {@code close()}
+     * was called, modelling a custom loader whose accessors fail after it was shut down.
+     */
+    private static final class FailingCloseableLoader extends NonCloseableLoader implements AutoCloseable {
+
+        private final Exception closeFailure;
+        private final boolean accessorFailsAfterClose;
+        private volatile boolean closeCalled;
+
+        FailingCloseableLoader(String issuer, Exception closeFailure, boolean accessorFailsAfterClose) {
+            super(issuer);
+            this.closeFailure = closeFailure;
+            this.accessorFailsAfterClose = accessorFailsAfterClose;
+        }
+
+        @Override
+        public Optional<String> getIssuerIdentifier() {
+            if (accessorFailsAfterClose && closeCalled) {
+                throw new IllegalStateException("accessor fails after close");
+            }
+            return super.getIssuerIdentifier();
+        }
+
+        @Override
+        public void close() throws Exception {
+            closeCalled = true;
+            throw closeFailure;
+        }
+    }
+
+    /**
+     * An {@link AutoCloseable} JWKS loader that records whether it was closed.
+     */
+    private static final class RecordingCloseableLoader extends NonCloseableLoader implements AutoCloseable {
+
+        @Getter
+        private volatile boolean closed;
+
+        RecordingCloseableLoader(String issuer) {
+            super(issuer);
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+    }
+
     /**
      * A JWKS loader that is not {@link AutoCloseable}, always reporting {@link LoaderStatus#OK}.
      */
-    private static final class NonCloseableLoader implements JwksLoader {
+    private static class NonCloseableLoader implements JwksLoader {
+
+        private final String issuer;
+
+        NonCloseableLoader() {
+            this(STUB_ISSUER);
+        }
+
+        NonCloseableLoader(String issuer) {
+            this.issuer = issuer;
+        }
 
         @Override
         public LoaderStatus getLoaderStatus() {
@@ -124,7 +236,7 @@ class HttpJwksLoaderValidatorCloseTest {
 
         @Override
         public Optional<String> getIssuerIdentifier() {
-            return Optional.of(STUB_ISSUER);
+            return Optional.of(issuer);
         }
 
         @Override
