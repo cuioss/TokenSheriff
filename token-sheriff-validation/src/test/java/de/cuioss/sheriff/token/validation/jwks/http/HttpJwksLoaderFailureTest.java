@@ -30,6 +30,7 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
 import lombok.Getter;
+import mockwebserver3.MockWebServer;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,7 +40,9 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
+import java.net.URI;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -181,6 +184,47 @@ class HttpJwksLoaderFailureTest {
         } finally {
             // Restore dispatcher state
             moduleDispatcher.setCustomResponse(previousResponse);
+        }
+    }
+
+    @Test
+    @DisplayName("An initialization resolving its endpoint after close() and a re-initialization publishes and fetches nothing")
+    void staleInitializationKeepsTheNewGenerationEndpoint() throws Exception {
+        String staleJwksPath = "/jwks-stale.json";
+        String currentJwksPath = "/jwks-current.json";
+        DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(staleJwksPath, currentJwksPath));
+        CountDownLatch firstDiscoveryGate = new CountDownLatch(1);
+        dispatcher.holdFirstDiscovery(firstDiscoveryGate);
+
+        try (MockWebServer server = new MockWebServer()) {
+            server.setDispatcher(dispatcher);
+            server.start();
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .wellKnownUrl(server.url(DiscoveryGenerationDispatcher.WELL_KNOWN_PATH).toString())
+                    .refreshIntervalSeconds(0)
+                    .build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                CompletableFuture<LoaderStatus> stale = loader.initJWKSLoader(securityEventCounter);
+                Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> dispatcher.discoveryRequests() >= 1);
+                loader.close();
+                assertEquals(LoaderStatus.OK, loader.initJWKSLoader(securityEventCounter).get(10, TimeUnit.SECONDS),
+                        "the re-initialization resolves and loads the current endpoint");
+
+                firstDiscoveryGate.countDown();
+                LoaderStatus staleStatus = stale.get(10, TimeUnit.SECONDS);
+                loader.performBackgroundRefresh();
+
+                assertAll("the stale initialization leaves the new generation untouched",
+                        () -> assertEquals(LoaderStatus.UNDEFINED, staleStatus, "a superseded initialization reports UNDEFINED"),
+                        () -> assertEquals(0, dispatcher.jwksFetches(staleJwksPath), "the stale endpoint must never be fetched"),
+                        () -> assertEquals(Optional.of(currentJwksPath), loader.getJwksFetchUri().map(URI::getPath)),
+                        () -> assertEquals(2, dispatcher.jwksFetches(currentJwksPath),
+                                "the initial load and the refresh fetch the current endpoint"),
+                        () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()));
+            }
+        } finally {
+            firstDiscoveryGate.countDown();
         }
     }
 

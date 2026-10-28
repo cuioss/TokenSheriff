@@ -104,17 +104,19 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     private final EgressPolicy egressPolicy;
 
     /**
-     * The resolved JWKS fetch URI captured at adapter resolution. The egress guard re-resolves and
-     * re-checks this URI on <em>every</em> fetch — initial and each scheduled background refresh — so
-     * a DNS rebind that flips the host into a blocked range after the initial fetch is rejected
-     * rather than silently trusted by the reused adapter.
+     * The JWKS endpoint of the current generation: the adapter and the fetch URI of one successful
+     * resolution, published together so a reader always obtains both from the same resolution.
+     * {@code null} before the first successful resolution and after {@link #close()}. Only a resolution
+     * that passed the egress guard is ever published, and only while the work that resolved it is
+     * still live (see {@link #epoch}). The egress guard re-resolves and re-checks the fetch URI on
+     * <em>every</em> background refresh, so a DNS rebind that flips the host into a blocked range after
+     * the initial fetch is rejected rather than silently trusted by the reused adapter.
      */
-    private final AtomicReference<URI> jwksFetchUri = new AtomicReference<>();
+    private final AtomicReference<JwksEndpoint> endpoint = new AtomicReference<>();
 
     private final AtomicReference<LoaderStatus> status = new AtomicReference<>(LoaderStatus.UNDEFINED);
     private final AtomicReference<JWKSKeyLoader> currentKeys = new AtomicReference<>();
     private final ConcurrentLinkedDeque<RetiredKeySet> retiredKeys = new ConcurrentLinkedDeque<>();
-    private final AtomicReference<HttpAdapter<Jwks>> httpAdapter = new AtomicReference<>();
     private final AtomicReference<ScheduledFuture<?>> refreshTask = new AtomicReference<>();
     private SecurityEventCounter securityEventCounter;
     private final AtomicReference<String> resolvedIssuerIdentifier = new AtomicReference<>();
@@ -145,10 +147,12 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     private boolean closed;
 
     /**
-     * Incremented by every {@link #close()}. An initialization or refresh cycle captures the value it
-     * started under and stops installing keys, publishing a status or scheduling a task once the value
-     * has moved on, so work that was in flight when the loader closed cannot leak into a later
-     * initialization of the same loader. Guarded by {@link #lifecycleLock}.
+     * Incremented by every {@link #close()}. An initialization captures the value it was claimed under,
+     * and the background refresh task it schedules carries that same value, fixed when the task is
+     * scheduled rather than read when a cycle begins. Once the value has moved on, such work installs
+     * no keys, publishes no status or endpoint, schedules no task and issues no fetch, so work of a
+     * closed generation cannot leak into a later initialization of the same loader. Guarded by
+     * {@link #lifecycleLock}.
      */
     private long epoch;
 
@@ -187,7 +191,10 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * later caller receives the same future and starts no work, so at most one initial fetch and one
      * background refresh task are started per initialization. Claiming the reservation and clearing a
      * previous {@link #close()} is one step under the lifecycle lock, so a concurrent {@code close()}
-     * is ordered strictly before or strictly after the claim and is never silently undone.
+     * is ordered strictly before or strictly after the claim and is never silently undone. An
+     * initialization that is still in flight when {@code close()} runs belongs to the closed
+     * generation: it publishes no endpoint, status or task and its future completes with
+     * {@link LoaderStatus#UNDEFINED} once its endpoint resolution returns.
      * <p>
      * <strong>Re-initialization after {@link #close()}:</strong> a closed loader can be initialized
      * again, with one exception. When background refresh is enabled and the refresh executor has been
@@ -241,29 +248,38 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
     /**
      * Initialization body, run asynchronously by the single winner of
-     * {@link #initJWKSLoader(SecurityEventCounter)}: resolves the adapter, performs the initial fetch,
-     * starts the background refresh when enabled and publishes the resulting status. A failed initial
-     * fetch does not overwrite an {@link LoaderStatus#OK} that a background refresh cycle published
-     * in the meantime (see {@link #publishFailedLoadStatus(LoaderStatus, long)}).
+     * {@link #initJWKSLoader(SecurityEventCounter)}: resolves the endpoint, publishes it, performs the
+     * initial fetch, starts the background refresh when enabled and publishes the resulting status. A
+     * failed initial fetch does not overwrite an {@link LoaderStatus#OK} that a background refresh cycle
+     * published in the meantime (see {@link #publishFailedLoadStatus(LoaderStatus, long)}).
+     * <p>
+     * When a {@link #close()} ran while the endpoint was being resolved, the resolution is discarded:
+     * no endpoint or issuer is published, no fetch is issued, no status is published, nothing is
+     * scheduled, and {@link LoaderStatus#UNDEFINED} is returned, the status {@code close()} leaves.
      *
      * @param startEpoch the {@link #epoch} this initialization was claimed under; once a
      *                   {@link #close()} moved it on, this initialization publishes and schedules nothing
      * @return the status in effect when this initialization finished, which is what
-     *         {@link #getLoaderStatus()} reports while the initialization is still live
+     *         {@link #getLoaderStatus()} reports while the initialization is still live, or
+     *         {@link LoaderStatus#UNDEFINED} when it was superseded by {@code close()} during the
+     *         endpoint resolution
      */
     private LoaderStatus initialize(long startEpoch) {
         publishStatus(LoaderStatus.LOADING, startEpoch);
 
-        // Resolve the adapter (may involve well-known discovery)
+        // Resolve the endpoint (may involve well-known discovery) and publish it only if still live
         AdapterResolution resolution = resolveJWKSAdapter();
-        HttpAdapter<Jwks> adapter = resolution.adapter();
-        if (adapter == null) {
+        if (!adoptResolution(resolution, startEpoch)) {
+            LOGGER.debug("Initialization superseded by close() during endpoint resolution, discarding it");
+            return LoaderStatus.UNDEFINED;
+        }
+        JwksEndpoint resolved = resolution.endpoint();
+        if (resolved == null) {
             return handleAdapterResolutionFailure(resolution, startEpoch);
         }
-        httpAdapter.set(adapter);
 
         // Load JWKS via HttpAdapter (blocking for initialization)
-        HttpResult<Jwks> result = adapter.getBlocking();
+        HttpResult<Jwks> result = resolved.adapter().getBlocking();
 
         // Start background refresh if configured (regardless of initial load status to enable retries)
         boolean backgroundRefreshEnabled = config.isBackgroundRefreshEnabled();
@@ -320,16 +336,23 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     }
 
     /**
-     * Resolves the JWKS adapter based on configuration.
+     * Resolves the JWKS endpoint based on configuration.
      * For well-known: performs discovery to get JWKS URL and validates issuer
      * For direct: uses the configured HTTP handler
+     * <p>
+     * Stores nothing: the caller publishes the returned issuer and endpoint, and only while the work
+     * that requested the resolution is still live (see {@link #adoptResolution(AdapterResolution, long)}).
+     * A URI rejected by the egress guard is never part of the result.
      *
-     * @return the resolution: the adapter on success; on failure no adapter, flagged retryable when
-     *         the well-known discovery yielded no JWKS URI (a transient condition) and not retryable
-     *         for a security rejection (issuer mismatch, absent issuer, egress block)
+     * @return the resolution: on success the endpoint (adapter and fetch URI of this one resolution)
+     *         and the resolved issuer; on failure no endpoint, flagged retryable when the well-known
+     *         discovery yielded no JWKS URI (a transient condition) and not retryable for a security
+     *         rejection (issuer mismatch, absent issuer, egress block). An egress-rejected resolution
+     *         still carries the issuer it resolved.
      */
     private AdapterResolution resolveJWKSAdapter() {
         HttpHandler handler;
+        @Nullable String issuer;
 
         if (config.getWellKnownConfig() != null) {
             // Well-known discovery - the resolver itself uses HttpAdapter for retry!
@@ -345,33 +368,32 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             Optional<String> discoveredIssuer = resolver.getIssuer();
             String configuredIssuer = config.getIssuerIdentifier();
 
-            Optional<String> issuer = resolveIssuer(discoveredIssuer.orElse(null), configuredIssuer, securityEventCounter);
-            if (issuer.isEmpty()) {
+            Optional<String> resolvedIssuer = resolveIssuer(discoveredIssuer.orElse(null), configuredIssuer, securityEventCounter);
+            if (resolvedIssuer.isEmpty()) {
                 return AdapterResolution.REJECTED;
             }
-            resolvedIssuerIdentifier.set(issuer.get());
+            issuer = resolvedIssuer.get();
 
             // Use overloaded method to create handler for discovered JWKS URL
             handler = config.getHttpHandler(jwksUri.get());
         } else {
             // Direct HTTP configuration - use existing handler from config
             handler = config.getHttpHandler();
-            resolvedIssuerIdentifier.set(config.getIssuerIdentifier());
+            issuer = config.getIssuerIdentifier();
         }
 
         // SSRF egress guard (C1): resolve the advertised/configured JWKS URL and reject it
         // if it lands on an internal/loopback/metadata address BEFORE any fetch is issued.
         // Resolving here — immediately before the fetch — also closes the DNS-rebinding window.
-        // The URI is retained so the guard can be re-applied on every scheduled background
-        // refresh (C1 follow-up), not just this initial resolution.
+        // The URI travels with the adapter in the endpoint so the guard can be re-applied on every
+        // scheduled background refresh (C1 follow-up), not just this initial resolution.
         URI fetchUri = handler.getUri();
-        jwksFetchUri.set(fetchUri);
         try {
             egressPolicy.check(fetchUri);
         } catch (TransportException e) {
             LOGGER.error(e, ERROR.JWKS_INITIALIZATION_FAILED, e.getMessage(),
-                    getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
-            return AdapterResolution.REJECTED;
+                    Optional.ofNullable(issuer).orElse(ISSUER_NOT_CONFIGURED));
+            return new AdapterResolution(null, issuer, false);
         }
 
         // Create base adapter with ETag caching
@@ -382,7 +404,37 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                 .build();
 
         // Wrap with retry behavior
-        return new AdapterResolution(ResilientHttpAdapter.wrap(baseAdapter, config.getRetryConfig()), false);
+        JwksEndpoint resolved = new JwksEndpoint(ResilientHttpAdapter.wrap(baseAdapter, config.getRetryConfig()), fetchUri);
+        return new AdapterResolution(resolved, issuer, false);
+    }
+
+    /**
+     * Publishes what a resolution yielded — its issuer and, on success, its endpoint — as one atomic
+     * step under {@link #lifecycleLock}, but only while the work that requested it is still live.
+     *
+     * @param resolution the resolution to publish
+     * @param startEpoch the {@link #epoch} the requesting initialization or refresh cycle started under
+     * @return {@code true} if the work is still live and the resolution was published; {@code false}
+     *         if a {@link #close()} ran since the work started, in which case nothing was published
+     */
+    private boolean adoptResolution(AdapterResolution resolution, long startEpoch) {
+        lifecycleLock.lock();
+        try {
+            if (!isLive(startEpoch)) {
+                return false;
+            }
+            String issuer = resolution.issuer();
+            if (issuer != null) {
+                resolvedIssuerIdentifier.set(issuer);
+            }
+            JwksEndpoint resolved = resolution.endpoint();
+            if (resolved != null) {
+                endpoint.set(resolved);
+            }
+            return true;
+        } finally {
+            lifecycleLock.unlock();
+        }
     }
 
     @Override
@@ -613,7 +665,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     /**
      * Schedules the background refresh, unless the loader has been closed in the meantime (an
      * initialization still in flight when {@link #close()} ran must not leave a running task behind,
-     * not even when the loader has been initialized again since).
+     * not even when the loader has been initialized again since). The scheduled task carries
+     * {@code startEpoch}, so each of its cycles belongs to this initialization's generation, also when
+     * it begins only after a {@code close()} and a later re-initialization.
      *
      * @param startEpoch the {@link #epoch} the calling initialization was claimed under
      */
@@ -624,7 +678,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                 return;
             }
             refreshTask.set(config.getScheduledExecutorService().scheduleAtFixedRate(
-                    this::performBackgroundRefresh,
+                    () -> performBackgroundRefresh(startEpoch),
                     config.getRefreshIntervalSeconds(),
                     config.getRefreshIntervalSeconds(),
                     TimeUnit.SECONDS));
@@ -653,15 +707,29 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     }
 
     /**
-     * Executes one background refresh cycle: re-validates SSRF egress against the resolved JWKS URI,
-     * fetches the JWKS, and rotates keys on success.
+     * Executes one background refresh cycle under the current {@link #epoch}.
+     * <p>
+     * Package-private test entry point, so a cycle can be driven deterministically in tests without
+     * relying on the {@link java.util.concurrent.ScheduledExecutorService} timing. It reads the current
+     * epoch and delegates to {@link #performBackgroundRefresh(long)}; the scheduled task does not use
+     * it, it carries the epoch of the initialization that scheduled it.
+     */
+    void performBackgroundRefresh() {
+        performBackgroundRefresh(currentEpoch());
+    }
+
+    /**
+     * Executes one background refresh cycle of the generation {@code cycleEpoch}: re-validates SSRF
+     * egress against the fetch URI of the current endpoint, fetches the JWKS with that same endpoint's
+     * adapter, and rotates keys on success.
      * <p>
      * Status contract: a cycle that installs a usable key set publishes {@link LoaderStatus#OK}, which
      * lets a loader whose first load failed recover. A failed cycle never downgrades an existing
-     * {@code OK}, since the installed keys remain usable. Once the loader is closed, a cycle that is
-     * still in flight neither installs keys nor publishes {@code OK}.
+     * {@code OK}, since the installed keys remain usable. A cycle of a closed generation — one whose
+     * {@code cycleEpoch} a {@link #close()} has moved on, even if the loader has been initialized again
+     * since — issues no fetch, installs no keys and publishes neither a status nor an endpoint.
      * <p>
-     * When no adapter is available because the initial well-known discovery failed transiently, the
+     * When no endpoint is available because the initial well-known discovery failed transiently, the
      * cycle re-attempts the discovery and, on success, continues with the fetch in the same cycle. A
      * security rejection on that re-attempt is terminal: the status becomes {@link LoaderStatus#ERROR}
      * and the refresh task is cancelled.
@@ -670,30 +738,38 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * every scheduled refresh, so without re-resolving and re-checking the fetch URI here, a DNS answer
      * that rebinds an initially-public host into an internal/loopback/metadata range after the first
      * fetch would be silently trusted. Re-running {@link EgressPolicy#check(URI)} on each cycle resolves
-     * the host fresh and blocks the rebound target before any bytes are fetched.
-     * <p>
-     * Package-private so the per-refresh re-validation can be driven deterministically in tests without
-     * relying on the {@link java.util.concurrent.ScheduledExecutorService} timing.
+     * the host fresh and blocks the rebound target before any bytes are fetched. The endpoint is read
+     * once, so the URI that is checked is the URI the adapter fetches.
+     *
+     * @param cycleEpoch the {@link #epoch} of the generation this cycle belongs to
      */
-    void performBackgroundRefresh() {
-        long cycleEpoch = currentEpoch();
+    private void performBackgroundRefresh(long cycleEpoch) {
+        JwksEndpoint current;
+        lifecycleLock.lock();
         try {
-            HttpAdapter<Jwks> adapter = httpAdapter.get();
-            if (adapter == null) {
-                adapter = reResolveAdapter(cycleEpoch);
-                if (adapter == null) {
+            if (!isLive(cycleEpoch)) {
+                LOGGER.debug("Skipping a background refresh cycle of a closed loader generation");
+                return;
+            }
+            current = endpoint.get();
+        } finally {
+            lifecycleLock.unlock();
+        }
+        try {
+            if (current == null) {
+                current = reResolveEndpoint(cycleEpoch);
+                if (current == null) {
                     return;
                 }
             }
 
             // Re-validate egress on every refresh (C1 follow-up): reject a rebound host before fetching.
-            URI fetchUri = jwksFetchUri.get();
-            if (fetchUri != null && !egressCheckPassed(fetchUri)) {
+            if (!egressCheckPassed(current.fetchUri())) {
                 return;
             }
 
             // Blocking load in background thread
-            HttpResult<Jwks> result = adapter.getBlocking();
+            HttpResult<Jwks> result = current.adapter().getBlocking();
 
             if (result.isSuccess()) {
                 installKeysAndPublishOk(result.getContent().orElse(null), false, cycleEpoch);
@@ -721,45 +797,48 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     }
 
     /**
-     * Re-attempts the adapter resolution for a refresh cycle that found no adapter.
+     * Re-attempts the endpoint resolution for a refresh cycle that found no endpoint.
      * <p>
-     * Only a well-known configuration can lack an adapter after initialization (its discovery failed
-     * transiently); in direct mode the cycle is skipped as before. A retryable failure is logged and
+     * Only a well-known configuration can lack an endpoint after initialization (its discovery failed
+     * transiently); in direct mode the cycle is skipped as before. The resolved endpoint and issuer are
+     * published only while the cycle's generation is still live. A retryable failure is logged and
      * leaves the status unchanged for the next cycle. A security rejection is terminal: the status
      * becomes {@link LoaderStatus#ERROR} and the refresh task is cancelled, so the rejection is not
-     * re-evaluated (and not re-counted) on every cycle.
+     * re-evaluated (and not re-counted) on every cycle. A resolution that completes after a
+     * {@link #close()} moved the epoch on publishes nothing, changes no status and cancels nothing.
      *
-     * @param cycleEpoch the {@link #epoch} the calling refresh cycle started under
-     * @return the resolved adapter, already stored for later cycles, or {@code null} if this cycle has
-     *         nothing to fetch from
+     * @param cycleEpoch the {@link #epoch} of the generation the calling refresh cycle belongs to
+     * @return the resolved endpoint, already published for later cycles, or {@code null} if this cycle
+     *         has nothing to fetch from
      */
-    private @Nullable HttpAdapter<Jwks> reResolveAdapter(long cycleEpoch) {
+    private @Nullable JwksEndpoint reResolveEndpoint(long cycleEpoch) {
         if (config.getWellKnownConfig() == null) {
             LOGGER.warn(WARN.BACKGROUND_REFRESH_NO_HANDLER);
             return null;
         }
         AdapterResolution resolution = resolveJWKSAdapter();
-        HttpAdapter<Jwks> adapter = resolution.adapter();
-        if (adapter != null) {
-            httpAdapter.set(adapter);
-            return adapter;
+        lifecycleLock.lock();
+        try {
+            // A cycle from before a close() must neither publish into nor cancel the task of a later
+            // initialization.
+            if (!adoptResolution(resolution, cycleEpoch)) {
+                return null;
+            }
+            JwksEndpoint resolved = resolution.endpoint();
+            if (resolved != null) {
+                return resolved;
+            }
+            if (!resolution.retryable()) {
+                status.set(LoaderStatus.ERROR);
+                ScheduledFuture<?> task = refreshTask.get();
+                if (task != null) {
+                    task.cancel(false);
+                }
+            }
+        } finally {
+            lifecycleLock.unlock();
         }
         LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
-        if (!resolution.retryable()) {
-            lifecycleLock.lock();
-            try {
-                // A cycle from before a close() must not cancel the task of a later initialization.
-                if (isLive(cycleEpoch)) {
-                    status.set(LoaderStatus.ERROR);
-                    ScheduledFuture<?> task = refreshTask.get();
-                    if (task != null) {
-                        task.cancel(false);
-                    }
-                }
-            } finally {
-                lifecycleLock.unlock();
-            }
-        }
         return null;
     }
 
@@ -790,8 +869,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             }
             currentKeys.set(null);
             retiredKeys.clear();
-            httpAdapter.set(null);
-            jwksFetchUri.set(null);
+            endpoint.set(null);
             currentJwksContent.set(null);
             initFuture = null;
             status.set(LoaderStatus.UNDEFINED);
@@ -809,6 +887,18 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     boolean isBackgroundRefreshActive() {
         ScheduledFuture<?> task = refreshTask.get();
         return task != null && !task.isCancelled() && !task.isDone();
+    }
+
+    /**
+     * Returns the fetch URI of the current JWKS endpoint.
+     * Package-private for testing purposes only.
+     *
+     * @return the fetch URI of the published endpoint, empty before the first successful resolution
+     *         and after {@link #close()}
+     */
+    Optional<URI> getJwksFetchUri() {
+        JwksEndpoint current = endpoint.get();
+        return current == null ? Optional.empty() : Optional.of(current.fetchUri());
     }
 
     /**
@@ -912,16 +1002,27 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     }
 
     /**
+     * A resolved JWKS endpoint: the adapter and the fetch URI of one resolution, published together.
+     *
+     * @param adapter  the adapter fetching the JWKS
+     * @param fetchUri the URI the adapter fetches, which passed the egress guard at resolution
+     */
+    private record JwksEndpoint(HttpAdapter<Jwks> adapter, URI fetchUri) {
+    }
+
+    /**
      * Outcome of {@link #resolveJWKSAdapter()}.
      *
-     * @param adapter   the resolved adapter, {@code null} if the resolution failed
+     * @param endpoint  the resolved endpoint, {@code null} if the resolution failed
+     * @param issuer    the resolved issuer, {@code null} when none was resolved; an egress-rejected
+     *                  resolution still carries the issuer it resolved
      * @param retryable for a failed resolution, whether the failure is transient (the well-known
      *                  discovery yielded no JWKS URI) and may succeed on a later refresh cycle, as
      *                  opposed to a security rejection
      */
-    private record AdapterResolution(@Nullable HttpAdapter<Jwks> adapter, boolean retryable) {
+    private record AdapterResolution(@Nullable JwksEndpoint endpoint, @Nullable String issuer, boolean retryable) {
 
-        static final AdapterResolution RETRYABLE_FAILURE = new AdapterResolution(null, true);
-        static final AdapterResolution REJECTED = new AdapterResolution(null, false);
+        static final AdapterResolution RETRYABLE_FAILURE = new AdapterResolution(null, null, true);
+        static final AdapterResolution REJECTED = new AdapterResolution(null, null, false);
     }
 }

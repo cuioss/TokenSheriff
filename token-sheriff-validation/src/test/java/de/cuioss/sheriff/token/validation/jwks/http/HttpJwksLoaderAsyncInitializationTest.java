@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.jwks.http;
 
+import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
@@ -324,12 +325,54 @@ class HttpJwksLoaderAsyncInitializationTest {
         }
     }
 
+    @Test
+    @DisplayName("A refresh task scheduled before close() does nothing in the next generation, its own task does")
+    void refreshTaskOfClosedGenerationDoesNotAffectNextGeneration(URIBuilder uriBuilder) {
+        CountingScheduledExecutor executor = new CountingScheduledExecutor();
+        RetryConfig fastRetry = RetryConfig.builder()
+                .initialDelay(Duration.ofMillis(1))
+                .maxDelay(Duration.ofMillis(5))
+                .build();
+        HttpJwksLoaderConfig config = baseConfig(uriBuilder, 60).scheduledExecutorService(executor).retryConfig(fastRetry).build();
+
+        try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            assertEquals(LoaderStatus.OK, loader.initJWKSLoader(counter).join());
+            Runnable firstGenerationTask = executor.getScheduledTasks().getFirst();
+            loader.close();
+
+            moduleDispatcher.returnError();
+            assertEquals(LoaderStatus.UNDEFINED, loader.initJWKSLoader(counter).join(),
+                    "the second generation starts without keys");
+            Runnable secondGenerationTask = executor.getScheduledTasks().getLast();
+            moduleDispatcher.returnDefault();
+            int callsBeforeStaleCycle = moduleDispatcher.getCallCounter();
+
+            // A cycle of the closed generation that only begins now, after the re-initialization
+            firstGenerationTask.run();
+
+            assertAll("the cycle of the closed generation leaves the new generation untouched",
+                    () -> assertEquals(callsBeforeStaleCycle, moduleDispatcher.getCallCounter(), "no fetch is issued"),
+                    () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus(), "no OK is published"),
+                    () -> assertTrue(loader.getKeyIds().isEmpty(), "no key is installed"));
+
+            secondGenerationTask.run();
+
+            assertAll("the cycle of the live generation recovers the loader",
+                    () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                    () -> assertFalse(loader.getKeyIds().isEmpty(), "keys are installed"));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
     /**
-     * Scheduled executor that counts the fixed-rate tasks scheduled on it.
+     * Scheduled executor that counts and records the fixed-rate tasks scheduled on it.
      */
     private static final class CountingScheduledExecutor extends ScheduledThreadPoolExecutor {
 
         private final AtomicInteger fixedRateSchedules = new AtomicInteger();
+        private final List<Runnable> scheduledTasks = new CopyOnWriteArrayList<>();
 
         CountingScheduledExecutor() {
             super(1);
@@ -338,11 +381,16 @@ class HttpJwksLoaderAsyncInitializationTest {
         @Override
         public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
             fixedRateSchedules.incrementAndGet();
+            scheduledTasks.add(command);
             return super.scheduleAtFixedRate(command, initialDelay, period, unit);
         }
 
         int getFixedRateSchedules() {
             return fixedRateSchedules.get();
+        }
+
+        List<Runnable> getScheduledTasks() {
+            return scheduledTasks;
         }
     }
 }
