@@ -210,6 +210,27 @@ class DpopProofGeneratorTest {
                 "a jti still tracked in the bounded LRU window is detected as reuse and fails closed");
     }
 
+    @Test
+    @DisplayName("Should forget the eldest jti once the configured window is exceeded, still refusing a tracked one")
+    void shouldEvictEldestJtiBeyondConfiguredWindow() {
+        String[] state = {"j1"};
+        var proofGenerator = new DpopProofGenerator(keyPair, "RS256", () -> state[0], 2);
+        proofGenerator.generateProof(HTM, HTU);
+        state[0] = "j2";
+        proofGenerator.generateProof(HTM, HTU);
+        state[0] = "j3";
+        proofGenerator.generateProof(HTM, HTU);
+
+        state[0] = "j1";
+        String reissued = proofGenerator.generateProof(HTM, HTU);
+
+        assertEquals("j1", extractJti(decode(reissued.split("\\.")[1])),
+                "j1 fell out of the two-entry window, so a proof carrying it is emitted again");
+        state[0] = "j3";
+        assertThrows(IllegalStateException.class, () -> proofGenerator.generateProof(HTM, HTU),
+                "j3 is still inside the window, so presenting it again fails closed as reuse");
+    }
+
     @ParameterizedTest(name = "{0} with a {1} key")
     @MethodSource("algorithmKeyTypeMismatches")
     @DisplayName("Should reject an algorithm that does not match the proof-key type")

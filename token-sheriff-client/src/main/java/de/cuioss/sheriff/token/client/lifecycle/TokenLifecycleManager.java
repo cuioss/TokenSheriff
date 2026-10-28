@@ -24,6 +24,7 @@ import de.cuioss.sheriff.token.client.flow.RefreshRedemption;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.client.token.IdTokenValidationBridge;
 import de.cuioss.sheriff.token.client.token.RefreshTokenFamily;
+import de.cuioss.sheriff.token.client.token.RefreshTokenFamilyRevokedException;
 import de.cuioss.sheriff.token.client.token.RotationResult;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.commons.error.TokenSheriffException;
@@ -117,9 +118,23 @@ import java.util.concurrent.ConcurrentMap;
  * is verified for OIDC Core §12.2 {@code iss}/{@code sub} consistency against the refreshed access
  * token and carried forward, rather than silently preserving the pre-refresh ID token.
  * <p>
+ * <strong>The family follows every legitimate grant.</strong> {@link #store} reseeds the session's
+ * family when it is handed a new grant (a re-login or step-up), the public {@link #applyRefresh}
+ * overloads advance it when a refresh is applied from outside {@link #refresh}, and {@link #refresh}
+ * yields to a re-login that lands while its exchange is in flight instead of reading the newer grant as
+ * reuse. A token the family knows — its current token or a remembered superseded one — never reseeds
+ * it, so a stale re-store or a replay is still reuse.
+ * <p>
  * The session&rarr;family mapping is held in-memory (matching the default {@link InMemoryTokenStore}
  * posture); a relying party that runs a persistent, shared {@link TokenStore} across instances would
- * pair it with a persistent family store — that SPI is not yet provided.
+ * pair it with a persistent family store — that SPI is not yet provided. Superseded refresh tokens are
+ * remembered only as digests.
+ * <p>
+ * <strong>Accepted residual risk — family eviction.</strong> The family map is a bounded LRU (see
+ * {@link #MAX_TRACKED_FAMILIES}). Once a session's family is evicted, the next refresh re-creates it
+ * from whatever refresh token the store holds, so client-side reuse detection is lost for that session:
+ * a replay of a token superseded before the eviction is no longer recognised here, and only the
+ * authorization server's own reuse detection remains.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -140,11 +155,18 @@ public class TokenLifecycleManager {
      * cannot grow without limit. The cap is deliberately generous (well above any realistic
      * concurrent-session count for an in-memory posture) so eviction only ever reclaims families
      * whose sessions are long dead.
+     * <p>
+     * <em>Accepted residual risk:</em> should a live session's family be evicted all the same, it is
+     * re-created from whatever refresh token the store holds on the next refresh, so client-side reuse
+     * detection is lost for that session and only the authorization server's own detection remains.
      */
     private static final int MAX_TRACKED_FAMILIES = 10_000;
 
     private final TokenStore tokenStore;
     private final RefreshScheduler refreshScheduler;
+
+    /** The family-map bound the LRU below enforces; {@link #MAX_TRACKED_FAMILIES} unless injected. */
+    private final int maxTrackedFamilies;
 
     /**
      * Per-session refresh-token rotation families. Seeded on {@link #store} when a refresh token is
@@ -154,20 +176,11 @@ public class TokenLifecycleManager {
      * Backed by an access-ordered, size-capped LRU (a {@link LinkedHashMap} in {@code accessOrder}
      * mode wrapped for thread-safety) rather than an unbounded map: a session that expires without an
      * explicit logout never removes its family via {@link #revokeAndClear}, so an unbounded map would
-     * leak those entries forever. Capping at {@link #MAX_TRACKED_FAMILIES} evicts the least-recently
+     * leak those entries forever. Capping at {@link #maxTrackedFamilies} evicts the least-recently
      * used family — one whose session has been idle longest — without touching the reuse-detection or
      * single-flight semantics, which continue to key off the per-session entry while it is live.
      */
-    private final Map<String, RefreshTokenFamily> families = Collections.synchronizedMap(
-            new LinkedHashMap<>(16, 0.75f, true) {
-                @Serial
-                private static final long serialVersionUID = 1L;
-
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<String, RefreshTokenFamily> eldest) {
-                    return size() > MAX_TRACKED_FAMILIES;
-                }
-            });
+    private final Map<String, RefreshTokenFamily> families;
 
     /**
      * Per-session in-flight rotations. The first caller to start a refresh for a session installs its
@@ -178,21 +191,72 @@ public class TokenLifecycleManager {
             new ConcurrentHashMap<>();
 
     /**
+     * Per-session record of the exchange {@link #doRefresh} is about to apply, read by the atomic
+     * transform inside {@link #applyRefresh} to make that apply a compare-and-set against the presented
+     * refresh token. Keying it by session on this instance — rather than passing it through a preferred
+     * overload or a thread-local — keeps the public, overridable {@code applyRefresh} the single call
+     * path (ADR-0006) and keeps the condition visible even when an override hands the call to another
+     * thread. An entry lives only for the duration of one {@code doRefresh} apply.
+     */
+    private final ConcurrentMap<String, PendingRefresh> pendingRefreshes = new ConcurrentHashMap<>();
+
+    /**
+     * The exchange a {@link #doRefresh} is applying: written only while the store still holds
+     * {@code presentedRefreshToken}, identified by the {@code newRefreshToken} it hands to
+     * {@link #applyRefresh}.
+     */
+    private record PendingRefresh(String presentedRefreshToken, String newRefreshToken) {
+    }
+
+    /**
      * @param tokenStore       the backing token store; must not be {@code null}
      * @param refreshScheduler the proactive-refresh policy; must not be {@code null}
      */
     public TokenLifecycleManager(TokenStore tokenStore, RefreshScheduler refreshScheduler) {
+        this(tokenStore, refreshScheduler, MAX_TRACKED_FAMILIES);
+    }
+
+    /**
+     * Creates a manager with an explicit bound on the number of tracked rotation families.
+     *
+     * @param tokenStore         the backing token store; must not be {@code null}
+     * @param refreshScheduler   the proactive-refresh policy; must not be {@code null}
+     * @param maxTrackedFamilies the family-map bound; must be positive
+     * @throws IllegalArgumentException if {@code maxTrackedFamilies} is not positive
+     */
+    TokenLifecycleManager(TokenStore tokenStore, RefreshScheduler refreshScheduler, int maxTrackedFamilies) {
         this.tokenStore = Objects.requireNonNull(tokenStore, "tokenStore must not be null");
         this.refreshScheduler = Objects.requireNonNull(refreshScheduler, "refreshScheduler must not be null");
+        if (maxTrackedFamilies <= 0) {
+            throw new IllegalArgumentException("maxTrackedFamilies must be positive");
+        }
+        this.maxTrackedFamilies = maxTrackedFamilies;
+        this.families = Collections.synchronizedMap(new LinkedHashMap<>(16, 0.75f, true) {
+            @Serial
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, RefreshTokenFamily> eldest) {
+                return size() > TokenLifecycleManager.this.maxTrackedFamilies;
+            }
+        });
     }
 
     /**
      * Stores (or replaces) the token bundle for a session.
      * <p>
-     * When the bundle carries a refresh token and no rotation family yet tracks the session, a family
-     * is seeded with that token so a later replay of a superseded token is detected as reuse. An
-     * existing family is left intact — re-storing an <em>older</em> bundle for a live session does not
-     * roll the family back, so the stale refresh token is still recognised as superseded.
+     * When the bundle carries a refresh token, the session's rotation family is brought in line with it
+     * in one atomic step:
+     * <ul>
+     *   <li>no family tracks the session — a family is seeded with that token;</li>
+     *   <li>the token is the family's current token or one it remembers as superseded — the family is
+     *       kept unchanged, so re-storing an <em>older</em> bundle never rolls the family back and the
+     *       stale refresh token is still reuse on the next refresh;</li>
+     *   <li>otherwise the token is a new grant (a re-login or step-up) — the family is replaced by its
+     *       {@linkplain RefreshTokenFamily#reseededWith(String) reseeded successor}, which starts at the
+     *       new token and remembers every token of the old family as superseded. A revoked family is
+     *       replaced the same way, so a fresh login recovers a session a detected reuse had ended.</li>
+     * </ul>
      *
      * @param sessionId the opaque session identifier; must not be {@code null} or blank
      * @param token     the token bundle; must not be {@code null}
@@ -201,8 +265,25 @@ public class TokenLifecycleManager {
         tokenStore.store(sessionId, token);
         String refreshToken = token.refreshToken();
         if (refreshToken != null && !refreshToken.isBlank()) {
-            families.computeIfAbsent(sessionId, key -> new RefreshTokenFamily(refreshToken));
+            // One atomic compute, never a read followed by a put: a concurrent rotation of the same
+            // family cannot slip between the reseed decision and the install.
+            families.compute(sessionId, (key, existing) -> familyForGrant(existing, refreshToken));
         }
+    }
+
+    /**
+     * The family a session must track once {@code refreshToken} is its stored grant: a fresh family when
+     * none exists, the existing one when it already knows the token, and its reseeded successor
+     * otherwise.
+     */
+    private static RefreshTokenFamily familyForGrant(@Nullable RefreshTokenFamily existing, String refreshToken) {
+        if (existing == null) {
+            return new RefreshTokenFamily(refreshToken);
+        }
+        if (existing.isCurrent(refreshToken) || existing.isSuperseded(refreshToken)) {
+            return existing;
+        }
+        return existing.reseededWith(refreshToken);
     }
 
     /**
@@ -230,6 +311,9 @@ public class TokenLifecycleManager {
      * bundle was sender-constrained but {@code refreshedBinding} no longer confirms the same key, or
      * when the stored bundle is bound to a subject that {@code refreshedSubject} does not match, the
      * transform throws {@link IllegalStateException} rather than writing a mismatched bundle.
+     * <p>
+     * A rotated {@code newRefreshToken} advances the session's rotation family exactly as the
+     * seven-argument overload documents, including its fail-closed reuse refusal.
      *
      * @param sessionId        the opaque session identifier; must not be {@code null} or blank
      * @param newAccessToken   the refreshed access token; must not be {@code null} or blank
@@ -240,6 +324,8 @@ public class TokenLifecycleManager {
      * @param refreshedSubject the principal the refreshed access token names, or {@code null} when it
      *                         carries no subject
      * @return the updated stored bundle, or {@link Optional#empty()} when no bundle was held
+     * @throws de.cuioss.sheriff.token.client.token.RefreshTokenFamilyRevokedException if the family
+     *                         refuses the advance as reuse; the session has been cleared first
      */
     public Optional<StoredToken> applyRefresh(String sessionId, String newAccessToken,
             @Nullable String newRefreshToken, @Nullable Instant newExpiresAt,
@@ -252,6 +338,20 @@ public class TokenLifecycleManager {
      * Applies refreshed token material to a stored session, carrying the supplied refreshed ID token
      * (OIDC Core §12.2) and verifying the refreshed token's sender-constraint and principal against the
      * stored ones ({@code CLIENT-18}). Does nothing and returns empty when no bundle is held.
+     * <p>
+     * <strong>The rotation family advances with the applied refresh.</strong> When
+     * {@code newRefreshToken} is non-blank and differs from the refresh token the store held, the
+     * session's {@link RefreshTokenFamily} is rotated from that held token to {@code newRefreshToken}
+     * inside the same atomic update (a family is seeded when none is tracked), so the next refresh of
+     * {@code newRefreshToken} is not mistaken for reuse. The advance is idempotent: when the family
+     * already has {@code newRefreshToken} as its current token — the {@link #refresh} path rotates it
+     * before applying — nothing is rotated again. When the family refuses the advance as reuse, the
+     * write is aborted and the session fails closed: the store entry and the family are cleared (this
+     * method has no revocation client, so nothing is revoked) and the refusal is rethrown.
+     * <p>
+     * When the call applies the exchange {@link #refresh} is running for the session and the store no
+     * longer holds the refresh token that exchange presented — a re-login stored a newer grant while
+     * the exchange was in flight — nothing is written and the newer bundle is returned unchanged.
      *
      * @param sessionId        the opaque session identifier; must not be {@code null} or blank
      * @param newAccessToken   the refreshed access token; must not be {@code null} or blank
@@ -263,7 +363,10 @@ public class TokenLifecycleManager {
      *                         carries no subject
      * @param newIdToken       the refreshed, consistency-checked ID token, or {@code null} to keep the
      *                         current one when the AS omitted it on the refresh
-     * @return the updated stored bundle, or {@link Optional#empty()} when no bundle was held
+     * @return the updated stored bundle, the unchanged newer bundle when an in-flight {@link #refresh}
+     *         yielded to a re-login, or {@link Optional#empty()} when no bundle was held
+     * @throws de.cuioss.sheriff.token.client.token.RefreshTokenFamilyRevokedException if the family
+     *                         refuses the advance as reuse; the session has been cleared first
      */
     public Optional<StoredToken> applyRefresh(String sessionId, String newAccessToken,
             @Nullable String newRefreshToken, @Nullable Instant newExpiresAt,
@@ -271,12 +374,61 @@ public class TokenLifecycleManager {
             @Nullable String newIdToken) {
         // Atomic retrieve-transform-store: a concurrent revokeAndClear (logout) can no longer slip
         // between the read and the write and resurrect a just-revoked session, so a refresh applied
-        // after logout is a no-op rather than a stale-token write (CLIENT-22). The subject binding is
-        // checked inside the same transform for the same reason: comparing here, before the update,
-        // would reopen the check-then-act window the atomic update exists to close.
-        return tokenStore.update(sessionId,
-                current -> current.refreshed(newAccessToken, newRefreshToken, newExpiresAt, refreshedBinding,
-                        refreshedSubject, newIdToken));
+        // after logout is a no-op rather than a stale-token write (CLIENT-22). The subject binding and
+        // the family advance are checked inside the same transform for the same reason: doing either
+        // before the update would reopen the check-then-act window the atomic update exists to close.
+        // The binding check runs first, so a refused binding never advances the family.
+        try {
+            return tokenStore.update(sessionId, current -> {
+                if (supersededByNewerGrant(sessionId, current, newRefreshToken)) {
+                    return current;
+                }
+                StoredToken successor = current.refreshed(newAccessToken, newRefreshToken, newExpiresAt,
+                        refreshedBinding, refreshedSubject, newIdToken);
+                advanceFamily(sessionId, current.refreshToken(), newRefreshToken);
+                return successor;
+            });
+        } catch (RefreshTokenFamilyRevokedException reuse) {
+            // The advance threw inside the transform, so nothing was written; fail the session closed.
+            tokenStore.remove(sessionId);
+            families.remove(sessionId);
+            throw reuse;
+        }
+    }
+
+    /**
+     * Whether this apply is the in-flight {@link #doRefresh} exchange for the session and the store no
+     * longer holds the refresh token that exchange presented — the compare-and-set condition under which
+     * the in-flight result is discarded in favour of the newer grant.
+     */
+    private boolean supersededByNewerGrant(String sessionId, StoredToken current, @Nullable String newRefreshToken) {
+        PendingRefresh pending = pendingRefreshes.get(sessionId);
+        return pending != null && pending.newRefreshToken().equals(newRefreshToken)
+                && !pending.presentedRefreshToken().equals(current.refreshToken());
+    }
+
+    /**
+     * Advances the session's rotation family from {@code previousRefreshToken} (the token the store
+     * held) to {@code newRefreshToken}; idempotent when the family already has it as current. Runs
+     * inside the store's atomic update, so the store &rarr; families lock order holds.
+     *
+     * @throws RefreshTokenFamilyRevokedException if the family refuses the advance as reuse
+     */
+    private void advanceFamily(String sessionId, @Nullable String previousRefreshToken,
+            @Nullable String newRefreshToken) {
+        if (newRefreshToken == null || newRefreshToken.isBlank() || newRefreshToken.equals(previousRefreshToken)) {
+            return;
+        }
+        if (previousRefreshToken == null || previousRefreshToken.isBlank()) {
+            // Nothing was held to rotate from, so the new token is a grant in its own right.
+            families.compute(sessionId, (key, existing) -> familyForGrant(existing, newRefreshToken));
+            return;
+        }
+        RefreshTokenFamily family = families.computeIfAbsent(sessionId,
+                key -> new RefreshTokenFamily(previousRefreshToken));
+        if (!family.isCurrent(newRefreshToken)) {
+            family.rotate(previousRefreshToken, newRefreshToken);
+        }
     }
 
     /**
@@ -291,6 +443,13 @@ public class TokenLifecycleManager {
      * rotation rather than redeeming the token twice, so a benign race never self-classifies as reuse.
      * A refreshed ID token is verified for §12.2 {@code iss}/{@code sub} consistency against the
      * refreshed access token before it is carried forward.
+     * <p>
+     * <strong>A refresh yields to a re-login that lands while it is in flight.</strong> The family is
+     * captured before the exchange and rotated on that captured instance, and the refreshed bundle is
+     * applied as a compare-and-set against the presented refresh token. When {@link #store} installed a
+     * newer grant in the meantime, the in-flight result is discarded — no reuse is raised and nothing
+     * is cleared — the newer bundle is returned, and the orphaned rotated successor is revoked
+     * best-effort (RFC 7009).
      * <p>
      * This coordinator refreshes plain-bearer sessions; it applies the refreshed material with no
      * {@code cnf} binding, so a sender-constrained stored bundle fails closed (a downgrade rather than
@@ -416,6 +575,13 @@ public class TokenLifecycleManager {
             return Optional.empty();
         }
 
+        // The family is captured BEFORE the exchange and the rotation below runs on this instance. A
+        // re-login that lands while the exchange is in flight installs a reseeded successor in the map
+        // rather than mutating this instance, so it cannot turn the in-flight rotation into a false
+        // reuse; the compare-and-set apply below then yields to that newer grant.
+        RefreshTokenFamily family = families.computeIfAbsent(sessionId,
+                key -> new RefreshTokenFamily(presentedRefreshToken));
+
         RotationResult rotation;
         try {
             rotation = refreshFlow.refresh(metadata, presentedRefreshToken);
@@ -448,8 +614,6 @@ public class TokenLifecycleManager {
         }
 
         if (rotation.rotated()) {
-            RefreshTokenFamily family = families.computeIfAbsent(sessionId,
-                    key -> new RefreshTokenFamily(presentedRefreshToken));
             try {
                 family.rotate(presentedRefreshToken, rotation.refreshToken());
             } catch (ClientProtocolException reuse) {
@@ -478,8 +642,16 @@ public class TokenLifecycleManager {
         // so the session is quarantined fail-closed rather than left holding a dead credential. If the
         // AS did not rotate, the presented token is still valid and the untouched store entry needs no
         // further action.
+        //
+        // The apply goes through the public, overridable applyRefresh (ADR-0006) and is a
+        // compare-and-set against the presented token: the pending record makes its atomic transform
+        // write only while the store still holds presentedRefreshToken. The family was already rotated
+        // above, so applyRefresh's own advance is a no-op here and never double-advances.
+        Optional<StoredToken> applied;
+        PendingRefresh pending = new PendingRefresh(presentedRefreshToken, rotation.refreshToken());
+        pendingRefreshes.put(sessionId, pending);
         try {
-            return applyRefresh(sessionId, rotation.accessToken().getRawToken(), rotation.refreshToken(),
+            applied = applyRefresh(sessionId, rotation.accessToken().getRawToken(), rotation.refreshToken(),
                     refreshedExpiry, null, refreshedSubject, refreshedIdToken);
         } catch (IllegalStateException rejected) {
             if (rotation.rotated()) {
@@ -487,7 +659,37 @@ public class TokenLifecycleManager {
                         clientAuthentication);
             }
             throw rejected;
+        } finally {
+            pendingRefreshes.remove(sessionId, pending);
         }
+        if (rotation.rotated() && applied.isPresent()
+                && !rotation.refreshToken().equals(applied.get().refreshToken())) {
+            revokeOrphanedSuccessor(sessionId, metadata, rotation.refreshToken(), revocationClient,
+                    clientAuthentication);
+        }
+        return applied;
+    }
+
+    /**
+     * Revokes the rotated successor of an in-flight refresh that yielded to a newer grant: a re-login
+     * stored that grant while the exchange was in flight, so the compare-and-set apply discarded the
+     * exchange's result and nothing holds the successor any more. It is still a live credential at the
+     * authorization server, so it is revoked best-effort (RFC 7009). Neither the store nor the family is
+     * touched — they belong to the newer grant, which this refresh must not disturb.
+     */
+    private void revokeOrphanedSuccessor(String sessionId, ProviderMetadata metadata, String orphanedSuccessor,
+            RevocationClient revocationClient, ClientAuthentication clientAuthentication) {
+        LOGGER.debug("Refresh for session %s yielded to a newer grant; revoking the orphaned successor",
+                maskSessionId(sessionId));
+        metadata.getRevocationEndpoint().ifPresent(endpoint -> {
+            try {
+                revocationClient.revoke(endpoint, orphanedSuccessor, REFRESH_TOKEN_TYPE_HINT, clientAuthentication);
+            } catch (TransportException revocationFailure) {
+                // Best-effort: the newer grant is already in place and must be returned regardless.
+                LOGGER.debug(revocationFailure, "RFC 7009 revocation of an orphaned successor failed: %s",
+                        revocationFailure.getMessage());
+            }
+        });
     }
 
     /**

@@ -148,14 +148,16 @@ public class DpopProofGenerator {
     private final String jwkJson;
     private final String jkt;
     private final Supplier<String> jtiSource;
+    /** The bound on {@link #issuedJtis}; {@link #MAX_TRACKED_JTIS} unless injected. */
+    private final int maxTrackedJtis;
     // Bounded, thread-safe LRU of recently-issued jti values: access-ordered LinkedHashMap that evicts
-    // its eldest entry once it exceeds MAX_TRACKED_JTIS, wrapped in a synchronized view for concurrent
+    // its eldest entry once it exceeds maxTrackedJtis, wrapped in a synchronized view for concurrent
     // use. Explicit java.util imports keep the construction stable under OpenRewrite.
     private final Map<String, Boolean> issuedJtis = Collections.synchronizedMap(
             new LinkedHashMap<String, Boolean>(16, 0.75f, true) {
                 @Override
                 protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
-                    return size() > MAX_TRACKED_JTIS;
+                    return size() > maxTrackedJtis;
                 }
             });
 
@@ -185,6 +187,28 @@ public class DpopProofGenerator {
      *         EC P-256 or OKP Ed25519 key, or the algorithm does not match the proof-key type
      */
     public DpopProofGenerator(KeyPair keyPair, String algorithm, Supplier<String> jtiSource) {
+        this(keyPair, algorithm, jtiSource, MAX_TRACKED_JTIS);
+    }
+
+    /**
+     * Creates a generator with an explicit {@code jti} source and an explicit bound on the tracked
+     * {@code jti} window, so tests can exercise the window's eviction without reflection.
+     *
+     * @param keyPair        the proof key pair (RSA, EC P-256 or OKP Ed25519); must not be {@code null}
+     * @param algorithm      the JWT signing algorithm ({@code RS256} / {@code RS384} / {@code RS512} /
+     *                       {@code PS256} / {@code ES256} / {@code EdDSA})
+     * @param jtiSource      the source of proof identifiers; must not be {@code null}
+     * @param maxTrackedJtis the number of recently-issued {@code jti} values tracked for reuse detection;
+     *                       must be positive
+     * @throws IllegalArgumentException if {@code maxTrackedJtis} is not positive, the algorithm is
+     *         unsupported, the proof key is not an RSA, EC P-256 or OKP Ed25519 key, or the algorithm
+     *         does not match the proof-key type
+     */
+    DpopProofGenerator(KeyPair keyPair, String algorithm, Supplier<String> jtiSource, int maxTrackedJtis) {
+        if (maxTrackedJtis <= 0) {
+            throw new IllegalArgumentException("maxTrackedJtis must be positive");
+        }
+        this.maxTrackedJtis = maxTrackedJtis;
         this.keyPair = Objects.requireNonNull(keyPair, "keyPair must not be null");
         Objects.requireNonNull(algorithm, "algorithm must not be null");
         this.jtiSource = Objects.requireNonNull(jtiSource, "jtiSource must not be null");

@@ -59,13 +59,23 @@ Retrieved tokens are held *server-side* and never returned to the browser in usa
 |===
 | Stage | Rule
 
-| *Store* | Held server-side; the BFF binding shape (server-side store or encrypted cookie) is the application's choice (<<_bff_groundwork_non_preclusion>>). Storage is minimal and protected at rest. The stored bundle records the principal the session was established for (`StoredToken.subject`), which is what <<_refresh_identity_binding>> compares against.
-| *Refresh* | Access tokens are refreshed with `refresh_token`; *refresh-token rotation* is applied, and a detected reuse of a rotated token triggers *revocation of the token family* (xref:../threat-model.adoc#T-REFRESH-THEFT[T-REFRESH-THEFT]). The refresh additionally enforces the session-identity binding (<<_refresh_identity_binding>>) and reconciles the granted scope (<<_scope_reconciliation>>).
+| *Store* | Held server-side; the BFF binding shape (server-side store or encrypted cookie) is the application's choice (<<_bff_groundwork_non_preclusion>>). Storage is minimal and protected at rest. The stored bundle records the principal the session was established for (`StoredToken.subject`), which is what <<_refresh_identity_binding>> compares against. Storing a *new grant* for a live session (a re-login or step-up) *reseeds* the session's refresh-token rotation family: the successor family starts at the new refresh token and remembers every token of the old family as superseded. Re-storing the family's current token or a remembered superseded one leaves the family unchanged, so a stale re-store is still reuse on the next refresh.
+| *Refresh* | Access tokens are refreshed with `refresh_token`; *refresh-token rotation* is applied, and a detected reuse of a rotated token triggers *revocation of the token family* (xref:../threat-model.adoc#T-REFRESH-THEFT[T-REFRESH-THEFT]). A refresh applied from outside the lifecycle manager (`applyRefresh`) advances the family as well, and fails the session closed when the family refuses the advance as reuse. A refresh that races a re-login *yields to the newer grant*: its result is discarded without a reuse verdict, the newer grant stays stored, and the orphaned rotated successor is revoked best-effort (RFC 7009). The access-token lifetime is taken from the plausibility-capped `expires_in`, so an absent, non-positive or absurd value means "no known expiry". The refresh additionally enforces the session-identity binding (<<_refresh_identity_binding>>) and reconciles the granted scope (<<_scope_reconciliation>>).
 | *Revoke* | Tokens are revoked through the engine's own `RevocationClient` back-channel call (RFC 7009, on the `cui-http` transport, `COMMONS-7`) on logout (xref:step-up-and-logout.adoc[step-up & logout]) and on detected refresh-token reuse (family revocation, xref:../threat-model.adoc#T-REFRESH-THEFT[T-REFRESH-THEFT]).
 | *Expiry* | Short-lived access tokens are preferred; refresh drives renewal.
 |===
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700#section-4.14[RFC 9700 §4.14] (refresh-token protection / rotation), https://www.rfc-editor.org/rfc/rfc7009[RFC 7009] (revocation).
+
+[WARNING]
+====
+*Accepted residual risk — bounded reuse memory.* Client-side reuse detection is bounded in two
+places. Each rotation family remembers only its most recent superseded tokens (a fixed-size digest
+history); a token aged out of it is no longer recognised as superseded. The session→family map
+is a bounded LRU; once a session's family is evicted, the next refresh re-creates it from whatever
+refresh token the store holds, so client-side reuse detection is lost for that session. In both
+cases a replay is caught only by the authorization server's own reuse detection.
+====
 
 [NOTE]
 ====
@@ -78,7 +88,9 @@ JSON and HTTP layers the engine builds on exchange `String`s throughout, so a by
 cannot be maintained end-to-end without copying the secret back into a `String` at every boundary. The
 residual exposure is bounded by the "protect the at-rest store" posture above — storage is minimal,
 server-side, and short-lived (short access-token TTLs, revoke-and-clear on logout) so the window in
-which reclaimable material lives in the heap is kept small.
+which reclaimable material lives in the heap is kept small. A rotation family's *superseded* refresh
+tokens are the exception: `RefreshTokenFamily` keeps them only as SHA-256 digests, never as the raw
+token, so its reuse history adds no credential material to the heap.
 ====
 
 == [[_refresh_identity_binding]] Refresh-path identity binding
