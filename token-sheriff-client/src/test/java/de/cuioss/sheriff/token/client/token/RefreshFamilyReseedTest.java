@@ -341,6 +341,27 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
     }
 
     @Test
+    @DisplayName("Should treat a stale superseded token as reuse when an external applyRefresh rotates from it")
+    void shouldRefuseExternalApplyRefreshRotatingFromSupersededToken() {
+        String rt1 = token();
+        String rt2 = token();
+        manager.store(session, bearerBundle(rt1, null));
+        manager.applyRefresh(session, token(), rt2, null, null, null);
+        // A stale re-store puts the superseded rt1 back; the family keeps remembering it as superseded.
+        manager.store(session, bearerBundle(rt1, null));
+
+        String replaySuccessor = token();
+        var reuse = assertThrows(RefreshTokenFamilyRevokedException.class,
+                () -> manager.applyRefresh(session, token(), replaySuccessor, null, null, null));
+
+        assertAll("the adoption path never launders a superseded token into a fresh grant",
+                () -> assertEquals(Optional.of(replaySuccessor), reuse.getRotatedRefreshToken(),
+                        "the refusal carries the successor as a live revocation target"),
+                () -> assertTrue(manager.get(session).isEmpty(), "the session is cleared fail-closed"));
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "Refresh token reuse detected");
+    }
+
+    @Test
     @DisplayName("Should store a bundle with no expiry when the refresh carries an absurd expires_in")
     void shouldStoreNoExpiryForAbsurdExpiresIn(URIBuilder uriBuilder) {
         ProviderMetadata metadata = metadata(uriBuilder);
