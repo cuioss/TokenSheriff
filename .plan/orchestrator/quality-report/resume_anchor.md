@@ -1,1 +1,1 @@
-await merge of the ledger PR (branch chore/epic-quality-report), then git checkout main && git pull and run /plan-orchestrator next slug=quality-report (expected first pair: PLAN-01 + PLAN-02)
+PLAN-01 + PLAN-02 running (operator-confirmed): await their PRs, then run /plan-orchestrator analyze slug=quality-report with each landing, then next. Ledger changes pending /plan-orchestrator land

@@ -4,35 +4,36 @@
 
 ## START HERE
 
-**Resume anchor**: await merge of the ledger PR (branch chore/epic-quality-report), then git checkout main && git pull and run /plan-orchestrator next slug=quality-report (expected first pair: PLAN-01 + PLAN-02)
+**Resume anchor**: PLAN-01 + PLAN-02 running (operator-confirmed): await their PRs, then run /plan-orchestrator analyze slug=quality-report with each landing, then next. Ledger changes pending /plan-orchestrator land
 **Phase**: orchestrating
+**Running**:
+- PLAN-01 (WS-01)
+- PLAN-02 (WS-02)
 **Queue** (staged, in order):
-1. PLAN-01 (WS-01)
-2. PLAN-02 (WS-02)
-3. PLAN-03 (WS-01)
-4. PLAN-04 (WS-03)
-5. PLAN-05 (WS-01)
-6. PLAN-06 (WS-02)
-7. PLAN-07 (WS-01)
-8. PLAN-08 (WS-03)
-9. PLAN-09 (WS-01)
-10. PLAN-10 (WS-02)
-11. PLAN-11 (WS-01)
-12. PLAN-12 (WS-04)
-13. PLAN-13 (WS-01)
-14. PLAN-14 (WS-02)
-15. PLAN-15 (WS-01)
-16. PLAN-16 (WS-03)
-17. PLAN-17 (WS-05)
-18. PLAN-18 (WS-05)
-19. PLAN-19 (WS-05)
+1. PLAN-03 (WS-01)
+2. PLAN-04 (WS-03)
+3. PLAN-05 (WS-01)
+4. PLAN-06 (WS-02)
+5. PLAN-07 (WS-01)
+6. PLAN-08 (WS-03)
+7. PLAN-09 (WS-01)
+8. PLAN-10 (WS-02)
+9. PLAN-11 (WS-01)
+10. PLAN-12 (WS-04)
+11. PLAN-13 (WS-01)
+12. PLAN-14 (WS-02)
+13. PLAN-15 (WS-01)
+14. PLAN-16 (WS-03)
+15. PLAN-17 (WS-05)
+16. PLAN-18 (WS-05)
+17. PLAN-19 (WS-05)
 
 ## Ordered Queue
 
 | # | Plan | Workstream | Status | Surface (expected) | Lane |
 |---|------|------------|--------|--------------------|------|
-| 1 | PLAN-01 | WS-01 | staged | token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/IssuerConfigCache.java; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/TokenValidator.java; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/IssuerConfigCacheRecoveryTest.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorTest.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderAsyncInitializationTest.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderFailureTest.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderWellKnownAsyncTest.java | plan-marshall |
-| 2 | PLAN-02 | WS-02 | staged | token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/dpop/DpopProofGenerator.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/RefreshFlow.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/lifecycle/TokenLifecycleManager.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/token/RefreshTokenFamily.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/token/RotationResult.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/RefreshFlowTest.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/lifecycle/TokenLifecycleManagerFamilyEvictionTest.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/token/RefreshAdversarialTest.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/token/RotationReuseDetectionTest.java | plan-marshall |
+| 1 | PLAN-01 | WS-01 | running | token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/IssuerConfigCache.java; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/TokenValidator.java; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/IssuerConfigCacheRecoveryTest.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorTest.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderAsyncInitializationTest.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderFailureTest.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderWellKnownAsyncTest.java | plan-marshall |
+| 2 | PLAN-02 | WS-02 | running | token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/dpop/DpopProofGenerator.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/RefreshFlow.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/lifecycle/TokenLifecycleManager.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/token/RefreshTokenFamily.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/token/RotationResult.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/RefreshFlowTest.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/lifecycle/TokenLifecycleManagerFamilyEvictionTest.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/token/RefreshAdversarialTest.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/token/RotationReuseDetectionTest.java | plan-marshall |
 | 3 | PLAN-03 | WS-01 | staged | token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/TokenValidator.java; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/cache/AccessTokenCache.java; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/AccessTokenValidationPipeline.java; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/validator/ExpirationValidator.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/cache/AccessTokenCacheTest.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/validator/ExpirationValidatorTest.java | plan-marshall |
 | 4 | PLAN-04 | WS-03 | staged | token-sheriff-quarkus-parent/token-sheriff-client-quarkus-deployment/src/main/java/de/cuioss/sheriff/token/client/quarkus/deployment/TokenSheriffClientProcessor.java; token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/src/test/java/de/cuioss/sheriff/token/integration/health/HealthCheckIntegrationIT.java; token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment/src/main/java/de/cuioss/sheriff/token/quarkus/deployment/TokenSheriffProcessor.java; token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment/src/test/java/de/cuioss/sheriff/token/quarkus/deployment/TokenSheriffProcessorBuildStepTest.java; token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/README.adoc; token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/health/TokenValidatorHealthCheck.java; token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/observability/ObservedValidatorResolver.java; token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/producer/TokenValidatorProducer.java; token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/resources/META-INF/quarkus-config-doc.adoc; token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/test/java/de/cuioss/sheriff/token/quarkus/health/TokenValidatorHealthCheckTest.java | plan-marshall |
 | 5 | PLAN-05 | WS-01 | staged | token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/json/JwtHeader.java; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwe/JweAlgorithmPreferences.java; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwe/JweDecryptor.java; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/NonValidatingJwtParser.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorJweTest.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/json/JwtHeaderJweTest.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwe/JweDecryptorTest.java; token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/NonValidatingJwtParserJweTest.java | plan-marshall |
