@@ -93,6 +93,17 @@ public class WellKnownDispatcher implements ModuleDispatcherElement {
     }
 
     /**
+     * Convenience method to set the response strategy to return a document with neither issuer nor
+     * jwks_uri.
+     *
+     * @return this instance for method chaining
+     */
+    public WellKnownDispatcher returnMissingIssuerAndJwksUri() {
+        this.responseStrategy = ResponseStrategy.MISSING_ISSUER_AND_JWKS_URI;
+        return this;
+    }
+
+    /**
      * Convenience method to set the response strategy to return a document with invalid issuer.
      *
      * @return this instance for method chaining
@@ -173,6 +184,15 @@ public class WellKnownDispatcher implements ModuleDispatcherElement {
                     SC_OK,
                     Headers.of("Content-Type", "application/json"),
                     createWellKnownResponseWithoutJwksUri(dynamicIssuerUrl)));
+            case MISSING_ISSUER_AND_JWKS_URI -> Optional.of(new MockResponse(
+                    SC_OK,
+                    Headers.of("Content-Type", "application/json"),
+                    """
+                    {
+                      "authorization_endpoint": "%s/protocol/openid-connect/auth",
+                      "response_types_supported": ["code"]
+                    }
+                    """.formatted(dynamicIssuerUrl)));
             case INVALID_ISSUER -> Optional.of(new MockResponse(
                     SC_OK,
                     Headers.of("Content-Type", "application/json"),
@@ -351,6 +371,11 @@ public class WellKnownDispatcher implements ModuleDispatcherElement {
          * Returns a well-known document without the jwks_uri field.
          */
         MISSING_JWKS_URI,
+
+        /**
+         * Returns a well-known document with neither issuer nor jwks_uri.
+         */
+        MISSING_ISSUER_AND_JWKS_URI,
 
         /**
          * Returns a well-known document with an invalid issuer.

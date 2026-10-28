@@ -143,17 +143,51 @@ class WellKnownResultConverterTest {
     }
 
     @Test
-    @DisplayName("Should handle missing required issuer field")
-    void shouldHandleMissingRequiredIssuerField() {
-        String invalidJson = """
+    @DisplayName("Should convert a document with a jwks_uri but no issuer, leaving the issuer absent")
+    void shouldConvertIssuerlessDocumentWithAbsentIssuer() {
+        String issuerlessJson = """
                 {
                     "jwks_uri": "https://example.com/.well-known/jwks.json"
                 }
                 """;
 
-        Optional<WellKnownResult> result = converter.convert(invalidJson);
+        Optional<WellKnownResult> result = converter.convert(issuerlessJson);
+
+        assertTrue(result.isPresent(), "the resolver, not the converter, rejects an issuer-less document");
+        assertAll("the issuer is absent and the jwks_uri is kept for the resolver's decision",
+                () -> assertEquals(Optional.empty(), result.get().getIssuer()),
+                () -> assertEquals(Optional.of("https://example.com/.well-known/jwks.json"), result.get().getJwksUri()));
+    }
+
+    @Test
+    @DisplayName("Should treat a blank issuer as absent")
+    void shouldTreatBlankIssuerAsAbsent() {
+        String blankIssuerJson = """
+                {
+                    "issuer": "   ",
+                    "jwks_uri": "https://example.com/.well-known/jwks.json"
+                }
+                """;
+
+        Optional<WellKnownResult> result = converter.convert(blankIssuerJson);
+
+        assertTrue(result.isPresent());
+        assertEquals(Optional.empty(), result.get().getIssuer(), "a blank issuer must not count as an issuer");
+    }
+
+    @Test
+    @DisplayName("Should reject a document lacking both issuer and jwks_uri as a missing jwks_uri")
+    void shouldRejectDocumentWithoutIssuerAndJwksUri() {
+        String emptyDocument = """
+                {
+                    "authorization_endpoint": "https://example.com/auth"
+                }
+                """;
+
+        Optional<WellKnownResult> result = converter.convert(emptyDocument);
 
         assertFalse(result.isPresent());
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR, "Missing required field: jwks_uri");
     }
 
     @Test

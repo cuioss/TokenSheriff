@@ -36,6 +36,12 @@ import java.util.Optional;
  * for ResilientHttpHandler integration.
  * <p>
  * Path: HttpResponse.BodyHandler → DSL-JSON → WellKnownResult
+ * <p>
+ * A document without a usable {@code jwks_uri} is rejected (empty result). A document that carries a
+ * {@code jwks_uri} but no (or a blank) {@code issuer} is converted with a {@code null} issuer, so that
+ * {@link HttpWellKnownResolver} can reject it as a distinct, terminal
+ * {@link HttpWellKnownResolver.FailureReason#ISSUER_ABSENT} failure; it never exposes such a document's
+ * {@code jwks_uri} to a caller. A document lacking both is the missing-{@code jwks_uri} case.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -104,14 +110,15 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
                 return Optional.empty();
             }
 
-            // Validate required fields
-            if (config.issuer == null || config.issuer.trim().isEmpty()) {
-                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "Missing required field: issuer");
-                return Optional.empty();
-            }
+            // A document without a usable jwks_uri is rejected, whether or not it carries an issuer
             if (config.jwksUri == null || config.jwksUri.trim().isEmpty()) {
                 LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "Missing required field: jwks_uri");
                 return Optional.empty();
+            }
+            // An absent or blank issuer is normalized to null and passed on: HttpWellKnownResolver
+            // turns it into a terminal ISSUER_ABSENT rejection, distinct from an unreadable document
+            if (config.issuer != null && config.issuer.trim().isEmpty()) {
+                config.issuer = null;
             }
 
             return Optional.of(config);

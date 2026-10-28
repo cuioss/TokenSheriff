@@ -158,6 +158,100 @@ class HttpJwksLoaderWellKnownAsyncTest {
         }
     }
 
+    @Test
+    @DisplayName("A discovery document without an issuer is a terminal ERROR with no refresh, counted as ISSUER_MISMATCH")
+    void issuerlessDocumentIsTerminalRejection() throws Exception {
+        WellKnownDispatcher wellKnownDispatcher = new WellKnownDispatcher().returnMissingIssuer();
+        JwksResolveDispatcher jwksDispatcher = new JwksResolveDispatcher();
+        try (MockWebServer server = startServer(wellKnownDispatcher, jwksDispatcher)) {
+            HttpJwksLoaderConfig config = wellKnownConfig(server)
+                    .issuerIdentifier(server.url("/").toString())
+                    .build();
+            SecurityEventCounter counter = new SecurityEventCounter();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                LoaderStatus status = loader.initJWKSLoader(counter).join();
+
+                assertAll("an absent advertised issuer is rejected, not retried",
+                        () -> assertEquals(LoaderStatus.ERROR, status),
+                        () -> assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus()),
+                        () -> assertFalse(loader.isBackgroundRefreshActive(), "no background refresh may be scheduled"),
+                        () -> assertEquals(0, jwksDispatcher.getCallCounter(), "the advertised jwks_uri must never be fetched"),
+                        () -> assertEquals(1, counter.getCount(SecurityEventCounter.EventType.ISSUER_MISMATCH)));
+                LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                        JWTValidationLogMessages.WARN.ISSUER_MISMATCH.resolveIdentifierString());
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("An issuer-less document found by a refresh cycle cancels the refresh and ends in ERROR")
+    void issuerlessDocumentOnRefreshCancelsRefresh() throws Exception {
+        WellKnownDispatcher wellKnownDispatcher = new WellKnownDispatcher().returnError();
+        JwksResolveDispatcher jwksDispatcher = new JwksResolveDispatcher();
+        try (MockWebServer server = startServer(wellKnownDispatcher, jwksDispatcher)) {
+            try (HttpJwksLoader loader = new HttpJwksLoader(wellKnownConfig(server).build())) {
+                assertEquals(LoaderStatus.UNDEFINED, loader.initJWKSLoader(new SecurityEventCounter()).join(),
+                        "a discovery endpoint that is down at init is retried");
+                assertTrue(loader.isBackgroundRefreshActive(), "the background refresh must be scheduled");
+
+                wellKnownDispatcher.returnMissingIssuer();
+                loader.performBackgroundRefresh();
+
+                assertAll("the rejection found by the refresh is terminal",
+                        () -> assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus()),
+                        () -> assertFalse(loader.isBackgroundRefreshActive(), "the refresh task must be cancelled"),
+                        () -> assertEquals(0, jwksDispatcher.getCallCounter(), "the advertised jwks_uri must never be fetched"));
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("A discovery document without jwks_uri stays retryable and recovers once fixed")
+    void documentWithoutJwksUriStaysRetryable() throws Exception {
+        assertRetryableAndRecovers(new WellKnownDispatcher().returnMissingJwksUri());
+    }
+
+    @Test
+    @DisplayName("A discovery document lacking both issuer and jwks_uri is the missing jwks_uri case and stays retryable")
+    void documentWithoutIssuerAndJwksUriStaysRetryable() throws Exception {
+        assertRetryableAndRecovers(new WellKnownDispatcher().returnMissingIssuerAndJwksUri());
+    }
+
+    private static void assertRetryableAndRecovers(WellKnownDispatcher wellKnownDispatcher) throws Exception {
+        JwksResolveDispatcher jwksDispatcher = new JwksResolveDispatcher();
+        try (MockWebServer server = startServer(wellKnownDispatcher, jwksDispatcher)) {
+            try (HttpJwksLoader loader = new HttpJwksLoader(wellKnownConfig(server).build())) {
+                LoaderStatus status = loader.initJWKSLoader(new SecurityEventCounter()).join();
+
+                assertAll("an unusable document without the issuer signal is retried",
+                        () -> assertEquals(LoaderStatus.UNDEFINED, status),
+                        () -> assertTrue(loader.isBackgroundRefreshActive(), "the background refresh must be scheduled"));
+
+                wellKnownDispatcher.returnDefault();
+                loader.performBackgroundRefresh();
+
+                assertAll("the fixed IdP brings the loader to OK",
+                        () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                        () -> assertFalse(loader.getKeyIds().isEmpty(), "keys must be loaded"));
+            }
+        }
+    }
+
+    private static MockWebServer startServer(WellKnownDispatcher wellKnownDispatcher, JwksResolveDispatcher jwksDispatcher)
+            throws Exception {
+        MockWebServer server = new MockWebServer();
+        server.setDispatcher(new CombinedDispatcher(wellKnownDispatcher, jwksDispatcher));
+        server.start();
+        return server;
+    }
+
+    private static HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder wellKnownConfig(MockWebServer server) {
+        return HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                .wellKnownUrl(server.url(WellKnownDispatcher.LOCAL_PATH).toString())
+                .retryConfig(FAST_RETRY);
+    }
+
     private static HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder unreachableWellKnownConfig() {
         return HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl("https://invalid-host.example.com/.well-known/openid_configuration")

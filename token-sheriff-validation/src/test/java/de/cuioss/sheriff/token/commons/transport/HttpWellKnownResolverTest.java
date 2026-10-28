@@ -374,6 +374,64 @@ class HttpWellKnownResolverTest {
     }
 
     @Test
+    @DisplayName("Should hand out nothing from an issuer-less document and report ISSUER_ABSENT")
+    void shouldRejectIssuerlessDocument(URIBuilder uriBuilder) {
+        moduleDispatcher.returnMissingIssuer();
+        resolver = singleAttemptConfig(uriBuilder).createResolver(new SecurityEventCounter());
+
+        assertAll("an issuer-less document is a failed load for every accessor",
+                () -> assertEquals(Optional.empty(), resolver.getJwksUri(), "its jwks_uri must never be handed out"),
+                () -> assertEquals(Optional.empty(), resolver.getIssuer()),
+                () -> assertEquals(Optional.empty(), resolver.getWellKnownResult()),
+                () -> assertEquals(LoaderStatus.ERROR, resolver.getLoaderStatus()),
+                () -> assertEquals(Optional.of(HttpWellKnownResolver.FailureReason.ISSUER_ABSENT), resolver.getFailureReason()),
+                () -> assertEquals(3, moduleDispatcher.getCallCounter(), "the failed load is not cached"));
+    }
+
+    @Test
+    @DisplayName("Should report UNAVAILABLE for an error response")
+    void shouldReportUnavailableForErrorResponse(URIBuilder uriBuilder) {
+        moduleDispatcher.returnError();
+        resolver = singleAttemptConfig(uriBuilder).createResolver(new SecurityEventCounter());
+
+        assertEquals(Optional.empty(), resolver.getJwksUri());
+        assertEquals(Optional.of(HttpWellKnownResolver.FailureReason.UNAVAILABLE), resolver.getFailureReason());
+    }
+
+    @Test
+    @DisplayName("Should report UNAVAILABLE for a document lacking both issuer and jwks_uri")
+    void shouldReportUnavailableForDocumentWithoutIssuerAndJwksUri(URIBuilder uriBuilder) {
+        moduleDispatcher.returnMissingIssuerAndJwksUri();
+        resolver = singleAttemptConfig(uriBuilder).createResolver(new SecurityEventCounter());
+
+        assertEquals(Optional.empty(), resolver.getJwksUri());
+        assertEquals(Optional.of(HttpWellKnownResolver.FailureReason.UNAVAILABLE), resolver.getFailureReason());
+    }
+
+    @Test
+    @DisplayName("Should reset the failure reason on a later successful load")
+    void shouldResetFailureReasonOnSuccess(URIBuilder uriBuilder) {
+        moduleDispatcher.returnMissingIssuer();
+        resolver = singleAttemptConfig(uriBuilder).createResolver(new SecurityEventCounter());
+        assertEquals(Optional.empty(), resolver.getJwksUri());
+        assertEquals(Optional.of(HttpWellKnownResolver.FailureReason.ISSUER_ABSENT), resolver.getFailureReason());
+
+        moduleDispatcher.returnDefault();
+
+        assertTrue(resolver.getJwksUri().isPresent(), "the fixed document is discovered");
+        assertAll("a successful load clears the reason",
+                () -> assertEquals(Optional.empty(), resolver.getFailureReason()),
+                () -> assertEquals(LoaderStatus.OK, resolver.getLoaderStatus()));
+    }
+
+    private static WellKnownConfig singleAttemptConfig(URIBuilder uriBuilder) {
+        return WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                .wellKnownUrl(uriBuilder.addPathSegment(".well-known").addPathSegment("openid-configuration").buildAsString())
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+    }
+
+    @Test
     @DisplayName("Should fetch the discovery endpoint when loopback egress is explicitly opted in (C1)")
     void shouldFetchLoopbackDiscoveryWhenOptedIn(URIBuilder uriBuilder) {
         moduleDispatcher.returnDefault();

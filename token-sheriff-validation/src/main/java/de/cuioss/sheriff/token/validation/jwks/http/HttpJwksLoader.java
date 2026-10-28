@@ -306,10 +306,12 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     /**
      * Handles the case where JWKS adapter resolution failed (well-known discovery or HTTP handler).
      * <p>
-     * A retryable well-known discovery failure with background refresh enabled leaves the status
+     * A retryable well-known discovery failure (the discovery was unavailable: a transport failure or
+     * a document without a {@code jwks_uri}) with background refresh enabled leaves the status
      * {@link LoaderStatus#UNDEFINED} and schedules the background refresh, which re-attempts the
-     * discovery. Every other failure (a security rejection, or any failure without background
-     * refresh) is a terminal {@link LoaderStatus#ERROR} and schedules nothing.
+     * discovery. Every other failure (a security rejection — an absent advertised issuer, an issuer
+     * mismatch or an egress block — or any failure without background refresh) is a terminal
+     * {@link LoaderStatus#ERROR} and schedules nothing.
      *
      * @param resolution the failed resolution
      * @param startEpoch the {@link #epoch} the calling initialization was claimed under
@@ -344,11 +346,21 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * that requested the resolution is still live (see {@link #adoptResolution(AdapterResolution, long)}).
      * A URI rejected by the egress guard is never part of the result.
      *
+     * <p>
+     * A well-known discovery that yields no JWKS URI is retryable when the discovery layer reports it
+     * as {@link HttpWellKnownResolver.FailureReason#UNAVAILABLE} (a transport failure, an error
+     * response, a blocked discovery endpoint, or a document that is unreadable or lacks a
+     * {@code jwks_uri}, also when it lacks the issuer as well). A document that carries a
+     * {@code jwks_uri} but advertises no issuer is reported as
+     * {@link HttpWellKnownResolver.FailureReason#ISSUER_ABSENT}; it goes through the issuer gate of
+     * {@link #resolveIssuer(String, String, SecurityEventCounter)} with an absent advertised issuer
+     * and is a terminal rejection.
+     *
      * @return the resolution: on success the endpoint (adapter and fetch URI of this one resolution)
-     *         and the resolved issuer; on failure no endpoint, flagged retryable when the well-known
-     *         discovery yielded no JWKS URI (a transient condition) and not retryable for a security
-     *         rejection (issuer mismatch, absent issuer, egress block). An egress-rejected resolution
-     *         still carries the issuer it resolved.
+     *         and the resolved issuer; on failure no endpoint, flagged retryable for an unavailable
+     *         discovery as described above and not retryable for a security rejection (absent
+     *         advertised issuer, issuer mismatch, egress block). An egress-rejected resolution still
+     *         carries the issuer it resolved.
      */
     private AdapterResolution resolveJWKSAdapter() {
         HttpHandler handler;
@@ -361,6 +373,14 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             // This call may block but we're in async context
             Optional<String> jwksUri = resolver.getJwksUri();
             if (jwksUri.isEmpty()) {
+                if (resolver.getFailureReason().orElse(null) == HttpWellKnownResolver.FailureReason.ISSUER_ABSENT) {
+                    // The discovery document advertises no issuer: the issuer gate rejects an absent
+                    // advertised issuer (counting ISSUER_MISMATCH when one is configured), so this is
+                    // a terminal rejection, never retried.
+                    resolveIssuer(null, config.getIssuerIdentifier(), securityEventCounter);
+                    return AdapterResolution.REJECTED;
+                }
+                // Transport failure, missing jwks_uri or an unreadable document: may succeed later
                 return AdapterResolution.RETRYABLE_FAILURE;
             }
 
@@ -923,11 +943,12 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * Gating here, before the advertised URL is fetched, closes the SSRF-relevant window (COMMONS-5):
      * a tampered discovery document cannot steer the loader to fetch key material from an
      * attacker-chosen endpoint under the authority of an issuer we do not trust. A mismatch is
-     * audited (WARN log + ISSUER_MISMATCH counter). A discovery document that omits {@code issuer}
-     * is already rejected by the well-known document parser before this method is reached, so that
-     * case produces no ISSUER_MISMATCH event; the absent-issuer branch here is a defensive gate
-     * (reached directly in unit tests) that logs the advertised value as {@code <absent>} and
-     * counts ISSUER_MISMATCH. Comparison tolerates a trailing-slash difference, which is a common,
+     * audited (WARN log + ISSUER_MISMATCH counter). A discovery document that carries a
+     * {@code jwks_uri} but omits {@code issuer} is reported by the discovery layer as
+     * {@link HttpWellKnownResolver.FailureReason#ISSUER_ABSENT}, and {@link #resolveJWKSAdapter()}
+     * passes it here as an absent advertised issuer: with a configured issuer the advertised value is
+     * logged as {@code <absent>} and ISSUER_MISMATCH is counted, and the resolution is a terminal
+     * rejection. Comparison tolerates a trailing-slash difference, which is a common,
      * benign formatting variance in real IdP deployments (e.g., Keycloak) and not a genuine issuer
      * mismatch.
      * <p>
