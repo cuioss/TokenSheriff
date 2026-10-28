@@ -152,6 +152,11 @@ services:
       # JWKS URL and a well-known URL. The `integration` issuer keeps its working JWKS URL.
       - SHERIFF_TOKEN_ISSUERS_KEYCLOAK_JWKS_HTTP_URL=
       - SHERIFF_TOKEN_ISSUERS_KEYCLOAK_JWKS_HTTP_WELL_KNOWN_URL=https://keycloak:8444/realms/benchmark/.well-known/openid-configuration
+      # No background refresh for the `keycloak` issuer. With a refresh interval the loader treats
+      # the failed discovery as transient: it stays UNDEFINED (loading IN_PROGRESS) and repeats the
+      # discovery every interval, adding a new round of attempts to the log each time. Without it,
+      # the failure is final: one discovery round, status ERROR and loading COMPLETE.
+      - SHERIFF_TOKEN_ISSUERS_KEYCLOAK_JWKS_HTTP_REFRESH_INTERVAL_SECONDS=0
       # A maximum that differs from the default of five, and a short initial delay
       - SHERIFF_TOKEN_RETRY_MAX_ATTEMPTS=${RETRY_PROBE_MAX_ATTEMPTS:-3}
       - SHERIFF_TOKEN_RETRY_INITIAL_DELAY_MS=${RETRY_PROBE_INITIAL_DELAY_MS:-200}

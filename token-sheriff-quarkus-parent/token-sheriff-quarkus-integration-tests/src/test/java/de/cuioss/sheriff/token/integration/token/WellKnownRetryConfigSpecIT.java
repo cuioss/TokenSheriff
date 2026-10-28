@@ -44,6 +44,13 @@ import static org.junit.jupiter.api.Assertions.*;
  * a value other than the default of five. Discovery therefore fails on every attempt, and the number
  * of attempts the probe logs is the number the retry configuration allowed.
  * <p>
+ * The probe runs the {@code keycloak} issuer without background refresh. With a refresh interval, a
+ * failed discovery is transient: the loader stays undefined, the readiness check keeps reporting
+ * loading {@code IN_PROGRESS}, and every refresh cycle runs another discovery round with its own
+ * attempts. Without it the failure is final, so the probe makes exactly one discovery round, the
+ * issuer ends in {@code ERROR} and loading is {@code COMPLETE} — the state this spec waits for before
+ * it counts the attempts.
+ * <p>
  * An attempt is counted from the log lines of the HTTP retry adapter, which carry no URL. That is
  * sufficient here because discovery of the {@code keycloak} issuer is the only request of the probe
  * that fails: its second issuer, {@code integration}, loads its key set from the running Keycloak, and
@@ -125,7 +132,9 @@ class WellKnownRetryConfigSpecIT extends BaseIntegrationTest {
     /**
      * Asserts the final state of the probe: loading is over, the issuer with the unreachable
      * well-known URL is down and the other issuer is up. The last part is what makes the log count
-     * meaningful — a second failing request would add retry lines of its own.
+     * meaningful — a second failing request would add retry lines of its own. Loading is over only
+     * because the probe disables background refresh for the unreachable issuer; with refresh enabled
+     * that issuer would stay undefined and keep loading {@code IN_PROGRESS}.
      */
     private static void assertProbeFinishedLoading() {
         // No status-code expectation: a readiness answer that is DOWN arrives as HTTP 503, and its
