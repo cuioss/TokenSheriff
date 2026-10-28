@@ -31,11 +31,13 @@ import de.cuioss.sheriff.token.validation.cache.AccessTokenCacheConfig;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
 import de.cuioss.tools.logging.CuiLogger;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import org.eclipse.microprofile.config.Config;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INFO;
 
@@ -44,7 +46,9 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INF
  * <p>
  * This producer creates and manages JWT validation components from
  * configuration properties. Components are initialized during startup
- * via {@link PostConstruct} and exposed through field-based producers.
+ * via {@link PostConstruct} and exposed through field-based producers. When the
+ * producer is destroyed ({@link PreDestroy}), the {@link TokenValidator} it created is
+ * closed, which also stops the background refresh of its JWKS loaders.
  * </p>
  * <p>
  * Configuration resolution is delegated to dedicated resolver classes for
@@ -85,6 +89,11 @@ public class TokenValidatorProducer {
     @Produces
     @ApplicationScoped
     SecurityEventCounter securityEventCounter;
+
+    /**
+     * Set once {@link #destroy()} closed {@link #tokenValidator}, so it is closed at most once.
+     */
+    private final AtomicBoolean validatorClosed = new AtomicBoolean();
 
     @SuppressWarnings("java:S2637") // False positive: fields are initialized in @PostConstruct
     public TokenValidatorProducer(Config config, ClaimMapperRegistry claimMapperRegistry,
@@ -155,5 +164,29 @@ public class TokenValidatorProducer {
         LOGGER.info(INFO.JWT_VALIDATION_COMPONENTS_INITIALIZED, issuerConfigs.size());
     }
 
-
+    /**
+     * Closes the {@link TokenValidator} this producer created when the producer is destroyed, for
+     * example when the CDI application context shuts down or is restarted in dev mode.
+     * <p>
+     * {@link TokenValidator#close()} releases the validator's internal resources and closes the JWKS
+     * loaders it owns, stopping their background refresh. The validator is closed at most once, nothing
+     * happens when {@link #init()} did not create one, and a failure while closing is logged instead of
+     * being propagated into the container shutdown.
+     */
+    @PreDestroy
+    void destroy() {
+        TokenValidator validator = tokenValidator;
+        if (validator == null || !validatorClosed.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            validator.close();
+        }
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
+        // Intentional catch-all: a failure while releasing the validator must not abort the
+        // container shutdown that triggered this callback.
+        catch (RuntimeException e) {
+            LOGGER.debug(e, "Failed to close the TokenValidator on producer destruction");
+        }
+    }
 }
