@@ -58,6 +58,18 @@ public final class ClientLogMessages {
                 .identifier(2)
                 .template("Cleared held tokens for session '%s' as part of RP-initiated logout")
                 .build();
+
+        /**
+         * A refused refresh exchange did not clear the session, because a newer grant (a re-login or
+         * step-up) was stored while the exchange was in flight. The refusal still propagated and its
+         * revocations still ran; only the fail-closed store and rotation-family clear was skipped, so the
+         * newer grant stays usable.
+         */
+        public static final LogRecord REFUSED_REFRESH_KEPT_NEWER_GRANT = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(3)
+                .template("Refused refresh for session '%s' left the store untouched: a newer grant was stored while the exchange was in flight, so it and its rotation family are kept")
+                .build();
     }
 
     /**

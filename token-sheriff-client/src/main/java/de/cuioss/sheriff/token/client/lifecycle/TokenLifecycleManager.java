@@ -174,16 +174,20 @@ public class TokenLifecycleManager {
      * the other as current, and the next refresh of the held, legitimate grant is read as reuse.
      * {@code applyRefresh} holds the stripe across its atomic update <em>and</em> its fail-closed reuse
      * teardown, because the store releases its key lock before that teardown runs: without the stripe a
-     * concurrent {@code store} could write a new grant in between, and the teardown would clear it.
+     * concurrent {@code store} could write a new grant in between, and the teardown would clear it. The
+     * fail-closed teardown of a refused {@link #refresh} exchange ({@link #clearRefusedSession}) holds the
+     * stripe for the same reason, around its compare against the presented token and its clear.
      * <p>
      * A fixed array indexed by the session id's hash, rather than a per-session map, keeps memory
      * bounded and needs no cleanup; two sessions sharing a stripe only serialize, never conflict.
      * <p>
      * <strong>Lock order.</strong> A caller takes exactly one stripe and never nests two, so stripes
      * cannot deadlock with each other. The order is <em>stripe &rarr; store key &rarr; families</em> on
-     * every path that takes a stripe — {@code store}, the capture, and {@code applyRefresh}. The stripe is
-     * always taken before the store's atomic update is entered and is never taken inside it, so no path
-     * acquires a stripe while holding a store key or the family map. The capture must never call
+     * every path that takes a stripe — {@code store}, the capture, {@code applyRefresh}, and the refused
+     * exchange's teardown. The stripe is always taken before the store's atomic update is entered and is
+     * never taken inside it, so no path acquires a stripe while holding a store key or the family map. The
+     * teardown takes the stripe only after the exchange's revocation calls have returned, so no HTTP call
+     * is made while a stripe is held. The capture must never call
      * {@code applyRefresh} while holding the stripe — {@link #doRefresh} releases it before the exchange
      * and the apply — so an overridden {@code applyRefresh} that hands the call to another thread cannot
      * block on a stripe its caller holds. Keeping both rules leaves the order acyclic.
@@ -289,10 +293,14 @@ public class TokenLifecycleManager {
      * The token write and the family update run under the session's grant lock, so they are atomic per
      * session with respect to other {@code store} calls, to the refresh's read of the held token, and to
      * {@link #applyRefresh}, which takes the same lock around its update and its fail-closed reuse
-     * teardown — two concurrent grants can never leave the store holding one and the family tracking the
-     * other, and a reuse refusal can never clear a grant stored while it was being torn down. Writers that
-     * bypass this manager, such as a {@link TokenStore} shared with another node, take no such lock; the
-     * refresh path's capture covers them by adopting and re-reading.
+     * teardown. The fail-closed teardown of a refused {@link #refresh} exchange takes it as well, and clears
+     * only while the store still holds the refresh token that exchange presented. Two concurrent grants can
+     * therefore never leave the store holding one and the family tracking the other, and neither a reuse
+     * refusal nor any other refused refresh clears a grant this method stored while the refusal was in
+     * flight. Writers that bypass this manager, such as a {@link TokenStore} shared with another node, take
+     * no such lock; the refresh path's capture covers them by adopting and re-reading, and a refused
+     * exchange's teardown still spares a grant such a writer stored before its compare, but not one written
+     * between that compare and the clear.
      * <ul>
      *   <li>no family tracks the session — a family is seeded with that token;</li>
      *   <li>the token is the family's current token or one it remembers as superseded — the family is
@@ -533,9 +541,15 @@ public class TokenLifecycleManager {
      * <strong>A refresh yields to a re-login that lands while it is in flight.</strong> The family is
      * captured before the exchange and rotated on that captured instance, and the refreshed bundle is
      * applied as a compare-and-set against the presented refresh token. When {@link #store} installed a
-     * newer grant in the meantime, the in-flight result is discarded — no reuse is raised and nothing
-     * is cleared — the newer bundle is returned, and the orphaned rotated successor is revoked
-     * best-effort (RFC 7009).
+     * newer grant in the meantime and the exchange succeeds, the in-flight result is discarded — no reuse
+     * is raised and nothing is cleared — the newer bundle is returned, and the orphaned rotated successor
+     * is revoked best-effort (RFC 7009). When the exchange is refused instead — the server rejects the
+     * presented token, a redemption is quarantined, the refreshed ID token is inconsistent, a binding check
+     * refuses the apply, or the presented token is detected as reuse — the refusal still propagates and its
+     * revocations still run, but the fail-closed teardown clears the store entry and the family only while
+     * the store still holds the refresh token this refresh presented: a newer grant stored in the meantime
+     * is left in place together with its family. The compare runs under the session's grant lock, so it is
+     * exact against {@link #store}; when the store cannot be read, the session is cleared as before.
      * <p>
      * This coordinator refreshes plain-bearer sessions; it applies the refreshed material with no
      * {@code cnf} binding, so a sender-constrained stored bundle fails closed (a downgrade rather than
@@ -739,8 +753,8 @@ public class TokenLifecycleManager {
         try {
             rotation = refreshFlow.refresh(metadata, presentedRefreshToken);
         } catch (TokenSheriffException refusedExchange) {
-            handleRefusedExchange(refusedExchange, sessionId, metadata, revocationClient,
-                    clientAuthentication);
+            handleRefusedExchange(refusedExchange, sessionId, presentedRefreshToken, metadata,
+                    revocationClient, clientAuthentication);
             // The rethrow stays at the call site: doRefresh's callers rely on the refusal propagating
             // out of the exchange unchanged, and the helper only decides the session disposition.
             throw refusedExchange;
@@ -760,8 +774,8 @@ public class TokenLifecycleManager {
             refreshedIdToken = verifiedRefreshedIdToken(rotation, idTokenValidationBridge);
         } catch (IllegalStateException inconsistent) {
             if (rotation.rotated()) {
-                quarantineRejectedRotation(sessionId, metadata, rotation.refreshToken(), revocationClient,
-                        clientAuthentication);
+                quarantineRejectedRotation(sessionId, presentedRefreshToken, metadata, rotation.refreshToken(),
+                        revocationClient, clientAuthentication);
             }
             throw inconsistent;
         }
@@ -808,8 +822,8 @@ public class TokenLifecycleManager {
                     refreshedExpiry, null, refreshedSubject, refreshedIdToken);
         } catch (IllegalStateException rejected) {
             if (rotation.rotated()) {
-                quarantineRejectedRotation(sessionId, metadata, rotation.refreshToken(), revocationClient,
-                        clientAuthentication);
+                quarantineRejectedRotation(sessionId, presentedRefreshToken, metadata, rotation.refreshToken(),
+                        revocationClient, clientAuthentication);
             }
             throw rejected;
         } finally {
@@ -863,14 +877,16 @@ public class TokenLifecycleManager {
      * This method decides the disposition only; it never rethrows. The refusal is rethrown by the caller
      * so the control-flow contract {@code doRefresh}'s callers rely on stays unchanged.
      *
-     * @param refusedExchange      the refusal the exchange raised; never {@code null}
-     * @param sessionId            the session whose disposition is being decided; never {@code null}
-     * @param metadata             the provider metadata used for any revocation call; never {@code null}
-     * @param revocationClient     the client used for best-effort revocation; never {@code null}
-     * @param clientAuthentication the authentication presented on a revocation call; never {@code null}
+     * @param refusedExchange       the refusal the exchange raised; never {@code null}
+     * @param sessionId             the session whose disposition is being decided; never {@code null}
+     * @param presentedRefreshToken the refresh token the refused exchange presented; a fail-closed clear
+     *                              runs only while the store still holds it. Never {@code null}
+     * @param metadata              the provider metadata used for any revocation call; never {@code null}
+     * @param revocationClient      the client used for best-effort revocation; never {@code null}
+     * @param clientAuthentication  the authentication presented on a revocation call; never {@code null}
      */
     private void handleRefusedExchange(TokenSheriffException refusedExchange, String sessionId,
-            ProviderMetadata metadata, RevocationClient revocationClient,
+            String presentedRefreshToken, ProviderMetadata metadata, RevocationClient revocationClient,
             ClientAuthentication clientAuthentication) {
         RefreshFailureClassification classification = RefreshFlow.classify(refusedExchange);
         switch (classification.kind()) {
@@ -881,14 +897,14 @@ public class TokenLifecycleManager {
                 RefreshRedemption redemption = Objects.requireNonNull(classification.redemption(),
                         "a REDEEMED classification carries the redemption it was raised under");
                 if (redemption.presentedTokenBurned()) {
-                    quarantineRedeemedRefresh(sessionId, metadata, redemption, revocationClient,
-                            clientAuthentication);
+                    quarantineRedeemedRefresh(sessionId, presentedRefreshToken, metadata, redemption,
+                            revocationClient, clientAuthentication);
                 }
             }
             // The server never redeemed anything, so there is no successor — but it declared the
             // presented token invalid, so keeping the session would leave the caller holding a dead
             // credential no retry revives.
-            case CREDENTIAL_REJECTED -> quarantineRejectedCredential(sessionId, metadata,
+            case CREDENTIAL_REJECTED -> quarantineRejectedCredential(sessionId, presentedRefreshToken, metadata,
                     revocationClient, clientAuthentication);
             // The request never reached the point where the server processed it (connection
             // failure, DNS failure, 5xx), so the presented refresh token is still valid. Clearing
@@ -924,7 +940,7 @@ public class TokenLifecycleManager {
         List<String> revocationTargets = rotatedSuccessor == null
                 ? List.of(reusedToken)
                 : List.of(reusedToken, rotatedSuccessor);
-        revokeAndClearFailClosed(sessionId, metadata, revocationTargets, revocationClient,
+        revokeAndClearFailClosed(sessionId, reusedToken, metadata, revocationTargets, revocationClient,
                 clientAuthentication);
     }
 
@@ -940,11 +956,12 @@ public class TokenLifecycleManager {
      * on a token the AS just minted, so the rotated token is revoked at the AS (RFC 7009, best-effort)
      * and both the store entry and the rotation family are dropped, forcing re-authentication.
      */
-    private void quarantineRejectedRotation(String sessionId, ProviderMetadata metadata, String rotatedToken,
-            RevocationClient revocationClient, ClientAuthentication clientAuthentication) {
+    private void quarantineRejectedRotation(String sessionId, String presentedRefreshToken,
+            ProviderMetadata metadata, String rotatedToken, RevocationClient revocationClient,
+            ClientAuthentication clientAuthentication) {
         LOGGER.warn(ClientLogMessages.WARN.REFRESH_IDENTITY_REJECTED_QUARANTINE, maskSessionId(sessionId));
-        revokeAndClearFailClosed(sessionId, metadata, revocationTargets(rotatedToken), revocationClient,
-                clientAuthentication);
+        revokeAndClearFailClosed(sessionId, presentedRefreshToken, metadata, revocationTargets(rotatedToken),
+                revocationClient, clientAuthentication);
     }
 
     /**
@@ -960,8 +977,8 @@ public class TokenLifecycleManager {
      * the presented token is presumed burned, so the store entry and rotation family are cleared, but
      * no revocation is attempted because there is no token to name in it.
      */
-    private void quarantineRedeemedRefresh(String sessionId, ProviderMetadata metadata,
-            RefreshRedemption redemption, RevocationClient revocationClient,
+    private void quarantineRedeemedRefresh(String sessionId, String presentedRefreshToken,
+            ProviderMetadata metadata, RefreshRedemption redemption, RevocationClient revocationClient,
             ClientAuthentication clientAuthentication) {
         String rotatedToken = redemption.rotatedRefreshToken();
         if (rotatedToken == null) {
@@ -970,8 +987,8 @@ public class TokenLifecycleManager {
         } else {
             LOGGER.warn(ClientLogMessages.WARN.REFRESH_IDENTITY_REJECTED_QUARANTINE, maskSessionId(sessionId));
         }
-        revokeAndClearFailClosed(sessionId, metadata, revocationTargets(rotatedToken), revocationClient,
-                clientAuthentication);
+        revokeAndClearFailClosed(sessionId, presentedRefreshToken, metadata, revocationTargets(rotatedToken),
+                revocationClient, clientAuthentication);
     }
 
     /**
@@ -985,10 +1002,12 @@ public class TokenLifecycleManager {
      * re-authentication — because a session left holding a credential the server has declared dead is a
      * session that fails on its very next refresh with no way to recover.
      */
-    private void quarantineRejectedCredential(String sessionId, ProviderMetadata metadata,
-            RevocationClient revocationClient, ClientAuthentication clientAuthentication) {
+    private void quarantineRejectedCredential(String sessionId, String presentedRefreshToken,
+            ProviderMetadata metadata, RevocationClient revocationClient,
+            ClientAuthentication clientAuthentication) {
         LOGGER.warn(ClientLogMessages.WARN.REFRESH_CREDENTIAL_REJECTED_QUARANTINE, maskSessionId(sessionId));
-        revokeAndClearFailClosed(sessionId, metadata, List.of(), revocationClient, clientAuthentication);
+        revokeAndClearFailClosed(sessionId, presentedRefreshToken, metadata, List.of(), revocationClient,
+                clientAuthentication);
     }
 
     /**
@@ -1002,16 +1021,17 @@ public class TokenLifecycleManager {
 
     /**
      * Revokes every named credential at the authorization server (best-effort, in the given order) and
-     * clears the session's store entry and rotation family, so the client-side fail-closed clear happens
-     * whether or not the AS revocations succeed. An empty list means no revocable credential is known —
-     * the clear still happens, and nothing is attempted.
+     * then fails the refused session closed through {@link #clearRefusedSession}, so the client-side clear
+     * runs whether or not the AS revocations succeed. An empty list means no revocable credential is known
+     * — the clear still runs, and nothing is attempted.
      * <p>
      * Each revocation is attempted independently: a {@link TransportException} from one does not stop
      * the next, because the targets are separate credentials and skipping the rest would leave a live
-     * one behind over an unrelated failure.
+     * one behind over an unrelated failure. The revocations run before, and outside, the session's grant
+     * lock the clear takes, so no HTTP call is made while the lock is held.
      */
-    private void revokeAndClearFailClosed(String sessionId, ProviderMetadata metadata,
-            List<String> revocationTargets, RevocationClient revocationClient,
+    private void revokeAndClearFailClosed(String sessionId, String presentedRefreshToken,
+            ProviderMetadata metadata, List<String> revocationTargets, RevocationClient revocationClient,
             ClientAuthentication clientAuthentication) {
         try {
             if (!revocationTargets.isEmpty()) {
@@ -1038,9 +1058,63 @@ public class TokenLifecycleManager {
             // told had been destroyed. Running the clear in a finally keeps the guarantee unconditional
             // while leaving propagation unchanged: TransportException stays caught and best-effort,
             // anything else still reaches the caller, only now after the clear has run.
+            clearRefusedSession(sessionId, presentedRefreshToken);
+        }
+    }
+
+    /**
+     * The single fail-closed clear of a refused {@link #refresh} exchange: drops the session's store entry
+     * and rotation family — unless the store now holds a newer grant.
+     * <p>
+     * The exchange released the session's grant lock before it presented {@code presentedRefreshToken},
+     * so a re-login may have stored a newer grant while the refused exchange was in flight. Clearing
+     * unconditionally would delete that grant and force the user to log in a second time. The clear
+     * therefore runs under the grant lock, and only while the store still holds the refused token — the
+     * same presented-token compare the {@link #applyRefresh} compare-and-set uses. When the store holds a
+     * different bundle, that bundle was stored after the capture, so it and its family are left untouched
+     * and the decision is logged.
+     * <p>
+     * <strong>Only a positively newer grant is spared.</strong> When the store cannot be read, the session
+     * is cleared exactly as before: an unreadable store is never evidence that the refused credential has
+     * gone. An empty store is cleared too, which also drops a family that outlived its token.
+     *
+     * @param sessionId             the refused session; never {@code null}
+     * @param presentedRefreshToken the refresh token the refused exchange presented; never {@code null}
+     */
+    private void clearRefusedSession(String sessionId, String presentedRefreshToken) {
+        ReentrantLock grantLock = grantLockFor(sessionId);
+        grantLock.lock();
+        try {
+            if (holdsNewerGrant(sessionId, presentedRefreshToken)) {
+                LOGGER.info(ClientLogMessages.INFO.REFUSED_REFRESH_KEPT_NEWER_GRANT, maskSessionId(sessionId));
+                return;
+            }
             tokenStore.remove(sessionId);
             families.remove(sessionId);
+        } finally {
+            grantLock.unlock();
         }
+    }
+
+    /**
+     * Whether the store holds a bundle whose refresh token is not {@code presentedRefreshToken}; the
+     * caller holds the session's grant lock. Fails closed: a store that throws on the read reports
+     * {@code false}, so the caller clears.
+     */
+    private boolean holdsNewerGrant(String sessionId, String presentedRefreshToken) {
+        Optional<StoredToken> held;
+        try {
+            held = tokenStore.retrieve(sessionId);
+        }
+        /*TODO: Catch specific not RuntimeException. Suppress: // cui-rewrite:disable InvalidExceptionUsageRecipe*/
+        catch (RuntimeException unreadable) {
+            // TokenStore is an SPI, so any unchecked failure is possible here. Whatever it is, it is not
+            // evidence that a newer grant replaced the refused one, so the caller clears.
+            LOGGER.debug(unreadable, "Store read before a fail-closed clear failed for session %s; clearing",
+                    maskSessionId(sessionId));
+            return false;
+        }
+        return held.isPresent() && !presentedRefreshToken.equals(held.get().refreshToken());
     }
 
     /**

@@ -19,12 +19,16 @@ import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.flow.RefreshFlow;
 import de.cuioss.sheriff.token.client.flow.TokenEndpointClient;
+import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.client.lifecycle.InMemoryTokenStore;
 import de.cuioss.sheriff.token.client.lifecycle.RefreshScheduler;
 import de.cuioss.sheriff.token.client.lifecycle.StoredToken;
 import de.cuioss.sheriff.token.client.lifecycle.TokenLifecycleManager;
 import de.cuioss.sheriff.token.client.lifecycle.TokenStore;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
+import de.cuioss.sheriff.token.commons.error.TransportException;
+import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
+import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.test.dispatcher.TokenDispatcher;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -63,14 +67,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A re-login reseeds the family, an externally applied refresh advances it, and a refresh racing a
  * re-login yields to the newer grant — none of them raises a false reuse. Each of those is paired with a
  * negative control showing that a token the family superseded is still reuse, so removing the reseed or
- * advance guard turns a test red. The wired path also maps an absurd {@code expires_in} to a bundle with
- * no expiry instead of overflowing.
+ * advance guard turns a test red. A refused refresh — {@code invalid_grant}, an inconsistent refreshed ID
+ * token on a rotated exchange, or a detected reuse — fails the session closed, but spares a re-login grant
+ * stored while that exchange was in flight; each refusal path is paired with the same path and no re-login,
+ * which must still clear the session. The wired path also maps an absurd {@code expires_in} to a bundle
+ * with no expiry instead of overflowing.
  */
 @EnableTestLogger
 @EnableGeneratorController
 @EnableMockWebServer
 @DisplayName("Wired refresh: the rotation family follows re-grants without weakening reuse detection")
 class RefreshFamilyReseedTest extends RefreshTestSupport {
+
+    /** An RFC 6749 §5.2 error body declaring the presented refresh token invalid. */
+    private static final String INVALID_GRANT = "{\"error\":\"invalid_grant\"}";
 
     private ClientConfiguration config;
     private TokenLifecycleManager manager;
@@ -417,6 +427,136 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
     }
 
     @Test
+    @DisplayName("Should keep a re-login grant when the server rejects the refused refresh token as invalid_grant")
+    void shouldKeepReLoginGrantWhenCredentialIsRejected(URIBuilder uriBuilder) {
+        ProviderMetadata metadata = metadata(uriBuilder);
+        arrangeCredentialRejection();
+
+        assertReLoginSurvivesRefusal(metadata, TransportException.class);
+        assertFalse(revocationClient.revokedAny(), "a rejected credential is never revoked");
+    }
+
+    @Test
+    @DisplayName("Should clear the session on invalid_grant when no re-login landed during the exchange")
+    void shouldClearSessionOnCredentialRejectionWithoutReLogin(URIBuilder uriBuilder) {
+        ProviderMetadata metadata = metadata(uriBuilder);
+        arrangeCredentialRejection();
+
+        assertRefusalClearsSession(metadata, TransportException.class);
+    }
+
+    @Test
+    @DisplayName("Should keep a re-login grant when the rotated exchange carries an inconsistent refreshed ID token")
+    void shouldKeepReLoginGrantWhenRefreshedIdTokenIsInconsistent(URIBuilder uriBuilder) {
+        ProviderMetadata metadata = metadata(uriBuilder);
+        String rotated = arrangeInconsistentIdToken();
+
+        assertReLoginSurvivesRefusal(metadata, IllegalStateException.class);
+        assertTrue(revocationClient.revoked(rotated), "the AS-issued successor is still revoked (RFC 7009)");
+    }
+
+    @Test
+    @DisplayName("Should clear the session on an inconsistent refreshed ID token when no re-login landed")
+    void shouldClearSessionOnInconsistentIdTokenWithoutReLogin(URIBuilder uriBuilder) {
+        ProviderMetadata metadata = metadata(uriBuilder);
+        arrangeInconsistentIdToken();
+
+        assertRefusalClearsSession(metadata, IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("Should keep a re-login grant when the refused exchange presented a superseded token")
+    void shouldKeepReLoginGrantWhenPresentedTokenIsReuse(URIBuilder uriBuilder) {
+        ProviderMetadata metadata = metadata(uriBuilder);
+        ReuseFixture reuse = arrangeReuse(metadata);
+
+        assertReLoginSurvivesRefusal(metadata, ClientProtocolException.class);
+        assertAll("the reuse verdict and its revocations are unchanged",
+                () -> assertTrue(revocationClient.revoked(reuse.replayed()), "the replayed token is revoked"),
+                () -> assertTrue(revocationClient.revoked(reuse.successor()), "the replay's successor is revoked"));
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "Refresh token reuse detected");
+    }
+
+    @Test
+    @DisplayName("Should clear the session on reuse when no re-login landed during the exchange")
+    void shouldClearSessionOnReuseWithoutReLogin(URIBuilder uriBuilder) {
+        ProviderMetadata metadata = metadata(uriBuilder);
+        arrangeReuse(metadata);
+
+        assertRefusalClearsSession(metadata, ClientProtocolException.class);
+    }
+
+    @Test
+    @DisplayName("Should keep a grant stored concurrently while a refused exchange tears the session down")
+    void shouldKeepGrantStoredDuringRefusedExchangeTeardown(URIBuilder uriBuilder) throws Exception {
+        ProviderMetadata metadata = metadata(uriBuilder);
+        var racingStore = new RacingTokenStore();
+        var racingManager = new TokenLifecycleManager(racingStore, new RefreshScheduler());
+        String newGrant = token();
+        racingManager.store(session, bearerBundle(token(), null));
+        getModuleDispatcher().respondWith(400, INVALID_GRANT);
+        var concurrentStoreReturned = new CountDownLatch(1);
+        var concurrentStore = new AtomicReference<Future<?>>();
+        var concurrentStoreInsideTeardown = new AtomicBoolean();
+        var clientAuth = clientAuth(config);
+
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            // Armed during the exchange, so the next retrieve is the teardown's compare. The hook runs on
+            // the refreshing thread after the compare has read the refused token and before the clear, and
+            // only then starts a store() of a new grant. This is a timing-bounded guard: without the grant
+            // lock around the compare and the clear the store normally completes inside the window and the
+            // clear wipes the new grant; with it, the store blocks until the teardown is done and the
+            // bounded wait simply times out. The bound can only weaken the red check, never make the green
+            // check flaky.
+            RefreshFlow flow = flowRunningDuringExchange(() -> racingStore.afterNextRetrieve(() -> {
+                concurrentStore.set(pool.submit(() -> {
+                    racingManager.store(session, bearerBundle(newGrant, null));
+                    concurrentStoreReturned.countDown();
+                }));
+                concurrentStoreInsideTeardown.set(awaitBounded(concurrentStoreReturned));
+            }));
+            assertThrows(TransportException.class,
+                    () -> racingManager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth));
+            assertNotNull(concurrentStore.get(), "the teardown reads the store before it clears");
+            concurrentStore.get().get(10, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertEquals(Optional.of(newGrant), racingManager.get(session).map(StoredToken::refreshToken),
+                "the grant stored during the teardown survives it (store inside the teardown window: "
+                        + concurrentStoreInsideTeardown.get() + ")");
+    }
+
+    @Test
+    @DisplayName("Should clear the session when the store cannot be read during a refused exchange's teardown")
+    void shouldClearSessionWhenStoreReadFailsDuringRefusalTeardown(URIBuilder uriBuilder) {
+        ProviderMetadata metadata = metadata(uriBuilder);
+        var racingStore = new RacingTokenStore();
+        var racingManager = new TokenLifecycleManager(racingStore, new RefreshScheduler());
+        String reLoginGrant = token();
+        racingManager.store(session, bearerBundle(token(), null));
+        getModuleDispatcher().respondWith(400, INVALID_GRANT);
+        // A newer grant IS stored, but the teardown's read of it fails: an unreadable store is no evidence
+        // the refused credential has gone, so the clear must run regardless.
+        RefreshFlow flow = flowRunningDuringExchange(() -> {
+            racingManager.store(session, bearerBundle(reLoginGrant, null));
+            racingStore.failNextRetrieve();
+        });
+        var clientAuth = clientAuth(config);
+
+        assertThrows(TransportException.class,
+                () -> racingManager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth),
+                "the original refusal still reaches the caller, not the store failure");
+
+        assertAll("an unreadable store fails the session closed",
+                () -> assertFalse(racingStore.retrieveFailurePending(), "the teardown read the store and it failed"),
+                () -> assertTrue(racingManager.get(session).isEmpty(), "the newer grant is cleared with it"));
+        LogAsserts.assertNoLogMessagePresent(TestLogLevel.INFO, TokenLifecycleManager.class);
+    }
+
+    @Test
     @DisplayName("Should store a bundle with no expiry when the refresh carries an absurd expires_in")
     void shouldStoreNoExpiryForAbsurdExpiresIn(URIBuilder uriBuilder) {
         ProviderMetadata metadata = metadata(uriBuilder);
@@ -444,6 +584,94 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
                 () -> assertTrue(revocationClient.revoked(replaySuccessor), "the replay's successor is revoked"),
                 () -> assertTrue(manager.get(session).isEmpty(), "the session is cleared fail-closed"));
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "Refresh token reuse detected");
+    }
+
+    /** Stores a grant and makes the token endpoint reject its refresh as {@code invalid_grant}. */
+    private void arrangeCredentialRejection() {
+        manager.store(session, bearerBundle(token(), null));
+        getModuleDispatcher().respondWith(400, INVALID_GRANT);
+    }
+
+    /**
+     * Stores a grant and makes the token endpoint rotate it while returning an ID token whose {@code sub}
+     * differs from the refreshed access token's, so the §12.2 check refuses after rotation.
+     *
+     * @return the rotated refresh token the endpoint issues
+     */
+    private String arrangeInconsistentIdToken() {
+        String subject = Generators.letterStrings(10, 15).next();
+        accessHolder.withClaim(ClaimName.SUBJECT.getName(), ClaimValue.forPlainString(subject));
+        idHolder.withClaim(ClaimName.SUBJECT.getName(),
+                ClaimValue.forPlainString(subject + Generators.letterStrings(3, 5).next()));
+        manager.store(session, bearerBundle(token(), token()));
+        String rotated = token();
+        getModuleDispatcher().respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), rotated,
+                idHolder.getRawToken(), 300));
+        return rotated;
+    }
+
+    /**
+     * Refreshes once and re-stores the superseded token, so the next refresh presents a replay, and makes
+     * the token endpoint issue a successor for that replay.
+     */
+    private ReuseFixture arrangeReuse(ProviderMetadata metadata) {
+        String replayed = token();
+        manager.store(session, bearerBundle(replayed, null));
+        refreshTo(metadata, token());
+        manager.store(session, bearerBundle(replayed, null));
+        String successor = token();
+        getModuleDispatcher().respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), successor,
+                null, 300));
+        return new ReuseFixture(replayed, successor);
+    }
+
+    /** The replayed token of {@link #arrangeReuse} and the successor the endpoint issues for it. */
+    private record ReuseFixture(String replayed, String successor) {
+    }
+
+    /**
+     * Runs the arranged refused refresh with a re-login stored during the exchange — after the held token
+     * was captured, before the teardown — and asserts the refusal propagates, the re-login grant survives
+     * with a family that still refreshes it, and the kept grant is logged.
+     */
+    private void assertReLoginSurvivesRefusal(ProviderMetadata metadata, Class<? extends Throwable> refusal) {
+        String reLoginGrant = token();
+        RefreshFlow flow = flowRunningDuringExchange(() -> manager.store(session, bearerBundle(reLoginGrant, null)));
+        var clientAuth = clientAuth(config);
+
+        assertThrows(refusal, () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth));
+
+        assertAll("the refusal ends the refused exchange, not the newer grant",
+                () -> assertEquals(Optional.of(reLoginGrant), manager.get(session).map(StoredToken::refreshToken),
+                        "the re-login grant stored during the exchange is still the stored bundle"),
+                () -> assertFalse(revocationClient.revoked(reLoginGrant), "the newer grant is never revoked"));
+        LogAsserts.assertSingleLogMessagePresentContaining(TestLogLevel.INFO,
+                ClientLogMessages.INFO.REFUSED_REFRESH_KEPT_NEWER_GRANT.resolveIdentifierString());
+        String successor = token();
+        assertEquals(successor, refreshTo(metadata, successor).refreshToken(),
+                "the kept grant's family is intact, so its own refresh is not reuse");
+    }
+
+    /** Runs the arranged refused refresh with no re-login and asserts the session is cleared fail-closed. */
+    private void assertRefusalClearsSession(ProviderMetadata metadata, Class<? extends Throwable> refusal) {
+        var flow = refreshFlow(config);
+        var clientAuth = clientAuth(config);
+
+        assertThrows(refusal, () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth));
+
+        assertTrue(manager.get(session).isEmpty(), "with no newer grant the refused session is cleared fail-closed");
+        LogAsserts.assertNoLogMessagePresent(TestLogLevel.INFO, TokenLifecycleManager.class);
+    }
+
+    /** The real refresh flow, running {@code duringExchange} on the refreshing thread before the exchange. */
+    private RefreshFlow flowRunningDuringExchange(Runnable duringExchange) {
+        return new RefreshFlow(config, new TokenEndpointClient(config), accessBridge, clientAuth(config)) {
+            @Override
+            public RotationResult refresh(ProviderMetadata providerMetadata, String refreshToken) {
+                duringExchange.run();
+                return super.refresh(providerMetadata, refreshToken);
+            }
+        };
     }
 
     private StoredToken refreshTo(ProviderMetadata metadata, String successor) {
@@ -483,7 +711,8 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
      * the point between the manager's token write and its family update — or right after the next
      * {@code update} has returned or thrown, the point between a refused applyRefresh transform and its
      * fail-closed teardown. Each action fires once, on the calling thread, so the interleaving point is
-     * deterministic; only the concurrent-writer tests add a bounded wait on top of it.
+     * deterministic; only the concurrent-writer tests add a bounded wait on top of it. It can also fail the
+     * next {@code retrieve} outright, standing in for a store that cannot be read.
      */
     private static final class RacingTokenStore implements TokenStore {
 
@@ -491,9 +720,18 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
         private final AtomicReference<Runnable> afterNextRetrieve = new AtomicReference<>();
         private final AtomicReference<Runnable> afterNextStore = new AtomicReference<>();
         private final AtomicReference<Runnable> afterNextUpdate = new AtomicReference<>();
+        private final AtomicBoolean failNextRetrieve = new AtomicBoolean();
 
         void afterNextRetrieve(Runnable action) {
             afterNextRetrieve.set(action);
+        }
+
+        void failNextRetrieve() {
+            failNextRetrieve.set(true);
+        }
+
+        boolean retrieveFailurePending() {
+            return failNextRetrieve.get();
         }
 
         void afterNextStore(Runnable action) {
@@ -515,6 +753,9 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
 
         @Override
         public Optional<StoredToken> retrieve(String sessionId) {
+            if (failNextRetrieve.getAndSet(false)) {
+                throw new IllegalStateException("simulated unreadable token store");
+            }
             Optional<StoredToken> snapshot = delegate.retrieve(sessionId);
             Runnable action = afterNextRetrieve.getAndSet(null);
             if (action != null) {

@@ -196,13 +196,14 @@ This section documents log messages specific to the Quarkus integration module (
 
 This section documents log messages specific to the client engine (token-sheriff-client). Messages carry the `TokenSheriffClient` prefix.
 
-=== Client INFO Level (001-002)
+=== Client INFO Level (001-003)
 
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
 |TokenSheriffClient-001 |DISCOVERY |Resolved OIDC provider metadata for issuer '%s' |Logged when provider metadata is successfully resolved for an issuer
 |TokenSheriffClient-002 |LOGOUT |Cleared held tokens for session '%s' as part of RP-initiated logout |Logged when held tokens for a session are cleared from the local store during RP-initiated logout (client-side store clear only; RFC 7009 revocation is performed separately)
+|TokenSheriffClient-003 |LIFECYCLE |Refused refresh for session '%s' left the store untouched: a newer grant was stored while the exchange was in flight, so it and its rotation family are kept |Logged after a refused refresh (one of TokenSheriffClient-108, -112, -113 or -114) when the fail-closed clear finds that the store no longer holds the refused refresh token: a re-login or step-up stored a newer grant while the exchange was in flight, so the store entry and rotation family are left in place instead of being cleared. The refusal still propagates and its revocations still run
 |===
 
 === Client WARN Level (100-114)
