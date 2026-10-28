@@ -195,6 +195,135 @@ class HttpJwksLoaderAsyncInitializationTest {
         }
     }
 
+    private HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder baseConfig(URIBuilder uriBuilder, int refreshIntervalSeconds) {
+        return HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                .jwksUrl(uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString())
+                .issuerIdentifier("test-issuer")
+                .refreshIntervalSeconds(refreshIntervalSeconds);
+    }
+
+    @Test
+    @DisplayName("Initializing again after close() fails cleanly when the loader owns the shut-down refresh executor")
+    void initAfterCloseWithOwnedExecutorFailsCleanly(URIBuilder uriBuilder) {
+        // No executor supplied: the config builds and owns one, and close() shuts it down.
+        try (HttpJwksLoader loader = new HttpJwksLoader(baseConfig(uriBuilder, 60).build())) {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            assertEquals(LoaderStatus.OK, loader.initJWKSLoader(counter).join());
+            loader.close();
+            int callsBeforeReinit = moduleDispatcher.getCallCounter();
+
+            CompletableFuture<LoaderStatus> rejected = loader.initJWKSLoader(counter);
+            CompletableFuture<LoaderStatus> rejectedAgain = loader.initJWKSLoader(counter);
+
+            ExecutionException failure = assertThrows(ExecutionException.class, () -> rejected.get(5, TimeUnit.SECONDS));
+            assertAll("the unusable loader reports its state instead of stranding itself",
+                    () -> assertInstanceOf(IllegalStateException.class, failure.getCause()),
+                    () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus(),
+                            "the status must not be left in LOADING"),
+                    () -> assertNotSame(rejected, rejectedAgain, "the failed future must not be cached"),
+                    () -> assertEquals(callsBeforeReinit, moduleDispatcher.getCallCounter(), "no fetch is started"),
+                    () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed"),
+                    () -> assertFalse(loader.isBackgroundRefreshActive(), "no refresh task may run"));
+        }
+    }
+
+    @Test
+    @DisplayName("A closed loader without background refresh can be initialized again")
+    void initAfterCloseWithoutRefreshReinitializes(URIBuilder uriBuilder) {
+        try (HttpJwksLoader loader = new HttpJwksLoader(baseConfig(uriBuilder, 0).build())) {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            assertEquals(LoaderStatus.OK, loader.initJWKSLoader(counter).join());
+            loader.close();
+            assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus(), "close() resets the loader");
+
+            LoaderStatus reinitialized = loader.initJWKSLoader(counter).join();
+
+            assertAll("the second initialization is a full one",
+                    () -> assertEquals(LoaderStatus.OK, reinitialized),
+                    () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                    () -> assertFalse(loader.getKeyIds().isEmpty(), "keys are installed again"));
+        }
+    }
+
+    @Test
+    @DisplayName("A closed loader with a caller-supplied running executor can be initialized again")
+    void initAfterCloseWithSuppliedExecutorReinitializes(URIBuilder uriBuilder) {
+        CountingScheduledExecutor executor = new CountingScheduledExecutor();
+        try (HttpJwksLoader loader = new HttpJwksLoader(baseConfig(uriBuilder, 60).scheduledExecutorService(executor).build())) {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            assertEquals(LoaderStatus.OK, loader.initJWKSLoader(counter).join());
+            loader.close();
+
+            LoaderStatus reinitialized = loader.initJWKSLoader(counter).join();
+
+            assertAll("the caller's executor survives close() and serves the second initialization",
+                    () -> assertEquals(LoaderStatus.OK, reinitialized),
+                    () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                    () -> assertTrue(loader.isBackgroundRefreshActive(), "the second initialization schedules a refresh"),
+                    () -> assertEquals(2, executor.getFixedRateSchedules(), "one refresh task per initialization"));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("close() during an initialization in flight keeps the loader closed")
+    void closeDuringInitializationIsNotUndone(URIBuilder uriBuilder) throws Exception {
+        CountingScheduledExecutor executor = new CountingScheduledExecutor();
+        CountDownLatch responseGate = new CountDownLatch(1);
+        moduleDispatcher.setResponseGate(responseGate);
+
+        try (HttpJwksLoader loader = new HttpJwksLoader(baseConfig(uriBuilder, 60).scheduledExecutorService(executor).build())) {
+            CompletableFuture<LoaderStatus> inFlight = loader.initJWKSLoader(new SecurityEventCounter());
+            Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> moduleDispatcher.getCallCounter() >= 1);
+
+            loader.close();
+            responseGate.countDown();
+            inFlight.get(10, TimeUnit.SECONDS);
+
+            assertAll("the initialization that was in flight leaves nothing behind",
+                    () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
+                    () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed after close()"),
+                    () -> assertEquals(0, executor.getFixedRateSchedules(), "no refresh task may be scheduled"),
+                    () -> assertFalse(loader.isBackgroundRefreshActive()));
+        } finally {
+            responseGate.countDown();
+            moduleDispatcher.setResponseGate(null);
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("A second initialization after close() mid-initialization leaves exactly one refresh task")
+    void initAfterCloseDuringInitializationLeavesOneRefreshTask(URIBuilder uriBuilder) throws Exception {
+        CountingScheduledExecutor executor = new CountingScheduledExecutor();
+        CountDownLatch responseGate = new CountDownLatch(1);
+        moduleDispatcher.setResponseGate(responseGate);
+
+        try (HttpJwksLoader loader = new HttpJwksLoader(baseConfig(uriBuilder, 60).scheduledExecutorService(executor).build())) {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            CompletableFuture<LoaderStatus> first = loader.initJWKSLoader(counter);
+            Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> moduleDispatcher.getCallCounter() >= 1);
+            loader.close();
+            CompletableFuture<LoaderStatus> second = loader.initJWKSLoader(counter);
+            assertNotSame(first, second, "close() discards the reservation, so the second call starts a new initialization");
+
+            responseGate.countDown();
+            first.get(10, TimeUnit.SECONDS);
+            LoaderStatus secondStatus = second.get(10, TimeUnit.SECONDS);
+
+            assertAll("only the initialization claimed after close() takes effect",
+                    () -> assertEquals(LoaderStatus.OK, secondStatus),
+                    () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                    () -> assertEquals(1, executor.getFixedRateSchedules(), "the stale initialization must not schedule a refresh"),
+                    () -> assertTrue(loader.isBackgroundRefreshActive()));
+        } finally {
+            responseGate.countDown();
+            moduleDispatcher.setResponseGate(null);
+            executor.shutdownNow();
+        }
+    }
+
     /**
      * Scheduled executor that counts the fixed-rate tasks scheduled on it.
      */
