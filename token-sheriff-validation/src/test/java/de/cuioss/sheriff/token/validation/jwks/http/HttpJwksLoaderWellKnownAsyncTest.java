@@ -31,7 +31,6 @@ import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -129,7 +128,7 @@ class HttpJwksLoaderWellKnownAsyncTest {
 
     @Test
     @DisplayName("Background refresh resolves the adapter once discovery recovers and reaches OK")
-    void backgroundRefreshShouldRecoverFromTransientDiscoveryFailure() throws IOException {
+    void backgroundRefreshShouldRecoverFromTransientDiscoveryFailure() throws Exception {
         WellKnownDispatcher wellKnownDispatcher = new WellKnownDispatcher();
         JwksResolveDispatcher jwksDispatcher = new JwksResolveDispatcher();
         try (MockWebServer server = new MockWebServer()) {

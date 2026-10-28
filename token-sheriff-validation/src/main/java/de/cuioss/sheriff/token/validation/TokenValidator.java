@@ -495,9 +495,11 @@ public class TokenValidator implements Closeable {
             if (loader instanceof AutoCloseable closeable) {
                 try {
                     closeable.close();
-                } catch (Exception e) {
-                    // cui-rewrite:disable InvalidExceptionUsageRecipe
-                    // Intentional catch-all: one failing loader must not keep the others running.
+                }
+                // cui-rewrite:disable InvalidExceptionUsageRecipe
+                // Intentional catch-all: AutoCloseable.close() declares Exception, and one failing
+                // loader must not keep the others running.
+                catch (Exception e) {
                     LOGGER.debug(e, "Failed to close JWKS loader %s for issuer %s",
                             loader.getClass().getSimpleName(), loader.getIssuerIdentifier().orElse("unknown"));
                 }
