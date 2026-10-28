@@ -308,7 +308,7 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
                 revocationClient, idBridge, clientAuth(config));
 
         assertAll("the surviving grant refreshes with its own family (second store inside the gap: "
-                        + secondStoreInsideGap.get() + ")",
+                + secondStoreInsideGap.get() + ")",
                 () -> assertEquals(Optional.of(successor), refreshed.map(StoredToken::refreshToken),
                         "the stored grant is refreshed, not read as a replay"),
                 () -> assertFalse(revocationClient.revokedAny(), "nothing is revoked"),
