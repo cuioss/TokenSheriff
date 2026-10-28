@@ -19,8 +19,11 @@ import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.flow.RefreshFlow;
 import de.cuioss.sheriff.token.client.flow.TokenEndpointClient;
+import de.cuioss.sheriff.token.client.lifecycle.InMemoryTokenStore;
+import de.cuioss.sheriff.token.client.lifecycle.RefreshScheduler;
 import de.cuioss.sheriff.token.client.lifecycle.StoredToken;
 import de.cuioss.sheriff.token.client.lifecycle.TokenLifecycleManager;
+import de.cuioss.sheriff.token.client.lifecycle.TokenStore;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.validation.test.dispatcher.TokenDispatcher;
 import de.cuioss.test.generator.Generators;
@@ -40,6 +43,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -212,6 +217,32 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
     }
 
     @Test
+    @DisplayName("Should not read a re-login landing between the token read and the family capture as reuse")
+    void shouldNotReadReLoginBetweenReadAndCaptureAsReuse(URIBuilder uriBuilder) {
+        ProviderMetadata metadata = metadata(uriBuilder);
+        var racingStore = new RacingTokenStore();
+        var racingManager = new TokenLifecycleManager(racingStore, new RefreshScheduler());
+        String rt1 = token();
+        String reLoginGrant = token();
+        String successor = token();
+        racingManager.store(session, bearerBundle(rt1, null));
+        racingStore.afterNextRetrieve(() -> racingManager.store(session, bearerBundle(reLoginGrant, null)));
+        getModuleDispatcher().respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), successor,
+                null, 300));
+
+        Optional<StoredToken> refreshed = racingManager.refresh(session, metadata, refreshFlow(config),
+                revocationClient, idBridge, clientAuth(config));
+
+        assertAll("the refresh re-reads the newer grant instead of presenting the stale token",
+                () -> assertEquals(Optional.of(successor), refreshed.map(StoredToken::refreshToken),
+                        "the newer grant is refreshed, not read as a replay of the token read before it"),
+                () -> assertFalse(revocationClient.revokedAny(), "nothing is revoked"),
+                () -> assertEquals(Optional.of(successor), racingManager.get(session).map(StoredToken::refreshToken),
+                        "the session survives with the refreshed grant"));
+        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, RefreshTokenFamily.class);
+    }
+
+    @Test
     @DisplayName("Should store a bundle with no expiry when the refresh carries an absurd expires_in")
     void shouldStoreNoExpiryForAbsurdExpiresIn(URIBuilder uriBuilder) {
         ProviderMetadata metadata = metadata(uriBuilder);
@@ -254,5 +285,46 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
 
     private static String token() {
         return Generators.letterStrings(20, 40).next();
+    }
+
+    /**
+     * An in-memory store that runs one registered action right after the next {@code retrieve} has taken
+     * its snapshot and before it returns — the point at which a re-login lands between a refresh reading
+     * the held token and capturing its family. The action fires on the calling thread, so the race needs
+     * no timing assumption.
+     */
+    private static final class RacingTokenStore implements TokenStore {
+
+        private final InMemoryTokenStore delegate = new InMemoryTokenStore();
+        private final AtomicReference<Runnable> afterNextRetrieve = new AtomicReference<>();
+
+        void afterNextRetrieve(Runnable action) {
+            afterNextRetrieve.set(action);
+        }
+
+        @Override
+        public void store(String sessionId, StoredToken token) {
+            delegate.store(sessionId, token);
+        }
+
+        @Override
+        public Optional<StoredToken> retrieve(String sessionId) {
+            Optional<StoredToken> snapshot = delegate.retrieve(sessionId);
+            Runnable action = afterNextRetrieve.getAndSet(null);
+            if (action != null) {
+                action.run();
+            }
+            return snapshot;
+        }
+
+        @Override
+        public Optional<StoredToken> remove(String sessionId) {
+            return delegate.remove(sessionId);
+        }
+
+        @Override
+        public Optional<StoredToken> update(String sessionId, UnaryOperator<StoredToken> updater) {
+            return delegate.update(sessionId, updater);
+        }
     }
 }

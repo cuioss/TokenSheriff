@@ -209,6 +209,17 @@ public class TokenLifecycleManager {
     }
 
     /**
+     * How often {@link #captureHeldRefresh} re-reads the store when a re-login lands between its read and
+     * its family capture. Each re-read only follows a store write by another caller, so the bound is a
+     * guard against a pathological writer, not a tuning knob.
+     */
+    private static final int MAX_CAPTURE_ATTEMPTS = 3;
+
+    /** The refresh token a {@link #doRefresh} presents, paired with the rotation family captured for it. */
+    private record HeldRefresh(String presentedRefreshToken, RefreshTokenFamily family) {
+    }
+
+    /**
      * @param tokenStore       the backing token store; must not be {@code null}
      * @param refreshScheduler the proactive-refresh policy; must not be {@code null}
      */
@@ -566,24 +577,54 @@ public class TokenLifecycleManager {
         // No-op by default: see the Javadoc above for why this observation point exists.
     }
 
+    /**
+     * Reads the session's held refresh token and captures its rotation family as one consistent pair.
+     * <p>
+     * The store and the family map are two slots. A re-login that lands between reading the held token
+     * and capturing the family has already reseeded the family to the newer grant, so a pair made of the
+     * <em>old</em> token and the <em>new</em> family would make the exchange's rotation look like reuse
+     * and destroy the session the user just established. When the captured family does not hold the read
+     * token as its current one, the store is therefore read again. A token the family has genuinely
+     * superseded — a stale re-store — is still not current after the re-read, so it falls through to
+     * reuse detection exactly as before once the bound is spent.
+     *
+     * @return the presented token with its family, or {@link Optional#empty()} when the session holds no
+     *         refresh token
+     */
+    private Optional<HeldRefresh> captureHeldRefresh(String sessionId) {
+        HeldRefresh capture = null;
+        for (int attempt = 0; attempt < MAX_CAPTURE_ATTEMPTS; attempt++) {
+            Optional<StoredToken> held = tokenStore.retrieve(sessionId);
+            if (held.isEmpty()) {
+                return Optional.empty();
+            }
+            String presentedRefreshToken = held.get().refreshToken();
+            if (presentedRefreshToken == null || presentedRefreshToken.isBlank()) {
+                return Optional.empty();
+            }
+            RefreshTokenFamily family = families.computeIfAbsent(sessionId,
+                    key -> new RefreshTokenFamily(presentedRefreshToken));
+            capture = new HeldRefresh(presentedRefreshToken, family);
+            if (family.isCurrent(presentedRefreshToken)) {
+                break;
+            }
+        }
+        return Optional.ofNullable(capture);
+    }
+
     private Optional<StoredToken> doRefresh(String sessionId, ProviderMetadata metadata,
             RefreshFlow refreshFlow, RevocationClient revocationClient,
             IdTokenValidationBridge idTokenValidationBridge, ClientAuthentication clientAuthentication) {
-        Optional<StoredToken> held = tokenStore.retrieve(sessionId);
-        if (held.isEmpty()) {
-            return Optional.empty();
-        }
-        String presentedRefreshToken = held.get().refreshToken();
-        if (presentedRefreshToken == null || presentedRefreshToken.isBlank()) {
-            return Optional.empty();
-        }
-
         // The family is captured BEFORE the exchange and the rotation below runs on this instance. A
         // re-login that lands while the exchange is in flight installs a reseeded successor in the map
         // rather than mutating this instance, so it cannot turn the in-flight rotation into a false
         // reuse; the compare-and-set apply below then yields to that newer grant.
-        RefreshTokenFamily family = families.computeIfAbsent(sessionId,
-                key -> new RefreshTokenFamily(presentedRefreshToken));
+        Optional<HeldRefresh> capture = captureHeldRefresh(sessionId);
+        if (capture.isEmpty()) {
+            return Optional.empty();
+        }
+        String presentedRefreshToken = capture.get().presentedRefreshToken();
+        RefreshTokenFamily family = capture.get().family();
 
         RotationResult rotation;
         try {
