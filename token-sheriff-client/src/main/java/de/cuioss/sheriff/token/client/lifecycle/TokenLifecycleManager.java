@@ -347,7 +347,10 @@ public class TokenLifecycleManager {
      * already has {@code newRefreshToken} as its current token — the {@link #refresh} path rotates it
      * before applying — nothing is rotated again. When the family refuses the advance as reuse, the
      * write is aborted and the session fails closed: the store entry and the family are cleared (this
-     * method has no revocation client, so nothing is revoked) and the refusal is rethrown.
+     * method has no revocation client, so nothing is revoked) and the refusal is rethrown. The
+     * authorization server issued {@code newRefreshToken} on the exchange being applied, so it is still
+     * a live credential there: the caller must revoke it (RFC 7009) — it is carried on the refusal as
+     * {@link RefreshTokenFamilyRevokedException#getRotatedRefreshToken()}.
      * <p>
      * When the call applies the exchange {@link #refresh} is running for the session and the store no
      * longer holds the refresh token that exchange presented — a re-login stored a newer grant while
