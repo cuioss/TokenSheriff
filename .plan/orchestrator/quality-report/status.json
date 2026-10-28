@@ -1,0 +1,16 @@
+{
+  "kind": "orchestrator",
+  "title": "Quality report remediation",
+  "phase": "orchestrating",
+  "workstreams": [
+    "WS-01-validation-core",
+    "WS-02-client",
+    "WS-03-quarkus",
+    "WS-04-benchmarking-build",
+    "WS-05-documentation"
+  ],
+  "metadata": {
+    "parallelization_scope": "2"
+  },
+  "created": "2026-10-28T08:34:40Z"
+}
