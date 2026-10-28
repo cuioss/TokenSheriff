@@ -188,11 +188,11 @@ public class WellKnownDispatcher implements ModuleDispatcherElement {
                     SC_OK,
                     Headers.of("Content-Type", "application/json"),
                     """
-                    {
-                      "authorization_endpoint": "%s/protocol/openid-connect/auth",
-                      "response_types_supported": ["code"]
-                    }
-                    """.formatted(dynamicIssuerUrl)));
+                            {
+                              "authorization_endpoint": "%s/protocol/openid-connect/auth",
+                              "response_types_supported": ["code"]
+                            }
+                            """.formatted(dynamicIssuerUrl)));
             case INVALID_ISSUER -> Optional.of(new MockResponse(
                     SC_OK,
                     Headers.of("Content-Type", "application/json"),
