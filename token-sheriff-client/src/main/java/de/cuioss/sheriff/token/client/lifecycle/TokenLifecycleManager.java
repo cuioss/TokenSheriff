@@ -209,9 +209,10 @@ public class TokenLifecycleManager {
     }
 
     /**
-     * How often {@link #captureHeldRefresh} re-reads the store when a re-login lands between its read and
-     * its family capture. Each re-read only follows a store write by another caller, so the bound is a
-     * guard against a pathological writer, not a tuning knob.
+     * How often {@link #captureHeldRefresh} re-reads the store when the family it captured no longer holds
+     * the read token as current — a re-login reseeded the family after the read. Each re-read only
+     * follows a store write by another caller, so the bound is a guard against a pathological writer,
+     * not a tuning knob.
      */
     private static final int MAX_CAPTURE_ATTEMPTS = 3;
 
@@ -580,13 +581,21 @@ public class TokenLifecycleManager {
     /**
      * Reads the session's held refresh token and captures its rotation family as one consistent pair.
      * <p>
-     * The store and the family map are two slots. A re-login that lands between reading the held token
-     * and capturing the family has already reseeded the family to the newer grant, so a pair made of the
-     * <em>old</em> token and the <em>new</em> family would make the exchange's rotation look like reuse
-     * and destroy the session the user just established. When the captured family does not hold the read
-     * token as its current one, the store is therefore read again. A token the family has genuinely
-     * superseded — a stale re-store — is still not current after the re-read, so it falls through to
-     * reuse detection exactly as before once the bound is spent.
+     * The store and the family map are two slots, and {@link #store} writes them one after the other. A
+     * re-login can therefore be seen half applied in either order, and either way a mismatched pair would
+     * make the exchange's rotation look like reuse and destroy the session the user just established:
+     * <ul>
+     *   <li><strong>The grant is stored but its family is not reseeded yet.</strong> The read token is one
+     *       the family has never heard of. That is the signature of a new grant, so the capture adopts it
+     *       exactly as {@link #store} is about to — one atomic {@code compute} over the same
+     *       {@link #familyForGrant} rule — and the later {@code store} finds the token already current.</li>
+     *   <li><strong>The family is reseeded after the token was read.</strong> The family no longer holds
+     *       the read token as its current one, so the store is read again, up to
+     *       {@value #MAX_CAPTURE_ATTEMPTS} times.</li>
+     * </ul>
+     * A token the family has genuinely superseded — a stale re-store — is neither adopted nor current
+     * after any re-read, so it falls through to reuse detection exactly as before once the bound is
+     * spent. Nothing here can make a token acceptable that {@link #store} would not.
      *
      * @return the presented token with its family, or {@link Optional#empty()} when the session holds no
      *         refresh token
@@ -602,8 +611,8 @@ public class TokenLifecycleManager {
             if (presentedRefreshToken == null || presentedRefreshToken.isBlank()) {
                 return Optional.empty();
             }
-            RefreshTokenFamily family = families.computeIfAbsent(sessionId,
-                    key -> new RefreshTokenFamily(presentedRefreshToken));
+            RefreshTokenFamily family = families.compute(sessionId,
+                    (key, existing) -> familyForGrant(existing, presentedRefreshToken));
             capture = new HeldRefresh(presentedRefreshToken, family);
             if (family.isCurrent(presentedRefreshToken)) {
                 break;

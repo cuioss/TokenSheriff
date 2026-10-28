@@ -243,6 +243,33 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
     }
 
     @Test
+    @DisplayName("Should adopt a grant that is stored but not yet reseeded instead of reading it as reuse")
+    void shouldAdoptGrantStoredBeforeFamilyReseed(URIBuilder uriBuilder) {
+        ProviderMetadata metadata = metadata(uriBuilder);
+        var racingStore = new RacingTokenStore();
+        var racingManager = new TokenLifecycleManager(racingStore, new RefreshScheduler());
+        String rt1 = token();
+        String grant = token();
+        String successor = token();
+        racingManager.store(session, bearerBundle(rt1, null));
+        // store() writes the token store first and reseeds the family second; this is the state a refresh
+        // sees when it reads between the two statements: the new grant held, its family not reseeded yet.
+        racingStore.store(session, bearerBundle(grant, null));
+        getModuleDispatcher().respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), successor,
+                null, 300));
+
+        Optional<StoredToken> refreshed = racingManager.refresh(session, metadata, refreshFlow(config),
+                revocationClient, idBridge, clientAuth(config));
+
+        assertAll("the half-applied grant is adopted as a new grant, not replayed",
+                () -> assertEquals(Optional.of(successor), refreshed.map(StoredToken::refreshToken)),
+                () -> assertFalse(revocationClient.revokedAny(), "nothing is revoked"),
+                () -> assertEquals(Optional.of(successor), racingManager.get(session).map(StoredToken::refreshToken),
+                        "the session survives with the refreshed grant"));
+        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, RefreshTokenFamily.class);
+    }
+
+    @Test
     @DisplayName("Should store a bundle with no expiry when the refresh carries an absurd expires_in")
     void shouldStoreNoExpiryForAbsurdExpiresIn(URIBuilder uriBuilder) {
         ProviderMetadata metadata = metadata(uriBuilder);
