@@ -186,9 +186,10 @@ public class TokenValidatorProducer {
         // Intentional catch-all: a failure while releasing the validator must not abort the
         // container shutdown that triggered this callback. TokenValidator.close() already isolates
         // failures of the (open-set) JwksLoader closeables itself; the remaining unchecked failure
-        // sources are its pipeline and replay-protection resources. This site does NOT fall under
-        // the AGENTS.md SPI carve-out for InvalidExceptionUsageRecipe: the suppression is a
-        // recorded, accepted deviation (review advisory F3).
+        // sources are its pipeline and replay-protection resources. The catch-all is kept
+        // deliberately and is NOT covered by the AGENTS.md SPI carve-out for
+        // InvalidExceptionUsageRecipe, so the suppression is an accepted deviation from the
+        // narrow-the-catch rule. The failure is logged at DEBUG.
         catch (RuntimeException e) {
             LOGGER.debug(e, "Failed to close the TokenValidator on producer destruction");
         }

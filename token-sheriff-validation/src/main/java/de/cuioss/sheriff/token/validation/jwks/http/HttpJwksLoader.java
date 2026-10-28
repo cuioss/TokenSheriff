@@ -319,7 +319,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      *
      * @param resolution the failed resolution
      * @param startEpoch the {@link #epoch} the calling initialization was claimed under
-     * @return the status this initialization reached
+     * @return the status this initialization reached; {@link LoaderStatus#UNDEFINED} when a
+     *         {@link #close()} superseded the initialization before the status was published
      */
     private LoaderStatus handleAdapterResolutionFailure(AdapterResolution resolution, long startEpoch) {
         boolean isWellKnownFailure = config.getWellKnownConfig() != null;
@@ -337,8 +338,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             startBackgroundRefresh(startEpoch);
             return LoaderStatus.UNDEFINED;
         }
-        publishStatus(LoaderStatus.ERROR, startEpoch);
-        return LoaderStatus.ERROR;
+        // Check-and-publish is one step: a close() that ran since the resolution was adopted leaves
+        // UNDEFINED, for the loader and for the future alike.
+        return publishFailedLoadStatus(LoaderStatus.ERROR, startEpoch);
     }
 
     /**

@@ -19,6 +19,7 @@ import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
+import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.test.dispatcher.JwksResolveDispatcher;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
@@ -34,6 +35,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Handler;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -316,6 +319,56 @@ class HttpJwksLoaderAsyncInitializationTest {
         } finally {
             responseGate.countDown();
             moduleDispatcher.setResponseGate(null);
+        }
+    }
+
+    @Test
+    @DisplayName("close() after a terminal resolution failure was adopted completes the future with UNDEFINED, not ERROR")
+    void closeAfterTerminalResolutionFailureCompletesUndefined(URIBuilder uriBuilder) throws Exception {
+        // Loopback egress is not allowed: the JWKS fetch URI is blocked, a terminal resolution failure.
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowInsecureHttp(true)
+                .jwksUrl(uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString())
+                .issuerIdentifier("test-issuer")
+                .refreshIntervalSeconds(0)
+                .build();
+        String failureIdentifier = JWTValidationLogMessages.ERROR.JWKS_INITIALIZATION_FAILED.resolveIdentifierString();
+        Logger loaderLogger = Logger.getLogger(HttpJwksLoader.class.getName());
+
+        try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+            // The resolution logs the egress block once itself; the failure handling that runs after
+            // the resolution was adopted and before the status is published logs the second one. The
+            // handler closes the loader exactly there, which makes that window deterministic.
+            AtomicInteger failureLogs = new AtomicInteger();
+            Handler closeOnSecondFailureLog = new Handler() {
+                @Override
+                public void publish(java.util.logging.LogRecord logRecord) {
+                    String message = logRecord.getMessage();
+                    if (message != null && message.contains(failureIdentifier) && failureLogs.incrementAndGet() == 2) {
+                        loader.close();
+                    }
+                }
+
+                @Override
+                public void flush() {
+                    // nothing buffered
+                }
+
+                @Override
+                public void close() {
+                    // nothing to release
+                }
+            };
+            loaderLogger.addHandler(closeOnSecondFailureLog);
+            try {
+                LoaderStatus completed = loader.initJWKSLoader(new SecurityEventCounter()).get(10, TimeUnit.SECONDS);
+
+                assertAll("the superseded terminal failure reports what the closed loader reports",
+                        () -> assertEquals(2, failureLogs.get(), "the window under test was reached"),
+                        () -> assertEquals(LoaderStatus.UNDEFINED, completed, "the future must not claim ERROR"),
+                        () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()));
+            } finally {
+                loaderLogger.removeHandler(closeOnSecondFailureLog);
+            }
         }
     }
 

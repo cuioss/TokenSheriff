@@ -57,6 +57,12 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
     private static final String BOUND_ORIGIN =
             "WellKnownConfig.parserConfig.maxPayloadSize; settable via WellKnownConfig.builder().parserConfig(...)";
 
+    /**
+     * Constant description of the parsed source, filled into the first placeholder of
+     * {@link TransportLogMessages.ERROR#JSON_PARSE_FAILED}; no document content is ever logged.
+     */
+    private static final String WELL_KNOWN_DOCUMENT = "well-known discovery document";
+
     private final DslJson<Object> dslJson;
     private final SecurityEventCounter securityEventCounter;
     private final int maxContentSize;
@@ -85,7 +91,7 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
         }
 
         if (stringContent.trim().isEmpty()) {
-            LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "Empty well-known response");
+            LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT, "Empty well-known response");
             return Optional.empty();
         }
 
@@ -106,13 +112,15 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
             WellKnownResult config = dslJson.deserialize(WellKnownResult.class, contentBytes, contentBytes.length);
 
             if (config == null) {
-                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "Failed to deserialize well-known configuration");
+                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT,
+                        "Failed to deserialize well-known configuration");
                 return Optional.empty();
             }
 
             // A document without a usable jwks_uri is rejected, whether or not it carries an issuer
             if (config.jwksUri == null || config.jwksUri.trim().isEmpty()) {
-                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "Missing required field: jwks_uri");
+                LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT,
+                        "Missing required field: jwks_uri");
                 return Optional.empty();
             }
             // An absent or blank issuer is normalized to null and passed on: HttpWellKnownResolver
