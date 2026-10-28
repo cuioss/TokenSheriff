@@ -22,18 +22,18 @@ __pycache__/
 .claude/settings.local.json
 
 # Planning system (managed by /plan-marshall)
-# Planning system (managed by /marshall-steward)
+# Planning system (managed by plan-marshall)
 # Runtime state (plans, run-configuration, lessons-learned, memory, logs — managed by plan-marshall)
 .plan/*
 !.plan/marshal.json
 !.plan/project-architecture/
 !.plan/plugin-doctor.yml
+.plan/local/worktrees/
 # Orchestrator epic ledgers are git-tracked; only their logs/ stay local
 !.plan/orchestrator/
 !.plan/archived-orchestrators/
 .plan/orchestrator/*/logs/
 .plan/archived-orchestrators/*/logs/
-.plan/local/worktrees/
 
 !.plan/project-structure.toon
 
