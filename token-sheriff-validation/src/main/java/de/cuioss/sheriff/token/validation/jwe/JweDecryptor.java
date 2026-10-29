@@ -66,7 +66,8 @@ import java.util.zip.Inflater;
  * The ECDH-ES ephemeral public key is taken from the {@code epk} header parameter, which is
  * bound to a {@link JwkKey} when the header is decoded (RFC 7518 Section 4.6.1.1).
  * <p>
- * This class is thread-safe and stateless.
+ * This class is thread-safe and holds no per-request state; its only field is a thread-safe
+ * {@link SecureRandom}.
  *
  * @since 1.0
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc7516">RFC 7516 - JSON Web Encryption</a>
@@ -76,6 +77,19 @@ public class JweDecryptor {
 
     private static final CuiLogger LOGGER = new CuiLogger(JweDecryptor.class);
     private static final int MAX_DECOMPRESSED_SIZE = 256 * 1024; // 256KB limit for compression bomb protection
+
+    /**
+     * Source of the random CEK substituted after a failed RSA unwrap (RFC 7516 Section 11.5).
+     * <p>
+     * This is an instance field and must NOT become {@code static}: a static {@link SecureRandom}
+     * is created when the class is initialized, which the Quarkus native build does at image build
+     * time, and a {@code SecureRandom} in the image heap fails that build
+     * ({@code UnsupportedFeatureException}). A {@code JweDecryptor} is only ever constructed at
+     * run time, from the {@code NonValidatingJwtParser} that the {@code TokenValidator} builds in
+     * the CDI producer's {@code @PostConstruct}, so an instance field never reaches the image
+     * heap. Holding it also avoids creating a new generator per call.
+     */
+    private final SecureRandom secureRandom = new SecureRandom();
 
     /**
      * Decrypts a JWE token and returns the inner plaintext (typically a JWS string).
@@ -219,17 +233,15 @@ public class JweDecryptor {
     /**
      * Generates a random CEK of the given length (RFC 7516 Section 11.5 substitution).
      * <p>
-     * The {@link SecureRandom} is created per call on purpose and is never held in a static or
-     * instance field: a {@code SecureRandom} reachable from the native-image heap fails the
-     * Quarkus native build. This path only runs after a failed RSA unwrap, so the per-call cost
-     * is irrelevant.
+     * Uses the instance's {@link #secureRandom}, which is deliberately not static: see the field
+     * documentation for the native-image constraint.
      *
      * @param length the required CEK length in bytes
      * @return a freshly generated random CEK
      */
-    private static byte[] randomCek(int length) {
+    private byte[] randomCek(int length) {
         byte[] cek = new byte[length];
-        new SecureRandom().nextBytes(cek);
+        secureRandom.nextBytes(cek);
         return cek;
     }
 
