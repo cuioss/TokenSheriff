@@ -49,7 +49,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-009 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
 |===
 
-== WARN Level (100-169)
+== WARN Level (100-169; identifier 156 is retired)
 
 [cols="1,1,2,2", options="header"]
 |===
@@ -105,11 +105,10 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-149 |DPOP |DPoP proof is missing required claim: %s |Logged when the DPoP proof JWT body is missing a required claim (jti, iat, or ath)
 |TokenSheriff-150 |DPOP |DPoP proof ath claim does not match access token hash |Logged when the DPoP proof ath claim (SHA-256 hash of the access token) does not match the actual access token
 |TokenSheriff-151 |DPOP |DPoP is required but access token does not contain cnf.jkt claim |Logged when DPoP validation is required or a DPoP proof is provided but the access token lacks the cnf.jkt claim
-|TokenSheriff-152 |JWE |Failed to decrypt JWE token: %s |Logged when JWE decryption fails due to cryptographic errors (wrong key, tampered content, etc.)
+|TokenSheriff-152 |JWE |Failed to decrypt JWE token: %s |Logged once when JWE decryption fails: cryptographic errors (wrong key, tampered content, authentication-tag mismatch) and the structural rejections raised during decryption — an unsupported or disabled `zip` compression, a missing or unparseable ECDH-ES `epk`, an `epk` curve mismatch or off-curve point, a non-empty ECDH-ES Encrypted Key, a wrong key or IV length, and a decompression failure. Header text in the detail is sanitized and length-bounded
 |TokenSheriff-153 |JWE |Unsupported JWE algorithm: alg=%s, enc=%s |Logged when a JWE token uses an unsupported or rejected algorithm combination
 |TokenSheriff-154 |JWE |Received JWE token but no decryption configuration is available |Logged when a 5-part JWE token is received but no JweDecryptionConfig was configured on TokenValidator
 |TokenSheriff-155 |JWE |No decryption key found for key ID: %s |Logged when the JWE header references a kid that has no matching decryption key and no default key is configured
-|TokenSheriff-156 |JWE |Unsupported JWE compression algorithm: %s |Logged when a JWE token uses an unsupported compression algorithm (only DEF/DEFLATE is supported)
 |TokenSheriff-157 |JWE |Nested JWE tokens are not allowed |Logged when decrypting a JWE token reveals another JWE (5-part) token instead of the expected inner JWS
 |TokenSheriff-158 |Token Age |Token age exceeds maximum allowed age |Logged when a token's `iat` claim indicates it was issued longer ago than the configured `maxTokenAgeSeconds`
 |TokenSheriff-159 |Custom Rule |Custom validation rule rejected token: %s |Logged when a custom `TokenValidationRule` rejects a token by throwing `TokenValidationException`

@@ -427,6 +427,102 @@ class JweDecryptorTest {
                     JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(message));
         }
 
+        @Test
+        @DisplayName("Should sanitize an unsupported alg carrying CR/LF in the log and the message (CWE-117)")
+        void shouldSanitizeUnsupportedAlgBeforeLogging() {
+            String forgedAlg = "RSA1_5\r\nWARN forged alg";
+            String forgedEnc = "A256GCM WARN forged enc";
+            JwtHeader header = new JwtHeader(forgedAlg, null, null, null, null,
+                    forgedEnc, null, null, null, null);
+            String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter));
+
+            String expectedAlg = "RSA1_5??WARN forged alg";
+            String expectedEnc = "A256GCM?WARN forged enc";
+            assertEquals(SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM, ex.getEventType());
+            assertEquals("Unsupported JWE key management algorithm: " + expectedAlg, ex.getMessage());
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWE_UNSUPPORTED_ALGORITHM.format(expectedAlg, expectedEnc));
+            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN, "\n").isEmpty(),
+                    "No WARN line may carry a line break");
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM));
+        }
+
+        @Test
+        @DisplayName("Should sanitize an unsupported enc carrying CR/LF in the log and the message (CWE-117)")
+        void shouldSanitizeUnsupportedEncBeforeLogging() {
+            String forgedEnc = "A192GCM\r\nWARN forged enc";
+            JwtHeader header = new JwtHeader("RSA-OAEP", null, null, null, null,
+                    forgedEnc, null, null, null, null);
+            String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter));
+
+            String expectedEnc = "A192GCM??WARN forged enc";
+            assertEquals(SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM, ex.getEventType());
+            assertEquals("Unsupported JWE content encryption algorithm: " + expectedEnc, ex.getMessage());
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWE_UNSUPPORTED_ALGORITHM.format("RSA-OAEP", expectedEnc));
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM));
+        }
+
+        @Test
+        @DisplayName("A malformed epk coordinate is rejected once by field name, never logging its raw text")
+        void shouldRejectMalformedEpkCoordinateWithoutLoggingIt() {
+            String forgedX = "AQ\r\nWARN forged coordinate";
+            JwkKey epk = new JwkKey("EC", null, null, null, null, "P-256", forgedX, "AQ");
+            JwtHeader header = new JwtHeader("ECDH-ES", null, null, null, null,
+                    "A128GCM", null, epk, null, null);
+            String[] parts = {"header", "", "iv", "ciphertext", "authTag"};
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(JweTestTokenFactory.generateEcKeyPair("secp256r1").getPrivate())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter));
+
+            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
+            assertEquals("Failed to parse ephemeral EC public key: invalid Base64 URL encoded value for 'x'",
+                    ex.getMessage());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(ex.getMessage()));
+            LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, JwkKey.class);
+            assertTrue(TestLoggerFactory.getTestHandler()
+                    .resolveLogMessagesContaining(TestLogLevel.WARN, "forged coordinate").isEmpty(),
+                    "The raw epk coordinate must not reach any log line");
+        }
+
+        @Test
+        @DisplayName("A malformed epk coordinate is neither logged nor counted when the caller suppresses both")
+        void shouldNotLogMalformedEpkCoordinateInSilentMode() {
+            JwkKey epk = new JwkKey("EC", null, null, null, null, "P-256", "AQ", "AQ\r\nWARN forged coordinate");
+            JwtHeader header = new JwtHeader("ECDH-ES", null, null, null, null,
+                    "A128GCM", null, epk, null, null);
+            String[] parts = {"header", "", "iv", "ciphertext", "authTag"};
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(JweTestTokenFactory.generateEcKeyPair("secp256r1").getPrivate())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter, false, false));
+
+            assertEquals("Failed to parse ephemeral EC public key: invalid Base64 URL encoded value for 'y'",
+                    ex.getMessage());
+            assertEquals(0, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
+            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty(),
+                    "No WARN may be written when the caller suppresses logging");
+        }
+
         private static boolean containsControlCharacter(String text) {
             return text.chars().anyMatch(Character::isISOControl);
         }

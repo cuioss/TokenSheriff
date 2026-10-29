@@ -53,6 +53,10 @@ String y      // EC y coordinate (Base64url-encoded, EC only)
 
     private static final Pattern BASE64_URL_PATTERN = Pattern.compile("^[A-Za-z0-9\\-_]*=*$");
     private static final CuiLogger LOGGER = new CuiLogger(JwkKey.class);
+    /**
+     * Upper bound for the length of an untrusted JWK field value rendered into a log line.
+     */
+    static final int MAX_LOGGED_VALUE_LENGTH = 64;
 
 
     /**
@@ -143,16 +147,40 @@ String y      // EC y coordinate (Base64url-encoded, EC only)
         }
 
         if (!BASE64_URL_PATTERN.matcher(base64String).matches()) {
-            LOGGER.warn(TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING, base64String);
+            LOGGER.warn(TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING, sanitizeForLog(base64String));
             return Optional.empty();
         }
 
         try {
             return Optional.of(Base64.getUrlDecoder().decode(base64String));
         } catch (IllegalArgumentException e) {
-            LOGGER.warn(TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING, base64String);
+            LOGGER.warn(TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING, sanitizeForLog(base64String));
             return Optional.empty();
         }
+    }
+
+    /**
+     * Renders an untrusted JWK field value safe for a log line (CWE-117): control characters and
+     * the Unicode line and paragraph separators (U+2028, U+2029) are replaced by {@code '?'}, and
+     * a value longer than {@value #MAX_LOGGED_VALUE_LENGTH} characters keeps its first
+     * {@value #MAX_LOGGED_VALUE_LENGTH} characters followed by an {@code "..."} marker.
+     *
+     * @param value the raw field value, never {@code null} here
+     * @return the sanitized, length-bounded value
+     */
+    static String sanitizeForLog(String value) {
+        boolean truncated = value.length() > MAX_LOGGED_VALUE_LENGTH;
+        String bounded = truncated ? value.substring(0, MAX_LOGGED_VALUE_LENGTH) : value;
+        StringBuilder sanitized = new StringBuilder(bounded.length() + 3);
+        for (int i = 0; i < bounded.length(); i++) {
+            char c = bounded.charAt(i);
+            boolean unsafe = Character.isISOControl(c) || c == ' ' || c == ' ';
+            sanitized.append(unsafe ? '?' : c);
+        }
+        if (truncated) {
+            sanitized.append("...");
+        }
+        return sanitized.toString();
     }
 
     /**

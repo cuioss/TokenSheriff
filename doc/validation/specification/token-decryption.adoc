@@ -205,13 +205,15 @@ ECDH-ES is Direct Key Agreement: the CEK is derived from the key agreement, so t
 
 === Rejection Logging and Counting
 
-Every rejection raised during decryption — an unsupported or disabled `zip` compression, an ECDH-ES `epk` or key check, a non-empty ECDH-ES Encrypted Key, a key or IV length mismatch, a decompression failure, or a content-authentication failure — is logged once as `JWE_DECRYPTION_FAILED` and counted once.
+Every rejection raised during decryption — an unsupported or disabled `zip` compression, an ECDH-ES `epk` or key check, a non-empty ECDH-ES Encrypted Key, a key or IV length mismatch, a decompression failure, or a content-authentication failure — is logged once as `JWE_DECRYPTION_FAILED` and counted once. An unsupported `alg` or `enc` is logged once as `JWE_UNSUPPORTED_ALGORITHM`, and a `kid` with no matching decryption key once as `JWE_DECRYPTION_KEY_NOT_FOUND`.
 
 Logging and counting follow the decode mode of the calling parser: the normal decode logs and counts, a quiet decode counts without logging, and an opaque decode (used for refresh tokens, whose decode failure is expected) neither logs nor counts. The rejection throws the same typed exception in every mode.
 
 === Header Value Sanitization
 
-JWE header values are unauthenticated. Before a header value reaches a log line or an exception message, it is sanitized (https://cwe.mitre.org/data/definitions/117.html[CWE-117]): control characters (including CR and LF) and the Unicode line and paragraph separators U+2028 and U+2029 are replaced by `?`, and the value is truncated to 64 characters. This applies to the `kid` (when no decryption key matches it), to an unsupported `zip` value, and to a key-parser message that carries the `epk` `crv` (when the curve is unsupported). A missing `kid` is rendered as `<none>`.
+JWE header values are unauthenticated. Before a header value reaches a log line or an exception message, it is sanitized (https://cwe.mitre.org/data/definitions/117.html[CWE-117]): control characters (including CR and LF) and the Unicode line and paragraph separators U+2028 and U+2029 are replaced by `?`, and a value longer than 64 characters keeps its first 64 characters followed by a `...` marker, so a truncated value renders as at most 67 characters. This applies to the `alg` and `enc` values (when the algorithm is unsupported or rejected), to the `kid` (when no decryption key matches it), to an unsupported `zip` value, and to a key-parser message that carries the `epk` `crv` (when the curve is unsupported). A missing `kid` is rendered as `<none>`.
+
+An `epk` `x` or `y` coordinate that is not valid Base64URL is rejected by field name only (`invalid Base64 URL encoded value for 'x'`); the coordinate text itself never reaches a log line, and the rejection is logged once as `JWE_DECRYPTION_FAILED`, following the decode mode of the calling parser like every other rejection.
 
 === Memory Clearing
 

@@ -71,8 +71,10 @@ import java.util.zip.Inflater;
  * JWE Encrypted Key is rejected for ECDH-ES (RFC 7516 Section 5.2 step 10). Every ECDH-ES
  * rejection, like every other failure raised during decryption (including an unsupported or
  * disabled {@code zip} compression), is logged as {@code JWE_DECRYPTION_FAILED} and counted
- * exactly once. Header text that reaches a log line or an exception message (the {@code kid},
- * the {@code zip} value, the {@code epk} {@code crv}) is sanitized and length-bounded first.
+ * exactly once. Header text that reaches a log line or an exception message (the {@code alg}
+ * and {@code enc} values, the {@code kid}, the {@code zip} value, the {@code epk} {@code crv})
+ * is sanitized and length-bounded first; a malformed {@code epk} coordinate is rejected by field
+ * name only, never by its text.
  * <p>
  * Logging and counting follow the caller's decode mode:
  * {@link #decrypt(String[], JwtHeader, JweDecryptionConfig, SecurityEventCounter, boolean, boolean)}
@@ -150,20 +152,23 @@ public class JweDecryptor {
         String alg = jweHeader.alg();
         String enc = jweHeader.enc();
 
-        // Validate algorithms
+        // Validate algorithms. alg and enc come from the unauthenticated header: sanitize them
+        // before they reach the log or the exception message (CWE-117).
         if (!config.getAlgorithmPreferences().isKeyManagementSupported(alg)) {
             reporter.report(JWTValidationLogMessages.WARN.JWE_UNSUPPORTED_ALGORITHM,
-                    SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM, alg, enc);
+                    SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM,
+                    sanitizeHeaderValue(alg), sanitizeHeaderValue(enc));
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM,
-                    "Unsupported JWE key management algorithm: %s".formatted(alg));
+                    "Unsupported JWE key management algorithm: %s".formatted(sanitizeHeaderValue(alg)));
         }
         if (!config.getAlgorithmPreferences().isContentEncryptionSupported(enc)) {
             reporter.report(JWTValidationLogMessages.WARN.JWE_UNSUPPORTED_ALGORITHM,
-                    SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM, alg, enc);
+                    SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM,
+                    sanitizeHeaderValue(alg), sanitizeHeaderValue(enc));
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM,
-                    "Unsupported JWE content encryption algorithm: %s".formatted(enc));
+                    "Unsupported JWE content encryption algorithm: %s".formatted(sanitizeHeaderValue(enc)));
         }
 
         // Resolve decryption key
@@ -306,8 +311,9 @@ public class JweDecryptor {
      * Renders unauthenticated JWE header text (the {@code kid}, the {@code zip} value, or a key
      * parser message that embeds the {@code epk} {@code crv}) safe for logging and exception
      * messages (CWE-117): control characters and the Unicode line and paragraph separators
-     * (U+2028, U+2029) are replaced by {@code '?'} and the value is truncated to
-     * {@value #MAX_LOGGED_KID_LENGTH} characters. A {@code null} value renders as {@code <none>}.
+     * (U+2028, U+2029) are replaced by {@code '?'}, and a value longer than
+     * {@value #MAX_LOGGED_KID_LENGTH} characters keeps its first {@value #MAX_LOGGED_KID_LENGTH}
+     * characters followed by an {@code "..."} marker. A {@code null} value renders as {@code <none>}.
      *
      * @param value the raw header-derived text, may be {@code null}
      * @return the sanitized text
@@ -642,18 +648,49 @@ public class JweDecryptor {
      * The key parser's message can embed the attacker-controlled {@code crv} (for an unsupported
      * curve), so it is sanitized and length-bounded before it enters the exception message that
      * {@link #decrypt} logs (CWE-117).
+     * <p>
+     * The {@code x} and {@code y} coordinates are checked for valid Base64URL here, without
+     * logging, before the key parser sees them. A malformed coordinate is rejected with a
+     * message that names only the field, so the attacker-controlled coordinate text never
+     * reaches a log line and the rejection is reported exactly once by {@link #decrypt},
+     * honouring the caller's decode mode. The key parser's own WARN for a malformed field is
+     * therefore not reached on this path.
      *
      * @param epk the ephemeral public key JWK from the JWE header
      * @return the parsed EC public key
      * @throws TokenValidationException if parsing fails
      */
     private static ECPublicKey parseEcPublicKeyFromJwk(JwkKey epk) {
+        requireBase64UrlCoordinate(epk.x(), "x");
+        requireBase64UrlCoordinate(epk.y(), "y");
         try {
             return (ECPublicKey) JwkKeyHandler.parseEcKey(epk);
         } catch (InvalidKeySpecException | ClassCastException e) {
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
                     "Failed to parse ephemeral EC public key: %s".formatted(sanitizeHeaderValue(e.getMessage())), e);
+        }
+    }
+
+    /**
+     * Rejects an {@code epk} coordinate that is present but not valid Base64URL, without logging
+     * it. An absent or blank coordinate is left to the key parser, which rejects it without
+     * logging.
+     *
+     * @param coordinate the raw coordinate text from the {@code epk} header, may be {@code null}
+     * @param field      the JWK field name ({@code x} or {@code y}), used in the message
+     * @throws TokenValidationException if the coordinate is not valid Base64URL
+     */
+    private static void requireBase64UrlCoordinate(String coordinate, String field) {
+        if (coordinate == null || coordinate.isBlank()) {
+            return;
+        }
+        try {
+            Base64.getUrlDecoder().decode(coordinate);
+        } catch (IllegalArgumentException e) {
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                    "Failed to parse ephemeral EC public key: invalid Base64 URL encoded value for '%s'".formatted(field));
         }
     }
 }
