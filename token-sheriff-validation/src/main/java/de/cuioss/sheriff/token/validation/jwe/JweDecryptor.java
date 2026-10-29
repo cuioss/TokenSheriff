@@ -327,7 +327,7 @@ public class JweDecryptor {
         StringBuilder sanitized = new StringBuilder(bounded.length() + 3);
         for (int i = 0; i < bounded.length(); i++) {
             char c = bounded.charAt(i);
-            boolean unsafe = Character.isISOControl(c) || c == ' ' || c == ' ';
+            boolean unsafe = Character.isISOControl(c) || c == '\u2028' || c == '\u2029';
             sanitized.append(unsafe ? '?' : c);
         }
         if (truncated) {
