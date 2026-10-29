@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.quarkus.health;
 
 import de.cuioss.sheriff.token.quarkus.observability.ObservedValidatorResolver;
+import de.cuioss.tools.logging.CuiLogger;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.health.HealthCheck;
@@ -31,8 +32,22 @@ import org.eclipse.microprofile.health.Liveness;
  * externally-produced one rather than the extension's own.
  * </p>
  * <p>
- * Liveness is always {@code UP}: an unconfigured optional extension is not a dead application. The
- * {@code status} data key carries the real state.
+ * Liveness reflects process health only and is therefore always {@code UP} — an unconfigured
+ * optional extension is not a dead application, and neither is one whose observed validator cannot
+ * be resolved. The {@code status} data key carries the real state:
+ * </p>
+ * <ul>
+ *   <li>{@code configured} — the extension's property-configured validator is in use</li>
+ *   <li>{@code observing external validator} — an application-supplied validator is observed</li>
+ *   <li>{@code not configured} — no validator is configured</li>
+ *   <li>{@code resolution failed} — resolving the observed validator threw; the check still
+ *       reports {@code UP} with an {@code issuerCount} of {@code 0}, and no exception detail is put
+ *       into the payload</li>
+ * </ul>
+ * <p>
+ * Configuration errors are not reported here: they surface at boot, where the property-configured
+ * validator is built eagerly. JWKS reachability is reported on readiness by
+ * {@link JwksEndpointHealthCheck}.
  * </p>
  *
  * @since 1.0
@@ -41,10 +56,13 @@ import org.eclipse.microprofile.health.Liveness;
 @Liveness
 public class TokenValidatorHealthCheck implements HealthCheck {
 
+    private static final CuiLogger LOGGER = new CuiLogger(TokenValidatorHealthCheck.class);
+
     private static final String HEALTHCHECK_NAME = "jwt-validator";
-    private static final String STATUS_EXTERNAL_VALIDATOR = "observing external validator";
-    private static final String STATUS_NOT_CONFIGURED = "not configured";
-    private static final String STATUS_CONFIGURED = "configured";
+    static final String STATUS_EXTERNAL_VALIDATOR = "observing external validator";
+    static final String STATUS_NOT_CONFIGURED = "not configured";
+    static final String STATUS_CONFIGURED = "configured";
+    static final String STATUS_RESOLUTION_FAILED = "resolution failed";
 
     private final ObservedValidatorResolver resolver;
 
@@ -55,10 +73,26 @@ public class TokenValidatorHealthCheck implements HealthCheck {
 
     @Override
     public HealthCheckResponse call() {
+        int issuerCount;
+        String status;
+        try {
+            issuerCount = resolver.observedIssuerConfigs().size();
+            status = statusFor(resolver.outcome());
+        }
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
+        // Intentional catch-all: a liveness probe must never throw, and the resolver's failure
+        // sources (CDI resolution, configuration access) are an open set of unchecked exceptions.
+        // The failure is reported through a fixed status marker only; its message stays out of the
+        // health payload (T-LEAK) and is logged at DEBUG.
+        catch (RuntimeException e) {
+            LOGGER.debug(e, "Failed to resolve the observed TokenValidator for the liveness check");
+            issuerCount = 0;
+            status = STATUS_RESOLUTION_FAILED;
+        }
         return HealthCheckResponse.named(HEALTHCHECK_NAME)
                 .up()
-                .withData("issuerCount", resolver.observedIssuerConfigs().size())
-                .withData("status", statusFor(resolver.outcome()))
+                .withData("issuerCount", issuerCount)
+                .withData("status", status)
                 .build();
     }
 

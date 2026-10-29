@@ -71,6 +71,19 @@ still reports `UP` and carries the real state in the `status` data key:
 }
 ----
 
+When resolving the observed validator fails, the check still reports `UP` with an `issuerCount` of
+`0` and the `resolution failed` marker. No exception detail appears in the payload; the failure is
+logged at DEBUG only:
+
+[source,json]
+----
+{
+  "status": "UP",
+  "name": "jwt-validator",
+  "data": { "issuerCount": 0, "status": "resolution failed" }
+}
+----
+
 == Configuration
 
 See xref:../../token-sheriff-validation-quarkus/src/main/resources/META-INF/quarkus-config-doc.adoc#_health_checks[Health Check Configuration] for options.
@@ -121,9 +134,15 @@ own producer. The three resolution outcomes are `PROPERTY_CONFIGURED`, `EXTERNAL
 === Token Validator Health Check
 
 * Consults `ObservedValidatorResolver` rather than injecting the extension's produced `List<IssuerConfig>`
-* Always returns UP — an unconfigured optional extension is not a dead application
-* Reports the real state in the `status` data key: `configured`, `observing external validator`, or
-  `not configured`, alongside the observable `issuerCount`
+* Always returns UP — liveness reflects process health only, and an unconfigured optional extension
+  is not a dead application
+* Reports the real state in the `status` data key: `configured`, `observing external validator`,
+  `not configured`, or `resolution failed`, alongside the observable `issuerCount`
+* Still reports UP with `issuerCount` of `0` and the `resolution failed` status when resolving the
+  observed validator fails; no exception detail appears in the payload
+* Does not report configuration errors: the property-configured validator is built eagerly at
+  startup, so an invalid `sheriff.token.issuers.*` configuration fails the boot instead. JWKS
+  reachability is reported on readiness by the JWKS Endpoint Health Check
 
 NOTE: An externally-produced `TokenValidator` does not expose its issuer configurations or its parser
 limits, so the health checks can detect it but cannot enumerate its issuers or probe its JWKS
