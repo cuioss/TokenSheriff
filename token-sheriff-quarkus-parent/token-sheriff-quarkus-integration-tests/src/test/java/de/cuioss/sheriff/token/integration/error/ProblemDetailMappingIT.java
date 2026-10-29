@@ -65,6 +65,8 @@ class ProblemDetailMappingIT extends BaseIntegrationTest {
         String body = response.asString();
         assertFalse(body.contains(exceptionMessage),
                 "the problem document must not contain the exception message: " + exceptionMessage);
+        assertFalse(body.contains(MALFORMED_TOKEN),
+                "the problem document must not contain the submitted token");
     }
 
     /**
