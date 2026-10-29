@@ -32,9 +32,8 @@ For Maven dependency information, see xref:../README.adoc#_maven_coordinates[Mav
 
 === Health Monitoring
 
-* Built-in health checks for JWT validation endpoints
-* JWKS endpoint connectivity monitoring
-* Token validator status verification
+* Liveness check that always reports `UP` and exposes the token validator state as data, so a configuration or JWKS problem never triggers a container restart
+* Readiness check for JWKS endpoint connectivity
 * See xref:../doc/integration/health-checks.adoc[Health Checks Documentation] for detailed configuration and usage
 
 === Metrics Collection
@@ -72,9 +71,9 @@ Configuration property key constants:
 CDI producer for JWT token validators:
 
 * link:src/main/java/de/cuioss/sheriff/token/quarkus/producer/TokenValidatorProducer.java[TokenValidatorProducer]
-* Creates configured token validators for each issuer
-* Handles validator lifecycle management
-* Provides named qualifiers for multiple issuers
+* Produces one application-scoped `TokenValidator` covering every enabled issuer
+* When the `sheriff.token.issuers.*` namespace yields at least one enabled issuer, the `TokenValidator` is built at startup, so an invalid issuer configuration fails application startup instead of the first request
+* An application without an enabled issuer, or one that supplies its own `TokenValidator`, starts without building it
 
 ==== BearerTokenProducer
 CDI producer for bearer token validation:
@@ -112,12 +111,15 @@ sheriff:
   token:
     issuers:
       my-issuer:
+        enabled: true
         issuer-identifier: "https://auth.example.com"
         jwks:
           http:
             url: "https://auth.example.com/.well-known/jwks.json"
             refresh-interval-seconds: 300
 ----
+
+NOTE: An issuer is only considered when it carries `enabled: true`. An issuer without it is ignored.
 
 === Multiple Issuers
 
@@ -127,11 +129,13 @@ sheriff:
   token:
     issuers:
       issuer-one:
+        enabled: true
         issuer-identifier: "https://auth1.example.com"
         jwks:
           http:
             well-known-url: "https://auth1.example.com/.well-known/openid-configuration"
       issuer-two:
+        enabled: true
         issuer-identifier: "https://auth2.example.com"
         jwks:
           file-path: "classpath:keys/public-key.pem"
@@ -243,6 +247,7 @@ sheriff.token.issuers.my-issuer.algorithm-preferences=RS256,RS384,RS512
 * Uses Micrometer for metrics collection
 * Depends on SmallRye Health for health check integration
 * Compatible with GraalVM native image compilation
+* The exception mappers (`application/problem+json` rendering) and the access-log filter are registered for RESTEasy Classic (`quarkus-resteasy`) only. Applications on Quarkus REST (RESTEasy Reactive) do not get the `application/problem+json` mapping or the access-log filter automatically.
 
 === Native Image Support
 
