@@ -73,6 +73,39 @@ class EndpointSchemePolicyTest {
                         () -> EndpointSchemePolicy.requireTls(endpoint, LABEL, true)));
     }
 
+    @ParameterizedTest(name = "refuses {0}")
+    @ValueSource(strings = {"https:/logout", "https:///logout", "https:foo"})
+    @DisplayName("Should refuse a hostless https endpoint even with the opt-in")
+    void shouldRefuseHostlessEndpoint(String endpoint) {
+        var withoutOptIn = assertThrows(ClientProtocolException.class,
+                () -> EndpointSchemePolicy.requireTls(endpoint, LABEL, false));
+        var withOptIn = assertThrows(ClientProtocolException.class,
+                () -> EndpointSchemePolicy.requireTls(endpoint, LABEL, true));
+
+        assertAll("hostless endpoint refused by label only",
+                () -> assertTrue(withoutOptIn.getMessage().contains(LABEL), "names the endpoint label"),
+                () -> assertTrue(withoutOptIn.getMessage().contains("host"), "names the missing host"),
+                () -> assertFalse(withoutOptIn.getMessage().contains(endpoint),
+                        "does not echo the untrusted endpoint"),
+                () -> assertTrue(withOptIn.getMessage().contains(LABEL), "names the endpoint label"));
+    }
+
+    @Test
+    @DisplayName("Should accept a registry-based authority that is not a server host name")
+    void shouldAcceptRegistryBasedAuthority() {
+        assertDoesNotThrow(() -> EndpointSchemePolicy.requireTls("https://my_host/logout", LABEL, false));
+    }
+
+    @Test
+    @DisplayName("Should keep the scheme refusal message for a hostless non-TLS endpoint")
+    void shouldKeepSchemeRefusalForHostlessNonTlsEndpoint() {
+        var thrown = assertThrows(ClientProtocolException.class,
+                () -> EndpointSchemePolicy.requireTls("http:/logout", LABEL, false));
+
+        assertTrue(thrown.getMessage().contains("is not a TLS (https) URL"),
+                "a scheme refusal takes precedence over the host check");
+    }
+
     @Test
     @DisplayName("Should name the label and not echo the endpoint in the refusal message")
     void shouldNameLabelInMessage() {
