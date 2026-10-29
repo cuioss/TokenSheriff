@@ -15,21 +15,21 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | ID | Sev | Verdict at HEAD | Owner |
 |---|---|---|---|
 | V-1 | major | VALID — `JwtHeader.epk` still `String`; ECDH-ES unparseable via production parser | PLAN-05 |
-| V-2 | major | VALID — `AccessTokenCache` hit path skips `validateTokenAge` | PLAN-03 |
-| V-3 | major | VALID — `HttpJwksLoader` never sets `OK` from background refresh | PLAN-01 |
-| V-4 | major | VALID — well-known resolution failure at init is terminal | PLAN-01 |
-| V-5 | major | VALID — `TokenValidator.close()` does not close JWKS loaders | PLAN-01 |
+| V-2 | major | **FIXED** — #833 (2ea3ef2f), PLAN-03; hit path and eviction re-apply the issuer's `maxTokenAgeSeconds` (closed per PR; code not re-read) | PLAN-03 |
+| V-3 | major | **FIXED** — #830 (1ca5ab35), PLAN-01 (closed per PR; merge state corroborated, code not re-read) | PLAN-01 |
+| V-4 | major | **FIXED** — #830 (1ca5ab35), PLAN-01; transient discovery failure retried, absent advertised issuer now terminal (closed per PR; code not re-read) | PLAN-01 |
+| V-5 | major | **FIXED** — #830 (1ca5ab35), PLAN-01; plus Quarkus `TokenValidatorProducer` `@PreDestroy` (closed per PR; code not re-read) | PLAN-01 |
 | V-6 | major | **FIXED** — #818 (9fc9d4d3) gate propagation, #817 (6d45da13) error text; `IssuerConfigDiscoveryIssuerTest` | — |
 | V-7 | major | PARTIAL — TLS fixed #748, retry fixed #795; connect/read timeouts still dropped in well-known mode | PLAN-07 |
-| V-8 | minor | VALID — zero usable keys still reports `OK` on first load | PLAN-01 |
-| V-9 | minor | VALID — cache uses max clock skew across issuers | PLAN-03 |
+| V-8 | minor | **FIXED** — #830 (1ca5ab35), PLAN-01 (closed per PR; code not re-read) | PLAN-01 |
+| V-9 | minor | **FIXED** — #833 (2ea3ef2f), PLAN-03; entries carry their issuer's clock skew (closed per PR; code not re-read) | PLAN-03 |
 | V-10 | minor | VALID — no staleness bound, no `jwks_uri` re-discovery | PLAN-07 |
 | V-11 | minor | VALID — DPoP path lacks ECDSA range check (CVE-2022-21449) | PLAN-09 |
 | V-12 | minor | VALID — DPoP replay `checkAndStore` before thumbprint check | PLAN-09 |
 | V-13 | minor | VALID — LogRecord template/argument mismatches | PLAN-13 |
 | V-14 | minor | VALID — identifier 168 duplicated (Transport + JWTValidation) | PLAN-13 |
 | V-15 | minor | VALID — `maxPayloadSize` doubles as HTTP response ceiling | PLAN-13 |
-| V-16 | minor | VALID — `initJWKSLoader` starts async work before CAS | PLAN-01 |
+| V-16 | minor | **FIXED** — #830 (1ca5ab35), PLAN-01 (closed per PR; code not re-read) | PLAN-01 |
 | V-17a | info | VALID — EgressPolicy DNS-rebinding claim / missing ranges | PLAN-13 |
 | V-17b | info | VALID — trailing-dot tokens (`split("\\.")`) | PLAN-09 |
 | V-17c | info | VALID — `exp` boundary off-by-one | PLAN-09 |
@@ -43,15 +43,15 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 
 | ID | Sev | Verdict at HEAD | Owner |
 |---|---|---|---|
-| C-1 | major | VALID — `store()` `computeIfAbsent` leaves rotation family stale | PLAN-02 |
-| C-2 | minor | VALID — refresh path uses raw `expires_in` | PLAN-02 |
+| C-1 | major | **FIXED** — #832 (31fb2212), PLAN-02 (closed per PR; merge state corroborated, code not re-read) | PLAN-02 |
+| C-2 | minor | **FIXED** — #832 (31fb2212), PLAN-02; the PR body files this fix under "C-8b" (closed per PR; code not re-read) | PLAN-02 |
 | C-3 | minor | VALID — DPoP `token_type` / `cnf.jkt` not verified at issuance | PLAN-10 |
 | C-4 | minor | VALID — `EndSessionFlow` no scheme check, fragment mishandled | PLAN-06 |
 | C-5 | minor | VALID — `CallbackParameters.toString()` unsanitized | PLAN-06 |
 | C-6 | minor | VALID — error callback handled before `state` check | PLAN-06 |
 | C-7 | info | VALID — single-use state/nonce is caller contract only | PLAN-06 |
 | C-8a | info | VALID — sanitizers miss U+0085/U+2028/U+2029 | PLAN-06 |
-| C-8b | info | VALID — family/JTI caps fixed at 10 000 | PLAN-02 |
+| C-8b | info | **FIXED** — #832 (31fb2212), PLAN-02; caps constructor-injectable (closed per PR; code not re-read) | PLAN-02 |
 | C-8c | info | VALID — PAR produced but never composed into a flow | PLAN-10 |
 | C-8d | info | VALID — step-up `auth_time` check without skew / clock | PLAN-10 |
 
@@ -60,13 +60,13 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | ID | Sev | Verdict at HEAD | Owner |
 |---|---|---|---|
 | Q-1 | major | VALID — class-level `@BearerAuth` read from proxy class | PLAN-08 |
-| Q-2 | major | PARTIAL — health checks registered by #795; exception mappers still unregistered | PLAN-04 |
-| Q-3 | major | VALID — no eager startup validation | PLAN-04 |
-| Q-4 | major | VALID and **worse** since #795 (check now always registered) — liveness DOWN on bad config | PLAN-04 |
+| Q-2 | major | **FIXED** — health checks by #795; both exception mappers now registered via build steps by #834 (ef720fd0), PLAN-04 (closed per PR; code not re-read) | PLAN-04 |
+| Q-3 | major | **FIXED** — #834 (ef720fd0), PLAN-04; validator built eagerly at startup when at least one issuer is enabled (ADR 0019) (closed per PR; code not re-read) | PLAN-04 |
+| Q-4 | major | **FIXED** — #834 (ef720fd0), PLAN-04; liveness catches and reports a resolver failure, stays UP (closed per PR; code not re-read) | PLAN-04 |
 | Q-5 | minor | VALID — `TokenStore`/`RefreshScheduler` producers lack `@DefaultBean` | PLAN-08 |
 | Q-6 | minor | VALID — JWE config silent fallbacks | PLAN-08 |
 | Q-7 | minor | VALID — BOM pins jjwt with `test` scope | PLAN-12 |
-| Q-8 | minor | VALID — RESTEasy-Classic-only, undocumented | PLAN-04 |
+| Q-8 | minor | **FIXED** — #834 (ef720fd0), PLAN-04; documented as RESTEasy Classic only, no Quarkus REST support added (closed per PR; code not re-read) | PLAN-04 |
 | Q-9 | info | VALID (mechanism; env-var consequence unverified) | PLAN-08 |
 | Q-10 | major | VALID — "concurrent" benchmark is thread-scoped | PLAN-12 |
 | Q-11 | minor | VALID — metrics export last-writer-wins | PLAN-12 |
@@ -90,7 +90,7 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | TC-3 | minor | VALID — logout IT accepts error page | PLAN-16 |
 | TC-4 | minor | VALID — mix-up IT bypasses wired `CallbackHandler` | PLAN-16 |
 | TC-5 | minor | VALID — state single-use untested (pairs with C-7) | PLAN-06 |
-| TC-6 | minor | VALID — post-eviction replay untested; cap read via reflection | PLAN-02 |
+| TC-6 | minor | **FIXED** — #832 (31fb2212), PLAN-02; reflection removed, post-eviction replay pinned (closed per PR; code not re-read) | PLAN-02 |
 | TC-7 | minor | VALID — attack corpora collapse to non-JSON | PLAN-14 |
 | TC-8 | minor | VALID — `ClientAuthSpecIT` positive-only | PLAN-16 |
 | TC-9 | info | PARTIAL — PKCE dup removed (#796); unit hygiene → PLAN-14; IT TLS trust-all → Watch | PLAN-14 |
@@ -109,7 +109,7 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 
 | ID | Sev | Verdict at HEAD | Owner |
 |---|---|---|---|
-| D-1 | major | PARTIAL — root README fixed (#817); validation-quarkus README YAML still lacks `enabled: true` | PLAN-04 |
+| D-1 | major | **FIXED** — root README #817; validation-quarkus README, health-checks and integration docs by #834 (ef720fd0), PLAN-04 (closed per PR; code not re-read) | PLAN-04 |
 | D-2 | major | VALID — "no HTTP of its own" in 5 places | PLAN-18 |
 | D-3 | major | VALID — Q-025 / Q-104 missing from LogMessages.adoc | PLAN-13 |
 | D-4 | major | VALID — = V-14 doc side | PLAN-13 |

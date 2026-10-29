@@ -2,10 +2,10 @@
   "id": "PLAN-02",
   "slug": "refresh-family-rotation",
   "workstream": "WS-02",
-  "status": "running",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "implement-plan-02-refresh-family-rotation",
+  "pr": "832",
+  "landing": "landings/PLAN-02.md",
   "seq": 2
 }
