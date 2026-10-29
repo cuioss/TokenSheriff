@@ -114,7 +114,7 @@ class JwtHeaderJweTest {
 
     @Test
     @DisplayName("Decoding should bind an epk JSON object to a JwkKey")
-    void decodeShouldBindEpkObject() throws IOException {
+    void decodeShouldBindEpkObject() throws Exception {
         byte[] json = """
                 {"alg":"ECDH-ES","enc":"A128GCM",\
                 "epk":{"kty":"EC","crv":"P-256","x":"WKn-ZIGevcwGIyyrzFoZNBdaq9_TsqzGl96oc0CWuis",\
