@@ -64,7 +64,10 @@ import java.util.zip.Inflater;
  * {@link AEADBadTagException}, the same exception type AES-GCM raises.
  * <p>
  * The ECDH-ES ephemeral public key is taken from the {@code epk} header parameter, which is
- * bound to a {@link JwkKey} when the header is decoded (RFC 7518 Section 4.6.1.1).
+ * bound to a {@link JwkKey} when the header is decoded (RFC 7518 Section 4.6.1.1). A non-empty
+ * JWE Encrypted Key is rejected for ECDH-ES (RFC 7516 Section 5.2 step 10). Every ECDH-ES
+ * rejection, like every other failure raised during decryption, is logged as
+ * {@code JWE_DECRYPTION_FAILED} and counted exactly once.
  * <p>
  * This class is thread-safe and holds no per-request state; its only field is a thread-safe
  * {@link SecureRandom}.
@@ -77,6 +80,8 @@ public class JweDecryptor {
 
     private static final CuiLogger LOGGER = new CuiLogger(JweDecryptor.class);
     private static final int MAX_DECOMPRESSED_SIZE = 256 * 1024; // 256KB limit for compression bomb protection
+    /** Upper bound for the length of an untrusted {@code kid} rendered into logs and messages. */
+    static final int MAX_LOGGED_KID_LENGTH = 64;
 
     /**
      * Source of the random CEK substituted after a failed RSA unwrap (RFC 7516 Section 11.5).
@@ -126,12 +131,13 @@ public class JweDecryptor {
         String kid = jweHeader.kid();
         PrivateKey decryptionKey = config.resolveKey(kid)
                 .orElseThrow(() -> {
-                    LOGGER.warn(JWTValidationLogMessages.WARN.JWE_DECRYPTION_KEY_NOT_FOUND,
-                            kid != null ? kid : "<none>");
+                    // The kid comes from the unauthenticated header: sanitize before logging (CWE-117)
+                    String safeKid = sanitizeKid(kid);
+                    LOGGER.warn(JWTValidationLogMessages.WARN.JWE_DECRYPTION_KEY_NOT_FOUND, safeKid);
                     counter.increment(SecurityEventCounter.EventType.JWE_DECRYPTION_KEY_NOT_FOUND);
                     return new TokenValidationException(
                             SecurityEventCounter.EventType.JWE_DECRYPTION_KEY_NOT_FOUND,
-                            "No decryption key found for kid: %s".formatted(kid));
+                            "No decryption key found for kid: %s".formatted(safeKid));
                 });
 
         // Validate compression before crypto operations
@@ -178,6 +184,13 @@ public class JweDecryptor {
                 // Clear CEK from memory
                 Arrays.fill(cek, (byte) 0);
             }
+        } catch (TokenValidationException e) {
+            // Structural rejections raised inside decryption (ECDH-ES epk / key checks, a non-empty
+            // ECDH-ES Encrypted Key, key / IV length, decompression) are logged and counted here,
+            // exactly once, and rethrown unchanged.
+            LOGGER.warn(JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, e.getMessage());
+            counter.increment(e.getEventType());
+            throw e;
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             LOGGER.warn(JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, e.getMessage());
             counter.increment(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED);
@@ -192,9 +205,44 @@ public class JweDecryptor {
             JwtHeader header, String enc) throws GeneralSecurityException {
         return switch (alg) {
             case "RSA-OAEP", "RSA-OAEP-256" -> unwrapRsaCek(alg, encryptedKey, key, enc);
-            case "ECDH-ES" -> deriveCekEcdhEs(header, key, enc);
+            case "ECDH-ES" -> {
+                // RFC 7516 Section 5.2 step 10: with Direct Key Agreement the JWE Encrypted Key
+                // MUST be the empty octet sequence.
+                if (encryptedKey.length != 0) {
+                    throw new TokenValidationException(
+                            SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                            "ECDH-ES requires an empty JWE Encrypted Key");
+                }
+                yield deriveCekEcdhEs(header, key, enc);
+            }
             default -> throw new IllegalArgumentException("Unsupported key management algorithm: " + alg);
         };
+    }
+
+    /**
+     * Renders an unauthenticated JWE header {@code kid} safe for logging and exception messages
+     * (CWE-117): control characters are replaced by {@code '?'} and the value is truncated to
+     * {@value #MAX_LOGGED_KID_LENGTH} characters. A {@code null} kid renders as {@code <none>}.
+     *
+     * @param kid the raw kid from the JWE header, may be {@code null}
+     * @return the sanitized kid
+     */
+    static String sanitizeKid(String kid) {
+        if (kid == null) {
+            return "<none>";
+        }
+        boolean truncated = kid.length() > MAX_LOGGED_KID_LENGTH;
+        String bounded = truncated ? kid.substring(0, MAX_LOGGED_KID_LENGTH) : kid;
+        StringBuilder sanitized = new StringBuilder(bounded.length() + 3);
+        for (int i = 0; i < bounded.length(); i++) {
+            char c = bounded.charAt(i);
+            boolean unsafe = Character.isISOControl(c) || c == ' ' || c == ' ';
+            sanitized.append(unsafe ? '?' : c);
+        }
+        if (truncated) {
+            sanitized.append("...");
+        }
+        return sanitized.toString();
     }
 
     /**

@@ -22,6 +22,7 @@ import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.token.validation.dpop.DpopConfig;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.jwe.JweAlgorithmPreferences;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.test.JweTestTokenFactory;
@@ -30,7 +31,7 @@ import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.math.BigInteger;
@@ -45,6 +46,7 @@ import java.security.Signature;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -321,8 +323,16 @@ class WiredNegativePathAttackTest {
                 "A header-driven downgrade to a rejected key-management algorithm must be refused before decryption");
     }
 
+    /**
+     * VTEST-14 covers every content-encryption algorithm the library accepts by default, so the
+     * parameter set follows {@link JweAlgorithmPreferences} instead of a hand-maintained copy.
+     */
+    static Stream<String> defaultContentEncryptionAlgorithms() {
+        return JweAlgorithmPreferences.getDefaultContentEncryptionAlgorithms().stream();
+    }
+
     @ParameterizedTest(name = "VTEST-14 [{0}]")
-    @ValueSource(strings = {"A128GCM", "A256GCM", "A128CBC-HS256", "A256CBC-HS512"})
+    @MethodSource("defaultContentEncryptionAlgorithms")
     @DisplayName("VTEST-14: distinct RSA-OAEP decryption failures all surface the same JWE_DECRYPTION_FAILED event")
     void shouldKeepJweDecryptionFailuresIndistinguishable(String enc) {
         // Authlib CVE-2026-28490 / jose4j GHSA-jgvc-jfgh-rjvv: a distinguishable error path (padding

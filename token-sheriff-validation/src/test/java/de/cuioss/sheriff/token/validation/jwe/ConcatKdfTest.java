@@ -18,7 +18,9 @@ package de.cuioss.sheriff.token.validation.jwe;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -83,5 +85,23 @@ class ConcatKdfTest {
         byte[] key2 = ConcatKdf.derive(sharedSecret, 256, "A256GCM", new byte[]{1}, new byte[]{2});
 
         assertArrayEquals(key1, key2);
+    }
+
+    @Test
+    @DisplayName("Should match the RFC 7518 Appendix C ECDH-ES known-answer vector")
+    void shouldMatchRfc7518AppendixCKnownAnswer() {
+        // RFC 7518 Appendix C: shared secret Z, enc "A128GCM", apu "Alice", apv "Bob", 128-bit key.
+        int[] z = {158, 86, 217, 29, 129, 113, 53, 211, 114, 131, 66, 131, 191, 132, 38, 156,
+                251, 49, 110, 163, 218, 128, 106, 72, 246, 218, 167, 121, 140, 254, 144, 196};
+        byte[] sharedSecret = new byte[z.length];
+        for (int i = 0; i < z.length; i++) {
+            sharedSecret[i] = (byte) z[i];
+        }
+        byte[] apu = "Alice".getBytes(StandardCharsets.US_ASCII);
+        byte[] apv = "Bob".getBytes(StandardCharsets.US_ASCII);
+
+        byte[] derived = ConcatKdf.derive(sharedSecret, 128, "A128GCM", apu, apv);
+
+        assertEquals("VqqN6vgjbSBcIijNcacQGg", Base64.getUrlEncoder().withoutPadding().encodeToString(derived));
     }
 }

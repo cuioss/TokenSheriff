@@ -205,6 +205,34 @@ public class JweTestTokenFactory {
     }
 
     /**
+     * Creates an RSA-OAEP / RSA-OAEP-256 JWE whose Encrypted Key unwraps successfully with the
+     * recipient key but yields a CEK of the wrong length for {@code enc} (half the required length).
+     * The content itself is encrypted under a correctly sized CEK, so a decryptor that honoured the
+     * unwrapped key would fail on the key length rather than at content authentication.
+     *
+     * @param signingKey    the private key to sign the inner JWS
+     * @param encryptionKey the public key to encrypt the CEK (RSA)
+     * @param alg           the JWE key management algorithm ({@code RSA-OAEP} or {@code RSA-OAEP-256})
+     * @param enc           the JWE content encryption algorithm (e.g., "A128CBC-HS256")
+     * @param issuer        the issuer claim
+     * @return the JWE compact serialization string carrying an incorrectly sized wrapped CEK
+     */
+    public static String createJweWithWrongLengthCek(PrivateKey signingKey, PublicKey encryptionKey,
+            String alg, String enc, String issuer) {
+        String jwe = createJweWrappedAccessToken(signingKey, encryptionKey,
+                "RS256", alg, enc, issuer, null);
+        String[] parts = jwe.split("\\.");
+        byte[] wrongLengthCek = new byte[getCekBits(enc) / 16];
+        new SecureRandom().nextBytes(wrongLengthCek);
+        try {
+            parts[1] = base64Url(encryptCek(wrongLengthCek, encryptionKey, alg));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Failed to wrap the wrong-length CEK", e);
+        }
+        return String.join(".", parts);
+    }
+
+    /**
      * Creates a JWE token with tampered ciphertext for security testing.
      */
     public static String createJweWithTamperedCiphertext(PrivateKey signingKey, PublicKey encryptionKey,

@@ -170,6 +170,61 @@ class JweDecryptorTest {
                     () -> assertEquals(detail, tagFailure.getCause().getMessage()));
         }
 
+        @ParameterizedTest
+        @CsvSource({
+                "RSA-OAEP, A128GCM",
+                "RSA-OAEP, A256GCM",
+                "RSA-OAEP, A128CBC-HS256",
+                "RSA-OAEP, A256CBC-HS512",
+                "RSA-OAEP-256, A128GCM",
+                "RSA-OAEP-256, A256GCM",
+                "RSA-OAEP-256, A128CBC-HS256",
+                "RSA-OAEP-256, A256CBC-HS512"
+        })
+        @DisplayName("A correctly unwrapped CEK of the wrong length and a bad authentication tag should fail identically")
+        void wrongLengthCekAndBadTagShouldFailIdentically(String alg, String enc) {
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
+                    .build();
+
+            String[] wrongLengthParts = JweTestTokenFactory.createJweWithWrongLengthCek(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                    RSA_ENCRYPTION_KEY_PAIR.getPublic(),
+                    alg, enc, ISSUER).split("\\.");
+            String[] badTagParts = JweTestTokenFactory.createJweWrappedAccessToken(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                    RSA_ENCRYPTION_KEY_PAIR.getPublic(),
+                    "RS256", alg, enc, ISSUER, null).split("\\.");
+            badTagParts[4] = flipLastBit(badTagParts[4]);
+
+            JwtHeader wrongLengthHeader = parseHeader(wrongLengthParts[0]);
+            TokenValidationException lengthFailure = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(wrongLengthParts, wrongLengthHeader, config, counter));
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
+                    "A wrong-length CEK should record exactly one JWE_DECRYPTION_FAILED event");
+            assertNotNull(lengthFailure.getCause(), "A wrong-length CEK should carry the authentication failure");
+            String detail = lengthFailure.getCause().getMessage();
+            String expectedLog = JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(detail);
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN, expectedLog);
+
+            TestLoggerFactory.getTestHandler().clearRecords();
+
+            JwtHeader badTagHeader = parseHeader(badTagParts[0]);
+            TokenValidationException tagFailure = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(badTagParts, badTagHeader, config, counter));
+            assertEquals(2, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
+                    "A bad tag should record exactly one further JWE_DECRYPTION_FAILED event");
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN, expectedLog);
+
+            assertAll("Uniform failure for a wrong-length CEK with " + alg + " / " + enc,
+                    () -> assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                            lengthFailure.getEventType()),
+                    () -> assertEquals(tagFailure.getEventType(), lengthFailure.getEventType()),
+                    () -> assertEquals(tagFailure.getMessage(), lengthFailure.getMessage()),
+                    () -> assertEquals(tagFailure.getCause().getClass(), lengthFailure.getCause().getClass()),
+                    () -> assertEquals(tagFailure.getCause().getMessage(), detail));
+        }
+
         private static String flipLastBit(String base64UrlPart) {
             byte[] bytes = Base64.getUrlDecoder().decode(base64UrlPart);
             bytes[bytes.length - 1] ^= 0x01;
@@ -293,6 +348,46 @@ class JweDecryptorTest {
             assertThrows(TokenValidationException.class,
                     () -> decryptor.decrypt(parts, header, config, counter));
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_KEY_NOT_FOUND));
+        }
+
+        @Test
+        @DisplayName("Should sanitize an unknown kid carrying CR/LF before logging it (CWE-117)")
+        void shouldSanitizeKidBeforeLogging() {
+            String forgedKid = "evil\r\nWARN forged log line\u0000";
+            JwtHeader header = new JwtHeader("RSA-OAEP", null, forgedKid, null, null,
+                    "A256GCM", null, null, null, null);
+            String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .decryptionKey("other-kid", RSA_ENCRYPTION_KEY_PAIR.getPrivate())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter));
+
+            String expectedKid = "evil??WARN forged log line?";
+            assertEquals(expectedKid, JweDecryptor.sanitizeKid(forgedKid));
+            assertFalse(containsControlCharacter(ex.getMessage()),
+                    "The exception message must not carry control characters: " + ex.getMessage());
+            assertTrue(ex.getMessage().contains(expectedKid));
+            String expectedLog = JWTValidationLogMessages.WARN.JWE_DECRYPTION_KEY_NOT_FOUND.format(expectedKid);
+            assertFalse(containsControlCharacter(expectedLog));
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN, expectedLog);
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_KEY_NOT_FOUND));
+        }
+
+        @Test
+        @DisplayName("Should bound the length of a logged kid and keep the null-kid placeholder")
+        void shouldBoundKidLengthAndKeepNullPlaceholder() {
+            String longKid = "k".repeat(JweDecryptor.MAX_LOGGED_KID_LENGTH + 50);
+
+            String sanitized = JweDecryptor.sanitizeKid(longKid);
+
+            assertEquals("k".repeat(JweDecryptor.MAX_LOGGED_KID_LENGTH) + "...", sanitized);
+            assertEquals("<none>", JweDecryptor.sanitizeKid(null));
+        }
+
+        private static boolean containsControlCharacter(String text) {
+            return text.chars().anyMatch(Character::isISOControl);
         }
     }
 
@@ -442,19 +537,7 @@ class JweDecryptorTest {
                     "A128GCM", ISSUER);
 
             String[] parts = jwe.split("\\.");
-            // Move the embedded ephemeral point off the curve by mutating the first character of its
-            // x coordinate. Curve parameters still match the recipient key, so only the independent
-            // on-curve check can catch this — exactly the provider-independent guard under test.
-            String headerJson = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
-            int keyIdx = headerJson.indexOf("\"x\"");
-            assertTrue(keyIdx >= 0, "The ECDH-ES header must embed an epk x coordinate");
-            int valueStart = headerJson.indexOf('"', headerJson.indexOf(':', keyIdx) + 1) + 1;
-            char original = headerJson.charAt(valueStart);
-            char replacement = original == 'A' ? 'B' : 'A';
-            String tamperedJson = headerJson.substring(0, valueStart) + replacement
-                    + headerJson.substring(valueStart + 1);
-            parts[0] = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString(tamperedJson.getBytes(StandardCharsets.UTF_8));
+            parts[0] = moveEpkOffCurve(parts[0]);
 
             JwtHeader header = parseHeader(parts[0]);
             JweDecryptionConfig config = JweDecryptionConfig.builder()
@@ -466,6 +549,79 @@ class JweDecryptorTest {
             assertTrue(ex.getMessage().contains("Ephemeral EC point"),
                     "An off-curve ephemeral point must be rejected by the independent on-curve check, but was: "
                             + ex.getMessage());
+        }
+
+        @Test
+        @DisplayName("An off-curve epk rejection should be logged and counted exactly once")
+        void offCurveRejectionShouldBeLoggedAndCountedOnce() {
+            String curve = "secp256r1";
+            KeyPair recipientKeyPair = JweTestTokenFactory.generateEcKeyPair(curve);
+            String[] parts = JweTestTokenFactory.createEcdhEsJweWrappedAccessToken(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                    JweTestTokenFactory.generateEcKeyPair(curve),
+                    (ECPublicKey) recipientKeyPair.getPublic(),
+                    "A128GCM", ISSUER).split("\\.");
+            parts[0] = moveEpkOffCurve(parts[0]);
+
+            JwtHeader header = parseHeader(parts[0]);
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(recipientKeyPair.getPrivate())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter));
+
+            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
+                    "An off-curve epk must record exactly one JWE_DECRYPTION_FAILED event");
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(ex.getMessage()));
+        }
+
+        @Test
+        @DisplayName("Should reject ECDH-ES with a non-empty JWE Encrypted Key (RFC 7516 Section 5.2 step 10)")
+        void shouldRejectEcdhEsWithNonEmptyEncryptedKey() {
+            String curve = "secp256r1";
+            KeyPair recipientKeyPair = JweTestTokenFactory.generateEcKeyPair(curve);
+            String[] parts = JweTestTokenFactory.createEcdhEsJweWrappedAccessToken(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                    JweTestTokenFactory.generateEcKeyPair(curve),
+                    (ECPublicKey) recipientKeyPair.getPublic(),
+                    "A128GCM", ISSUER).split("\\.");
+            assertTrue(parts[1].isEmpty(), "The fixture must start from a valid ECDH-ES token");
+            parts[1] = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString("unexpected-key".getBytes(StandardCharsets.UTF_8));
+
+            JwtHeader header = parseHeader(parts[0]);
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(recipientKeyPair.getPrivate())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter));
+
+            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
+            assertTrue(ex.getMessage().contains("empty JWE Encrypted Key"),
+                    "A non-empty Encrypted Key must be rejected, but was: " + ex.getMessage());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
+        }
+
+        /**
+         * Moves the embedded ephemeral point off the curve by mutating the first character of its x
+         * coordinate. Curve parameters still match the recipient key, so only the independent on-curve
+         * check can catch this.
+         */
+        private static String moveEpkOffCurve(String encodedHeader) {
+            String headerJson = new String(Base64.getUrlDecoder().decode(encodedHeader), StandardCharsets.UTF_8);
+            int keyIdx = headerJson.indexOf("\"x\"");
+            assertTrue(keyIdx >= 0, "The ECDH-ES header must embed an epk x coordinate");
+            int valueStart = headerJson.indexOf('"', headerJson.indexOf(':', keyIdx) + 1) + 1;
+            char original = headerJson.charAt(valueStart);
+            char replacement = original == 'A' ? 'B' : 'A';
+            String tamperedJson = headerJson.substring(0, valueStart) + replacement
+                    + headerJson.substring(valueStart + 1);
+            return Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(tamperedJson.getBytes(StandardCharsets.UTF_8));
         }
 
         @Test
