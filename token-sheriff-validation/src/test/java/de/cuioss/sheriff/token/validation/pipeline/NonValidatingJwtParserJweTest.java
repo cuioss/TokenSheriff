@@ -318,7 +318,14 @@ class NonValidatingJwtParserJweTest {
                                     + "\",\"epk\":{\"kty\":\"EC\",\"crv\":\"P-256\","
                                     + "\"x\":\"AQ\\r\\nWARN forged coordinate\",\"y\":\"AQ\"}}", ""),
                             SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, ""));
+                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, ""),
+                    Arguments.of("non-EC epk kty",
+                            token("{\"alg\":\"ECDH-ES\",\"enc\":\"A128GCM\",\"kid\":\"" + KNOWN_KID
+                                    + "\",\"epk\":{\"kty\":\"RSA\\r\\nWARN forged kty\",\"crv\":\"P-256\","
+                                    + "\"x\":\"AQ\",\"y\":\"AQ\"}}", ""),
+                            SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED,
+                            "epk 'kty' must be 'EC'"));
         }
 
         /**
@@ -450,7 +457,28 @@ class NonValidatingJwtParserJweTest {
             assertTrue(warning.getMessage().contains(
                     JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT.resolveIdentifierString()), warning.getMessage());
             assertFalse(warning.getMessage().contains(FORGED_TEXT), warning.getMessage());
+            assertFalse(warning.getMessage().contains("\r") || warning.getMessage().contains("\n"),
+                    warning.getMessage());
             assertNull(warning.getThrown(), "The WARN must not attach the DSL-JSON exception quoting raw header text");
+        }
+
+        /**
+         * A header that is the top-level JSON literal {@code null} binds to no header at all. It is
+         * rejected as a decode failure, but on a path the parser neither logs nor counts; this test
+         * pins that documented behaviour (see token-decryption.adoc, Header Value Sanitization).
+         */
+        @Test
+        @DisplayName("A top-level JSON null header is rejected without a WARN or a count")
+        void topLevelNullHeaderShouldBeRejectedWithoutLogOrCount() {
+            String nullHeaderJwe = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString("null".getBytes(StandardCharsets.UTF_8)) + ".AA.AA.AA.AA";
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> parser.decode(nullHeaderJwe));
+
+            assertEquals(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, ex.getEventType());
+            assertEquals(0, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
+            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty());
         }
 
         @Test

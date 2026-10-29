@@ -445,16 +445,19 @@ public class NonValidatingJwtParser {
 
             return new DecodedJwt(header, body, signature, parts, token);
         } catch (IOException e) {
-            // IOException from DSL-JSON deserialization
+            // IOException from DSL-JSON deserialization. Its message quotes the raw input around
+            // the failure position, i.e. unauthenticated header/payload bytes including CR/LF
+            // (CWE-117). Neither the WARN nor the exception message may carry it; the cause chain
+            // keeps it for callers that deliberately inspect it.
             if (logWarnings) {
-                LOGGER.warn(e, JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT);
+                LOGGER.warn(JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT);
             }
             if (trackSecurityEvents) {
                 securityEventCounter.increment(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT);
             }
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT,
-                    "Failed to decode JWT parts: " + e.getMessage(),
+                    "Failed to decode JWT parts: malformed or structurally invalid JSON",
                     e
             );
         }

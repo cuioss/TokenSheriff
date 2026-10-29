@@ -603,6 +603,7 @@ class JweDecryptorTest {
 
             JwtHeader header = parseHeader(parts[0]);
             assertTrue(header.getEpk().isPresent(), "The production header decode should bind the epk object");
+            assertEquals("EC", header.getEpk().orElseThrow().kty(), "The fixture epk must carry kty EC");
 
             String innerJws = decryptor.decrypt(parts, header, config, counter);
             assertNotNull(innerJws);
@@ -741,6 +742,63 @@ class JweDecryptorTest {
             assertTrue(ex.getMessage().contains("empty JWE Encrypted Key"),
                     "A non-empty Encrypted Key must be rejected, but was: " + ex.getMessage());
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
+        }
+
+        /**
+         * RFC 7518 section 4.6.1.1: the {@code epk} must be an EC key. An otherwise valid ECDH-ES
+         * token whose {@code epk} {@code kty} is absent, a different key type, a different case, or
+         * forged log text is rejected once by field name, never logging the raw value.
+         */
+        @ParameterizedTest(name = "kty member: [{0}]")
+        @ValueSource(strings = {
+                "\"kty\":\"RSA\",",
+                "",
+                "\"kty\":\"ec\",",
+                "\"kty\":\"EC\\r\\nWARN forged kty\","
+        })
+        @DisplayName("Should reject an epk whose kty is absent or not exactly EC")
+        void shouldRejectEpkWithNonEcKty(String ktyMember) {
+            String curve = "secp256r1";
+            KeyPair recipientKeyPair = JweTestTokenFactory.generateEcKeyPair(curve);
+            String[] parts = JweTestTokenFactory.createEcdhEsJweWrappedAccessToken(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                    JweTestTokenFactory.generateEcKeyPair(curve),
+                    (ECPublicKey) recipientKeyPair.getPublic(),
+                    "A128GCM", ISSUER).split("\\.");
+            parts[0] = replaceEpkKtyMember(parts[0], ktyMember);
+
+            JwtHeader header = parseHeader(parts[0]);
+            assertTrue(header.getEpk().isPresent(), "The tampered header must still bind an epk object");
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(recipientKeyPair.getPrivate())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter));
+
+            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
+            assertTrue(ex.getMessage().contains("epk 'kty' must be 'EC'"),
+                    "The rejection must come from the kty check, but was: " + ex.getMessage());
+            assertFalse(ex.getMessage().contains("forged"), ex.getMessage());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(ex.getMessage()));
+            assertTrue(TestLoggerFactory.getTestHandler()
+                            .resolveLogMessagesContaining(TestLogLevel.WARN, "forged").isEmpty(),
+                    "The raw kty value must not reach any log line");
+        }
+
+        /**
+         * Replaces the {@code "kty":"EC",} member the test factory writes first into the {@code epk}
+         * object with {@code ktyMember} (which may be empty to drop the member).
+         */
+        private static String replaceEpkKtyMember(String encodedHeader, String ktyMember) {
+            String headerJson = new String(Base64.getUrlDecoder().decode(encodedHeader), StandardCharsets.UTF_8);
+            String original = "\"kty\":\"EC\",";
+            assertTrue(headerJson.contains(original), "The ECDH-ES fixture must embed an epk with kty EC: " + headerJson);
+            String tamperedJson = headerJson.replace(original, ktyMember);
+            return Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(tamperedJson.getBytes(StandardCharsets.UTF_8));
         }
 
         /**

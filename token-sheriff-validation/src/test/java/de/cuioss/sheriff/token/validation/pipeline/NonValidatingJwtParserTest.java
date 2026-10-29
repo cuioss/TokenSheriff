@@ -23,6 +23,7 @@ import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -243,6 +244,85 @@ class NonValidatingJwtParserTest {
             // Verify log message
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                     JWTValidationLogMessages.WARN.DECODED_PART_SIZE_EXCEEDED.resolveIdentifierString());
+        }
+    }
+
+    /**
+     * A JWS header DSL-JSON cannot bind (a string-valued {@code epk} carrying raw CR/LF and forged
+     * log text) fails in the token-parts decode step. DSL-JSON's parse-error message quotes the
+     * input around the failure position, so the raw header bytes must stay out of the exception
+     * message and the WARN, while the cause chain is kept. The same step decodes the inner JWS of
+     * a decrypted JWE.
+     */
+    @Nested
+    @DisplayName("JWS Token-Parts Decode Failure Sanitization")
+    class TokenPartsDecodeFailureSanitization {
+
+        /** DSL-JSON quotes about 20 bytes either side of the failure position, so keep the marker short. */
+        private static final String FORGED_TEXT = "WARN forged";
+
+        private SecurityEventCounter counter;
+        private NonValidatingJwtParser sanitizingParser;
+        private String malformedHeaderJws;
+
+        @BeforeEach
+        void setUpParser() {
+            counter = new SecurityEventCounter();
+            sanitizingParser = NonValidatingJwtParser.builder().securityEventCounter(counter).build();
+            String headerJson = "{\"alg\":\"RS256\",\"typ\":\"JWT\",\"epk\":\"\r\n" + FORGED_TEXT + "\"}";
+            malformedHeaderJws = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8))
+                    + "." + ENCODED_PAYLOAD + "." + ENCODED_SIGNATURE;
+        }
+
+        @Test
+        @DisplayName("The exception message carries no raw header text while the cause chain is kept")
+        void exceptionMessageShouldNotCarryRawHeaderText() {
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> sanitizingParser.decode(malformedHeaderJws));
+
+            assertEquals(EventType.FAILED_TO_DECODE_JWT, ex.getEventType());
+            assertNotNull(ex.getCause(), "The DSL-JSON failure must stay on the cause chain");
+            assertTrue(ex.getCause().getMessage().contains("\r\n" + FORGED_TEXT),
+                    "Non-vacuity: the DSL-JSON message must quote the raw CR/LF and forged header text: "
+                            + ex.getCause().getMessage());
+            assertFalse(ex.getMessage().contains(FORGED_TEXT), ex.getMessage());
+            assertFalse(ex.getMessage().contains("\r") || ex.getMessage().contains("\n"), ex.getMessage());
+        }
+
+        @Test
+        @DisplayName("A normal decode logs one WARN free of the raw header text and counts once")
+        void normalDecodeShouldLogSanitizedWarnOnce() {
+            assertThrows(TokenValidationException.class, () -> sanitizingParser.decode(malformedHeaderJws));
+
+            assertEquals(1, counter.getCount(EventType.FAILED_TO_DECODE_JWT));
+            var warnings = TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN);
+            assertEquals(1, warnings.size(), "Exactly one WARN");
+            var warning = warnings.getFirst();
+            assertTrue(warning.getMessage().contains(
+                    JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT.resolveIdentifierString()), warning.getMessage());
+            assertFalse(warning.getMessage().contains(FORGED_TEXT), warning.getMessage());
+            assertFalse(warning.getMessage().contains("\r") || warning.getMessage().contains("\n"),
+                    warning.getMessage());
+            assertNull(warning.getThrown(), "The WARN must not attach the DSL-JSON exception quoting raw header text");
+        }
+
+        @Test
+        @DisplayName("A quiet decode counts once but does not log")
+        void quietDecodeShouldCountButNotLog() {
+            assertThrows(TokenValidationException.class, () -> sanitizingParser.decodeQuietly(malformedHeaderJws));
+
+            assertEquals(1, counter.getCount(EventType.FAILED_TO_DECODE_JWT));
+            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty());
+        }
+
+        @Test
+        @DisplayName("An opaque decode neither logs nor counts")
+        void opaqueDecodeShouldNotLogOrCount() {
+            assertThrows(TokenValidationException.class, () -> sanitizingParser.decodeOpaqueToken(malformedHeaderJws));
+
+            assertEquals(0, counter.getCount(EventType.FAILED_TO_DECODE_JWT));
+            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty());
         }
     }
 

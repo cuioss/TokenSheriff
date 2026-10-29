@@ -655,12 +655,21 @@ public class JweDecryptor {
      * reaches a log line and the rejection is reported exactly once by {@link #decrypt},
      * honouring the caller's decode mode. The key parser's own WARN for a malformed field is
      * therefore not reached on this path.
+     * <p>
+     * RFC 7518 section 4.6.1.1 requires the {@code epk} to be an EC key, so an {@code epk} whose
+     * {@code kty} is absent or not exactly {@code EC} is rejected first. The message names only
+     * the field, never the attacker-controlled {@code kty} value.
      *
      * @param epk the ephemeral public key JWK from the JWE header
      * @return the parsed EC public key
      * @throws TokenValidationException if parsing fails
      */
     private static ECPublicKey parseEcPublicKeyFromJwk(JwkKey epk) {
+        if (!"EC".equals(epk.kty())) {
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                    "Failed to parse ephemeral EC public key: epk 'kty' must be 'EC'");
+        }
         requireBase64UrlCoordinate(epk.x(), "x");
         requireBase64UrlCoordinate(epk.y(), "y");
         try {
