@@ -15,11 +15,14 @@
  */
 package de.cuioss.sheriff.token.client.logout;
 
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -27,6 +30,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -90,6 +94,75 @@ class EndSessionFlowTest {
     @DisplayName("Should reject a null redirect validator at construction")
     void shouldRejectNullValidator() {
         assertThrows(NullPointerException.class, () -> new EndSessionFlow(null));
+    }
+
+    @Test
+    @DisplayName("Should refuse an http end_session_endpoint by default and accept it with the opt-in (C-4)")
+    void shouldRefuseHttpEndpointUnlessOptedIn() {
+        String httpEndpoint = "http://localhost:8080/realms/demo/protocol/openid-connect/logout";
+        String idTokenHint = Generators.letterStrings(30, 60).next();
+        String state = Generators.letterStrings(20, 40).next();
+        var insecureFlow = new EndSessionFlow(new PostLogoutRedirectValidator(Set.of(REGISTERED_REDIRECT)), true);
+
+        assertAll("http end_session_endpoint",
+                () -> assertThrows(ClientProtocolException.class,
+                        () -> flow.buildLogoutRedirect(httpEndpoint, idTokenHint, REGISTERED_REDIRECT, state),
+                        "the default constructor is https-only"),
+                () -> assertTrue(insecureFlow.buildLogoutRedirect(httpEndpoint, idTokenHint, REGISTERED_REDIRECT, state)
+                        .startsWith(httpEndpoint + "?"), "the opt-in constructor tolerates http"));
+    }
+
+    @ParameterizedTest(name = "refuses {0}")
+    @ValueSource(strings = {"ftp://as.example.com/logout", "javascript:alert(1)", "file:///etc/passwd"})
+    @DisplayName("Should refuse a non-http(s) end_session_endpoint even with the opt-in (C-4)")
+    void shouldRefuseNonHttpSchemeEvenWithOptIn(String endpoint) {
+        String idTokenHint = Generators.letterStrings(30, 60).next();
+        String state = Generators.letterStrings(20, 40).next();
+        var insecureFlow = new EndSessionFlow(new PostLogoutRedirectValidator(Set.of(REGISTERED_REDIRECT)), true);
+
+        assertThrows(ClientProtocolException.class,
+                () -> insecureFlow.buildLogoutRedirect(endpoint, idTokenHint, REGISTERED_REDIRECT, state));
+    }
+
+    @Test
+    @DisplayName("Should insert the logout parameters before the endpoint fragment (C-4)")
+    void shouldInsertParametersBeforeFragment() {
+        String idTokenHint = Generators.letterStrings(30, 60).next();
+        String state = Generators.letterStrings(20, 40).next();
+
+        String url = flow.buildLogoutRedirect("https://as.example.com/logout#frag", idTokenHint,
+                REGISTERED_REDIRECT, state);
+
+        int fragmentStart = url.indexOf('#');
+        String beforeFragment = url.substring(0, fragmentStart);
+        assertAll("fragment-aware query",
+                () -> assertTrue(url.startsWith("https://as.example.com/logout?"), "query starts after the path"),
+                () -> assertEquals("#frag", url.substring(fragmentStart), "fragment is kept unchanged at the end"),
+                () -> assertTrue(beforeFragment.contains("id_token_hint=" + urlEncode(idTokenHint)),
+                        "id_token_hint precedes the fragment"),
+                () -> assertTrue(beforeFragment.contains("post_logout_redirect_uri=" + urlEncode(REGISTERED_REDIRECT)),
+                        "post_logout_redirect_uri precedes the fragment"),
+                () -> assertTrue(beforeFragment.contains("state=" + urlEncode(state)), "state precedes the fragment"));
+    }
+
+    @Test
+    @DisplayName("Should join an existing query with & before the endpoint fragment (C-4)")
+    void shouldJoinExistingQueryBeforeFragment() {
+        String idTokenHint = Generators.letterStrings(30, 60).next();
+        String state = Generators.letterStrings(20, 40).next();
+
+        String url = flow.buildLogoutRedirect("https://as.example.com/logout?a=b#frag", idTokenHint,
+                REGISTERED_REDIRECT, state);
+
+        int fragmentStart = url.indexOf('#');
+        String beforeFragment = url.substring(0, fragmentStart);
+        assertAll("existing query and fragment",
+                () -> assertTrue(url.startsWith("https://as.example.com/logout?a=b&"), "joins the existing query with &"),
+                () -> assertEquals("#frag", url.substring(fragmentStart), "fragment is kept unchanged at the end"),
+                () -> assertEquals(1, url.chars().filter(c -> c == '?').count(), "exactly one query separator"),
+                () -> assertTrue(beforeFragment.contains("id_token_hint=" + urlEncode(idTokenHint)),
+                        "id_token_hint precedes the fragment"),
+                () -> assertTrue(beforeFragment.contains("state=" + urlEncode(state)), "state precedes the fragment"));
     }
 
     @Test

@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.logout;
 
+import de.cuioss.sheriff.token.client.internal.EndpointSchemePolicy;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import org.jspecify.annotations.Nullable;
 
@@ -38,6 +39,12 @@ import java.util.Objects;
  *   <li>{@code state} — a session-bound CSRF token echoed back on the post-logout redirect; a logout
  *       without it is refused.</li>
  * </ul>
+ * The {@code end_session_endpoint} must be a TLS ({@code https}) URL, because the request carries the
+ * ID token and the logout state; a literal {@code http} endpoint is accepted only when the flow is
+ * created with {@code allowInsecureHttp} for a local test setup, and every other scheme is refused (see
+ * {@link EndpointSchemePolicy}). The logout parameters are inserted before any {@code #fragment} of the
+ * endpoint, so they always reach the authorization server and the fragment is kept unchanged.
+ * <p>
  * A complete logout also revokes the session's held tokens: the relying party clears them via
  * {@link de.cuioss.sheriff.token.client.lifecycle.TokenLifecycleManager#revokeAndClear(String)}
  * (fail-closed, no stale-read) and revokes them at the AS through
@@ -55,13 +62,32 @@ public class EndSessionFlow {
     private static final String PARAM_POST_LOGOUT_REDIRECT_URI = "post_logout_redirect_uri";
     private static final String PARAM_STATE = "state";
 
+    private static final String ENDPOINT_LABEL = "end_session_endpoint";
+
     private final PostLogoutRedirectValidator redirectValidator;
+    private final boolean allowInsecureHttp;
 
     /**
+     * Creates an https-only flow: an {@code end_session_endpoint} that is not a TLS URL is refused.
+     *
      * @param redirectValidator the exact-match post-logout redirect validator; must not be {@code null}
      */
     public EndSessionFlow(PostLogoutRedirectValidator redirectValidator) {
+        this(redirectValidator, false);
+    }
+
+    /**
+     * Creates a flow with an explicit choice about cleartext endpoints.
+     *
+     * @param redirectValidator the exact-match post-logout redirect validator; must not be {@code null}
+     * @param allowInsecureHttp whether a literal {@code http} {@code end_session_endpoint} is tolerated
+     *                          for a local test setup, mirroring
+     *                          {@link de.cuioss.sheriff.token.client.config.ClientConfiguration#allowInsecureHttp};
+     *                          every other non-https scheme is refused regardless
+     */
+    public EndSessionFlow(PostLogoutRedirectValidator redirectValidator, boolean allowInsecureHttp) {
         this.redirectValidator = Objects.requireNonNull(redirectValidator, "redirectValidator must not be null");
+        this.allowInsecureHttp = allowInsecureHttp;
     }
 
     /**
@@ -76,14 +102,18 @@ public class EndSessionFlow {
      * @param state                   the session-bound CSRF state; must not be {@code null} or blank
      * @return the fully-formed end-session redirect URL
      * @throws IllegalArgumentException if any required parameter is {@code null} or blank
-     * @throws de.cuioss.sheriff.token.commons.error.ClientProtocolException if the post-logout redirect
-     *                                  URI is not exactly registered
+     * @throws de.cuioss.sheriff.token.commons.error.ClientProtocolException if the
+     *                                  {@code end_session_endpoint} is not a valid TLS URL (literal
+     *                                  {@code http} is accepted only when this flow was created with
+     *                                  {@code allowInsecureHttp}), or if the post-logout redirect URI is
+     *                                  not exactly registered
      */
     public String buildLogoutRedirect(String endSessionEndpoint, String idTokenHint,
             String postLogoutRedirectUri, String state) {
         requireNonBlank(endSessionEndpoint, "endSessionEndpoint");
         requireNonBlank(idTokenHint, PARAM_ID_TOKEN_HINT);
         requireNonBlank(state, PARAM_STATE);
+        EndpointSchemePolicy.requireTls(endSessionEndpoint, ENDPOINT_LABEL, allowInsecureHttp);
         String validatedRedirect = redirectValidator.validate(postLogoutRedirectUri);
 
         Map<String, String> params = new HashMap<>(Map.of(
@@ -91,7 +121,12 @@ public class EndSessionFlow {
                 PARAM_POST_LOGOUT_REDIRECT_URI, validatedRedirect,
                 PARAM_STATE, state));
 
-        return endSessionEndpoint + (endSessionEndpoint.indexOf('?') < 0 ? '?' : '&') + FormEncoder.encode(params);
+        // The query goes in front of any #fragment: parameters appended after the '#' would be part of
+        // the fragment and never reach the authorization server.
+        int fragmentStart = endSessionEndpoint.indexOf('#');
+        String base = fragmentStart < 0 ? endSessionEndpoint : endSessionEndpoint.substring(0, fragmentStart);
+        String fragment = fragmentStart < 0 ? "" : endSessionEndpoint.substring(fragmentStart);
+        return base + (base.indexOf('?') < 0 ? '?' : '&') + FormEncoder.encode(params) + fragment;
     }
 
     /**
