@@ -76,7 +76,6 @@ public class JweDecryptor {
 
     private static final CuiLogger LOGGER = new CuiLogger(JweDecryptor.class);
     private static final int MAX_DECOMPRESSED_SIZE = 256 * 1024; // 256KB limit for compression bomb protection
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     /**
      * Decrypts a JWE token and returns the inner plaintext (typically a JWS string).
@@ -217,9 +216,20 @@ public class JweDecryptor {
         return cek;
     }
 
+    /**
+     * Generates a random CEK of the given length (RFC 7516 Section 11.5 substitution).
+     * <p>
+     * The {@link SecureRandom} is created per call on purpose and is never held in a static or
+     * instance field: a {@code SecureRandom} reachable from the native-image heap fails the
+     * Quarkus native build. This path only runs after a failed RSA unwrap, so the per-call cost
+     * is irrelevant.
+     *
+     * @param length the required CEK length in bytes
+     * @return a freshly generated random CEK
+     */
     private static byte[] randomCek(int length) {
         byte[] cek = new byte[length];
-        SECURE_RANDOM.nextBytes(cek);
+        new SecureRandom().nextBytes(cek);
         return cek;
     }
 
