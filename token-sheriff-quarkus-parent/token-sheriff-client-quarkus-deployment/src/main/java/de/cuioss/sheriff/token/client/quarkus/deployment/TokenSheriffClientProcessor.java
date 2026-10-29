@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.quarkus.deployment;
 
+import de.cuioss.sheriff.token.client.quarkus.ClientExceptionMapper;
 import de.cuioss.sheriff.token.client.quarkus.TokenSheriffClientProducer;
 import de.cuioss.tools.logging.CuiLogger;
 import de.cuioss.tools.logging.LogRecord;
@@ -22,15 +23,24 @@ import de.cuioss.tools.logging.LogRecordModel;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
 
 /**
  * Build-time processor for the Token-Sheriff client Quarkus extension.
  * <p>
- * At augmentation it registers the {@code token-sheriff-client} feature and contributes the
- * {@link TokenSheriffClientProducer} to the CDI bean archive so the framework-agnostic client engine
- * is exposed as {@link jakarta.enterprise.context.ApplicationScoped} beans. The extension runtime jar
- * is not part of the application's bean-discovery archive by default, so the producer is registered
- * explicitly here ({@code CLIENT-21}).
+ * At augmentation it
+ * </p>
+ * <ul>
+ *   <li>registers the {@code token-sheriff-client} feature,</li>
+ *   <li>contributes the {@link TokenSheriffClientProducer} to the CDI bean archive so the
+ *       framework-agnostic client engine is exposed as
+ *       {@link jakarta.enterprise.context.ApplicationScoped} beans, and</li>
+ *   <li>registers the {@link ClientExceptionMapper} as a JAX-RS provider (RESTEasy Classic only).</li>
+ * </ul>
+ * <p>
+ * The extension runtime jar is not part of the application's bean-discovery archive by default, so
+ * both the producer and the mapper are registered explicitly here ({@code CLIENT-21}).
+ * </p>
  */
 public class TokenSheriffClientProcessor {
 
@@ -76,5 +86,22 @@ public class TokenSheriffClientProcessor {
         return AdditionalBeanBuildItem.builder()
                 .addBeanClass(TokenSheriffClientProducer.class)
                 .build();
+    }
+
+    /**
+     * Register the {@link ClientExceptionMapper} as a JAX-RS provider. Its {@code @Provider}
+     * annotation alone does not register it, because the extension's runtime jar is not part of the
+     * application's index.
+     * <p>
+     * <strong>RESTEasy Classic only:</strong> {@link ResteasyJaxrsProviderBuildItem} is consumed by
+     * RESTEasy Classic. Applications running on Quarkus REST (RESTEasy Reactive) do not pick up this
+     * registration.
+     * </p>
+     *
+     * @return a {@link ResteasyJaxrsProviderBuildItem} for the {@link ClientExceptionMapper}
+     */
+    @BuildStep
+    public ResteasyJaxrsProviderBuildItem registerClientExceptionMapper() {
+        return new ResteasyJaxrsProviderBuildItem(ClientExceptionMapper.class.getName());
     }
 }

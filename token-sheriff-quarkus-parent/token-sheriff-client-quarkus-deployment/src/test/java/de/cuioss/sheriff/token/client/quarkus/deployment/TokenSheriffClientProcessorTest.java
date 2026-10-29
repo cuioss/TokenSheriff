@@ -15,10 +15,13 @@
  */
 package de.cuioss.sheriff.token.client.quarkus.deployment;
 
+import de.cuioss.sheriff.token.client.quarkus.ClientExceptionMapper;
 import de.cuioss.sheriff.token.client.quarkus.TokenSheriffClientProducer;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -51,5 +54,18 @@ class TokenSheriffClientProcessorTest {
         assertNotNull(beanItem, "the additional-bean build item must be produced");
         assertTrue(beanItem.getBeanClasses().contains(TokenSheriffClientProducer.class.getName()),
                 "the producer bean class must be registered so the engine beans are discoverable");
+    }
+
+    @Test
+    @DisplayName("Should register the ClientExceptionMapper as a JAX-RS provider")
+    void shouldRegisterClientExceptionMapperProvider() throws Exception {
+        ResteasyJaxrsProviderBuildItem providerItem = processor.registerClientExceptionMapper();
+
+        assertNotNull(providerItem, "the JAX-RS provider build item must be produced");
+        assertEquals(ClientExceptionMapper.class.getName(), providerItem.getName(),
+                "the ClientExceptionMapper must be registered because the runtime jar is not indexed");
+        assertTrue(TokenSheriffClientProcessor.class.getDeclaredMethod("registerClientExceptionMapper")
+                        .isAnnotationPresent(BuildStep.class),
+                "registerClientExceptionMapper must be a @BuildStep, otherwise Quarkus never invokes it");
     }
 }
