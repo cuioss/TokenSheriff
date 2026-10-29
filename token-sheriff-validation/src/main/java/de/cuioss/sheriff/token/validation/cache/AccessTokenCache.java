@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.validation.cache;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
+import de.cuioss.sheriff.token.validation.domain.context.ValidationContext;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.metrics.MeasurementType;
@@ -47,11 +48,17 @@ import java.util.concurrent.TimeUnit;
  *   <li>Simple get/put API for explicit caching control</li>
  *   <li>Lock-free concurrent access via ConcurrentHashMap</li>
  *   <li>Configurable maximum cache size with automatic overflow eviction</li>
- *   <li>Automatic expiration checking on retrieval</li>
- *   <li>Background thread for periodic expired token cleanup</li>
+ *   <li>Issuer time policy enforcement on retrieval (expiry and maximum token age)</li>
+ *   <li>Background thread for periodic cleanup of expired and too-old tokens</li>
  *   <li>Security event tracking for cache hits</li>
  *   <li>No external dependencies (Quarkus compatible)</li>
  * </ul>
+ * <p>
+ * Each entry carries the time policy of the issuer that validated it — that issuer's own
+ * clock skew tolerance and maximum token age, taken from the per-issuer
+ * {@link ValidationContext} passed to {@link #put}. Every cache hit re-applies that policy,
+ * so the cache never returns a token the uncached validation pipeline would reject at the
+ * same instant.
  * <p>
  * The cache verifies token content on each hit to handle potential hash collisions.
  * JWTs self-expire via their exp claim, reducing need for complex eviction strategies.
@@ -82,13 +89,6 @@ public class AccessTokenCache {
     private final SecurityEventCounter securityEventCounter;
 
     /**
-     * Clock skew tolerance in seconds, used when checking token expiration in the cache.
-     * This should be the maximum clock skew across all configured issuers so that tokens
-     * are only evicted when expired even for the most lenient issuer.
-     */
-    private final int clockSkewSeconds;
-
-    /**
      * Background executor for expired token eviction.
      */
     private final ScheduledExecutorService evictionExecutor;
@@ -111,16 +111,13 @@ public class AccessTokenCache {
      *
      * @param config the cache configuration
      * @param securityEventCounter the security event counter for tracking cache hits
-     * @param clockSkewSeconds the maximum clock skew tolerance in seconds across all issuers
      */
     public AccessTokenCache(
             AccessTokenCacheConfig config,
-            SecurityEventCounter securityEventCounter,
-            int clockSkewSeconds) {
+            SecurityEventCounter securityEventCounter) {
 
         config.validate();
         this.maxSize = config.getMaxSize();
-        this.clockSkewSeconds = clockSkewSeconds;
         this.securityEventCounter = securityEventCounter;
 
         if (config.isCachingEnabled()) {
@@ -159,15 +156,23 @@ public class AccessTokenCache {
     /**
      * Retrieves a cached access token if present and valid.
      * <p>
-     * This method checks if a token exists in cache and is still valid (not expired,
-     * raw token matches). If found and valid, returns the cached token and increments
-     * cache hit counter. If expired, removes it from cache and throws exception.
+     * This method checks if a token exists in cache and whether its raw token matches.
+     * A verified hit is then evaluated against the time policy of the issuer that
+     * validated it (captured at store time):
+     * <ul>
+     *   <li>If expired under the issuer's clock skew tolerance, the entry is removed and a
+     *   {@link SecurityEventCounter.EventType#TOKEN_EXPIRED} exception is thrown.</li>
+     *   <li>If older than the issuer's maximum token age (plus clock skew), the entry is
+     *   removed and a {@link SecurityEventCounter.EventType#TOKEN_AGE_EXCEEDED} exception
+     *   is thrown.</li>
+     *   <li>Otherwise the cached token is returned and the cache hit counter is incremented.</li>
+     * </ul>
      *
      * @param tokenString the raw JWT token string to look up
      * @param performanceMonitor the monitor for recording CACHE_LOOKUP metrics
-     * @param now the current time to use for expiration checks (avoids per-call OffsetDateTime.now())
+     * @param now the current time to use for the time policy checks (avoids per-call OffsetDateTime.now())
      * @return Optional containing the cached token if found and valid, empty otherwise
-     * @throws TokenValidationException if the cached token is expired
+     * @throws TokenValidationException if the cached token is expired or exceeds its issuer's maximum token age
      */
     public Optional<AccessTokenContent> get(
             String tokenString,
@@ -189,12 +194,12 @@ public class AccessTokenCache {
         lookupTicker.stopAndRecord();
 
         if (existing != null) {
-            if (existing.verifyToken(tokenString) && !existing.isExpired(now, clockSkewSeconds)) {
-                // True cache hit - valid cached token
-                securityEventCounter.increment(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT);
-                return Optional.of(existing.getContent());
-            } else if (existing.isExpired(now, clockSkewSeconds)) {
-                // Token is expired - remove from cache and throw exception
+            if (!existing.verifyToken(tokenString)) {
+                // Token verification failed - defense-in-depth for SHA-256 collision (negligible probability)
+                cache.remove(cacheKey, existing);
+                LOGGER.debug("Cached token verification failed - hash collision detected");
+            } else if (existing.isExpired(now)) {
+                // Token is expired under its issuer's clock skew - remove from cache and throw exception
                 cache.remove(cacheKey, existing);
                 LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_EXPIRED);
                 securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_EXPIRED);
@@ -202,10 +207,19 @@ public class AccessTokenCache {
                         SecurityEventCounter.EventType.TOKEN_EXPIRED,
                         "Cached token is expired"
                 );
-            } else {
-                // Token verification failed - defense-in-depth for SHA-256 collision (negligible probability)
+            } else if (existing.isTooOld(now)) {
+                // Token exceeds its issuer's maximum token age - remove from cache and throw exception
                 cache.remove(cacheKey, existing);
-                LOGGER.debug("Cached token verification failed - hash collision detected");
+                LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_AGE_EXCEEDED);
+                securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED);
+                throw new TokenValidationException(
+                        SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED,
+                        "Cached token exceeds the maximum token age"
+                );
+            } else {
+                // True cache hit - valid cached token under its issuer's time policy
+                securityEventCounter.increment(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT);
+                return Optional.of(existing.getContent());
             }
         }
 
@@ -219,15 +233,22 @@ public class AccessTokenCache {
      * Wraps the token in a CachedToken and stores it using putIfAbsent to handle
      * concurrent storage attempts. If multiple threads attempt to store the same
      * token simultaneously, only the first succeeds.
+     * <p>
+     * The issuer time policy of the given validation context — its clock skew tolerance
+     * and maximum token age — is stored with the entry and re-applied on every cache hit
+     * and by the background eviction.
      *
      * @param tokenString the raw JWT token string as cache key
      * @param content the validated access token content to cache
+     * @param issuerContext the per-issuer validation context the token was validated with,
+     *                      providing the issuer's clock skew and maximum token age
      * @param performanceMonitor the monitor for recording CACHE_STORE metrics
      * @throws TokenValidationException if the token cannot be cached
      */
     public void put(
             String tokenString,
             AccessTokenContent content,
+            ValidationContext issuerContext,
             TokenValidatorMonitor performanceMonitor) {
 
         if (cache == null) {
@@ -251,6 +272,8 @@ public class AccessTokenCache {
                     .rawToken(tokenString)
                     .content(content)
                     .expirationTime(expirationTime)
+                    .clockSkewSeconds(issuerContext.getClockSkewSeconds())
+                    .maxTokenAgeSeconds(issuerContext.getMaxTokenAgeSeconds())
                     .build();
 
             // putIfAbsent: only store if no value exists (handles concurrent validation races)
@@ -302,9 +325,10 @@ public class AccessTokenCache {
     }
 
     /**
-     * Background task to evict expired tokens.
+     * Background task to evict expired and too-old tokens.
      * <p>
-     * Scans cache for expired tokens and removes them in batches.
+     * Scans cache for tokens that are expired or exceed their maximum token age under the
+     * time policy of their own issuer, and removes them in batches.
      * Only called when cache is enabled (maxSize > 0) and executor is configured.
      * <p>
      * Note: ConcurrentHashMap operations are thread-safe and don't throw
@@ -314,9 +338,10 @@ public class AccessTokenCache {
         OffsetDateTime now = OffsetDateTime.now();
         List<String> expiredKeys = new ArrayList<>();
 
-        // Collect expired keys (thread-safe iteration)
+        // Collect expired or too-old keys (thread-safe iteration)
         for (Map.Entry<String, CachedToken> entry : cache.entrySet()) {
-            if (entry.getValue().isExpired(now, clockSkewSeconds)) {
+            CachedToken cachedToken = entry.getValue();
+            if (cachedToken.isExpired(now) || cachedToken.isTooOld(now)) {
                 expiredKeys.add(entry.getKey());
             }
         }
@@ -324,7 +349,7 @@ public class AccessTokenCache {
         if (!expiredKeys.isEmpty()) {
             // Batch remove from cache (thread-safe operations)
             expiredKeys.forEach(cache::remove);
-            LOGGER.debug("Evicted %s expired tokens from cache", expiredKeys.size());
+            LOGGER.debug("Evicted %s expired or too-old tokens from cache", expiredKeys.size());
         }
     }
 

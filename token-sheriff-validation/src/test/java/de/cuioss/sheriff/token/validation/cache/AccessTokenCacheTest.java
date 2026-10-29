@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.validation.cache;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
+import de.cuioss.sheriff.token.validation.domain.context.ValidationContext;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.metrics.TokenValidatorMonitor;
@@ -56,7 +57,7 @@ class AccessTokenCacheTest {
                 .maxSize(10)
                 .evictionIntervalSeconds(300L) // Use longer interval to avoid race conditions in tests
                 .build();
-        cache = new AccessTokenCache(config, securityEventCounter, 0);
+        cache = new AccessTokenCache(config, securityEventCounter);
     }
 
     @AfterEach
@@ -79,7 +80,7 @@ class AccessTokenCacheTest {
         assertTrue(cached.isEmpty());
 
         validationCount.incrementAndGet();
-        cache.put(token, expectedContent, performanceMonitor);
+        cache.put(token, expectedContent, defaultIssuerPolicy(), performanceMonitor);
         //noinspection UnnecessaryLocalVariable - Variable needed to avoid second cache access in assertions
         AccessTokenContent result = expectedContent;
 
@@ -104,7 +105,7 @@ class AccessTokenCacheTest {
         Optional<AccessTokenContent> cached1 = cache.get(token, performanceMonitor, OffsetDateTime.now());
         if (cached1.isEmpty()) {
             validationCount.incrementAndGet();
-            cache.put(token, expectedContent, performanceMonitor);
+            cache.put(token, expectedContent, defaultIssuerPolicy(), performanceMonitor);
         }
 
         // When - second access should be cache hit
@@ -113,7 +114,7 @@ class AccessTokenCacheTest {
         if (cached2.isEmpty()) {
             validationCount.incrementAndGet();
             result = expectedContent;
-            cache.put(token, result, performanceMonitor);
+            cache.put(token, result, defaultIssuerPolicy(), performanceMonitor);
         } else {
             result = cached2.get();
         }
@@ -149,7 +150,7 @@ class AccessTokenCacheTest {
         if (cached1.isEmpty()) {
             validationCount.incrementAndGet();
             result1 = expiredContent;
-            cache.put(testToken, result1, performanceMonitor);
+            cache.put(testToken, result1, defaultIssuerPolicy(), performanceMonitor);
         } else {
             result1 = cached1.get();
         }
@@ -195,7 +196,7 @@ class AccessTokenCacheTest {
                             validationCount.incrementAndGet();
                             // Simple atomic operation, no complex simulation
                             result = content;
-                            cache.put(token, result, performanceMonitor);
+                            cache.put(token, result, defaultIssuerPolicy(), performanceMonitor);
                         } else {
                             result = cached.get();
                         }
@@ -261,7 +262,7 @@ class AccessTokenCacheTest {
                             // failing unrelated threads.
                             LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(1));
                             result = content;
-                            cache.put(token, result, performanceMonitor);
+                            cache.put(token, result, defaultIssuerPolicy(), performanceMonitor);
                         } else {
                             result = cached.get();
                         }
@@ -327,7 +328,7 @@ class AccessTokenCacheTest {
                             if (cached.isEmpty()) {
                                 totalValidationCount.incrementAndGet();
                                 result = content;
-                                cache.put(token, result, performanceMonitor);
+                                cache.put(token, result, defaultIssuerPolicy(), performanceMonitor);
                             } else {
                                 result = cached.get();
                             }
@@ -404,7 +405,7 @@ class AccessTokenCacheTest {
             AccessTokenContent result;
             if (cached.isEmpty()) {
                 result = content;
-                cache.put(token, result, performanceMonitor);
+                cache.put(token, result, defaultIssuerPolicy(), performanceMonitor);
             } else {
                 result = cached.get();
             }
@@ -424,7 +425,7 @@ class AccessTokenCacheTest {
                     OffsetDateTime.now().plusHours(1));
             Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
             if (cached.isEmpty()) {
-                cache.put(token, content, performanceMonitor);
+                cache.put(token, content, defaultIssuerPolicy(), performanceMonitor);
             }
         }
         assertEquals(10, cache.size());
@@ -437,7 +438,7 @@ class AccessTokenCacheTest {
         AccessTokenContent result;
         if (cached.isEmpty()) {
             result = overflowContent;
-            cache.put(overflowToken, result, performanceMonitor);
+            cache.put(overflowToken, result, defaultIssuerPolicy(), performanceMonitor);
         } else {
             result = cached.get();
         }
@@ -457,7 +458,7 @@ class AccessTokenCacheTest {
                 .maxSize(5)
                 .evictionIntervalSeconds(300L)
                 .build();
-        cache = new AccessTokenCache(config, securityEventCounter, 0);
+        cache = new AccessTokenCache(config, securityEventCounter);
 
         int threadCount = 5; // Reduced thread count
         int tokensPerThread = 3; // Reduced tokens per thread
@@ -484,7 +485,7 @@ class AccessTokenCacheTest {
                             AccessTokenContent result;
                             if (cached.isEmpty()) {
                                 result = content;
-                                cache.put(token, result, threadMonitor);
+                                cache.put(token, result, defaultIssuerPolicy(), threadMonitor);
                             } else {
                                 result = cached.get();
                             }
@@ -522,7 +523,7 @@ class AccessTokenCacheTest {
                 .maxSize(100)
                 .evictionIntervalSeconds(300L)
                 .build();
-        cache = new AccessTokenCache(config, securityEventCounter, 0);
+        cache = new AccessTokenCache(config, securityEventCounter);
 
         // When - fill cache to capacity
         for (int i = 0; i < 100; i++) {
@@ -531,7 +532,7 @@ class AccessTokenCacheTest {
                     OffsetDateTime.now().plusHours(1));
             Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
             if (cached.isEmpty()) {
-                cache.put(token, content, performanceMonitor);
+                cache.put(token, content, defaultIssuerPolicy(), performanceMonitor);
             }
         }
 
@@ -541,7 +542,7 @@ class AccessTokenCacheTest {
         Optional<AccessTokenContent> cached = cache.get("overflow-token", performanceMonitor, OffsetDateTime.now());
         if (cached.isEmpty()) {
             AccessTokenContent content = createAccessToken("https://example.com", OffsetDateTime.now().plusHours(1));
-            cache.put("overflow-token", content, performanceMonitor);
+            cache.put("overflow-token", content, defaultIssuerPolicy(), performanceMonitor);
         }
 
         // Then - should have evicted ~10% of entries
@@ -567,7 +568,7 @@ class AccessTokenCacheTest {
         // When/Then - cache.put reads getExpirationDateTime() on the request path, so the refusal is
         // the declared TokenValidationException rather than an unchecked exception
         TokenValidationException exception = assertThrows(TokenValidationException.class, () ->
-                cache.put(token, contentWithoutExp, performanceMonitor)
+                cache.put(token, contentWithoutExp, defaultIssuerPolicy(), performanceMonitor)
         );
 
         assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
@@ -582,7 +583,7 @@ class AccessTokenCacheTest {
                 .maxSize(0)
                 .evictionIntervalSeconds(300L)
                 .build();
-        cache = new AccessTokenCache(config, securityEventCounter, 0);
+        cache = new AccessTokenCache(config, securityEventCounter);
 
         // When - try to cache tokens
         for (int i = 0; i < 10; i++) {
@@ -597,7 +598,7 @@ class AccessTokenCacheTest {
                 validationCount.incrementAndGet();
                 result = content;
                 // When cache is disabled, put should be a no-op
-                cache.put(token, result, performanceMonitor);
+                cache.put(token, result, defaultIssuerPolicy(), performanceMonitor);
             } else {
                 result = cached.get();
             }
@@ -623,7 +624,7 @@ class AccessTokenCacheTest {
                     .evictionIntervalSeconds(300L)
                     .scheduledExecutorService(scheduler)
                     .build();
-            cache = new AccessTokenCache(config, securityEventCounter, 0);
+            cache = new AccessTokenCache(config, securityEventCounter);
 
             assertEvictionTickRemovesExpiredTokens(scheduler);
         } finally {
@@ -643,7 +644,7 @@ class AccessTokenCacheTest {
             );
             Optional<AccessTokenContent> cached = cache.get(rawToken, performanceMonitor, OffsetDateTime.now());
             if (cached.isEmpty()) {
-                cache.put(rawToken, content, performanceMonitor);
+                cache.put(rawToken, content, defaultIssuerPolicy(), performanceMonitor);
             }
         }
 
@@ -662,7 +663,7 @@ class AccessTokenCacheTest {
         AccessTokenContent result;
         if (cached.isEmpty()) {
             result = newContent;
-            cache.put(newToken, result, performanceMonitor);
+            cache.put(newToken, result, defaultIssuerPolicy(), performanceMonitor);
         } else {
             result = cached.get();
         }
@@ -717,7 +718,7 @@ class AccessTokenCacheTest {
                     .evictionIntervalSeconds(300L)
                     .scheduledExecutorService(callerExecutor)
                     .build();
-            AccessTokenCache ownedByCaller = new AccessTokenCache(config, securityEventCounter, 0);
+            AccessTokenCache ownedByCaller = new AccessTokenCache(config, securityEventCounter);
 
             ownedByCaller.shutdown();
 
@@ -734,10 +735,139 @@ class AccessTokenCacheTest {
                 .maxSize(10)
                 .evictionIntervalSeconds(300L)
                 .build();
-        AccessTokenCache internallyOwned = new AccessTokenCache(config, securityEventCounter, 0);
+        AccessTokenCache internallyOwned = new AccessTokenCache(config, securityEventCounter);
 
         // No handle on the internal executor; shutdown must simply not throw and be idempotent
         assertDoesNotThrow(internallyOwned::shutdown);
         assertDoesNotThrow(internallyOwned::shutdown);
+    }
+
+    @Test
+    void cacheHitRejectsTokenExceedingIssuerMaxTokenAge() {
+        // Given - a token stored under an issuer policy with a 300 s maximum token age and no skew
+        String token = "too-old-token";
+        OffsetDateTime issuedAt = OffsetDateTime.now().minusMinutes(1);
+        OffsetDateTime expiration = issuedAt.plusHours(1);
+        cache.put(token, createAccessToken(issuedAt, expiration), issuerPolicy(0, 300), performanceMonitor);
+        assertEquals(1, cache.size());
+
+        // When - now is past iat + maxTokenAge + skew, but still before exp
+        OffsetDateTime now = issuedAt.plusSeconds(301);
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> cache.get(token, performanceMonitor, now));
+
+        // Then - rejected exactly like the uncached pipeline would, and the entry is gone
+        assertEquals(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED, exception.getEventType());
+        assertEquals(0, cache.size(), "A too-old entry must be removed from the cache");
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_EXPIRED));
+    }
+
+    @Test
+    void cacheHitAppliesEachIssuersOwnClockSkew() {
+        // Given - two entries with the same expiry, stored under a strict (0 s) and a lenient (60 s) skew
+        String strictToken = "strict-issuer-token";
+        String lenientToken = "lenient-issuer-token";
+        OffsetDateTime issuedAt = OffsetDateTime.now().minusMinutes(5);
+        OffsetDateTime expiration = issuedAt.plusMinutes(10);
+        cache.put(strictToken, createAccessToken(issuedAt, expiration), issuerPolicy(0, null), performanceMonitor);
+        cache.put(lenientToken, createAccessToken(issuedAt, expiration), issuerPolicy(60, null), performanceMonitor);
+        assertEquals(2, cache.size());
+
+        // When - now lies between exp + 0 s and exp + 60 s
+        OffsetDateTime now = expiration.plusSeconds(30);
+
+        // Then - the strict entry is rejected as expired ...
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> cache.get(strictToken, performanceMonitor, now));
+        assertEquals(SecurityEventCounter.EventType.TOKEN_EXPIRED, exception.getEventType());
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_EXPIRED));
+
+        // ... while the lenient entry is still a cache hit under its own issuer's skew
+        Optional<AccessTokenContent> lenientHit = cache.get(lenientToken, performanceMonitor, now);
+        assertTrue(lenientHit.isPresent(), "The lenient issuer's token must still be served");
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT));
+        assertEquals(1, cache.size(), "Only the strict entry must be removed");
+    }
+
+    @Test
+    void cacheHitServesOldTokenUntilExpiryWhenAgeCheckDisabled() {
+        // Given - a token issued long ago, stored under a policy with token age validation disabled
+        String token = "old-token-age-check-disabled";
+        OffsetDateTime issuedAt = OffsetDateTime.now().minusDays(1);
+        OffsetDateTime expiration = OffsetDateTime.now().plusHours(1);
+        cache.put(token, createAccessToken(issuedAt, expiration), issuerPolicy(0, null), performanceMonitor);
+
+        // When/Then - the old token is still served before its expiry
+        Optional<AccessTokenContent> hit = cache.get(token, performanceMonitor, expiration.minusSeconds(1));
+        assertTrue(hit.isPresent(), "Without a maximum token age the token must be served until expiry");
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED));
+
+        // ... and rejected as expired once past its expiry
+        OffsetDateTime afterExpiry = expiration.plusSeconds(1);
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> cache.get(token, performanceMonitor, afterExpiry));
+        assertEquals(SecurityEventCounter.EventType.TOKEN_EXPIRED, exception.getEventType());
+    }
+
+    @Test
+    void evictionExecutorRemovesTooOldTokens() {
+        // Given - cache whose eviction tick is driven by the test
+        cache.shutdown();
+        TickCapturingScheduler scheduler = new TickCapturingScheduler();
+        try {
+            AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
+                    .maxSize(10)
+                    .evictionIntervalSeconds(300L)
+                    .scheduledExecutorService(scheduler)
+                    .build();
+            cache = new AccessTokenCache(config, securityEventCounter);
+
+            // A not-yet-expired token that exceeds its issuer's 60 s maximum token age ...
+            OffsetDateTime issuedAt = OffsetDateTime.now().minusHours(1);
+            OffsetDateTime expiration = OffsetDateTime.now().plusHours(1);
+            cache.put("too-old-token", createAccessToken(issuedAt, expiration), issuerPolicy(0, 60), performanceMonitor);
+            // ... and an equally old token whose issuer has token age validation disabled
+            cache.put("age-unchecked-token", createAccessToken(issuedAt, expiration), issuerPolicy(0, null), performanceMonitor);
+            assertEquals(2, cache.size());
+
+            // When - one eviction tick runs
+            scheduler.tick();
+
+            // Then - only the too-old entry is evicted
+            assertEquals(1, cache.size(), "The too-old token must be evicted, the age-unchecked one kept");
+            assertTrue(cache.get("age-unchecked-token", performanceMonitor, OffsetDateTime.now()).isPresent());
+        } finally {
+            scheduler.shutdownNow();
+        }
+    }
+
+    /**
+     * The per-issuer time policy used by tests that do not exercise it: no clock skew,
+     * token age validation disabled.
+     */
+    private static ValidationContext defaultIssuerPolicy() {
+        return issuerPolicy(0, null);
+    }
+
+    /**
+     * Builds the per-issuer validation context whose time policy the cache stores with an entry.
+     *
+     * @param clockSkewSeconds the issuer's clock skew tolerance
+     * @param maxTokenAgeSeconds the issuer's maximum token age, or null to disable the age check
+     */
+    private static ValidationContext issuerPolicy(int clockSkewSeconds, Integer maxTokenAgeSeconds) {
+        return new ValidationContext(clockSkewSeconds, maxTokenAgeSeconds);
+    }
+
+    private static AccessTokenContent createAccessToken(OffsetDateTime issuedAt, OffsetDateTime expiration) {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        tokenHolder.withClaim(ClaimName.ISSUER.getName(), ClaimValue.forPlainString("https://example.com"));
+        tokenHolder.withClaim(ClaimName.EXPIRATION.getName(), ClaimValue.forDateTime(String.valueOf(expiration.toEpochSecond()), expiration));
+        tokenHolder.withClaim(ClaimName.ISSUED_AT.getName(), ClaimValue.forDateTime(String.valueOf(issuedAt.toEpochSecond()), issuedAt));
+        tokenHolder.withClaim(ClaimName.TOKEN_ID.getName(), ClaimValue.forPlainString("jti-" + System.nanoTime()));
+        return tokenHolder.asAccessTokenContent();
     }
 }

@@ -111,7 +111,6 @@ public class AccessTokenValidationPipeline {
      * @param cacheConfig the cache configuration for access token caching
      * @param securityEventCounter the security event counter for tracking operations
      * @param performanceMonitor the monitor for recording performance metrics
-     * @param maxClockSkewSeconds the maximum clock skew tolerance across all issuers (for cache expiration)
      */
     @SuppressWarnings("java:S107") // Many dependencies are required
     public AccessTokenValidationPipeline(NonValidatingJwtParser jwtParser,
@@ -124,8 +123,7 @@ public class AccessTokenValidationPipeline {
             List<TokenValidationRule> customValidationRules,
             AccessTokenCacheConfig cacheConfig,
             SecurityEventCounter securityEventCounter,
-            TokenValidatorMonitor performanceMonitor,
-            int maxClockSkewSeconds) {
+            TokenValidatorMonitor performanceMonitor) {
         this.jwtParser = jwtParser;
         this.issuerConfigCache = issuerConfigCache;
         this.signatureValidators = signatureValidators;
@@ -134,7 +132,7 @@ public class AccessTokenValidationPipeline {
         this.headerValidators = headerValidators;
         this.dpopValidators = dpopValidators;
         this.customValidationRules = List.copyOf(customValidationRules);
-        this.cache = new AccessTokenCache(cacheConfig, securityEventCounter, maxClockSkewSeconds);
+        this.cache = new AccessTokenCache(cacheConfig, securityEventCounter);
         this.securityEventCounter = securityEventCounter;
         this.performanceMonitor = performanceMonitor;
     }
@@ -146,7 +144,10 @@ public class AccessTokenValidationPipeline {
      * to optimize performance for repeated token validation (addresses issue #131).
      * <p>
      * If the token is found in cache and is still valid, it is returned immediately
-     * without performing expensive cryptographic operations.
+     * without performing expensive cryptographic operations. Before a cached token is
+     * returned, the cache enforces the issuing issuer's own time policy — its clock skew
+     * tolerance for the expiry and its maximum token age — and only then are the DPoP
+     * proof and the custom validation rules run against the cached token.
      *
      * @param request the access token validation request (token string guaranteed non-null, non-blank, within size limits)
      * @return the validated access token content
@@ -161,7 +162,9 @@ public class AccessTokenValidationPipeline {
         // Create current time once for cache and validation context consistency
         OffsetDateTime now = OffsetDateTime.now();
 
-        // 1. CHECK CACHE FIRST - before any expensive parsing
+        // 1. CHECK CACHE FIRST - before any expensive parsing.
+        // The cache enforces the issuer's own expiry clock skew and max token age on every hit
+        // (throwing TOKEN_EXPIRED / TOKEN_AGE_EXCEEDED), before DPoP and custom rules run below.
         Optional<AccessTokenContent> cached = cache.get(tokenString, performanceMonitor, now);
         if (cached.isPresent()) {
             LOGGER.debug("Access token retrieved from cache");
@@ -278,8 +281,8 @@ public class AccessTokenValidationPipeline {
 
         LOGGER.debug("Token successfully validated");
 
-        // 9. Store in cache for future lookups
-        cache.put(tokenString, validatedToken, performanceMonitor);
+        // 9. Store in cache for future lookups, together with this issuer's time policy
+        cache.put(tokenString, validatedToken, context, performanceMonitor);
 
         return validatedToken;
     }
