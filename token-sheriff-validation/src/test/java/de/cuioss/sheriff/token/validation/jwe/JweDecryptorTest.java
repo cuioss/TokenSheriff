@@ -498,7 +498,7 @@ class JweDecryptorTest {
                     JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(ex.getMessage()));
             LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, JwkKey.class);
             assertTrue(TestLoggerFactory.getTestHandler()
-                    .resolveLogMessagesContaining(TestLogLevel.WARN, "forged coordinate").isEmpty(),
+                            .resolveLogMessagesContaining(TestLogLevel.WARN, "forged coordinate").isEmpty(),
                     "The raw epk coordinate must not reach any log line");
         }
 

@@ -365,7 +365,7 @@ class NonValidatingJwtParserJweTest {
                     "Exactly one WARN for: " + site);
             LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, JwkKey.class);
             assertTrue(TestLoggerFactory.getTestHandler()
-                    .resolveLogMessagesContaining(TestLogLevel.WARN, "forged coordinate").isEmpty(),
+                            .resolveLogMessagesContaining(TestLogLevel.WARN, "forged coordinate").isEmpty(),
                     "No raw header text may reach the log: " + site);
         }
 
