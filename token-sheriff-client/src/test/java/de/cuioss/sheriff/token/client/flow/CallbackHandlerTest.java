@@ -42,6 +42,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("CallbackHandler authorization_code redirect validation (RFC 6749 §4.1.2)")
 class CallbackHandlerTest {
 
+    /** The message {@link CallbackHandler} throws on a missing or non-matching {@code state}. */
+    private static final String STATE_MISMATCH_MESSAGE =
+            "authorization callback 'state' does not match the flow context";
+
+    /** The prefix every message produced by the commons {@code InboundErrorNormalizer} carries. */
+    private static final String AS_ERROR_PREFIX = "authorization server returned";
+
     private final CallbackHandler handler = new CallbackHandler();
 
     private static FlowContext context() {
@@ -90,6 +97,53 @@ class CallbackHandlerTest {
                     context.state(), "invalid_request", null, null);
 
             assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
+        }
+
+        @Test
+        @DisplayName("Should refuse an error callback with a wrong state as a state mismatch, not as an AS error (C-6)")
+        void shouldRejectErrorCallbackWithWrongStateAsMismatch() {
+            var context = context();
+            var parameters = new CallbackParameters(null, Generators.nonBlankStrings().next(),
+                    "access_denied", "forged by an attacker", null);
+
+            var thrown = assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
+
+            assertAll("forged error callback refused as a state mismatch",
+                    () -> assertEquals(STATE_MISMATCH_MESSAGE, thrown.getMessage(),
+                            "a wrong state is refused before the error is looked at"),
+                    () -> assertFalse(thrown.getMessage().contains(AS_ERROR_PREFIX),
+                            "attacker-chosen error text must not be surfaced as an authorization-server error"));
+        }
+
+        @Test
+        @DisplayName("Should refuse an error callback with a missing state as a state mismatch (C-6)")
+        void shouldRejectErrorCallbackWithMissingStateAsMismatch() {
+            var context = context();
+            var parameters = new CallbackParameters(null, null, "access_denied", "forged by an attacker", null);
+
+            var thrown = assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
+
+            assertAll("state-less error callback refused as a state mismatch",
+                    () -> assertEquals(STATE_MISMATCH_MESSAGE, thrown.getMessage(),
+                            "an absent state counts as a mismatch, also on an error callback"),
+                    () -> assertFalse(thrown.getMessage().contains(AS_ERROR_PREFIX),
+                            "attacker-chosen error text must not be surfaced as an authorization-server error"));
+        }
+
+        @Test
+        @DisplayName("Should surface the normalized error for an error callback whose state matches (C-6)")
+        void shouldSurfaceNormalizedErrorOnMatchingState() {
+            var context = context();
+            var parameters = new CallbackParameters(null, context.state(), "access_denied", "user said no", null);
+
+            var thrown = assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
+
+            assertAll("bound error callback surfaces the normalized error",
+                    () -> assertTrue(thrown.getMessage().contains(AS_ERROR_PREFIX),
+                            "a state-bound error callback reaches the commons normalizer"),
+                    () -> assertTrue(thrown.getMessage().contains("access_denied"), "the error code is surfaced"),
+                    () -> assertTrue(thrown.getMessage().contains("user said no"),
+                            "the sanitized error_description is surfaced"));
         }
 
         @Test
