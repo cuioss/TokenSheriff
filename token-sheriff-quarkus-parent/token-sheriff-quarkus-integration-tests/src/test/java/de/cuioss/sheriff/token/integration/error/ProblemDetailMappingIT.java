@@ -41,6 +41,8 @@ class ProblemDetailMappingIT extends BaseIntegrationTest {
     private static final String PROBLEM_JSON = "application/problem+json";
     private static final String MALFORMED_TOKEN = "not-a-jwt";
     private static final String EXPLICIT_MESSAGE_PREFIX = "Token validation failed: ";
+    /** The published problem type for a rejected token (doc/commons/specification/error-model.adoc). */
+    private static final String TOKEN_INVALID_TYPE = "https://cuioss.github.io/TokenSheriff/problems/token-invalid";
 
     @Test
     @DisplayName("Unhandled TokenValidationException is mapped to 401 application/problem+json without leaking the message")
@@ -56,7 +58,7 @@ class ProblemDetailMappingIT extends BaseIntegrationTest {
         response.then()
                 .statusCode(401)
                 .contentType(startsWith(PROBLEM_JSON))
-                .body("type", endsWith("token-invalid"))
+                .body("type", equalTo(TOKEN_INVALID_TYPE))
                 .body("status", equalTo(401));
 
         String body = response.asString();
