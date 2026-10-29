@@ -29,7 +29,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.easymock.EasyMock.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit tests for {@link TokenValidatorStartupInitializer}, exercising the enabled-issuer gate and the
