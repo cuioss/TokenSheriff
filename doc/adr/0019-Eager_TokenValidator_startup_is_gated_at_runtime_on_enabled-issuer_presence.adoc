@@ -1,0 +1,99 @@
+= ADR-0019: Eager TokenValidator startup is gated at runtime on enabled-issuer presence
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// Progressive-disclosure metadata block (see manage-adr SKILL.md → "ADR Template
+// Structure"). Read by `manage-adr.py scan` so a caller can assess an ADR's
+// relevance without reading the full file. List fields are comma-separated.
+// summary: The property-configured TokenValidator is built at startup by a StartupEvent observer gated on a pure-Config enabled-issuer probe; an invalid enabled configuration fails boot, while a namespace with no enabled issuer (unconfigured, or an embedder-supplied validator) keeps booting
+// tags: quarkus-extension, cdi, startup, fail-closed, lifecycle
+// affects: token-sheriff-validation-quarkus
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+A Quarkus extension that produces a security-critical facade from a configuration namespace faces a recurring
+choice point: **when is that namespace validated?** A lazily initialized producer defers every
+configuration error to the first use of the facade. For a token validator that first use is a request on the
+hot path, so an invalid issuer configuration turns into a latent failure that surfaces only after the
+application has already reported itself started and ready. Anything that reads the facade's state before
+then (a liveness or readiness probe, a metrics collector) inherits the failure and can turn a configuration
+error into an orchestrator restart loop.
+
+The opposite extreme, unconditional eager initialization, has its own failure class. The extension's
+producer is fail-fast by contract: it throws when the namespace holds no enabled issuer. An embedder that
+supplies its own, differently-qualified facade instance deliberately leaves the extension's namespace empty.
+Forcing the extension's producer at startup would punish that embedder for a configuration surface it never
+intended to use, and applications that booted before would stop booting.
+
+The structural choice is therefore not "eager or lazy" but **what condition licenses an eager failure**:
+the presence of configuration the extension itself owns and would act on.
+
+== Decision
+
+Fail-fast applies exactly where the extension's own namespace yields at least one enabled issuer.
+
+A runtime `StartupEvent` observer evaluates a pure-Config probe, the same enabled-issuer probe the
+observability layer uses to decide whether the extension is property-configured. When the probe is true,
+the observer forces instantiation of the validator, and any resolution or builder failure aborts boot. When
+the probe is false, the observer does nothing: an unconfigured namespace, or a namespace left empty because
+the embedder supplies its own validator, keeps booting exactly as before.
+
+Observability and startup thereby agree on what "configured" means, because they share one probe rather than
+two independently maintained definitions. The observer is registered as an unremovable bean by the
+extension's build step, because nothing injects it.
+
+The decision widens nothing: no token, callback or configuration that was rejected before is accepted now.
+It only moves the rejection of an invalid enabled configuration from first use to boot.
+
+== Consequences
+
+=== Positive
+
+* An invalid enabled issuer configuration fails the application start instead of surfacing on a request.
+* Liveness and readiness probes never see a configuration error that boot would have rejected.
+* Unconfigured and embedder-supplied setups keep booting unchanged.
+* Startup and observability share one definition of "configured".
+
+=== Negative
+
+* The probe and the producer must keep agreeing on what counts as an enabled issuer. A divergence would
+  either skip a validation that should happen or fail a boot that should succeed.
+* Test fixtures that enable an issuer must now carry a valid key source, because enabling an issuer is
+  validated at boot.
+
+=== Risks
+
+* An embedder that supplies its own validator and also enables an issuer in the extension's namespace is
+  still built at boot, and an unqualified own validator makes the lookup ambiguous. The behaviour is
+  correct for the contract, but surprising without the documentation that states it.
+* A build-time-only gate is not available as a safety net, because the namespace is only known at runtime.
+
+== Alternatives Considered
+
+* **Mark the producer as a startup bean.** Rejected: the producer throws when no enabled issuer exists, so
+  every embedder with an empty namespace would stop booting. It solves the latent-failure class by
+  creating the opposite failure class.
+* **Gate the producer at build time.** Rejected: the issuer namespace is configuration, known only at
+  runtime, and decisions about it cannot be taken during augmentation. The observability decision already
+  rejects this shape for the same reason.
+* **Keep lazy first-use initialization.** Rejected: it leaves configuration errors latent and exposes them
+  in the request path and to health probes.
+
+The alternatives fall into one class: each ties the failure condition to something other than the presence
+of configuration the extension owns, either too broadly (always) or too late (never at boot).
+
+== References
+
+* xref:0002-Observability_beans_observe_the_resolved_TokenValidator_not_the_issuer_property_namespace.adoc[ADR-0002: Observability beans observe the resolved TokenValidator, not the issuer property namespace] — the empty-namespace contract and the shared enabled-issuer probe
+* xref:0016-TokenValidator_owns_and_closes_the_JWKS_loaders_of_its_issuer_configs.adoc[ADR-0016: TokenValidator owns and closes the JWKS loaders of its issuer configs] — what an eagerly built validator owns
+* xref:0017-A_JWKS_loader_reports_OK_only_with_usable_keys_and_retries_only_transient_discovery_failures.adoc[ADR-0017: A JWKS loader reports OK only with usable keys and retries only transient discovery failures] — the fail-closed posture the boot-time check builds on
