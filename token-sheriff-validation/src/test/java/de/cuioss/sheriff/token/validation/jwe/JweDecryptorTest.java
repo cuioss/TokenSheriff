@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -388,7 +389,7 @@ class JweDecryptorTest {
         }
 
         @ParameterizedTest
-        @CsvSource({"2028", "2029"})
+        @ValueSource(strings = {"2028", "2029"})
         @DisplayName("Should replace the Unicode line and paragraph separators in a kid")
         void shouldReplaceUnicodeLineSeparators(String codePointHex) {
             char separator = (char) Integer.parseInt(codePointHex, 16);

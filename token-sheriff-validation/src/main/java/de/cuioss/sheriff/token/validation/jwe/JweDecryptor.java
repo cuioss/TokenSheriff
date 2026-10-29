@@ -261,7 +261,7 @@ public class JweDecryptor {
      * @param trackSecurityEvents whether the rejection is counted
      */
     private record RejectionReporter(SecurityEventCounter counter, boolean logWarnings,
-            boolean trackSecurityEvents) {
+    boolean trackSecurityEvents) {
 
         void report(LogRecord logRecord, SecurityEventCounter.EventType eventType, Object... logArgs) {
             if (logWarnings) {
