@@ -57,7 +57,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-100 |TOKEN |Token exceeds maximum size limit of %s bytes, validation will be rejected |Logged when a token is rejected due to size constraints
 |TokenSheriff-101 |TOKEN |The given validation was empty, request will be rejected |Logged when an empty or null token is provided
 |TokenSheriff-102 |TOKEN |No key found with ID: %s |Logged when a key with the specified ID cannot be found in the JWKS
-|TokenSheriff-103 |TOKEN |Failed to decode JWT Token |Logged when the JWT token cannot be decoded
+|TokenSheriff-103 |TOKEN |Failed to decode JWT Token |Logged when the JWT token cannot be decoded. For a JWE header that cannot be decoded it is logged without the JSON parser exception, whose message quotes raw header bytes
 |TokenSheriff-104 |TOKEN |Invalid JWT Token format: expected 3 parts (JWS) or 5 parts (JWE) but got %s |Logged when the JWT token format is invalid
 |TokenSheriff-105 |TOKEN |Decoded part exceeds maximum size limit of %s bytes |Logged when a decoded part of the token exceeds the maximum size limit
 |TokenSheriff-106 |TOKEN |Unsupported algorithm: %s |Logged when an unsupported algorithm is encountered

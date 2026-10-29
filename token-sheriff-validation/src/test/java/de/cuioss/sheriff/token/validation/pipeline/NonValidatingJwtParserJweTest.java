@@ -294,27 +294,43 @@ class NonValidatingJwtParserJweTest {
                     Arguments.of("unsupported algorithm",
                             token("{\"alg\":\"RSA1_5\",\"enc\":\"A256GCM\",\"kid\":\"" + KNOWN_KID + "\"}", "AA"),
                             SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM,
-                            JWTValidationLogMessages.WARN.JWE_UNSUPPORTED_ALGORITHM),
+                            JWTValidationLogMessages.WARN.JWE_UNSUPPORTED_ALGORITHM, ""),
                     Arguments.of("key not found",
                             token("{\"alg\":\"RSA-OAEP\",\"enc\":\"A256GCM\",\"kid\":\"unknown-kid\"}", "AA"),
                             SecurityEventCounter.EventType.JWE_DECRYPTION_KEY_NOT_FOUND,
-                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_KEY_NOT_FOUND),
+                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_KEY_NOT_FOUND, ""),
                     Arguments.of("unsupported compression",
                             token("{\"alg\":\"RSA-OAEP\",\"enc\":\"A256GCM\",\"zip\":\"GZIP\",\"kid\":\""
                                     + KNOWN_KID + "\"}", "AA"),
                             SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED),
+                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, ""),
+                    // The fixture pairs an ECDH-ES header with an RSA recipient key, so later epk /
+                    // key checks would also reject it: the message fragment pins the
+                    // non-empty-Encrypted-Key guard itself.
                     Arguments.of("ECDH-ES non-empty encrypted key",
                             token("{\"alg\":\"ECDH-ES\",\"enc\":\"A128GCM\",\"kid\":\"" + KNOWN_KID
                                     + "\",\"epk\":" + EC_EPK + "}", "AA"),
                             SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED),
+                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED,
+                            "ECDH-ES requires an empty JWE Encrypted Key"),
                     Arguments.of("malformed epk coordinate",
                             token("{\"alg\":\"ECDH-ES\",\"enc\":\"A128GCM\",\"kid\":\"" + KNOWN_KID
                                     + "\",\"epk\":{\"kty\":\"EC\",\"crv\":\"P-256\","
                                     + "\"x\":\"AQ\\r\\nWARN forged coordinate\",\"y\":\"AQ\"}}", ""),
                             SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED));
+                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, ""));
+        }
+
+        /**
+         * Asserts the rejection carries the row's guard-specific message fragment; an empty
+         * fragment pins nothing beyond the event type.
+         */
+        private static void assertGuardMessage(TokenValidationException ex, String expectedMessageFragment,
+                String site) {
+            if (!expectedMessageFragment.isEmpty()) {
+                assertTrue(ex.getMessage().contains(expectedMessageFragment),
+                        "Rejection for " + site + " must come from its guard, but was: " + ex.getMessage());
+            }
         }
 
         private static String token(String headerJson, String encryptedKey) {
@@ -327,11 +343,12 @@ class NonValidatingJwtParserJweTest {
         @MethodSource("rejectionSites")
         @DisplayName("An opaque decode neither logs nor counts the rejection")
         void opaqueDecodeShouldNotLogOrCount(String site, String token,
-                SecurityEventCounter.EventType eventType, LogRecord logRecord) {
+                SecurityEventCounter.EventType eventType, LogRecord logRecord, String expectedMessageFragment) {
             TokenValidationException ex = assertThrows(TokenValidationException.class,
                     () -> parser.decodeOpaqueToken(token));
 
             assertEquals(eventType, ex.getEventType(), site);
+            assertGuardMessage(ex, expectedMessageFragment, site);
             assertEquals(0, counter.getCount(eventType), "An opaque decode must not count: " + site);
             assertNoWarnings(site);
         }
@@ -340,11 +357,12 @@ class NonValidatingJwtParserJweTest {
         @MethodSource("rejectionSites")
         @DisplayName("A quiet decode counts the rejection once but does not log it")
         void quietDecodeShouldCountButNotLog(String site, String token,
-                SecurityEventCounter.EventType eventType, LogRecord logRecord) {
+                SecurityEventCounter.EventType eventType, LogRecord logRecord, String expectedMessageFragment) {
             TokenValidationException ex = assertThrows(TokenValidationException.class,
                     () -> parser.decodeQuietly(token));
 
             assertEquals(eventType, ex.getEventType(), site);
+            assertGuardMessage(ex, expectedMessageFragment, site);
             assertEquals(1, counter.getCount(eventType), "A quiet decode counts exactly once: " + site);
             assertNoWarnings(site);
         }
@@ -353,11 +371,12 @@ class NonValidatingJwtParserJweTest {
         @MethodSource("rejectionSites")
         @DisplayName("A normal decode logs and counts the rejection exactly once")
         void normalDecodeShouldLogAndCountOnce(String site, String token,
-                SecurityEventCounter.EventType eventType, LogRecord logRecord) {
+                SecurityEventCounter.EventType eventType, LogRecord logRecord, String expectedMessageFragment) {
             TokenValidationException ex = assertThrows(TokenValidationException.class,
                     () -> parser.decode(token));
 
             assertEquals(eventType, ex.getEventType(), site);
+            assertGuardMessage(ex, expectedMessageFragment, site);
             assertEquals(1, counter.getCount(eventType), "A normal decode counts exactly once: " + site);
             LogAsserts.assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
                     logRecord.resolveIdentifierString());
@@ -372,6 +391,84 @@ class NonValidatingJwtParserJweTest {
         private static void assertNoWarnings(String site) {
             assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty(),
                     "No WARN may be written for: " + site);
+        }
+    }
+
+    /**
+     * A JWE header DSL-JSON cannot bind (here a string-valued {@code epk} followed by raw CR/LF and
+     * forged log text) fails in the header-decode step. DSL-JSON's parse-error message quotes the
+     * input around the failure position, so the raw header bytes must stay out of the exception
+     * message and the WARN, while the cause chain is kept.
+     */
+    @Nested
+    @DisplayName("JWE Header-Decode Failure Sanitization")
+    class HeaderDecodeFailureSanitization {
+
+        /** DSL-JSON quotes about 20 bytes either side of the failure position, so keep the marker short. */
+        private static final String FORGED_TEXT = "WARN forged";
+
+        private NonValidatingJwtParser parser;
+        private String malformedHeaderJwe;
+
+        @BeforeEach
+        void setUpParser() {
+            parser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .jweDecryptionConfig(JweDecryptionConfig.builder()
+                            .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                            .build())
+                    .build();
+            String headerJson = "{\"alg\":\"ECDH-ES\",\"enc\":\"A128GCM\",\"epk\":\"\r\n" + FORGED_TEXT + "\"}";
+            malformedHeaderJwe = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8)) + ".AA.AA.AA.AA";
+        }
+
+        @Test
+        @DisplayName("The exception message carries no raw header text while the cause chain is kept")
+        void exceptionMessageShouldNotCarryRawHeaderText() {
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> parser.decode(malformedHeaderJwe));
+
+            assertEquals(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, ex.getEventType());
+            assertNotNull(ex.getCause(), "The DSL-JSON failure must stay on the cause chain");
+            assertTrue(ex.getCause().getMessage().contains("\r\n" + FORGED_TEXT),
+                    "Non-vacuity: the DSL-JSON message must quote the raw CR/LF and forged header text: "
+                            + ex.getCause().getMessage());
+            assertFalse(ex.getMessage().contains(FORGED_TEXT), ex.getMessage());
+            assertFalse(ex.getMessage().contains("\r") || ex.getMessage().contains("\n"), ex.getMessage());
+        }
+
+        @Test
+        @DisplayName("A normal decode logs one WARN free of the raw header text and counts once")
+        void normalDecodeShouldLogSanitizedWarnOnce() {
+            assertThrows(TokenValidationException.class, () -> parser.decode(malformedHeaderJwe));
+
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
+            var warnings = TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN);
+            assertEquals(1, warnings.size(), "Exactly one WARN");
+            var warning = warnings.getFirst();
+            assertTrue(warning.getMessage().contains(
+                    JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT.resolveIdentifierString()), warning.getMessage());
+            assertFalse(warning.getMessage().contains(FORGED_TEXT), warning.getMessage());
+            assertNull(warning.getThrown(), "The WARN must not attach the DSL-JSON exception quoting raw header text");
+        }
+
+        @Test
+        @DisplayName("A quiet decode counts once but does not log")
+        void quietDecodeShouldCountButNotLog() {
+            assertThrows(TokenValidationException.class, () -> parser.decodeQuietly(malformedHeaderJwe));
+
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
+            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty());
+        }
+
+        @Test
+        @DisplayName("An opaque decode neither logs nor counts")
+        void opaqueDecodeShouldNotLogOrCount() {
+            assertThrows(TokenValidationException.class, () -> parser.decodeOpaqueToken(malformedHeaderJwe));
+
+            assertEquals(0, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
+            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty());
         }
     }
 

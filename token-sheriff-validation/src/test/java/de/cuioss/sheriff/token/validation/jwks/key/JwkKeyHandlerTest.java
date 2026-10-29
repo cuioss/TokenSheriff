@@ -248,7 +248,8 @@ class JwkKeyHandlerTest {
     void shouldSanitizeAndBoundAMalformedCoordinateBeforeLoggingIt() {
         // The JWK sink is reachable from attacker-controlled input (the DPoP embedded jwk), so the
         // logged value must not carry line breaks and must be length-bounded (CWE-117).
-        String forgedX = "AQ\r\nWARN forged " + "c".repeat(200);
+        // The forged value carries CR, LF and both Unicode separators (U+2028, U+2029), written as escapes.
+        String forgedX = "AQ\r\nWARN forged  " + "c".repeat(200);
         JwkKey jwk = createEcJwk(forgedX, "AQ");
 
         InvalidKeySpecException exception = assertThrows(
@@ -257,7 +258,8 @@ class JwkKeyHandlerTest {
         );
         assertTrue(exception.getMessage().contains("Invalid Base64 URL encoded value for 'x'"), exception.getMessage());
 
-        String expectedValue = ("AQ??WARN forged?" + "c".repeat(200)).substring(0, 64) + "...";
+        // Each of CR, LF, U+2028 and U+2029 renders as '?'.
+        String expectedValue = ("AQ??WARN forged??" + "c".repeat(200)).substring(0, 64) + "...";
         LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
                 TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING.format(expectedValue));
         assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN, "\n").isEmpty(),
