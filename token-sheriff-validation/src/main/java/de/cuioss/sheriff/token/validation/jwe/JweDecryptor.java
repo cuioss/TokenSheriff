@@ -22,6 +22,7 @@ import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.JwtHeader;
 import de.cuioss.sheriff.token.validation.jwks.key.JwkKeyHandler;
 import de.cuioss.tools.logging.CuiLogger;
+import de.cuioss.tools.logging.LogRecord;
 
 import javax.crypto.AEADBadTagException;
 import javax.crypto.Cipher;
@@ -53,21 +54,30 @@ import java.util.zip.Inflater;
  *   <li>Content Encryption: A128GCM, A256GCM, A128CBC-HS256, A256CBC-HS512</li>
  * </ul>
  * <p>
- * <strong>Uniform content-authentication failure.</strong> Every failure to authenticate the
- * encrypted content surfaces identically: the same
+ * <strong>Uniform content-authentication failure.</strong> For a given {@code enc}, every
+ * failure to authenticate the encrypted content surfaces identically: the same
  * {@link SecurityEventCounter.EventType#JWE_DECRYPTION_FAILED} event, the same
  * {@link TokenValidationException} type and the same log detail. For RSA-OAEP and
  * RSA-OAEP-256, a failed CEK unwrap or an unwrapped CEK of the wrong length does not
  * propagate; a random CEK of the length {@code enc} requires is used instead
  * (RFC 7516 Section 11.5), so the failure surfaces at content authentication and cannot be
- * told apart from an authentication-tag mismatch. An A*CBC-HS* tag mismatch is reported as
- * {@link AEADBadTagException}, the same exception type AES-GCM raises.
+ * told apart from an authentication-tag mismatch under the same {@code enc}. An A*CBC-HS* tag
+ * mismatch is reported as {@link AEADBadTagException}, the same exception type AES-GCM raises;
+ * the log detail differs between the GCM and CBC-HS families, so it is identical only within
+ * one {@code enc}.
  * <p>
  * The ECDH-ES ephemeral public key is taken from the {@code epk} header parameter, which is
  * bound to a {@link JwkKey} when the header is decoded (RFC 7518 Section 4.6.1.1). A non-empty
  * JWE Encrypted Key is rejected for ECDH-ES (RFC 7516 Section 5.2 step 10). Every ECDH-ES
- * rejection, like every other failure raised during decryption, is logged as
- * {@code JWE_DECRYPTION_FAILED} and counted exactly once.
+ * rejection, like every other failure raised during decryption (including an unsupported or
+ * disabled {@code zip} compression), is logged as {@code JWE_DECRYPTION_FAILED} and counted
+ * exactly once. Header text that reaches a log line or an exception message (the {@code kid},
+ * the {@code zip} value, the {@code epk} {@code crv}) is sanitized and length-bounded first.
+ * <p>
+ * Logging and counting follow the caller's decode mode:
+ * {@link #decrypt(String[], JwtHeader, JweDecryptionConfig, SecurityEventCounter, boolean, boolean)}
+ * suppresses the WARN, the counter increment, or both, while still throwing the same typed
+ * exception.
  * <p>
  * This class is thread-safe and holds no per-request state; its only field is a thread-safe
  * {@link SecureRandom}.
@@ -80,7 +90,10 @@ public class JweDecryptor {
 
     private static final CuiLogger LOGGER = new CuiLogger(JweDecryptor.class);
     private static final int MAX_DECOMPRESSED_SIZE = 256 * 1024; // 256KB limit for compression bomb protection
-    /** Upper bound for the length of an untrusted {@code kid} rendered into logs and messages. */
+    /**
+     * Upper bound for the length of untrusted header text (a {@code kid}, a {@code zip} value, a
+     * key-parser message carrying an {@code epk} {@code crv}) rendered into logs and messages.
+     */
     static final int MAX_LOGGED_KID_LENGTH = 64;
 
     /**
@@ -97,7 +110,8 @@ public class JweDecryptor {
     private final SecureRandom secureRandom = new SecureRandom();
 
     /**
-     * Decrypts a JWE token and returns the inner plaintext (typically a JWS string).
+     * Decrypts a JWE token and returns the inner plaintext (typically a JWS string). Every
+     * rejection is logged as a WARN and counted.
      *
      * @param jweParts the 5 Base64URL-encoded JWE parts
      * @param jweHeader the decoded JWE header
@@ -108,20 +122,45 @@ public class JweDecryptor {
      */
     public String decrypt(String[] jweParts, JwtHeader jweHeader,
             JweDecryptionConfig config, SecurityEventCounter counter) {
+        return decrypt(jweParts, jweHeader, config, counter, true, true);
+    }
+
+    /**
+     * Decrypts a JWE token, with control over whether rejections are logged and counted.
+     * <p>
+     * Every rejection throws the same typed {@link TokenValidationException} regardless of the
+     * flags; the flags only decide whether the rejection is additionally written as a WARN log
+     * and whether it increments the {@link SecurityEventCounter}. This lets a caller that decodes
+     * tokens whose failure is expected (for example an opaque refresh token) keep the decryption
+     * as silent as its own decode mode.
+     *
+     * @param jweParts the 5 Base64URL-encoded JWE parts
+     * @param jweHeader the decoded JWE header
+     * @param config the decryption configuration
+     * @param counter the security event counter
+     * @param logWarnings whether a rejection is logged as a WARN
+     * @param trackSecurityEvents whether a rejection increments the security event counter
+     * @return the decrypted plaintext string
+     * @throws TokenValidationException if decryption fails
+     */
+    public String decrypt(String[] jweParts, JwtHeader jweHeader,
+            JweDecryptionConfig config, SecurityEventCounter counter,
+            boolean logWarnings, boolean trackSecurityEvents) {
+        var reporter = new RejectionReporter(counter, logWarnings, trackSecurityEvents);
         String alg = jweHeader.alg();
         String enc = jweHeader.enc();
 
         // Validate algorithms
         if (!config.getAlgorithmPreferences().isKeyManagementSupported(alg)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.JWE_UNSUPPORTED_ALGORITHM, alg, enc);
-            counter.increment(SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM);
+            reporter.report(JWTValidationLogMessages.WARN.JWE_UNSUPPORTED_ALGORITHM,
+                    SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM, alg, enc);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM,
                     "Unsupported JWE key management algorithm: %s".formatted(alg));
         }
         if (!config.getAlgorithmPreferences().isContentEncryptionSupported(enc)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.JWE_UNSUPPORTED_ALGORITHM, alg, enc);
-            counter.increment(SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM);
+            reporter.report(JWTValidationLogMessages.WARN.JWE_UNSUPPORTED_ALGORITHM,
+                    SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM, alg, enc);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM,
                     "Unsupported JWE content encryption algorithm: %s".formatted(enc));
@@ -133,31 +172,19 @@ public class JweDecryptor {
                 .orElseThrow(() -> {
                     // The kid comes from the unauthenticated header: sanitize before logging (CWE-117)
                     String safeKid = sanitizeKid(kid);
-                    LOGGER.warn(JWTValidationLogMessages.WARN.JWE_DECRYPTION_KEY_NOT_FOUND, safeKid);
-                    counter.increment(SecurityEventCounter.EventType.JWE_DECRYPTION_KEY_NOT_FOUND);
+                    reporter.report(JWTValidationLogMessages.WARN.JWE_DECRYPTION_KEY_NOT_FOUND,
+                            SecurityEventCounter.EventType.JWE_DECRYPTION_KEY_NOT_FOUND, safeKid);
                     return new TokenValidationException(
                             SecurityEventCounter.EventType.JWE_DECRYPTION_KEY_NOT_FOUND,
                             "No decryption key found for kid: %s".formatted(safeKid));
                 });
 
-        // Validate compression before crypto operations
         var zipOptional = jweHeader.getZip();
-        if (zipOptional.isPresent()) {
-            String zipAlg = zipOptional.get();
-            if (!"DEF".equals(zipAlg)) {
-                LOGGER.warn(JWTValidationLogMessages.WARN.JWE_COMPRESSION_NOT_SUPPORTED, zipAlg);
-                throw new TokenValidationException(
-                        SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                        "Unsupported compression algorithm: %s".formatted(zipAlg));
-            }
-            if (!config.isCompressionEnabled()) {
-                throw new TokenValidationException(
-                        SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                        "JWE compression is disabled");
-            }
-        }
-
         try {
+            // Validate compression before crypto operations. The rejections are raised inside the
+            // try so they share the single JWE_DECRYPTION_FAILED log/count path below.
+            validateCompression(zipOptional.orElse(null), config);
+
             // Decode JWE parts
             byte[] encryptedKey = Base64.getUrlDecoder().decode(jweParts[1]);
             byte[] iv = Base64.getUrlDecoder().decode(jweParts[2]);
@@ -185,19 +212,64 @@ public class JweDecryptor {
                 Arrays.fill(cek, (byte) 0);
             }
         } catch (TokenValidationException e) {
-            // Structural rejections raised inside decryption (ECDH-ES epk / key checks, a non-empty
-            // ECDH-ES Encrypted Key, key / IV length, decompression) are logged and counted here,
-            // exactly once, and rethrown unchanged.
-            LOGGER.warn(JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, e.getMessage());
-            counter.increment(e.getEventType());
+            // Structural rejections raised inside decryption (compression, ECDH-ES epk / key checks,
+            // a non-empty ECDH-ES Encrypted Key, key / IV length, decompression) are logged and
+            // counted here, exactly once, and rethrown unchanged. Every message that embeds header
+            // text is sanitized where it is built.
+            reporter.report(JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, e.getEventType(), e.getMessage());
             throw e;
         } catch (GeneralSecurityException | IllegalArgumentException e) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, e.getMessage());
-            counter.increment(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED);
+            reporter.report(JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED,
+                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, e.getMessage());
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
                     "JWE decryption failed",
                     e);
+        }
+    }
+
+    /**
+     * Rejects a {@code zip} header value this decryptor will not honour: anything other than
+     * {@code DEF}, or {@code DEF} while compression is disabled. The attacker-controlled value is
+     * sanitized before it enters the message (CWE-117).
+     *
+     * @param zipAlg the {@code zip} header value, or {@code null} when absent
+     * @param config the decryption configuration
+     */
+    private static void validateCompression(String zipAlg, JweDecryptionConfig config) {
+        if (zipAlg == null) {
+            return;
+        }
+        if (!"DEF".equals(zipAlg)) {
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                    "Unsupported compression algorithm: %s".formatted(sanitizeHeaderValue(zipAlg)));
+        }
+        if (!config.isCompressionEnabled()) {
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                    "JWE compression is disabled");
+        }
+    }
+
+    /**
+     * Writes a rejection to the WARN log and to the security event counter, each only when the
+     * caller's decode mode asks for it.
+     *
+     * @param counter             the security event counter
+     * @param logWarnings         whether the rejection is logged
+     * @param trackSecurityEvents whether the rejection is counted
+     */
+    private record RejectionReporter(SecurityEventCounter counter, boolean logWarnings,
+            boolean trackSecurityEvents) {
+
+        void report(LogRecord logRecord, SecurityEventCounter.EventType eventType, Object... logArgs) {
+            if (logWarnings) {
+                LOGGER.warn(logRecord, logArgs);
+            }
+            if (trackSecurityEvents) {
+                counter.increment(eventType);
+            }
         }
     }
 
@@ -221,18 +293,31 @@ public class JweDecryptor {
 
     /**
      * Renders an unauthenticated JWE header {@code kid} safe for logging and exception messages
-     * (CWE-117): control characters are replaced by {@code '?'} and the value is truncated to
-     * {@value #MAX_LOGGED_KID_LENGTH} characters. A {@code null} kid renders as {@code <none>}.
+     * (CWE-117), with the rules of {@link #sanitizeHeaderValue(String)}.
      *
      * @param kid the raw kid from the JWE header, may be {@code null}
      * @return the sanitized kid
      */
     static String sanitizeKid(String kid) {
-        if (kid == null) {
+        return sanitizeHeaderValue(kid);
+    }
+
+    /**
+     * Renders unauthenticated JWE header text (the {@code kid}, the {@code zip} value, or a key
+     * parser message that embeds the {@code epk} {@code crv}) safe for logging and exception
+     * messages (CWE-117): control characters and the Unicode line and paragraph separators
+     * (U+2028, U+2029) are replaced by {@code '?'} and the value is truncated to
+     * {@value #MAX_LOGGED_KID_LENGTH} characters. A {@code null} value renders as {@code <none>}.
+     *
+     * @param value the raw header-derived text, may be {@code null}
+     * @return the sanitized text
+     */
+    static String sanitizeHeaderValue(String value) {
+        if (value == null) {
             return "<none>";
         }
-        boolean truncated = kid.length() > MAX_LOGGED_KID_LENGTH;
-        String bounded = truncated ? kid.substring(0, MAX_LOGGED_KID_LENGTH) : kid;
+        boolean truncated = value.length() > MAX_LOGGED_KID_LENGTH;
+        String bounded = truncated ? value.substring(0, MAX_LOGGED_KID_LENGTH) : value;
         StringBuilder sanitized = new StringBuilder(bounded.length() + 3);
         for (int i = 0; i < bounded.length(); i++) {
             char c = bounded.charAt(i);
@@ -553,6 +638,10 @@ public class JweDecryptor {
     /**
      * Parses an EC public key from the {@code epk} JWK by delegating to
      * {@link JwkKeyHandler#parseEcKey(JwkKey)}.
+     * <p>
+     * The key parser's message can embed the attacker-controlled {@code crv} (for an unsupported
+     * curve), so it is sanitized and length-bounded before it enters the exception message that
+     * {@link #decrypt} logs (CWE-117).
      *
      * @param epk the ephemeral public key JWK from the JWE header
      * @return the parsed EC public key
@@ -564,7 +653,7 @@ public class JweDecryptor {
         } catch (InvalidKeySpecException | ClassCastException e) {
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                    "Failed to parse ephemeral EC public key: %s".formatted(e.getMessage()), e);
+                    "Failed to parse ephemeral EC public key: %s".formatted(sanitizeHeaderValue(e.getMessage())), e);
         }
     }
 }

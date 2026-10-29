@@ -16,10 +16,15 @@
 package de.cuioss.sheriff.token.validation.pipeline;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
+import de.cuioss.sheriff.token.validation.jwe.JweDecryptor;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.test.JweTestTokenFactory;
+import de.cuioss.test.juli.LogAsserts;
+import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -34,6 +39,7 @@ import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@EnableTestLogger
 @DisplayName("NonValidatingJwtParser JWE Integration Tests")
 class NonValidatingJwtParserJweTest {
 
@@ -189,6 +195,67 @@ class NonValidatingJwtParserJweTest {
                     () -> parser.decode(token));
             assertEquals(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, ex.getEventType());
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
+        }
+    }
+
+    @Nested
+    @DisplayName("Decode Mode Honoured by JWE Decryption")
+    class DecodeModeHandling {
+
+        private NonValidatingJwtParser parser;
+        private String undecryptableJwe;
+
+        @BeforeEach
+        void setUpParser() {
+            parser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .jweDecryptionConfig(JweDecryptionConfig.builder()
+                            .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                            .build())
+                    .build();
+            undecryptableJwe = JweTestTokenFactory.createJweWithTamperedAuthTag(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                    rsaEncryptionKeyPair.getPublic(),
+                    ISSUER);
+        }
+
+        @Test
+        @DisplayName("An undecryptable JWE decoded as an opaque token is neither logged nor counted")
+        void opaqueDecodeShouldNotLogOrCount() {
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> parser.decodeOpaqueToken(undecryptableJwe));
+
+            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
+            assertEquals(0, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
+                    "An opaque decode must not count the decryption failure");
+            LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, JweDecryptor.class);
+            LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, NonValidatingJwtParser.class);
+        }
+
+        @Test
+        @DisplayName("An undecryptable JWE decoded quietly is counted but not logged")
+        void quietDecodeShouldCountButNotLog() {
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> parser.decodeQuietly(undecryptableJwe));
+
+            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
+                    "A quiet decode still counts the decryption failure exactly once");
+            LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, JweDecryptor.class);
+        }
+
+        @Test
+        @DisplayName("An undecryptable JWE on the normal decode path is logged and counted once")
+        void normalDecodeShouldLogAndCountOnce() {
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> parser.decode(undecryptableJwe));
+
+            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
+                    "The normal decode path counts the decryption failure exactly once");
+            assertNotNull(ex.getCause(), "The decryption failure should carry its cause");
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(ex.getCause().getMessage()));
         }
     }
 

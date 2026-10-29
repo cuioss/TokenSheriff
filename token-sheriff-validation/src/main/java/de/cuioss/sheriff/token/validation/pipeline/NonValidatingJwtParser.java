@@ -344,8 +344,10 @@ public class NonValidatingJwtParser {
                         "5-part token does not have 'enc' header field — not a valid JWE");
             }
 
-            // Decrypt to get inner JWS string
-            String innerJws = jweDecryptor.decrypt(parts, jweHeader, jweDecryptionConfig, securityEventCounter);
+            // Decrypt to get inner JWS string. The decryptor honours this decode mode, so an
+            // opaque decode stays free of logging and counting, and a quiet decode only counts.
+            String innerJws = jweDecryptor.decrypt(parts, jweHeader, jweDecryptionConfig, securityEventCounter,
+                    logWarnings, trackSecurityEvents);
 
             // Check inner JWS size
             if (innerJws.getBytes(StandardCharsets.UTF_8).length > config.getMaxTokenSize()) {

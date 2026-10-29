@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.validation.jwe;
 
 import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.JwkKey;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
@@ -386,6 +387,45 @@ class JweDecryptorTest {
             assertEquals("<none>", JweDecryptor.sanitizeKid(null));
         }
 
+        @ParameterizedTest
+        @CsvSource({"2028", "2029"})
+        @DisplayName("Should replace the Unicode line and paragraph separators in a kid")
+        void shouldReplaceUnicodeLineSeparators(String codePointHex) {
+            char separator = (char) Integer.parseInt(codePointHex, 16);
+            String forgedKid = "evil" + separator + "WARN forged log line";
+
+            String sanitized = JweDecryptor.sanitizeKid(forgedKid);
+
+            assertEquals("evil?WARN forged log line", sanitized);
+        }
+
+        @Test
+        @DisplayName("Should sanitize and bound an epk crv before it reaches the log (CWE-117)")
+        void shouldSanitizeEpkCrvBeforeLogging() {
+            String forgedCrv = "P-256\r\nWARN forged " + "c".repeat(JweDecryptor.MAX_LOGGED_KID_LENGTH * 2);
+            JwkKey epk = new JwkKey("EC", null, null, null, null, forgedCrv, "AQ", "AQ");
+            JwtHeader header = new JwtHeader("ECDH-ES", null, null, null, null,
+                    "A128GCM", null, epk, null, null);
+            String[] parts = {"header", "", "iv", "ciphertext", "authTag"};
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(JweTestTokenFactory.generateEcKeyPair("secp256r1").getPrivate())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter));
+
+            String message = ex.getMessage();
+            assertTrue(message.startsWith("Failed to parse ephemeral EC public key: "),
+                    "The rejection must come from the epk parse, but was: " + message);
+            assertFalse(containsControlCharacter(message), "The message must not carry control characters");
+            assertFalse(message.indexOf(' ') >= 0, "The message must not carry U+2028");
+            assertFalse(message.contains("c".repeat(JweDecryptor.MAX_LOGGED_KID_LENGTH)),
+                    "The crv text must be length-bounded, but was: " + message);
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(message));
+        }
+
         private static boolean containsControlCharacter(String text) {
             return text.chars().anyMatch(Character::isISOControl);
         }
@@ -696,6 +736,30 @@ class JweDecryptorTest {
             TokenValidationException ex = assertThrows(TokenValidationException.class,
                     () -> decryptor.decrypt(parts, header, config, counter));
             assertTrue(ex.getMessage().contains("Unsupported compression"));
+            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
+                    "An unsupported zip value must record exactly one JWE_DECRYPTION_FAILED event");
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(ex.getMessage()));
+        }
+
+        @Test
+        @DisplayName("Should sanitize an unsupported zip value before it reaches the log")
+        void shouldSanitizeUnsupportedZipValue() {
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
+                    .build();
+            JwtHeader header = new JwtHeader("RSA-OAEP", null, null, null, null,
+                    "A256GCM", "GZIP\r\nWARN forged", null, null, null);
+            String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter));
+
+            assertTrue(ex.getMessage().endsWith("GZIP??WARN forged"),
+                    "The zip value must be sanitized, but was: " + ex.getMessage());
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(ex.getMessage()));
         }
 
         @Test
@@ -714,6 +778,11 @@ class JweDecryptorTest {
             TokenValidationException ex = assertThrows(TokenValidationException.class,
                     () -> decryptor.decrypt(parts, header, config, counter));
             assertTrue(ex.getMessage().contains("compression is disabled"));
+            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
+                    "zip=DEF with compression disabled must record exactly one JWE_DECRYPTION_FAILED event");
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(ex.getMessage()));
         }
     }
 
