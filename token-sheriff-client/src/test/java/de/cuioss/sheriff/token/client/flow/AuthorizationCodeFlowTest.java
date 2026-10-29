@@ -351,6 +351,53 @@ class AuthorizationCodeFlowTest {
     }
 
     @Test
+    @DisplayName("exchange() should refuse a replayed callback on a used flow context without a second token request (C-7, TC-5)")
+    void shouldRefuseReplayedCallback(URIBuilder uriBuilder, MockWebServer server) {
+        var config = config();
+        var context = FlowContext.create(REDIRECT_URI);
+        idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
+                idHolder.getRawToken(), 300));
+        var metadata = metadataWithTokenEndpoint(uriBuilder);
+        var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
+        var flow = flow(config);
+        var clientAuth = auth(config);
+
+        assertNotNull(flow.exchange(metadata, context, callback, clientAuth).accessToken(),
+                "the first exchange succeeds");
+        var thrown = assertThrows(ClientProtocolException.class,
+                () -> flow.exchange(metadata, context, callback, clientAuth));
+
+        assertAll("replay refused before the token endpoint",
+                () -> assertTrue(thrown.getMessage().contains("already been used"),
+                        "the replay is refused as a reuse of the flow context"),
+                () -> assertEquals(1, server.getRequestCount(),
+                        "the replayed callback never reaches the token endpoint"));
+    }
+
+    @Test
+    @DisplayName("exchange() should refuse an error callback with a forged state as a state mismatch without a token request (C-6)")
+    void shouldRefuseForgedErrorCallback(URIBuilder uriBuilder, MockWebServer server) {
+        var config = config();
+        var context = FlowContext.create(REDIRECT_URI);
+        var metadata = metadataWithTokenEndpoint(uriBuilder);
+        var callback = new CallbackParameters(null, Generators.letterStrings(20, 40).next(),
+                "access_denied", "forged by an attacker", null);
+        var flow = flow(config);
+        var clientAuth = auth(config);
+
+        var thrown = assertThrows(ClientProtocolException.class,
+                () -> flow.exchange(metadata, context, callback, clientAuth));
+
+        assertAll("forged error callback refused as a state mismatch",
+                () -> assertEquals("authorization callback 'state' does not match the flow context",
+                        thrown.getMessage(), "the forged state is refused before the error is looked at"),
+                () -> assertFalse(thrown.getMessage().contains("authorization server returned"),
+                        "the attacker-chosen error is not surfaced as an authorization-server error"),
+                () -> assertEquals(0, server.getRequestCount(), "no token request is made"));
+    }
+
+    @Test
     @DisplayName("exchange() should reject metadata that advertises no token endpoint")
     void shouldRejectMissingTokenEndpoint(URIBuilder uriBuilder) {
         var config = config();
