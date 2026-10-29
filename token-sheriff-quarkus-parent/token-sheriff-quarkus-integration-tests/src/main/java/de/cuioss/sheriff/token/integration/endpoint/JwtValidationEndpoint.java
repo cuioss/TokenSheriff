@@ -139,6 +139,32 @@ public class JwtValidationEndpoint {
     }
 
     /**
+     * Validates a JWT access token from the request body without catching
+     * {@link TokenValidationException}.
+     * <p>
+     * A failed validation propagates to the JAX-RS exception-mapper chain, so the integration tests can
+     * verify that the extension-registered {@code ProblemDetailExceptionMapper} renders it as
+     * {@code application/problem+json}.
+     * </p>
+     *
+     * @param tokenRequest Request containing the access token
+     * @return Validation result for a valid token
+     */
+    @POST
+    @Path("/validate-unhandled")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response validateTokenUnhandled(TokenRequest tokenRequest) {
+        if (tokenRequest == null || tokenRequest.isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new ValidationResponse(false, "Missing or empty access token in request body"))
+                    .build();
+        }
+
+        AccessTokenContent token = tokenValidator.createAccessToken(AccessTokenRequest.of(tokenRequest.token().trim()));
+        return Response.ok(createTokenResponse(token, "Access token is valid")).build();
+    }
+
+    /**
      * Validates a JWT ID token.
      */
     @POST
