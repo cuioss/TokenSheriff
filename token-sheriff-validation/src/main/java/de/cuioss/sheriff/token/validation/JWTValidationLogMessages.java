@@ -432,12 +432,6 @@ public final class JWTValidationLogMessages {
                 .template("No decryption key found for key ID: %s")
                 .build();
 
-        public static final LogRecord JWE_COMPRESSION_NOT_SUPPORTED = LogRecordModel.builder()
-                .prefix(PREFIX)
-                .identifier(156)
-                .template("Unsupported JWE compression algorithm: %s")
-                .build();
-
         public static final LogRecord JWE_NESTED_NOT_ALLOWED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(157)

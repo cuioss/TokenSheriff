@@ -20,6 +20,7 @@ import de.cuioss.sheriff.token.commons.transport.TransportLogMessages;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -241,6 +242,31 @@ class JwkKeyHandlerTest {
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "abc==");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                 TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING.resolveIdentifierString());
+    }
+
+    @Test
+    void shouldSanitizeAndBoundAMalformedCoordinateBeforeLoggingIt() {
+        // The JWK sink is reachable from attacker-controlled input (the DPoP embedded jwk), so the
+        // logged value must not carry line breaks and must be length-bounded (CWE-117).
+        // The forged value carries CR, LF and both Unicode separators (U+2028, U+2029), written as escapes.
+        String forgedX = "AQ\r\nWARN forged  " + "c".repeat(200);
+        JwkKey jwk = createEcJwk(forgedX, "AQ");
+
+        InvalidKeySpecException exception = assertThrows(
+                InvalidKeySpecException.class,
+                () -> JwkKeyHandler.parseEcKey(jwk)
+        );
+        assertTrue(exception.getMessage().contains("Invalid Base64 URL encoded value for 'x'"), exception.getMessage());
+
+        // Each of CR, LF, U+2028 and U+2029 renders as '?'.
+        String expectedValue = ("AQ??WARN forged??" + "c".repeat(200)).substring(0, 64) + "...";
+        LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING.format(expectedValue));
+        assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN, "\n").isEmpty(),
+                "The logged value must not carry a line break");
+        assertTrue(TestLoggerFactory.getTestHandler()
+                        .resolveLogMessagesContaining(TestLogLevel.WARN, "c".repeat(65)).isEmpty(),
+                "The logged value must be length-bounded");
     }
 
     @Test

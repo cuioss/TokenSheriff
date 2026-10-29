@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.validation.json;
 
 import com.dslplatform.json.CompiledJson;
+import de.cuioss.sheriff.token.commons.transport.JwkKey;
 
 import java.util.Optional;
 
@@ -37,6 +38,11 @@ import java.util.Optional;
  * (content encryption algorithm) field. When {@code enc} is present and non-blank,
  * the header belongs to a JWE token (RFC 7516).
  * <p>
+ * The {@code epk} (ephemeral public key) header parameter is a JSON Web Key object as
+ * defined by RFC 7518 Section 4.6.1.1 and is bound directly to a {@link JwkKey} during
+ * decoding. A string-encoded {@code epk} value does not match that structure and is
+ * rejected when the header is decoded.
+ * <p>
  * For more details on JWT header structure, see:
  * <ul>
  *   <li><a href="https://datatracker.ietf.org/doc/html/rfc7515#section-4">RFC 7515 - 4. JWS Header</a></li>
@@ -56,7 +62,8 @@ import java.util.Optional;
  * @param zip The "zip" (compression algorithm) Header Parameter (JWE only, RFC 7516).
  *            If present, the plaintext was compressed before encryption (e.g., "DEF" for DEFLATE).
  * @param epk The "epk" (ephemeral public key) Header Parameter (JWE only, RFC 7518 Section 4.6.1.1).
- *            Used with ECDH-ES key agreement. Stored as String for DSL-JSON compatibility.
+ *            Used with ECDH-ES key agreement. A JWK JSON object bound to {@link JwkKey};
+ *            {@code null} when the header carries no {@code epk}.
  * @param apu The "apu" (Agreement PartyUInfo) Header Parameter (JWE only, RFC 7518 Section 4.6.1.2).
  *            Base64URL-encoded value for key derivation.
  * @param apv The "apv" (Agreement PartyVInfo) Header Parameter (JWE only, RFC 7518 Section 4.6.1.3).
@@ -74,7 +81,7 @@ String jwk,
 String cty,
 String enc,
 String zip,
-String epk,
+JwkKey epk,
 String apu,
 String apv
 ) {
@@ -136,10 +143,11 @@ String apv
     /**
      * Gets the ephemeral public key parameter as Optional (JWE ECDH-ES only).
      *
-     * @return Optional containing the ephemeral public key JSON, empty if null or blank
+     * @return Optional containing the ephemeral public key as a JWK, empty if the header
+     *         carries no {@code epk}
      */
-    public Optional<String> getEpk() {
-        return nonBlank(epk);
+    public Optional<JwkKey> getEpk() {
+        return Optional.ofNullable(epk);
     }
 
     /**
