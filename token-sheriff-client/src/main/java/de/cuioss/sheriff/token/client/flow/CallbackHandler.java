@@ -31,6 +31,9 @@ import java.util.Objects;
  * The handler fails closed on every adversarial condition before the code is ever used. The checks
  * run in this order:
  * <ol>
+ *   <li>a {@link FlowContext} that has already been used by an earlier {@code handle} call is
+ *       rejected (single use, C-7): a context is used up by its first call, whatever that call's
+ *       outcome, so a replayed callback can never be redeemed twice;</li>
  *   <li>a missing or non-matching {@code state} is rejected (CSRF defence), compared in constant
  *       time; this applies to error callbacks too, so a forged error callback is refused as a state
  *       mismatch;</li>
@@ -53,13 +56,22 @@ public class CallbackHandler {
      * @param context    the flow context that issued the request; must not be {@code null}
      * @param parameters the parsed callback parameters; must not be {@code null}
      * @return the validated authorization code
-     * @throws ClientProtocolException checked in this order: if the {@code state} is missing or does
-     *                               not match (also for an error callback), if the callback signals an
-     *                               error, or if the authorization code is absent
+     * @throws ClientProtocolException checked in this order: if the context has already been used by
+     *                               an earlier call, if the {@code state} is missing or does not match
+     *                               (also for an error callback), if the callback signals an error, or
+     *                               if the authorization code is absent
      */
     public String handle(FlowContext context, CallbackParameters parameters) {
         Objects.requireNonNull(context, "context must not be null");
         Objects.requireNonNull(parameters, "parameters must not be null");
+
+        // Single use: the claim is one compare-and-set, so exactly one call per context gets past
+        // this point, and the context is used up whatever the outcome of the checks below.
+        if (!context.markConsumed()) {
+            LOGGER.debug("Rejecting authorization callback: flow context already used");
+            throw new ClientProtocolException(
+                    "authorization callback rejected: the flow context has already been used");
+        }
 
         // The state is checked before the error branch: an error callback without the CSRF binding
         // is refused as a mismatch instead of being surfaced as an authorization-server error.

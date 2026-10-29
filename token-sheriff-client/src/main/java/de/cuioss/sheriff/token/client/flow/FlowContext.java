@@ -21,6 +21,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The per-flow secret state that binds an interactive {@code authorization_code} request to its
@@ -36,16 +37,15 @@ import java.util.Optional;
  *   <li>the exact {@code redirect_uri} the request was issued for;</li>
  *   <li>an optional {@code acr_values} request for RFC 9470 step-up.</li>
  * </ul>
- * The context is immutable; {@code state}, {@code nonce}, and the PKCE verifier are secrets and are
- * never logged.
+ * The secret fields — {@code state}, {@code nonce}, the PKCE verifier — and the request parameters
+ * are immutable; the secrets are never logged.
  * <p>
- * <strong>One-time-use discard contract (L7):</strong> a context is single-use. The relying party
- * MUST bind exactly one context to the request it was created for, and MUST discard it — remove it
- * from the session store — as soon as the callback has been processed (whether the exchange succeeded
- * or {@link CallbackHandler} rejected it). Because the type carries no consumed flag, re-presenting a
- * retained context against a second callback would re-run the {@code state}/{@code nonce} checks
- * against the same secrets and defeat the anti-CSRF/anti-replay guarantees; the class stays immutable
- * and the one-time-use invariant is enforced by the caller's discard, not by internal mutation.
+ * <strong>One-time-use discard contract (L7):</strong> a context is single-use, and
+ * {@link CallbackHandler} enforces it: the first {@link CallbackHandler#handle} call uses the context
+ * up, whatever the outcome — a returned code, a {@code state} mismatch, or an error callback — and every
+ * later call with the same context is refused. The relying party MUST still bind exactly one context to
+ * the request it was created for, and MUST discard it — remove it from the session store — as soon as
+ * the callback has been processed, so a used-up context is not kept around.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -62,6 +62,7 @@ public final class FlowContext {
     private final PkceChallenge pkceChallenge;
     private final @Nullable String acrValues;
     private final @Nullable Integer maxAge;
+    private final AtomicBoolean consumed = new AtomicBoolean(false);
 
     private FlowContext(String state, String nonce, String redirectUri, PkceChallenge pkceChallenge,
             @Nullable String acrValues, @Nullable Integer maxAge) {
@@ -152,6 +153,16 @@ public final class FlowContext {
      */
     public Optional<Integer> maxAge() {
         return Optional.ofNullable(maxAge);
+    }
+
+    /**
+     * Claims this context for its single use. The claim is one atomic compare-and-set, so when several
+     * callers race on one context exactly one of them wins. There is no way to release the claim.
+     *
+     * @return {@code true} for the first caller only; {@code false} once the context has been used
+     */
+    boolean markConsumed() {
+        return consumed.compareAndSet(false, true);
     }
 
     private static String randomToken() {
