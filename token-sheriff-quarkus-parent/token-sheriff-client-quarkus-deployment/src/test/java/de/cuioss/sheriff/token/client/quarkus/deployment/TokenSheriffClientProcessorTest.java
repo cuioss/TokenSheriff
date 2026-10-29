@@ -58,7 +58,7 @@ class TokenSheriffClientProcessorTest {
 
     @Test
     @DisplayName("Should register the ClientExceptionMapper as a JAX-RS provider")
-    void shouldRegisterClientExceptionMapperProvider() throws NoSuchMethodException {
+    void shouldRegisterClientExceptionMapperProvider() throws Exception {
         ResteasyJaxrsProviderBuildItem providerItem = processor.registerClientExceptionMapper();
 
         assertNotNull(providerItem, "the JAX-RS provider build item must be produced");
