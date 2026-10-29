@@ -15,10 +15,13 @@
  */
 package de.cuioss.sheriff.token.quarkus.deployment;
 
+import de.cuioss.sheriff.token.quarkus.error.ProblemDetailExceptionMapper;
 import de.cuioss.sheriff.token.quarkus.health.JwksEndpointHealthCheck;
 import de.cuioss.sheriff.token.quarkus.health.TokenValidatorHealthCheck;
+import de.cuioss.sheriff.token.quarkus.logging.CustomAccessLogFilter;
 import de.cuioss.sheriff.token.quarkus.mapper.DiscoverableClaimMapper;
 import de.cuioss.sheriff.token.quarkus.producer.JsonWebTokenAdapter;
+import de.cuioss.sheriff.token.quarkus.producer.TokenValidatorStartupInitializer;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
@@ -28,6 +31,7 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
 import io.quarkus.devui.spi.page.CardPageBuildItem;
+import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -137,6 +141,32 @@ class TokenSheriffProcessorBuildStepTest {
                         "the liveness check must be registered, was: " + beanItem.getBeanClasses()),
                 () -> assertFalse(beanItem.isRemovable(),
                         "nothing injects a health check, so a removable one would be dropped"));
+    }
+
+    @Test
+    @DisplayName("Should register the startup initializer as an unremovable bean")
+    void shouldRegisterStartupInitializerAsBean() {
+        AdditionalBeanBuildItem beanItem = processor.additionalBeans();
+
+        // Nothing injects the initializer: without registration it is never discovered, and as a
+        // removable bean it would be dropped, so the validator would silently stay lazy.
+        assertAll("startup initializer registration",
+                () -> assertTrue(beanItem.getBeanClasses().contains(TokenValidatorStartupInitializer.class.getName()),
+                        "the startup initializer must be registered, was: " + beanItem.getBeanClasses()),
+                () -> assertFalse(beanItem.isRemovable(),
+                        "nothing injects the startup initializer, so a removable one would be dropped"));
+    }
+
+    @Test
+    @DisplayName("Should register the access log filter and the problem detail mapper as JAX-RS providers")
+    void shouldRegisterJaxrsProviders() {
+        Set<String> providers = Set.of(
+                processor.registerCustomAccessLogFilter().getName(),
+                processor.registerProblemDetailExceptionMapper().getName());
+
+        assertEquals(Set.of(CustomAccessLogFilter.class.getName(), ProblemDetailExceptionMapper.class.getName()),
+                providers,
+                "both runtime-jar providers must be registered explicitly, because the runtime jar is not indexed");
     }
 
     @Test
