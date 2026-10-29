@@ -27,9 +27,10 @@ import org.jspecify.annotations.Nullable;
  * server's discovery document. Parameterized logging alone does not neutralize embedded {@code CR} /
  * {@code LF} on a plain-text appender — the substituted value is still written verbatim, so an
  * attacker who embeds {@code %0d%0a} can forge a new, seemingly legitimate log entry. This sanitizer
- * escapes (rather than drops) {@code CR}, {@code LF}, tab, the remaining ASCII control characters, and
- * the Unicode line separators U+0085 (NEL), U+2028 (LS) and U+2029 (PS) — which Unicode-aware log
- * viewers and appenders treat as line breaks — preserving the value's investigative content while
+ * escapes (rather than drops) {@code CR}, {@code LF}, tab, the remaining ASCII control characters, DEL,
+ * the C1 control characters U+0080 to U+009F (including U+0085 NEL), and the Unicode line separators
+ * U+2028 (LS) and U+2029 (PS) — which Unicode-aware log viewers and appenders treat as line breaks —
+ * preserving the value's investigative content while
  * making it impossible to inject a line break.
  * <p>
  * The value is also truncated to {@value #MAX_LENGTH} characters before escaping, so an attacker
@@ -48,8 +49,11 @@ public final class LogSanitizer {
     /** Appended when a value is truncated, so the elision is visible in the log. */
     private static final String TRUNCATION_MARKER = "...[truncated]";
 
-    /** U+0085 NEXT LINE (NEL). */
-    private static final char NEXT_LINE = 0x0085;
+    /** U+007F DELETE, the first character of the DEL plus C1 control range. */
+    private static final char DELETE = 0x007F;
+
+    /** U+009F APPLICATION PROGRAM COMMAND, the last C1 control character. */
+    private static final char LAST_C1_CONTROL = 0x009F;
 
     /** U+2028 LINE SEPARATOR (LS). */
     private static final char LINE_SEPARATOR = 0x2028;
@@ -62,9 +66,10 @@ public final class LogSanitizer {
     }
 
     /**
-     * Escapes {@code CR}, {@code LF}, every other ASCII control character, and the Unicode line
-     * separators U+0085 (NEL), U+2028 (LS) and U+2029 (PS) in {@code value} — the latter three, like
-     * the ASCII control characters, as a backslash-{@code u} four-digit hex escape — so it cannot
+     * Escapes {@code CR}, {@code LF}, every other ASCII control character, DEL, the C1 control
+     * characters U+0080 to U+009F (including U+0085 NEL), and the Unicode line separators U+2028 (LS)
+     * and U+2029 (PS) in {@code value} — all but {@code CR}, {@code LF} and tab as a
+     * backslash-{@code u} four-digit hex escape — so it cannot
      * forge a new log line when substituted into a log template, and truncates the value to
      * {@value #MAX_LENGTH} characters to bound log flooding.
      *
@@ -86,7 +91,7 @@ public final class LogSanitizer {
                 case '\n' -> sanitized.append("\\n");
                 case '\t' -> sanitized.append("\\t");
                 default -> {
-                    if (c < 0x20 || c == 0x7F || isUnicodeLineSeparator(c)) {
+                    if (isControlCharacter(c) || isUnicodeLineSeparator(c)) {
                         sanitized.append(String.format("\\u%04x", (int) c));
                     } else {
                         sanitized.append(c);
@@ -102,10 +107,19 @@ public final class LogSanitizer {
 
     /**
      * @param c the character to test
-     * @return whether {@code c} is one of the Unicode line separators U+0085 (NEL), U+2028 (LS) or
-     *         U+2029 (PS), which Unicode-aware log viewers and appenders render as a line break
+     * @return whether {@code c} is an ASCII control character (below U+0020), DEL (U+007F) or a C1
+     *         control character (U+0080 to U+009F, including U+0085 NEL)
+     */
+    private static boolean isControlCharacter(char c) {
+        return c < 0x20 || (c >= DELETE && c <= LAST_C1_CONTROL);
+    }
+
+    /**
+     * @param c the character to test
+     * @return whether {@code c} is one of the Unicode line separators U+2028 (LS) or U+2029 (PS), which
+     *         Unicode-aware log viewers and appenders render as a line break
      */
     private static boolean isUnicodeLineSeparator(char c) {
-        return c == NEXT_LINE || c == LINE_SEPARATOR || c == PARAGRAPH_SEPARATOR;
+        return c == LINE_SEPARATOR || c == PARAGRAPH_SEPARATOR;
     }
 }

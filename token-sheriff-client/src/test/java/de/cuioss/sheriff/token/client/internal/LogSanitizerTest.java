@@ -19,6 +19,8 @@ import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -109,6 +111,21 @@ class LogSanitizerTest {
                 () -> assertTrue(sanitized.contains(BACKSLASH + "u0085"), "NEL is escaped as a unicode sequence"),
                 () -> assertTrue(sanitized.contains(BACKSLASH + "u2028"), "LS is escaped as a unicode sequence"),
                 () -> assertTrue(sanitized.contains(BACKSLASH + "u2029"), "PS is escaped as a unicode sequence"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = {(char) 0x0080, (char) 0x009B, (char) 0x009D, (char) 0x009F})
+    @DisplayName("Should escape C1 control characters as unicode escapes")
+    void shouldEscapeC1ControlCharacters(char c1) {
+        String prefix = Generators.letterStrings(3, 10).next();
+        String value = prefix + c1 + "INFO forged log entry";
+
+        String sanitized = LogSanitizer.sanitize(value);
+
+        assertAll("C1 control character escaped, none surviving raw",
+                () -> assertFalse(sanitized.indexOf(c1) >= 0, "no raw C1 character survives"),
+                () -> assertEquals(prefix + BACKSLASH + String.format("u%04x", (int) c1) + "INFO forged log entry",
+                        sanitized, "the C1 character is rendered as a unicode escape sequence"));
     }
 
     @Test

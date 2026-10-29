@@ -136,6 +136,41 @@ class InboundErrorNormalizerTest {
     }
 
     @Test
+    @DisplayName("Should treat a separator-only field as absent although the separators are escaped")
+    void shouldTreatSeparatorOnlyFieldAsAbsent() {
+        String separatorsOnly = Character.toString(LS) + " " + Character.toString(PS);
+
+        String separatorOnlyDescription =
+                InboundErrorNormalizer.normalize("access_denied", separatorsOnly).getMessage();
+        String separatorOnlyCode = InboundErrorNormalizer.normalize(separatorsOnly, null).getMessage();
+
+        assertAll("separator-only fields carry no content",
+                () -> assertFalse(separatorOnlyDescription.contains("("),
+                        "a separator-only error_description adds no parenthetical clause"),
+                () -> assertTrue(separatorOnlyCode.contains("without an error code"),
+                        "a separator-only error code is reported as missing"),
+                () -> assertFalse(separatorOnlyCode.contains("unrecognized"),
+                        "a separator-only error code is not reported as unrecognized"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = {(char) 0x0080, (char) 0x009B, (char) 0x009D, (char) 0x009F})
+    @DisplayName("Should escape C1 control characters in both fields")
+    void shouldEscapeC1ControlCharacters(char c1) {
+        String expectedEscape = String.format("\\u%04x", (int) c1);
+        ClientProtocolException exception = InboundErrorNormalizer.normalize(
+                "access_denied" + c1 + "code", "denied" + c1 + "description");
+
+        String message = exception.getMessage();
+        assertAll("escaped C1 control character",
+                () -> assertFalse(message.indexOf(c1) >= 0, "no raw C1 character survives from either field"),
+                () -> assertTrue(message.contains("access_denied" + expectedEscape + "code"),
+                        "the C1 character in the error code is rendered as an escape"),
+                () -> assertTrue(message.contains("denied" + expectedEscape + "description"),
+                        "the C1 character in the error_description is rendered as an escape"));
+    }
+
+    @Test
     @DisplayName("Should truncate an over-long field to bound log flooding")
     void shouldTruncateOverlongField() {
         String overlong = "x".repeat(300);
