@@ -193,7 +193,7 @@ AES-CBC-HS authentication tag validation uses `MessageDigest.isEqual()` for cons
 
 For RSA-OAEP and RSA-OAEP-256, a failed CEK unwrap, or an unwrapped CEK whose length differs from the length the `enc` algorithm requires, does not end decryption. The CEK is replaced by a randomly generated CEK of the required length, as recommended by https://datatracker.ietf.org/doc/html/rfc7516#section-11.5[RFC 7516 Section 11.5], and decryption fails at content authentication instead.
 
-An unwrap failure is therefore indistinguishable from an authentication-tag failure: both raise the same `JWE_DECRYPTION_FAILED` security event, the same exception type, and the same log detail. An AES-CBC-HS tag mismatch is reported as `AEADBadTagException`, the same exception type AES-GCM raises, so the content encryption algorithm does not change how the failure surfaces either.
+For a given `enc` algorithm, an unwrap failure is therefore indistinguishable from an authentication-tag failure: both raise the same `JWE_DECRYPTION_FAILED` security event, the same exception type, and the same log detail. An AES-CBC-HS tag mismatch is reported as `AEADBadTagException`, the same exception type AES-GCM raises, so the content encryption algorithm does not change the exception type. The log detail is the exception message, which is fixed text for AES-CBC-HS and the JCE provider's own text for AES-GCM, so it can differ between content encryption algorithms.
 
 === Ephemeral Public Key Parsing
 

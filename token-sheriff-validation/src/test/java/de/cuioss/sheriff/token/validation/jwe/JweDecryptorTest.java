@@ -141,8 +141,9 @@ class JweDecryptorTest {
                     "RS256", alg, enc, ISSUER, null).split("\\.");
             badTagParts[4] = flipLastBit(badTagParts[4]);
 
+            JwtHeader badUnwrapHeader = parseHeader(badUnwrapParts[0]);
             TokenValidationException unwrapFailure = assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(badUnwrapParts, parseHeader(badUnwrapParts[0]), config, counter));
+                    () -> decryptor.decrypt(badUnwrapParts, badUnwrapHeader, config, counter));
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
                     "A bad unwrap should record exactly one JWE_DECRYPTION_FAILED event");
             assertNotNull(unwrapFailure.getCause(), "A bad unwrap should carry the authentication failure");
@@ -152,8 +153,9 @@ class JweDecryptorTest {
 
             TestLoggerFactory.getTestHandler().clearRecords();
 
+            JwtHeader badTagHeader = parseHeader(badTagParts[0]);
             TokenValidationException tagFailure = assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(badTagParts, parseHeader(badTagParts[0]), config, counter));
+                    () -> decryptor.decrypt(badTagParts, badTagHeader, config, counter));
             assertEquals(2, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
                     "A bad tag should record exactly one further JWE_DECRYPTION_FAILED event");
             LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN, expectedLog);
