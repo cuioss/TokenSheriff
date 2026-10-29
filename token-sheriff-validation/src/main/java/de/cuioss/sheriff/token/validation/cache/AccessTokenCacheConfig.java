@@ -45,7 +45,7 @@ import java.util.concurrent.ScheduledExecutorService;
  *     .build();
  *
  * // Create cache instance
- * AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter, 60);
+ * AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter);
  * </pre>
  *
  * @since 1.0

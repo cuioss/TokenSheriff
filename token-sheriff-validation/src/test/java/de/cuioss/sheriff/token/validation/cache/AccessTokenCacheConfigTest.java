@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.validation.cache;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
+import de.cuioss.sheriff.token.validation.domain.context.ValidationContext;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.metrics.TokenValidatorMonitorConfig;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
@@ -82,7 +83,7 @@ class AccessTokenCacheConfigTest {
                 .build();
 
         // When
-        AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter, 0);
+        AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter);
 
         // Then
         assertNotNull(cache);
@@ -102,7 +103,7 @@ class AccessTokenCacheConfigTest {
                 OffsetDateTime.now().plusHours(1));
 
         // When
-        AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter, 0);
+        AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter);
 
         // Then - cache is created but calls validation function directly (no caching)
         assertNotNull(cache);
@@ -116,7 +117,7 @@ class AccessTokenCacheConfigTest {
         AccessTokenContent result;
         if (cached.isEmpty()) {
             result = expectedContent;
-            cache.put("token", result, performanceMonitor);
+            cache.put("token", result, new ValidationContext(0, null), performanceMonitor);
         } else {
             result = cached.get();
         }
@@ -259,7 +260,7 @@ class AccessTokenCacheConfigTest {
                 .build();
 
         // When
-        AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter, 0);
+        AccessTokenCache cache = new AccessTokenCache(config, securityEventCounter);
 
         // Then
         assertNotNull(cache);
