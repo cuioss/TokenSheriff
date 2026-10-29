@@ -31,7 +31,6 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
 import io.quarkus.devui.spi.page.CardPageBuildItem;
-import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
