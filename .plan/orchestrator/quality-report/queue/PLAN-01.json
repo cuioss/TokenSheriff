@@ -2,10 +2,10 @@
   "id": "PLAN-01",
   "slug": "jwks-loader-lifecycle",
   "workstream": "WS-01",
-  "status": "running",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-01-jwks-loader-lifecycle",
+  "pr": "830",
+  "landing": "landings/PLAN-01.md",
   "seq": 1
 }

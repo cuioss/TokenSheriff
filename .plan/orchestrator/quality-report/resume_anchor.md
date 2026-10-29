@@ -1,1 +1,1 @@
-PLAN-01 + PLAN-02 running (operator-confirmed): await their PRs, then run /plan-orchestrator analyze slug=quality-report with each landing, then next. Ledger changes pending /plan-orchestrator land
+PLAN-01..04 shipped and reconciled; PLAN-05 running; PLAN-06 emitted, not yet launched: await operator launch confirmation, then record launched/running. Pending: 26 candidate-lesson inbox messages need a routing decision; Sonar checks on #832, #833, #834; effort missing on PLAN-01/02/04 landings.

@@ -2,10 +2,10 @@
   "id": "PLAN-03",
   "slug": "cache-hit-policy",
   "workstream": "WS-01",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "implement-plan-03-cache-hit-policy",
+  "pr": "833",
+  "landing": "landings/PLAN-03.md",
   "seq": 3
 }
