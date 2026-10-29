@@ -27,8 +27,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.security.KeyPair;
+import java.security.interfaces.ECPublicKey;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -131,6 +134,38 @@ class TokenValidatorJweTest {
             var accessTokenRequest = AccessTokenRequest.of(jweToken);
             assertThrows(TokenValidationException.class,
                     () -> validator.createAccessToken(accessTokenRequest));
+        }
+    }
+
+    @Nested
+    @DisplayName("Access Token via ECDH-ES JWE")
+    class EcdhEsViaJwe {
+
+        @ParameterizedTest
+        @ValueSource(strings = {"A256GCM", "A128CBC-HS256"})
+        @DisplayName("Should decrypt an ECDH-ES JWE and validate the inner access token")
+        void shouldDecryptEcdhEsAndValidateAccessToken(String enc) {
+            TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+            issuerConfig = tokenHolder.getIssuerConfig();
+            KeyPair recipientKeyPair = JweTestTokenFactory.generateEcKeyPair("secp256r1");
+
+            String jweToken = JweTestTokenFactory.encryptAsEcdhEsJwe(
+                    tokenHolder.getRawToken(),
+                    JweTestTokenFactory.generateEcKeyPair("secp256r1"),
+                    (ECPublicKey) recipientKeyPair.getPublic(),
+                    enc);
+
+            TokenValidator validator = TokenValidator.builder()
+                    .issuerConfig(issuerConfig)
+                    .jweDecryptionConfig(JweDecryptionConfig.builder()
+                            .defaultDecryptionKey(recipientKeyPair.getPrivate())
+                            .build())
+                    .build();
+
+            var result = validator.createAccessToken(AccessTokenRequest.of(jweToken));
+
+            assertNotNull(result);
+            assertFalse(result.getClaims().isEmpty(), "ECDH-ES JWE should yield the inner token's claims");
         }
     }
 

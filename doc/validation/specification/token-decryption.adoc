@@ -189,6 +189,16 @@ When `zip="DEF"` (DEFLATE compression), decompressed content is limited to 256 K
 
 AES-CBC-HS authentication tag validation uses `MessageDigest.isEqual()` for constant-time comparison, preventing timing side-channel attacks.
 
+=== Uniform CEK Unwrap Failure
+
+For RSA-OAEP and RSA-OAEP-256, a failed CEK unwrap, or an unwrapped CEK whose length differs from the length the `enc` algorithm requires, does not end decryption. The CEK is replaced by a randomly generated CEK of the required length, as recommended by https://datatracker.ietf.org/doc/html/rfc7516#section-11.5[RFC 7516 Section 11.5], and decryption fails at content authentication instead.
+
+An unwrap failure is therefore indistinguishable from an authentication-tag failure: both raise the same `JWE_DECRYPTION_FAILED` security event, the same exception type, and the same log detail. An AES-CBC-HS tag mismatch is reported as `AEADBadTagException`, the same exception type AES-GCM raises, so the content encryption algorithm does not change how the failure surfaces either.
+
+=== Ephemeral Public Key Parsing
+
+The ECDH-ES `epk` header parameter is parsed as a JWK JSON object (https://datatracker.ietf.org/doc/html/rfc7518#section-4.6.1.1[RFC 7518 Section 4.6.1.1]) while the JWE header is decoded. A string-encoded `epk` does not match that structure and is rejected.
+
 === Memory Clearing
 
 CEK and derived key material is cleared (`Arrays.fill(cek, (byte) 0)`) after use to minimize exposure window in memory.

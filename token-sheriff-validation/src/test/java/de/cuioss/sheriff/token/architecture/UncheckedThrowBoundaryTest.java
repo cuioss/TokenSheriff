@@ -211,9 +211,8 @@ class UncheckedThrowBoundaryTest {
             Map.entry("de.cuioss.sheriff.token.validation.jwe.JweDecryptor#decryptContent",
                     ALREADY_TRANSLATED + " — JweDecryptor.decrypt"),
             Map.entry("de.cuioss.sheriff.token.validation.jwe.JweDecryptor#getContentEncryptionKeyLength",
-                    ALREADY_TRANSLATED + " — JweDecryptor.decrypt, via deriveCekEcdhEs"),
-            Map.entry("de.cuioss.sheriff.token.validation.jwe.JweDecryptor#parseEcPublicKeyFromJwk",
-                    ALREADY_TRANSLATED + " — JweDecryptor.decrypt, via deriveCekEcdhEs"),
+                    ALREADY_TRANSLATED + " — JweDecryptor.decrypt, via deriveCekEcdhEs and the RSA-OAEP"
+                            + " random-CEK substitution in unwrapRsaCek"),
 
             // --- request path, but an argument-contract guard on a construction-validated value ---
             Map.entry("de.cuioss.sheriff.token.validation.domain.context.ValidationContext#<init>",

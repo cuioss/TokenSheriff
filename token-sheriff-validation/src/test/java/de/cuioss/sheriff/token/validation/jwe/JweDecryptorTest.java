@@ -18,10 +18,15 @@ package de.cuioss.sheriff.token.validation.jwe;
 import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
+import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.JwtHeader;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.test.JweTestTokenFactory;
+import de.cuioss.test.juli.LogAsserts;
+import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
+import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -36,6 +41,7 @@ import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@EnableTestLogger
 @DisplayName("JweDecryptor Tests")
 class JweDecryptorTest {
 
@@ -44,6 +50,13 @@ class JweDecryptorTest {
      * the class. {@code shouldFailWithWrongKey} generates its own, differing key.
      */
     private static final KeyPair RSA_ENCRYPTION_KEY_PAIR = JweTestTokenFactory.generateRsaKeyPair();
+
+    /**
+     * A second RSA key pair whose public key wraps a CEK the recipient key cannot unwrap.
+     */
+    private static final KeyPair FOREIGN_RSA_KEY_PAIR = JweTestTokenFactory.generateRsaKeyPair();
+
+    private static final String ISSUER = "https://test-issuer.example.com";
 
     private JweDecryptor decryptor;
     private SecurityEventCounter counter;
@@ -73,38 +86,92 @@ class JweDecryptorTest {
         })
         @DisplayName("Should decrypt JWE with RSA-OAEP variants")
         void shouldDecryptRsaOaep(String alg, String enc) {
-            // Create a JWE token
             String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
                     RSA_ENCRYPTION_KEY_PAIR.getPublic(),
-                    "RS256", alg, enc, "https://test-issuer.example.com", "test-kid");
+                    "RS256", alg, enc, ISSUER, "test-kid");
 
             String[] parts = jwe.split("\\.");
             assertEquals(5, parts.length);
 
-            // Decode header
-            String headerJson = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
-            assertTrue(headerJson.contains("\"enc\""));
-
-            // Build config
             JweDecryptionConfig config = JweDecryptionConfig.builder()
                     .decryptionKey("test-kid", RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
-            // Parse header
             JwtHeader header = parseHeader(parts[0]);
+            assertTrue(header.isJwe(), "Decoded header should carry enc");
 
-            // Decrypt
-            String innerJws = decryptor.decrypt(parts, header, config, counter, dslJson);
+            String innerJws = decryptor.decrypt(parts, header, config, counter);
 
-            // Verify result is a valid JWS (3 parts)
             assertNotNull(innerJws);
-            String[] jwsParts = innerJws.split("\\.");
-            assertEquals(3, jwsParts.length, "Decrypted content should be a 3-part JWS");
-
-            // Verify no security events were recorded
+            assertEquals(3, innerJws.split("\\.").length, "Decrypted content should be a 3-part JWS");
             assertEquals(0, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
+        }
+    }
+
+    @Nested
+    @DisplayName("Uniform Content-Authentication Failure Tests")
+    class UniformFailureTests {
+
+        @ParameterizedTest
+        @CsvSource({
+                "RSA-OAEP, A128GCM",
+                "RSA-OAEP, A256GCM",
+                "RSA-OAEP, A128CBC-HS256",
+                "RSA-OAEP, A256CBC-HS512",
+                "RSA-OAEP-256, A128GCM",
+                "RSA-OAEP-256, A256GCM",
+                "RSA-OAEP-256, A128CBC-HS256",
+                "RSA-OAEP-256, A256CBC-HS512"
+        })
+        @DisplayName("A bad CEK unwrap and a bad authentication tag should fail identically")
+        void badUnwrapAndBadTagShouldFailIdentically(String alg, String enc) {
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
+                    .build();
+
+            String[] badUnwrapParts = JweTestTokenFactory.createJweWrappedAccessToken(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                    FOREIGN_RSA_KEY_PAIR.getPublic(),
+                    "RS256", alg, enc, ISSUER, null).split("\\.");
+            String[] badTagParts = JweTestTokenFactory.createJweWrappedAccessToken(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                    RSA_ENCRYPTION_KEY_PAIR.getPublic(),
+                    "RS256", alg, enc, ISSUER, null).split("\\.");
+            badTagParts[4] = flipLastBit(badTagParts[4]);
+
+            TokenValidationException unwrapFailure = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(badUnwrapParts, parseHeader(badUnwrapParts[0]), config, counter));
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
+                    "A bad unwrap should record exactly one JWE_DECRYPTION_FAILED event");
+            assertNotNull(unwrapFailure.getCause(), "A bad unwrap should carry the authentication failure");
+            String detail = unwrapFailure.getCause().getMessage();
+            String expectedLog = JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(detail);
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN, expectedLog);
+
+            TestLoggerFactory.getTestHandler().clearRecords();
+
+            TokenValidationException tagFailure = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(badTagParts, parseHeader(badTagParts[0]), config, counter));
+            assertEquals(2, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
+                    "A bad tag should record exactly one further JWE_DECRYPTION_FAILED event");
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN, expectedLog);
+
+            assertAll("Uniform failure for " + alg + " / " + enc,
+                    () -> assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                            unwrapFailure.getEventType()),
+                    () -> assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                            tagFailure.getEventType()),
+                    () -> assertEquals(unwrapFailure.getMessage(), tagFailure.getMessage()),
+                    () -> assertEquals(unwrapFailure.getCause().getClass(), tagFailure.getCause().getClass()),
+                    () -> assertEquals(detail, tagFailure.getCause().getMessage()));
+        }
+
+        private static String flipLastBit(String base64UrlPart) {
+            byte[] bytes = Base64.getUrlDecoder().decode(base64UrlPart);
+            bytes[bytes.length - 1] ^= 0x01;
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         }
     }
 
@@ -119,14 +186,13 @@ class JweDecryptorTest {
                     .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
-            // Create a fake header with RSA1_5
             JwtHeader header = new JwtHeader("RSA1_5", null, null, null, null,
                     "A128GCM", null, null, null, null);
 
             String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+                    () -> decryptor.decrypt(parts, header, config, counter));
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM));
         }
 
@@ -143,7 +209,7 @@ class JweDecryptorTest {
             String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+                    () -> decryptor.decrypt(parts, header, config, counter));
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM));
         }
 
@@ -155,18 +221,17 @@ class JweDecryptorTest {
             String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
                     RSA_ENCRYPTION_KEY_PAIR.getPublic(),
-                    "RS256", "RSA-OAEP", "A256GCM", "https://test-issuer.example.com", null);
+                    "RS256", "RSA-OAEP", "A256GCM", ISSUER, null);
 
             String[] parts = jwe.split("\\.");
             JwtHeader header = parseHeader(parts[0]);
 
-            // Use wrong private key
             JweDecryptionConfig config = JweDecryptionConfig.builder()
                     .defaultDecryptionKey(wrongKeyPair.getPrivate())
                     .build();
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+                    () -> decryptor.decrypt(parts, header, config, counter));
         }
 
         @Test
@@ -175,7 +240,7 @@ class JweDecryptorTest {
             String jwe = JweTestTokenFactory.createJweWithTamperedAuthTag(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
                     RSA_ENCRYPTION_KEY_PAIR.getPublic(),
-                    "https://test-issuer.example.com");
+                    ISSUER);
 
             String[] parts = jwe.split("\\.");
             JwtHeader header = parseHeader(parts[0]);
@@ -185,7 +250,7 @@ class JweDecryptorTest {
                     .build();
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+                    () -> decryptor.decrypt(parts, header, config, counter));
         }
 
         @Test
@@ -194,7 +259,7 @@ class JweDecryptorTest {
             String jwe = JweTestTokenFactory.createJweWithTamperedCiphertext(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
                     RSA_ENCRYPTION_KEY_PAIR.getPublic(),
-                    "https://test-issuer.example.com");
+                    ISSUER);
 
             String[] parts = jwe.split("\\.");
             JwtHeader header = parseHeader(parts[0]);
@@ -204,7 +269,7 @@ class JweDecryptorTest {
                     .build();
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+                    () -> decryptor.decrypt(parts, header, config, counter));
         }
 
         @Test
@@ -213,7 +278,7 @@ class JweDecryptorTest {
             String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
                     RSA_ENCRYPTION_KEY_PAIR.getPublic(),
-                    "RS256", "RSA-OAEP", "A256GCM", "https://test-issuer.example.com", "unknown-kid");
+                    "RS256", "RSA-OAEP", "A256GCM", ISSUER, "unknown-kid");
 
             String[] parts = jwe.split("\\.");
             JwtHeader header = parseHeader(parts[0]);
@@ -224,7 +289,7 @@ class JweDecryptorTest {
                     .build();
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+                    () -> decryptor.decrypt(parts, header, config, counter));
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_KEY_NOT_FOUND));
         }
     }
@@ -239,7 +304,7 @@ class JweDecryptorTest {
             String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
                     RSA_ENCRYPTION_KEY_PAIR.getPublic(),
-                    "RS256", "RSA-OAEP", "A256GCM", "https://test-issuer.example.com", "my-kid");
+                    "RS256", "RSA-OAEP", "A256GCM", ISSUER, "my-kid");
 
             String[] parts = jwe.split("\\.");
             JwtHeader header = parseHeader(parts[0]);
@@ -248,7 +313,7 @@ class JweDecryptorTest {
                     .decryptionKey("my-kid", RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
-            String innerJws = decryptor.decrypt(parts, header, config, counter, dslJson);
+            String innerJws = decryptor.decrypt(parts, header, config, counter);
             assertNotNull(innerJws);
             assertEquals(3, innerJws.split("\\.").length);
         }
@@ -259,7 +324,7 @@ class JweDecryptorTest {
             String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
                     RSA_ENCRYPTION_KEY_PAIR.getPublic(),
-                    "RS256", "RSA-OAEP", "A256GCM", "https://test-issuer.example.com", "unknown-kid");
+                    "RS256", "RSA-OAEP", "A256GCM", ISSUER, "unknown-kid");
 
             String[] parts = jwe.split("\\.");
             JwtHeader header = parseHeader(parts[0]);
@@ -268,7 +333,7 @@ class JweDecryptorTest {
                     .defaultDecryptionKey(RSA_ENCRYPTION_KEY_PAIR.getPrivate())
                     .build();
 
-            String innerJws = decryptor.decrypt(parts, header, config, counter, dslJson);
+            String innerJws = decryptor.decrypt(parts, header, config, counter);
             assertNotNull(innerJws);
         }
     }
@@ -293,7 +358,7 @@ class JweDecryptorTest {
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
                     ephemeralKeyPair,
                     (ECPublicKey) recipientKeyPair.getPublic(),
-                    enc, "https://test-issuer.example.com");
+                    enc, ISSUER);
 
             String[] parts = jwe.split("\\.");
             assertEquals(5, parts.length);
@@ -303,8 +368,9 @@ class JweDecryptorTest {
                     .build();
 
             JwtHeader header = parseHeader(parts[0]);
+            assertTrue(header.getEpk().isPresent(), "The production header decode should bind the epk object");
 
-            String innerJws = decryptor.decrypt(parts, header, config, counter, dslJson);
+            String innerJws = decryptor.decrypt(parts, header, config, counter);
             assertNotNull(innerJws);
             assertEquals(3, innerJws.split("\\.").length);
             assertEquals(0, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
@@ -320,7 +386,7 @@ class JweDecryptorTest {
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
                     ephemeralKeyPair,
                     (ECPublicKey) ecKeyPair.getPublic(),
-                    "A128GCM", "https://test-issuer.example.com");
+                    "A128GCM", ISSUER);
 
             String[] parts = jwe.split("\\.");
             JwtHeader header = parseHeader(parts[0]);
@@ -331,7 +397,7 @@ class JweDecryptorTest {
                     .build();
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+                    () -> decryptor.decrypt(parts, header, config, counter));
         }
 
         @Test
@@ -345,7 +411,7 @@ class JweDecryptorTest {
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
                     ephemeralKeyPair,
                     (ECPublicKey) JweTestTokenFactory.generateEcKeyPair("secp256r1").getPublic(),
-                    "A128GCM", "https://test-issuer.example.com");
+                    "A128GCM", ISSUER);
 
             String[] parts = jwe.split("\\.");
             JwtHeader header = parseHeader(parts[0]);
@@ -356,7 +422,7 @@ class JweDecryptorTest {
                     .build();
 
             TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+                    () -> decryptor.decrypt(parts, header, config, counter));
             assertTrue(ex.getMessage().contains("curve does not match"));
         }
 
@@ -371,7 +437,7 @@ class JweDecryptorTest {
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
                     ephemeralKeyPair,
                     (ECPublicKey) recipientKeyPair.getPublic(),
-                    "A128GCM", "https://test-issuer.example.com");
+                    "A128GCM", ISSUER);
 
             String[] parts = jwe.split("\\.");
             // Move the embedded ephemeral point off the curve by mutating the first character of its
@@ -394,7 +460,7 @@ class JweDecryptorTest {
                     .build();
 
             TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+                    () -> decryptor.decrypt(parts, header, config, counter));
             assertTrue(ex.getMessage().contains("Ephemeral EC point"),
                     "An off-curve ephemeral point must be rejected by the independent on-curve check, but was: "
                             + ex.getMessage());
@@ -424,7 +490,7 @@ class JweDecryptorTest {
             String[] parts = {"header", "", "iv", "ciphertext", "authTag"};
 
             assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+                    () -> decryptor.decrypt(parts, header, config, counter));
         }
     }
 
@@ -438,7 +504,7 @@ class JweDecryptorTest {
             String jwe = JweTestTokenFactory.createCompressedJwe(
                     InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
                     RSA_ENCRYPTION_KEY_PAIR.getPublic(),
-                    "RSA-OAEP", "A256GCM", "https://test-issuer.example.com");
+                    "RSA-OAEP", "A256GCM", ISSUER);
 
             String[] parts = jwe.split("\\.");
             assertEquals(5, parts.length);
@@ -452,7 +518,7 @@ class JweDecryptorTest {
             assertTrue(header.getZip().isPresent());
             assertEquals("DEF", header.getZip().get());
 
-            String innerJws = decryptor.decrypt(parts, header, config, counter, dslJson);
+            String innerJws = decryptor.decrypt(parts, header, config, counter);
             assertNotNull(innerJws);
             assertEquals(3, innerJws.split("\\.").length);
         }
@@ -470,7 +536,7 @@ class JweDecryptorTest {
             String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
 
             TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+                    () -> decryptor.decrypt(parts, header, config, counter));
             assertTrue(ex.getMessage().contains("Unsupported compression"));
         }
 
@@ -488,46 +554,20 @@ class JweDecryptorTest {
             String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
 
             TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> decryptor.decrypt(parts, header, config, counter, dslJson));
+                    () -> decryptor.decrypt(parts, header, config, counter));
             assertTrue(ex.getMessage().contains("compression is disabled"));
         }
     }
 
-    private static JwtHeader parseHeader(String encodedHeader) {
-        String json = new String(Base64.getUrlDecoder().decode(encodedHeader), StandardCharsets.UTF_8);
-        // Simple extraction for test purposes
-        String alg = extractField(json, "alg");
-        String enc = extractField(json, "enc");
-        String kid = extractField(json, "kid");
-        String zip = extractField(json, "zip");
-        String epk = extractEpkObject(json);
-        return new JwtHeader(alg, null, kid, null, null,
-                enc, zip, epk, null, null);
-    }
-
-    private static String extractField(String json, String field) {
-        String key = "\"" + field + "\":\"";
-        int idx = json.indexOf(key);
-        if (idx < 0) return null;
-        int start = idx + key.length();
-        int end = json.indexOf('"', start);
-        return end > start ? json.substring(start, end) : null;
-    }
-
-    private static String extractEpkObject(String json) {
-        String key = "\"epk\":";
-        int idx = json.indexOf(key);
-        if (idx < 0) return null;
-        int start = idx + key.length();
-        // Find matching closing brace
-        int depth = 0;
-        for (int i = start; i < json.length(); i++) {
-            if (json.charAt(i) == '{') depth++;
-            else if (json.charAt(i) == '}') {
-                depth--;
-                if (depth == 0) return json.substring(start, i + 1);
-            }
-        }
-        return null;
+    /**
+     * Decodes a Base64URL-encoded JWE protected header through the production DSL-JSON path, the
+     * same decode {@code NonValidatingJwtParser} performs.
+     */
+    private JwtHeader parseHeader(String encodedHeader) {
+        byte[] json = Base64.getUrlDecoder().decode(encodedHeader);
+        JwtHeader header = assertDoesNotThrow(() -> dslJson.deserialize(JwtHeader.class, json, json.length),
+                "The JWE header should decode through the production DSL-JSON path");
+        assertNotNull(header, "The JWE header should not decode to null");
+        return header;
     }
 }

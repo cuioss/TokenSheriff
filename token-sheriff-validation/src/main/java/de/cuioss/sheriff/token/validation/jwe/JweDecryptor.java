@@ -15,7 +15,6 @@
  */
 package de.cuioss.sheriff.token.validation.jwe;
 
-import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.JwkKey;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
@@ -24,6 +23,7 @@ import de.cuioss.sheriff.token.validation.json.JwtHeader;
 import de.cuioss.sheriff.token.validation.jwks.key.JwkKeyHandler;
 import de.cuioss.tools.logging.CuiLogger;
 
+import javax.crypto.AEADBadTagException;
 import javax.crypto.Cipher;
 import javax.crypto.KeyAgreement;
 import javax.crypto.Mac;
@@ -35,6 +35,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.PrivateKey;
+import java.security.SecureRandom;
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.*;
@@ -52,6 +53,19 @@ import java.util.zip.Inflater;
  *   <li>Content Encryption: A128GCM, A256GCM, A128CBC-HS256, A256CBC-HS512</li>
  * </ul>
  * <p>
+ * <strong>Uniform content-authentication failure.</strong> Every failure to authenticate the
+ * encrypted content surfaces identically: the same
+ * {@link SecurityEventCounter.EventType#JWE_DECRYPTION_FAILED} event, the same
+ * {@link TokenValidationException} type and the same log detail. For RSA-OAEP and
+ * RSA-OAEP-256, a failed CEK unwrap or an unwrapped CEK of the wrong length does not
+ * propagate; a random CEK of the length {@code enc} requires is used instead
+ * (RFC 7516 Section 11.5), so the failure surfaces at content authentication and cannot be
+ * told apart from an authentication-tag mismatch. An A*CBC-HS* tag mismatch is reported as
+ * {@link AEADBadTagException}, the same exception type AES-GCM raises.
+ * <p>
+ * The ECDH-ES ephemeral public key is taken from the {@code epk} header parameter, which is
+ * bound to a {@link JwkKey} when the header is decoded (RFC 7518 Section 4.6.1.1).
+ * <p>
  * This class is thread-safe and stateless.
  *
  * @since 1.0
@@ -62,6 +76,7 @@ public class JweDecryptor {
 
     private static final CuiLogger LOGGER = new CuiLogger(JweDecryptor.class);
     private static final int MAX_DECOMPRESSED_SIZE = 256 * 1024; // 256KB limit for compression bomb protection
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     /**
      * Decrypts a JWE token and returns the inner plaintext (typically a JWS string).
@@ -70,13 +85,11 @@ public class JweDecryptor {
      * @param jweHeader the decoded JWE header
      * @param config the decryption configuration
      * @param counter the security event counter
-     * @param dslJson the configured DslJson instance for JSON parsing (with security limits)
      * @return the decrypted plaintext string
      * @throws TokenValidationException if decryption fails
      */
     public String decrypt(String[] jweParts, JwtHeader jweHeader,
-            JweDecryptionConfig config, SecurityEventCounter counter,
-            DslJson<Object> dslJson) {
+            JweDecryptionConfig config, SecurityEventCounter counter) {
         String alg = jweHeader.alg();
         String enc = jweHeader.enc();
 
@@ -136,7 +149,7 @@ public class JweDecryptor {
             byte[] aad = jweParts[0].getBytes(StandardCharsets.US_ASCII);
 
             // Decrypt Content Encryption Key (CEK)
-            byte[] cek = decryptCek(alg, encryptedKey, decryptionKey, jweHeader, enc, dslJson);
+            byte[] cek = decryptCek(alg, encryptedKey, decryptionKey, jweHeader, enc);
 
             try {
                 // Decrypt content
@@ -163,13 +176,51 @@ public class JweDecryptor {
     }
 
     private byte[] decryptCek(String alg, byte[] encryptedKey, PrivateKey key,
-            JwtHeader header, String enc, DslJson<Object> dslJson) throws GeneralSecurityException {
+            JwtHeader header, String enc) throws GeneralSecurityException {
         return switch (alg) {
-            case "RSA-OAEP" -> decryptCekRsaOaep(encryptedKey, key);
-            case "RSA-OAEP-256" -> decryptCekRsaOaep256(encryptedKey, key);
-            case "ECDH-ES" -> deriveCekEcdhEs(header, key, enc, dslJson);
+            case "RSA-OAEP", "RSA-OAEP-256" -> unwrapRsaCek(alg, encryptedKey, key, enc);
+            case "ECDH-ES" -> deriveCekEcdhEs(header, key, enc);
             default -> throw new IllegalArgumentException("Unsupported key management algorithm: " + alg);
         };
+    }
+
+    /**
+     * Unwraps an RSA-OAEP / RSA-OAEP-256 encrypted CEK without revealing whether the unwrap
+     * succeeded.
+     * <p>
+     * Per RFC 7516 Section 11.5, a failed unwrap or an unwrapped CEK whose length differs from
+     * the length {@code enc} requires is replaced by a randomly generated CEK of the required
+     * length. Decryption then proceeds and fails at content authentication, so the failure is
+     * indistinguishable from an authentication-tag mismatch.
+     *
+     * @param alg          the RSA key management algorithm ({@code RSA-OAEP} or {@code RSA-OAEP-256})
+     * @param encryptedKey the JWE Encrypted Key
+     * @param key          the private decryption key
+     * @param enc          the content encryption algorithm, which determines the required CEK length
+     * @return the unwrapped CEK, or a random CEK of the required length when the unwrap failed
+     */
+    private byte[] unwrapRsaCek(String alg, byte[] encryptedKey, PrivateKey key, String enc) {
+        int requiredLength = getContentEncryptionKeyLength(enc) / 8;
+        byte[] cek;
+        try {
+            cek = "RSA-OAEP".equals(alg)
+                    ? decryptCekRsaOaep(encryptedKey, key)
+                    : decryptCekRsaOaep256(encryptedKey, key);
+        } catch (GeneralSecurityException e) {
+            LOGGER.debug(e, "JWE CEK unwrap failed, substituting a random CEK (RFC 7516 Section 11.5)");
+            return randomCek(requiredLength);
+        }
+        if (cek.length != requiredLength) {
+            Arrays.fill(cek, (byte) 0);
+            return randomCek(requiredLength);
+        }
+        return cek;
+    }
+
+    private static byte[] randomCek(int length) {
+        byte[] cek = new byte[length];
+        SECURE_RANDOM.nextBytes(cek);
+        return cek;
     }
 
     private byte[] decryptCekRsaOaep(byte[] encryptedKey, PrivateKey key)
@@ -192,15 +243,15 @@ public class JweDecryptor {
     }
 
     @SuppressWarnings("java:S3776") // Complexity justified: key agreement requires multiple steps
-    private byte[] deriveCekEcdhEs(JwtHeader header, PrivateKey key, String enc,
-            DslJson<Object> dslJson) throws GeneralSecurityException {
-        // Parse ephemeral public key from header
-        String epkJson = header.getEpk().orElseThrow(() ->
+    private byte[] deriveCekEcdhEs(JwtHeader header, PrivateKey key, String enc)
+            throws GeneralSecurityException {
+        // Ephemeral public key from header, bound as a JWK object at header decoding
+        JwkKey epk = header.getEpk().orElseThrow(() ->
                 new TokenValidationException(
                         SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
                         "ECDH-ES requires epk (ephemeral public key) in JWE header"));
 
-        ECPublicKey ephemeralKey = parseEcPublicKeyFromJwk(epkJson, dslJson);
+        ECPublicKey ephemeralKey = parseEcPublicKeyFromJwk(epk);
 
         // Validate the private key is EC
         if (!(key instanceof ECPrivateKey ecPrivateKey)) {
@@ -331,7 +382,7 @@ public class JweDecryptor {
             // Verify authentication tag (constant-time comparison)
             byte[] computedTag = computeAesCbcHsTag(macKey, macAlg, aad, iv, ciphertext, macKeyLen);
             if (!MessageDigest.isEqual(computedTag, authTag)) {
-                throw new SecurityException("Authentication tag verification failed");
+                throw new AEADBadTagException("Authentication tag verification failed");
             }
 
             // Decrypt — CBC with PKCS5Padding is required by RFC 7518 Section 5.2.6 for A*CBC-HS*.
@@ -430,25 +481,17 @@ public class JweDecryptor {
     }
 
     /**
-     * Parses an EC public key from an EPK JSON string by deserializing to a {@link JwkKey}
-     * and delegating to {@link JwkKeyHandler#parseEcKey(JwkKey)}.
+     * Parses an EC public key from the {@code epk} JWK by delegating to
+     * {@link JwkKeyHandler#parseEcKey(JwkKey)}.
      *
-     * @param epkJson the EPK JSON string from the JWE header
-     * @param dslJson the configured DslJson instance for JSON parsing
+     * @param epk the ephemeral public key JWK from the JWE header
      * @return the parsed EC public key
      * @throws TokenValidationException if parsing fails
      */
-    private static ECPublicKey parseEcPublicKeyFromJwk(String epkJson, DslJson<Object> dslJson) {
+    private static ECPublicKey parseEcPublicKeyFromJwk(JwkKey epk) {
         try {
-            byte[] epkBytes = epkJson.getBytes(StandardCharsets.UTF_8);
-            JwkKey jwkKey = dslJson.deserialize(JwkKey.class, epkBytes, epkBytes.length);
-
-            if (jwkKey == null) {
-                throw new IllegalArgumentException("EPK JSON parsed to null");
-            }
-
-            return (ECPublicKey) JwkKeyHandler.parseEcKey(jwkKey);
-        } catch (IOException | InvalidKeySpecException | ClassCastException e) {
+            return (ECPublicKey) JwkKeyHandler.parseEcKey(epk);
+        } catch (InvalidKeySpecException | ClassCastException e) {
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
                     "Failed to parse ephemeral EC public key: %s".formatted(e.getMessage()), e);

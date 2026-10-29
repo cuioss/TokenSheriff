@@ -345,7 +345,7 @@ public class NonValidatingJwtParser {
             }
 
             // Decrypt to get inner JWS string
-            String innerJws = jweDecryptor.decrypt(parts, jweHeader, jweDecryptionConfig, securityEventCounter, config.getDslJson());
+            String innerJws = jweDecryptor.decrypt(parts, jweHeader, jweDecryptionConfig, securityEventCounter);
 
             // Check inner JWS size
             if (innerJws.getBytes(StandardCharsets.UTF_8).length > config.getMaxTokenSize()) {

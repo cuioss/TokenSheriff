@@ -24,9 +24,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.security.interfaces.ECPublicKey;
 import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -123,6 +126,69 @@ class NonValidatingJwtParserJweTest {
             assertEquals("RS256", decoded.header().alg());
             assertTrue(decoded.getIssuer().isPresent());
             assertEquals(ISSUER, decoded.getIssuer().get());
+        }
+    }
+
+    @Nested
+    @DisplayName("ECDH-ES JWE Token Handling")
+    class EcdhEsTokenHandling {
+
+        @ParameterizedTest
+        @CsvSource({
+                "secp256r1, A128GCM",
+                "secp256r1, A256GCM",
+                "secp256r1, A128CBC-HS256",
+                "secp256r1, A256CBC-HS512",
+                "secp384r1, A128GCM",
+                "secp384r1, A256GCM",
+                "secp384r1, A128CBC-HS256",
+                "secp384r1, A256CBC-HS512"
+        })
+        @DisplayName("Should decode an ECDH-ES JWE end to end through the parser")
+        void shouldDecodeEcdhEsJwe(String curve, String enc) {
+            KeyPair recipientKeyPair = JweTestTokenFactory.generateEcKeyPair(curve);
+            String jwe = JweTestTokenFactory.createEcdhEsJweWrappedAccessToken(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                    JweTestTokenFactory.generateEcKeyPair(curve),
+                    (ECPublicKey) recipientKeyPair.getPublic(),
+                    enc, ISSUER);
+
+            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .jweDecryptionConfig(JweDecryptionConfig.builder()
+                            .defaultDecryptionKey(recipientKeyPair.getPrivate())
+                            .build())
+                    .build();
+
+            DecodedJwt decoded = parser.decode(jwe);
+
+            assertAll("ECDH-ES " + curve + " / " + enc,
+                    () -> assertEquals("RS256", decoded.header().alg()),
+                    () -> assertEquals(ISSUER, decoded.getIssuer().orElseThrow()),
+                    () -> assertEquals(jwe, decoded.rawToken()),
+                    () -> assertEquals(0, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT)));
+        }
+
+        @Test
+        @DisplayName("Should reject an ECDH-ES header whose epk is a JSON string")
+        void shouldRejectStringEncodedEpk() {
+            String headerJson = "{\"alg\":\"ECDH-ES\",\"enc\":\"A128GCM\","
+                    + "\"epk\":\"{\\\"kty\\\":\\\"EC\\\",\\\"crv\\\":\\\"P-256\\\"}\"}";
+            String encodedHeader = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+            String token = encodedHeader + ".AA.AA.AA.AA";
+
+            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .jweDecryptionConfig(JweDecryptionConfig.builder()
+                            .defaultDecryptionKey(JweTestTokenFactory.generateEcKeyPair("secp256r1").getPrivate())
+                            .build())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> parser.decode(token));
+            assertEquals(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, ex.getEventType());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
         }
     }
 

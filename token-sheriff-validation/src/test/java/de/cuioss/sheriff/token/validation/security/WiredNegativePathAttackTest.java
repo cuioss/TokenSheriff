@@ -29,6 +29,8 @@ import de.cuioss.sheriff.token.validation.util.JwkThumbprintUtil;
 import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.math.BigInteger;
@@ -69,7 +71,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  *   <li>VTEST-11 — over-depth JSON payload rejected during parsing (Nimbus CVE-2025-53864 class)</li>
  *   <li>VTEST-12 — cross-audience token rejected on {@code aud} (Argo CD CVE-2023-22482 class)</li>
  *   <li>VTEST-13 — JWE header downgrade {@code RSA-OAEP}&rarr;{@code RSA1_5} refused before decryption</li>
- *   <li>VTEST-14 — RSA-OAEP decryption failures are indistinguishable (Bleichenbacher-oracle class)</li>
+ *   <li>VTEST-14 — RSA-OAEP decryption failures are indistinguishable across every supported
+ *       {@code enc} (Bleichenbacher-oracle class)</li>
  *   <li>VTEST-15 — client_id&rarr;azp fallback off by default; a token omitting azp is rejected</li>
  * </ul>
  * <p>
@@ -318,9 +321,10 @@ class WiredNegativePathAttackTest {
                 "A header-driven downgrade to a rejected key-management algorithm must be refused before decryption");
     }
 
-    @Test
+    @ParameterizedTest(name = "VTEST-14 [{0}]")
+    @ValueSource(strings = {"A128GCM", "A256GCM", "A128CBC-HS256", "A256CBC-HS512"})
     @DisplayName("VTEST-14: distinct RSA-OAEP decryption failures all surface the same JWE_DECRYPTION_FAILED event")
-    void shouldKeepJweDecryptionFailuresIndistinguishable() {
+    void shouldKeepJweDecryptionFailuresIndistinguishable(String enc) {
         // Authlib CVE-2026-28490 / jose4j GHSA-jgvc-jfgh-rjvv: a distinguishable error path (padding
         // failure vs auth failure) is a Bleichenbacher oracle. All three failure modes below must
         // collapse to one indistinguishable event so an attacker learns nothing from the response.
@@ -331,12 +335,12 @@ class WiredNegativePathAttackTest {
 
         // (a) wrong decryption key: the CEK was wrapped for a different RSA key than the validator holds.
         String wrongKeyJwe = JweTestTokenFactory.createJweWrappedAccessToken(
-                signingKey, wrongKeyPair.getPublic(), "RS256", "RSA-OAEP", "A256GCM", TEST_ISSUER, null);
-        // (b) tampered ciphertext and (c) tampered auth tag: correct key, corrupted AES-GCM.
-        String tamperedCiphertext = JweTestTokenFactory.createJweWithTamperedCiphertext(
-                signingKey, jweKeyPair.getPublic(), TEST_ISSUER);
+                signingKey, wrongKeyPair.getPublic(), "RS256", "RSA-OAEP", enc, TEST_ISSUER, null);
+        // (b) tampered ciphertext and (c) tampered auth tag: correct key, corrupted content.
+        String tamperedCiphertext = tamperJwePart(JweTestTokenFactory.createJweWrappedAccessToken(
+                signingKey, jweKeyPair.getPublic(), "RS256", "RSA-OAEP", enc, TEST_ISSUER, null), 3);
         String tamperedAuthTag = JweTestTokenFactory.createJweWithTamperedAuthTag(
-                signingKey, jweKeyPair.getPublic(), TEST_ISSUER);
+                signingKey, jweKeyPair.getPublic(), "RSA-OAEP", enc, TEST_ISSUER);
 
         EventType wrongKey = decryptionFailureEvent(validator, wrongKeyJwe);
         EventType badCiphertext = decryptionFailureEvent(validator, tamperedCiphertext);
@@ -477,6 +481,15 @@ class WiredNegativePathAttackTest {
         var ex = assertThrows(TokenValidationException.class,
                 () -> validator.createAccessToken(AccessTokenRequest.of(jwe)));
         return ex.getEventType();
+    }
+
+    /** Flips every bit of the first byte of one Base64URL-encoded JWE compact part. */
+    private static String tamperJwePart(String jwe, int partIndex) {
+        String[] parts = jwe.split("\\.");
+        byte[] bytes = Base64.getUrlDecoder().decode(parts[partIndex]);
+        bytes[0] ^= (byte) 0xFF;
+        parts[partIndex] = base64Url(bytes);
+        return String.join(".", parts);
     }
 
     private static String deeplyNested(int levels) {

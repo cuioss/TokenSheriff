@@ -15,8 +15,13 @@
  */
 package de.cuioss.sheriff.token.validation.json;
 
+import de.cuioss.sheriff.token.commons.transport.JwkKey;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -92,11 +97,54 @@ class JwtHeaderJweTest {
     @Test
     @DisplayName("getEpk should return value when present")
     void getEpkShouldReturnValue() {
-        String epk = "{\"kty\":\"EC\",\"crv\":\"P-256\"}";
+        var epk = new JwkKey("EC", null, null, null, null, "P-256", "eA", "eQ");
         var header = new JwtHeader("ECDH-ES", null, null, null, null,
                 "A128GCM", null, epk, null, null);
         assertTrue(header.getEpk().isPresent());
-        assertEquals(epk, header.getEpk().get());
+        assertSame(epk, header.getEpk().get());
+    }
+
+    @Test
+    @DisplayName("getEpk should return empty when null")
+    void getEpkShouldReturnEmptyWhenNull() {
+        var header = new JwtHeader("ECDH-ES", null, null, null, null,
+                "A128GCM", null, null, null, null);
+        assertTrue(header.getEpk().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Decoding should bind an epk JSON object to a JwkKey")
+    void decodeShouldBindEpkObject() throws IOException {
+        byte[] json = """
+                {"alg":"ECDH-ES","enc":"A128GCM",\
+                "epk":{"kty":"EC","crv":"P-256","x":"WKn-ZIGevcwGIyyrzFoZNBdaq9_TsqzGl96oc0CWuis",\
+                "y":"y77t-RvAHRKTsSGdIYUfweuOvwrvDD-Q3Hv5J0fSKbE"}}"""
+                .getBytes(StandardCharsets.UTF_8);
+
+        JwtHeader header = ParserConfig.builder().build().getDslJson()
+                .deserialize(JwtHeader.class, json, json.length);
+
+        assertNotNull(header, "Header should be decoded");
+        JwkKey epk = header.getEpk().orElseThrow();
+        assertAll("epk binding",
+                () -> assertEquals("EC", epk.kty()),
+                () -> assertEquals("P-256", epk.crv()),
+                () -> assertEquals("WKn-ZIGevcwGIyyrzFoZNBdaq9_TsqzGl96oc0CWuis", epk.x()),
+                () -> assertEquals("y77t-RvAHRKTsSGdIYUfweuOvwrvDD-Q3Hv5J0fSKbE", epk.y()));
+    }
+
+    @Test
+    @DisplayName("Decoding should reject an epk given as a JSON string")
+    void decodeShouldRejectStringEncodedEpk() {
+        byte[] json = """
+                {"alg":"ECDH-ES","enc":"A128GCM",\
+                "epk":"{\\"kty\\":\\"EC\\",\\"crv\\":\\"P-256\\"}"}"""
+                .getBytes(StandardCharsets.UTF_8);
+        var dslJson = ParserConfig.builder().build().getDslJson();
+
+        assertThrows(IOException.class,
+                () -> dslJson.deserialize(JwtHeader.class, json, json.length),
+                "A string-encoded epk must fail to decode");
     }
 
     @Test

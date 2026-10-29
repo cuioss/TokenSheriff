@@ -174,12 +174,28 @@ public class JweTestTokenFactory {
     }
 
     /**
-     * Creates a JWE token with tampered auth tag for security testing.
+     * Creates an RSA-OAEP / A256GCM JWE token with tampered auth tag for security testing.
      */
     public static String createJweWithTamperedAuthTag(PrivateKey signingKey, PublicKey encryptionKey,
             String issuer) {
+        return createJweWithTamperedAuthTag(signingKey, encryptionKey, "RSA-OAEP", "A256GCM", issuer);
+    }
+
+    /**
+     * Creates a JWE token with tampered auth tag for security testing, for any supported key
+     * management and content encryption algorithm.
+     *
+     * @param signingKey    the private key to sign the inner JWS
+     * @param encryptionKey the public key to encrypt the CEK (RSA)
+     * @param alg           the JWE key management algorithm (e.g., "RSA-OAEP")
+     * @param enc           the JWE content encryption algorithm (e.g., "A128CBC-HS256")
+     * @param issuer        the issuer claim
+     * @return the JWE compact serialization string whose authentication tag no longer matches
+     */
+    public static String createJweWithTamperedAuthTag(PrivateKey signingKey, PublicKey encryptionKey,
+            String alg, String enc, String issuer) {
         String jwe = createJweWrappedAccessToken(signingKey, encryptionKey,
-                "RS256", "RSA-OAEP", "A256GCM", issuer, null);
+                "RS256", alg, enc, issuer, null);
         String[] parts = jwe.split("\\.");
         // Tamper with auth tag (last part)
         byte[] authTag = Base64.getUrlDecoder().decode(parts[4]);
@@ -208,9 +224,25 @@ public class JweTestTokenFactory {
      */
     public static String createEcdhEsJweWrappedAccessToken(PrivateKey signingKey, KeyPair ephemeralKeyPair,
             ECPublicKey recipientPublicKey, String enc, String issuer) {
+        String innerJws = createSignedJws(signingKey, "RS256", issuer);
+        return encryptAsEcdhEsJwe(innerJws, ephemeralKeyPair, recipientPublicKey, enc);
+    }
+
+    /**
+     * Encrypts an arbitrary plaintext (typically an inner JWS) as an ECDH-ES JWE whose {@code epk}
+     * header parameter is a JWK JSON object.
+     *
+     * @param plaintext          the plaintext to encrypt, e.g. a raw JWS
+     * @param ephemeralKeyPair   the sender's ephemeral EC key pair
+     * @param recipientPublicKey the recipient's EC public key
+     * @param enc                the JWE content encryption algorithm (e.g., "A256GCM")
+     * @return the JWE compact serialization string
+     * @throws IllegalStateException if the JDK crypto operations fail
+     */
+    public static String encryptAsEcdhEsJwe(String plaintext, KeyPair ephemeralKeyPair,
+            ECPublicKey recipientPublicKey, String enc) {
         try {
-            String innerJws = createSignedJws(signingKey, "RS256", issuer);
-            return encryptAsEcdhEsJwe(innerJws, ephemeralKeyPair, recipientPublicKey, enc);
+            return encryptAsEcdhEsJweChecked(plaintext, ephemeralKeyPair, recipientPublicKey, enc);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Failed to create ECDH-ES JWE", e);
         }
@@ -290,7 +322,7 @@ public class JweTestTokenFactory {
         }
     }
 
-    private static String encryptAsEcdhEsJwe(String plaintext, KeyPair ephemeralKeyPair,
+    private static String encryptAsEcdhEsJweChecked(String plaintext, KeyPair ephemeralKeyPair,
             ECPublicKey recipientPublicKey, String enc) throws GeneralSecurityException {
         ECPublicKey ephemeralPublicKey = (ECPublicKey) ephemeralKeyPair.getPublic();
 
@@ -306,10 +338,7 @@ public class JweTestTokenFactory {
 
         // Build header with epk
         String epkJson = buildEpkJson(ephemeralPublicKey);
-        Map<String, String> headerMap = new LinkedHashMap<>();
-        headerMap.put("alg", "ECDH-ES");
-        headerMap.put("enc", enc);
-        // EPK needs special handling since it's a nested object
+        // The epk is a nested JWK object (RFC 7518 Section 4.6.1.1), so the header is built by hand
         String headerJson = "{\"alg\":\"ECDH-ES\",\"enc\":\"" + enc + "\",\"epk\":" + epkJson + "}";
         String encodedHeader = base64Url(headerJson.getBytes(StandardCharsets.UTF_8));
 
