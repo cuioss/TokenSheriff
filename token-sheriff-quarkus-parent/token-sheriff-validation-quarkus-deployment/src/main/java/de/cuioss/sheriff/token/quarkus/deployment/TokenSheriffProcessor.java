@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.quarkus.deployment;
 
 import de.cuioss.sheriff.token.quarkus.config.AccessLogFilterConfigResolver;
+import de.cuioss.sheriff.token.quarkus.error.ProblemDetailExceptionMapper;
 import de.cuioss.sheriff.token.quarkus.health.JwksEndpointHealthCheck;
 import de.cuioss.sheriff.token.quarkus.health.TokenValidatorHealthCheck;
 import de.cuioss.sheriff.token.quarkus.interceptor.BearerTokenInterceptor;
@@ -29,6 +30,7 @@ import de.cuioss.sheriff.token.quarkus.observability.ObservedValidatorResolver;
 import de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer;
 import de.cuioss.sheriff.token.quarkus.producer.JsonWebTokenAdapter;
 import de.cuioss.sheriff.token.quarkus.producer.TokenValidatorProducer;
+import de.cuioss.sheriff.token.quarkus.producer.TokenValidatorStartupInitializer;
 import de.cuioss.sheriff.token.quarkus.runtime.TokenSheriffDevUIRuntimeService;
 import de.cuioss.sheriff.token.quarkus.servlet.VertxServletObjectsResolver;
 import de.cuioss.sheriff.token.quarkus.validation.DiscoverableTokenValidationRule;
@@ -158,6 +160,9 @@ public class TokenSheriffProcessor {
                 // Explicitly register the CDI producer classes to ensure they're discovered
                 .addBeanClasses(
                         TokenValidatorProducer.class,
+                        // Eagerly builds the property-configured validator on StartupEvent. Nothing
+                        // injects it, so it relies on the unremovable flag below to survive bean removal.
+                        TokenValidatorStartupInitializer.class,
                         BearerTokenProducer.class,
                         VertxServletObjectsResolver.class,
                         // Observation target resolution for the metrics, health and DevUI beans
@@ -193,6 +198,27 @@ public class TokenSheriffProcessor {
     @BuildStep
     public ResteasyJaxrsProviderBuildItem registerCustomAccessLogFilter() {
         return new ResteasyJaxrsProviderBuildItem(CustomAccessLogFilter.class.getName());
+    }
+
+    /**
+     * Register the {@link ProblemDetailExceptionMapper} as a JAX-RS provider.
+     * <p>
+     * The mapper lives in the extension's runtime jar, which is not part of the application's index, so
+     * its {@code @Provider} annotation alone does not register it. Without this registration a
+     * {@code TokenSheriffException} escaping a resource is not rendered as an RFC 9457 problem
+     * document.
+     * </p>
+     * <p>
+     * <strong>RESTEasy Classic only:</strong> {@link ResteasyJaxrsProviderBuildItem} is consumed by
+     * RESTEasy Classic. Applications running on Quarkus REST (RESTEasy Reactive) do not pick up this
+     * registration.
+     * </p>
+     *
+     * @return A {@link ResteasyJaxrsProviderBuildItem} for the ProblemDetailExceptionMapper
+     */
+    @BuildStep
+    public ResteasyJaxrsProviderBuildItem registerProblemDetailExceptionMapper() {
+        return new ResteasyJaxrsProviderBuildItem(ProblemDetailExceptionMapper.class.getName());
     }
 
     /**
