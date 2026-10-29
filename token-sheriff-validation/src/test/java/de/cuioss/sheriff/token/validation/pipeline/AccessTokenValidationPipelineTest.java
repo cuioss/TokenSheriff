@@ -107,7 +107,7 @@ class AccessTokenValidationPipelineTest {
     // AccessTokenRequest.of(rawToken) is a pure factory call that never throws
     @DisplayName("Should reject a cached token once it exceeds its issuer's maximum token age (V-9)")
     void shouldRejectCachedTokenExceedingIssuerMaxTokenAge() {
-        int maxTokenAgeSeconds = 4;
+        int maxTokenAgeSeconds = 6;
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         // iat close to the age limit, exp far in the future: only the age check can reject the token
         OffsetDateTime issuedAt = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(1);
@@ -125,10 +125,17 @@ class AccessTokenValidationPipelineTest {
             assertNotNull(cachingValidator.createAccessToken(AccessTokenRequest.of(rawToken)),
                     "First validation should succeed and prime the cache");
 
+            // Second validation: cache hit — the token is still within its age limit and is served.
+            assertNotNull(cachingValidator.createAccessToken(AccessTokenRequest.of(rawToken)),
+                    "A still-valid cached token must be served from the cache");
+            assertEquals(1, cachingValidator.getSecurityEventCounter()
+                            .getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT),
+                    "The still-valid second validation must be a cache hit");
+
             // Once now - iat exceeds maxTokenAge + skew (0), the issuer policy rejects the token.
             awaitPast(issuedAt.plusSeconds(maxTokenAgeSeconds + 1L));
 
-            // Second validation: cache hit — the cached token must be rejected, not served.
+            // Third validation: cache hit — the cached token must be rejected, not served.
             var cachedRejection = assertThrows(TokenValidationException.class,
                     () -> cachingValidator.createAccessToken(AccessTokenRequest.of(rawToken)),
                     "A cached token past its issuer's maximum token age must be rejected");
@@ -136,8 +143,8 @@ class AccessTokenValidationPipelineTest {
             SecurityEventCounter cachingCounter = cachingValidator.getSecurityEventCounter();
             assertEquals(1, cachingCounter.getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED),
                     "The cache-hit rejection must be counted exactly once");
-            assertEquals(0, cachingCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT),
-                    "A rejected token must not be counted as a cache hit");
+            assertEquals(1, cachingCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT),
+                    "Only the valid second validation may be counted as a cache hit");
         }
 
         // The uncached pipeline rejects the same token at this point under the same event type.
@@ -161,7 +168,7 @@ class AccessTokenValidationPipelineTest {
     void shouldRejectExpiredCachedTokenUnderOwnIssuerSkew() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         // exp a moment ahead; the token's issuer tolerates no skew, the other issuer 60 s
-        OffsetDateTime expiration = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS).plusSeconds(3);
+        OffsetDateTime expiration = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS).plusSeconds(5);
         withTimeClaim(tokenHolder, ClaimName.EXPIRATION, expiration);
         String rawToken = tokenHolder.getRawToken();
         String issuer = tokenHolder.getIssuer();
@@ -177,10 +184,17 @@ class AccessTokenValidationPipelineTest {
             assertNotNull(cachingValidator.createAccessToken(AccessTokenRequest.of(rawToken)),
                     "First validation should succeed and prime the cache");
 
+            // Second validation: cache hit — the token is not yet expired and is served.
+            assertNotNull(cachingValidator.createAccessToken(AccessTokenRequest.of(rawToken)),
+                    "A still-valid cached token must be served from the cache");
+            assertEquals(1, cachingValidator.getSecurityEventCounter()
+                            .getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT),
+                    "The still-valid second validation must be a cache hit");
+
             // Past exp, but well within the lenient issuer's 60 s skew.
             awaitPast(expiration);
 
-            // Second validation: cache hit — the strict issuer's own skew (0 s) applies.
+            // Third validation: cache hit — the strict issuer's own skew (0 s) applies.
             var cachedRejection = assertThrows(TokenValidationException.class,
                     () -> cachingValidator.createAccessToken(AccessTokenRequest.of(rawToken)),
                     "A cached token past exp must be rejected under its own issuer's skew");
@@ -188,8 +202,8 @@ class AccessTokenValidationPipelineTest {
             SecurityEventCounter cachingCounter = cachingValidator.getSecurityEventCounter();
             assertEquals(1, cachingCounter.getCount(SecurityEventCounter.EventType.TOKEN_EXPIRED),
                     "The cache-hit rejection must be counted exactly once");
-            assertEquals(0, cachingCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT),
-                    "A rejected token must not be counted as a cache hit");
+            assertEquals(1, cachingCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT),
+                    "Only the valid second validation may be counted as a cache hit");
         }
 
         // The uncached pipeline rejects the same token at this point under the same event type.
