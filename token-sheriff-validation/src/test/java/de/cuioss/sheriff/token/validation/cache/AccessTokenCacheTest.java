@@ -567,8 +567,9 @@ class AccessTokenCacheTest {
 
         // When/Then - cache.put reads getExpirationDateTime() on the request path, so the refusal is
         // the declared TokenValidationException rather than an unchecked exception
+        ValidationContext issuerPolicy = defaultIssuerPolicy();
         TokenValidationException exception = assertThrows(TokenValidationException.class, () ->
-                cache.put(token, contentWithoutExp, defaultIssuerPolicy(), performanceMonitor)
+                cache.put(token, contentWithoutExp, issuerPolicy, performanceMonitor)
         );
 
         assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
@@ -813,6 +814,9 @@ class AccessTokenCacheTest {
     }
 
     @Test
+    @SuppressWarnings("java:S2093")
+    // try-with-resources is not usable here: ExecutorService.close() waits for termination, and the
+    // scheduler's placeholder one-day task would make it block, so shutdownNow() in finally is required
     void evictionExecutorRemovesTooOldTokens() {
         // Given - cache whose eviction tick is driven by the test
         cache.shutdown();
