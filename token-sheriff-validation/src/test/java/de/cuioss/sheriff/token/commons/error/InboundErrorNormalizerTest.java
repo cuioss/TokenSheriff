@@ -28,6 +28,11 @@ class InboundErrorNormalizerTest {
     /** The BEL control character (0x07), used to prove non-CR/LF control chars are also escaped. */
     private static final char BELL = 0x07;
 
+    /** The Unicode line separators U+0085 (NEL), U+2028 (LS) and U+2029 (PS). */
+    private static final char NEL = 0x0085;
+    private static final char LS = 0x2028;
+    private static final char PS = 0x2029;
+
     @ParameterizedTest
     @ValueSource(strings = {"invalid_request", "invalid_client", "invalid_grant", "unauthorized_client",
             "unsupported_grant_type", "unsupported_response_type", "access_denied", "invalid_scope",
@@ -109,6 +114,25 @@ class InboundErrorNormalizerTest {
         assertAll("escaped control character",
                 () -> assertFalse(message.indexOf(BELL) >= 0, "the raw control character does not survive"),
                 () -> assertTrue(message.contains("\\u0007"), "the control character is rendered as an escape"));
+    }
+
+    @Test
+    @DisplayName("Should escape the Unicode line separators NEL, LS and PS in both fields (C-8a)")
+    void shouldEscapeUnicodeLineSeparatorsInBothFields() {
+        String separators = Character.toString(NEL) + Character.toString(LS) + Character.toString(PS);
+        ClientProtocolException exception = InboundErrorNormalizer.normalize(
+                "access_denied" + separators + "WARN forged-code-line",
+                "denied" + separators + "WARN forged-description-line");
+
+        String message = exception.getMessage();
+        assertAll("escaped Unicode line separators",
+                () -> assertFalse(message.indexOf(NEL) >= 0, "no raw NEL (U+0085) survives from either field"),
+                () -> assertFalse(message.indexOf(LS) >= 0, "no raw LS (U+2028) survives from either field"),
+                () -> assertFalse(message.indexOf(PS) >= 0, "no raw PS (U+2029) survives from either field"),
+                () -> assertTrue(message.contains("access_denied\\u0085\\u2028\\u2029WARN forged-code-line"),
+                        "the separators in the error code are rendered as escapes"),
+                () -> assertTrue(message.contains("denied\\u0085\\u2028\\u2029WARN forged-description-line"),
+                        "the separators in the error_description are rendered as escapes"));
     }
 
     @Test

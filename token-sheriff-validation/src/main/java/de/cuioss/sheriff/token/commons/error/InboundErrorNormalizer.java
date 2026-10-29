@@ -27,8 +27,10 @@ import java.util.Set;
  * The raw upstream {@code error} and {@code error_description} are authorization-server-controlled and
  * are never surfaced verbatim: both are neutralized for log/response injection (CWE-117) before they
  * reach the caller-safe exception message. Because the {@code commons} base layer must not depend on
- * the client engine (the ArchUnit boundary), this normalizer carries its own minimal CR/LF /
- * control-character neutralization rather than the client-internal sanitizer.
+ * the client engine (the ArchUnit boundary, ADR-0001), this normalizer carries its own minimal CR/LF /
+ * control-character neutralization rather than the client-internal sanitizer. Like that sanitizer it
+ * also escapes the Unicode line separators U+0085 (NEL), U+2028 (LS) and U+2029 (PS), which
+ * Unicode-aware log viewers and appenders treat as line breaks.
  * <p>
  * The utility is stateless and has no configuration surface.
  *
@@ -43,6 +45,15 @@ public final class InboundErrorNormalizer {
 
     /** Appended when a field is truncated, so the elision is visible. */
     private static final String TRUNCATION_MARKER = "...[truncated]";
+
+    /** U+0085 NEXT LINE (NEL). */
+    private static final char NEXT_LINE = 0x0085;
+
+    /** U+2028 LINE SEPARATOR (LS). */
+    private static final char LINE_SEPARATOR = 0x2028;
+
+    /** U+2029 PARAGRAPH SEPARATOR (PS). */
+    private static final char PARAGRAPH_SEPARATOR = 0x2029;
 
     /**
      * The registered OAuth 2.0 error codes across the authorization endpoint (RFC 6749 §4.1.2.1) and
@@ -95,8 +106,10 @@ public final class InboundErrorNormalizer {
     }
 
     /**
-     * Escapes {@code CR}, {@code LF}, tab and every other ASCII control character so an
-     * authorization-server-controlled value cannot forge a new log/response line, and truncates the
+     * Escapes {@code CR}, {@code LF}, tab, every other ASCII control character, and the Unicode line
+     * separators U+0085 (NEL), U+2028 (LS) and U+2029 (PS) — the latter three as a backslash-{@code u}
+     * four-digit hex escape — so an authorization-server-controlled value cannot forge a new
+     * log/response line, and truncates the
      * value to {@value #MAX_LENGTH} characters to bound flooding.
      *
      * @param value the untrusted value to sanitize; may be {@code null}
@@ -116,7 +129,7 @@ public final class InboundErrorNormalizer {
                 case '\n' -> sanitized.append("\\n");
                 case '\t' -> sanitized.append("\\t");
                 default -> {
-                    if (c < 0x20 || c == 0x7F) {
+                    if (c < 0x20 || c == 0x7F || isUnicodeLineSeparator(c)) {
                         sanitized.append(String.format("\\u%04x", (int) c));
                     } else {
                         sanitized.append(c);
@@ -128,5 +141,14 @@ public final class InboundErrorNormalizer {
             sanitized.append(TRUNCATION_MARKER);
         }
         return sanitized.toString();
+    }
+
+    /**
+     * @param c the character to test
+     * @return whether {@code c} is one of the Unicode line separators U+0085 (NEL), U+2028 (LS) or
+     *         U+2029 (PS), which Unicode-aware log viewers and appenders render as a line break
+     */
+    private static boolean isUnicodeLineSeparator(char c) {
+        return c == NEXT_LINE || c == LINE_SEPARATOR || c == PARAGRAPH_SEPARATOR;
     }
 }
