@@ -242,10 +242,11 @@ class CallbackHandlerTest {
             var context = context();
             String code = Generators.nonBlankStrings().next();
 
-            var first = assertThrows(ClientProtocolException.class,
-                    () -> handler.handle(context, success(code, Generators.nonBlankStrings().next())));
-            var second = assertThrows(ClientProtocolException.class,
-                    () -> handler.handle(context, success(code, context.state())));
+            var mismatchedState = success(code, Generators.nonBlankStrings().next());
+            var correctState = success(code, context.state());
+
+            var first = assertThrows(ClientProtocolException.class, () -> handler.handle(context, mismatchedState));
+            var second = assertThrows(ClientProtocolException.class, () -> handler.handle(context, correctState));
 
             assertAll("a rejected first call still uses the context up",
                     () -> assertEquals(STATE_MISMATCH_MESSAGE, first.getMessage(), "the first call is a mismatch"),
