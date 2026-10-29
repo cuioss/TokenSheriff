@@ -45,8 +45,10 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INF
  * CDI producer for JWT validation related instances.
  * <p>
  * This producer creates and manages JWT validation components from
- * configuration properties. Components are initialized during startup
- * via {@link PostConstruct} and exposed through field-based producers. When the
+ * configuration properties. Components are initialized in {@link PostConstruct} and
+ * exposed through field-based producers. Initialization is forced at startup by
+ * {@link TokenValidatorStartupInitializer} when the {@code sheriff.token.issuers.*}
+ * namespace yields at least one enabled issuer, and stays lazy otherwise. When the
  * producer is destroyed ({@link PreDestroy}), the {@link TokenValidator} it created is
  * closed, which also stops the background refresh of its JWKS loaders.
  * </p>
@@ -106,8 +108,10 @@ public class TokenValidatorProducer {
     /**
      * Initializes all JWT validation components from configuration.
      * <p>
-     * This method is called during CDI container startup and creates all
-     * the validation components that will be exposed through the field producers.
+     * This method is called when the container first creates this bean and creates all
+     * the validation components that will be exposed through the field producers. At
+     * startup that happens only when {@link TokenValidatorStartupInitializer} forces it,
+     * i.e. when at least one enabled issuer is configured.
      * </p>
      */
     @PostConstruct
