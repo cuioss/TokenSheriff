@@ -36,6 +36,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("CallbackParameters redirect query-string parsing")
 class CallbackParametersTest {
 
+    private static final char CR = 13;
+    private static final char LF = 10;
+    private static final char LS = (char) 0x2028;
+
+    /** A single backslash, used to build expected escape-sequence needles without source escapes. */
+    private static final String BACKSLASH = String.valueOf((char) 92);
+
+    /** CR, LF and U+2028 as {@code LogSanitizer} renders them. */
+    private static final String ESCAPED_BREAKS = BACKSLASH + "r" + BACKSLASH + "n" + BACKSLASH + "u2028";
+
     @Test
     @DisplayName("Should parse a successful callback query into code, state, and issuer")
     void shouldParseSuccessCallback() {
@@ -139,5 +149,40 @@ class CallbackParametersTest {
     @DisplayName("Should reject a null map in of(Map)")
     void shouldRejectNullMap() {
         assertThrows(NullPointerException.class, () -> CallbackParameters.of(null));
+    }
+
+    @Test
+    @DisplayName("Should sanitize CR/LF and U+2028 in error, errorDescription and issuer in toString() (C-5)")
+    void shouldSanitizeUntrustedFieldsInToString() {
+        String breaks = Character.toString(CR) + Character.toString(LF) + Character.toString(LS);
+        var parameters = new CallbackParameters(null, null, "access_denied" + breaks + "WARN forged error",
+                "denied" + breaks + "WARN forged description",
+                "https://issuer.example.com" + breaks + "WARN forged iss");
+
+        String rendered = parameters.toString();
+
+        assertAll("sanitized CallbackParameters rendering",
+                () -> assertFalse(rendered.indexOf(CR) >= 0, "no raw carriage return survives"),
+                () -> assertFalse(rendered.indexOf(LF) >= 0, "no raw line feed survives"),
+                () -> assertFalse(rendered.indexOf(LS) >= 0, "no raw U+2028 line separator survives"),
+                () -> assertTrue(rendered.contains("error=access_denied" + ESCAPED_BREAKS + "WARN forged error"),
+                        "the error is shown with its line breaks escaped"),
+                () -> assertTrue(rendered.contains("errorDescription=denied" + ESCAPED_BREAKS),
+                        "the error description is shown with its line breaks escaped"),
+                () -> assertTrue(rendered.contains("issuer=https://issuer.example.com" + ESCAPED_BREAKS),
+                        "the issuer is shown with its line breaks escaped"));
+    }
+
+    @Test
+    @DisplayName("Should truncate an over-long errorDescription in toString() (C-5)")
+    void shouldTruncateOverlongErrorDescriptionInToString() {
+        String overlong = "d".repeat(300);
+        var parameters = new CallbackParameters(null, null, "access_denied", overlong, null);
+
+        String rendered = parameters.toString();
+
+        assertAll("bounded CallbackParameters rendering",
+                () -> assertTrue(rendered.contains("...[truncated]"), "an over-long value is marked truncated"),
+                () -> assertFalse(rendered.contains(overlong), "the full over-long value is not rendered"));
     }
 }

@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
+import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import org.jspecify.annotations.Nullable;
 
 import java.net.URLDecoder;
@@ -133,15 +134,21 @@ String errorDescription, @Nullable
      * Renders the parameters without exposing the secret-carrying fields: the authorization
      * {@code code} and the CSRF {@code state} are redacted so a stray {@code toString()} — a log
      * statement, an exception message, or a debugger dump — never leaks a usable authorization code or
-     * the anti-CSRF token (H8). The non-secret error and issuer fields are shown for diagnostics.
+     * the anti-CSRF token (H8). The non-secret {@code error}, {@code errorDescription} and {@code issuer}
+     * fields are shown for diagnostics, but they are browser-controlled: each is passed through
+     * {@link LogSanitizer#sanitize(String)}, so CR/LF, the other control characters and the Unicode line
+     * separators are escaped and an over-long value is truncated before it can reach a log line or an
+     * exception message (C-5).
      *
-     * @return a redacted string representation carrying no authorization code or state
+     * @return a redacted, sanitized and length-bounded string representation carrying no authorization
+     *         code or state
      */
     @Override
     public String toString() {
         return "CallbackParameters[code=" + redact(code) + ", state=" + redact(state)
-                + ", error=" + error + ", errorDescription=" + errorDescription
-                + ", issuer=" + issuer + "]";
+                + ", error=" + LogSanitizer.sanitize(error)
+                + ", errorDescription=" + LogSanitizer.sanitize(errorDescription)
+                + ", issuer=" + LogSanitizer.sanitize(issuer) + "]";
     }
 
     private static String redact(@Nullable String secret) {

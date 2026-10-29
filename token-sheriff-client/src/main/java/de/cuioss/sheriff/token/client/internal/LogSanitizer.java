@@ -27,8 +27,10 @@ import org.jspecify.annotations.Nullable;
  * server's discovery document. Parameterized logging alone does not neutralize embedded {@code CR} /
  * {@code LF} on a plain-text appender — the substituted value is still written verbatim, so an
  * attacker who embeds {@code %0d%0a} can forge a new, seemingly legitimate log entry. This sanitizer
- * escapes (rather than drops) {@code CR}, {@code LF}, tab, and the remaining ASCII control characters,
- * preserving the value's investigative content while making it impossible to inject a line break.
+ * escapes (rather than drops) {@code CR}, {@code LF}, tab, the remaining ASCII control characters, and
+ * the Unicode line separators U+0085 (NEL), U+2028 (LS) and U+2029 (PS) — which Unicode-aware log
+ * viewers and appenders treat as line breaks — preserving the value's investigative content while
+ * making it impossible to inject a line break.
  * <p>
  * The value is also truncated to {@value #MAX_LENGTH} characters before escaping, so an attacker
  * cannot flood the log with an arbitrarily long value (L18). When truncation occurs the marker
@@ -46,13 +48,24 @@ public final class LogSanitizer {
     /** Appended when a value is truncated, so the elision is visible in the log. */
     private static final String TRUNCATION_MARKER = "...[truncated]";
 
+    /** U+0085 NEXT LINE (NEL). */
+    private static final char NEXT_LINE = 0x0085;
+
+    /** U+2028 LINE SEPARATOR (LS). */
+    private static final char LINE_SEPARATOR = 0x2028;
+
+    /** U+2029 PARAGRAPH SEPARATOR (PS). */
+    private static final char PARAGRAPH_SEPARATOR = 0x2029;
+
     private LogSanitizer() {
         // utility class — never instantiated
     }
 
     /**
-     * Escapes {@code CR}, {@code LF} and every other ASCII control character in {@code value} so it
-     * cannot forge a new log line when substituted into a log template, and truncates the value to
+     * Escapes {@code CR}, {@code LF}, every other ASCII control character, and the Unicode line
+     * separators U+0085 (NEL), U+2028 (LS) and U+2029 (PS) in {@code value} — the latter three, like
+     * the ASCII control characters, as a backslash-{@code u} four-digit hex escape — so it cannot
+     * forge a new log line when substituted into a log template, and truncates the value to
      * {@value #MAX_LENGTH} characters to bound log flooding.
      *
      * @param value the untrusted value to sanitize; may be {@code null}
@@ -73,7 +86,7 @@ public final class LogSanitizer {
                 case '\n' -> sanitized.append("\\n");
                 case '\t' -> sanitized.append("\\t");
                 default -> {
-                    if (c < 0x20 || c == 0x7F) {
+                    if (c < 0x20 || c == 0x7F || isUnicodeLineSeparator(c)) {
                         sanitized.append(String.format("\\u%04x", (int) c));
                     } else {
                         sanitized.append(c);
@@ -85,5 +98,14 @@ public final class LogSanitizer {
             sanitized.append(TRUNCATION_MARKER);
         }
         return sanitized.toString();
+    }
+
+    /**
+     * @param c the character to test
+     * @return whether {@code c} is one of the Unicode line separators U+0085 (NEL), U+2028 (LS) or
+     *         U+2029 (PS), which Unicode-aware log viewers and appenders render as a line break
+     */
+    private static boolean isUnicodeLineSeparator(char c) {
+        return c == NEXT_LINE || c == LINE_SEPARATOR || c == PARAGRAPH_SEPARATOR;
     }
 }

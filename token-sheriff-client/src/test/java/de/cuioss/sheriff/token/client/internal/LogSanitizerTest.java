@@ -44,6 +44,9 @@ class LogSanitizerTest {
     private static final char CR = 13;
     private static final char NUL = 0;
     private static final char DEL = 127;
+    private static final char NEL = (char) 0x0085;
+    private static final char LS = (char) 0x2028;
+    private static final char PS = (char) 0x2029;
 
     @Test
     @DisplayName("Should return null for a null value")
@@ -89,6 +92,23 @@ class LogSanitizerTest {
                 () -> assertTrue(sanitized.contains(BACKSLASH + "u007f"), "DEL is escaped as a unicode sequence"),
                 () -> assertFalse(sanitized.indexOf(NUL) >= 0, "no raw NUL survives"),
                 () -> assertFalse(sanitized.indexOf(DEL) >= 0, "no raw DEL survives"));
+    }
+
+    @Test
+    @DisplayName("Should escape the Unicode line separators NEL, LS and PS (C-8a)")
+    void shouldEscapeUnicodeLineSeparators() {
+        String value = Generators.letterStrings(3, 10).next() + Character.toString(NEL) + "a"
+                + Character.toString(LS) + "b" + Character.toString(PS) + "INFO forged log entry";
+
+        String sanitized = LogSanitizer.sanitize(value);
+
+        assertAll("no raw Unicode line separator survives",
+                () -> assertFalse(sanitized.indexOf(NEL) >= 0, "no raw NEL (U+0085) survives"),
+                () -> assertFalse(sanitized.indexOf(LS) >= 0, "no raw LS (U+2028) survives"),
+                () -> assertFalse(sanitized.indexOf(PS) >= 0, "no raw PS (U+2029) survives"),
+                () -> assertTrue(sanitized.contains(BACKSLASH + "u0085"), "NEL is escaped as a unicode sequence"),
+                () -> assertTrue(sanitized.contains(BACKSLASH + "u2028"), "LS is escaped as a unicode sequence"),
+                () -> assertTrue(sanitized.contains(BACKSLASH + "u2029"), "PS is escaped as a unicode sequence"));
     }
 
     @Test
