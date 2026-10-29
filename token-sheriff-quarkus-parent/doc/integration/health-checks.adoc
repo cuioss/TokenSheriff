@@ -141,8 +141,9 @@ own producer. The three resolution outcomes are `PROPERTY_CONFIGURED`, `EXTERNAL
 * Still reports UP with `issuerCount` of `0` and the `resolution failed` status when resolving the
   observed validator fails; no exception detail appears in the payload
 * Does not report configuration errors: the property-configured validator is built eagerly at
-  startup, so an invalid `sheriff.token.issuers.*` configuration fails the boot instead. JWKS
-  reachability is reported on readiness by the JWKS Endpoint Health Check
+  startup only when an issuer is enabled. Only enabled `sheriff.token.issuers.*` configurations
+  fail the boot; settings of disabled issuers are not validated. JWKS reachability is reported on
+  readiness by the JWKS Endpoint Health Check
 
 NOTE: An externally-produced `TokenValidator` does not expose its issuer configurations or its parser
 limits, so the health checks can detect it but cannot enumerate its issuers or probe its JWKS

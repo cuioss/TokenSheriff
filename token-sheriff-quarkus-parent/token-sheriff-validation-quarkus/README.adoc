@@ -32,7 +32,7 @@ For Maven dependency information, see xref:../README.adoc#_maven_coordinates[Mav
 
 === Health Monitoring
 
-* Liveness check that always reports `UP` and exposes the token validator state as data, so a configuration or JWKS problem never triggers a container restart
+* Liveness check that always reports `UP` and exposes the token validator state as data. A JWKS endpoint problem after startup does not affect liveness. An invalid issuer configuration aborts application startup instead, so the container exits and its restart policy applies
 * Readiness check for JWKS endpoint connectivity
 * See xref:../doc/integration/health-checks.adoc[Health Checks Documentation] for detailed configuration and usage
 
