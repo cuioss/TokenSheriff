@@ -223,6 +223,35 @@ class HttpJwksLoaderRediscoveryTest {
     }
 
     @Test
+    @DisplayName("A successful fetch clears the suppression, so the next threshold of failures re-discovers")
+    void shouldClearSuppressionOnSuccessfulFetch() throws Exception {
+        DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(JWKS_A_PATH, MALFORMED_JWKS_URI));
+        try (HttpJwksLoader loader = startLoader(dispatcher)) {
+            initializeAndFailJwksA(loader, dispatcher);
+            refreshCycles(loader, REDISCOVERY_FAILURE_THRESHOLD + 1);
+            assertRejectedRediscoveryKeepsLoader(loader, dispatcher);
+            dispatcher.restoreJwks(JWKS_A_PATH);
+            int jwksAFetchesBeforeSuccess = dispatcher.jwksFetches(JWKS_A_PATH);
+
+            loader.performBackgroundRefresh();
+
+            assertAll("the recovering cycle fetches the current endpoint without consulting the discovery document",
+                    () -> assertEquals(jwksAFetchesBeforeSuccess + 1, dispatcher.jwksFetches(JWKS_A_PATH)),
+                    () -> assertEquals(2, dispatcher.discoveryRequests(), "no further discovery request"),
+                    () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()));
+
+            dispatcher.failJwks(JWKS_A_PATH);
+            refreshCycles(loader, REDISCOVERY_FAILURE_THRESHOLD);
+            assertEquals(2, dispatcher.discoveryRequests(), "no re-discovery below the threshold after the success");
+
+            loader.performBackgroundRefresh();
+
+            assertEquals(3, dispatcher.discoveryRequests(),
+                    "the cleared suppression lets the cycle after the threshold re-discover exactly once");
+        }
+    }
+
+    @Test
     @DisplayName("A generation closed during re-discovery issues no fetch")
     void shouldNotFetchWhenClosedDuringRediscovery() throws Exception {
         DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(JWKS_A_PATH, JWKS_B_PATH));

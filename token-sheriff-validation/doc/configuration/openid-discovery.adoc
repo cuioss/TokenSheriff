@@ -141,7 +141,8 @@ When a background refresh cycle installs no keys and the last successful load is
 
 * the loader status leaves `OK` and becomes `UNDEFINED`;
 * the issuer is no longer resolvable, so every token for it is rejected until a refresh succeeds again;
-* the readiness health check reports `NOT_READY`, as it does for any loader that is not `OK`;
+* the readiness health check reports `NOT_READY` once its cached response expires (30 seconds by
+  default), as it does for any loader that is not `OK`;
 * `TokenSheriff-170` (`JWKS_KEYS_STALE`) is logged once per degradation;
 * no key is dropped. The installed and retired keys stay in place, and the next refresh that installs
   usable keys publishes `OK` again, which re-admits the issuer.
