@@ -79,6 +79,8 @@ HttpJwksLoaderConfig jwksConfig = HttpJwksLoaderConfig.builder()
     .build();
 ----
 
+The `connectTimeoutSeconds` and `readTimeoutSeconds` values apply to the discovery fetch and to the fetch of the advertised `jwks_uri` alike.
+
 For a local or containerised issuer reached by a name its certificate was never issued for, hostname
 matching can be relaxed on its own. This is a *separate* configuration — it deliberately does not
 supply `sslContext`, because the two cannot be combined:
@@ -113,6 +115,66 @@ trust store (`javax.net.ssl.trustStore` and its companions). Use it for local de
 topologies only, never in production. See
 xref:../../../doc/adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008]
 for the decision and its rationale.
+
+[#key-staleness-and-rediscovery]
+== Key staleness and endpoint re-discovery
+
+=== Maximum key staleness
+
+By default, a loader that has installed usable keys keeps reporting `OK` through an outage of the
+identity provider: a failed background refresh never downgrades the status, and the last good keys stay
+in use for as long as the outage lasts. The opt-in `maxStaleness(Duration)` setting caps that period. It
+defaults to off, and it applies to a direct JWKS configuration (`jwksUrl` / `jwksUri`) as well as to
+well-known discovery.
+
+[source,java]
+----
+HttpJwksLoaderConfig jwksConfig = HttpJwksLoaderConfig.builder()
+    .wellKnownUrl("https://your-issuer.com/.well-known/openid-configuration")
+    .issuerIdentifier("https://your-issuer.com")
+    .refreshIntervalSeconds(300)
+    .maxStaleness(Duration.ofHours(1))    // Opt-in; default: off
+    .build();
+----
+
+When a background refresh cycle installs no keys and the last successful load is older than the bound:
+
+* the loader status leaves `OK` and becomes `UNDEFINED`;
+* the issuer is no longer resolvable, so every token for it is rejected until a refresh succeeds again;
+* `TokenSheriff-170` (`JWKS_KEYS_STALE`) is logged once per degradation;
+* no key is dropped. The installed and retired keys stay in place, and the next refresh that installs
+  usable keys publishes `OK` again, which re-admits the issuer.
+
+The bound is checked after each failed refresh cycle, so it takes effect with the granularity of the
+refresh interval; choose a bound of at least several refresh intervals, so a single failed cycle does not
+degrade the issuer. It requires background refresh: `build()` rejects `maxStaleness` combined with
+`refreshIntervalSeconds(0)`, and the setter rejects a `null`, zero or negative duration.
+
+Choosing the setting is an availability trade-off. Off preserves availability through an identity
+provider outage: tokens signed with the last good keys are accepted for as long as the outage lasts. On
+caps how long stale keys are trusted, at the price of rejecting every token for the issuer once the
+bound is exceeded.
+
+=== Re-discovery of a moved `jwks_uri`
+
+A loader configured with well-known discovery resolves its `jwks_uri` once, at initialization. If the
+identity provider moves the JWKS to a new location, fetches from the old one keep failing. After three
+consecutive refresh cycles that installed no keys, the next cycle therefore repeats the discovery before
+it fetches:
+
+* The re-discovery applies the same checks as the initial one: the advertised issuer must match the
+  configured issuer (or, for a standalone loader without one, the issuer resolved so far), and the new
+  `jwks_uri` must pass the egress guard.
+* When it is accepted, the new endpoint is used, and the same cycle fetches the keys from it.
+* When the discovery endpoint is unavailable, the existing endpoint is kept and the re-discovery is
+  attempted again after another three failed cycles.
+* When it is rejected (an issuer mismatch, an absent advertised issuer, or a new `jwks_uri` blocked by
+  the egress guard), nothing is adopted: the existing endpoint, keys, status and refresh task are kept. An
+  issuer mismatch is counted once as an `ISSUER_MISMATCH` security event. No further re-discovery is
+  attempted until a refresh installs keys successfully again.
+
+Re-discovery does not replace the staleness bound: if the identity provider stays unreachable, the
+status degrades as described above when `maxStaleness` is configured.
 
 == Complete Integration Example
 
