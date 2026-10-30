@@ -22,7 +22,7 @@
     <properties>
         <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.token.benchmarking</maven.jar.plugin.automatic.module.name>
         <!-- External dependency versions -->
-        <version.gson>2.14.0</version.gson>
+        <version.gson>2.15.0</version.gson>
         <version.hdrhistogram>2.2.2</version.hdrhistogram>
         <version.commons-io>2.22.0</version.commons-io>
         <!-- Skip benchmarks by default -->
