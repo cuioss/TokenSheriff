@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.internal;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -33,33 +34,19 @@ import org.jspecify.annotations.Nullable;
  * preserving the value's investigative content while
  * making it impossible to inject a line break.
  * <p>
- * The value is also truncated to {@value #MAX_LENGTH} characters before escaping, so an attacker
- * cannot flood the log with an arbitrarily long value (L18). When truncation occurs the marker
- * {@value #TRUNCATION_MARKER} is appended so the elision is visible in the log.
+ * The value is also truncated to {@value ErrorTextSanitizer#MAX_LENGTH} characters before escaping, so
+ * an attacker cannot flood the log with an arbitrarily long value (L18). When truncation occurs the
+ * marker {@value ErrorTextSanitizer#TRUNCATION_MARKER} is appended so the elision is visible in the log.
+ * <p>
+ * The escaping and truncation are implemented once, in the commons base layer's
+ * {@link ErrorTextSanitizer}; this class is the client engine's entry point and delegates to it, so the
+ * client and the inbound error normalizer can never drift apart.
  *
  * @since 1.0
  * @author Oliver Wolff
  * @see <a href="https://owasp.org/www-community/attacks/Log_Injection">OWASP Log Injection</a>
  */
 public final class LogSanitizer {
-
-    /** Maximum number of source characters retained; longer values are truncated to bound flooding. */
-    private static final int MAX_LENGTH = 256;
-
-    /** Appended when a value is truncated, so the elision is visible in the log. */
-    private static final String TRUNCATION_MARKER = "...[truncated]";
-
-    /** U+007F DELETE, the first character of the DEL plus C1 control range. */
-    private static final char DELETE = 0x007F;
-
-    /** U+009F APPLICATION PROGRAM COMMAND, the last C1 control character. */
-    private static final char LAST_C1_CONTROL = 0x009F;
-
-    /** U+2028 LINE SEPARATOR (LS). */
-    private static final char LINE_SEPARATOR = 0x2028;
-
-    /** U+2029 PARAGRAPH SEPARATOR (PS). */
-    private static final char PARAGRAPH_SEPARATOR = 0x2029;
 
     private LogSanitizer() {
         // utility class — never instantiated
@@ -71,55 +58,14 @@ public final class LogSanitizer {
      * and U+2029 (PS) in {@code value} — all but {@code CR}, {@code LF} and tab as a
      * backslash-{@code u} four-digit hex escape — so it cannot
      * forge a new log line when substituted into a log template, and truncates the value to
-     * {@value #MAX_LENGTH} characters to bound log flooding.
+     * {@value ErrorTextSanitizer#MAX_LENGTH} characters to bound log flooding. Delegates to
+     * {@link ErrorTextSanitizer#sanitize(String)}.
      *
      * @param value the untrusted value to sanitize; may be {@code null}
      * @return the sanitized (and, when over-long, truncated) value, or {@code null} when {@code value}
      *         is {@code null}
      */
     public static @Nullable String sanitize(@Nullable String value) {
-        if (value == null) {
-            return null;
-        }
-        boolean truncated = value.length() > MAX_LENGTH;
-        String bounded = truncated ? value.substring(0, MAX_LENGTH) : value;
-        StringBuilder sanitized = new StringBuilder(bounded.length());
-        for (int i = 0; i < bounded.length(); i++) {
-            char c = bounded.charAt(i);
-            switch (c) {
-                case '\r' -> sanitized.append("\\r");
-                case '\n' -> sanitized.append("\\n");
-                case '\t' -> sanitized.append("\\t");
-                default -> {
-                    if (isControlCharacter(c) || isUnicodeLineSeparator(c)) {
-                        sanitized.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        sanitized.append(c);
-                    }
-                }
-            }
-        }
-        if (truncated) {
-            sanitized.append(TRUNCATION_MARKER);
-        }
-        return sanitized.toString();
-    }
-
-    /**
-     * @param c the character to test
-     * @return whether {@code c} is an ASCII control character (below U+0020), DEL (U+007F) or a C1
-     *         control character (U+0080 to U+009F, including U+0085 NEL)
-     */
-    private static boolean isControlCharacter(char c) {
-        return c < 0x20 || (c >= DELETE && c <= LAST_C1_CONTROL);
-    }
-
-    /**
-     * @param c the character to test
-     * @return whether {@code c} is one of the Unicode line separators U+2028 (LS) or U+2029 (PS), which
-     *         Unicode-aware log viewers and appenders render as a line break
-     */
-    private static boolean isUnicodeLineSeparator(char c) {
-        return c == LINE_SEPARATOR || c == PARAGRAPH_SEPARATOR;
+        return ErrorTextSanitizer.sanitize(value);
     }
 }

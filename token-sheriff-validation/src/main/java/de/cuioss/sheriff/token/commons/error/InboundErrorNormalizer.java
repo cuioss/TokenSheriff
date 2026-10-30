@@ -26,12 +26,13 @@ import java.util.Set;
  * <p>
  * The raw upstream {@code error} and {@code error_description} are authorization-server-controlled and
  * are never surfaced verbatim: both are neutralized for log/response injection (CWE-117) before they
- * reach the caller-safe exception message. Because the {@code commons} base layer must not depend on
- * the client engine (the ArchUnit boundary, ADR-0001), this normalizer carries its own minimal CR/LF /
- * control-character neutralization rather than the client-internal sanitizer. Like that sanitizer it
- * also escapes the C1 control characters U+0080 to U+009F (including U+0085 NEL) and the Unicode line
- * separators U+2028 (LS) and U+2029 (PS), which Unicode-aware log viewers and appenders treat as line
- * breaks.
+ * reach the caller-safe exception message. The neutralization is the shared {@link ErrorTextSanitizer},
+ * which lives in this {@code commons} base layer because the base layer must not depend on the client
+ * engine (the ArchUnit boundary, ADR-0001); the client's own log sanitizer delegates to it. It escapes
+ * CR, LF, tab and the other ASCII controls, DEL, the C1 control characters U+0080 to U+009F (including
+ * U+0085 NEL) and the Unicode line separators U+2028 (LS) and U+2029 (PS), which Unicode-aware log
+ * viewers and appenders treat as line breaks, and truncates each field to
+ * {@value ErrorTextSanitizer#MAX_LENGTH} characters.
  * <p>
  * Whether a field is <em>absent</em> is decided on the raw value, not on its escaped rendering: a value
  * that is {@code null} or consists solely of white space that the sanitizer leaves untouched (for
@@ -45,24 +46,6 @@ import java.util.Set;
  * @see <a href="https://www.rfc-editor.org/rfc/rfc6749#section-5.2">RFC 6749 §5.2</a>
  */
 public final class InboundErrorNormalizer {
-
-    /** Maximum number of source characters retained per field; longer values are truncated. */
-    private static final int MAX_LENGTH = 256;
-
-    /** Appended when a field is truncated, so the elision is visible. */
-    private static final String TRUNCATION_MARKER = "...[truncated]";
-
-    /** U+007F DELETE, the first character of the DEL plus C1 control range. */
-    private static final char DELETE = 0x007F;
-
-    /** U+009F APPLICATION PROGRAM COMMAND, the last C1 control character. */
-    private static final char LAST_C1_CONTROL = 0x009F;
-
-    /** U+2028 LINE SEPARATOR (LS). */
-    private static final char LINE_SEPARATOR = 0x2028;
-
-    /** U+2029 PARAGRAPH SEPARATOR (PS). */
-    private static final char PARAGRAPH_SEPARATOR = 0x2029;
 
     /**
      * The registered OAuth 2.0 error codes across the authorization endpoint (RFC 6749 §4.1.2.1) and
@@ -94,7 +77,7 @@ public final class InboundErrorNormalizer {
      *         error code and, when present, the sanitized description — never the raw upstream content
      */
     public static ClientProtocolException normalize(@Nullable String error, @Nullable String errorDescription) {
-        String safeError = sanitize(error);
+        String safeError = ErrorTextSanitizer.sanitize(error);
         String message;
         if (safeError == null || isBlankBeforeEscaping(error)) {
             message = "authorization server returned an error callback without an error code";
@@ -103,7 +86,7 @@ public final class InboundErrorNormalizer {
         } else {
             message = "authorization server returned an unrecognized error callback: " + safeError;
         }
-        String safeDescription = sanitize(errorDescription);
+        String safeDescription = ErrorTextSanitizer.sanitize(errorDescription);
         if (safeDescription != null && !isBlankBeforeEscaping(errorDescription)) {
             message = message + " (" + safeDescription + ")";
         }
@@ -115,14 +98,14 @@ public final class InboundErrorNormalizer {
     }
 
     /**
-     * Decides blankness on the raw value, so the escaping done by {@link #sanitize(String)} cannot turn
-     * a field that carries no content into reported content.
+     * Decides blankness on the raw value, so the escaping done by {@link ErrorTextSanitizer#sanitize(String)}
+     * cannot turn a field that carries no content into reported content.
      *
      * @param value the raw untrusted value; may be {@code null}
      * @return {@code true} when {@code value} is {@code null} or holds only white space (in the sense
-     *         of {@link String#isBlank()}) that {@link #sanitize(String)} leaves unescaped, such as
-     *         spaces, LS (U+2028) or PS (U+2029); {@code false} as soon as one character is not white
-     *         space or would be rendered as an escape sequence
+     *         of {@link String#isBlank()}) that is not a control character, such as spaces, LS (U+2028)
+     *         or PS (U+2029); {@code false} as soon as one character is not white space or is a control
+     *         character
      */
     private static boolean isBlankBeforeEscaping(@Nullable String value) {
         if (value == null) {
@@ -130,66 +113,10 @@ public final class InboundErrorNormalizer {
         }
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
-            if (isControlCharacter(c) || !Character.isWhitespace(c)) {
+            if (ErrorTextSanitizer.isControlCharacter(c) || !Character.isWhitespace(c)) {
                 return false;
             }
         }
         return true;
-    }
-
-    /**
-     * Escapes {@code CR}, {@code LF}, tab, every other ASCII control character, DEL, the C1 control
-     * characters U+0080 to U+009F (including U+0085 NEL), and the Unicode line separators U+2028 (LS)
-     * and U+2029 (PS) — all but {@code CR}, {@code LF} and tab as a backslash-{@code u} four-digit hex
-     * escape — so an authorization-server-controlled value cannot forge a new log/response line, and
-     * truncates the value to {@value #MAX_LENGTH} characters to bound flooding.
-     *
-     * @param value the untrusted value to sanitize; may be {@code null}
-     * @return the sanitized value, or {@code null} when {@code value} is {@code null}
-     */
-    private static @Nullable String sanitize(@Nullable String value) {
-        if (value == null) {
-            return null;
-        }
-        boolean truncated = value.length() > MAX_LENGTH;
-        String bounded = truncated ? value.substring(0, MAX_LENGTH) : value;
-        StringBuilder sanitized = new StringBuilder(bounded.length());
-        for (int i = 0; i < bounded.length(); i++) {
-            char c = bounded.charAt(i);
-            switch (c) {
-                case '\r' -> sanitized.append("\\r");
-                case '\n' -> sanitized.append("\\n");
-                case '\t' -> sanitized.append("\\t");
-                default -> {
-                    if (isControlCharacter(c) || isUnicodeLineSeparator(c)) {
-                        sanitized.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        sanitized.append(c);
-                    }
-                }
-            }
-        }
-        if (truncated) {
-            sanitized.append(TRUNCATION_MARKER);
-        }
-        return sanitized.toString();
-    }
-
-    /**
-     * @param c the character to test
-     * @return whether {@code c} is an ASCII control character (below U+0020), DEL (U+007F) or a C1
-     *         control character (U+0080 to U+009F, including U+0085 NEL)
-     */
-    private static boolean isControlCharacter(char c) {
-        return c < 0x20 || (c >= DELETE && c <= LAST_C1_CONTROL);
-    }
-
-    /**
-     * @param c the character to test
-     * @return whether {@code c} is one of the Unicode line separators U+2028 (LS) or U+2029 (PS), which
-     *         Unicode-aware log viewers and appenders render as a line break
-     */
-    private static boolean isUnicodeLineSeparator(char c) {
-        return c == LINE_SEPARATOR || c == PARAGRAPH_SEPARATOR;
     }
 }

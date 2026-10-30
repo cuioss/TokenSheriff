@@ -15,12 +15,17 @@
  */
 package de.cuioss.sheriff.token.client.internal;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -137,6 +142,23 @@ class LogSanitizerTest {
 
         assertEquals(value, LogSanitizer.sanitize(value),
                 "a character just outside the escaped ranges is kept verbatim");
+    }
+
+    static Stream<String> delegationSamples() {
+        return Stream.of("",
+                "plain-value",
+                "a" + CR + LF + "b" + TAB + "c" + NUL + DEL + NEL + LS + PS,
+                Character.toString(LF).repeat(MAX_LENGTH + 1),
+                "x".repeat(MAX_LENGTH + 5));
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @MethodSource("delegationSamples")
+    @DisplayName("Should delegate to the shared commons sanitizer with an identical result")
+    void shouldDelegateToSharedSanitizer(String value) {
+        assertEquals(ErrorTextSanitizer.sanitize(value), LogSanitizer.sanitize(value),
+                "the client entry point returns exactly what the shared implementation returns");
     }
 
     @Test
