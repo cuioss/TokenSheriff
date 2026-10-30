@@ -23,11 +23,13 @@ import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import javax.net.ssl.SSLContext;
 import java.net.URI;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -815,5 +817,73 @@ class HttpJwksLoaderConfigTest {
                 () -> assertThrows(IllegalArgumentException.class, () -> config.withIssuerIdentifier(null)),
                 () -> assertThrows(IllegalArgumentException.class, () -> config.withIssuerIdentifier("")),
                 () -> assertThrows(IllegalArgumentException.class, () -> config.withIssuerIdentifier("  ")));
+    }
+
+    @Nested
+    @DisplayName("maxStaleness")
+    class MaxStaleness {
+
+        @Test
+        @DisplayName("Should leave maxStaleness absent by default")
+        void shouldLeaveMaxStalenessAbsentByDefault() {
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                    .jwksUrl(VALID_URL)
+                    .issuerIdentifier("test-issuer")
+                    .build();
+
+            assertTrue(config.getMaxStaleness().isEmpty(), "maxStaleness must be opt-in");
+        }
+
+        @Test
+        @DisplayName("Should accept a positive maxStaleness")
+        void shouldAcceptPositiveMaxStaleness() {
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                    .jwksUrl(VALID_URL)
+                    .issuerIdentifier("test-issuer")
+                    .maxStaleness(Duration.ofHours(2))
+                    .build();
+
+            assertEquals(Optional.of(Duration.ofHours(2)), config.getMaxStaleness());
+        }
+
+        @Test
+        @DisplayName("Should reject a null, zero or negative maxStaleness")
+        void shouldRejectNonPositiveMaxStaleness() {
+            var builder = HttpJwksLoaderConfig.builder();
+
+            assertAll("non-positive bounds",
+                    () -> assertThrows(IllegalArgumentException.class, () -> builder.maxStaleness(null)),
+                    () -> assertThrows(IllegalArgumentException.class, () -> builder.maxStaleness(Duration.ZERO)),
+                    () -> assertThrows(IllegalArgumentException.class,
+                            () -> builder.maxStaleness(Duration.ofSeconds(-1))));
+        }
+
+        @Test
+        @DisplayName("Should reject maxStaleness combined with refreshIntervalSeconds(0)")
+        void shouldRejectMaxStalenessWithoutBackgroundRefresh() {
+            var builder = HttpJwksLoaderConfig.builder()
+                    .jwksUrl(VALID_URL)
+                    .issuerIdentifier("test-issuer")
+                    .refreshIntervalSeconds(0)
+                    .maxStaleness(Duration.ofMinutes(30));
+
+            var exception = assertThrows(IllegalArgumentException.class, builder::build);
+
+            assertTrue(exception.getMessage().contains("maxStaleness(...) cannot be combined with refreshIntervalSeconds(0)"),
+                    "the guard must name the conflict, but was: " + exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("withIssuerIdentifier should preserve maxStaleness")
+        void withIssuerIdentifierShouldPreserveMaxStaleness() {
+            HttpJwksLoaderConfig original = HttpJwksLoaderConfig.builder()
+                    .wellKnownUrl(WELL_KNOWN_URL)
+                    .maxStaleness(Duration.ofMinutes(45))
+                    .build();
+
+            HttpJwksLoaderConfig copy = original.withIssuerIdentifier("https://example.com");
+
+            assertEquals(Optional.of(Duration.ofMinutes(45)), copy.getMaxStaleness());
+        }
     }
 }

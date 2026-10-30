@@ -38,6 +38,7 @@ import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
 
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
@@ -65,8 +66,13 @@ import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
  * installs usable keys publishes {@code OK}) and {@link LoaderStatus#ERROR} when it is disabled.
  * A security rejection (issuer mismatch, absent advertised issuer, or an egress block of the JWKS
  * fetch URI) is a terminal {@code ERROR}. A blocked discovery endpoint is not terminal: it is an
- * unavailable discovery and is handled like a transient discovery failure. A failed refresh never downgrades an existing {@code OK}, since the installed keys
- * remain usable. After {@link #close()} no refresh still in flight publishes {@code OK}.
+ * unavailable discovery and is handled like a transient discovery failure. A failed refresh never
+ * downgrades an existing {@code OK}, since the installed keys remain usable — unless an opt-in
+ * {@linkplain HttpJwksLoaderConfig#getMaxStaleness() maximum staleness} is configured and the time since
+ * the last successful load exceeds it: then a refresh cycle that installs no keys moves the status to
+ * {@link LoaderStatus#UNDEFINED} and logs {@code JWKS_KEYS_STALE} once, while the installed and retired
+ * keys stay in place; the next refresh that installs usable keys publishes {@code OK} again. After
+ * {@link #close()} no refresh still in flight publishes {@code OK}.
  * <p>
  * This implementation follows a clean architecture with:
  * <ul>
@@ -123,6 +129,13 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     private SecurityEventCounter securityEventCounter;
     private final AtomicReference<String> resolvedIssuerIdentifier = new AtomicReference<>();
     private final AtomicReference<Jwks> currentJwksContent = new AtomicReference<>();
+
+    /**
+     * When the last load that installed (or confirmed) a usable key set finished, {@code null} before the
+     * first successful load and after {@link #close()}. Read by the opt-in staleness check
+     * ({@link #degradeIfStale(long)}).
+     */
+    private final AtomicReference<Instant> lastSuccessfulLoad = new AtomicReference<>();
 
     /**
      * Lifecycle monitor. {@link #close()} marks the loader closed and resets it while holding this
@@ -546,6 +559,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             if (logInitialLoad) {
                 LOGGER.info(INFO.JWKS_LOADED, getResolvedIssuer());
             }
+            lastSuccessfulLoad.set(Instant.now());
             status.set(LoaderStatus.OK);
             return true;
         } finally {
@@ -754,7 +768,10 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * <p>
      * Status contract: a cycle that installs a usable key set publishes {@link LoaderStatus#OK}, which
      * lets a loader whose first load failed recover. A failed cycle never downgrades an existing
-     * {@code OK}, since the installed keys remain usable. A cycle of a closed generation — one whose
+     * {@code OK}, since the installed keys remain usable — unless a
+     * {@linkplain HttpJwksLoaderConfig#getMaxStaleness() maximum staleness} is configured and exceeded,
+     * in which case the cycle moves the status to {@link LoaderStatus#UNDEFINED} without dropping any
+     * key (see {@link #degradeIfStale(long)}). A cycle of a closed generation — one whose
      * {@code cycleEpoch} a {@link #close()} has moved on, even if the loader has been initialized again
      * since — issues no fetch, installs no keys and publishes neither a status nor an endpoint.
      * <p>
@@ -784,6 +801,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         } finally {
             lifecycleLock.unlock();
         }
+        boolean installed = false;
         try {
             if (current == null) {
                 current = reResolveEndpoint(cycleEpoch);
@@ -801,7 +819,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             HttpResult<Jwks> result = current.adapter().getBlocking();
 
             if (result.isSuccess()) {
-                installKeysAndPublishOk(result.getContent().orElse(null), false, cycleEpoch);
+                installed = installKeysAndPublishOk(result.getContent().orElse(null), false, cycleEpoch);
             } else {
                 // Handle error (network, server, etc.)
                 String statusDesc = result.getErrorMessage()
@@ -822,6 +840,43 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         // causing keys to never rotate — a silent availability degradation.
         catch (Exception e) {
             LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+        } finally {
+            if (!installed) {
+                degradeIfStale(cycleEpoch);
+            }
+        }
+    }
+
+    /**
+     * Applies the opt-in staleness bound after a refresh cycle that did not end with installed keys.
+     * <p>
+     * Acts only when a {@linkplain HttpJwksLoaderConfig#getMaxStaleness() maximum staleness} is
+     * configured, the cycle's generation is still live, the status is {@link LoaderStatus#OK} and the
+     * time since the last successful load exceeds the bound. It then sets the status to
+     * {@link LoaderStatus#UNDEFINED} and logs {@code JWKS_KEYS_STALE}; since the status is no longer
+     * {@code OK} afterwards, the warning is logged once per degradation. Installed and retired keys are
+     * not touched, so {@link #getKeyInfo(String)} keeps answering, and the next cycle that installs
+     * usable keys publishes {@code OK} again.
+     *
+     * @param cycleEpoch the {@link #epoch} of the generation the calling refresh cycle belongs to
+     */
+    private void degradeIfStale(long cycleEpoch) {
+        Optional<Duration> maxStaleness = config.getMaxStaleness();
+        if (maxStaleness.isEmpty()) {
+            return;
+        }
+        lifecycleLock.lock();
+        try {
+            Instant lastLoad = lastSuccessfulLoad.get();
+            if (!isLive(cycleEpoch) || status.get() != LoaderStatus.OK || lastLoad == null) {
+                return;
+            }
+            if (Duration.between(lastLoad, Instant.now()).compareTo(maxStaleness.get()) > 0) {
+                status.set(LoaderStatus.UNDEFINED);
+                LOGGER.warn(WARN.JWKS_KEYS_STALE, getResolvedIssuer(), lastLoad, maxStaleness.get());
+            }
+        } finally {
+            lifecycleLock.unlock();
         }
     }
 
@@ -901,6 +956,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             retiredKeys.clear();
             endpoint.set(null);
             currentJwksContent.set(null);
+            lastSuccessfulLoad.set(null);
             initFuture = null;
             status.set(LoaderStatus.UNDEFINED);
         } finally {
