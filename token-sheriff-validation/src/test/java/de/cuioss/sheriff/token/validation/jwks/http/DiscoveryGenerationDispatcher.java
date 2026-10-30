@@ -25,11 +25,13 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static jakarta.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 import static jakarta.servlet.http.HttpServletResponse.SC_NOT_FOUND;
 import static jakarta.servlet.http.HttpServletResponse.SC_OK;
 
@@ -41,6 +43,10 @@ import static jakarta.servlet.http.HttpServletResponse.SC_OK;
  * <p>
  * This lets a test let one initialization resolve a different {@code jwks_uri} than a later one, and
  * hold the first resolution in flight across a {@code close()} and a re-initialization of the loader.
+ * <p>
+ * Two further controls serve the re-discovery tests: a JWKS path can be marked as failing, so its
+ * fetches are answered with HTTP 500 (and still counted) until it is restored, and the discovery
+ * document can advertise an override issuer from a given discovery request onward.
  */
 final class DiscoveryGenerationDispatcher extends Dispatcher {
 
@@ -52,7 +58,9 @@ final class DiscoveryGenerationDispatcher extends Dispatcher {
     private final List<String> advertisedJwksUris;
     private final AtomicInteger discoveryRequests = new AtomicInteger();
     private final Map<String, AtomicInteger> jwksFetches = new ConcurrentHashMap<>();
+    private final Set<String> failingJwksPaths = ConcurrentHashMap.newKeySet();
     private volatile @Nullable CountDownLatch firstDiscoveryGate;
+    private volatile @Nullable IssuerOverride issuerOverride;
 
     /**
      * @param advertisedJwksUris the {@code jwks_uri} advertised by the first, second, ... discovery
@@ -71,6 +79,37 @@ final class DiscoveryGenerationDispatcher extends Dispatcher {
      */
     void holdFirstDiscovery(CountDownLatch gate) {
         this.firstDiscoveryGate = gate;
+    }
+
+    /**
+     * Answers every following fetch of the given JWKS path with HTTP 500 until
+     * {@link #restoreJwks(String)} is called. Failed fetches are still counted.
+     *
+     * @param path the JWKS path, for example {@code /jwks-a.json}
+     */
+    void failJwks(String path) {
+        failingJwksPaths.add(path);
+    }
+
+    /**
+     * Serves the default key set again for a JWKS path marked by {@link #failJwks(String)}.
+     *
+     * @param path the JWKS path, for example {@code /jwks-a.json}
+     */
+    void restoreJwks(String path) {
+        failingJwksPaths.remove(path);
+    }
+
+    /**
+     * Advertises {@code issuer} instead of the server's own issuer in the discovery responses from the
+     * discovery request with the given zero-based index onward; earlier requests keep the server issuer.
+     *
+     * @param fromDiscoveryIndex the zero-based index of the first discovery request advertising
+     *                           {@code issuer}
+     * @param issuer             the issuer to advertise
+     */
+    void advertiseIssuerFrom(int fromDiscoveryIndex, String issuer) {
+        this.issuerOverride = new IssuerOverride(fromDiscoveryIndex, issuer);
     }
 
     /**
@@ -98,6 +137,9 @@ final class DiscoveryGenerationDispatcher extends Dispatcher {
         }
         if (path.startsWith("/jwks")) {
             jwksFetches.computeIfAbsent(path, key -> new AtomicInteger()).incrementAndGet();
+            if (failingJwksPaths.contains(path)) {
+                return new MockResponse(SC_INTERNAL_SERVER_ERROR, Headers.of(), "");
+            }
             return new MockResponse(SC_OK, Headers.of("Content-Type", "application/json"),
                     InMemoryJWKSFactory.createDefaultJwks());
         }
@@ -107,9 +149,11 @@ final class DiscoveryGenerationDispatcher extends Dispatcher {
     private MockResponse discovery(HttpUrl url) {
         int index = discoveryRequests.getAndIncrement();
         String baseUrl = url.newBuilder().encodedPath("/").build().toString();
-        String issuer = baseUrl.substring(0, baseUrl.length() - 1);
+        String serverIssuer = baseUrl.substring(0, baseUrl.length() - 1);
         String advertised = advertisedJwksUris.get(Math.min(index, advertisedJwksUris.size() - 1));
-        String jwksUri = advertised.startsWith("/") ? issuer + advertised : advertised;
+        String jwksUri = advertised.startsWith("/") ? serverIssuer + advertised : advertised;
+        IssuerOverride override = issuerOverride;
+        String issuer = override != null && index >= override.fromDiscoveryIndex() ? override.issuer() : serverIssuer;
         if (index == 0) {
             awaitFirstDiscoveryGate();
         }
@@ -135,5 +179,14 @@ final class DiscoveryGenerationDispatcher extends Dispatcher {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while waiting for the first discovery gate", e);
         }
+    }
+
+    /**
+     * An issuer advertised from a given discovery request onward.
+     *
+     * @param fromDiscoveryIndex the zero-based index of the first discovery request advertising it
+     * @param issuer             the advertised issuer
+     */
+    private record IssuerOverride(int fromDiscoveryIndex, String issuer) {
     }
 }
