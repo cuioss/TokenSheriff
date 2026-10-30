@@ -23,7 +23,9 @@ package de.cuioss.sheriff.token.commons.transport;
  *   <li>OK: if it can load at least one key or has valid content</li>
  *   <li>ERROR: if it failed to load any keys due to configuration or runtime issues</li>
  *   <li>LOADING: if a loading operation is currently in progress</li>
- *   <li>UNDEFINED: if the status hasn't been determined yet</li>
+ *   <li>UNDEFINED: if no usable key set is currently confirmed but the loader is not terminally failed:
+ *       the status hasn't been determined yet, a failed load awaits a retry by the background refresh, or
+ *       the installed keys exceeded a configured maximum staleness</li>
  * </ul>
  * @since 1.0
  */
@@ -38,7 +40,10 @@ public enum LoaderStatus {
     // clarity in status reporting (e.g., "loading" vs "error" in health endpoint output).
     /** A loading operation is currently in progress */
     LOADING("loading"),
-    /** The loader's status hasn't been determined yet */
+    /**
+     * No usable key set is currently confirmed, without a terminal failure: not determined yet, a failed
+     * load awaiting a retry, or keys beyond a configured maximum staleness
+     */
     UNDEFINED("undefined");
 
     private final String value;

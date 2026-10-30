@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.commons.transport;
 
 import de.cuioss.http.client.adapter.RetryConfig;
+import de.cuioss.http.client.handler.HttpHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -30,6 +31,7 @@ class HttpJwksLoaderConfigWellKnownTest {
     private static final String TEST_WELL_KNOWN_URL = "https://example.com/.well-known/openid-configuration";
     private static final URI TEST_WELL_KNOWN_URI = URI.create(TEST_WELL_KNOWN_URL);
     private static final String TEST_JWKS_URL = "https://example.com/jwks";
+    private static final String DERIVED_JWKS_URL = "https://idp.example.com/jwks.json";
 
     @Test
     @DisplayName("Should create config with well-known URL")
@@ -146,5 +148,49 @@ class HttpJwksLoaderConfigWellKnownTest {
                         "The JWKS fetch must default to RetryConfig.defaults()"),
                 () -> assertEquals(RetryConfig.defaults(), config.getWellKnownConfig().getRetryConfig(),
                         "Well-known discovery must default to RetryConfig.defaults()"));
+    }
+
+    @Test
+    @DisplayName("Should hand the configured timeouts to the discovery handler and the derived JWKS handler")
+    void shouldPropagateConfiguredTimeoutsToWellKnownHandlers() {
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                .connectTimeoutSeconds(7)
+                .readTimeoutSeconds(11)
+                .build();
+
+        HttpHandler discoveryHandler = config.getWellKnownConfig().getHttpHandler();
+        HttpHandler derivedJwksHandler = config.getHttpHandler(DERIVED_JWKS_URL);
+
+        assertAll("configured timeouts",
+                () -> assertEquals(7, discoveryHandler.getConnectionTimeoutSeconds(),
+                        "The discovery fetch must use the configured connect timeout"),
+                () -> assertEquals(11, discoveryHandler.getReadTimeoutSeconds(),
+                        "The discovery fetch must use the configured read timeout"),
+                () -> assertEquals(7, derivedJwksHandler.getConnectionTimeoutSeconds(),
+                        "The handler derived for the advertised jwks_uri must use the configured connect timeout"),
+                () -> assertEquals(11, derivedJwksHandler.getReadTimeoutSeconds(),
+                        "The handler derived for the advertised jwks_uri must use the configured read timeout"));
+    }
+
+    @Test
+    @DisplayName("Should use the 2s connect / 3s read defaults on both well-known handlers when none are configured")
+    void shouldUseDefaultTimeoutsForWellKnownHandlersWhenNoneConfigured() {
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                .build();
+
+        HttpHandler discoveryHandler = config.getWellKnownConfig().getHttpHandler();
+        HttpHandler derivedJwksHandler = config.getHttpHandler(DERIVED_JWKS_URL);
+
+        assertAll("default timeouts",
+                () -> assertEquals(2, discoveryHandler.getConnectionTimeoutSeconds(),
+                        "The discovery fetch must default to a 2s connect timeout"),
+                () -> assertEquals(3, discoveryHandler.getReadTimeoutSeconds(),
+                        "The discovery fetch must default to a 3s read timeout"),
+                () -> assertEquals(2, derivedJwksHandler.getConnectionTimeoutSeconds(),
+                        "The derived JWKS handler must default to a 2s connect timeout"),
+                () -> assertEquals(3, derivedJwksHandler.getReadTimeoutSeconds(),
+                        "The derived JWKS handler must default to a 3s read timeout"));
     }
 }

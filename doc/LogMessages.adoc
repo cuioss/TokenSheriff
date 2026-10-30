@@ -49,7 +49,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-009 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
 |===
 
-== WARN Level (100-169; identifier 156 is retired)
+== WARN Level (100-170; identifier 156 is retired)
 
 [cols="1,1,2,2", options="header"]
 |===
@@ -123,6 +123,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-168 |JWKS |SSRF egress guard blocked well-known discovery fetch: %s |Logged when the SSRF egress guard rejects the OIDC well-known discovery endpoint because its host resolves to a disallowed (loopback/link-local/site-local/ULA/metadata) address before any fetch is issued
 |TokenSheriff-168 |JWKS |Duplicate kid '%s' in JWKS: a later key overwrote an earlier one — the JWKS should carry a unique kid per key |Logged when a JWKS document contains two keys with the same key ID (note: this identifier is currently shared with the SSRF egress guard message above)
 |TokenSheriff-169 |JWKS |JWKS refresh for issuer '%s' produced no usable keys — retaining the current key set instead of retiring it |Logged when a JWKS refresh returns no usable keys and the previously loaded key set is kept
+|TokenSheriff-170 |JWKS |JWKS for issuer '%s' has not been refreshed successfully since %s, exceeding the configured maximum staleness of %s; the loader reports a non-OK status until a refresh succeeds |Logged once per degradation when a `maxStaleness` is configured and a failed background refresh finds the last successful JWKS load older than that bound. The loader leaves `OK` (tokens for the issuer are rejected until a refresh succeeds); no installed key is dropped
 |===
 
 == ERROR Level (200-206)

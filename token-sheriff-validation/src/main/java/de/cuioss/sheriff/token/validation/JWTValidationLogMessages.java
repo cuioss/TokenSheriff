@@ -510,6 +510,12 @@ public final class JWTValidationLogMessages {
                 .template("JWKS refresh for issuer '%s' produced no usable keys — retaining the current key set instead of retiring it")
                 .build();
 
+        public static final LogRecord JWKS_KEYS_STALE = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(170)
+                .template("JWKS for issuer '%s' has not been refreshed successfully since %s, exceeding the configured maximum staleness of %s; the loader reports a non-OK status until a refresh succeeds")
+                .build();
+
     }
 
 }

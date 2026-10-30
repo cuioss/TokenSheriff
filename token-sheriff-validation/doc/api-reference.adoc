@@ -126,6 +126,7 @@ public class HttpJwksLoaderConfig {
         public HttpJwksLoaderConfigBuilder retryConfig(RetryConfig config);
         public HttpJwksLoaderConfigBuilder issuerIdentifier(String issuer);
         public HttpJwksLoaderConfigBuilder keyRotationGracePeriod(Duration period);
+        public HttpJwksLoaderConfigBuilder maxStaleness(Duration maxStaleness);  // Default: off
         public HttpJwksLoaderConfigBuilder maxRetiredKeySets(int maxRetiredKeySets);
         public HttpJwksLoaderConfigBuilder parserConfig(ParserConfig config);
     }

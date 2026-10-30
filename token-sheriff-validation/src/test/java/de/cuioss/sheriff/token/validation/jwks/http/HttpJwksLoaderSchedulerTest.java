@@ -29,11 +29,13 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
 import lombok.Getter;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -46,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class HttpJwksLoaderSchedulerTest {
 
     private static final String TEST_KID = InMemoryJWKSFactory.DEFAULT_KEY_ID;
+    private static final Duration SHORT_STALENESS_BOUND = Duration.ofMillis(50);
 
     @Getter
     private final JwksResolveDispatcher moduleDispatcher = new JwksResolveDispatcher();
@@ -344,5 +347,92 @@ class HttpJwksLoaderSchedulerTest {
                 "Loader should stay healthy after a refresh with unchanged content");
 
         loader.close();
+    }
+
+    @Test
+    @DisplayName("Should degrade from OK once failing refreshes exceed maxStaleness, and recover on success")
+    void shouldDegradeWhenStaleAndRecoverOnSuccess(URIBuilder uriBuilder) {
+        HttpJwksLoader loader = initializedLoaderWithMaxStaleness(uriBuilder, SHORT_STALENESS_BOUND);
+        awaitElapsedBeyond(Instant.now(), SHORT_STALENESS_BOUND);
+        moduleDispatcher.returnError();
+
+        loader.performBackgroundRefresh();
+        loader.performBackgroundRefresh();
+
+        assertAll("degraded but keys retained",
+                () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus(),
+                        "a failing refresh past the bound must leave OK"),
+                () -> assertTrue(loader.getKeyInfo(TEST_KID).isPresent(),
+                        "the degradation must not drop any installed key"));
+        LogAsserts.assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
+                JWTValidationLogMessages.WARN.JWKS_KEYS_STALE.resolveIdentifierString());
+
+        moduleDispatcher.returnDefault();
+        loader.performBackgroundRefresh();
+
+        assertEquals(LoaderStatus.OK, loader.getLoaderStatus(), "a successful refresh must restore OK");
+        loader.close();
+    }
+
+    @Test
+    @DisplayName("Should keep OK for failing refreshes when maxStaleness is not configured")
+    void shouldKeepOkForFailingRefreshesWithoutMaxStaleness(URIBuilder uriBuilder) {
+        HttpJwksLoader loader = initializedLoaderWithMaxStaleness(uriBuilder, null);
+        awaitElapsedBeyond(Instant.now(), SHORT_STALENESS_BOUND);
+        moduleDispatcher.returnError();
+
+        loader.performBackgroundRefresh();
+        loader.performBackgroundRefresh();
+
+        assertAll("default behaviour: installed keys are served indefinitely",
+                () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                () -> assertTrue(loader.getKeyInfo(TEST_KID).isPresent()));
+        loader.close();
+    }
+
+    @Test
+    @DisplayName("Should keep OK for a failing refresh within maxStaleness")
+    void shouldKeepOkForFailingRefreshWithinMaxStaleness(URIBuilder uriBuilder) {
+        HttpJwksLoader loader = initializedLoaderWithMaxStaleness(uriBuilder, Duration.ofHours(1));
+        moduleDispatcher.returnError();
+
+        loader.performBackgroundRefresh();
+
+        assertEquals(LoaderStatus.OK, loader.getLoaderStatus(),
+                "a failing refresh within the bound must not degrade the status");
+        loader.close();
+    }
+
+    private HttpJwksLoader initializedLoaderWithMaxStaleness(URIBuilder uriBuilder, @Nullable Duration maxStaleness) {
+        moduleDispatcher.returnDefault();
+        HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder builder = HttpJwksLoaderConfig.builder()
+                .allowLoopbackEgress(true)
+                .allowInsecureHttp(true)
+                .jwksUrl(uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString())
+                .issuerIdentifier("test-issuer")
+                // Long interval: the scheduled task never fires, the test drives every cycle itself
+                .refreshIntervalSeconds(3600)
+                .retryConfig(RetryConfig.builder()
+                        .maxAttempts(1)
+                        .initialDelay(Duration.ofMillis(1))
+                        .maxDelay(Duration.ofMillis(5))
+                        .build());
+        if (maxStaleness != null) {
+            builder.maxStaleness(maxStaleness);
+        }
+        HttpJwksLoader loader = new HttpJwksLoader(builder.build());
+        loader.initJWKSLoader(securityEventCounter).join();
+        assertEquals(LoaderStatus.OK, loader.getLoaderStatus(), "the initial load must succeed");
+        return loader;
+    }
+
+    /**
+     * Waits until twice {@code bound} has elapsed since {@code since}, which the caller captures after
+     * the last successful load, so the time since that load certainly exceeds {@code bound}.
+     */
+    private static void awaitElapsedBeyond(Instant since, Duration bound) {
+        await("the staleness bound to elapse")
+                .atMost(2, SECONDS)
+                .until(() -> Duration.between(since, Instant.now()).compareTo(bound.multipliedBy(2)) > 0);
     }
 }

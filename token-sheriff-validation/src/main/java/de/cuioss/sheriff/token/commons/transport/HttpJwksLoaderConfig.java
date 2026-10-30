@@ -23,12 +23,14 @@ import de.cuioss.tools.logging.CuiLogger;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
+import org.jspecify.annotations.Nullable;
 
 import javax.net.ssl.SSLContext;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -195,6 +197,12 @@ public class HttpJwksLoaderConfig {
     @EqualsAndHashCode.Exclude
     private final CleartextEndpoints.TlsSettings tlsSettings;
 
+    /**
+     * The opt-in maximum key staleness, {@code null} when not configured. See
+     * {@link HttpJwksLoaderConfigBuilder#maxStaleness(Duration)}.
+     */
+    private final @Nullable Duration maxStaleness;
+
     @SuppressWarnings("java:S107") // ok for builder
     private HttpJwksLoaderConfig(int refreshIntervalSeconds,
             HttpHandler httpHandler,
@@ -207,7 +215,8 @@ public class HttpJwksLoaderConfig {
             int maxRetiredKeySets,
             ParserConfig parserConfig,
             EgressPolicy egressPolicy,
-            CleartextEndpoints.TlsSettings tlsSettings) {
+            CleartextEndpoints.TlsSettings tlsSettings,
+            @Nullable Duration maxStaleness) {
         this.refreshIntervalSeconds = refreshIntervalSeconds;
         this.httpHandler = httpHandler;
         this.wellKnownConfig = wellKnownConfig;
@@ -220,6 +229,20 @@ public class HttpJwksLoaderConfig {
         this.parserConfig = parserConfig;
         this.egressPolicy = egressPolicy;
         this.tlsSettings = tlsSettings;
+        this.maxStaleness = maxStaleness;
+    }
+
+    /**
+     * Returns the opt-in maximum key staleness.
+     * <p>
+     * When present, a loader whose installed keys have not been refreshed successfully for longer than
+     * this bound leaves {@link LoaderStatus#OK} until a refresh succeeds again. When absent (the default),
+     * installed keys are served indefinitely while refreshes fail.
+     *
+     * @return the configured maximum staleness, empty when not configured
+     */
+    public Optional<Duration> getMaxStaleness() {
+        return Optional.ofNullable(maxStaleness);
     }
 
     /**
@@ -303,8 +326,9 @@ public class HttpJwksLoaderConfig {
      * Every other setting is copied unchanged: the copy shares the HTTP handler, the
      * {@link WellKnownConfig}, the retry configuration, the scheduled executor (together with its
      * ownership flag), the parser configuration, the egress policy and the TLS settings of this
-     * instance. {@code IssuerConfig} uses this method to propagate its identifier into the loader
-     * configuration, so that the issuer advertised by a discovery document is always compared with it.
+     * instance, as is the maximum staleness. {@code IssuerConfig} uses this method to propagate its
+     * identifier into the loader configuration, so that the issuer advertised by a discovery document is
+     * always compared with it.
      *
      * @param issuerIdentifier the issuer identifier for the copy, must not be {@code null} or blank
      * @return a new configuration equal to this one except for the issuer identifier
@@ -325,7 +349,8 @@ public class HttpJwksLoaderConfig {
                 maxRetiredKeySets,
                 parserConfig,
                 egressPolicy,
-                tlsSettings);
+                tlsSettings,
+                maxStaleness);
     }
 
     /**
@@ -376,6 +401,10 @@ public class HttpJwksLoaderConfig {
         // Retained, besides the pass-through, for the well-known branch and the derived jwks_uri handlers
         private SSLContext sslContext;
         private SecureSSLContextProvider tlsVersions;
+        // Retained, besides the pass-through, so build() can forward them to the well-known branch
+        private int connectTimeoutSeconds = DEFAULT_CONNECT_TIMEOUT_SECONDS;
+        private int readTimeoutSeconds = DEFAULT_READ_TIMEOUT_SECONDS;
+        private @Nullable Duration maxStaleness;
         private final List<String> allowedEgressHosts = new ArrayList<>();
 
         // The directly configured JWKS endpoint, kept to fit the TLS settings to its scheme in build()
@@ -689,6 +718,11 @@ public class HttpJwksLoaderConfig {
 
         /**
          * Sets the connection timeout in seconds.
+         * <p>
+         * Defaults to 2 seconds. The value applies on both configuration branches: to the JWKS fetch for a
+         * directly configured endpoint, and, for a discovery-configured one, to the well-known discovery
+         * fetch as well as to the handler derived for the advertised {@code jwks_uri} — it is forwarded to
+         * the {@link WellKnownConfig} created in {@link #build()}.
          *
          * @param connectTimeoutSeconds the connection timeout in seconds
          * @return this builder instance
@@ -696,12 +730,18 @@ public class HttpJwksLoaderConfig {
          */
         public HttpJwksLoaderConfigBuilder connectTimeoutSeconds(int connectTimeoutSeconds) {
             Preconditions.checkArgument(connectTimeoutSeconds > 0, "connectTimeoutSeconds must be > 0, but was %s", connectTimeoutSeconds);
+            this.connectTimeoutSeconds = connectTimeoutSeconds;
             httpHandlerBuilder.connectionTimeoutSeconds(connectTimeoutSeconds);
             return this;
         }
 
         /**
          * Sets the read timeout in seconds.
+         * <p>
+         * Defaults to 3 seconds. The value applies on both configuration branches: to the JWKS fetch for a
+         * directly configured endpoint, and, for a discovery-configured one, to the well-known discovery
+         * fetch as well as to the handler derived for the advertised {@code jwks_uri} — it is forwarded to
+         * the {@link WellKnownConfig} created in {@link #build()}.
          *
          * @param readTimeoutSeconds the read timeout in seconds
          * @return this builder instance
@@ -709,6 +749,7 @@ public class HttpJwksLoaderConfig {
          */
         public HttpJwksLoaderConfigBuilder readTimeoutSeconds(int readTimeoutSeconds) {
             Preconditions.checkArgument(readTimeoutSeconds > 0, "readTimeoutSeconds must be > 0, but was %s", readTimeoutSeconds);
+            this.readTimeoutSeconds = readTimeoutSeconds;
             httpHandlerBuilder.readTimeoutSeconds(readTimeoutSeconds);
             return this;
         }
@@ -738,6 +779,36 @@ public class HttpJwksLoaderConfig {
          */
         public HttpJwksLoaderConfigBuilder scheduledExecutorService(ScheduledExecutorService scheduledExecutorService) {
             this.scheduledExecutorService = scheduledExecutorService;
+            return this;
+        }
+
+        /**
+         * Sets an opt-in upper bound on how long installed keys may go without a successful refresh.
+         * <p>
+         * Not set by default: the loader then serves its installed keys indefinitely while background
+         * refreshes keep failing, and its status stays {@link LoaderStatus#OK}. When set, every background
+         * refresh cycle that does not end with installed keys checks the time since the last successful
+         * load; once it exceeds this bound, the loader leaves {@code OK} and logs {@code TokenSheriff-170}
+         * ({@code JWKS_KEYS_STALE}) once. A later successful refresh restores {@code OK}.
+         * <p>
+         * <strong>Availability trade-off:</strong> past the bound the issuer stops resolving until a
+         * refresh succeeds, and tokens for it are rejected, because only an {@code OK} loader is admitted.
+         * No key is dropped by the degradation — installed and retired keys stay in place, so recovery is
+         * immediate on the next successful refresh.
+         * <p>
+         * Staleness is evaluated per background refresh cycle, so {@link #build()} rejects this setting
+         * combined with {@link #refreshIntervalSeconds(int) refreshIntervalSeconds(0)}. Choose a bound of
+         * at least several refresh intervals, so a single failed cycle does not degrade the issuer.
+         *
+         * @param maxStaleness the maximum staleness, must be positive
+         * @return this builder instance
+         * @throws IllegalArgumentException if {@code maxStaleness} is {@code null}, zero or negative
+         */
+        public HttpJwksLoaderConfigBuilder maxStaleness(Duration maxStaleness) {
+            Preconditions.checkArgument(maxStaleness != null, "maxStaleness must not be null");
+            Preconditions.checkArgument(!maxStaleness.isZero() && !maxStaleness.isNegative(),
+                    "maxStaleness must be positive, but was %s", maxStaleness);
+            this.maxStaleness = maxStaleness;
             return this;
         }
 
@@ -786,6 +857,15 @@ public class HttpJwksLoaderConfig {
                                 + "through the JVM default trust store, or keep verifyHostname(true).");
             }
 
+            // Staleness is evaluated per background refresh cycle; without a refresh it could never be
+            // evaluated, so the bound would be silently inert.
+            if (maxStaleness != null && refreshIntervalSeconds == 0) {
+                throw new IllegalArgumentException(
+                        "HttpJwksLoaderConfigBuilder: maxStaleness(...) cannot be combined with refreshIntervalSeconds(0). "
+                                + "Staleness is evaluated on each background refresh cycle, which refreshIntervalSeconds(0) disables. "
+                                + "Either configure a positive refresh interval or drop maxStaleness(...).");
+            }
+
             // Ensure at least one endpoint configuration method was used
             if (endpointSource == null) {
                 throw new IllegalArgumentException(
@@ -808,6 +888,8 @@ public class HttpJwksLoaderConfig {
                 // Build WellKnownConfig with the resolved ParserConfig
                 var wkBuilder = WellKnownConfig.builder()
                         .retryConfig(retryConfig)
+                        .connectTimeoutSeconds(connectTimeoutSeconds)
+                        .readTimeoutSeconds(readTimeoutSeconds)
                         .parserConfig(resolvedParserConfig)
                         .allowInsecureHttp(allowInsecureHttp)
                         .allowLoopbackEgress(allowLoopbackEgress)
@@ -887,7 +969,8 @@ public class HttpJwksLoaderConfig {
                     maxRetiredKeySets,
                     resolvedParserConfig,
                     resolvedEgressPolicy,
-                    tlsSettings);
+                    tlsSettings,
+                    maxStaleness);
         }
 
     }
