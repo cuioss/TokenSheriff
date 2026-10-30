@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.logout;
 
+import de.cuioss.sheriff.token.client.internal.EndpointQuery;
 import de.cuioss.sheriff.token.client.internal.EndpointSchemePolicy;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import org.jspecify.annotations.Nullable;
@@ -121,12 +122,7 @@ public class EndSessionFlow {
                 PARAM_POST_LOGOUT_REDIRECT_URI, validatedRedirect,
                 PARAM_STATE, state));
 
-        // The query goes in front of any #fragment: parameters appended after the '#' would be part of
-        // the fragment and never reach the authorization server.
-        int fragmentStart = endSessionEndpoint.indexOf('#');
-        String base = fragmentStart < 0 ? endSessionEndpoint : endSessionEndpoint.substring(0, fragmentStart);
-        String fragment = fragmentStart < 0 ? "" : endSessionEndpoint.substring(fragmentStart);
-        return base + (base.indexOf('?') < 0 ? '?' : '&') + FormEncoder.encode(params) + fragment;
+        return EndpointQuery.append(endSessionEndpoint, FormEncoder.encode(params));
     }
 
     /**

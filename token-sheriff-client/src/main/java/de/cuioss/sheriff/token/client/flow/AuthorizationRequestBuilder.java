@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.client.flow;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
+import de.cuioss.sheriff.token.client.internal.EndpointQuery;
 import de.cuioss.sheriff.token.client.internal.EndpointSchemePolicy;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
@@ -39,7 +40,9 @@ import java.util.Objects;
  * the redirect URI rather than as query parameters on a redirect URL, where it would leak into
  * browser history, server logs, and the {@code Referer} header ({@code CLIENT-1} / {@code CLIENT-14},
  * {@code T-URL-LEAK}). When the flow context requests {@code acr_values} and/or a {@code max_age}
- * freshness constraint (RFC 9470 step-up), they are appended. The builder fails closed when the
+ * freshness constraint (RFC 9470 step-up), they are appended. The parameters are inserted before any
+ * {@code #fragment} of the authorization endpoint, so they always reach the authorization server and the
+ * fragment is kept unchanged (see {@link EndpointQuery}). The builder fails closed when the
  * authorization server does not advertise PKCE {@code S256}, so a downgrade to a non-PKCE (or
  * {@code plain}) request can never be issued ({@code CLIENT-2}).
  *
@@ -113,6 +116,7 @@ public class AuthorizationRequestBuilder {
         context.acrValues().ifPresent(acr -> params.put(PARAM_ACR_VALUES, acr));
         context.maxAge().ifPresent(maxAge -> params.put(PARAM_MAX_AGE, Integer.toString(maxAge)));
 
-        return authorizationEndpoint + (authorizationEndpoint.indexOf('?') < 0 ? '?' : '&') + FormEncoder.encode(params);
+        // The query goes in front of any #fragment, or state, nonce and PKCE would never reach the AS.
+        return EndpointQuery.append(authorizationEndpoint, FormEncoder.encode(params));
     }
 }

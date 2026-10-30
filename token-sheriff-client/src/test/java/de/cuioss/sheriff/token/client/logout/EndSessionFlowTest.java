@@ -166,6 +166,24 @@ class EndSessionFlowTest {
     }
 
     @Test
+    @DisplayName("Should not treat a '?' inside the endpoint fragment as the query separator (C-4)")
+    void shouldIgnoreQuestionMarkInsideFragment() {
+        String idTokenHint = Generators.letterStrings(30, 60).next();
+        String state = Generators.letterStrings(20, 40).next();
+
+        String url = flow.buildLogoutRedirect("https://as.example.com/logout#frag?x=y", idTokenHint,
+                REGISTERED_REDIRECT, state);
+
+        int fragmentStart = url.indexOf('#');
+        String beforeFragment = url.substring(0, fragmentStart);
+        assertAll("question mark inside the fragment",
+                () -> assertTrue(url.startsWith("https://as.example.com/logout?"),
+                        "the query is opened with '?' before the fragment"),
+                () -> assertEquals("#frag?x=y", url.substring(fragmentStart), "fragment is kept unchanged at the end"),
+                () -> assertTrue(beforeFragment.contains("state=" + urlEncode(state)), "state precedes the fragment"));
+    }
+
+    @Test
     @DisplayName("Should accept a post-logout state that matches the session-bound state (M2)")
     void shouldAcceptMatchingPostLogoutState() {
         String state = Generators.letterStrings(20, 40).next();
