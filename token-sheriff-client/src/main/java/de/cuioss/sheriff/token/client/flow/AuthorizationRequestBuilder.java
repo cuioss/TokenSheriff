@@ -18,11 +18,12 @@ package de.cuioss.sheriff.token.client.flow;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
+import de.cuioss.sheriff.token.client.internal.EndpointQuery;
+import de.cuioss.sheriff.token.client.internal.EndpointSchemePolicy;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.tools.logging.CuiLogger;
 
-import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -39,7 +40,9 @@ import java.util.Objects;
  * the redirect URI rather than as query parameters on a redirect URL, where it would leak into
  * browser history, server logs, and the {@code Referer} header ({@code CLIENT-1} / {@code CLIENT-14},
  * {@code T-URL-LEAK}). When the flow context requests {@code acr_values} and/or a {@code max_age}
- * freshness constraint (RFC 9470 step-up), they are appended. The builder fails closed when the
+ * freshness constraint (RFC 9470 step-up), they are appended. The parameters are inserted before any
+ * {@code #fragment} of the authorization endpoint, so they always reach the authorization server and the
+ * fragment is kept unchanged (see {@link EndpointQuery}). The builder fails closed when the
  * authorization server does not advertise PKCE {@code S256}, so a downgrade to a non-PKCE (or
  * {@code plain}) request can never be issued ({@code CLIENT-2}).
  *
@@ -65,8 +68,6 @@ public class AuthorizationRequestBuilder {
     private static final String PARAM_MAX_AGE = "max_age";
     private static final String PARAM_RESPONSE_MODE = "response_mode";
     private static final String RESPONSE_MODE_FORM_POST = "form_post";
-    private static final String SCHEME_HTTPS = "https";
-    private static final String SCHEME_HTTP = "http";
 
     /**
      * Builds the authorization request URL for the given flow context.
@@ -77,7 +78,8 @@ public class AuthorizationRequestBuilder {
      * @param context       the flow context carrying {@code state}, {@code nonce}, PKCE, and the
      *                      redirect URI; must not be {@code null}
      * @return the fully-formed authorization request URL
-     * @throws ClientProtocolException if the AS advertises no authorization endpoint or does not
+     * @throws ClientProtocolException if the AS advertises no authorization endpoint, the endpoint is
+     *                               not a TLS URL (see {@link EndpointSchemePolicy}), or the AS does not
      *                               advertise PKCE {@code S256}
      */
     public String build(ClientConfiguration configuration, ProviderMetadata metadata, FlowContext context) {
@@ -88,7 +90,10 @@ public class AuthorizationRequestBuilder {
         String authorizationEndpoint = metadata.getAuthorizationEndpoint()
                 .orElseThrow(() -> new ClientProtocolException(
                         "provider metadata is missing the authorization endpoint"));
-        enforceEndpointScheme(authorizationEndpoint, configuration);
+        // A non-TLS authorization endpoint would expose state/nonce/PKCE and the resulting code to a
+        // network observer (L5); cleartext http is tolerated only for an explicit local test setup.
+        EndpointSchemePolicy.requireTls(authorizationEndpoint, "authorization endpoint",
+                configuration.isAllowInsecureHttp());
         if (!metadata.supportsS256()) {
             LOGGER.warn(ClientLogMessages.WARN.S256_NOT_ADVERTISED, metadata.getIssuer().orElse(authorizationEndpoint));
             throw new ClientProtocolException(
@@ -111,35 +116,7 @@ public class AuthorizationRequestBuilder {
         context.acrValues().ifPresent(acr -> params.put(PARAM_ACR_VALUES, acr));
         context.maxAge().ifPresent(maxAge -> params.put(PARAM_MAX_AGE, Integer.toString(maxAge)));
 
-        return authorizationEndpoint + (authorizationEndpoint.indexOf('?') < 0 ? '?' : '&') + FormEncoder.encode(params);
-    }
-
-    /**
-     * Refuses a non-TLS authorization endpoint (L5). The authorization request URL is the front-channel
-     * redirect the user agent follows, so a cleartext {@code http://} endpoint would expose the
-     * {@code state}/{@code nonce}/PKCE parameters — and the resulting authorization code — to a network
-     * observer. A non-TLS endpoint is rejected unless {@link ClientConfiguration#allowInsecureHttp}
-     * is set for a local test setup, mirroring the discovery/back-channel TLS policy.
-     */
-    private static void enforceEndpointScheme(String authorizationEndpoint, ClientConfiguration configuration) {
-        String scheme;
-        try {
-            scheme = URI.create(authorizationEndpoint).getScheme();
-        } catch (IllegalArgumentException e) {
-            throw new ClientProtocolException(
-                    "authorization endpoint is not a valid URL: " + authorizationEndpoint, e);
-        }
-        if (SCHEME_HTTPS.equalsIgnoreCase(scheme)) {
-            return;
-        }
-        // Only literal cleartext http is tolerated, and only when explicitly allowed for a local test
-        // setup. Any other scheme (ftp/file/javascript/…) and an absent/blank scheme are rejected, so a
-        // non-http(s) authorization endpoint can never be issued.
-        if (configuration.isAllowInsecureHttp() && SCHEME_HTTP.equalsIgnoreCase(scheme)) {
-            return;
-        }
-        throw new ClientProtocolException(
-                "authorization endpoint is not a TLS (https) URL; refusing to start the authorization_code"
-                        + " flow over an insecure channel");
+        // The query goes in front of any #fragment, or state, nonce and PKCE would never reach the AS.
+        return EndpointQuery.append(authorizationEndpoint, FormEncoder.encode(params));
     }
 }

@@ -23,6 +23,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -41,6 +50,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @EnableGeneratorController
 @DisplayName("CallbackHandler authorization_code redirect validation (RFC 6749 §4.1.2)")
 class CallbackHandlerTest {
+
+    /** The message {@link CallbackHandler} throws on a missing or non-matching {@code state}. */
+    private static final String STATE_MISMATCH_MESSAGE =
+            "authorization callback 'state' does not match the flow context";
+
+    /** The prefix every message produced by the commons {@code InboundErrorNormalizer} carries. */
+    private static final String AS_ERROR_PREFIX = "authorization server returned";
 
     private final CallbackHandler handler = new CallbackHandler();
 
@@ -90,6 +106,53 @@ class CallbackHandlerTest {
                     context.state(), "invalid_request", null, null);
 
             assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
+        }
+
+        @Test
+        @DisplayName("Should refuse an error callback with a wrong state as a state mismatch, not as an AS error (C-6)")
+        void shouldRejectErrorCallbackWithWrongStateAsMismatch() {
+            var context = context();
+            var parameters = new CallbackParameters(null, Generators.nonBlankStrings().next(),
+                    "access_denied", "forged by an attacker", null);
+
+            var thrown = assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
+
+            assertAll("forged error callback refused as a state mismatch",
+                    () -> assertEquals(STATE_MISMATCH_MESSAGE, thrown.getMessage(),
+                            "a wrong state is refused before the error is looked at"),
+                    () -> assertFalse(thrown.getMessage().contains(AS_ERROR_PREFIX),
+                            "attacker-chosen error text must not be surfaced as an authorization-server error"));
+        }
+
+        @Test
+        @DisplayName("Should refuse an error callback with a missing state as a state mismatch (C-6)")
+        void shouldRejectErrorCallbackWithMissingStateAsMismatch() {
+            var context = context();
+            var parameters = new CallbackParameters(null, null, "access_denied", "forged by an attacker", null);
+
+            var thrown = assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
+
+            assertAll("state-less error callback refused as a state mismatch",
+                    () -> assertEquals(STATE_MISMATCH_MESSAGE, thrown.getMessage(),
+                            "an absent state counts as a mismatch, also on an error callback"),
+                    () -> assertFalse(thrown.getMessage().contains(AS_ERROR_PREFIX),
+                            "attacker-chosen error text must not be surfaced as an authorization-server error"));
+        }
+
+        @Test
+        @DisplayName("Should surface the normalized error for an error callback whose state matches (C-6)")
+        void shouldSurfaceNormalizedErrorOnMatchingState() {
+            var context = context();
+            var parameters = new CallbackParameters(null, context.state(), "access_denied", "user said no", null);
+
+            var thrown = assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
+
+            assertAll("bound error callback surfaces the normalized error",
+                    () -> assertTrue(thrown.getMessage().contains(AS_ERROR_PREFIX),
+                            "a state-bound error callback reaches the commons normalizer"),
+                    () -> assertTrue(thrown.getMessage().contains("access_denied"), "the error code is surfaced"),
+                    () -> assertTrue(thrown.getMessage().contains("user said no"),
+                            "the sanitized error_description is surfaced"));
         }
 
         @Test
@@ -146,6 +209,102 @@ class CallbackHandlerTest {
             assertAll("null-guards",
                     () -> assertThrows(NullPointerException.class, () -> handler.handle(null, parameters)),
                     () -> assertThrows(NullPointerException.class, () -> handler.handle(context, null)));
+        }
+    }
+
+    /**
+     * C-7 / TC-5: a {@link FlowContext} is single-use. The first {@code handle} call uses it up,
+     * whatever its outcome, so a replayed callback can never be redeemed against the same context.
+     */
+    @Nested
+    @DisplayName("Single use of the flow context (C-7, TC-5)")
+    class SingleUse {
+
+        private static final String REUSE_MESSAGE =
+                "authorization callback rejected: the flow context has already been used";
+
+        @Test
+        @DisplayName("Should refuse a second handle() with the same context after a successful first call")
+        void shouldRefuseReuseAfterSuccess() {
+            var context = context();
+            String code = Generators.nonBlankStrings().next();
+            var parameters = success(code, context.state());
+
+            assertEquals(code, handler.handle(context, parameters), "the first call returns the code");
+            var thrown = assertThrows(ClientProtocolException.class, () -> handler.handle(context, parameters));
+
+            assertEquals(REUSE_MESSAGE, thrown.getMessage(), "the replayed callback is refused as a reuse");
+        }
+
+        @Test
+        @DisplayName("Should refuse a correct second callback after a first call rejected for a state mismatch")
+        void shouldRefuseReuseAfterRejectedFirstCall() {
+            var context = context();
+            String code = Generators.nonBlankStrings().next();
+
+            var mismatchedState = success(code, Generators.nonBlankStrings().next());
+            var correctState = success(code, context.state());
+
+            var first = assertThrows(ClientProtocolException.class, () -> handler.handle(context, mismatchedState));
+            var second = assertThrows(ClientProtocolException.class, () -> handler.handle(context, correctState));
+
+            assertAll("a rejected first call still uses the context up",
+                    () -> assertEquals(STATE_MISMATCH_MESSAGE, first.getMessage(), "the first call is a mismatch"),
+                    () -> assertEquals(REUSE_MESSAGE, second.getMessage(),
+                            "the second call is refused even with the correct state"));
+        }
+
+        @Test
+        @DisplayName("Should accept each call that brings its own fresh context")
+        void shouldAcceptFreshContextPerCall() {
+            for (int i = 0; i < 3; i++) {
+                var context = context();
+                String code = Generators.nonBlankStrings().next();
+
+                assertEquals(code, handler.handle(context, success(code, context.state())),
+                        "a fresh context is accepted");
+            }
+        }
+
+        @Test
+        @DisplayName("Should let exactly one of many concurrent handle() calls on one context return the code")
+        void shouldAllowExactlyOneConcurrentWinner() throws Exception {
+            int threads = 16;
+            var context = context();
+            String code = Generators.nonBlankStrings().next();
+            var parameters = success(code, context.state());
+            var start = new CountDownLatch(1);
+            var winners = new AtomicInteger();
+            var reuseRefusals = new AtomicInteger();
+            ExecutorService executor = Executors.newFixedThreadPool(threads);
+            try {
+                List<Future<?>> futures = new ArrayList<>();
+                for (int i = 0; i < threads; i++) {
+                    futures.add(executor.submit(() -> {
+                        start.await();
+                        try {
+                            if (code.equals(handler.handle(context, parameters))) {
+                                winners.incrementAndGet();
+                            }
+                        } catch (ClientProtocolException e) {
+                            if (REUSE_MESSAGE.equals(e.getMessage())) {
+                                reuseRefusals.incrementAndGet();
+                            }
+                        }
+                        return null;
+                    }));
+                }
+                start.countDown();
+                for (Future<?> future : futures) {
+                    future.get(10, TimeUnit.SECONDS);
+                }
+            } finally {
+                executor.shutdownNow();
+            }
+
+            assertAll("single concurrent winner",
+                    () -> assertEquals(1, winners.get(), "exactly one call returns the code"),
+                    () -> assertEquals(threads - 1, reuseRefusals.get(), "every other call is refused as a reuse"));
         }
     }
 

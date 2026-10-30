@@ -15,10 +15,17 @@
  */
 package de.cuioss.sheriff.token.client.internal;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,6 +51,9 @@ class LogSanitizerTest {
     private static final char CR = 13;
     private static final char NUL = 0;
     private static final char DEL = 127;
+    private static final char NEL = (char) 0x0085;
+    private static final char LS = (char) 0x2028;
+    private static final char PS = (char) 0x2029;
 
     @Test
     @DisplayName("Should return null for a null value")
@@ -89,6 +99,66 @@ class LogSanitizerTest {
                 () -> assertTrue(sanitized.contains(BACKSLASH + "u007f"), "DEL is escaped as a unicode sequence"),
                 () -> assertFalse(sanitized.indexOf(NUL) >= 0, "no raw NUL survives"),
                 () -> assertFalse(sanitized.indexOf(DEL) >= 0, "no raw DEL survives"));
+    }
+
+    @Test
+    @DisplayName("Should escape the Unicode line separators NEL, LS and PS (C-8a)")
+    void shouldEscapeUnicodeLineSeparators() {
+        String value = Generators.letterStrings(3, 10).next() + Character.toString(NEL) + "a"
+                + Character.toString(LS) + "b" + Character.toString(PS) + "INFO forged log entry";
+
+        String sanitized = LogSanitizer.sanitize(value);
+
+        assertAll("no raw Unicode line separator survives",
+                () -> assertFalse(sanitized.indexOf(NEL) >= 0, "no raw NEL (U+0085) survives"),
+                () -> assertFalse(sanitized.indexOf(LS) >= 0, "no raw LS (U+2028) survives"),
+                () -> assertFalse(sanitized.indexOf(PS) >= 0, "no raw PS (U+2029) survives"),
+                () -> assertTrue(sanitized.contains(BACKSLASH + "u0085"), "NEL is escaped as a unicode sequence"),
+                () -> assertTrue(sanitized.contains(BACKSLASH + "u2028"), "LS is escaped as a unicode sequence"),
+                () -> assertTrue(sanitized.contains(BACKSLASH + "u2029"), "PS is escaped as a unicode sequence"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = {(char) 0x007F, (char) 0x0080, (char) 0x009B, (char) 0x009D, (char) 0x009F,
+            (char) 0x2028, (char) 0x2029})
+    @DisplayName("Should escape C1 controls and the characters at the edges of the escaped ranges")
+    void shouldEscapeRangeEdgeAndC1Characters(char escaped) {
+        String prefix = Generators.letterStrings(3, 10).next();
+        String suffix = "INFO forged log entry";
+
+        String sanitized = LogSanitizer.sanitize(prefix + escaped + suffix);
+
+        assertAll("character escaped, none surviving raw",
+                () -> assertFalse(sanitized.indexOf(escaped) >= 0, "no raw character survives"),
+                () -> assertEquals(prefix + BACKSLASH + String.format("u%04x", (int) escaped) + suffix,
+                        sanitized, "the character is rendered as a unicode escape sequence"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = {(char) 0x007E, (char) 0x00A0, (char) 0x2027, (char) 0x202A})
+    @DisplayName("Should pass the characters just outside the escaped ranges through unescaped")
+    void shouldPassRangeBoundaryNeighboursThrough(char neighbour) {
+        String value = Generators.letterStrings(3, 10).next() + neighbour + "suffix";
+
+        assertEquals(value, LogSanitizer.sanitize(value),
+                "a character just outside the escaped ranges is kept verbatim");
+    }
+
+    static Stream<String> delegationSamples() {
+        return Stream.of("",
+                "plain-value",
+                "a" + CR + LF + "b" + TAB + "c" + NUL + DEL + NEL + LS + PS,
+                Character.toString(LF).repeat(MAX_LENGTH + 1),
+                "x".repeat(MAX_LENGTH + 5));
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @MethodSource("delegationSamples")
+    @DisplayName("Should delegate to the shared commons sanitizer with an identical result")
+    void shouldDelegateToSharedSanitizer(String value) {
+        assertEquals(ErrorTextSanitizer.sanitize(value), LogSanitizer.sanitize(value),
+                "the client entry point returns exactly what the shared implementation returns");
     }
 
     @Test

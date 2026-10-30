@@ -28,13 +28,19 @@ import java.util.Objects;
  * Validates the {@code authorization_code} redirect callback against its originating
  * {@link FlowContext} and returns the authorization code (RFC 6749 §4.1.2).
  * <p>
- * The handler fails closed on every adversarial condition before the code is ever used:
- * <ul>
- *   <li>an {@code error} callback is rejected;</li>
+ * The handler fails closed on every adversarial condition before the code is ever used. The checks
+ * run in this order:
+ * <ol>
+ *   <li>a {@link FlowContext} that has already been used by an earlier {@code handle} call is
+ *       rejected (single use, C-7): a context is used up by its first call, whatever that call's
+ *       outcome, so a replayed callback can never be redeemed twice;</li>
  *   <li>a missing or non-matching {@code state} is rejected (CSRF defence), compared in constant
- *       time;</li>
+ *       time; this applies to error callbacks too, so a forged error callback is refused as a state
+ *       mismatch;</li>
+ *   <li>an {@code error} callback with a matching {@code state} is rejected with the normalized,
+ *       sanitized authorization-server error;</li>
  *   <li>a missing authorization {@code code} is rejected.</li>
- * </ul>
+ * </ol>
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -50,21 +56,33 @@ public class CallbackHandler {
      * @param context    the flow context that issued the request; must not be {@code null}
      * @param parameters the parsed callback parameters; must not be {@code null}
      * @return the validated authorization code
-     * @throws ClientProtocolException if the callback signals an error, the {@code state} is missing or
-     *                               does not match, or the authorization code is absent
+     * @throws ClientProtocolException checked in this order: if the context has already been used by
+     *                               an earlier call, if the {@code state} is missing or does not match
+     *                               (also for an error callback), if the callback signals an error, or
+     *                               if the authorization code is absent
      */
     public String handle(FlowContext context, CallbackParameters parameters) {
         Objects.requireNonNull(context, "context must not be null");
         Objects.requireNonNull(parameters, "parameters must not be null");
 
+        // Single use: the claim is one compare-and-set, so exactly one call per context gets past
+        // this point, and the context is used up whatever the outcome of the checks below.
+        if (!context.markConsumed()) {
+            LOGGER.debug("Rejecting authorization callback: flow context already used");
+            throw new ClientProtocolException(
+                    "authorization callback rejected: the flow context has already been used");
+        }
+
+        // The state is checked before the error branch: an error callback without the CSRF binding
+        // is refused as a mismatch instead of being surfaced as an authorization-server error.
+        if (!statesMatch(context.state(), parameters.state())) {
+            LOGGER.debug("Rejecting authorization callback: state mismatch");
+            throw new ClientProtocolException("authorization callback 'state' does not match the flow context");
+        }
         if (parameters.hasError()) {
             // Route both error and error_description through the shared commons normalizer so the
             // inbound and outbound error surfaces render one sanitized contract (COMMONS-11).
             throw InboundErrorNormalizer.normalize(parameters.error(), parameters.errorDescription());
-        }
-        if (!statesMatch(context.state(), parameters.state())) {
-            LOGGER.debug("Rejecting authorization callback: state mismatch");
-            throw new ClientProtocolException("authorization callback 'state' does not match the flow context");
         }
         return parameters.getCode()
                 .filter(code -> !code.isBlank())

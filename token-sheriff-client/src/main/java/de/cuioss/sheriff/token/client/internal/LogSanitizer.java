@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.internal;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -27,12 +28,19 @@ import org.jspecify.annotations.Nullable;
  * server's discovery document. Parameterized logging alone does not neutralize embedded {@code CR} /
  * {@code LF} on a plain-text appender — the substituted value is still written verbatim, so an
  * attacker who embeds {@code %0d%0a} can forge a new, seemingly legitimate log entry. This sanitizer
- * escapes (rather than drops) {@code CR}, {@code LF}, tab, and the remaining ASCII control characters,
- * preserving the value's investigative content while making it impossible to inject a line break.
+ * escapes (rather than drops) {@code CR}, {@code LF}, tab, the remaining ASCII control characters, DEL,
+ * the C1 control characters U+0080 to U+009F (including U+0085 NEL), and the Unicode line separators
+ * U+2028 (LS) and U+2029 (PS) — which Unicode-aware log viewers and appenders treat as line breaks —
+ * preserving the value's investigative content while
+ * making it impossible to inject a line break.
  * <p>
- * The value is also truncated to {@value #MAX_LENGTH} characters before escaping, so an attacker
- * cannot flood the log with an arbitrarily long value (L18). When truncation occurs the marker
- * {@value #TRUNCATION_MARKER} is appended so the elision is visible in the log.
+ * The value is also truncated to {@value ErrorTextSanitizer#MAX_LENGTH} characters before escaping, so
+ * an attacker cannot flood the log with an arbitrarily long value (L18). When truncation occurs the
+ * marker {@value ErrorTextSanitizer#TRUNCATION_MARKER} is appended so the elision is visible in the log.
+ * <p>
+ * The escaping and truncation are implemented once, in the commons base layer's
+ * {@link ErrorTextSanitizer}; this class is the client engine's entry point and delegates to it, so the
+ * client and the inbound error normalizer can never drift apart.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -40,50 +48,24 @@ import org.jspecify.annotations.Nullable;
  */
 public final class LogSanitizer {
 
-    /** Maximum number of source characters retained; longer values are truncated to bound flooding. */
-    private static final int MAX_LENGTH = 256;
-
-    /** Appended when a value is truncated, so the elision is visible in the log. */
-    private static final String TRUNCATION_MARKER = "...[truncated]";
-
     private LogSanitizer() {
         // utility class — never instantiated
     }
 
     /**
-     * Escapes {@code CR}, {@code LF} and every other ASCII control character in {@code value} so it
-     * cannot forge a new log line when substituted into a log template, and truncates the value to
-     * {@value #MAX_LENGTH} characters to bound log flooding.
+     * Escapes {@code CR}, {@code LF}, every other ASCII control character, DEL, the C1 control
+     * characters U+0080 to U+009F (including U+0085 NEL), and the Unicode line separators U+2028 (LS)
+     * and U+2029 (PS) in {@code value} — all but {@code CR}, {@code LF} and tab as a
+     * backslash-{@code u} four-digit hex escape — so it cannot
+     * forge a new log line when substituted into a log template, and truncates the value to
+     * {@value ErrorTextSanitizer#MAX_LENGTH} characters to bound log flooding. Delegates to
+     * {@link ErrorTextSanitizer#sanitize(String)}.
      *
      * @param value the untrusted value to sanitize; may be {@code null}
      * @return the sanitized (and, when over-long, truncated) value, or {@code null} when {@code value}
      *         is {@code null}
      */
     public static @Nullable String sanitize(@Nullable String value) {
-        if (value == null) {
-            return null;
-        }
-        boolean truncated = value.length() > MAX_LENGTH;
-        String bounded = truncated ? value.substring(0, MAX_LENGTH) : value;
-        StringBuilder sanitized = new StringBuilder(bounded.length());
-        for (int i = 0; i < bounded.length(); i++) {
-            char c = bounded.charAt(i);
-            switch (c) {
-                case '\r' -> sanitized.append("\\r");
-                case '\n' -> sanitized.append("\\n");
-                case '\t' -> sanitized.append("\\t");
-                default -> {
-                    if (c < 0x20 || c == 0x7F) {
-                        sanitized.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        sanitized.append(c);
-                    }
-                }
-            }
-        }
-        if (truncated) {
-            sanitized.append(TRUNCATION_MARKER);
-        }
-        return sanitized.toString();
+        return ErrorTextSanitizer.sanitize(value);
     }
 }

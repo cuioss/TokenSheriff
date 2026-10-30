@@ -183,6 +183,70 @@ class AuthorizationRequestBuilderTest {
     }
 
     @Nested
+    @DisplayName("Endpoint fragment (C-4)")
+    class EndpointFragment {
+
+        @Test
+        @DisplayName("Should insert every parameter before the endpoint fragment and keep the fragment unchanged")
+        void shouldInsertParametersBeforeFragment() {
+            var context = FlowContext.create(REDIRECT_URI);
+
+            String url = builder.build(config(), metadataWithS256(AUTH_ENDPOINT + "#frag"), context);
+            Map<String, String> params = queryParams(url);
+
+            assertAll("fragment-aware query",
+                    () -> assertTrue(url.startsWith(AUTH_ENDPOINT + "?"), "the query starts after the path"),
+                    () -> assertEquals("#frag", url.substring(url.indexOf('#')), "the fragment is kept at the end"),
+                    () -> assertEquals(context.state(), params.get("state"), "state reaches the query"),
+                    () -> assertEquals(context.nonce(), params.get("nonce"), "nonce reaches the query"),
+                    () -> assertEquals(context.pkceChallenge().codeChallenge(), params.get("code_challenge"),
+                            "the PKCE challenge reaches the query"),
+                    () -> assertEquals("code", params.get("response_type"), "response_type reaches the query"));
+        }
+
+        @Test
+        @DisplayName("Should join an existing query with '&' before the endpoint fragment")
+        void shouldJoinExistingQueryBeforeFragment() {
+            var context = FlowContext.create(REDIRECT_URI);
+
+            String url = builder.build(config(), metadataWithS256(AUTH_ENDPOINT + "?a=b#frag"), context);
+
+            assertAll("existing query and fragment",
+                    () -> assertTrue(url.startsWith(AUTH_ENDPOINT + "?a=b&"), "joins the existing query with '&'"),
+                    () -> assertEquals("#frag", url.substring(url.indexOf('#')), "the fragment is kept at the end"),
+                    () -> assertEquals("b", queryParams(url).get("a"), "the pre-existing parameter survives"),
+                    () -> assertEquals(context.state(), queryParams(url).get("state"), "state reaches the query"));
+        }
+
+        @Test
+        @DisplayName("Should not treat a '?' inside the endpoint fragment as the query separator")
+        void shouldIgnoreQuestionMarkInsideFragment() {
+            var context = FlowContext.create(REDIRECT_URI);
+
+            String url = builder.build(config(), metadataWithS256(AUTH_ENDPOINT + "#frag?x=y"), context);
+
+            assertAll("question mark inside the fragment",
+                    () -> assertTrue(url.startsWith(AUTH_ENDPOINT + "?"), "the query is opened with '?'"),
+                    () -> assertEquals("#frag?x=y", url.substring(url.indexOf('#')),
+                            "the fragment is kept unchanged at the end"),
+                    () -> assertEquals(context.state(), queryParams(url).get("state"), "state reaches the query"),
+                    () -> assertFalse(queryParams(url).containsKey("x"), "the fragment content is not a parameter"));
+        }
+
+        @Test
+        @DisplayName("Should keep the URL for an endpoint without a fragment unchanged")
+        void shouldKeepUrlWithoutFragmentUnchanged() {
+            var context = FlowContext.create(REDIRECT_URI);
+
+            String url = builder.build(config(), metadataWithS256(AUTH_ENDPOINT), context);
+
+            assertAll("no fragment",
+                    () -> assertTrue(url.startsWith(AUTH_ENDPOINT + "?"), "the query directly follows the endpoint"),
+                    () -> assertFalse(url.contains("#"), "no fragment is introduced"));
+        }
+    }
+
+    @Nested
     @DisplayName("Fail-closed")
     class FailClosed {
 
