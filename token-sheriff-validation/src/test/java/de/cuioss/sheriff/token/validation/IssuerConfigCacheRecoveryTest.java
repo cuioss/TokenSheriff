@@ -28,11 +28,14 @@ import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.test.dispatcher.JwksResolveDispatcher;
+import de.cuioss.test.juli.LogAsserts;
+import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.dispatcher.CombinedDispatcher;
 import io.jsonwebtoken.Jwts;
 import mockwebserver3.MockWebServer;
 import org.awaitility.Awaitility;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -51,12 +54,22 @@ import static org.junit.jupiter.api.Assertions.*;
  * Verifies that an issuer whose initial JWKS load fails becomes resolvable again
  * once its loader recovers (e.g. through background refresh), instead of being
  * permanently unavailable until process restart.
+ * <p>
+ * It also pins the user-visible acceptance policy of the opt-in maximum key staleness: with the bound
+ * configured, an issuer stops being admitted once its keys go unrefreshed for longer than the bound and is
+ * re-admitted after the next successful refresh; without it, the issuer stays admitted through the outage.
  */
 @EnableTestLogger
 class IssuerConfigCacheRecoveryTest {
 
     private static final String ISSUER = "https://recovering-issuer.example.com";
     private static final String AUDIENCE = "test-audience";
+
+    /** Staleness bound shorter than the one-second refresh interval, so the first failed cycle exceeds it. */
+    private static final Duration STALENESS_BOUND = Duration.ofMillis(500);
+
+    /** Outage length for the default-availability test: the bound plus two refresh intervals. */
+    private static final Duration OUTAGE_DURATION = STALENESS_BOUND.plusSeconds(2);
 
     /**
      * Minimal JwksLoader stub whose status can be flipped externally, simulating
@@ -182,6 +195,101 @@ class IssuerConfigCacheRecoveryTest {
                 .expiration(Date.from(Instant.now().plusSeconds(3600)))
                 .signWith(InMemoryKeyMaterialHandler.getDefaultPrivateKey(), Jwts.SIG.RS256)
                 .compact();
+    }
+
+    /**
+     * Builds a direct-mode loader against the given server with a one-second refresh interval and, when
+     * {@code maxStaleness} is non-null, that staleness bound.
+     */
+    private static HttpJwksLoader directLoader(MockWebServer server, @Nullable Duration maxStaleness) {
+        HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder builder = HttpJwksLoaderConfig.builder()
+                .allowLoopbackEgress(true).allowInsecureHttp(true)
+                .jwksUrl(server.url(JwksResolveDispatcher.LOCAL_PATH).toString())
+                .issuerIdentifier(ISSUER)
+                .refreshIntervalSeconds(1)
+                .retryConfig(RetryConfig.builder()
+                        .initialDelay(Duration.ofMillis(1))
+                        .maxDelay(Duration.ofMillis(5))
+                        .build());
+        if (maxStaleness != null) {
+            builder.maxStaleness(maxStaleness);
+        }
+        return new HttpJwksLoader(builder.build());
+    }
+
+    private static IssuerConfig issuerConfig(HttpJwksLoader loader) {
+        return IssuerConfig.builder()
+                .issuerIdentifier(ISSUER)
+                .expectedAudience(AUDIENCE)
+                .jwksLoader(loader)
+                .build();
+    }
+
+    @Test
+    @DisplayName("A configured staleness bound stops admitting the issuer during an outage and re-admits it on recovery")
+    void stalenessBoundRejectsIssuerUntilRefreshSucceeds() throws Exception {
+        JwksResolveDispatcher jwksDispatcher = new JwksResolveDispatcher();
+        jwksDispatcher.returnDefault();
+        try (MockWebServer server = new MockWebServer()) {
+            server.setDispatcher(new CombinedDispatcher(jwksDispatcher));
+            server.start();
+            try (HttpJwksLoader loader = directLoader(server, STALENESS_BOUND)) {
+                IssuerConfig config = issuerConfig(loader);
+                IssuerConfigCache cache = new IssuerConfigCache(List.of(config), new SecurityEventCounter());
+                Awaitility.await("the issuer resolves while its keys are fresh")
+                        .atMost(Duration.ofSeconds(5)).ignoreExceptions()
+                        .until(() -> cache.resolveConfig(ISSUER) == config);
+
+                jwksDispatcher.returnError();
+                Awaitility.await("a failed refresh past the bound degrades the loader")
+                        .atMost(Duration.ofSeconds(10))
+                        .until(() -> loader.getLoaderStatus() == LoaderStatus.UNDEFINED);
+
+                TokenValidationException rejected = assertThrows(TokenValidationException.class,
+                        () -> cache.resolveConfig(ISSUER), "a stale issuer must not be admitted");
+                assertEquals(SecurityEventCounter.EventType.NO_ISSUER_CONFIG, rejected.getEventType());
+                assertTrue(loader.getKeyInfo(InMemoryKeyMaterialHandler.DEFAULT_KEY_ID).isPresent(),
+                        "the degradation drops no key");
+
+                jwksDispatcher.returnDefault();
+                Awaitility.await("a successful refresh restores OK")
+                        .atMost(Duration.ofSeconds(10))
+                        .until(() -> loader.getLoaderStatus() == LoaderStatus.OK);
+                assertSame(config, cache.resolveConfig(ISSUER), "the recovered issuer is re-admitted");
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Without a staleness bound the issuer stays admitted through the same outage")
+    void withoutStalenessBoundIssuerStaysResolvableThroughOutage() throws Exception {
+        JwksResolveDispatcher jwksDispatcher = new JwksResolveDispatcher();
+        jwksDispatcher.returnDefault();
+        try (MockWebServer server = new MockWebServer()) {
+            server.setDispatcher(new CombinedDispatcher(jwksDispatcher));
+            server.start();
+            try (HttpJwksLoader loader = directLoader(server, null)) {
+                IssuerConfig config = issuerConfig(loader);
+                IssuerConfigCache cache = new IssuerConfigCache(List.of(config), new SecurityEventCounter());
+                Awaitility.await("the issuer resolves while its keys are fresh")
+                        .atMost(Duration.ofSeconds(5)).ignoreExceptions()
+                        .until(() -> cache.resolveConfig(ISSUER) == config);
+                Instant outageStart = Instant.now();
+
+                jwksDispatcher.returnError();
+                // With one cycle per second, an outage of OUTAGE_DURATION contains a completed failed cycle
+                // that started after STALENESS_BOUND had elapsed, i.e. one the bound would have degraded on.
+                Awaitility.await("the outage outlasts the staleness bound by more than a refresh interval")
+                        .pollDelay(OUTAGE_DURATION).atMost(OUTAGE_DURATION.plusSeconds(5))
+                        .until(() -> Duration.between(outageStart, Instant.now()).compareTo(OUTAGE_DURATION) >= 0);
+                LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                        JWTValidationLogMessages.WARN.BACKGROUND_REFRESH_FAILED.resolveIdentifierString());
+
+                assertAll("the default keeps the issuer available",
+                        () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                        () -> assertSame(config, cache.resolveConfig(ISSUER)));
+            }
+        }
     }
 
     @Test
