@@ -16,8 +16,10 @@
 package de.cuioss.sheriff.token.client.internal;
 
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
+import org.jspecify.annotations.Nullable;
 
 import java.net.URI;
+import java.util.regex.Pattern;
 
 /**
  * The shared TLS policy for front-channel endpoints the client sends the user agent to, such as the
@@ -28,12 +30,15 @@ import java.net.URI;
  * accepts {@code https} (case-insensitive). Literal {@code http} is accepted only when the caller opts
  * in through {@link de.cuioss.sheriff.token.client.config.ClientConfiguration#allowInsecureHttp} for a
  * local test setup. Every other scheme ({@code ftp}, {@code file}, {@code javascript}, …) and a missing
- * scheme are refused in every case. An accepted endpoint must also be an absolute URL with a host
- * (an authority component): a hostless value such as {@code https:/logout}, {@code https:///logout} or
- * the opaque {@code https:foo} is refused, since the user agent would be sent to no host at all.
+ * scheme are refused in every case. An accepted endpoint must also be an absolute URL with a host:
+ * a value without an authority such as {@code https:/logout}, {@code https:///logout} or the opaque
+ * {@code https:foo} is refused, and so is an authority that carries no host once its user-info and port
+ * are removed, such as {@code https://:443/logout}, {@code https://user@/x} or {@code https://;/x}, since
+ * the user agent would be sent to no host at all.
  * <p>
  * The refusal message names the endpoint by its label only. The raw endpoint may come from a discovery
- * document and is not trusted, so it is never echoed into the message.
+ * document and is not trusted, so it is never echoed into the message, and a refusal carries no cause
+ * whose message could echo it either.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -43,6 +48,9 @@ public final class EndpointSchemePolicy {
     private static final String SCHEME_HTTPS = "https";
     private static final String SCHEME_HTTP = "http";
 
+    /** A trailing port: a {@code :} followed by digits, or a bare {@code :}. */
+    private static final Pattern PORT_SUFFIX = Pattern.compile(":\\d*$");
+
     private EndpointSchemePolicy() {
         // utility class — never instantiated
     }
@@ -51,8 +59,14 @@ public final class EndpointSchemePolicy {
      * Refuses an endpoint that is not an absolute TLS ({@code https}) URL with a host.
      * <p>
      * The scheme is checked first; only an endpoint whose scheme is accepted is then required to carry
-     * an authority component. The authority is read raw, so a registry-based authority that is not a
-     * valid server host name (for example {@code https://my_host/logout}) is still accepted.
+     * a host. The host is read from the raw authority with any user-info (up to and including the last
+     * {@code @}) and any port (a trailing {@code :} followed by digits, or a bare {@code :}) removed, and
+     * must contain at least one letter or digit. Reading the raw authority keeps a registry-based
+     * authority that is not a valid server host name (for example {@code https://my_host/logout})
+     * accepted.
+     * <p>
+     * An unparsable endpoint is refused without a cause: the parser's own exception message embeds the
+     * raw endpoint, so attaching it would echo the untrusted value through a logged stack trace.
      *
      * @param endpoint          the endpoint URL to check; must not be {@code null}
      * @param endpointLabel     the human-readable name of the endpoint used in the refusal message, for
@@ -61,14 +75,14 @@ public final class EndpointSchemePolicy {
      *                          setup
      * @throws ClientProtocolException if the endpoint is not a valid URL, if its scheme is neither
      *                                 {@code https} nor an opted-in {@code http}, or if it has no host
-     *                                 (authority)
      */
     public static void requireTls(String endpoint, String endpointLabel, boolean allowInsecureHttp) {
         URI uri;
         try {
             uri = URI.create(endpoint);
         } catch (IllegalArgumentException e) {
-            throw new ClientProtocolException(endpointLabel + " is not a valid URL", e);
+            // The cause is deliberately dropped: its message embeds the raw, untrusted endpoint.
+            throw new ClientProtocolException(endpointLabel + " is not a valid URL");
         }
         String scheme = uri.getScheme();
         boolean schemeAccepted = SCHEME_HTTPS.equalsIgnoreCase(scheme)
@@ -77,9 +91,24 @@ public final class EndpointSchemePolicy {
             throw new ClientProtocolException(
                     endpointLabel + " is not a TLS (https) URL; refusing to use it over an insecure channel");
         }
-        if (uri.getRawAuthority() == null) {
+        if (!hasHost(uri.getRawAuthority())) {
             throw new ClientProtocolException(
                     endpointLabel + " is not an absolute URL with a host; refusing to use it");
         }
+    }
+
+    /**
+     * Tells whether a raw authority carries a host once its user-info and port are removed.
+     *
+     * @param rawAuthority the raw authority component, {@code null} when the URL has none
+     * @return {@code true} if the remaining host part contains at least one letter or digit
+     */
+    private static boolean hasHost(@Nullable String rawAuthority) {
+        if (rawAuthority == null) {
+            return false;
+        }
+        String host = rawAuthority.substring(rawAuthority.lastIndexOf('@') + 1);
+        host = PORT_SUFFIX.matcher(host).replaceFirst("");
+        return host.chars().anyMatch(Character::isLetterOrDigit);
     }
 }

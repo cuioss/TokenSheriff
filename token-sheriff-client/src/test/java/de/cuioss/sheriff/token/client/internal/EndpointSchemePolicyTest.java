@@ -90,10 +90,29 @@ class EndpointSchemePolicyTest {
                 () -> assertTrue(withOptIn.getMessage().contains(LABEL), "names the endpoint label"));
     }
 
-    @Test
-    @DisplayName("Should accept a registry-based authority that is not a server host name")
-    void shouldAcceptRegistryBasedAuthority() {
-        assertDoesNotThrow(() -> EndpointSchemePolicy.requireTls("https://my_host/logout", LABEL, false));
+    @ParameterizedTest(name = "refuses {0}")
+    @ValueSource(strings = {"https://:443/logout", "https://@/x", "https://user@/x", "https://:/x", "https://;/x",
+            "https://user@:443/x"})
+    @DisplayName("Should refuse an endpoint whose authority carries no host even with the opt-in")
+    void shouldRefuseAuthorityWithoutHost(String endpoint) {
+        var withoutOptIn = assertThrows(ClientProtocolException.class,
+                () -> EndpointSchemePolicy.requireTls(endpoint, LABEL, false));
+        var withOptIn = assertThrows(ClientProtocolException.class,
+                () -> EndpointSchemePolicy.requireTls(endpoint, LABEL, true));
+
+        assertAll("authority without host refused by label only",
+                () -> assertTrue(withoutOptIn.getMessage().contains("host"), "names the missing host"),
+                () -> assertFalse(withoutOptIn.getMessage().contains(endpoint),
+                        "does not echo the untrusted endpoint"),
+                () -> assertTrue(withOptIn.getMessage().contains(LABEL), "names the endpoint label"));
+    }
+
+    @ParameterizedTest(name = "accepts {0}")
+    @ValueSource(strings = {"https://my_host/logout", "https://user@as.example.com:8443/logout",
+            "https://as.example.com:/logout", "https://[::1]:8443/logout", "https://127.0.0.1/logout"})
+    @DisplayName("Should accept an authority with a host, including a registry-based one, user-info and port")
+    void shouldAcceptAuthorityWithHost(String endpoint) {
+        assertDoesNotThrow(() -> EndpointSchemePolicy.requireTls(endpoint, LABEL, false));
     }
 
     @Test
@@ -127,5 +146,23 @@ class EndpointSchemePolicyTest {
                 () -> EndpointSchemePolicy.requireTls("https://as.example.com/a b", LABEL, false));
 
         assertTrue(thrown.getMessage().contains(LABEL), "names the endpoint label");
+    }
+
+    @Test
+    @DisplayName("Should not echo an unparsable endpoint through the cause chain")
+    void shouldNotEchoUnparsableEndpointThroughCause() {
+        String endpoint = "https://attacker.example.com/a b\r\nInjected: line";
+
+        var thrown = assertThrows(ClientProtocolException.class,
+                () -> EndpointSchemePolicy.requireTls(endpoint, LABEL, false));
+
+        assertTrue(thrown.getMessage().contains("is not a valid URL"), "keeps the unparsable-URL message");
+        Throwable current = thrown;
+        while (current != null) {
+            String message = current.getMessage();
+            assertFalse(message != null && message.contains("attacker.example.com"),
+                    "no message in the cause chain echoes the untrusted endpoint: " + current.getClass().getName());
+            current = current.getCause();
+        }
     }
 }
