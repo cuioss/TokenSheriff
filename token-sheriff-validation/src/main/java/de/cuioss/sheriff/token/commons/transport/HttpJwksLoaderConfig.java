@@ -376,6 +376,9 @@ public class HttpJwksLoaderConfig {
         // Retained, besides the pass-through, for the well-known branch and the derived jwks_uri handlers
         private SSLContext sslContext;
         private SecureSSLContextProvider tlsVersions;
+        // Retained, besides the pass-through, so build() can forward them to the well-known branch
+        private int connectTimeoutSeconds = DEFAULT_CONNECT_TIMEOUT_SECONDS;
+        private int readTimeoutSeconds = DEFAULT_READ_TIMEOUT_SECONDS;
         private final List<String> allowedEgressHosts = new ArrayList<>();
 
         // The directly configured JWKS endpoint, kept to fit the TLS settings to its scheme in build()
@@ -689,6 +692,11 @@ public class HttpJwksLoaderConfig {
 
         /**
          * Sets the connection timeout in seconds.
+         * <p>
+         * Defaults to 2 seconds. The value applies on both configuration branches: to the JWKS fetch for a
+         * directly configured endpoint, and, for a discovery-configured one, to the well-known discovery
+         * fetch as well as to the handler derived for the advertised {@code jwks_uri} — it is forwarded to
+         * the {@link WellKnownConfig} created in {@link #build()}.
          *
          * @param connectTimeoutSeconds the connection timeout in seconds
          * @return this builder instance
@@ -696,12 +704,18 @@ public class HttpJwksLoaderConfig {
          */
         public HttpJwksLoaderConfigBuilder connectTimeoutSeconds(int connectTimeoutSeconds) {
             Preconditions.checkArgument(connectTimeoutSeconds > 0, "connectTimeoutSeconds must be > 0, but was %s", connectTimeoutSeconds);
+            this.connectTimeoutSeconds = connectTimeoutSeconds;
             httpHandlerBuilder.connectionTimeoutSeconds(connectTimeoutSeconds);
             return this;
         }
 
         /**
          * Sets the read timeout in seconds.
+         * <p>
+         * Defaults to 3 seconds. The value applies on both configuration branches: to the JWKS fetch for a
+         * directly configured endpoint, and, for a discovery-configured one, to the well-known discovery
+         * fetch as well as to the handler derived for the advertised {@code jwks_uri} — it is forwarded to
+         * the {@link WellKnownConfig} created in {@link #build()}.
          *
          * @param readTimeoutSeconds the read timeout in seconds
          * @return this builder instance
@@ -709,6 +723,7 @@ public class HttpJwksLoaderConfig {
          */
         public HttpJwksLoaderConfigBuilder readTimeoutSeconds(int readTimeoutSeconds) {
             Preconditions.checkArgument(readTimeoutSeconds > 0, "readTimeoutSeconds must be > 0, but was %s", readTimeoutSeconds);
+            this.readTimeoutSeconds = readTimeoutSeconds;
             httpHandlerBuilder.readTimeoutSeconds(readTimeoutSeconds);
             return this;
         }
@@ -808,6 +823,8 @@ public class HttpJwksLoaderConfig {
                 // Build WellKnownConfig with the resolved ParserConfig
                 var wkBuilder = WellKnownConfig.builder()
                         .retryConfig(retryConfig)
+                        .connectTimeoutSeconds(connectTimeoutSeconds)
+                        .readTimeoutSeconds(readTimeoutSeconds)
                         .parserConfig(resolvedParserConfig)
                         .allowInsecureHttp(allowInsecureHttp)
                         .allowLoopbackEgress(allowLoopbackEgress)
