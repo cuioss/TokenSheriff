@@ -114,41 +114,29 @@ class LogSanitizerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(chars = {(char) 0x0080, (char) 0x009B, (char) 0x009D, (char) 0x009F})
-    @DisplayName("Should escape C1 control characters as unicode escapes")
-    void shouldEscapeC1ControlCharacters(char c1) {
+    @ValueSource(chars = {(char) 0x007F, (char) 0x0080, (char) 0x009B, (char) 0x009D, (char) 0x009F,
+            (char) 0x2028, (char) 0x2029})
+    @DisplayName("Should escape C1 controls and the characters at the edges of the escaped ranges")
+    void shouldEscapeRangeEdgeAndC1Characters(char escaped) {
         String prefix = Generators.letterStrings(3, 10).next();
-        String value = prefix + c1 + "INFO forged log entry";
+        String suffix = "INFO forged log entry";
 
-        String sanitized = LogSanitizer.sanitize(value);
+        String sanitized = LogSanitizer.sanitize(prefix + escaped + suffix);
 
-        assertAll("C1 control character escaped, none surviving raw",
-                () -> assertFalse(sanitized.indexOf(c1) >= 0, "no raw C1 character survives"),
-                () -> assertEquals(prefix + BACKSLASH + String.format("u%04x", (int) c1) + "INFO forged log entry",
-                        sanitized, "the C1 character is rendered as a unicode escape sequence"));
+        assertAll("character escaped, none surviving raw",
+                () -> assertFalse(sanitized.indexOf(escaped) >= 0, "no raw character survives"),
+                () -> assertEquals(prefix + BACKSLASH + String.format("u%04x", (int) escaped) + suffix,
+                        sanitized, "the character is rendered as a unicode escape sequence"));
     }
 
     @ParameterizedTest
     @ValueSource(chars = {(char) 0x007E, (char) 0x00A0, (char) 0x2027, (char) 0x202A})
     @DisplayName("Should pass the characters just outside the escaped ranges through unescaped")
     void shouldPassRangeBoundaryNeighboursThrough(char neighbour) {
-        String prefix = Generators.letterStrings(3, 10).next();
-        String value = prefix + neighbour + "suffix";
+        String value = Generators.letterStrings(3, 10).next() + neighbour + "suffix";
 
         assertEquals(value, LogSanitizer.sanitize(value),
                 "a character just outside the escaped ranges is kept verbatim");
-    }
-
-    @ParameterizedTest
-    @ValueSource(chars = {(char) 0x007F, (char) 0x0080, (char) 0x009F, (char) 0x2028, (char) 0x2029})
-    @DisplayName("Should escape the characters at the edges of the escaped ranges")
-    void shouldEscapeRangeBoundaryCharacters(char edge) {
-        String prefix = Generators.letterStrings(3, 10).next();
-
-        String sanitized = LogSanitizer.sanitize(prefix + edge + "suffix");
-
-        assertEquals(prefix + BACKSLASH + String.format("u%04x", (int) edge) + "suffix", sanitized,
-                "a character at the edge of an escaped range is rendered as a unicode escape sequence");
     }
 
     @Test
