@@ -20,6 +20,8 @@ import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
+import de.cuioss.test.juli.LogAsserts;
+import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
@@ -32,7 +34,11 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
+import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
 import static de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader.REDISCOVERY_FAILURE_THRESHOLD;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -51,9 +57,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class HttpJwksLoaderRediscoveryTest {
 
     private static final String TEST_KID = InMemoryJWKSFactory.DEFAULT_KEY_ID;
+    private static final String MOVED_KID = "moved-endpoint-key";
     private static final String JWKS_A_PATH = "/jwks-a.json";
     private static final String JWKS_B_PATH = "/jwks-b.json";
     private static final String METADATA_JWKS_URI = "http://169.254.169.254/jwks.json";
+    /** A jwks_uri no HTTP handler can be built for. */
+    private static final String MALFORMED_JWKS_URI = "http://[malformed";
     private static final String FOREIGN_ISSUER = "https://foreign-issuer.example.com";
     private static final int LONG_REFRESH_INTERVAL_SECONDS = 3600;
 
@@ -81,14 +90,20 @@ class HttpJwksLoaderRediscoveryTest {
      * Starts the server with the given dispatcher and builds a well-known loader against it.
      */
     private HttpJwksLoader startLoader(DiscoveryGenerationDispatcher dispatcher) throws IOException {
+        return new HttpJwksLoader(startServer(dispatcher).build());
+    }
+
+    /**
+     * Starts the server with the given dispatcher and returns a well-known loader configuration against it.
+     */
+    private HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder startServer(DiscoveryGenerationDispatcher dispatcher)
+            throws IOException {
         server.setDispatcher(dispatcher);
         server.start();
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+        return HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
                 .wellKnownUrl(server.url(DiscoveryGenerationDispatcher.WELL_KNOWN_PATH).toString())
                 .retryConfig(FAST_RETRY)
-                .refreshIntervalSeconds(LONG_REFRESH_INTERVAL_SECONDS)
-                .build();
-        return new HttpJwksLoader(config);
+                .refreshIntervalSeconds(LONG_REFRESH_INTERVAL_SECONDS);
     }
 
     /**
@@ -116,8 +131,10 @@ class HttpJwksLoaderRediscoveryTest {
     @DisplayName("A moved jwks_uri is followed after the failure threshold and the loader recovers to OK")
     void shouldFollowMovedJwksUriAfterThreshold() throws Exception {
         DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(JWKS_A_PATH, JWKS_B_PATH));
+        dispatcher.serveJwks(JWKS_B_PATH, InMemoryJWKSFactory.createValidJwksWithKeyId(MOVED_KID));
         try (HttpJwksLoader loader = startLoader(dispatcher)) {
             initializeAndFailJwksA(loader, dispatcher);
+            assertFalse(loader.getKeyInfo(MOVED_KID).isPresent(), "the key of the moved endpoint is not known before the move");
             refreshCycles(loader, REDISCOVERY_FAILURE_THRESHOLD);
             int jwksAFetchesBeforeRediscovery = dispatcher.jwksFetches(JWKS_A_PATH);
 
@@ -130,7 +147,84 @@ class HttpJwksLoaderRediscoveryTest {
                     () -> assertEquals(jwksAFetchesBeforeRediscovery, dispatcher.jwksFetches(JWKS_A_PATH),
                             "the old endpoint is not fetched again"),
                     () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
-                    () -> assertTrue(loader.getKeyInfo(TEST_KID).isPresent()));
+                    () -> assertTrue(loader.getKeyInfo(MOVED_KID).isPresent(), "the key of the moved endpoint is installed"),
+                    () -> assertEquals(Set.of(MOVED_KID), loader.getKeyIds(), "the active key set is the moved endpoint's"));
+        }
+    }
+
+    @Test
+    @DisplayName("A re-discovered jwks_uri no handler can be built for keeps fetching the current endpoint")
+    void shouldKeepFetchingCurrentEndpointOnUnusableRediscoveredJwksUri() throws Exception {
+        DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(JWKS_A_PATH, MALFORMED_JWKS_URI));
+        try (HttpJwksLoader loader = startLoader(dispatcher)) {
+            initializeAndFailJwksA(loader, dispatcher);
+            refreshCycles(loader, REDISCOVERY_FAILURE_THRESHOLD);
+            int jwksAFetchesBeforeRediscovery = dispatcher.jwksFetches(JWKS_A_PATH);
+
+            loader.performBackgroundRefresh();
+
+            assertTrue(dispatcher.jwksFetches(JWKS_A_PATH) > jwksAFetchesBeforeRediscovery,
+                    "the re-discovering cycle still fetches the current endpoint");
+            assertRejectedRediscoveryKeepsLoader(loader, dispatcher);
+            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                    WARN.JWKS_URI_RESOLUTION_FAILED.resolveIdentifierString());
+
+            refreshCycles(loader, REDISCOVERY_FAILURE_THRESHOLD);
+
+            assertAll("re-discovery stays suppressed after the unusable jwks_uri",
+                    () -> assertEquals(2, dispatcher.discoveryRequests(), "no further discovery request"),
+                    () -> assertEquals(Optional.of(JWKS_A_PATH), fetchPath(loader)));
+        }
+    }
+
+    @Test
+    @DisplayName("A generation closed during re-discovery issues no fetch")
+    void shouldNotFetchWhenClosedDuringRediscovery() throws Exception {
+        DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(JWKS_A_PATH, JWKS_B_PATH));
+        try (HttpJwksLoader loader = startLoader(dispatcher)) {
+            initializeAndFailJwksA(loader, dispatcher);
+            refreshCycles(loader, REDISCOVERY_FAILURE_THRESHOLD);
+            int jwksAFetchesBeforeRediscovery = dispatcher.jwksFetches(JWKS_A_PATH);
+            dispatcher.onDiscovery(1, loader::close);
+
+            loader.performBackgroundRefresh();
+
+            assertAll("the closed generation adopts nothing and fetches nothing",
+                    () -> assertEquals(2, dispatcher.discoveryRequests(), "the re-discovery was made"),
+                    () -> assertEquals(jwksAFetchesBeforeRediscovery, dispatcher.jwksFetches(JWKS_A_PATH),
+                            "the current endpoint is not fetched"),
+                    () -> assertEquals(0, dispatcher.jwksFetches(JWKS_B_PATH), "the re-discovered endpoint is not fetched"),
+                    () -> assertEquals(Optional.empty(), fetchPath(loader), "no endpoint is published"),
+                    () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()));
+        }
+    }
+
+    @Test
+    @DisplayName("A refresh cycle of a closed generation does not count towards the next generation's re-discovery")
+    void shouldNotCountClosedGenerationCycleInNextGeneration() throws Exception {
+        DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(JWKS_A_PATH));
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        try (HttpJwksLoader loader = new HttpJwksLoader(startServer(dispatcher).scheduledExecutorService(executor).build())) {
+            initializeAndFailJwksA(loader, dispatcher);
+            dispatcher.onNextJwksFetch(JWKS_A_PATH, loader::close);
+
+            loader.performBackgroundRefresh();
+
+            assertEquals(LoaderStatus.UNDEFINED, loader.initJWKSLoader(securityEventCounter).join(),
+                    "the next generation starts against the still failing endpoint");
+            assertEquals(2, dispatcher.discoveryRequests(), "the re-initialization discovers once");
+
+            refreshCycles(loader, REDISCOVERY_FAILURE_THRESHOLD);
+
+            assertEquals(2, dispatcher.discoveryRequests(),
+                    "the next generation re-discovers only after its own failure threshold");
+
+            loader.performBackgroundRefresh();
+
+            assertEquals(3, dispatcher.discoveryRequests(),
+                    "the next generation re-discovers once its own failures reach the threshold");
+        } finally {
+            executor.shutdownNow();
         }
     }
 

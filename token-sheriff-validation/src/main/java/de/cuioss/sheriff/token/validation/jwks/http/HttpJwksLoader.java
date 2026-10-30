@@ -83,8 +83,10 @@ import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
  * resolved so far — and the egress guard. An accepted re-discovery publishes the new endpoint and the
  * same cycle fetches from it. An unavailable discovery keeps the current endpoint and is retried after
  * the same number of further failures. A rejected re-discovery (issuer mismatch, absent advertised
- * issuer, egress block of the new {@code jwks_uri}) adopts nothing and keeps the current endpoint, keys,
- * status and refresh task; re-discovery is then suppressed until keys are installed successfully again.
+ * issuer, egress block of the new {@code jwks_uri}, or a new {@code jwks_uri} no HTTP handler can be built
+ * for) adopts nothing and keeps the current endpoint, keys, status and refresh task, and the cycle still
+ * fetches from the current endpoint; re-discovery is then suppressed until keys are installed successfully
+ * again.
  * <p>
  * This implementation follows a clean architecture with:
  * <ul>
@@ -807,7 +809,11 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * in which case the cycle moves the status to {@link LoaderStatus#UNDEFINED} without dropping any
      * key (see {@link #degradeIfStale(long)}). A cycle of a closed generation — one whose
      * {@code cycleEpoch} a {@link #close()} has moved on, even if the loader has been initialized again
-     * since — issues no fetch, installs no keys and publishes neither a status nor an endpoint.
+     * since — issues no fetch, installs no keys, publishes neither a status nor an endpoint and leaves the
+     * re-discovery failure counter alone. This also holds for a {@code close()} that happens while the
+     * cycle is re-discovering its endpoint: the cycle then returns before the egress check and the fetch.
+     * A {@code close()} during the fetch itself cannot stop the fetch, but its outcome is discarded and
+     * counted nowhere.
      * <p>
      * When no endpoint is available because the initial well-known discovery failed transiently, the
      * cycle re-attempts the discovery and, on success, continues with the fetch in the same cycle. A
@@ -817,7 +823,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * When an endpoint is available in well-known mode and {@value #REDISCOVERY_FAILURE_THRESHOLD}
      * consecutive cycles installed no keys, the cycle first repeats the discovery (see
      * {@link #rediscoverEndpoint(long, JwksEndpoint)}). Unlike the no-endpoint case, a rejected
-     * re-discovery is not terminal: the current endpoint, keys, status and refresh task are kept.
+     * re-discovery is not terminal: the current endpoint, keys, status and refresh task are kept, and the
+     * cycle still fetches from the current endpoint. That includes an advertised {@code jwks_uri} for
+     * which no HTTP handler can be built.
      * <p>
      * The egress re-check (C1 follow-up) is the crux: the cached {@link HttpAdapter} is reused across
      * every scheduled refresh, so without re-resolving and re-checking the fetch URI here, a DNS answer
@@ -849,6 +857,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                 }
             } else if (isRediscoveryDue()) {
                 current = rediscoverEndpoint(cycleEpoch, current);
+                if (current == null) {
+                    return;
+                }
             }
 
             // Re-validate egress on every refresh (C1 follow-up): reject a rebound host before fetching.
@@ -883,10 +894,32 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
         } finally {
             if (!installed) {
-                consecutiveRefreshFailures.incrementAndGet();
-                degradeIfStale(cycleEpoch);
+                recordFailedCycle(cycleEpoch);
             }
         }
+    }
+
+    /**
+     * Records a refresh cycle that installed no keys: counts it towards the re-discovery threshold and
+     * applies the opt-in staleness bound (see {@link #degradeIfStale(long)}).
+     * <p>
+     * Both happen only while the cycle's generation is live. The failure counter is incremented under
+     * {@link #lifecycleLock}, so a cycle that started before a {@link #close()} cannot add a failure to the
+     * counter that {@code close()} reset, and therefore not to the counter of a later initialization.
+     *
+     * @param cycleEpoch the {@link #epoch} of the generation the calling refresh cycle belongs to
+     */
+    private void recordFailedCycle(long cycleEpoch) {
+        lifecycleLock.lock();
+        try {
+            if (!isLive(cycleEpoch)) {
+                return;
+            }
+            consecutiveRefreshFailures.incrementAndGet();
+        } finally {
+            lifecycleLock.unlock();
+        }
+        degradeIfStale(cycleEpoch);
     }
 
     /**
@@ -917,36 +950,74 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      *   <li>Rejected (issuer mismatch, absent advertised issuer, egress block of the new
      *       {@code jwks_uri}): nothing is adopted, the current endpoint, keys, status and refresh task are
      *       kept, and re-discovery is suppressed until keys are installed successfully again.</li>
+     *   <li>Unusable advertised {@code jwks_uri} (no HTTP handler can be built for it: a malformed URI, or
+     *       a cleartext {@code http} URI while insecure HTTP is not allowed): logged as
+     *       {@code JWKS_URI_RESOLUTION_FAILED} and handled as a rejection. The configuration refuses the
+     *       advertised endpoint, so repeating the discovery would only meet the same refusal until the
+     *       IdP changes its document; the current endpoint is kept and still fetched in this cycle, and
+     *       re-discovery is suppressed until keys are installed successfully again.</li>
      * </ul>
+     * When a {@link #close()} moved the cycle's generation on before the outcome is applied, nothing is
+     * adopted or suppressed and {@code null} is returned, so the cycle issues no fetch.
      *
      * @param cycleEpoch the {@link #epoch} of the generation the calling refresh cycle belongs to
      * @param current    the endpoint the cycle would otherwise fetch from
      * @return the endpoint this cycle fetches from: the re-discovered one when accepted, otherwise
-     *         {@code current}
+     *         {@code current}; {@code null} when the cycle's generation was closed, in which case the
+     *         cycle must fetch nothing
      */
-    private JwksEndpoint rediscoverEndpoint(long cycleEpoch, JwksEndpoint current) {
-        consecutiveRefreshFailures.set(0);
+    private @Nullable JwksEndpoint rediscoverEndpoint(long cycleEpoch, JwksEndpoint current) {
+        lifecycleLock.lock();
+        try {
+            if (!isLive(cycleEpoch)) {
+                return null;
+            }
+            consecutiveRefreshFailures.set(0);
+        } finally {
+            lifecycleLock.unlock();
+        }
         String trustAnchor = config.getIssuerIdentifier() != null ? config.getIssuerIdentifier() : getResolvedIssuer();
         LOGGER.debug("Re-discovering the JWKS endpoint after %s consecutive failed refresh cycles",
                 REDISCOVERY_FAILURE_THRESHOLD);
-        AdapterResolution resolution = resolveJWKSAdapter(trustAnchor);
+        AdapterResolution resolution;
+        try {
+            resolution = resolveJWKSAdapter(trustAnchor);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            // No handler could be built for the advertised jwks_uri: keep fetching the current endpoint
+            LOGGER.warn(e, WARN.JWKS_URI_RESOLUTION_FAILED);
+            return keepCurrentEndpoint(cycleEpoch, current, true);
+        }
         JwksEndpoint resolved = resolution.endpoint();
         if (resolved != null) {
-            // A cycle of a closed generation publishes nothing; its later steps are fenced as well
-            return adoptResolution(resolution, cycleEpoch) ? resolved : current;
-        }
-        if (!resolution.retryable()) {
-            lifecycleLock.lock();
-            try {
-                if (isLive(cycleEpoch)) {
-                    rediscoverySuppressed.set(true);
-                }
-            } finally {
-                lifecycleLock.unlock();
-            }
+            // A cycle of a closed generation publishes nothing and fetches nothing
+            return adoptResolution(resolution, cycleEpoch) ? resolved : null;
         }
         LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
-        return current;
+        return keepCurrentEndpoint(cycleEpoch, current, !resolution.retryable());
+    }
+
+    /**
+     * Keeps the current endpoint after a re-discovery that adopted nothing, suppressing further
+     * re-discovery when the outcome was a rejection; both only while the cycle's generation is live.
+     *
+     * @param cycleEpoch the {@link #epoch} of the generation the calling refresh cycle belongs to
+     * @param current    the endpoint the cycle fetches from when its generation is still live
+     * @param rejected   whether the re-discovery was rejected, which suppresses further re-discovery
+     * @return {@code current} while the generation is live, {@code null} once a {@link #close()} moved it on
+     */
+    private @Nullable JwksEndpoint keepCurrentEndpoint(long cycleEpoch, JwksEndpoint current, boolean rejected) {
+        lifecycleLock.lock();
+        try {
+            if (!isLive(cycleEpoch)) {
+                return null;
+            }
+            if (rejected) {
+                rediscoverySuppressed.set(true);
+            }
+            return current;
+        } finally {
+            lifecycleLock.unlock();
+        }
     }
 
     /**
