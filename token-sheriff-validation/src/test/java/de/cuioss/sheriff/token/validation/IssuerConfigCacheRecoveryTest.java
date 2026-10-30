@@ -26,6 +26,8 @@ import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
 import de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
+import de.cuioss.sheriff.token.validation.pipeline.validator.TokenValidationRule;
+import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.test.dispatcher.JwksResolveDispatcher;
 import de.cuioss.test.juli.LogAsserts;
@@ -46,6 +48,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -58,11 +61,14 @@ import static org.junit.jupiter.api.Assertions.*;
  * It also pins the user-visible acceptance policy of the opt-in maximum key staleness: with the bound
  * configured, an issuer stops being admitted once its keys go unrefreshed for longer than the bound and is
  * re-admitted after the next successful refresh; without it, the issuer stays admitted through the outage.
+ * A degraded issuer is rejected on every path: also for a token cached while its loader was OK, and also
+ * while the completed loading future of its initial load is still held.
  */
 @EnableTestLogger
 class IssuerConfigCacheRecoveryTest {
 
     private static final String ISSUER = "https://recovering-issuer.example.com";
+    private static final String OTHER_ISSUER = "https://still-loading-issuer.example.com";
     private static final String AUDIENCE = "test-audience";
 
     /** Staleness bound shorter than the one-second refresh interval, so the first failed cycle exceeds it. */
@@ -75,9 +81,28 @@ class IssuerConfigCacheRecoveryTest {
      * Minimal JwksLoader stub whose status can be flipped externally, simulating
      * a loader that fails its initial load but recovers via background refresh.
      */
-    private static final class StatusControlledLoader implements JwksLoader {
+    private static class StatusControlledLoader implements JwksLoader {
 
-        private final AtomicReference<LoaderStatus> status = new AtomicReference<>(LoaderStatus.UNDEFINED);
+        private final AtomicReference<LoaderStatus> status;
+        private final String issuer;
+        private final @Nullable CompletableFuture<LoaderStatus> initFuture;
+
+        StatusControlledLoader() {
+            this(ISSUER, LoaderStatus.UNDEFINED, null);
+        }
+
+        /**
+         * @param issuer        the issuer this loader reports
+         * @param initialStatus the status before any {@link #setStatus(LoaderStatus)}
+         * @param initFuture    the future {@link #initJWKSLoader(SecurityEventCounter)} returns, {@code null} for
+         *                      one already completed with the current status
+         */
+        StatusControlledLoader(String issuer, LoaderStatus initialStatus,
+                @Nullable CompletableFuture<LoaderStatus> initFuture) {
+            this.issuer = issuer;
+            this.status = new AtomicReference<>(initialStatus);
+            this.initFuture = initFuture;
+        }
 
         void setStatus(LoaderStatus newStatus) {
             status.set(newStatus);
@@ -105,14 +130,109 @@ class IssuerConfigCacheRecoveryTest {
 
         @Override
         public Optional<String> getIssuerIdentifier() {
-            return Optional.of(ISSUER);
+            return Optional.of(issuer);
         }
 
         @Override
         public CompletableFuture<LoaderStatus> initJWKSLoader(SecurityEventCounter securityEventCounter) {
-            // Simulates a failed initial load: status stays non-OK, background refresh may recover later
-            return CompletableFuture.completedFuture(status.get());
+            // By default simulates a finished initial load with the current status; a non-OK status
+            // stands for a failed load that background refresh may recover later
+            return initFuture != null ? initFuture : CompletableFuture.completedFuture(status.get());
         }
+    }
+
+    /**
+     * A status-controlled loader that serves the module's default test key, so tokens signed with the
+     * default private key validate while its status is {@link LoaderStatus#OK}.
+     */
+    private static final class KeyServingStatusLoader extends StatusControlledLoader {
+
+        private final JwksLoader keys = InMemoryJWKSFactory.createDefaultJwksLoader(new SecurityEventCounter());
+
+        KeyServingStatusLoader() {
+            super(ISSUER, LoaderStatus.OK, null);
+        }
+
+        @Override
+        public Optional<KeyInfo> getKeyInfo(String kid) {
+            return keys.getKeyInfo(kid);
+        }
+
+        @Override
+        public Set<String> getKeyIds() {
+            return keys.getKeyIds();
+        }
+
+        @Override
+        public CompletableFuture<LoaderStatus> initJWKSLoader(SecurityEventCounter securityEventCounter) {
+            keys.initJWKSLoader(securityEventCounter).join();
+            return super.initJWKSLoader(securityEventCounter);
+        }
+    }
+
+    @Test
+    @DisplayName("A token cached while the loader was OK is rejected after the loader degrades")
+    void rejectsCachedTokenAfterLoaderDegrades() {
+        assertCachedTokenRejectedAfterDegradation(List.of());
+    }
+
+    @Test
+    @DisplayName("A token cached while the loader was OK is rejected after the loader degrades, with custom rules")
+    void rejectsCachedTokenAfterLoaderDegradesWithCustomRules() {
+        AtomicInteger ruleInvocations = new AtomicInteger();
+        TokenValidationRule countingRule = (token, context) -> ruleInvocations.incrementAndGet();
+
+        assertCachedTokenRejectedAfterDegradation(List.of(countingRule));
+
+        assertEquals(1, ruleInvocations.get(), "the rule ran for the first validation only");
+    }
+
+    /**
+     * Validates a token while the issuer's loader is OK, so it is cached, then degrades the loader and
+     * expects the same token to be rejected as an issuer without a healthy configuration.
+     */
+    private static void assertCachedTokenRejectedAfterDegradation(List<TokenValidationRule> rules) {
+        KeyServingStatusLoader loader = new KeyServingStatusLoader();
+        String token = signedAccessToken();
+        try (TokenValidator validator = TokenValidator.builder()
+                     .issuerConfig(IssuerConfig.builder()
+                             .issuerIdentifier(ISSUER)
+                             .expectedAudience(AUDIENCE)
+                             .jwksLoader(loader)
+                             .build())
+                     .tokenValidationRules(rules)
+                     .build()) {
+            AccessTokenRequest request = AccessTokenRequest.of(token);
+            assertEquals(ISSUER, validator.createAccessToken(request).getIssuer(),
+                    "the token validates and is cached while the loader is OK");
+
+            loader.setStatus(LoaderStatus.UNDEFINED);
+
+            TokenValidationException rejected = assertThrows(TokenValidationException.class,
+                    () -> validator.createAccessToken(request), "a cached token of a degraded issuer must be rejected");
+            assertEquals(SecurityEventCounter.EventType.NO_ISSUER_CONFIG, rejected.getEventType());
+        }
+    }
+
+    @Test
+    @DisplayName("A completed OK loading future does not admit an issuer whose loader has degraded since")
+    void rejectsDegradedIssuerDespiteCompletedOkLoadingFuture() {
+        StatusControlledLoader degrading = new StatusControlledLoader(ISSUER, LoaderStatus.OK, null);
+        StatusControlledLoader stillLoading = new StatusControlledLoader(OTHER_ISSUER, LoaderStatus.LOADING,
+                new CompletableFuture<>());
+        IssuerConfig degradingConfig = IssuerConfig.builder()
+                .issuerIdentifier(ISSUER).expectedAudience(AUDIENCE).jwksLoader(degrading).build();
+        IssuerConfig stillLoadingConfig = IssuerConfig.builder()
+                .issuerIdentifier(OTHER_ISSUER).expectedAudience(AUDIENCE).jwksLoader(stillLoading).build();
+        IssuerConfigCache cache = new IssuerConfigCache(List.of(degradingConfig, stillLoadingConfig),
+                new SecurityEventCounter());
+        assertSame(degradingConfig, cache.resolveConfig(ISSUER), "the issuer resolves while its loader is OK");
+
+        degrading.setStatus(LoaderStatus.UNDEFINED);
+
+        TokenValidationException rejected = assertThrows(TokenValidationException.class,
+                () -> cache.resolveConfig(ISSUER), "the completed OK future of the initial load must not admit it");
+        assertEquals(SecurityEventCounter.EventType.NO_ISSUER_CONFIG, rejected.getEventType());
     }
 
     @Test

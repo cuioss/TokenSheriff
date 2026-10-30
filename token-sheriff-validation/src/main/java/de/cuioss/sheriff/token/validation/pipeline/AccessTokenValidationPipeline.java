@@ -146,8 +146,10 @@ public class AccessTokenValidationPipeline {
      * If the token is found in cache and is still valid, it is returned immediately
      * without performing expensive cryptographic operations. Before a cached token is
      * returned, the cache enforces the issuing issuer's own time policy — its clock skew
-     * tolerance for the expiry and its maximum token age — and only then are the DPoP
-     * proof and the custom validation rules run against the cached token.
+     * tolerance for the expiry and its maximum token age — then the issuer is resolved again,
+     * so a cached token of an issuer whose JWKS loader is no longer {@code OK} is rejected,
+     * and only then are the DPoP proof and the custom validation rules run against the
+     * cached token.
      *
      * @param request the access token validation request (token string guaranteed non-null, non-blank, within size limits)
      * @return the validated access token content
@@ -169,6 +171,11 @@ public class AccessTokenValidationPipeline {
         if (cached.isPresent()) {
             LOGGER.debug("Access token retrieved from cache");
             AccessTokenContent cachedToken = cached.get();
+            // Re-resolve the issuer on every cache hit: resolveConfig admits only an issuer whose
+            // loader is OK, so a token cached before the loader degraded (for example past its
+            // maximum key staleness) is rejected like any other token of that issuer. The lookup
+            // is a lock-free map read plus a status read on the hot path.
+            IssuerConfig cachedIssuerConfig = issuerConfigCache.resolveConfig(cachedToken.getIssuer());
             // Still validate DPoP proof even for cached tokens (proofs must be fresh per request)
             runDpopValidation(request, cachedToken.getIssuer(), tokenString);
             // Re-run custom validation rules on every cache hit (M5): a stateful custom rule
@@ -176,7 +183,6 @@ public class AccessTokenValidationPipeline {
             // be bypassed by the cache. Without this, a token that passed once would be served
             // indefinitely even after a rule flips to reject it.
             if (!customValidationRules.isEmpty()) {
-                IssuerConfig cachedIssuerConfig = issuerConfigCache.resolveConfig(cachedToken.getIssuer());
                 ValidationContext cacheHitContext = new ValidationContext(now,
                         cachedIssuerConfig.getClockSkewSeconds(), cachedIssuerConfig.getMaxTokenAgeSeconds());
                 for (TokenValidationRule rule : customValidationRules) {

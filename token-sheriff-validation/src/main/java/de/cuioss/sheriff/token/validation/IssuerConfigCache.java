@@ -163,7 +163,9 @@ public class IssuerConfigCache {
      *   <li><strong>Failure:</strong> Throw exception if no healthy config is available</li>
      * </ol>
      * <p>
-     * Only returns configurations with LoaderStatus.OK.
+     * Only returns configurations whose loader reports LoaderStatus.OK at the time of the call, on
+     * every tier: a completed loading future that reported {@code OK} for the initial load does not
+     * admit an issuer whose loader has left {@code OK} since.
      *
      * @param issuer the issuer identifier to resolve, must not be null
      * @return the resolved issuer configuration, never null
@@ -183,8 +185,11 @@ public class IssuerConfigCache {
                 // Wait for loading to complete (with timeout)
                 LoaderStatus status = future.get(LOADING_WAIT_SECONDS, TimeUnit.SECONDS);
                 if (status == LoaderStatus.OK) {
+                    // The future reports the status of the initial load only. It stays in
+                    // loadingFutures until every issuer has finished loading, so the loader may have
+                    // left OK since (for example past its maximum key staleness): re-check it.
                     IssuerConfig loadedConfig = getCachedConfig(issuer);
-                    if (loadedConfig != null) {
+                    if (loadedConfig != null && loadedConfig.getJwksLoader().getLoaderStatus() == LoaderStatus.OK) {
                         return loadedConfig;
                     }
                 }
