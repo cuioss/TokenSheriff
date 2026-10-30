@@ -114,7 +114,7 @@ class HttpJwksLoaderRediscoveryTest {
 
     @Test
     @DisplayName("A moved jwks_uri is followed after the failure threshold and the loader recovers to OK")
-    void shouldFollowMovedJwksUriAfterThreshold() throws IOException {
+    void shouldFollowMovedJwksUriAfterThreshold() throws Exception {
         DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(JWKS_A_PATH, JWKS_B_PATH));
         try (HttpJwksLoader loader = startLoader(dispatcher)) {
             initializeAndFailJwksA(loader, dispatcher);
@@ -136,7 +136,7 @@ class HttpJwksLoaderRediscoveryTest {
 
     @Test
     @DisplayName("Below the failure threshold no re-discovery is made")
-    void shouldNotRediscoverBelowThreshold() throws IOException {
+    void shouldNotRediscoverBelowThreshold() throws Exception {
         DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(JWKS_A_PATH, JWKS_B_PATH));
         try (HttpJwksLoader loader = startLoader(dispatcher)) {
             initializeAndFailJwksA(loader, dispatcher);
@@ -153,7 +153,7 @@ class HttpJwksLoaderRediscoveryTest {
 
     @Test
     @DisplayName("An egress-blocked re-discovered jwks_uri is not adopted and re-discovery is suppressed")
-    void shouldFailClosedOnEgressBlockedRediscovery() throws IOException {
+    void shouldFailClosedOnEgressBlockedRediscovery() throws Exception {
         DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(JWKS_A_PATH, METADATA_JWKS_URI));
         try (HttpJwksLoader loader = startLoader(dispatcher)) {
             initializeAndFailJwksA(loader, dispatcher);
@@ -174,7 +174,7 @@ class HttpJwksLoaderRediscoveryTest {
 
     @Test
     @DisplayName("A re-discovery advertising a mismatching issuer is not adopted and counted exactly once")
-    void shouldFailClosedOnIssuerMismatchRediscovery() throws IOException {
+    void shouldFailClosedOnIssuerMismatchRediscovery() throws Exception {
         DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(JWKS_A_PATH, JWKS_B_PATH));
         dispatcher.advertiseIssuerFrom(1, FOREIGN_ISSUER);
         try (HttpJwksLoader loader = startLoader(dispatcher)) {
