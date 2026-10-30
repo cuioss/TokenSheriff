@@ -154,6 +154,68 @@ class InboundErrorNormalizerTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"\r", "\n", "\t", "\r\n\t", "\t \n"})
+    @DisplayName("Should treat a control-character-only error_description as content, not as blank")
+    void shouldTreatControlOnlyDescriptionAsContent(String controlsOnly) {
+        String expected = "(" + escaped(controlsOnly) + ")";
+
+        String message = InboundErrorNormalizer.normalize("access_denied", controlsOnly).getMessage();
+
+        assertAll("control-only description",
+                () -> assertTrue(message.endsWith(expected),
+                        "the control characters are reported as an escaped parenthetical clause: " + message),
+                () -> assertFalse(message.indexOf('\r') >= 0 || message.indexOf('\n') >= 0
+                        || message.indexOf('\t') >= 0, "no raw control character survives"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"\r", "\n", "\t", "\r\n\t", "\t \n"})
+    @DisplayName("Should report a control-character-only error code as unrecognized, not as missing")
+    void shouldTreatControlOnlyErrorCodeAsContent(String controlsOnly) {
+        String message = InboundErrorNormalizer.normalize(controlsOnly, null).getMessage();
+
+        assertAll("control-only error code",
+                () -> assertFalse(message.contains("without an error code"),
+                        "a control-only code is not reported as missing"),
+                () -> assertTrue(message.endsWith("unrecognized error callback: " + escaped(controlsOnly)),
+                        "a control-only code is reported, escaped, as unrecognized: " + message));
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = {(char) 0x007E, (char) 0x00A0, (char) 0x2027, (char) 0x202A})
+    @DisplayName("Should pass the characters just outside the escaped ranges through unescaped in both fields")
+    void shouldPassRangeBoundaryNeighboursThrough(char neighbour) {
+        ClientProtocolException exception = InboundErrorNormalizer.normalize(
+                "access_denied" + neighbour + "code", "denied" + neighbour + "description");
+
+        String message = exception.getMessage();
+        assertAll("range-boundary neighbour passed through",
+                () -> assertTrue(message.contains("access_denied" + neighbour + "code"),
+                        "the character in the error code is kept verbatim"),
+                () -> assertTrue(message.contains("denied" + neighbour + "description"),
+                        "the character in the error_description is kept verbatim"),
+                () -> assertFalse(message.contains(String.format("\\u%04x", (int) neighbour)),
+                        "the character is not rendered as an escape"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = {(char) 0x007F, (char) 0x0080, (char) 0x009F, (char) 0x2028, (char) 0x2029})
+    @DisplayName("Should escape the characters at the edges of the escaped ranges in both fields")
+    void shouldEscapeRangeBoundaryCharacters(char edge) {
+        String expectedEscape = String.format("\\u%04x", (int) edge);
+        ClientProtocolException exception = InboundErrorNormalizer.normalize(
+                "access_denied" + edge + "code", "denied" + edge + "description");
+
+        String message = exception.getMessage();
+        assertAll("range-edge character escaped",
+                () -> assertFalse(message.indexOf(edge) >= 0, "no raw edge character survives"),
+                () -> assertTrue(message.contains("access_denied" + expectedEscape + "code"),
+                        "the character in the error code is rendered as an escape"),
+                () -> assertTrue(message.contains("denied" + expectedEscape + "description"),
+                        "the character in the error_description is rendered as an escape"));
+    }
+
+    @ParameterizedTest
     @ValueSource(chars = {(char) 0x0080, (char) 0x009B, (char) 0x009D, (char) 0x009F})
     @DisplayName("Should escape C1 control characters in both fields")
     void shouldEscapeC1ControlCharacters(char c1) {
@@ -181,5 +243,14 @@ class InboundErrorNormalizerTest {
                 () -> assertNotNull(message),
                 () -> assertTrue(message.contains("...[truncated]"), "an over-long value is marked truncated"),
                 () -> assertFalse(message.contains(overlong), "the full over-long value is not carried"));
+    }
+
+    /**
+     * @param controls a value made only of CR, LF, tab and spaces
+     * @return the rendering the normalizer documents for it: CR, LF and tab as backslash escapes, spaces
+     *         verbatim
+     */
+    private static String escaped(String controls) {
+        return controls.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t");
     }
 }

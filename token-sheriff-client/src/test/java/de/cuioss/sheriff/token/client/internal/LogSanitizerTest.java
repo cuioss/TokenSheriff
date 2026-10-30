@@ -128,6 +128,29 @@ class LogSanitizerTest {
                         sanitized, "the C1 character is rendered as a unicode escape sequence"));
     }
 
+    @ParameterizedTest
+    @ValueSource(chars = {(char) 0x007E, (char) 0x00A0, (char) 0x2027, (char) 0x202A})
+    @DisplayName("Should pass the characters just outside the escaped ranges through unescaped")
+    void shouldPassRangeBoundaryNeighboursThrough(char neighbour) {
+        String prefix = Generators.letterStrings(3, 10).next();
+        String value = prefix + neighbour + "suffix";
+
+        assertEquals(value, LogSanitizer.sanitize(value),
+                "a character just outside the escaped ranges is kept verbatim");
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = {(char) 0x007F, (char) 0x0080, (char) 0x009F, (char) 0x2028, (char) 0x2029})
+    @DisplayName("Should escape the characters at the edges of the escaped ranges")
+    void shouldEscapeRangeBoundaryCharacters(char edge) {
+        String prefix = Generators.letterStrings(3, 10).next();
+
+        String sanitized = LogSanitizer.sanitize(prefix + edge + "suffix");
+
+        assertEquals(prefix + BACKSLASH + String.format("u%04x", (int) edge) + "suffix", sanitized,
+                "a character at the edge of an escaped range is rendered as a unicode escape sequence");
+    }
+
     @Test
     @DisplayName("Should truncate an over-long value and mark the elision (L18)")
     void shouldTruncateOverLongValue() {
