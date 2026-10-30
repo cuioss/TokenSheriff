@@ -92,7 +92,7 @@ class EndpointSchemePolicyTest {
 
     @ParameterizedTest(name = "refuses {0}")
     @ValueSource(strings = {"https://:443/logout", "https://@/x", "https://user@/x", "https://:/x", "https://;/x",
-            "https://user@:443/x", "https://:abc/logout"})
+            "https://user@:443/x", "https://user@:abc/x", "https://:abc/logout"})
     @DisplayName("Should refuse an endpoint whose authority carries no host even with the opt-in")
     void shouldRefuseAuthorityWithoutHost(String endpoint) {
         var withoutOptIn = assertThrows(ClientProtocolException.class,
