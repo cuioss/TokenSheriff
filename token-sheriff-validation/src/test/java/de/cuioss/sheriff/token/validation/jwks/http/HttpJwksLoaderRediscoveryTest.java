@@ -46,8 +46,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * Verifies that a well-known {@link HttpJwksLoader} re-runs the discovery after
  * {@value HttpJwksLoader#REDISCOVERY_FAILURE_THRESHOLD} consecutive failed refresh cycles, so a
  * {@code jwks_uri} the IdP has moved is followed (V-10b), and that a re-discovery rejected by the egress
- * guard or the issuer gate fails closed: the current endpoint, keys, status and refresh task are kept and
- * no further re-discovery is attempted.
+ * guard, the issuer gate or an unusable advertised {@code jwks_uri} fails closed: the current endpoint,
+ * keys, status and refresh task are kept, and no further re-discovery is attempted until the current
+ * endpoint has failed {@value HttpJwksLoader#REDISCOVERY_FAILURE_THRESHOLD} further refresh cycles.
  * <p>
  * Refresh cycles are driven deterministically through {@link HttpJwksLoader#performBackgroundRefresh()};
  * the long refresh interval keeps the scheduled task from running a cycle of its own during a test.
@@ -174,6 +175,50 @@ class HttpJwksLoaderRediscoveryTest {
             assertAll("re-discovery stays suppressed after the unusable jwks_uri",
                     () -> assertEquals(2, dispatcher.discoveryRequests(), "no further discovery request"),
                     () -> assertEquals(Optional.of(JWKS_A_PATH), fetchPath(loader)));
+        }
+    }
+
+    @Test
+    @DisplayName("The suppression after a rejected re-discovery lifts after the threshold and a corrected jwks_uri is followed")
+    void shouldFollowCorrectedJwksUriOnceSuppressionLifts() throws Exception {
+        DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(
+                List.of(JWKS_A_PATH, MALFORMED_JWKS_URI, JWKS_B_PATH));
+        dispatcher.serveJwks(JWKS_B_PATH, InMemoryJWKSFactory.createValidJwksWithKeyId(MOVED_KID));
+        try (HttpJwksLoader loader = startLoader(dispatcher)) {
+            initializeAndFailJwksA(loader, dispatcher);
+            refreshCycles(loader, REDISCOVERY_FAILURE_THRESHOLD + 1);
+            assertRejectedRediscoveryKeepsLoader(loader, dispatcher);
+            refreshCycles(loader, REDISCOVERY_FAILURE_THRESHOLD);
+            assertEquals(2, dispatcher.discoveryRequests(), "the suppression holds up to the threshold");
+
+            loader.performBackgroundRefresh();
+
+            assertAll("the cycle after the lifted suppression follows the corrected discovery document",
+                    () -> assertEquals(3, dispatcher.discoveryRequests(), "exactly one further re-discovery"),
+                    () -> assertEquals(Optional.of(JWKS_B_PATH), fetchPath(loader), "the corrected endpoint is published"),
+                    () -> assertEquals(1, dispatcher.jwksFetches(JWKS_B_PATH), "the corrected endpoint is fetched in the same cycle"),
+                    () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                    () -> assertEquals(Set.of(MOVED_KID), loader.getKeyIds(), "the active key set is the corrected endpoint's"));
+        }
+    }
+
+    @Test
+    @DisplayName("Below the threshold of further failed cycles a rejected re-discovery stays suppressed")
+    void shouldKeepSuppressionBelowThresholdAfterRejectedRediscovery() throws Exception {
+        DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(
+                List.of(JWKS_A_PATH, MALFORMED_JWKS_URI, JWKS_B_PATH));
+        try (HttpJwksLoader loader = startLoader(dispatcher)) {
+            initializeAndFailJwksA(loader, dispatcher);
+            refreshCycles(loader, REDISCOVERY_FAILURE_THRESHOLD + 1);
+            assertRejectedRediscoveryKeepsLoader(loader, dispatcher);
+
+            for (int further = 1; further <= REDISCOVERY_FAILURE_THRESHOLD; further++) {
+                loader.performBackgroundRefresh();
+                assertAll("after " + further + " further failed cycle(s) the discovery document is not consulted",
+                        () -> assertEquals(2, dispatcher.discoveryRequests(), "no further discovery request"),
+                        () -> assertEquals(Optional.of(JWKS_A_PATH), fetchPath(loader), "the current endpoint is kept"),
+                        () -> assertEquals(0, dispatcher.jwksFetches(JWKS_B_PATH), "the corrected endpoint is not fetched"));
+            }
         }
     }
 

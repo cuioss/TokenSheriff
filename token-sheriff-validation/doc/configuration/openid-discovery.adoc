@@ -141,6 +141,7 @@ When a background refresh cycle installs no keys and the last successful load is
 
 * the loader status leaves `OK` and becomes `UNDEFINED`;
 * the issuer is no longer resolvable, so every token for it is rejected until a refresh succeeds again;
+* the readiness health check reports `NOT_READY`, as it does for any loader that is not `OK`;
 * `TokenSheriff-170` (`JWKS_KEYS_STALE`) is logged once per degradation;
 * no key is dropped. The installed and retired keys stay in place, and the next refresh that installs
   usable keys publishes `OK` again, which re-admits the issuer.
@@ -168,10 +169,16 @@ it fetches:
 * When it is accepted, the new endpoint is used, and the same cycle fetches the keys from it.
 * When the discovery endpoint is unavailable, the existing endpoint is kept and the re-discovery is
   attempted again after another three failed cycles.
-* When it is rejected (an issuer mismatch, an absent advertised issuer, or a new `jwks_uri` blocked by
-  the egress guard), nothing is adopted: the existing endpoint, keys, status and refresh task are kept. An
-  issuer mismatch is counted once as an `ISSUER_MISMATCH` security event. No further re-discovery is
-  attempted until a refresh installs keys successfully again.
+* When it is rejected, nothing is adopted: the existing endpoint, keys, status and refresh task are kept,
+  and the same cycle still fetches from the existing endpoint. A re-discovery is rejected for an issuer
+  mismatch, an absent advertised issuer, a new `jwks_uri` blocked by the egress guard, or a new
+  `jwks_uri` that is unusable because no HTTP handler can be built for it (a malformed URI, or a cleartext
+  `http` URI while insecure HTTP is not allowed). An issuer mismatch is counted as an `ISSUER_MISMATCH`
+  security event.
+* After a rejection, no further re-discovery is attempted until a refresh installs keys successfully
+  again or the existing endpoint has failed three further refresh cycles after the rejecting one. The
+  cycle after that repeats the discovery, so a discovery document the identity provider has corrected is
+  eventually followed. This bound is fixed and not configurable.
 
 Re-discovery does not replace the staleness bound: if the identity provider stays unreachable, the
 status degrades as described above when `maxStaleness` is configured.

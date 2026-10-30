@@ -85,8 +85,10 @@ import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
  * the same number of further failures. A rejected re-discovery (issuer mismatch, absent advertised
  * issuer, egress block of the new {@code jwks_uri}, or a new {@code jwks_uri} no HTTP handler can be built
  * for) adopts nothing and keeps the current endpoint, keys, status and refresh task, and the cycle still
- * fetches from the current endpoint; re-discovery is then suppressed until keys are installed successfully
- * again.
+ * fetches from the current endpoint. Re-discovery is then suppressed until keys are installed successfully
+ * again or the current endpoint has failed {@value #REDISCOVERY_FAILURE_THRESHOLD} further refresh cycles
+ * after the rejecting one; the cycle after that consults the discovery document again, so a corrected
+ * document is eventually followed.
  * <p>
  * This implementation follows a clean architecture with:
  * <ul>
@@ -164,8 +166,11 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     private final AtomicInteger consecutiveRefreshFailures = new AtomicInteger();
 
     /**
-     * Set when a re-discovery was rejected by the issuer gate or the egress guard, cleared by the next
-     * successful key installation and by {@link #close()}. While set, no re-discovery is attempted.
+     * Set when a re-discovery was rejected (by the issuer gate, the egress guard, or because no HTTP handler
+     * can be built for the advertised {@code jwks_uri}). Cleared by the next successful key installation, by
+     * {@link #close()}, and once the retained endpoint has failed {@value #REDISCOVERY_FAILURE_THRESHOLD}
+     * further refresh cycles after the rejecting one (see {@link #recordFailedCycle(long)}). While set, no
+     * re-discovery is attempted.
      */
     private final AtomicBoolean rediscoverySuppressed = new AtomicBoolean();
 
@@ -825,7 +830,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * {@link #rediscoverEndpoint(long, JwksEndpoint)}). Unlike the no-endpoint case, a rejected
      * re-discovery is not terminal: the current endpoint, keys, status and refresh task are kept, and the
      * cycle still fetches from the current endpoint. That includes an advertised {@code jwks_uri} for
-     * which no HTTP handler can be built.
+     * which no HTTP handler can be built. After a rejection the next re-discovery follows only once the
+     * current endpoint has failed {@value #REDISCOVERY_FAILURE_THRESHOLD} further cycles, or not at all
+     * when a cycle installs keys first.
      * <p>
      * The egress re-check (C1 follow-up) is the crux: the cached {@link HttpAdapter} is reused across
      * every scheduled refresh, so without re-resolving and re-checking the fetch URI here, a DNS answer
@@ -900,10 +907,16 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     }
 
     /**
-     * Records a refresh cycle that installed no keys: counts it towards the re-discovery threshold and
-     * applies the opt-in staleness bound (see {@link #degradeIfStale(long)}).
+     * Records a refresh cycle that installed no keys: counts it towards the re-discovery threshold, lifts
+     * a re-discovery suppression that has run its course, and applies the opt-in staleness bound (see
+     * {@link #degradeIfStale(long)}).
      * <p>
-     * Both happen only while the cycle's generation is live. The failure counter is incremented under
+     * A re-discovery resets the counter, so the cycle that made a rejected re-discovery is counted as the
+     * first failure after it. Once the counter exceeds {@value #REDISCOVERY_FAILURE_THRESHOLD}, the retained
+     * endpoint has failed that many further cycles and the suppression is lifted, so the next cycle consults
+     * the discovery document again.
+     * <p>
+     * All of this happens only while the cycle's generation is live. The failure counter is incremented under
      * {@link #lifecycleLock}, so a cycle that started before a {@link #close()} cannot add a failure to the
      * counter that {@code close()} reset, and therefore not to the counter of a later initialization.
      *
@@ -915,7 +928,10 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             if (!isLive(cycleEpoch)) {
                 return;
             }
-            consecutiveRefreshFailures.incrementAndGet();
+            if (consecutiveRefreshFailures.incrementAndGet() > REDISCOVERY_FAILURE_THRESHOLD) {
+                // The rejecting cycle and the threshold of further cycles failed: lift the suppression
+                rediscoverySuppressed.set(false);
+            }
         } finally {
             lifecycleLock.unlock();
         }
@@ -925,7 +941,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     /**
      * Whether the current refresh cycle should repeat the well-known discovery before fetching: the
      * loader is in well-known mode, {@value #REDISCOVERY_FAILURE_THRESHOLD} consecutive cycles installed no
-     * keys, and re-discovery is not suppressed by an earlier rejection.
+     * keys, and re-discovery is not suppressed by an earlier rejection. A suppression lasts until keys are
+     * installed or the current endpoint has failed {@value #REDISCOVERY_FAILURE_THRESHOLD} further cycles
+     * after the rejecting one (see {@link #recordFailedCycle(long)}).
      *
      * @return {@code true} if the cycle should re-discover its endpoint first
      */
@@ -949,14 +967,17 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      *   <li>Unavailable discovery: the current endpoint is kept.</li>
      *   <li>Rejected (issuer mismatch, absent advertised issuer, egress block of the new
      *       {@code jwks_uri}): nothing is adopted, the current endpoint, keys, status and refresh task are
-     *       kept, and re-discovery is suppressed until keys are installed successfully again.</li>
+     *       kept, and re-discovery is suppressed.</li>
      *   <li>Unusable advertised {@code jwks_uri} (no HTTP handler can be built for it: a malformed URI, or
      *       a cleartext {@code http} URI while insecure HTTP is not allowed): logged as
      *       {@code JWKS_URI_RESOLUTION_FAILED} and handled as a rejection. The configuration refuses the
      *       advertised endpoint, so repeating the discovery would only meet the same refusal until the
      *       IdP changes its document; the current endpoint is kept and still fetched in this cycle, and
-     *       re-discovery is suppressed until keys are installed successfully again.</li>
+     *       re-discovery is suppressed.</li>
      * </ul>
+     * A suppression lasts until keys are installed successfully again or the current endpoint has failed
+     * {@value #REDISCOVERY_FAILURE_THRESHOLD} further cycles after the rejecting one; the cycle after that
+     * consults the discovery document again, so a document the IdP has corrected is eventually followed.
      * When a {@link #close()} moved the cycle's generation on before the outcome is applied, nothing is
      * adopted or suppressed and {@code null} is returned, so the cycle issues no fetch.
      *
@@ -998,7 +1019,10 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
     /**
      * Keeps the current endpoint after a re-discovery that adopted nothing, suppressing further
-     * re-discovery when the outcome was a rejection; both only while the cycle's generation is live.
+     * re-discovery when the outcome was a rejection; both only while the cycle's generation is live. The
+     * suppression is lifted by a successful key installation, by {@link #close()}, or by
+     * {@link #recordFailedCycle(long)} once the current endpoint has failed
+     * {@value #REDISCOVERY_FAILURE_THRESHOLD} further cycles.
      *
      * @param cycleEpoch the {@link #epoch} of the generation the calling refresh cycle belongs to
      * @param current    the endpoint the cycle fetches from when its generation is still live
