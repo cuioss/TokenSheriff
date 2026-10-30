@@ -33,8 +33,9 @@ import java.util.regex.Pattern;
  * scheme are refused in every case. An accepted endpoint must also be an absolute URL with a host:
  * a value without an authority such as {@code https:/logout}, {@code https:///logout} or the opaque
  * {@code https:foo} is refused, and so is an authority that carries no host once its user-info and port
- * are removed, such as {@code https://:443/logout}, {@code https://user@/x} or {@code https://;/x}, since
- * the user agent would be sent to no host at all.
+ * are removed, such as {@code https://:443/logout}, {@code https://user@/x} or {@code https://;/x}, and an
+ * authority whose remainder starts with {@code :}, such as {@code https://:abc/logout}, since the user
+ * agent would be sent to no host at all.
  * <p>
  * The refusal message names the endpoint by its label only. The raw endpoint may come from a discovery
  * document and is not trusted, so it is never echoed into the message, and a refusal carries no cause
@@ -60,8 +61,10 @@ public final class EndpointSchemePolicy {
      * <p>
      * The scheme is checked first; only an endpoint whose scheme is accepted is then required to carry
      * a host. The host is read from the raw authority with any user-info (up to and including the last
-     * {@code @}) and any port (a trailing {@code :} followed by digits, or a bare {@code :}) removed, and
-     * must contain at least one letter or digit. Reading the raw authority keeps a registry-based
+     * {@code @}) and any port (a trailing {@code :} followed by digits, or a bare {@code :}) removed. It
+     * must not start with {@code :} — a host never does, an IPv6 host is bracketed — and must contain at
+     * least one letter or digit, so a non-numeric port with no host in front of it, such as
+     * {@code https://:abc/logout}, is refused. Reading the raw authority keeps a registry-based
      * authority that is not a valid server host name (for example {@code https://my_host/logout})
      * accepted.
      * <p>
@@ -101,7 +104,8 @@ public final class EndpointSchemePolicy {
      * Tells whether a raw authority carries a host once its user-info and port are removed.
      *
      * @param rawAuthority the raw authority component, {@code null} when the URL has none
-     * @return {@code true} if the remaining host part contains at least one letter or digit
+     * @return {@code true} if the remaining host part does not start with {@code :} and contains at
+     *         least one letter or digit
      */
     private static boolean hasHost(@Nullable String rawAuthority) {
         if (rawAuthority == null) {
@@ -109,6 +113,6 @@ public final class EndpointSchemePolicy {
         }
         String host = rawAuthority.substring(rawAuthority.lastIndexOf('@') + 1);
         host = PORT_SUFFIX.matcher(host).replaceFirst("");
-        return host.chars().anyMatch(Character::isLetterOrDigit);
+        return !host.startsWith(":") && host.chars().anyMatch(Character::isLetterOrDigit);
     }
 }
