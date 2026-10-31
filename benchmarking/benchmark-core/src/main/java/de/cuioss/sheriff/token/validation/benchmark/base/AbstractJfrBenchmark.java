@@ -19,6 +19,7 @@ import de.cuioss.benchmarking.common.jfr.JfrInstrumentation;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.TearDown;
+import org.openjdk.jmh.infra.BenchmarkParams;
 
 /**
  * Abstract base class for JFR-instrumented benchmarks.
@@ -65,17 +66,17 @@ public abstract class AbstractJfrBenchmark extends AbstractBenchmark {
     }
 
     /**
-     * Shuts down JFR instrumentation and exports metrics at the end of the trial.
+     * Shuts down JFR instrumentation, then exports the step metrics of the trial's benchmark method.
+     *
+     * @param params the JMH parameters of the finished trial, injected by JMH
      */
     @Override
     @TearDown(Level.Trial)
-    public void exportBenchmarkMetrics() {
-        // Shutdown JFR instrumentation
+    public void exportBenchmarkMetrics(BenchmarkParams params) {
         if (jfrInstrumentation != null) {
             jfrInstrumentation.shutdown();
         }
 
-        // Call parent's export method
-        super.exportBenchmarkMetrics();
+        super.exportBenchmarkMetrics(params);
     }
 }
