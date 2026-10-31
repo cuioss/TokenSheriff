@@ -23,13 +23,16 @@ import org.openjdk.jmh.infra.Blackhole;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Mixed error rate JFR-instrumented benchmarks for JWT validation.
- * Split from UnifiedJfrBenchmark to eliminate JMH threading contention.
- * Contains only mixed token validation benchmarks (2 methods maximum).
+ * Mixed error rate JFR-instrumented benchmarks for JWT validation at fixed error rates
+ * of 0% and 50%.
+ *
+ * <p>The benchmark state uses {@link Scope#Benchmark}: all JMH worker threads share one
+ * {@code TokenValidator} instance, mirroring the singleton validator used in production,
+ * and record their operations into the one shared JFR instrumentation.
  *
  * @author Oliver Wolff
  */
-@State(Scope.Thread)
+@State(Scope.Benchmark)
 @SuppressWarnings("java:S112")
 public class MixedJfrBenchmark extends AbstractJfrBenchmark {
 
