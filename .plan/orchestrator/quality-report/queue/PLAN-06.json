@@ -2,10 +2,10 @@
   "id": "PLAN-06",
   "slug": "callback-logout-hardening",
   "workstream": "WS-02",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-06-callback-logout-hardening",
+  "pr": "840",
+  "landing": "landings/PLAN-06.md",
   "seq": 6
 }

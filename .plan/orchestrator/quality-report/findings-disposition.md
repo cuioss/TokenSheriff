@@ -14,16 +14,16 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 
 | ID | Sev | Verdict at HEAD | Owner |
 |---|---|---|---|
-| V-1 | major | VALID — `JwtHeader.epk` still `String`; ECDH-ES unparseable via production parser | PLAN-05 |
+| V-1 | major | **FIXED** — #835 (e010c5cf), PLAN-05; `epk` is a typed `JwkKey`, ECDH-ES works through the production parser (closed per PR; code not re-read) | PLAN-05 |
 | V-2 | major | **FIXED** — #833 (2ea3ef2f), PLAN-03; hit path and eviction re-apply the issuer's `maxTokenAgeSeconds` (closed per PR; code not re-read) | PLAN-03 |
 | V-3 | major | **FIXED** — #830 (1ca5ab35), PLAN-01 (closed per PR; merge state corroborated, code not re-read) | PLAN-01 |
 | V-4 | major | **FIXED** — #830 (1ca5ab35), PLAN-01; transient discovery failure retried, absent advertised issuer now terminal (closed per PR; code not re-read) | PLAN-01 |
 | V-5 | major | **FIXED** — #830 (1ca5ab35), PLAN-01; plus Quarkus `TokenValidatorProducer` `@PreDestroy` (closed per PR; code not re-read) | PLAN-01 |
 | V-6 | major | **FIXED** — #818 (9fc9d4d3) gate propagation, #817 (6d45da13) error text; `IssuerConfigDiscoveryIssuerTest` | — |
-| V-7 | major | PARTIAL — TLS fixed #748, retry fixed #795; connect/read timeouts still dropped in well-known mode | PLAN-07 |
+| V-7 | major | **FIXED** — TLS #748, retry #795, connect/read timeouts #844 (50c295e6), PLAN-07; both well-known handlers honour them (closed per PR; code not re-read) | PLAN-07 |
 | V-8 | minor | **FIXED** — #830 (1ca5ab35), PLAN-01 (closed per PR; code not re-read) | PLAN-01 |
 | V-9 | minor | **FIXED** — #833 (2ea3ef2f), PLAN-03; entries carry their issuer's clock skew (closed per PR; code not re-read) | PLAN-03 |
-| V-10 | minor | VALID — no staleness bound, no `jwks_uri` re-discovery | PLAN-07 |
+| V-10 | minor | **FIXED** — #844 (50c295e6), PLAN-07; opt-in max-staleness bound (off by default, `TokenSheriff-170`) and re-discovery after three failed cycles (closed per PR; code not re-read) | PLAN-07 |
 | V-11 | minor | VALID — DPoP path lacks ECDSA range check (CVE-2022-21449) | PLAN-09 |
 | V-12 | minor | VALID — DPoP replay `checkAndStore` before thumbprint check | PLAN-09 |
 | V-13 | minor | VALID — LogRecord template/argument mismatches | PLAN-13 |
@@ -36,7 +36,7 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | V-17d | info | VALID — duplicate JSON keys last-wins (doc only) | PLAN-18 |
 | V-17e | info | VALID — EC JWK `alg` not cross-checked against curve | PLAN-09 |
 | V-17f | info | VALID — empty `aud` array falls to `azp` fallback | PLAN-11 |
-| V-17g | info | VALID — RSA-OAEP random-CEK mitigation absent | PLAN-05 |
+| V-17g | info | **FIXED** — #835 (e010c5cf), PLAN-05; random CEK on unwrap failure, CBC tag mismatch normalised to the same typed rejection (closed per PR; code not re-read) | PLAN-05 |
 | V-17h | info | VALID — observability drift (`JWKS_KEYS_UPDATED` content etc.); J-1 part owned by PLAN-17 | PLAN-13 |
 
 ## Client code (C)
@@ -46,11 +46,11 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | C-1 | major | **FIXED** — #832 (31fb2212), PLAN-02 (closed per PR; merge state corroborated, code not re-read) | PLAN-02 |
 | C-2 | minor | **FIXED** — #832 (31fb2212), PLAN-02; the PR body files this fix under "C-8b" (closed per PR; code not re-read) | PLAN-02 |
 | C-3 | minor | VALID — DPoP `token_type` / `cnf.jkt` not verified at issuance | PLAN-10 |
-| C-4 | minor | VALID — `EndSessionFlow` no scheme check, fragment mishandled | PLAN-06 |
-| C-5 | minor | VALID — `CallbackParameters.toString()` unsanitized | PLAN-06 |
-| C-6 | minor | VALID — error callback handled before `state` check | PLAN-06 |
-| C-7 | info | VALID — single-use state/nonce is caller contract only | PLAN-06 |
-| C-8a | info | VALID — sanitizers miss U+0085/U+2028/U+2029 | PLAN-06 |
+| C-4 | minor | **FIXED** — #840 (a56b1b59), PLAN-06; shared `EndpointSchemePolicy`, query placed before a fragment (closed per PR; code not re-read) | PLAN-06 |
+| C-5 | minor | **FIXED** — #840 (a56b1b59), PLAN-06 (closed per PR; code not re-read) | PLAN-06 |
+| C-6 | minor | **FIXED** — #840 (a56b1b59), PLAN-06; `state` verified first (closed per PR; code not re-read) | PLAN-06 |
+| C-7 | info | **FIXED** — #840 (a56b1b59), PLAN-06; `FlowContext` is single use, claimed atomically (closed per PR; code not re-read) | PLAN-06 |
+| C-8a | info | **FIXED** — #840 (a56b1b59), PLAN-06; one shared `ErrorTextSanitizer` (closed per PR; code not re-read) | PLAN-06 |
 | C-8b | info | **FIXED** — #832 (31fb2212), PLAN-02; caps constructor-injectable (closed per PR; code not re-read) | PLAN-02 |
 | C-8c | info | VALID — PAR produced but never composed into a flow | PLAN-10 |
 | C-8d | info | VALID — step-up `auth_time` check without skew / clock | PLAN-10 |
@@ -89,7 +89,7 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | TC-2 | major | **FIXED** (CHANGED) — `RefreshProductionPathSpecIT` asserts rotation | — |
 | TC-3 | minor | VALID — logout IT accepts error page | PLAN-16 |
 | TC-4 | minor | VALID — mix-up IT bypasses wired `CallbackHandler` | PLAN-16 |
-| TC-5 | minor | VALID — state single-use untested (pairs with C-7) | PLAN-06 |
+| TC-5 | minor | **FIXED** — #840 (a56b1b59), PLAN-06; pinned through `AuthorizationCodeFlow.exchange` (closed per PR; code not re-read) | PLAN-06 |
 | TC-6 | minor | **FIXED** — #832 (31fb2212), PLAN-02; reflection removed, post-eviction replay pinned (closed per PR; code not re-read) | PLAN-02 |
 | TC-7 | minor | VALID — attack corpora collapse to non-JSON | PLAN-14 |
 | TC-8 | minor | VALID — `ClientAuthSpecIT` positive-only | PLAN-16 |
@@ -99,7 +99,7 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | gap VAL 4 | – | VALID — list-typed `azp` | PLAN-11 |
 | gap VAL 6 | – | PARTIAL — dup-kid warning pinned (#803); winning key + counter unasserted | PLAN-15 |
 | gap VAL 7 | – | = TV-6 | PLAN-15 |
-| gap VAL 8 | – | = V-1 | PLAN-05 |
+| gap VAL 8 | – | = V-1 — **FIXED** by #835 (e010c5cf), PLAN-05 | PLAN-05 |
 | gaps CLI 1,2 | – | = TC-5, TC-6 | PLAN-06, PLAN-02 |
 | gaps CLI 3,4 | – | FIXED (4: `invalid_grant` residual = TC-1) | PLAN-16 |
 | gaps CLI 7,8,9 | – | VALID — valid-JSON adversarial, discovery edges, iss/logout normalization | PLAN-14 |

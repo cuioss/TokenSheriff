@@ -2,10 +2,10 @@
   "id": "PLAN-07",
   "slug": "jwks-staleness-timeouts",
   "workstream": "WS-01",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-07-jwks-staleness-timeouts",
+  "pr": "844",
+  "landing": "landings/PLAN-07.md",
   "seq": 7
 }
