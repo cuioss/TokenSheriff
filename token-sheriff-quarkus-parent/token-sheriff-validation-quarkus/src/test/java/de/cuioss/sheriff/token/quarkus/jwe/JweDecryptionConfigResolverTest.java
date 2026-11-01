@@ -20,6 +20,9 @@ import de.cuioss.sheriff.token.quarkus.test.TestConfig;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import io.smallrye.config.EnvConfigSource;
+import io.smallrye.config.SmallRyeConfigBuilder;
+import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -322,6 +325,40 @@ class JweDecryptionConfigResolverTest {
                 resolver::resolveJweDecryptionConfig);
         assertTrue(exception.getMessage().contains(pathlessProperty),
                 "Should name the missing path property: " + exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("Should not turn an env-only decryption-keys path into a multi-key entry")
+    void shouldNotDiscoverEnvOnlyMultiKey() throws Exception {
+        Path pemFile = createRsaPemFile("env-only.pem");
+        Config config = new SmallRyeConfigBuilder()
+                .withSources(new EnvConfigSource(
+                        Map.of("SHERIFF_TOKEN_JWE_DECRYPTION_KEYS_ENVKID_PATH", pemFile.toString()), 300))
+                .build();
+        JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(config);
+
+        assertNull(resolver.resolveJweDecryptionConfig(),
+                "Kid discovery is dotted-only: an env-only multi-key path must not configure JWE");
+    }
+
+    @Test
+    @DisplayName("Should keep dotted multi-key discovery unchanged on a SmallRye config")
+    void shouldKeepDottedMultiKeyDiscovery() throws Exception {
+        Path firstPem = createRsaPemFile("dotted-1.pem");
+        Path secondPem = createRsaPemFile("dotted-2.pem");
+        Config config = new SmallRyeConfigBuilder()
+                .withDefaultValues(Map.of(
+                        JwtPropertyKeys.JWE.MULTI_KEY_PREFIX + "first.path", firstPem.toString(),
+                        JwtPropertyKeys.JWE.MULTI_KEY_PREFIX + "second.path", secondPem.toString()))
+                .build();
+        JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(config);
+
+        JweDecryptionConfig result = resolver.resolveJweDecryptionConfig();
+
+        assertNotNull(result);
+        assertEquals(2, result.getKeyCount(), "Both dotted kids must be loaded");
+        assertTrue(result.resolveKey("first").isPresent());
+        assertTrue(result.resolveKey("second").isPresent());
     }
 
     private Path createRsaPemFile(String filename) throws Exception {

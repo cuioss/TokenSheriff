@@ -24,15 +24,16 @@ import de.cuioss.sheriff.token.validation.dpop.DpopConfig;
 import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import io.smallrye.config.EnvConfigSource;
+import io.smallrye.config.SmallRyeConfigBuilder;
+import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INFO;
 import static de.cuioss.test.juli.LogAsserts.assertLogMessagePresent;
@@ -954,6 +955,69 @@ class IssuerConfigResolverTest {
             resolver.resolveIssuerConfigs();
 
             assertLogMessagePresentContaining(TestLogLevel.DEBUG, "Set claim subject optional for " + TEST_ISSUER + ": true");
+        }
+    }
+
+    @Nested
+    @DisplayName("Environment Variable Discovery")
+    class EnvironmentVariableDiscovery {
+
+        /**
+         * A multi-word name: its environment form {@code ENV_IDP} cannot be split back into
+         * {@code env-idp} by a dotted scan, which is what the environment discovery is for.
+         */
+        private static final String ENV_ISSUER = "env-idp";
+        private static final String MIXED_ISSUER = "mixed";
+        private static final String JWKS_CONTENT = "{\"keys\":[{\"kty\":\"RSA\",\"use\":\"sig\",\"kid\":\"env-key-1\",\"alg\":\"RS256\",\"n\":\"0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw\",\"e\":\"AQAB\"}]}";
+
+        @Test
+        @DisplayName("should resolve an issuer configured only through environment variables")
+        void shouldResolveEnvOnlyIssuer() {
+            Config config = new SmallRyeConfigBuilder()
+                    .withSources(new EnvConfigSource(envOnlyIssuer(ENV_ISSUER, "https://env.example.com"), 300))
+                    .build();
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config, RetryConfig.defaults(), null, null);
+
+            List<IssuerConfig> result = resolver.resolveIssuerConfigs();
+
+            assertEquals(1, result.size(), "Env-only issuer should be resolved");
+            assertEquals("https://env.example.com", result.getFirst().getIssuerIdentifier());
+            assertTrue(IssuerConfigResolver.hasEnabledIssuers(config),
+                    "hasEnabledIssuers must see the env-only issuer");
+        }
+
+        @Test
+        @DisplayName("should yield exactly one issuer per logical name for mixed properties and env vars")
+        void shouldYieldOneIssuerPerNameForMixedConfiguration() {
+            Map<String, String> envVars = new HashMap<>(envOnlyIssuer(ENV_ISSUER, "https://env.example.com"));
+            envVars.put(toEnvName(JwtPropertyKeys.ISSUERS.ENABLED.formatted(MIXED_ISSUER)), "true");
+            Config config = new SmallRyeConfigBuilder()
+                    .withDefaultValues(Map.of(
+                            JwtPropertyKeys.ISSUERS.ENABLED.formatted(MIXED_ISSUER), "true",
+                            JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(MIXED_ISSUER), "https://mixed.example.com",
+                            JwtPropertyKeys.ISSUERS.JWKS_CONTENT.formatted(MIXED_ISSUER), JWKS_CONTENT,
+                            JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(MIXED_ISSUER), "true"))
+                    .withSources(new EnvConfigSource(envVars, 300))
+                    .build();
+            IssuerConfigResolver resolver = new IssuerConfigResolver(config, RetryConfig.defaults(), null, null);
+
+            List<IssuerConfig> result = resolver.resolveIssuerConfigs();
+
+            assertEquals(List.of("https://mixed.example.com", "https://env.example.com"),
+                    result.stream().map(IssuerConfig::getIssuerIdentifier).toList(),
+                    "Each logical issuer must be resolved exactly once, dotted names first");
+        }
+
+        private Map<String, String> envOnlyIssuer(String issuerName, String issuerIdentifier) {
+            return Map.of(
+                    toEnvName(JwtPropertyKeys.ISSUERS.ENABLED.formatted(issuerName)), "true",
+                    toEnvName(JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(issuerName)), issuerIdentifier,
+                    toEnvName(JwtPropertyKeys.ISSUERS.JWKS_CONTENT.formatted(issuerName)), JWKS_CONTENT,
+                    toEnvName(JwtPropertyKeys.ISSUERS.AUDIENCE_VALIDATION_DISABLED.formatted(issuerName)), "true");
+        }
+
+        private String toEnvName(String dottedName) {
+            return dottedName.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "_");
         }
     }
 }

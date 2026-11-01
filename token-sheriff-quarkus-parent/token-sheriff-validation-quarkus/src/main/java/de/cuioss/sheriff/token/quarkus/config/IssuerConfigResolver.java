@@ -27,10 +27,7 @@ import org.eclipse.microprofile.config.Config;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INFO;
 
@@ -59,6 +56,13 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INF
 public class IssuerConfigResolver {
 
     private static final CuiLogger LOGGER = new CuiLogger(IssuerConfigResolver.class);
+
+    /**
+     * Leaf keys that identify an environment-only issuer, derived from the issuer templates.
+     */
+    private static final List<String> ISSUER_ANCHOR_LEAF_KEYS = List.of(
+            toLeafKey(JwtPropertyKeys.ISSUERS.DPOP_ENABLED),
+            toLeafKey(JwtPropertyKeys.ISSUERS.ENABLED));
 
     private final Config config;
     private final RetryConfig retryConfig;
@@ -145,18 +149,31 @@ public class IssuerConfigResolver {
     /**
      * Discovers all configured issuer names by scanning properties.
      * <p>
-     * Scans all property names for the issuer template pattern and extracts
-     * the issuer names from matching properties.
+     * The result is the union of the dotted discovery
+     * ({@code sheriff.token.issuers.<name>.*}) and the environment-variable discovery
+     * ({@code SHERIFF_TOKEN_ISSUERS_<NAME>_ENABLED} or {@code SHERIFF_TOKEN_ISSUERS_<NAME>_DPOP_ENABLED}),
+     * so an issuer configured only through environment variables is found as well. Dotted
+     * names come first, in encounter order; an environment-only name is reconstructed in
+     * lower case and is not reported again when it matches a dotted name. Both
+     * {@link #resolveIssuerConfigs()} and {@link #hasEnabledIssuers(Config)} use this union.
      * </p>
      *
      * @param config the configuration instance to scan
      * @return set of discovered issuer names
+     * @see ConfigValueParser#discoverEnvNameSegments(Config, String, List, java.util.Collection)
      */
     private static Set<String> discoverIssuerNames(Config config) {
-        Set<String> issuerNames = ConfigValueParser.discoverNameSegments(
-                config, JwtPropertyKeys.PREFIX + ".issuers.");
+        String issuersPrefix = JwtPropertyKeys.PREFIX + ".issuers.";
+        Set<String> issuerNames = new LinkedHashSet<>(
+                ConfigValueParser.discoverNameSegments(config, issuersPrefix));
+        issuerNames.addAll(ConfigValueParser.discoverEnvNameSegments(
+                config, issuersPrefix, ISSUER_ANCHOR_LEAF_KEYS, issuerNames));
         LOGGER.debug("Discovered issuer names: %s", issuerNames);
         return issuerNames;
+    }
+
+    private static String toLeafKey(String issuerTemplate) {
+        return issuerTemplate.substring(JwtPropertyKeys.ISSUERS.BASE.length());
     }
 
     /**
