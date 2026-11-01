@@ -23,13 +23,16 @@ import org.openjdk.jmh.infra.Blackhole;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Simplified error load benchmark - split from ErrorLoadBenchmark.
- * Contains only mixed token validation benchmarks (2 methods maximum).
- * Designed to eliminate JMH threading contention by removing @Param annotations.
+ * Error load benchmark measuring validation throughput for mixed valid and invalid tokens
+ * at fixed error rates of 0% and 50%.
+ *
+ * <p>The benchmark state uses {@link Scope#Benchmark}: all JMH worker threads share one
+ * {@code TokenValidator} instance, mirroring the singleton validator used in production.
+ * Each reported throughput is the aggregate of all worker threads against that shared validator.
  *
  * @author Oliver Wolff
  */
-@State(Scope.Thread)
+@State(Scope.Benchmark)
 @SuppressWarnings("java:S112")
 public class SimpleErrorLoadBenchmark extends AbstractBenchmark {
 

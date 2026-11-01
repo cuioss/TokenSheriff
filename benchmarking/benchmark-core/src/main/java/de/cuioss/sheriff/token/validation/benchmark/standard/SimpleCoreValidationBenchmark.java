@@ -23,13 +23,16 @@ import org.openjdk.jmh.annotations.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Simplified core validation benchmark - split from PerformanceIndicatorBenchmark.
- * Contains only essential JWT validation performance metrics (3 methods maximum).
- * Designed to eliminate JMH threading contention by keeping class complexity minimal.
+ * Core JWT validation benchmark measuring latency and throughput of the token validator.
+ *
+ * <p>The benchmark state uses {@link Scope#Benchmark}: all JMH worker threads share one
+ * {@code TokenValidator} instance, mirroring the singleton validator used in production.
+ * Running with the configured {@code jmh.threads} therefore measures the validator under
+ * genuine concurrent access rather than one private validator per thread.
  *
  * @author Oliver Wolff
  */
-@State(Scope.Thread)
+@State(Scope.Benchmark)
 @SuppressWarnings("java:S112")
 public class SimpleCoreValidationBenchmark extends AbstractBenchmark {
 
@@ -46,9 +49,10 @@ public class SimpleCoreValidationBenchmark extends AbstractBenchmark {
     }
 
     /**
-     * Measures average validation time for single-threaded token validation using full token spectrum.
-     * This benchmark measures the baseline latency for validating tokens while rotating
-     * through all 600 tokens to test cache effectiveness. Lower values indicate better performance.
+     * Measures the mean latency per validation call using the full token spectrum.
+     * The benchmark runs with the configured {@code jmh.threads} against the shared validator,
+     * rotating through all 600 tokens to exercise cache effectiveness, and reports the average
+     * time of a single call. Lower values indicate better performance.
      *
      * @return validated access token content
      */
@@ -60,10 +64,9 @@ public class SimpleCoreValidationBenchmark extends AbstractBenchmark {
     }
 
     /**
-     * Measures token validation throughput under concurrent load using full token spectrum.
-     * This benchmark uses multiple threads to measure how many token validations
-     * can be performed per second under concurrent load, rotating through all 600 tokens
-     * to test cache effectiveness. Higher values indicate better throughput.
+     * Measures the aggregate validation throughput of all worker threads against the one
+     * shared validator using the full token spectrum, rotating through all 600 tokens to
+     * exercise cache effectiveness. Higher values indicate better throughput.
      *
      * @return validated access token content
      */

@@ -106,7 +106,7 @@ public final class TestDataFactory {
      * @return A JSON string representing benchmark results
      */
     public static String createTestBenchmarkResult() {
-        return createTestBenchmarkResult("de.cuioss.jwt.benchmark.Test", "testMethod", "Sample", 1000);
+        return createTestBenchmarkResult("de.cuioss.sheriff.token.validation.benchmark.Test", "testMethod", "Sample", 1000);
     }
 
     /**

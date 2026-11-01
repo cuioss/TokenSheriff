@@ -23,13 +23,15 @@ import org.openjdk.jmh.annotations.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Core JFR-instrumented benchmark for essential JWT validation performance.
- * Split from UnifiedJfrBenchmark to eliminate JMH threading contention.
- * Contains only core validation benchmarks (3 methods maximum).
+ * Core JFR-instrumented benchmark for JWT validation latency and throughput.
+ *
+ * <p>The benchmark state uses {@link Scope#Benchmark}: all JMH worker threads share one
+ * {@code TokenValidator} instance, mirroring the singleton validator used in production,
+ * and record their operations into the one shared JFR instrumentation.
  *
  * @author Oliver Wolff
  */
-@State(Scope.Thread)
+@State(Scope.Benchmark)
 @SuppressWarnings("java:S112")
 public class CoreJfrBenchmark extends AbstractJfrBenchmark {
 
@@ -49,54 +51,50 @@ public class CoreJfrBenchmark extends AbstractJfrBenchmark {
     // ========== Core Validation Benchmarks ==========
 
     /**
-     * Measures average validation time for single-threaded token validation with JFR instrumentation using full token spectrum.
+     * Measures the mean latency per validation call with JFR instrumentation using the full token spectrum.
+     * Runs with the configured {@code jmh.threads} against the shared validator.
+     *
+     * @return validated access token content
      */
     @Benchmark
     @BenchmarkMode(Mode.AverageTime)
     @OutputTimeUnit(TimeUnit.MICROSECONDS)
     public AccessTokenContent measureAverageTimeWithJfr() {
-        return performValidationWithJfr("measureAverageTimeWithJfr", "full_spectrum",
-                () -> coreValidationDelegate.validateWithFullSpectrum());
+        return performValidationWithJfr("measureAverageTimeWithJfr");
     }
 
     /**
-     * Measures token validation throughput under concurrent load with JFR instrumentation using full token spectrum.
+     * Measures the aggregate validation throughput of all worker threads against the one shared
+     * validator with JFR instrumentation using the full token spectrum.
+     *
+     * @return validated access token content
      */
     @Benchmark
     @BenchmarkMode(Mode.Throughput)
     @OutputTimeUnit(TimeUnit.SECONDS)
     public AccessTokenContent measureThroughputWithJfr() {
-        return performValidationWithJfr("measureThroughputWithJfr", "full_spectrum",
-                () -> coreValidationDelegate.validateWithFullSpectrum());
+        return performValidationWithJfr("measureThroughputWithJfr");
     }
 
     /**
-     * Common method to perform validation with JFR instrumentation.
+     * Common method to perform a full-spectrum validation with JFR instrumentation.
+     *
+     * <p>The token is selected once and that same token is both described in the JFR metadata and
+     * validated, so payload size and issuer always match the operation being recorded.
      *
      * @param operationName the name of the operation for JFR recording
-     * @param tokenType the type of token to retrieve
-     * @param validationSupplier the validation operation to perform
      * @return the validation result
      */
-    private AccessTokenContent performValidationWithJfr(String operationName, String tokenType,
-            ValidationSupplier validationSupplier) {
-        String token = coreValidationDelegate.getCurrentToken(tokenType);
+    private AccessTokenContent performValidationWithJfr(String operationName) {
+        String token = coreValidationDelegate.nextFullSpectrumToken();
 
         try (var recorder = jfrInstrumentation.recordOperation(operationName, OPERATION_TYPE_VALIDATION)) {
             recorder.withPayloadSize(token.length())
                     .withMetadata("issuer", tokenRepository.getTokenIssuer(token).orElse(null));
 
-            AccessTokenContent result = validationSupplier.validate();
+            AccessTokenContent result = coreValidationDelegate.validateWithFullSpectrum(token);
             recorder.withSuccess(true);
             return result;
         }
-    }
-
-    /**
-     * Functional interface for validation operations.
-     */
-    @FunctionalInterface
-    private interface ValidationSupplier {
-        AccessTokenContent validate();
     }
 }

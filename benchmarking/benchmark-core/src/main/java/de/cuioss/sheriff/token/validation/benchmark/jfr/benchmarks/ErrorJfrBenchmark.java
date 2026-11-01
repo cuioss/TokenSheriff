@@ -23,13 +23,16 @@ import org.openjdk.jmh.annotations.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Error handling JFR-instrumented benchmarks for JWT validation.
- * Split from UnifiedJfrBenchmark to eliminate JMH threading contention.
- * Contains only error scenario benchmarks (4 methods maximum).
+ * Error handling JFR-instrumented benchmarks for JWT validation, covering valid, expired,
+ * malformed and invalid-signature tokens.
+ *
+ * <p>The benchmark state uses {@link Scope#Benchmark}: all JMH worker threads share one
+ * {@code TokenValidator} instance, mirroring the singleton validator used in production,
+ * and record their operations into the one shared JFR instrumentation.
  *
  * @author Oliver Wolff
  */
-@State(Scope.Thread)
+@State(Scope.Benchmark)
 @SuppressWarnings("java:S112")
 public class ErrorJfrBenchmark extends AbstractJfrBenchmark {
 
