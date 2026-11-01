@@ -15,9 +15,11 @@
  */
 package de.cuioss.sheriff.token.quarkus.deployment;
 
+import de.cuioss.sheriff.token.quarkus.annotation.BearerAuth;
 import de.cuioss.sheriff.token.quarkus.error.ProblemDetailExceptionMapper;
 import de.cuioss.sheriff.token.quarkus.health.JwksEndpointHealthCheck;
 import de.cuioss.sheriff.token.quarkus.health.TokenValidatorHealthCheck;
+import de.cuioss.sheriff.token.quarkus.interceptor.BearerAuthRecorder;
 import de.cuioss.sheriff.token.quarkus.logging.CustomAccessLogFilter;
 import de.cuioss.sheriff.token.quarkus.mapper.DiscoverableClaimMapper;
 import de.cuioss.sheriff.token.quarkus.producer.JsonWebTokenAdapter;
@@ -27,11 +29,14 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
+import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
 import io.quarkus.devui.spi.page.CardPageBuildItem;
+import jakarta.interceptor.Interceptor;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.jboss.jandex.Index;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -195,5 +200,46 @@ class TokenSheriffProcessorBuildStepTest {
         processor.registerUnremovableBeans(producer);
 
         assertEquals(1, unremovableBeans.size());
+    }
+
+    @Test
+    @DisplayName("Should record the class-level BearerAuth requirements of annotated classes only")
+    void shouldRecordClassLevelBearerAuthRequirements() throws Exception {
+        Index index = Index.of(ClassLevelSecured.class, MethodLevelOnly.class, SecuringInterceptor.class);
+        CapturingBearerAuthRecorder recorder = new CapturingBearerAuthRecorder();
+
+        processor.recordClassLevelBearerAuth(new CombinedIndexBuildItem(index, index), recorder);
+
+        assertEquals(Map.of(ClassLevelSecured.class.getName(),
+                        List.of(List.of("read"), List.of("user"), List.of())),
+                recorder.recorded,
+                "only a class-level declaration on a non-interceptor class is a requirement to record");
+    }
+
+    @BearerAuth(requiredScopes = {"read"}, requiredRoles = {"user"})
+    static class ClassLevelSecured {
+    }
+
+    static class MethodLevelOnly {
+        @BearerAuth(requiredScopes = {"method"})
+        public String secured() {
+            return "result";
+        }
+    }
+
+    @BearerAuth
+    @Interceptor
+    static class SecuringInterceptor {
+    }
+
+    static class CapturingBearerAuthRecorder extends BearerAuthRecorder {
+
+        final Map<String, List<List<String>>> recorded = new HashMap<>();
+
+        @Override
+        public void registerClassLevelRequirement(String className, String[] requiredScopes, String[] requiredRoles,
+                String[] requiredGroups) {
+            recorded.put(className, List.of(List.of(requiredScopes), List.of(requiredRoles), List.of(requiredGroups)));
+        }
     }
 }
