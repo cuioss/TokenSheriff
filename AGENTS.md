@@ -237,11 +237,12 @@ to narrow the caught exception type against the **throwers the callee actually d
 where the caught failures come from an **open set of SPI implementations that declare no
 `throws`**, in which case there is nothing to narrow against and suppression is legitimate.
 
-That carve-out is the rule's single limit, and it is part of the rule rather than a footnote: the
-tree already holds its one sanctioned instance at
-`token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/TokenBuilder.java:143`,
-where custom SPI claim mappers are translated into `TokenValidationException`. Everywhere else,
-narrow.
+That carve-out is the rule's single limit, and it is part of the rule rather than a footnote. The
+tree holds several sanctioned instances of it, each at a `catch` over an open set of SPI
+implementations (or an equivalent boundary whose thrower declares nothing to narrow against), and
+each carries a comment recording why the broad catch is deliberate. `TokenBuilder`, where custom SPI
+claim mappers are translated into `TokenValidationException`, is the reference example. Everywhere
+else, narrow.
 
 Two practical notes from the sites already narrowed:
 
@@ -281,10 +282,16 @@ carrying `%n` must **never** be "fixed" by accepting the rewrite.
 
 #### What is known about suppression placement, and what is not
 
-The failure that produced the narrow-not-suppress rule was observed for a `// cui-rewrite:disable`
-comment placed at the **closing-brace / `catch`** position, and only there. Class-level and
-method-level suppression of `InvalidExceptionUsageRecipe` were never tested, so they are
-**untested, not refuted**. Treat that as a known gap for a future investigation, not as a finding.
+The **catch-position** placement — a `// cui-rewrite:disable InvalidExceptionUsageRecipe` line
+comment on the line directly before the `catch` — has been observed to hold: a `-Ppre-commit` run
+(`rewrite:run` with `InvalidExceptionUsageRecipe` active) against `TokenLifecycleManager`, after its
+committed marker was replaced by that comment, re-injected no marker anywhere in the tree. Use that
+adjacent placement for new sites. `TokenLifecycleManager` is the only live sanctioned instance that
+uses it: the other catch-position instances (for example `TokenBuilder`, `TokenValidator` and
+`TokenValidatorHealthCheck`) place explanatory comment lines between the directive and the `catch`,
+and whether the recipe honors that form is not recorded. Class-level and method-level suppression of
+`InvalidExceptionUsageRecipe` were never tested, so they are **untested, not refuted**. Treat that
+as a known gap for a future investigation, not as a finding.
 
 Adjacent evidence exists but must not be over-read: this tree relies on **method-level**
 suppression of a *different* recipe (`CuiLoggerStandardsRecipe`, at the two `%n` sites), and a
