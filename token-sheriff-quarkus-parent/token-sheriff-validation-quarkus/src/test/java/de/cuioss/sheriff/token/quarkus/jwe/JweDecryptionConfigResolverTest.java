@@ -23,6 +23,9 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,6 +34,7 @@ import java.security.KeyPairGenerator;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -207,6 +211,117 @@ class JweDecryptionConfigResolverTest {
         var exception = assertThrows(IllegalStateException.class,
                 resolver::resolveJweDecryptionConfig);
         assertTrue(exception.getMessage().contains("key loading failed"));
+    }
+
+    @Test
+    @DisplayName("Should throw when default-key-id names no configured multi-key kid")
+    void shouldThrowWhenDefaultKeyIdUnknown() throws Exception {
+        Path pemFile1 = createRsaPemFile("known-1.pem");
+        Path pemFile2 = createRsaPemFile("known-2.pem");
+
+        Map<String, String> props = new HashMap<>();
+        props.put(JwtPropertyKeys.JWE.MULTI_KEY_PREFIX + "key-1.path", pemFile1.toString());
+        props.put(JwtPropertyKeys.JWE.MULTI_KEY_PREFIX + "key-2.path", pemFile2.toString());
+        props.put(JwtPropertyKeys.JWE.DEFAULT_KEY_ID, "unknown-kid");
+
+        JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(new TestConfig(props));
+
+        var exception = assertThrows(IllegalStateException.class,
+                resolver::resolveJweDecryptionConfig);
+        String message = exception.getMessage();
+        assertTrue(message.contains("key loading failed"),
+                "Should be wrapped in the fail-closed message: " + message);
+        assertTrue(message.contains("unknown-kid"), "Should name the configured kid: " + message);
+        assertTrue(message.contains("key-1") && message.contains("key-2"),
+                "Should name the available kids: " + message);
+        assertTrue(message.contains(JwtPropertyKeys.JWE.DEFAULT_KEY_ID),
+                "Should name the property key: " + message);
+    }
+
+    @ParameterizedTest(name = "{0} without any key source")
+    @MethodSource("ancillaryPropertiesRequiringAnyKeySource")
+    @DisplayName("Should throw when an ancillary property is set without any key source")
+    void shouldThrowWhenAncillaryPropertyHasNoKeySource(String property, String value) {
+        JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(
+                new TestConfig(Map.of(property, value)));
+
+        var exception = assertThrows(IllegalStateException.class,
+                resolver::resolveJweDecryptionConfig);
+        assertTrue(exception.getMessage().contains(property),
+                "Should name the orphaned property: " + exception.getMessage());
+    }
+
+    static Stream<Arguments> ancillaryPropertiesRequiringAnyKeySource() {
+        return Stream.of(
+                Arguments.of(JwtPropertyKeys.JWE.DECRYPTION_KEY_ID, "orphan-kid"),
+                Arguments.of(JwtPropertyKeys.JWE.KEYSTORE_PASSWORD, "secret"),
+                Arguments.of(JwtPropertyKeys.JWE.KEY_ALIAS, "alias"),
+                Arguments.of(JwtPropertyKeys.JWE.KEY_PASSWORD, "secret"),
+                Arguments.of(JwtPropertyKeys.JWE.DEFAULT_KEY_ID, "key-1"),
+                Arguments.of(JwtPropertyKeys.JWE.KEY_MANAGEMENT_ALGORITHMS, "RSA-OAEP"),
+                Arguments.of(JwtPropertyKeys.JWE.CONTENT_ENCRYPTION_ALGORITHMS, "A256GCM"),
+                Arguments.of(JwtPropertyKeys.JWE.MAX_ENCRYPTED_TOKEN_SIZE, "65536"));
+    }
+
+    @ParameterizedTest(name = "{0} with only a single key path")
+    @MethodSource("keystoreOrMultiKeyPropertiesWithSingleKey")
+    @DisplayName("Should throw when a keystore or multi-key property is set with only a single key path")
+    void shouldThrowWhenPropertySetWithWrongKeySource(String property, String value) throws Exception {
+        Path pemFile = createRsaPemFile("single-only.pem");
+
+        Map<String, String> props = new HashMap<>();
+        props.put(JwtPropertyKeys.JWE.DECRYPTION_KEY_PATH, pemFile.toString());
+        props.put(property, value);
+
+        JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(new TestConfig(props));
+
+        var exception = assertThrows(IllegalStateException.class,
+                resolver::resolveJweDecryptionConfig);
+        assertTrue(exception.getMessage().contains(property),
+                "Should name the orphaned property: " + exception.getMessage());
+    }
+
+    static Stream<Arguments> keystoreOrMultiKeyPropertiesWithSingleKey() {
+        return Stream.of(
+                Arguments.of(JwtPropertyKeys.JWE.KEYSTORE_PASSWORD, "secret"),
+                Arguments.of(JwtPropertyKeys.JWE.KEY_ALIAS, "alias"),
+                Arguments.of(JwtPropertyKeys.JWE.KEY_PASSWORD, "secret"),
+                Arguments.of(JwtPropertyKeys.JWE.DEFAULT_KEY_ID, "key-1"));
+    }
+
+    @Test
+    @DisplayName("Should throw when decryption-key-id is set with only multi-key paths")
+    void shouldThrowWhenDecryptionKeyIdSetWithOnlyMultiKeys() throws Exception {
+        Path pemFile = createRsaPemFile("multi-only.pem");
+
+        Map<String, String> props = new HashMap<>();
+        props.put(JwtPropertyKeys.JWE.MULTI_KEY_PREFIX + "key-1.path", pemFile.toString());
+        props.put(JwtPropertyKeys.JWE.DECRYPTION_KEY_ID, "key-1");
+
+        JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(new TestConfig(props));
+
+        var exception = assertThrows(IllegalStateException.class,
+                resolver::resolveJweDecryptionConfig);
+        assertTrue(exception.getMessage().contains(JwtPropertyKeys.JWE.DECRYPTION_KEY_ID),
+                "Should name the orphaned property: " + exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("Should throw when a multi-key entry has no path")
+    void shouldThrowWhenMultiKeyEntryHasNoPath() throws Exception {
+        Path pemFile = createRsaPemFile("with-path.pem");
+        String pathlessProperty = JwtPropertyKeys.JWE.MULTI_KEY_PREFIX + "pathless.path";
+
+        Map<String, String> props = new HashMap<>();
+        props.put(JwtPropertyKeys.JWE.MULTI_KEY_PREFIX + "key-1.path", pemFile.toString());
+        props.put(JwtPropertyKeys.JWE.MULTI_KEY_PREFIX + "pathless.pth", "/typo/key.pem");
+
+        JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(new TestConfig(props));
+
+        var exception = assertThrows(IllegalStateException.class,
+                resolver::resolveJweDecryptionConfig);
+        assertTrue(exception.getMessage().contains(pathlessProperty),
+                "Should name the missing path property: " + exception.getMessage());
     }
 
     private Path createRsaPemFile(String filename) throws Exception {
