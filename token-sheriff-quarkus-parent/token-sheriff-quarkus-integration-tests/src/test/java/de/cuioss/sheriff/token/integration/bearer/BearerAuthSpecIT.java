@@ -316,4 +316,82 @@ class BearerAuthSpecIT extends BaseIntegrationTest {
                 .then()
                 .statusCode(401);
     }
+
+    // === Class-Level @BearerAuth Tests ===
+
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("de.cuioss.sheriff.token.integration.TestProviders#rolesProviders")
+    @Order(50)
+    @DisplayName("Class-level — method without own annotation is protected by the class requirement")
+    void classLevelClassOnly(TestRealm realm) {
+        var tokenResponse = realm.obtainValidToken();
+        given()
+                .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
+                .when()
+                .get("/jwt/class-level/class-only")
+                .then()
+                .statusCode(200)
+                .body("valid", equalTo(true))
+                .body("message", equalTo("Class-level validation successful (class-only)"));
+    }
+
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("de.cuioss.sheriff.token.integration.TestProviders#bearerAuthProviders")
+    @Order(51)
+    @DisplayName("Class-level — union of satisfied class and method requirements succeeds")
+    void classLevelUnion(TestRealm realm) {
+        var tokenResponse = realm.obtainValidToken();
+        given()
+                .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
+                .when()
+                .get("/jwt/class-level/union")
+                .then()
+                .statusCode(200)
+                .body("valid", equalTo(true))
+                .body("message", equalTo("Class-level validation successful (union)"));
+    }
+
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("de.cuioss.sheriff.token.integration.TestProviders#rolesProviders")
+    @Order(52)
+    @DisplayName("Class-level — inherited method is protected by the subclass requirement")
+    void classLevelInherited(TestRealm realm) {
+        var tokenResponse = realm.obtainValidToken();
+        given()
+                .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
+                .when()
+                .get("/jwt/class-level/inherited")
+                .then()
+                .statusCode(200)
+                .body("valid", equalTo(true))
+                .body("message", equalTo("Class-level validation successful (inherited)"));
+    }
+
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("de.cuioss.sheriff.token.integration.TestProviders#bearerAuthProviders")
+    @Order(53)
+    @DisplayName("Class-level — unsatisfied class requirement is not dropped by a method annotation")
+    void classLevelUnsatisfiedUnion(TestRealm realm) {
+        var tokenResponse = realm.obtainValidToken();
+        given()
+                .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
+                .when()
+                .get("/jwt/class-level-unsatisfied/union")
+                .then()
+                .statusCode(403);
+    }
+
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("de.cuioss.sheriff.token.integration.TestProviders#bearerAuthProviders")
+    @Order(54)
+    @DisplayName("Class-level — unsatisfied subclass requirement guards an inherited method")
+    void classLevelUnsatisfiedInherited(TestRealm realm) {
+        var tokenResponse = realm.obtainValidToken();
+        given()
+                .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
+                .when()
+                .get("/jwt/class-level-unsatisfied/inherited")
+                .then()
+                .statusCode(403);
+    }
 }
