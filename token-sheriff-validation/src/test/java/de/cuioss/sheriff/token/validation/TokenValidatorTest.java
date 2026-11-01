@@ -16,7 +16,10 @@
 package de.cuioss.sheriff.token.validation;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.JwksType;
+import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
+import de.cuioss.sheriff.token.validation.cache.AccessTokenCacheConfig;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
@@ -24,6 +27,8 @@ import de.cuioss.sheriff.token.validation.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.context.RefreshTokenRequest;
 import de.cuioss.sheriff.token.validation.dpop.DpopConfig;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
+import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
@@ -34,13 +39,20 @@ import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -444,6 +456,158 @@ class TokenValidatorTest {
                          .build()) {
                 assertNotNull(multiValidator);
             }
+        }
+
+        @Test
+        @DisplayName("A failing pipeline shutdown still releases the DPoP replay protection and the JWKS loaders")
+        void failingCloseStillReleasesRemainingResources() {
+            RecordingCloseableLoader loader = new RecordingCloseableLoader();
+            CancelFailingExecutor cacheExecutor = new CancelFailingExecutor();
+            Set<Thread> dpopThreadsBefore = dpopEvictionThreads();
+            TokenValidator validator = TokenValidator.builder()
+                    .issuerConfig(IssuerConfig.builder()
+                            .issuerIdentifier(RecordingCloseableLoader.ISSUER)
+                            .dpopConfig(DpopConfig.builder().build())
+                            .jwksLoader(loader)
+                            .audienceValidationDisabled(true)
+                            .build())
+                    .cacheConfig(AccessTokenCacheConfig.builder()
+                            .maxSize(10)
+                            .evictionIntervalSeconds(300L)
+                            .scheduledExecutorService(cacheExecutor)
+                            .build())
+                    .build();
+            Set<Thread> dpopThreads = new HashSet<>(dpopEvictionThreads());
+            dpopThreads.removeAll(dpopThreadsBefore);
+
+            try {
+                assertFalse(dpopThreads.isEmpty(), "the DPoP replay protection runs its eviction thread before close()");
+
+                SecurityException failure = assertThrows(SecurityException.class, validator::close,
+                        "the failure of the pipeline shutdown is still reported to the caller");
+
+                assertEquals(CancelFailingExecutor.FAILURE_MESSAGE, failure.getMessage());
+                assertTrue(loader.isClosed(), "the JWKS loader must be closed despite the failing pipeline shutdown");
+                Awaitility.await().atMost(Duration.ofSeconds(5))
+                        .until(() -> dpopThreads.stream().noneMatch(Thread::isAlive));
+            } finally {
+                cacheExecutor.shutdownNow();
+            }
+        }
+
+        private static Set<Thread> dpopEvictionThreads() {
+            return Thread.getAllStackTraces().keySet().stream()
+                    .filter(thread -> DPOP_EVICTION_THREAD_NAME.equals(thread.getName()))
+                    .collect(Collectors.toSet());
+        }
+    }
+
+    /** Name of the eviction thread a {@code DpopReplayProtection} runs until it is closed. */
+    private static final String DPOP_EVICTION_THREAD_NAME = "dpop-replay-eviction";
+
+    /**
+     * Caller-supplied cache eviction executor that schedules nothing: the eviction task it hands back
+     * throws a {@link SecurityException} when cancelled, as a security manager may refuse an executor
+     * operation, so the access token cache's shutdown fails.
+     */
+    private static final class CancelFailingExecutor extends ScheduledThreadPoolExecutor {
+
+        static final String FAILURE_MESSAGE = "cancelling the eviction task is not permitted";
+
+        CancelFailingExecutor() {
+            super(1);
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
+            return new CancelFailingFuture();
+        }
+
+        private static final class CancelFailingFuture implements ScheduledFuture<Object> {
+
+            @Override
+            public long getDelay(TimeUnit unit) {
+                return 0;
+            }
+
+            @Override
+            public int compareTo(Delayed other) {
+                return Long.compare(getDelay(TimeUnit.NANOSECONDS), other.getDelay(TimeUnit.NANOSECONDS));
+            }
+
+            @Override
+            public boolean cancel(boolean mayInterruptIfRunning) {
+                throw new SecurityException(FAILURE_MESSAGE);
+            }
+
+            @Override
+            public boolean isCancelled() {
+                return false;
+            }
+
+            @Override
+            public boolean isDone() {
+                return false;
+            }
+
+            @Override
+            public Object get() {
+                return null;
+            }
+
+            @Override
+            public Object get(long timeout, TimeUnit unit) {
+                return null;
+            }
+        }
+    }
+
+    /**
+     * An {@link AutoCloseable} JWKS loader without keys that records whether it was closed.
+     */
+    private static final class RecordingCloseableLoader implements JwksLoader, AutoCloseable {
+
+        static final String ISSUER = "https://closing-issuer.example.com";
+
+        private volatile boolean closed;
+
+        boolean isClosed() {
+            return closed;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+
+        @Override
+        public LoaderStatus getLoaderStatus() {
+            return LoaderStatus.OK;
+        }
+
+        @Override
+        public Optional<KeyInfo> getKeyInfo(String kid) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Set<String> getKeyIds() {
+            return Set.of();
+        }
+
+        @Override
+        public JwksType getJwksType() {
+            return JwksType.MEMORY;
+        }
+
+        @Override
+        public Optional<String> getIssuerIdentifier() {
+            return Optional.of(ISSUER);
+        }
+
+        @Override
+        public CompletableFuture<LoaderStatus> initJWKSLoader(SecurityEventCounter securityEventCounter) {
+            return CompletableFuture.completedFuture(LoaderStatus.OK);
         }
     }
 

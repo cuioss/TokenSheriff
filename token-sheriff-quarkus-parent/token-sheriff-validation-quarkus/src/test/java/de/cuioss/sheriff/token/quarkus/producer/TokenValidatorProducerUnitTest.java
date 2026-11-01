@@ -22,6 +22,7 @@ import de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.token.quarkus.test.TestConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.TokenValidator;
+import de.cuioss.sheriff.token.validation.cache.AccessTokenCacheConfig;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.test.juli.LogAsserts;
@@ -35,7 +36,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INFO;
@@ -129,6 +130,40 @@ class TokenValidatorProducerUnitTest {
         }
 
         @Test
+        @DisplayName("Should contain a SecurityException from closing the TokenValidator and not retry the close")
+        void shouldContainSecurityExceptionWhileClosing() {
+            RecordingJwksLoader loader = new RecordingJwksLoader();
+            CancelFailingExecutor cacheExecutor = new CancelFailingExecutor(new SecurityException("cancel refused"));
+            TokenValidatorProducer producer = new TokenValidatorProducer(new TestConfig(Map.of()), null, null);
+            producer.tokenValidator = validatorOwning(loader, cacheExecutor);
+            try {
+                assertDoesNotThrow(producer::destroy, "a SecurityException while closing must not abort the container shutdown");
+                assertDoesNotThrow(producer::destroy, "a repeated destruction must not abort the container shutdown either");
+
+                assertAll("the failing close is attempted exactly once and still releases the loaders",
+                        () -> assertEquals(1, cacheExecutor.getCancelAttempts(), "the failing close must not be retried"),
+                        () -> assertEquals(1, loader.getCloseCount(), "the validator's JWKS loader must still be closed"));
+            } finally {
+                cacheExecutor.shutdownNow();
+            }
+        }
+
+        @Test
+        @DisplayName("Should propagate a close failure other than a SecurityException")
+        void shouldPropagateOtherCloseFailure() {
+            CancelFailingExecutor cacheExecutor = new CancelFailingExecutor(new IllegalStateException("unexpected"));
+            TokenValidatorProducer producer = new TokenValidatorProducer(new TestConfig(Map.of()), null, null);
+            producer.tokenValidator = validatorOwning(new RecordingJwksLoader(), cacheExecutor);
+            try {
+                IllegalStateException failure = assertThrows(IllegalStateException.class, producer::destroy,
+                        "only the documented SecurityException is contained");
+                assertEquals("unexpected", failure.getMessage());
+            } finally {
+                cacheExecutor.shutdownNow();
+            }
+        }
+
+        @Test
         @DisplayName("Should do nothing when init() never created a TokenValidator")
         void shouldIgnoreDestroyWithoutValidator() {
             Map<String, String> props = Map.of(
@@ -149,6 +184,85 @@ class TokenValidatorProducerUnitTest {
                             .jwksLoader(loader)
                             .build())
                     .build();
+        }
+
+        private static TokenValidator validatorOwning(JwksLoader loader, ScheduledExecutorService cacheExecutor) {
+            return TokenValidator.builder()
+                    .issuerConfig(IssuerConfig.builder()
+                            .issuerIdentifier(RecordingJwksLoader.ISSUER)
+                            .expectedAudience("test-audience")
+                            .jwksLoader(loader)
+                            .build())
+                    .cacheConfig(AccessTokenCacheConfig.builder()
+                            .maxSize(10)
+                            .evictionIntervalSeconds(300L)
+                            .scheduledExecutorService(cacheExecutor)
+                            .build())
+                    .build();
+        }
+    }
+
+    /**
+     * Caller-supplied cache eviction executor that schedules nothing: the eviction task it hands back
+     * throws the given exception when cancelled, so closing the validator fails while its access token
+     * cache shuts down.
+     */
+    private static final class CancelFailingExecutor extends ScheduledThreadPoolExecutor {
+
+        private final RuntimeException cancelFailure;
+        private final AtomicInteger cancelAttempts = new AtomicInteger();
+
+        CancelFailingExecutor(RuntimeException cancelFailure) {
+            super(1);
+            this.cancelFailure = cancelFailure;
+        }
+
+        int getCancelAttempts() {
+            return cancelAttempts.get();
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
+            return new CancelFailingFuture();
+        }
+
+        private final class CancelFailingFuture implements ScheduledFuture<Object> {
+
+            @Override
+            public long getDelay(TimeUnit unit) {
+                return 0;
+            }
+
+            @Override
+            public int compareTo(Delayed other) {
+                return Long.compare(getDelay(TimeUnit.NANOSECONDS), other.getDelay(TimeUnit.NANOSECONDS));
+            }
+
+            @Override
+            public boolean cancel(boolean mayInterruptIfRunning) {
+                cancelAttempts.incrementAndGet();
+                throw cancelFailure;
+            }
+
+            @Override
+            public boolean isCancelled() {
+                return false;
+            }
+
+            @Override
+            public boolean isDone() {
+                return false;
+            }
+
+            @Override
+            public Object get() {
+                return null;
+            }
+
+            @Override
+            public Object get(long timeout, TimeUnit unit) {
+                return null;
+            }
         }
     }
 

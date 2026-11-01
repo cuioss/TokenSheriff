@@ -173,9 +173,13 @@ public class TokenValidatorProducer {
      * example when the CDI application context shuts down or is restarted in dev mode.
      * <p>
      * {@link TokenValidator#close()} releases the validator's internal resources and closes the JWKS
-     * loaders it owns, stopping their background refresh. The validator is closed at most once, nothing
-     * happens when {@link #init()} did not create one, and a failure while closing is logged instead of
-     * being propagated into the container shutdown.
+     * loaders it owns, stopping their background refresh. The validator is closed at most once, also
+     * when closing it failed, and nothing happens when {@link #init()} did not create one.
+     * <p>
+     * {@code TokenValidator.close()} isolates failures of its JWKS loaders itself; its remaining
+     * resources (the access token pipeline with its cache, and the DPoP replay protection) shut down
+     * executors, whose documented unchecked failure is a {@link SecurityException}. Such a failure is
+     * logged instead of being propagated into the container shutdown.
      */
     @PreDestroy
     void destroy() {
@@ -185,16 +189,7 @@ public class TokenValidatorProducer {
         }
         try {
             validator.close();
-        }
-        // cui-rewrite:disable InvalidExceptionUsageRecipe
-        // Intentional catch-all: a failure while releasing the validator must not abort the
-        // container shutdown that triggered this callback. TokenValidator.close() already isolates
-        // failures of the (open-set) JwksLoader closeables itself; the remaining unchecked failure
-        // sources are its pipeline and replay-protection resources. The catch-all is kept
-        // deliberately and is NOT covered by the AGENTS.md SPI carve-out for
-        // InvalidExceptionUsageRecipe, so the suppression is an accepted deviation from the
-        // narrow-the-catch rule. The failure is logged at DEBUG.
-        catch (RuntimeException e) {
+        } catch (SecurityException e) {
             LOGGER.debug(e, "Failed to close the TokenValidator on producer destruction");
         }
     }
