@@ -82,7 +82,7 @@ class AbstractBenchmarkTest {
 
     @Test
     @DisplayName("Should export the shared validator metrics under the per-method key")
-    void shouldExportSharedValidatorMetricsUnderPerMethodKey() throws IOException {
+    void shouldExportSharedValidatorMetricsUnderPerMethodKey() throws Exception {
         AbstractBenchmark benchmark = new AbstractBenchmark() {
         };
         benchmark.setupBase();
