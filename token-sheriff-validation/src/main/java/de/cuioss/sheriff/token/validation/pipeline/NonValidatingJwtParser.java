@@ -335,7 +335,7 @@ public class NonValidatingJwtParser {
 
         try {
             // Decode JWE header only (first part)
-            JwtHeader jweHeader = decodeJwtHeader(parts[0]);
+            JwtHeader jweHeader = decodeJwtHeader(parts[0], logWarnings, trackSecurityEvents);
 
             // Verify this is actually a JWE (has 'enc' field)
             if (!jweHeader.isJwe()) {
@@ -370,15 +370,8 @@ public class NonValidatingJwtParser {
             // i.e. unauthenticated header bytes including CR/LF (CWE-117). Neither the WARN nor
             // the exception message may carry it; the cause chain keeps it for callers that
             // deliberately inspect it.
-            if (logWarnings) {
-                LOGGER.warn(JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT);
-            }
-            if (trackSecurityEvents) {
-                securityEventCounter.increment(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT);
-            }
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT,
-                    "Failed to decode JWE header: malformed or structurally invalid header JSON", e);
+            throw rejectUndecodablePart("Failed to decode JWE header: malformed or structurally invalid header JSON",
+                    e, logWarnings, trackSecurityEvents);
         }
     }
 
@@ -435,10 +428,10 @@ public class NonValidatingJwtParser {
     private DecodedJwt decodeTokenParts(String[] parts, String token, boolean logWarnings, boolean trackSecurityEvents) {
         try {
             // Decode the header (first part) to JwtHeader using DSL-JSON
-            JwtHeader header = decodeJwtHeader(parts[0]);
+            JwtHeader header = decodeJwtHeader(parts[0], logWarnings, trackSecurityEvents);
 
             // Decode the payload (second part) to MapRepresentation using DSL-JSON
-            MapRepresentation body = decodePayload(parts[1]);
+            MapRepresentation body = decodePayload(parts[1], logWarnings, trackSecurityEvents);
 
             // The signature part (third part) is kept as is
             String signature = parts[2];
@@ -449,38 +442,31 @@ public class NonValidatingJwtParser {
             // the failure position, i.e. unauthenticated header/payload bytes including CR/LF
             // (CWE-117). Neither the WARN nor the exception message may carry it; the cause chain
             // keeps it for callers that deliberately inspect it.
-            if (logWarnings) {
-                LOGGER.warn(JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT);
-            }
-            if (trackSecurityEvents) {
-                securityEventCounter.increment(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT);
-            }
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT,
-                    "Failed to decode JWT parts: malformed or structurally invalid JSON",
-                    e
-            );
+            throw rejectUndecodablePart("Failed to decode JWT parts: malformed or structurally invalid JSON",
+                    e, logWarnings, trackSecurityEvents);
         }
     }
 
     /**
      * Decodes a Base64Url encoded JWT header using DSL-JSON.
      *
-     * @param encodedHeader the Base64Url encoded header part
+     * @param encodedHeader        the Base64Url encoded header part
+     * @param logWarnings          whether a rejection is logged
+     * @param trackSecurityEvents  whether a rejection is counted
      * @return the decoded JwtHeader
-     * @throws IOException if decoding fails
+     * @throws IOException if DSL-JSON deserialization fails
+     * @throws TokenValidationException if the part is not valid Base64Url or the header is JSON {@code null}
      */
-    private JwtHeader decodeJwtHeader(String encodedHeader) throws IOException {
-        byte[] jsonBytes = decodeBase64UrlPart(encodedHeader);
+    private JwtHeader decodeJwtHeader(String encodedHeader, boolean logWarnings, boolean trackSecurityEvents)
+            throws IOException {
+        byte[] jsonBytes = decodeBase64UrlPart(encodedHeader, logWarnings, trackSecurityEvents);
         DslJson<Object> dslJson = config.getDslJson();
 
         JwtHeader header = dslJson.deserialize(JwtHeader.class, jsonBytes, jsonBytes.length);
 
         if (header == null) {
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT,
-                    "Failed to deserialize JWT header: null result"
-            );
+            throw rejectUndecodablePart("Failed to deserialize JWT header: null result",
+                    null, logWarnings, trackSecurityEvents);
         }
 
         return header;
@@ -489,12 +475,16 @@ public class NonValidatingJwtParser {
     /**
      * Decodes a Base64Url encoded JWT payload using DSL-JSON.
      *
-     * @param encodedPayload the Base64Url encoded payload part
+     * @param encodedPayload       the Base64Url encoded payload part
+     * @param logWarnings          whether a rejection is logged
+     * @param trackSecurityEvents  whether a rejection is counted
      * @return the decoded MapRepresentation
-     * @throws IOException if decoding fails
+     * @throws IOException if DSL-JSON deserialization fails
+     * @throws TokenValidationException if the part is not valid Base64Url
      */
-    private MapRepresentation decodePayload(String encodedPayload) throws IOException {
-        byte[] jsonBytes = decodeBase64UrlPart(encodedPayload);
+    private MapRepresentation decodePayload(String encodedPayload, boolean logWarnings, boolean trackSecurityEvents)
+            throws IOException {
+        byte[] jsonBytes = decodeBase64UrlPart(encodedPayload, logWarnings, trackSecurityEvents);
         DslJson<Object> dslJson = config.getDslJson();
 
         return MapRepresentation.fromJson(dslJson, jsonBytes);
@@ -506,11 +496,17 @@ public class NonValidatingJwtParser {
      * Returning the raw bytes avoids a lossy byte-to-String-to-byte round trip and
      * guarantees that no platform-default charset is involved (JWT JSON is always UTF-8
      * per RFC 7515).
+     * <p>
+     * A part that is not valid Base64Url is rejected through
+     * {@link #rejectUndecodablePart(String, Throwable, boolean, boolean)}, so it is logged and
+     * counted exactly once according to the decode mode.
      *
-     * @param encodedPart the Base64Url encoded part
+     * @param encodedPart          the Base64Url encoded part
+     * @param logWarnings          whether a Base64Url rejection is logged
+     * @param trackSecurityEvents  whether a Base64Url rejection is counted
      * @return the decoded JSON bytes
      */
-    private byte[] decodeBase64UrlPart(String encodedPart) {
+    private byte[] decodeBase64UrlPart(String encodedPart, boolean logWarnings, boolean trackSecurityEvents) {
         try {
             byte[] decodedBytes = Base64.getUrlDecoder().decode(encodedPart);
 
@@ -531,12 +527,40 @@ public class NonValidatingJwtParser {
 
             return decodedBytes;
         } catch (IllegalArgumentException e) {
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT,
-                    "Failed to decode Base64Url part: " + e.getMessage(),
-                    e
-            );
+            // The decoder's message names the offending input character; it stays on the cause
+            // chain only, never in the WARN or the exception message.
+            throw rejectUndecodablePart("Failed to decode Base64Url part: invalid Base64Url encoding",
+                    e, logWarnings, trackSecurityEvents);
         }
+    }
+
+    /**
+     * Rejects a JWT part that cannot be decoded, accounting for it according to the decode mode.
+     * <p>
+     * Logs {@code WARN.FAILED_TO_DECODE_JWT} without an attached throwable when
+     * {@code logWarnings} is set, counts {@code FAILED_TO_DECODE_JWT} when
+     * {@code trackSecurityEvents} is set, and throws. The message must not carry raw part
+     * bytes; the underlying failure is kept on the cause chain only.
+     *
+     * @param message              the exception message, free of raw part bytes
+     * @param cause                the underlying decoder failure, or {@code null} if there is none
+     * @param logWarnings          whether the rejection is logged
+     * @param trackSecurityEvents  whether the rejection is counted
+     * @return never returns normally; declared so callers can write {@code throw rejectUndecodablePart(...)}
+     * @throws TokenValidationException always, with event type {@code FAILED_TO_DECODE_JWT}
+     */
+    private TokenValidationException rejectUndecodablePart(String message, @Nullable Throwable cause,
+            boolean logWarnings, boolean trackSecurityEvents) {
+        if (logWarnings) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT);
+        }
+        if (trackSecurityEvents) {
+            securityEventCounter.increment(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT);
+        }
+        if (cause == null) {
+            throw new TokenValidationException(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, message);
+        }
+        throw new TokenValidationException(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, message, cause);
     }
 
     /**
