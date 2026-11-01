@@ -171,13 +171,16 @@ public class MockTokenRepository {
     }
 
     /**
-     * Gets a token from the pool at the specified index
+     * Gets a token from the pool at the specified index.
+     * <p>
+     * The index wraps around the pool in both directions, so a rotation counter that has overflowed
+     * into negative values still selects a valid pool entry.
      *
-     * @param index The index in the token pool
-     * @return The token at the specified index
+     * @param index The index in the token pool, any int value
+     * @return The token at the specified index modulo the pool size
      */
     public String getToken(int index) {
-        return tokenPool[index % tokenPool.length];
+        return tokenPool[Math.floorMod(index, tokenPool.length)];
     }
 
     /**
