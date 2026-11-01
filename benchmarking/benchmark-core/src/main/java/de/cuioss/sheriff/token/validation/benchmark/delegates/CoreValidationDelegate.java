@@ -43,25 +43,32 @@ public class CoreValidationDelegate extends BenchmarkDelegate {
      * @throws IllegalStateException if validation fails unexpectedly
      */
     public AccessTokenContent validateWithFullSpectrum() {
+        return validateWithFullSpectrum(nextFullSpectrumToken());
+    }
+
+    /**
+     * Returns the next token from the full-spectrum rotation pool.
+     * Use this to obtain the token that will be validated by {@link #validateWithFullSpectrum(String)},
+     * so metadata (issuer, size) can be derived from the same token that is actually validated.
+     *
+     * @return the next token from the pool
+     */
+    public String nextFullSpectrumToken() {
+        return tokenRepository.getToken(tokenIndex.getAndIncrement());
+    }
+
+    /**
+     * Validates the given token drawn from the full-spectrum rotation pool.
+     *
+     * @param token the token to validate
+     * @return the validated access token content
+     * @throws IllegalStateException if validation fails unexpectedly
+     */
+    public AccessTokenContent validateWithFullSpectrum(String token) {
         try {
-            // Use rotation through entire token pool for full spectrum testing
-            String token = tokenRepository.getToken(tokenIndex.getAndIncrement());
             return validateToken(token);
         } catch (TokenValidationException e) {
             throw new IllegalStateException("Unexpected validation failure during full spectrum validation", e);
         }
-    }
-
-    /**
-     * Gets the current token for the given operation type.
-     *
-     * @param operationType the type of operation (e.g., "primary", "rotation", "full_spectrum")
-     * @return the token to use for validation
-     */
-    public String getCurrentToken(String operationType) {
-        if ("rotation".equals(operationType) || "full_spectrum".equals(operationType)) {
-            return tokenRepository.getToken(tokenIndex.get());
-        }
-        return tokenRepository.getPrimaryToken();
     }
 }

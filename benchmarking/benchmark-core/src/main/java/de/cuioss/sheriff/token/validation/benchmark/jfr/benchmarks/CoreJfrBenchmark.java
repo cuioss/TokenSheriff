@@ -60,8 +60,7 @@ public class CoreJfrBenchmark extends AbstractJfrBenchmark {
     @BenchmarkMode(Mode.AverageTime)
     @OutputTimeUnit(TimeUnit.MICROSECONDS)
     public AccessTokenContent measureAverageTimeWithJfr() {
-        return performValidationWithJfr("measureAverageTimeWithJfr", "full_spectrum",
-                () -> coreValidationDelegate.validateWithFullSpectrum());
+        return performValidationWithJfr("measureAverageTimeWithJfr");
     }
 
     /**
@@ -74,37 +73,28 @@ public class CoreJfrBenchmark extends AbstractJfrBenchmark {
     @BenchmarkMode(Mode.Throughput)
     @OutputTimeUnit(TimeUnit.SECONDS)
     public AccessTokenContent measureThroughputWithJfr() {
-        return performValidationWithJfr("measureThroughputWithJfr", "full_spectrum",
-                () -> coreValidationDelegate.validateWithFullSpectrum());
+        return performValidationWithJfr("measureThroughputWithJfr");
     }
 
     /**
-     * Common method to perform validation with JFR instrumentation.
+     * Common method to perform a full-spectrum validation with JFR instrumentation.
+     *
+     * <p>The token is selected once and that same token is both described in the JFR metadata and
+     * validated, so payload size and issuer always match the operation being recorded.
      *
      * @param operationName the name of the operation for JFR recording
-     * @param tokenType the type of token to retrieve
-     * @param validationSupplier the validation operation to perform
      * @return the validation result
      */
-    private AccessTokenContent performValidationWithJfr(String operationName, String tokenType,
-            ValidationSupplier validationSupplier) {
-        String token = coreValidationDelegate.getCurrentToken(tokenType);
+    private AccessTokenContent performValidationWithJfr(String operationName) {
+        String token = coreValidationDelegate.nextFullSpectrumToken();
 
         try (var recorder = jfrInstrumentation.recordOperation(operationName, OPERATION_TYPE_VALIDATION)) {
             recorder.withPayloadSize(token.length())
                     .withMetadata("issuer", tokenRepository.getTokenIssuer(token).orElse(null));
 
-            AccessTokenContent result = validationSupplier.validate();
+            AccessTokenContent result = coreValidationDelegate.validateWithFullSpectrum(token);
             recorder.withSuccess(true);
             return result;
         }
-    }
-
-    /**
-     * Functional interface for validation operations.
-     */
-    @FunctionalInterface
-    private interface ValidationSupplier {
-        AccessTokenContent validate();
     }
 }
