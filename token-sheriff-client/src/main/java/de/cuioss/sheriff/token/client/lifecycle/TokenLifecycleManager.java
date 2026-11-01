@@ -1106,10 +1106,12 @@ public class TokenLifecycleManager {
         try {
             held = tokenStore.retrieve(sessionId);
         }
-        /*TODO: Catch specific not RuntimeException. Suppress: // cui-rewrite:disable InvalidExceptionUsageRecipe*/
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
         catch (RuntimeException unreadable) {
-            // TokenStore is an SPI, so any unchecked failure is possible here. Whatever it is, it is not
-            // evidence that a newer grant replaced the refused one, so the caller clears.
+            // Deliberate broad catch: TokenStore is an SPI and its retrieve declares no throws, so there
+            // is no declared thrower to narrow against and any unchecked failure is possible here.
+            // Whatever it is, it is not evidence that a newer grant replaced the refused one, so the
+            // caller clears.
             LOGGER.debug(unreadable, "Store read before a fail-closed clear failed for session %s; clearing",
                     maskSessionId(sessionId));
             return false;
