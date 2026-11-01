@@ -283,13 +283,15 @@ carrying `%n` must **never** be "fixed" by accepting the rewrite.
 #### What is known about suppression placement, and what is not
 
 The **catch-position** placement — a `// cui-rewrite:disable InvalidExceptionUsageRecipe` line
-comment on the line directly before the `catch` — is the placement the live sanctioned instances
-use, and it has been observed to hold: a `-Ppre-commit` run (`rewrite:run` with
-`InvalidExceptionUsageRecipe` active) against `TokenLifecycleManager`, after its committed marker
-was replaced by that comment, re-injected no marker anywhere in the tree. Use that placement.
-Class-level and method-level suppression of `InvalidExceptionUsageRecipe` were never tested, so
-they are **untested, not refuted**. Treat that as a known gap for a future investigation, not as a
-finding.
+comment on the line directly before the `catch` — has been observed to hold: a `-Ppre-commit` run
+(`rewrite:run` with `InvalidExceptionUsageRecipe` active) against `TokenLifecycleManager`, after its
+committed marker was replaced by that comment, re-injected no marker anywhere in the tree. Use that
+adjacent placement for new sites. `TokenLifecycleManager` is the only live sanctioned instance that
+uses it: the other catch-position instances (for example `TokenBuilder`, `TokenValidator` and
+`TokenValidatorHealthCheck`) place explanatory comment lines between the directive and the `catch`,
+and whether the recipe honors that form is not recorded. Class-level and method-level suppression of
+`InvalidExceptionUsageRecipe` were never tested, so they are **untested, not refuted**. Treat that
+as a known gap for a future investigation, not as a finding.
 
 Adjacent evidence exists but must not be over-read: this tree relies on **method-level**
 suppression of a *different* recipe (`CuiLoggerStandardsRecipe`, at the two `%n` sites), and a
