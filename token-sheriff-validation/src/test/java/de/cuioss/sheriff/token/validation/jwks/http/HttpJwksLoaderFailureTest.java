@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.validation.jwks.http;
 import de.cuioss.http.client.HttpLogMessages;
 import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.EgressPolicy;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
@@ -32,6 +33,7 @@ import de.cuioss.test.mockwebserver.URIBuilder;
 import lombok.Getter;
 import mockwebserver3.MockWebServer;
 import org.awaitility.Awaitility;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -407,6 +409,207 @@ class HttpJwksLoaderFailureTest {
             assertAll("a refresh in flight during close() must not re-publish OK",
                     () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
                     () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed after close()"));
+        }
+    }
+
+    /**
+     * Pins that an unexpected (unchecked) failure of the initialization body never leaves the loader in
+     * {@link LoaderStatus#LOADING}: it ends in {@link LoaderStatus#UNDEFINED} only when a background refresh
+     * that can recover is actually scheduled, otherwise in a terminal {@link LoaderStatus#ERROR}, and the
+     * initialization future completes normally with that status.
+     */
+    @Nested
+    @DisplayName("Unexpected initialization failure")
+    class UnexpectedInitializationFailure {
+
+        /** A jwks_uri no HTTP handler can be built for. */
+        private static final String MALFORMED_JWKS_URI = "http://[malformed";
+        private static final String DUPLICATE_KID_JWKS_PATH = "/jwks-duplicate-kid.json";
+        private static final int LONG_REFRESH_INTERVAL_SECONDS = 3600;
+        private static final int NO_REFRESH = 0;
+
+        private final RetryConfig fastRetry = RetryConfig.builder()
+                .initialDelay(Duration.ofMillis(1))
+                .maxDelay(Duration.ofMillis(5))
+                .build();
+
+        private MockWebServer server;
+
+        /**
+         * Exposes the enclosing class's dispatcher to the MockWebServer extension, which resolves the
+         * module dispatcher on the nested test instance.
+         *
+         * @return the shared JWKS dispatcher
+         */
+        public JwksResolveDispatcher getModuleDispatcher() {
+            return moduleDispatcher;
+        }
+
+        @BeforeEach
+        void startServer() {
+            server = new MockWebServer();
+        }
+
+        @AfterEach
+        void stopServer() {
+            server.close();
+        }
+
+        private HttpJwksLoaderConfig wellKnownAdvertisingMalformedJwksUri(int refreshIntervalSeconds) throws IOException {
+            server.setDispatcher(new DiscoveryGenerationDispatcher(List.of(MALFORMED_JWKS_URI)));
+            server.start();
+            return HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .wellKnownUrl(server.url(DiscoveryGenerationDispatcher.WELL_KNOWN_PATH).toString())
+                    .retryConfig(fastRetry)
+                    .refreshIntervalSeconds(refreshIntervalSeconds)
+                    .build();
+        }
+
+        private static LoaderStatus awaitInitialization(HttpJwksLoader loader, SecurityEventCounter counter)
+                throws Exception {
+            return loader.initJWKSLoader(counter).get(10, TimeUnit.SECONDS);
+        }
+
+        private static void assertInitializationFailureLogged() {
+            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
+                    JWTValidationLogMessages.ERROR.JWKS_INITIALIZATION_FAILED.resolveIdentifierString());
+        }
+
+        @Test
+        @DisplayName("No handler for the advertised jwks_uri with background refresh enabled is UNDEFINED and keeps refreshing")
+        void unusableAdvertisedJwksUriWithRefreshIsUndefined() throws Exception {
+            try (HttpJwksLoader loader = new HttpJwksLoader(wellKnownAdvertisingMalformedJwksUri(LONG_REFRESH_INTERVAL_SECONDS))) {
+                LoaderStatus initStatus = awaitInitialization(loader, securityEventCounter);
+
+                assertAll("the failure ends retry-pending with a scheduled refresh",
+                        () -> assertEquals(LoaderStatus.UNDEFINED, initStatus, "the future completes with the status in effect"),
+                        () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
+                        () -> assertNotEquals(LoaderStatus.LOADING, loader.getLoaderStatus()),
+                        () -> assertTrue(loader.isBackgroundRefreshActive(), "the refresh re-attempts the discovery"),
+                        () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed"));
+                assertInitializationFailureLogged();
+            }
+        }
+
+        @Test
+        @DisplayName("No handler for the advertised jwks_uri with background refresh disabled is ERROR")
+        void unusableAdvertisedJwksUriWithoutRefreshIsError() throws Exception {
+            try (HttpJwksLoader loader = new HttpJwksLoader(wellKnownAdvertisingMalformedJwksUri(NO_REFRESH))) {
+                LoaderStatus initStatus = awaitInitialization(loader, securityEventCounter);
+
+                assertAll("without a refresh the failure is terminal",
+                        () -> assertEquals(LoaderStatus.ERROR, initStatus),
+                        () -> assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus()),
+                        () -> assertNotEquals(LoaderStatus.LOADING, loader.getLoaderStatus()),
+                        () -> assertFalse(loader.isBackgroundRefreshActive(), "no refresh may be scheduled"),
+                        () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed"));
+                assertInitializationFailureLogged();
+            }
+        }
+
+        @Test
+        @DisplayName("A key-loading failure after the endpoint was published is UNDEFINED with exactly one refresh task")
+        void keyLoadingFailureAfterEndpointPublishedIsUndefinedWithOneRefreshTask() throws Exception {
+            DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(DUPLICATE_KID_JWKS_PATH));
+            dispatcher.serveJwks(DUPLICATE_KID_JWKS_PATH, duplicateKidJwks());
+            server.setDispatcher(dispatcher);
+            server.start();
+            CountingScheduledExecutor executor = new CountingScheduledExecutor();
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .jwksUrl(server.url(DUPLICATE_KID_JWKS_PATH).toString())
+                    .issuerIdentifier("test-issuer")
+                    .retryConfig(fastRetry)
+                    .refreshIntervalSeconds(LONG_REFRESH_INTERVAL_SECONDS)
+                    .scheduledExecutorService(executor)
+                    .build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                LoaderStatus initStatus = awaitInitialization(loader, new FailingOnDuplicateKidCounter());
+
+                assertAll("the failure after the fetch ends retry-pending with a single refresh task",
+                        () -> assertEquals(1, dispatcher.jwksFetches(DUPLICATE_KID_JWKS_PATH), "the endpoint was fetched"),
+                        () -> assertEquals(LoaderStatus.UNDEFINED, initStatus),
+                        () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
+                        () -> assertNotEquals(LoaderStatus.LOADING, loader.getLoaderStatus()),
+                        () -> assertTrue(loader.isBackgroundRefreshActive()),
+                        () -> assertEquals(1, executor.getScheduledTasks(), "the refresh task is never scheduled twice"),
+                        () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed"));
+                assertInitializationFailureLogged();
+            } finally {
+                executor.shutdownNow();
+            }
+        }
+
+        @Test
+        @DisplayName("A direct-mode failure before any endpoint was published is ERROR, also with background refresh enabled")
+        void directModeFailureWithoutEndpointIsError() throws Exception {
+            EgressPolicy failingPolicy = EgressPolicy.builder().resolver(host -> {
+                throw new IllegalStateException("injected resolver failure");
+            }).build();
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowInsecureHttp(true)
+                    .jwksUrl("http://jwks.example.test/jwks")
+                    .issuerIdentifier("test-issuer")
+                    .refreshIntervalSeconds(LONG_REFRESH_INTERVAL_SECONDS)
+                    .build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config, failingPolicy)) {
+                LoaderStatus initStatus = awaitInitialization(loader, securityEventCounter);
+
+                assertAll("a refresh cannot recover direct mode without an endpoint, so the failure is terminal",
+                        () -> assertEquals(LoaderStatus.ERROR, initStatus),
+                        () -> assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus()),
+                        () -> assertNotEquals(LoaderStatus.LOADING, loader.getLoaderStatus()),
+                        () -> assertFalse(loader.isBackgroundRefreshActive(), "no refresh may be scheduled"),
+                        () -> assertTrue(loader.getJwksFetchUri().isEmpty(), "no endpoint may be published"));
+                assertInitializationFailureLogged();
+            }
+        }
+
+        /**
+         * A JWKS carrying the default key twice under the same {@code kid}, so key loading counts a
+         * {@code DUPLICATE_JWKS_KID} event.
+         */
+        private static String duplicateKidJwks() {
+            String jwks = InMemoryJWKSFactory.createDefaultJwks();
+            String key = jwks.substring(jwks.indexOf('[') + 1, jwks.lastIndexOf(']')).strip();
+            return "{\"keys\":[" + key + "," + key + "]}";
+        }
+    }
+
+    /**
+     * Counter whose {@code DUPLICATE_JWKS_KID} event throws, injecting an unchecked failure into the key
+     * loading of the initial load.
+     */
+    private static final class FailingOnDuplicateKidCounter extends SecurityEventCounter {
+
+        @Override
+        public long increment(EventType eventType) {
+            if (eventType == EventType.DUPLICATE_JWKS_KID) {
+                throw new IllegalStateException("injected key-loading failure");
+            }
+            return super.increment(eventType);
+        }
+    }
+
+    /**
+     * Scheduled executor counting the fixed-rate tasks scheduled on it.
+     */
+    private static final class CountingScheduledExecutor extends ScheduledThreadPoolExecutor {
+
+        private final AtomicInteger scheduledTasks = new AtomicInteger();
+
+        CountingScheduledExecutor() {
+            super(1);
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
+            scheduledTasks.incrementAndGet();
+            return super.scheduleAtFixedRate(command, initialDelay, period, unit);
+        }
+
+        int getScheduledTasks() {
+            return scheduledTasks.get();
         }
     }
 
