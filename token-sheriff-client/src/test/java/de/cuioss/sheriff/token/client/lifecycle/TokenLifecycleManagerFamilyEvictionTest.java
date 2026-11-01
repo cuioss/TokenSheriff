@@ -110,7 +110,8 @@ class TokenLifecycleManagerFamilyEvictionTest {
     /** Stores generation 0 of the session's refresh token and rotates it to generation 1. */
     private static void seedRotatedSession(TokenLifecycleManager manager, String sessionId) {
         manager.store(sessionId, bundle(sessionId, 0));
-        manager.applyRefresh(sessionId, "access-" + sessionId + "-1", refreshToken(sessionId, 1), null, null, null);
+        manager.applyRefresh(sessionId, refreshToken(sessionId, 0), "access-" + sessionId + "-1",
+                refreshToken(sessionId, 1), null, null, null);
     }
 
     /**
@@ -119,7 +120,7 @@ class TokenLifecycleManagerFamilyEvictionTest {
      */
     private static Optional<StoredToken> replaySuperseded(TokenLifecycleManager manager, String sessionId) {
         manager.store(sessionId, bundle(sessionId, 0));
-        return manager.applyRefresh(sessionId, "access-" + sessionId + "-replayed",
+        return manager.applyRefresh(sessionId, refreshToken(sessionId, 0), "access-" + sessionId + "-replayed",
                 "refresh-" + sessionId + "-replayed", null, null, null);
     }
 
