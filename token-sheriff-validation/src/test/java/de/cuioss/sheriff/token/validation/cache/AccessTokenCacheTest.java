@@ -848,6 +848,75 @@ class AccessTokenCacheTest {
         }
     }
 
+    @Test
+    void tokenWithoutIatIsNotCachedUnderMaxTokenAge() {
+        // Given - a token without iat, validated under an issuer policy with a maximum token age
+        String token = "iat-less-token-max-age";
+        AccessTokenContent iatLess = createAccessTokenWithoutIat(OffsetDateTime.now().plusHours(1));
+
+        // When - the token is offered to the cache
+        assertDoesNotThrow(() -> cache.put(token, iatLess, issuerPolicy(0, 300), performanceMonitor));
+
+        // Then - it is not cached, so a lookup cannot throw MISSING_CLAIM and the token stays on the
+        // full validation path
+        assertEquals(0, cache.size(), "An iat-less token must not be cached under a maximum token age");
+        assertTrue(cache.get(token, performanceMonitor, OffsetDateTime.now()).isEmpty());
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT));
+    }
+
+    @Test
+    @SuppressWarnings("java:S2093")
+    // try-with-resources is not usable here: ExecutorService.close() waits for termination, and the
+    // scheduler's placeholder one-day task would make it block, so shutdownNow() in finally is required
+    void evictionKeepsRunningAfterIatLessTokenUnderMaxTokenAge() {
+        // Given - cache whose eviction tick is driven by the test
+        cache.shutdown();
+        TickCapturingScheduler scheduler = new TickCapturingScheduler();
+        try {
+            AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
+                    .maxSize(10)
+                    .evictionIntervalSeconds(300L)
+                    .scheduledExecutorService(scheduler)
+                    .build();
+            cache = new AccessTokenCache(config, securityEventCounter);
+            cache.put("iat-less-token", createAccessTokenWithoutIat(OffsetDateTime.now().plusHours(1)),
+                    issuerPolicy(0, 60), performanceMonitor);
+            OffsetDateTime issuedAt = OffsetDateTime.now().minusHours(1);
+            cache.put("too-old-token", createAccessToken(issuedAt, OffsetDateTime.now().plusHours(1)),
+                    issuerPolicy(0, 60), performanceMonitor);
+            assertEquals(1, cache.size(), "Only the token carrying iat is cached");
+
+            // When/Then - the eviction tick completes and still evicts the too-old entry
+            assertDoesNotThrow(scheduler::tick, "The eviction task must not fail on a cached entry");
+            assertEquals(0, cache.size(), "The too-old token must still be evicted");
+        } finally {
+            scheduler.shutdownNow();
+        }
+    }
+
+    @Test
+    void tokenWithoutIatIsCachedWithoutMaxTokenAge() {
+        // Given - a token without iat, validated under an issuer policy without a maximum token age
+        String token = "iat-less-token-no-max-age";
+        AccessTokenContent iatLess = createAccessTokenWithoutIat(OffsetDateTime.now().plusHours(1));
+
+        // When
+        cache.put(token, iatLess, defaultIssuerPolicy(), performanceMonitor);
+
+        // Then - behaviour is unchanged: the token is cached and served
+        assertEquals(1, cache.size());
+        assertEquals(Optional.of(iatLess), cache.get(token, performanceMonitor, OffsetDateTime.now()));
+    }
+
+    private static AccessTokenContent createAccessTokenWithoutIat(OffsetDateTime expiration) {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        tokenHolder.withClaim(ClaimName.EXPIRATION.getName(), ClaimValue.forDateTime(String.valueOf(expiration.toEpochSecond()), expiration));
+        tokenHolder.getClaims().remove(ClaimName.ISSUED_AT.getName());
+        AccessTokenContent content = tokenHolder.asAccessTokenContent();
+        assertTrue(content.getClaimOption(ClaimName.ISSUED_AT).isEmpty(), "the fixture must carry no iat claim");
+        return content;
+    }
+
     /**
      * The per-issuer time policy used by tests that do not exercise it: no clock skew,
      * token age validation disabled.
