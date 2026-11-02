@@ -242,19 +242,26 @@
                 <!-- Container-based native build with optimized rebuild detection -->
                 <quarkus.native.container-build>true</quarkus.native.container-build>
                 <quarkus.native.enabled>true</quarkus.native.enabled>
+
+                <!-- Phase of the Quarkus build execution below. "none" keeps the native build out of
+                     the normal lifecycle; scripts/build-native-if-needed.sh sets it to "package" for
+                     its inner reactor build, so the native executable is built in this module only
+                     and from the checked-out upstream modules. -->
+                <integration-tests.native-build.phase>none</integration-tests.native-build.phase>
             </properties>
             <build>
                 <plugins>
-                    
+
                     <!-- Quarkus plugin (build only on-demand via script) -->
                     <plugin>
                         <groupId>io.quarkus</groupId>
                         <artifactId>quarkus-maven-plugin</artifactId>
                         <executions>
-                            <!-- Override parent's default execution to prevent automatic native build -->
+                            <!-- Override parent's default execution to prevent automatic native build;
+                                 the script enables it through integration-tests.native-build.phase -->
                             <execution>
                                 <id>default</id>
-                                <phase>none</phase>
+                                <phase>${integration-tests.native-build.phase}</phase>
                             </execution>
                         </executions>
                     </plugin>

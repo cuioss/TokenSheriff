@@ -23,6 +23,7 @@ import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.ClaimControlParameter;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import io.quarkus.arc.Subclass;
 import jakarta.interceptor.InvocationContext;
 import jakarta.ws.rs.WebApplicationException;
 import org.junit.jupiter.api.BeforeEach;
@@ -273,6 +274,98 @@ class BearerTokenInterceptorTest {
         verify(invocationContext, bearerTokenProducer);
     }
 
+    @Test
+    @DisplayName("Should read class-level annotation from bean class behind an ArC subclass")
+    void shouldReadClassLevelAnnotationThroughArcSubclass() throws Exception {
+        TestTokenHolder tokenHolder = createValidToken();
+
+        expect(invocationContext.getMethod()).andReturn(TestResourceClassLevel.class.getMethod("methodWithoutAnnotation"));
+        expect(invocationContext.getTarget()).andReturn(new ArcSubclassOfClassLevel());
+        expect(bearerTokenProducer.getBearerTokenResult(Set.of("class-scope"), Set.of(), Set.of()))
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
+        expect(invocationContext.proceed()).andReturn("success");
+        replay(invocationContext, bearerTokenProducer);
+
+        Object result = interceptor.validateBearerToken(invocationContext);
+
+        assertEquals("success", result);
+        verify(invocationContext, bearerTokenProducer);
+    }
+
+    @Test
+    @DisplayName("Should merge class and method annotations when target is an ArC subclass")
+    void shouldMergeClassAndMethodAnnotationsThroughArcSubclass() throws Exception {
+        TestTokenHolder tokenHolder = createValidToken();
+
+        expect(invocationContext.getMethod()).andReturn(TestResourceClassAndMethodLevel.class.getMethod("methodWithScopes"));
+        expect(invocationContext.getTarget()).andReturn(new ArcSubclassOfClassAndMethodLevel());
+        expect(bearerTokenProducer.getBearerTokenResult(
+                Set.of("class-scope", "method-scope"),
+                Set.of("class-role"),
+                Set.of()))
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
+        expect(invocationContext.proceed()).andReturn("success");
+        replay(invocationContext, bearerTokenProducer);
+
+        interceptor.validateBearerToken(invocationContext);
+
+        verify(invocationContext, bearerTokenProducer);
+    }
+
+    @Test
+    @DisplayName("Should apply bean-class requirements to a method declared on a superclass")
+    void shouldApplyBeanClassRequirementsToSuperclassMethod() throws Exception {
+        TestTokenHolder tokenHolder = createValidToken();
+
+        expect(invocationContext.getMethod()).andReturn(BaseResource.class.getMethod("inheritedMethod"));
+        expect(invocationContext.getTarget()).andReturn(new ArcSubclassOfInheritingResource());
+        expect(bearerTokenProducer.getBearerTokenResult(Set.of("bean-scope"), Set.of(), Set.of()))
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
+        expect(invocationContext.proceed()).andReturn("success");
+        replay(invocationContext, bearerTokenProducer);
+
+        interceptor.validateBearerToken(invocationContext);
+
+        verify(invocationContext, bearerTokenProducer);
+    }
+
+    @Test
+    @DisplayName("Should fail closed when neither level is annotated behind an ArC subclass")
+    void shouldThrowWhenAnnotationNotFoundThroughArcSubclass() throws Exception {
+        expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithoutAnnotation")).times(2);
+        expect(invocationContext.getTarget()).andReturn(new ArcSubclassOfUnannotated());
+        replay(invocationContext, bearerTokenProducer);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> interceptor.validateBearerToken(invocationContext));
+
+        assertTrue(exception.getMessage().contains("@BearerAuth annotation not found"),
+                "Exception message should mention missing annotation");
+        verify(invocationContext, bearerTokenProducer);
+    }
+
+    @Test
+    @DisplayName("Should not walk the hierarchy for a target that is not an ArC subclass")
+    void shouldNotWalkHierarchyForPlainSubclass() throws Exception {
+        expect(invocationContext.getMethod()).andReturn(TestResourceClassLevel.class.getMethod("methodWithoutAnnotation")).times(2);
+        expect(invocationContext.getTarget()).andReturn(new PlainSubclassOfClassLevel());
+        replay(invocationContext, bearerTokenProducer);
+
+        assertThrows(IllegalStateException.class,
+                () -> interceptor.validateBearerToken(invocationContext));
+
+        verify(invocationContext, bearerTokenProducer);
+    }
+
     private TestTokenHolder createValidToken() {
         return new TestTokenHolder(TokenType.ACCESS_TOKEN,
                 ClaimControlParameter.defaultForTokenType(TokenType.ACCESS_TOKEN));
@@ -319,5 +412,45 @@ class BearerTokenInterceptorTest {
         public String methodWithoutAnnotation() {
             return "result";
         }
+    }
+
+    @BearerAuth(requiredScopes = {"class-scope"}, requiredRoles = {"class-role"})
+    public static class TestResourceClassAndMethodLevel {
+        @BearerAuth(requiredScopes = {"method-scope"})
+        public String methodWithScopes() {
+            return "result";
+        }
+    }
+
+    public static class BaseResource {
+        public String inheritedMethod() {
+            return "result";
+        }
+    }
+
+    @BearerAuth(requiredScopes = {"bean-scope"})
+    public static class TestResourceInheritingMethod extends BaseResource {
+    }
+
+    /**
+     * Simulates the subclass ArC generates for an intercepted bean: it implements
+     * {@link Subclass} and does not carry the bean's class-level annotations.
+     */
+    static class ArcSubclassOfClassLevel extends TestResourceClassLevel implements Subclass {
+    }
+
+    static class ArcSubclassOfClassAndMethodLevel extends TestResourceClassAndMethodLevel implements Subclass {
+    }
+
+    static class ArcSubclassOfInheritingResource extends TestResourceInheritingMethod implements Subclass {
+    }
+
+    static class ArcSubclassOfUnannotated extends TestResource implements Subclass {
+    }
+
+    /**
+     * A subclass that is not ArC-generated: its superclass annotations must not be consulted.
+     */
+    static class PlainSubclassOfClassLevel extends TestResourceClassLevel {
     }
 }

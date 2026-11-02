@@ -33,12 +33,15 @@ import de.cuioss.sheriff.token.client.quarkus.config.ClientConfigMapper;
 import de.cuioss.sheriff.token.client.quarkus.config.ClientRuntimeConfig;
 import de.cuioss.sheriff.token.client.token.UserInfoClient;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import io.quarkus.arc.DefaultBean;
 import io.smallrye.config.SmallRyeConfigBuilder;
+import jakarta.enterprise.inject.Produces;
 import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -269,6 +272,35 @@ class TokenSheriffClientProducerTest {
                     () -> assertNotNull(lifecycleManager, "lifecycle manager"),
                     () -> assertNotSame(producer.tokenStore(), tokenStore,
                             "each store production is an independent instance"));
+        }
+    }
+
+    /**
+     * Pins the replaceability contract of the lifecycle defaults (Q-5): the {@link TokenStore} and
+     * {@link RefreshScheduler} producers must be ArC {@link DefaultBean}s, otherwise an application bean
+     * of the same type causes an ambiguous-dependency failure instead of replacing the default. The
+     * container-level replacement itself is exercised in the deployment module; this test guards the
+     * annotation that makes it possible.
+     */
+    @Nested
+    @DisplayName("Default-bean replaceability contract")
+    class DefaultBeanReplaceabilityContract {
+
+        @Test
+        @DisplayName("Should declare the token-store and refresh-scheduler producers as replaceable default beans")
+        void shouldDeclareLifecycleDefaultsAsDefaultBeans() throws Exception {
+            Method tokenStoreProducer = TokenSheriffClientProducer.class.getMethod("tokenStore");
+            Method refreshSchedulerProducer = TokenSheriffClientProducer.class.getMethod("refreshScheduler");
+
+            assertAll("default-bean producers",
+                    () -> assertTrue(tokenStoreProducer.isAnnotationPresent(Produces.class),
+                            "tokenStore() must remain a CDI producer"),
+                    () -> assertTrue(tokenStoreProducer.isAnnotationPresent(DefaultBean.class),
+                            "tokenStore() must be a @DefaultBean so an application TokenStore replaces it"),
+                    () -> assertTrue(refreshSchedulerProducer.isAnnotationPresent(Produces.class),
+                            "refreshScheduler() must remain a CDI producer"),
+                    () -> assertTrue(refreshSchedulerProducer.isAnnotationPresent(DefaultBean.class),
+                            "refreshScheduler() must be a @DefaultBean so an application RefreshScheduler replaces it"));
         }
     }
 

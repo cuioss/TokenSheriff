@@ -40,7 +40,14 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INF
  *   <li>KeyStore: via {@code sheriff.token.jwe.keystore-path}</li>
  * </ul>
  * <p>
- * Returns {@code null} if no JWE properties are configured.
+ * Returns {@code null} if no JWE property is configured at all. A partial configuration
+ * fails fast with an {@link IllegalStateException} instead of being silently ignored:
+ * <ul>
+ *   <li>an ancillary property (for example {@code keystore-password} or
+ *       {@code key-management-algorithms}) set without the key source it belongs to,</li>
+ *   <li>a {@code decryption-keys.{kid}} entry without a {@code .path} value,</li>
+ *   <li>a {@code default-key-id} that names none of the loaded multi-key kids.</li>
+ * </ul>
  *
  * @since 1.0
  * @see JwtPropertyKeys.JWE
@@ -58,8 +65,13 @@ public class JweDecryptionConfigResolver {
     /**
      * Resolves JWE decryption configuration from properties.
      *
-     * @return the resolved config, or {@code null} if JWE is not configured
-     * @throws IllegalStateException if JWE is explicitly configured but key loading fails
+     * @return the resolved config, or {@code null} if no JWE property is configured. Multi-key
+     *         entries given only as environment variables are not discovered, so a configuration
+     *         consisting solely of such entries also yields {@code null} and JWE stays unconfigured
+     * @throws IllegalStateException if a JWE property is set without its owning key source,
+     *         a multi-key entry (including the bare form {@code decryption-keys.{kid}}) has no
+     *         {@code .path} value, or JWE is explicitly configured but key loading
+     *         fails (including a {@code default-key-id} that names no loaded key)
      */
     public @Nullable JweDecryptionConfig resolveJweDecryptionConfig() {
         // Check if any JWE property is present
@@ -72,6 +84,9 @@ public class JweDecryptionConfigResolver {
         Map<String, String> multiKeyPaths = discoverMultiKeyPaths();
 
         LOGGER.info(INFO.JWE_CONFIG_CHECK, singleKeyPath, keystorePath, multiKeyPaths);
+
+        validateNoOrphanedJweProperties(singleKeyPath.isPresent(), keystorePath.isPresent(),
+                !multiKeyPaths.isEmpty());
 
         if (singleKeyPath.isEmpty() && keystorePath.isEmpty() && multiKeyPaths.isEmpty()) {
             LOGGER.info(INFO.JWE_DECRYPTION_NOT_CONFIGURED);
@@ -170,23 +185,100 @@ public class JweDecryptionConfigResolver {
             LOGGER.debug("Loaded JWE decryption key '%s' from: %s", kid, path);
         }
 
-        // Set default key: use configured default kid, or fall back to the first loaded key
-        PrivateKey defaultKey = defaultKid.map(loadedKeys::get)
-                .orElseGet(() -> loadedKeys.isEmpty() ? null : loadedKeys.values().iterator().next());
-        if (defaultKey != null) {
+        // Set default key: use the configured default kid, or fall back to the first loaded key
+        // only when no default kid is configured
+        if (defaultKid.isPresent()) {
+            PrivateKey defaultKey = loadedKeys.get(defaultKid.get());
+            if (defaultKey == null) {
+                throw new IllegalStateException(
+                        "Property '%s' names key id '%s', which is not among the configured decryption keys %s."
+                                .formatted(JwtPropertyKeys.JWE.DEFAULT_KEY_ID, defaultKid.get(), loadedKeys.keySet()));
+            }
             builder.defaultDecryptionKey(defaultKey);
+        } else if (!loadedKeys.isEmpty()) {
+            builder.defaultDecryptionKey(loadedKeys.values().iterator().next());
         }
     }
 
+    /**
+     * Discovers the multi-key entries configured under
+     * {@code sheriff.token.jwe.decryption-keys.{kid}.*}.
+     *
+     * <p>
+     * A bare property {@code sheriff.token.jwe.decryption-keys.{kid}} (no further dot segment)
+     * is not found by the dotted kid discovery, so it is collected separately and treated as a
+     * discovered kid. It therefore fails fast for a missing {@code .path} instead of being
+     * silently ignored; when the same kid also has a {@code .path} value the bare property
+     * changes nothing.
+     *
+     * @return the key path per kid, in discovery order
+     * @throws IllegalStateException if a discovered kid has no {@code .path} value
+     */
     private Map<String, String> discoverMultiKeyPaths() {
         Map<String, String> keyPaths = new LinkedHashMap<>();
         String multiKeyPrefix = JwtPropertyKeys.JWE.MULTI_KEY_PREFIX;
 
-        for (String kid : ConfigValueParser.discoverNameSegments(config, multiKeyPrefix)) {
-            config.getOptionalValue(multiKeyPrefix + kid + ".path", String.class)
-                    .ifPresent(path -> keyPaths.put(kid, path));
+        Set<String> kids = new LinkedHashSet<>(ConfigValueParser.discoverNameSegments(config, multiKeyPrefix));
+        for (String propertyName : config.getPropertyNames()) {
+            if (propertyName.startsWith(multiKeyPrefix)) {
+                String remainder = propertyName.substring(multiKeyPrefix.length());
+                if (!remainder.isEmpty() && remainder.indexOf('.') < 0) {
+                    kids.add(remainder);
+                }
+            }
+        }
+
+        for (String kid : kids) {
+            String pathProperty = multiKeyPrefix + kid + ".path";
+            String path = config.getOptionalValue(pathProperty, String.class)
+                    .orElseThrow(() -> new IllegalStateException(
+                            ("JWE decryption key '%s' is configured under '%s%s.' but '%s' is not set. "
+                                    + "Configure the key path, or remove the '%s%s.' properties.")
+                                    .formatted(kid, multiKeyPrefix, kid, pathProperty, multiKeyPrefix, kid)));
+            keyPaths.put(kid, path);
         }
         return keyPaths;
+    }
+
+    /**
+     * Fails fast when an ancillary JWE property is configured without the key source it
+     * belongs to. Without this check such a property would be silently ignored, for
+     * example a keystore password with no keystore, or algorithm preferences with no key
+     * at all. Runs before the not-configured check, so a configuration consisting only of
+     * ancillary properties fails instead of disabling JWE.
+     *
+     * @param hasSingleKey whether {@code decryption-key-path} is configured
+     * @param hasKeystore whether {@code keystore-path} is configured
+     * @param hasMultiKeys whether at least one {@code decryption-keys.{kid}.path} is configured
+     * @throws IllegalStateException naming the offending property and the source it requires
+     */
+    private void validateNoOrphanedJweProperties(boolean hasSingleKey, boolean hasKeystore, boolean hasMultiKeys) {
+        String keystoreSource = "'%s'".formatted(JwtPropertyKeys.JWE.KEYSTORE_PATH);
+        String singleOrKeystoreSource = "'%s' or '%s'".formatted(
+                JwtPropertyKeys.JWE.DECRYPTION_KEY_PATH, JwtPropertyKeys.JWE.KEYSTORE_PATH);
+        String multiKeySource = "at least one '%s{kid}.path'".formatted(JwtPropertyKeys.JWE.MULTI_KEY_PREFIX);
+        String anyKeySource = "'%s', '%s' or at least one '%s{kid}.path'".formatted(
+                JwtPropertyKeys.JWE.DECRYPTION_KEY_PATH, JwtPropertyKeys.JWE.KEYSTORE_PATH,
+                JwtPropertyKeys.JWE.MULTI_KEY_PREFIX);
+        boolean hasAnyKeySource = hasSingleKey || hasKeystore || hasMultiKeys;
+
+        requireOwningSource(JwtPropertyKeys.JWE.DECRYPTION_KEY_ID, hasSingleKey || hasKeystore, singleOrKeystoreSource);
+        requireOwningSource(JwtPropertyKeys.JWE.KEYSTORE_PASSWORD, hasKeystore, keystoreSource);
+        requireOwningSource(JwtPropertyKeys.JWE.KEY_ALIAS, hasKeystore, keystoreSource);
+        requireOwningSource(JwtPropertyKeys.JWE.KEY_PASSWORD, hasKeystore, keystoreSource);
+        requireOwningSource(JwtPropertyKeys.JWE.DEFAULT_KEY_ID, hasMultiKeys, multiKeySource);
+        requireOwningSource(JwtPropertyKeys.JWE.KEY_MANAGEMENT_ALGORITHMS, hasAnyKeySource, anyKeySource);
+        requireOwningSource(JwtPropertyKeys.JWE.CONTENT_ENCRYPTION_ALGORITHMS, hasAnyKeySource, anyKeySource);
+        requireOwningSource(JwtPropertyKeys.JWE.MAX_ENCRYPTED_TOKEN_SIZE, hasAnyKeySource, anyKeySource);
+    }
+
+    private void requireOwningSource(String property, boolean owningSourcePresent, String requiredSource) {
+        if (!owningSourcePresent && config.getOptionalValue(property, String.class).isPresent()) {
+            throw new IllegalStateException(
+                    ("Property '%s' is configured but the key source it belongs to is not. "
+                            + "Configure %s, or remove '%s'.")
+                            .formatted(property, requiredSource, property));
+        }
     }
 
     private void configureAlgorithmPreferences(JweDecryptionConfig.JweDecryptionConfigBuilder builder) {

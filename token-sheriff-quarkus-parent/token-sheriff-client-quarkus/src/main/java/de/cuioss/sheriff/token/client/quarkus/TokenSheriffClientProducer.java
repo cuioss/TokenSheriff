@@ -38,6 +38,7 @@ import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
 import de.cuioss.sheriff.token.client.token.UserInfoClient;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.tools.logging.CuiLogger;
+import io.quarkus.arc.DefaultBean;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import org.eclipse.microprofile.config.Config;
@@ -57,8 +58,12 @@ import org.eclipse.microprofile.config.Config;
  * The engine entry points that need only the configuration are produced directly
  * ({@link TokenEndpointClient}, {@link DiscoveryResolver}, {@link UserInfoClient},
  * {@link RevocationClient}). Server-side token lifecycle is wired with the default
- * {@link InMemoryTokenStore}; a relying party that needs a shared, persistent store replaces the
- * {@link TokenStore} bean with its own implementation.
+ * {@link InMemoryTokenStore} and a default {@link RefreshScheduler}. Both producers are
+ * {@link DefaultBean}s: a relying party that declares its own bean of type {@link TokenStore} (for
+ * example a shared, persistent store) or {@link RefreshScheduler} replaces the default, and the
+ * {@link TokenLifecycleManager} is then wired with the application's bean. The replacement only
+ * applies to a bean that is unqualified or annotated only with {@code @Named}; a bean with a custom
+ * qualifier does not replace the default.
  * <p>
  * The full guarded-exchange flow graph is also produced so an application can inject and drive the
  * engine end-to-end ({@code S0}): {@link AuthorizationCodeFlow} and {@link RefreshFlow} are assembled
@@ -157,19 +162,31 @@ public class TokenSheriffClientProducer {
     }
 
     /**
-     * @return the default in-memory server-side token store; replaceable by the relying party
+     * Produces the default in-memory server-side token store. The producer is a {@link DefaultBean}:
+     * when the application declares its own bean of type {@link TokenStore} that is unqualified or
+     * annotated only with {@code @Named}, that bean replaces this default and this producer is not
+     * used. A bean with a custom qualifier does not replace it.
+     *
+     * @return the default in-memory server-side token store
      */
     @Produces
     @ApplicationScoped
+    @DefaultBean
     public TokenStore tokenStore() {
         return new InMemoryTokenStore();
     }
 
     /**
+     * Produces the proactive-refresh scheduler with its default refresh-lead window. The producer is a
+     * {@link DefaultBean}: when the application declares its own bean of type {@link RefreshScheduler}
+     * that is unqualified or annotated only with {@code @Named}, that bean replaces this default and
+     * this producer is not used. A bean with a custom qualifier does not replace it.
+     *
      * @return the proactive-refresh scheduler with its default refresh-lead window
      */
     @Produces
     @ApplicationScoped
+    @DefaultBean
     public RefreshScheduler refreshScheduler() {
         return new RefreshScheduler();
     }

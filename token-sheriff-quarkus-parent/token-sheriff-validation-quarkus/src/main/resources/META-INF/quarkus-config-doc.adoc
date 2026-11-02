@@ -40,6 +40,12 @@ Properties under `sheriff.token.issuers.<name>.*` — one block per issuer.
 |`max-token-age-seconds` |int |— (disabled) |Max token age based on `iat`; rejects when `now - iat > max-token-age-seconds + clock-skew-seconds`
 |===
 
+NOTE: An issuer can be configured entirely through environment variables. Discovery is anchored on
+`SHERIFF_TOKEN_ISSUERS_<NAME>_ENABLED=true`; the issuer name is the lower-cased `<NAME>`, so
+`SHERIFF_TOKEN_ISSUERS_MY_IDP_ENABLED` configures the issuer `my_idp`. Issuer names ending in `_DPOP`
+are not supported through environment variables, because `SHERIFF_TOKEN_ISSUERS_MY_DPOP_ENABLED` is read
+as `dpop.enabled` of the issuer `my` — configure such an issuer in dotted form.
+
 === JWKS Source (mutually exclusive)
 
 [cols="2,1,3", options="header"]
@@ -89,7 +95,7 @@ for the rationale.
 |`dpop.required` |boolean |`false` |Require DPoP for all tokens
 |`dpop.proof-max-age-seconds` |long |`300` |Max age for DPoP proof `iat`
 |`dpop.nonce-cache-size` |int |`10000` |JTI replay cache size
-|`dpop.nonce-cache-ttl-seconds` |long |`300` |JTI cache entry TTL
+|`dpop.nonce-cache-ttl-seconds` |long |`360` |JTI cache entry TTL. The effective TTL is never below `proof-max-age-seconds + 60` (the replay-window floor); a smaller value is raised to that floor
 |===
 
 NOTE: All `dpop.*` sub-properties require `dpop.enabled=true`. Configuring any of them
@@ -133,8 +139,8 @@ belongs to this Resource Server.
 |Property |Type |Default |Description
 |`sheriff.token.jwe.decryption-key-path` |String |— |Path to a PKCS#8 PEM file with the decryption private key
 |`sheriff.token.jwe.decryption-key-id` |String |— |Key ID (`kid`) associated with the PEM key
-|`sheriff.token.jwe.decryption-keys.<kid>` |String |— |Additional per-`kid` PEM key paths (rotation)
-|`sheriff.token.jwe.default-key-id` |String |— |Default key ID when multiple keys are configured
+|`sheriff.token.jwe.decryption-keys.<kid>.path` |String |— |Path to the PEM key for the given `kid` (multi-key, rotation); `.path` is required for every `<kid>` entry
+|`sheriff.token.jwe.default-key-id` |String |— |Default key ID when multiple `decryption-keys.<kid>.path` keys are configured; must name one of the loaded `<kid>` entries
 |`sheriff.token.jwe.keystore-path` |String |— |Keystore-based key configuration (alternative to PEM)
 |`sheriff.token.jwe.keystore-password` |String |— |Keystore password
 |`sheriff.token.jwe.key-alias` |String |— |Keystore key alias
@@ -143,6 +149,14 @@ belongs to this Resource Server.
 |`sheriff.token.jwe.content-encryption-algorithms` |String (csv) |all supported |Allowed content encryption algorithms (A128GCM, A256GCM, A128CBC-HS256, A256CBC-HS512)
 |`sheriff.token.jwe.max-encrypted-token-size` |int |`32768` |Max JWE token size (bytes)
 |===
+
+NOTE: A configuration without any JWE property leaves JWE decryption disabled. When at least one
+issuer is enabled, a partial JWE configuration fails at application startup instead of being silently
+ignored: a JWE property set without the key source it belongs to (for example `keystore-password`
+without `keystore-path`, or `key-management-algorithms` without any key), a `decryption-keys.<kid>`
+entry without `.path`, or a `default-key-id` that names a key that was not loaded. Without an enabled
+issuer the JWE properties are not validated at startup. Multi-key `decryption-keys.<kid>.*` entries are
+discovered from dotted property names only, not from environment-variable-only configuration.
 
 == Health Checks
 

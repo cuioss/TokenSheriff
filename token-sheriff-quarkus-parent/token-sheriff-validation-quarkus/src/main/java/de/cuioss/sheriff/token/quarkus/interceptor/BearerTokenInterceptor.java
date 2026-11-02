@@ -19,6 +19,7 @@ import de.cuioss.sheriff.token.quarkus.annotation.BearerAuth;
 import de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer;
 import de.cuioss.sheriff.token.quarkus.producer.BearerTokenResult;
 import de.cuioss.tools.logging.CuiLogger;
+import io.quarkus.arc.Subclass;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
@@ -172,10 +173,16 @@ public class BearerTokenInterceptor {
     }
 
     /**
-     * Extracts and merges {@link BearerAuth} annotations from both the method and its
-     * declaring class. If both levels are annotated, the requirements are merged (union
-     * of requiredScopes, requiredRoles, requiredGroups). If only one level is annotated,
-     * its values are used directly.
+     * Extracts and merges {@link BearerAuth} annotations from both the method and the
+     * bean class of the intercepted target. If both levels are annotated, the requirements
+     * are merged (union of requiredScopes, requiredRoles, requiredGroups). If only one level
+     * is annotated, its values are used directly.
+     * <p>
+     * The class-level annotation is read from the bean class resolved by
+     * {@link #resolveBeanClass(Object)}: under ArC the intercepted target is a generated
+     * subclass that does not carry the {@code @BearerAuth} of the bean it extends, so the
+     * annotation is read from the original bean class instead. Only that single class is
+     * inspected; the hierarchy above it is not walked.
      *
      * @param ctx the invocation context
      * @return the merged authentication requirements
@@ -183,7 +190,7 @@ public class BearerTokenInterceptor {
      */
     private MergedAuth extractMergedAuth(InvocationContext ctx) {
         BearerAuth methodAnnotation = ctx.getMethod().getAnnotation(BearerAuth.class);
-        BearerAuth classAnnotation = ctx.getTarget().getClass().getAnnotation(BearerAuth.class);
+        BearerAuth classAnnotation = resolveBeanClass(ctx.getTarget()).getAnnotation(BearerAuth.class);
 
         if (methodAnnotation != null && classAnnotation != null) {
             return MergedAuth.merge(classAnnotation, methodAnnotation);
@@ -197,8 +204,25 @@ public class BearerTokenInterceptor {
 
         // Fail closed: missing annotation means security configuration error
         throw new IllegalStateException(
-                "@BearerAuth annotation not found on method '%s' or its declaring class. "
+                "@BearerAuth annotation not found on method '%s' or its bean class. "
                         .formatted(ctx.getMethod().getName())
                         + "Security interceptor cannot proceed without authentication configuration.");
+    }
+
+    /**
+     * Resolves the bean class of an intercepted target. ArC intercepts a bean by
+     * instantiating a generated subclass that implements {@link Subclass}; for such a
+     * target the original bean class is its direct superclass. Any other target is its
+     * own bean class.
+     *
+     * @param target the intercepted target instance
+     * @return the bean class whose class-level annotations apply to the target
+     */
+    private static Class<?> resolveBeanClass(Object target) {
+        Class<?> targetClass = target.getClass();
+        if (target instanceof Subclass) {
+            return targetClass.getSuperclass();
+        }
+        return targetClass;
     }
 }

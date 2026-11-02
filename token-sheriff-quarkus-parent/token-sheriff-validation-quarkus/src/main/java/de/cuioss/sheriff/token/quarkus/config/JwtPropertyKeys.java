@@ -319,8 +319,16 @@ public final class JwtPropertyKeys {
          * Time-to-live in seconds for jti entries in the DPoP replay cache.
          * Template: "sheriff.token.issuers.%s.dpop.nonce-cache-ttl-seconds"
          * <p>
-         * Default value is {@code 300} (5 minutes).
+         * Default value is {@code 360} ({@link #DPOP_PROOF_MAX_AGE_SECONDS} default of 300 plus 60 seconds
+         * clock skew).
          * </p>
+         * <p>
+         * The effective TTL is never below {@code proofMaxAge + 60} seconds, the replay-window floor: a
+         * configured value smaller than that floor is raised to it, so a jti cannot expire while its proof
+         * is still acceptable.
+         * </p>
+         *
+         * @see de.cuioss.sheriff.token.validation.dpop.DpopConfig#DEFAULT_NONCE_CACHE_TTL_SECONDS
          */
         public static final String DPOP_NONCE_CACHE_TTL_SECONDS = DPOP_BASE + "nonce-cache-ttl-seconds";
 
