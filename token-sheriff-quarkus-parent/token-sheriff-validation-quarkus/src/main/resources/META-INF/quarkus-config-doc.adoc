@@ -139,8 +139,8 @@ belongs to this Resource Server.
 |Property |Type |Default |Description
 |`sheriff.token.jwe.decryption-key-path` |String |— |Path to a PKCS#8 PEM file with the decryption private key
 |`sheriff.token.jwe.decryption-key-id` |String |— |Key ID (`kid`) associated with the PEM key
-|`sheriff.token.jwe.decryption-keys.<kid>` |String |— |Additional per-`kid` PEM key paths (rotation)
-|`sheriff.token.jwe.default-key-id` |String |— |Default key ID when multiple keys are configured
+|`sheriff.token.jwe.decryption-keys.<kid>.path` |String |— |Path to the PEM key for the given `kid` (multi-key, rotation); `.path` is required for every `<kid>` entry
+|`sheriff.token.jwe.default-key-id` |String |— |Default key ID when multiple `decryption-keys.<kid>.path` keys are configured; must name one of the loaded `<kid>` entries
 |`sheriff.token.jwe.keystore-path` |String |— |Keystore-based key configuration (alternative to PEM)
 |`sheriff.token.jwe.keystore-password` |String |— |Keystore password
 |`sheriff.token.jwe.key-alias` |String |— |Keystore key alias
@@ -149,6 +149,13 @@ belongs to this Resource Server.
 |`sheriff.token.jwe.content-encryption-algorithms` |String (csv) |all supported |Allowed content encryption algorithms (A128GCM, A256GCM, A128CBC-HS256, A256CBC-HS512)
 |`sheriff.token.jwe.max-encrypted-token-size` |int |`32768` |Max JWE token size (bytes)
 |===
+
+NOTE: A configuration without any JWE property leaves JWE decryption disabled. A partial JWE
+configuration fails at application startup instead of being silently ignored: a JWE property set
+without the key source it belongs to (for example `keystore-password` without `keystore-path`, or
+`key-management-algorithms` without any key), a `decryption-keys.<kid>` entry without `.path`, and a
+`default-key-id` that names a key that was not loaded. Multi-key `decryption-keys.<kid>.*` entries are
+discovered from dotted property names only, not from environment-variable-only configuration.
 
 == Health Checks
 
