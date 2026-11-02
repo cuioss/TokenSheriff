@@ -57,7 +57,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * The sender-constrained half of the lifecycle contract lives in
  * {@link RefreshConstraintLifecycleSpecIT}, which drives a real DPoP-bound session through both the
- * fail-closed coordinator and the documented confirmed-binding {@code applyRefresh} path.
+ * fail-closed coordinator and the documented confirmed-binding {@code applyRefresh} path, which names the
+ * refresh token the rotation presented as its base token.
  * <p>
  * The realm's {@code refresh-fast-client} issues a 35-second access token, which is inside the
  * scheduler's 30-second refresh lead within ~5 seconds of issue — short enough for the proactive

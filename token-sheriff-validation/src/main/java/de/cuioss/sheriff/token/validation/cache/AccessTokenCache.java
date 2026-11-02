@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.validation.cache;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
+import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.context.ValidationContext;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
@@ -237,6 +238,12 @@ public class AccessTokenCache {
      * The issuer time policy of the given validation context — its clock skew tolerance
      * and maximum token age — is stored with the entry and re-applied on every cache hit
      * and by the background eviction.
+     * <p>
+     * A token without an {@code iat} claim is not cached when the issuer enforces a maximum token
+     * age: its age cannot be re-checked on a cache hit or by the background eviction. Such a token
+     * simply stays on the full validation path for every request; nothing is accepted that the
+     * uncached pipeline would reject. Without a maximum token age an {@code iat}-less token is
+     * cached as usual.
      *
      * @param tokenString the raw JWT token string as cache key
      * @param content the validated access token content to cache
@@ -260,6 +267,13 @@ public class AccessTokenCache {
 
         // Use try-finally to ensure ticker is always stopped, even on unexpected exceptions
         try {
+            if (issuerContext.isTokenAgeValidationEnabled()
+                    && content.getClaimOption(ClaimName.ISSUED_AT).isEmpty()) {
+                // The age of an iat-less token cannot be re-checked on a hit or by the eviction
+                LOGGER.debug("Token without iat not cached: its issuer enforces a maximum token age");
+                return;
+            }
+
             // Generate collision-resistant cache key from token string
             String cacheKey = sha256Hex(tokenString);
 

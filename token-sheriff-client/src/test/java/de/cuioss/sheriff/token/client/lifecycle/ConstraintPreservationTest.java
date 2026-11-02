@@ -63,14 +63,15 @@ class ConstraintPreservationTest {
         String sessionId = Generators.letterStrings(10, 20).next();
         ConstraintBinding binding = ConstraintBinding.mtls(Generators.letterStrings(30, 43).next());
         String idToken = Generators.letterStrings(20, 40).next();
+        String heldRefresh = Generators.letterStrings(20, 40).next();
         manager.store(sessionId, new StoredToken(Generators.letterStrings(20, 40).next(),
-                Generators.letterStrings(20, 40).next(), idToken, binding, Instant.now().plusSeconds(60), null));
+                heldRefresh, idToken, binding, Instant.now().plusSeconds(60), null));
 
         String refreshedAccess = Generators.letterStrings(20, 40).next();
         String refreshedRefresh = Generators.letterStrings(20, 40).next();
         Instant refreshedExpiry = Instant.now().plusSeconds(300);
-        StoredToken refreshed = manager.applyRefresh(sessionId, refreshedAccess, refreshedRefresh, refreshedExpiry,
-                binding, null)
+        StoredToken refreshed = manager.applyRefresh(sessionId, heldRefresh, refreshedAccess, refreshedRefresh,
+                refreshedExpiry, binding, null)
                 .orElseThrow();
 
         assertAll("refresh preserves constraint",

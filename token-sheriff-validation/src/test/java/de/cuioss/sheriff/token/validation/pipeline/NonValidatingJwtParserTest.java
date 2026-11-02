@@ -326,6 +326,95 @@ class NonValidatingJwtParserTest {
         }
     }
 
+    /**
+     * A JWS whose header is the JSON literal {@code null}, or whose header or payload part is not
+     * valid Base64Url, is rejected as {@code FAILED_TO_DECODE_JWT} and accounted for exactly once
+     * according to the decode mode: the normal decode logs and counts, a quiet decode only counts,
+     * an opaque decode does neither.
+     */
+    @Nested
+    @DisplayName("Undecodable Part Accounting per Decode Mode")
+    class UndecodablePartAccounting {
+
+        /** {@code '*'} lies outside the Base64Url alphabet, so the JDK decoder rejects the part. */
+        private static final String INVALID_BASE64URL_PART = "eyJ*bGciOiJSUzI1NiJ9";
+
+        private SecurityEventCounter counter;
+        private NonValidatingJwtParser accountingParser;
+
+        @BeforeEach
+        void setUpParser() {
+            counter = new SecurityEventCounter();
+            accountingParser = NonValidatingJwtParser.builder().securityEventCounter(counter).build();
+        }
+
+        static Stream<Arguments> undecodableTokens() {
+            String nullHeader = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString("null".getBytes(StandardCharsets.UTF_8));
+            return Stream.of(
+                    Arguments.of("JSON null header",
+                            nullHeader + "." + ENCODED_PAYLOAD + "." + ENCODED_SIGNATURE, false),
+                    Arguments.of("invalid Base64Url header",
+                            INVALID_BASE64URL_PART + "." + ENCODED_PAYLOAD + "." + ENCODED_SIGNATURE, true),
+                    Arguments.of("invalid Base64Url payload",
+                            ENCODED_HEADER + "." + INVALID_BASE64URL_PART + "." + ENCODED_SIGNATURE, true));
+        }
+
+        private static void assertRejection(TokenValidationException ex, String site, boolean decoderCause) {
+            assertEquals(EventType.FAILED_TO_DECODE_JWT, ex.getEventType(), site);
+            if (decoderCause) {
+                assertInstanceOf(IllegalArgumentException.class, ex.getCause(),
+                        "Non-vacuity: the part must be rejected by the Base64Url decoder: " + site);
+                assertEquals("Failed to decode Base64Url part: invalid Base64Url encoding", ex.getMessage(), site);
+                assertFalse(ex.getMessage().contains(INVALID_BASE64URL_PART), ex.getMessage());
+            }
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("undecodableTokens")
+        @DisplayName("A normal decode logs one WARN without a throwable and counts once")
+        void normalDecodeShouldLogAndCountOnce(String site, String token, boolean decoderCause) {
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> accountingParser.decode(token));
+
+            assertRejection(ex, site, decoderCause);
+            assertEquals(1, counter.getCount(EventType.FAILED_TO_DECODE_JWT), "Counted exactly once: " + site);
+            var warnings = TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN);
+            assertEquals(1, warnings.size(), "Exactly one WARN: " + site);
+            var warning = warnings.getFirst();
+            assertTrue(warning.getMessage().contains(
+                    JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT.resolveIdentifierString()), warning.getMessage());
+            assertFalse(warning.getMessage().contains(INVALID_BASE64URL_PART), warning.getMessage());
+            assertNull(warning.getThrown(), "The WARN must not attach the decoder exception: " + site);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("undecodableTokens")
+        @DisplayName("A quiet decode counts once but does not log")
+        void quietDecodeShouldCountButNotLog(String site, String token, boolean decoderCause) {
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> accountingParser.decodeQuietly(token));
+
+            assertRejection(ex, site, decoderCause);
+            assertEquals(1, counter.getCount(EventType.FAILED_TO_DECODE_JWT), "Counted exactly once: " + site);
+            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty(),
+                    "No WARN may be written: " + site);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("undecodableTokens")
+        @DisplayName("An opaque decode neither logs nor counts")
+        void opaqueDecodeShouldNotLogOrCount(String site, String token, boolean decoderCause) {
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> accountingParser.decodeOpaqueToken(token));
+
+            assertRejection(ex, site, decoderCause);
+            assertEquals(0, counter.getCount(EventType.FAILED_TO_DECODE_JWT), "Not counted: " + site);
+            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty(),
+                    "No WARN may be written: " + site);
+        }
+    }
+
     @Nested
     @DisplayName("Builder Tests")
     class BuilderTests {

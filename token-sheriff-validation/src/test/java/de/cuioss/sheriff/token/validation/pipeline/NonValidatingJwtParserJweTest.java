@@ -462,25 +462,6 @@ class NonValidatingJwtParserJweTest {
             assertNull(warning.getThrown(), "The WARN must not attach the DSL-JSON exception quoting raw header text");
         }
 
-        /**
-         * A header that is the top-level JSON literal {@code null} binds to no header at all. It is
-         * rejected as a decode failure, but on a path the parser neither logs nor counts; this test
-         * pins that documented behaviour (see token-decryption.adoc, Header Value Sanitization).
-         */
-        @Test
-        @DisplayName("A top-level JSON null header is rejected without a WARN or a count")
-        void topLevelNullHeaderShouldBeRejectedWithoutLogOrCount() {
-            String nullHeaderJwe = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString("null".getBytes(StandardCharsets.UTF_8)) + ".AA.AA.AA.AA";
-
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decode(nullHeaderJwe));
-
-            assertEquals(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, ex.getEventType());
-            assertEquals(0, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
-            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty());
-        }
-
         @Test
         @DisplayName("A quiet decode counts once but does not log")
         void quietDecodeShouldCountButNotLog() {
@@ -497,6 +478,93 @@ class NonValidatingJwtParserJweTest {
 
             assertEquals(0, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
             assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty());
+        }
+    }
+
+    /**
+     * A JWE header that is the top-level JSON literal {@code null}, or that is not valid Base64Url,
+     * is rejected as {@code FAILED_TO_DECODE_JWT} and accounted for according to the decode mode
+     * (see token-decryption.adoc, Header Value Sanitization).
+     */
+    @Nested
+    @DisplayName("Undecodable JWE Header Accounting per Decode Mode")
+    class UndecodableJweHeaderAccounting {
+
+        /** {@code '*'} lies outside the Base64Url alphabet, so the JDK decoder rejects the part. */
+        private static final String INVALID_BASE64URL_HEADER = "eyJ*bGciOiJSU0EtT0FFUCJ9";
+
+        private NonValidatingJwtParser parser;
+
+        @BeforeEach
+        void setUpParser() {
+            parser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .jweDecryptionConfig(JweDecryptionConfig.builder()
+                            .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                            .build())
+                    .build();
+        }
+
+        static Stream<Arguments> undecodableJweHeaders() {
+            String nullHeader = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString("null".getBytes(StandardCharsets.UTF_8));
+            return Stream.of(
+                    Arguments.of("JSON null header", nullHeader + ".AA.AA.AA.AA", false),
+                    Arguments.of("invalid Base64Url header", INVALID_BASE64URL_HEADER + ".AA.AA.AA.AA", true));
+        }
+
+        private static void assertRejection(TokenValidationException ex, String site, boolean decoderCause) {
+            assertEquals(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, ex.getEventType(), site);
+            if (decoderCause) {
+                assertInstanceOf(IllegalArgumentException.class, ex.getCause(),
+                        "Non-vacuity: the header must be rejected by the Base64Url decoder: " + site);
+                assertFalse(ex.getMessage().contains(INVALID_BASE64URL_HEADER), ex.getMessage());
+            }
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("undecodableJweHeaders")
+        @DisplayName("A normal decode logs one WARN without a throwable and counts once")
+        void normalDecodeShouldLogAndCountOnce(String site, String token, boolean decoderCause) {
+            TokenValidationException ex = assertThrows(TokenValidationException.class, () -> parser.decode(token));
+
+            assertRejection(ex, site, decoderCause);
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT),
+                    "Counted exactly once: " + site);
+            var warnings = TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN);
+            assertEquals(1, warnings.size(), "Exactly one WARN: " + site);
+            var warning = warnings.getFirst();
+            assertTrue(warning.getMessage().contains(
+                    JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT.resolveIdentifierString()), warning.getMessage());
+            assertNull(warning.getThrown(), "The WARN must not attach the decoder exception: " + site);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("undecodableJweHeaders")
+        @DisplayName("A quiet decode counts once but does not log")
+        void quietDecodeShouldCountButNotLog(String site, String token, boolean decoderCause) {
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> parser.decodeQuietly(token));
+
+            assertRejection(ex, site, decoderCause);
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT),
+                    "Counted exactly once: " + site);
+            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty(),
+                    "No WARN may be written: " + site);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("undecodableJweHeaders")
+        @DisplayName("An opaque decode neither logs nor counts")
+        void opaqueDecodeShouldNotLogOrCount(String site, String token, boolean decoderCause) {
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> parser.decodeOpaqueToken(token));
+
+            assertRejection(ex, site, decoderCause);
+            assertEquals(0, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT),
+                    "Not counted: " + site);
+            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty(),
+                    "No WARN may be written: " + site);
         }
     }
 

@@ -140,7 +140,7 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
         String a2 = token();
         String a3 = token();
         manager.store(session, bearerBundle(a, null));
-        manager.applyRefresh(session, token(), a2, null, null, null);
+        manager.applyRefresh(session, a, token(), a2, null, null, null);
 
         StoredToken refreshed = refreshTo(metadata, a3);
 
@@ -156,7 +156,7 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
         ProviderMetadata metadata = metadata(uriBuilder);
         String a = token();
         manager.store(session, bearerBundle(a, null));
-        manager.applyRefresh(session, token(), token(), null, null, null);
+        manager.applyRefresh(session, a, token(), token(), null, null, null);
 
         manager.store(session, bearerBundle(a, null));
 
@@ -343,7 +343,8 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
         // running between the two sees the new grant held while its family is not reseeded yet.
         racingStore.store(session, bearerBundle(grant, null));
 
-        Optional<StoredToken> applied = racingManager.applyRefresh(session, token(), rotated, null, null, null);
+        Optional<StoredToken> applied = racingManager.applyRefresh(session, grant, token(), rotated, null, null,
+                null);
 
         assertAll("the half-applied grant is adopted, then rotated, not read as a replay",
                 () -> assertEquals(Optional.of(rotated), applied.map(StoredToken::refreshToken)),
@@ -359,14 +360,14 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
         String rt1 = token();
         String rt2 = token();
         manager.store(session, bearerBundle(rt1, null));
-        manager.applyRefresh(session, token(), rt2, null, null, null);
+        manager.applyRefresh(session, rt1, token(), rt2, null, null, null);
         // A stale re-store puts the superseded rt1 back; the family keeps remembering it as superseded.
         manager.store(session, bearerBundle(rt1, null));
 
         String replaySuccessor = token();
         String replayAccessToken = token();
         var reuse = assertThrows(RefreshTokenFamilyRevokedException.class,
-                () -> manager.applyRefresh(session, replayAccessToken, replaySuccessor, null, null, null));
+                () -> manager.applyRefresh(session, rt1, replayAccessToken, replaySuccessor, null, null, null));
 
         assertAll("the adoption path never launders a superseded token into a fresh grant",
                 () -> assertEquals(Optional.of(replaySuccessor), reuse.getRotatedRefreshToken(),
@@ -386,7 +387,7 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
         String replaySuccessor = token();
         String nextSuccessor = token();
         racingManager.store(session, bearerBundle(rt1, null));
-        racingManager.applyRefresh(session, token(), rt2, null, null, null);
+        racingManager.applyRefresh(session, rt1, token(), rt2, null, null, null);
         // A stale re-store puts the superseded rt1 back, so the next applyRefresh rotating from it is reuse.
         racingManager.store(session, bearerBundle(rt1, null));
         var concurrentStoreReturned = new CountDownLatch(1);
@@ -410,7 +411,8 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
             });
             String replayAccessToken = token();
             assertThrows(RefreshTokenFamilyRevokedException.class,
-                    () -> racingManager.applyRefresh(session, replayAccessToken, replaySuccessor, null, null, null));
+                    () -> racingManager.applyRefresh(session, rt1, replayAccessToken, replaySuccessor, null, null,
+                            null));
             concurrentStore.get().get(10, TimeUnit.SECONDS);
         } finally {
             pool.shutdownNow();
@@ -419,8 +421,8 @@ class RefreshFamilyReseedTest extends RefreshTestSupport {
         assertEquals(Optional.of(newGrant), racingManager.get(session).map(StoredToken::refreshToken),
                 "the grant stored during the teardown survives it (store inside the teardown window: "
                         + concurrentStoreInsideTeardown.get() + ")");
-        Optional<StoredToken> advanced = racingManager.applyRefresh(session, token(), nextSuccessor, null, null,
-                null);
+        Optional<StoredToken> advanced = racingManager.applyRefresh(session, newGrant, token(), nextSuccessor, null,
+                null, null);
         assertEquals(Optional.of(nextSuccessor), advanced.map(StoredToken::refreshToken),
                 "the surviving grant has its own family, so rotating from it is not reuse");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "Refresh token reuse detected");

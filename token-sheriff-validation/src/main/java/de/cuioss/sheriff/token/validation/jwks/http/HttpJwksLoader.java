@@ -66,7 +66,13 @@ import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
  * load. A failed initial load or a transient well-known discovery failure leaves the status
  * {@link LoaderStatus#UNDEFINED} when background refresh is enabled (a later refresh cycle that
  * installs usable keys publishes {@code OK}) and {@link LoaderStatus#ERROR} when it is disabled.
- * A security rejection (issuer mismatch, absent advertised issuer, or an egress block of the JWKS
+ * An unexpected failure of the initialization itself (for example no HTTP handler can be built for the
+ * advertised {@code jwks_uri}, or the initial fetch or key loading throws) never leaves the status
+ * {@link LoaderStatus#LOADING}: it ends in {@link LoaderStatus#UNDEFINED} only when background refresh
+ * is enabled, a refresh cycle can recover (an endpoint is already published, or the loader is in
+ * well-known mode and re-attempts the discovery) and the refresh task is actually scheduled; otherwise
+ * it ends in a terminal {@link LoaderStatus#ERROR}. Such a failure installs no key and publishes no
+ * {@code OK}. A security rejection (issuer mismatch, absent advertised issuer, or an egress block of the JWKS
  * fetch URI) is a terminal {@code ERROR}. A blocked discovery endpoint is not terminal: it is an
  * unavailable discovery and is handled like a transient discovery failure. A failed refresh never
  * downgrades an existing {@code OK}, since the installed keys remain usable — unless an opt-in
@@ -209,6 +215,13 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     private long epoch;
 
     /**
+     * The {@link #epoch} of the initialization whose background refresh task was scheduled last,
+     * {@code -1} before the first one. Lets {@link #startBackgroundRefresh(long)} schedule at most one
+     * task per initialization. Guarded by {@link #lifecycleLock}.
+     */
+    private long refreshScheduledEpoch = -1;
+
+    /**
      * Constructor using HttpJwksLoaderConfig.
      * Simple constructor with no I/O operations - all loading happens asynchronously in initJWKSLoader.
      *
@@ -239,7 +252,10 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * <p>
      * Idempotent and race-free: the caller first reserves an uncompleted future by winning the
      * {@code initFuture} compare-and-set, and only the winner starts the asynchronous initialization,
-     * whose outcome (including an exceptional one) completes the reserved future. Every concurrent or
+     * whose outcome completes the reserved future. An unexpected failure of the initialization does not
+     * complete the future exceptionally: it is logged as {@code JWKS_INITIALIZATION_FAILED}, a status is
+     * published (see the class-level status contract, never {@link LoaderStatus#LOADING}) and the future
+     * completes normally with the status in effect. Every concurrent or
      * later caller receives the same future and starts no work, so at most one initial fetch and one
      * background refresh task are started per initialization. Claiming the reservation and clearing a
      * previous {@link #close()} is one step under the lifecycle lock, so a concurrent {@code close()}
@@ -289,14 +305,41 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             lifecycleLock.unlock();
         }
 
-        CompletableFuture.supplyAsync(() -> initialize(claimedEpoch)).whenComplete((loaderStatus, failure) -> {
-            if (failure != null) {
-                reserved.completeExceptionally(failure);
-            } else {
-                reserved.complete(loaderStatus);
-            }
-        });
+        CompletableFuture.supplyAsync(() -> initialize(claimedEpoch))
+                .exceptionally(failure -> handleUnexpectedInitializationFailure(failure, claimedEpoch))
+                .whenComplete((loaderStatus, failure) -> {
+                    if (failure != null) {
+                        reserved.completeExceptionally(failure);
+                    } else {
+                        reserved.complete(completionStatus(loaderStatus, claimedEpoch));
+                    }
+                });
         return reserved;
+    }
+
+    /**
+     * Decides the value an initialization's future completes with, re-checking under
+     * {@link #lifecycleLock} whether the initialization is still live. The status returned by the
+     * initialization body or by {@link #handleUnexpectedInitializationFailure(Throwable, long)} is
+     * decided under the lock, but a {@link #close()} can run after that lock is released and before the
+     * future completes; the closed loader then reports {@link LoaderStatus#UNDEFINED}, and so must the
+     * future. The decision is the point at which the initialization is ordered against
+     * {@code close()}: a {@code close()} that runs after it closes a loader whose initialization had
+     * already finished. The future itself is completed outside the lock, so its dependent stages never
+     * run while the lock is held.
+     *
+     * @param loaderStatus the status the initialization reached
+     * @param claimedEpoch the {@link #epoch} the initialization was claimed under
+     * @return {@code loaderStatus} while the initialization is still live, otherwise
+     *         {@link LoaderStatus#UNDEFINED}
+     */
+    private LoaderStatus completionStatus(LoaderStatus loaderStatus, long claimedEpoch) {
+        lifecycleLock.lock();
+        try {
+            return isLive(claimedEpoch) ? loaderStatus : LoaderStatus.UNDEFINED;
+        } finally {
+            lifecycleLock.unlock();
+        }
     }
 
     /**
@@ -309,6 +352,11 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * When a {@link #close()} ran while the endpoint was being resolved, the resolution is discarded:
      * no endpoint or issuer is published, no fetch is issued, no status is published, nothing is
      * scheduled, and {@link LoaderStatus#UNDEFINED} is returned, the status {@code close()} leaves.
+     * <p>
+     * An unchecked exception thrown here (by the endpoint resolution, the initial fetch or the key
+     * loading) is not handled in this method: it completes the asynchronous stage exceptionally and
+     * {@link #handleUnexpectedInitializationFailure(Throwable, long)} publishes the final status, so the
+     * {@link LoaderStatus#LOADING} published first is never left in place.
      *
      * @param startEpoch the {@link #epoch} this initialization was claimed under; once a
      *                   {@link #close()} moved it on, this initialization publishes and schedules nothing
@@ -354,6 +402,84 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         // the meantime; that OK is kept.
         LoaderStatus failedStatus = backgroundRefreshEnabled ? LoaderStatus.UNDEFINED : LoaderStatus.ERROR;
         return publishFailedLoadStatus(failedStatus, startEpoch);
+    }
+
+    /**
+     * Ends an initialization whose body failed with an unexpected exception in a published status, so
+     * the {@link LoaderStatus#LOADING} published at its start is never left in place.
+     * <p>
+     * The failure is logged as {@code JWKS_INITIALIZATION_FAILED} with its cause. The status is then
+     * decided as one atomic step under {@link #lifecycleLock}, and only while the initialization is
+     * still live:
+     * <ul>
+     *   <li>a {@link #close()} superseded the initialization: nothing is published or scheduled and
+     *       {@link LoaderStatus#UNDEFINED} is returned, the status a closed loader reports;</li>
+     *   <li>a refresh cycle already published {@link LoaderStatus#OK} or a terminal
+     *       {@link LoaderStatus#ERROR}: that status is kept;</li>
+     *   <li>background refresh is enabled and a refresh cycle can recover (an endpoint is already
+     *       published, or the loader is in well-known mode, where a cycle re-attempts the discovery):
+     *       the refresh task of this initialization is scheduled unless it already is, and
+     *       {@link LoaderStatus#UNDEFINED} is published once the task is in place;</li>
+     *   <li>otherwise (background refresh disabled, direct mode without a published endpoint, or the
+     *       refresh task cannot be scheduled): a terminal {@link LoaderStatus#ERROR} is published.</li>
+     * </ul>
+     * No key is installed and no {@code OK} is published here.
+     *
+     * @param failure      the failure of the initialization stage, possibly wrapped in a
+     *                     {@link CompletionException}
+     * @param claimedEpoch the {@link #epoch} the failed initialization was claimed under
+     * @return the status in effect for this initialization, with which its future completes
+     */
+    private LoaderStatus handleUnexpectedInitializationFailure(Throwable failure, long claimedEpoch) {
+        Throwable cause = failure instanceof CompletionException && failure.getCause() != null
+                ? failure.getCause()
+                : failure;
+        LOGGER.error(cause, ERROR.JWKS_INITIALIZATION_FAILED, cause.getMessage(),
+                getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
+
+        lifecycleLock.lock();
+        try {
+            if (!isLive(claimedEpoch)) {
+                return LoaderStatus.UNDEFINED;
+            }
+            LoaderStatus current = status.get();
+            if (current == LoaderStatus.OK || current == LoaderStatus.ERROR) {
+                return current;
+            }
+            boolean recoverable = config.isBackgroundRefreshEnabled()
+                    && (endpoint.get() != null || config.getWellKnownConfig() != null);
+            LoaderStatus failedStatus = recoverable && ensureBackgroundRefresh(claimedEpoch)
+                    ? LoaderStatus.UNDEFINED
+                    : LoaderStatus.ERROR;
+            status.set(failedStatus);
+            return failedStatus;
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    /**
+     * Makes sure the background refresh of the given live initialization is scheduled, scheduling it
+     * when the failure struck before {@link #startBackgroundRefresh(long)} ran. A task already
+     * scheduled for this initialization is never scheduled a second time. The caller must hold
+     * {@link #lifecycleLock}.
+     *
+     * @param claimedEpoch the {@link #epoch} of the live initialization
+     * @return {@code true} if a refresh task of this initialization is scheduled and active;
+     *         {@code false} if none could be scheduled (the refresh executor rejected it) or the
+     *         task has been cancelled
+     */
+    private boolean ensureBackgroundRefresh(long claimedEpoch) {
+        if (refreshScheduledEpoch != claimedEpoch) {
+            try {
+                startBackgroundRefresh(claimedEpoch);
+            } catch (RejectedExecutionException e) {
+                LOGGER.error(e, ERROR.JWKS_INITIALIZATION_FAILED, e.getMessage(),
+                        getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
+                return false;
+            }
+        }
+        return isBackgroundRefreshActive();
     }
 
     /**
@@ -751,14 +877,16 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * initialization still in flight when {@link #close()} ran must not leave a running task behind,
      * not even when the loader has been initialized again since). The scheduled task carries
      * {@code startEpoch}, so each of its cycles belongs to this initialization's generation, also when
-     * it begins only after a {@code close()} and a later re-initialization.
+     * it begins only after a {@code close()} and a later re-initialization. An initialization schedules
+     * at most one task: a second call for the same {@code startEpoch} schedules nothing.
      *
      * @param startEpoch the {@link #epoch} the calling initialization was claimed under
+     * @throws RejectedExecutionException if the refresh executor rejects the task
      */
     private void startBackgroundRefresh(long startEpoch) {
         lifecycleLock.lock();
         try {
-            if (!isLive(startEpoch)) {
+            if (!isLive(startEpoch) || refreshScheduledEpoch == startEpoch) {
                 return;
             }
             refreshTask.set(config.getScheduledExecutorService().scheduleAtFixedRate(
@@ -766,6 +894,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                     config.getRefreshIntervalSeconds(),
                     config.getRefreshIntervalSeconds(),
                     TimeUnit.SECONDS));
+            refreshScheduledEpoch = startEpoch;
         } finally {
             lifecycleLock.unlock();
         }

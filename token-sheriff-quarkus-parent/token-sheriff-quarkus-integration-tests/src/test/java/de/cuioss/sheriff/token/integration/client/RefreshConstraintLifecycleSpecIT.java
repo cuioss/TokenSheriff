@@ -56,9 +56,10 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>{@link #shouldPreserveTheSenderConstraintThroughConfirmedBindingApplyRefresh()} drives the
  *       <em>documented</em> sender-constrained path: the caller has {@link RefreshFlow} perform the
  *       DPoP-constrained rotation, extracts the {@code cnf} binding the refreshed token actually
- *       carries, and applies it through the seven-argument
- *       {@link TokenLifecycleManager#applyRefresh(String, String, String, Instant, ConstraintBinding, String, String)}
- *       overload. The stored bundle keeps its binding and nothing throws.</li>
+ *       carries, and applies it through the eight-argument
+ *       {@link TokenLifecycleManager#applyRefresh(String, String, String, String, Instant, ConstraintBinding, String, String)}
+ *       overload, naming the refresh token the rotation presented as the base. The stored bundle keeps its
+ *       binding and nothing throws.</li>
  *   <li>{@link #shouldRefuseCoordinatorRefreshThatAppliesNoConfirmedBinding()} drives the
  *       {@link TokenLifecycleManager#refresh} coordinator over the same kind of session. That
  *       coordinator hard-codes a {@code null} refreshed binding, so a sender-constrained bundle fails
@@ -115,7 +116,7 @@ class RefreshConstraintLifecycleSpecIT extends BaseIntegrationTest {
         ConstraintBinding confirmedBinding = confirmedBindingOf(rotation.accessToken().getRawToken())
                 .orElse(null);
 
-        StoredToken refreshed = assertDoesNotThrow(() -> manager.applyRefresh(sessionId,
+        StoredToken refreshed = assertDoesNotThrow(() -> manager.applyRefresh(sessionId, stored.refreshToken(),
                         rotation.accessToken().getRawToken(), rotation.refreshToken(),
                         Instant.now().plusSeconds(rotation.accessTokenExpiresInSeconds()), confirmedBinding,
                         rotation.accessToken().getSubject().orElse(null), rotation.idToken()),

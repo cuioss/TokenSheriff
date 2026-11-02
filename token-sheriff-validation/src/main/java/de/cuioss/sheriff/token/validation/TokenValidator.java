@@ -468,17 +468,26 @@ public class TokenValidator implements Closeable {
      * remaining loaders nor the shutdown of the other resources. A loader whose close is interrupted
      * does not stop the remaining loaders either; the calling thread's interrupt flag is restored.
      * <p>
+     * A failure shutting down one internal resource does not prevent releasing the others: the access
+     * token pipeline, the DPoP replay protection and the JWKS loaders are each released even when an
+     * earlier one failed. Such a failure (for example a {@link SecurityException} from an executor
+     * shutdown) is still propagated to the caller once the remaining resources are released; when both
+     * the pipeline and the DPoP replay protection fail, the later failure is the one propagated.
+     * <p>
      * This should be called when the TokenValidator is no longer needed.
      */
     @Override
     public void close() {
         try {
             accessTokenPipeline.shutdown();
-            if (dpopReplayProtection != null) {
-                dpopReplayProtection.close();
-            }
         } finally {
-            closeJwksLoaders();
+            try {
+                if (dpopReplayProtection != null) {
+                    dpopReplayProtection.close();
+                }
+            } finally {
+                closeJwksLoaders();
+            }
         }
     }
 

@@ -131,11 +131,12 @@ class TokenStoreTest {
     void shouldNotResurrectRevokedSessionOnRefresh() {
         var manager = new TokenLifecycleManager(new InMemoryTokenStore(), new RefreshScheduler());
         String sessionId = Generators.letterStrings(10, 20).next();
-        manager.store(sessionId, bearerToken());
+        StoredToken held = bearerToken();
+        manager.store(sessionId, held);
         manager.revokeAndClear(sessionId);
 
-        var refreshed = manager.applyRefresh(sessionId, Generators.letterStrings(20, 40).next(), null, null, null,
-                null);
+        var refreshed = manager.applyRefresh(sessionId, held.refreshToken(), Generators.letterStrings(20, 40).next(),
+                null, null, null, null);
 
         assertAll("refresh after logout is a no-op",
                 () -> assertTrue(refreshed.isEmpty(),
@@ -222,13 +223,14 @@ class TokenStoreTest {
         try {
             for (int i = 0; i < iterations; i++) {
                 String sessionId = Generators.letterStrings(10, 20).next();
-                manager.store(sessionId, bearerToken());
+                StoredToken held = bearerToken();
+                manager.store(sessionId, held);
                 String rotatedAccess = Generators.letterStrings(20, 40).next();
                 var barrier = new CyclicBarrier(2);
 
                 Callable<Void> refreshTask = () -> {
                     barrier.await();
-                    manager.applyRefresh(sessionId, rotatedAccess, null, null, null, null);
+                    manager.applyRefresh(sessionId, held.refreshToken(), rotatedAccess, null, null, null, null);
                     return null;
                 };
                 Callable<Void> logoutTask = () -> {
