@@ -15,12 +15,10 @@
  */
 package de.cuioss.sheriff.token.quarkus.deployment;
 
-import de.cuioss.sheriff.token.quarkus.annotation.BearerAuth;
 import de.cuioss.sheriff.token.quarkus.config.AccessLogFilterConfigResolver;
 import de.cuioss.sheriff.token.quarkus.error.ProblemDetailExceptionMapper;
 import de.cuioss.sheriff.token.quarkus.health.JwksEndpointHealthCheck;
 import de.cuioss.sheriff.token.quarkus.health.TokenValidatorHealthCheck;
-import de.cuioss.sheriff.token.quarkus.interceptor.BearerAuthRecorder;
 import de.cuioss.sheriff.token.quarkus.interceptor.BearerTokenInterceptor;
 import de.cuioss.sheriff.token.quarkus.logging.CustomAccessLogFilter;
 import de.cuioss.sheriff.token.quarkus.mapper.ClaimMapperRegistry;
@@ -47,9 +45,6 @@ import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.annotations.ExecutionTime;
-import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
@@ -57,12 +52,7 @@ import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
 import io.quarkus.devui.spi.page.CardPageBuildItem;
 import io.quarkus.devui.spi.page.Page;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
-import jakarta.interceptor.Interceptor;
 import org.eclipse.microprofile.jwt.JsonWebToken;
-import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
-import org.jboss.jandex.AnnotationValue;
-import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 
 /**
@@ -85,10 +75,6 @@ public class TokenSheriffProcessor {
      * The feature name for the Token-Sheriff extension.
      */
     private static final String FEATURE = "token-sheriff";
-
-    private static final DotName BEARER_AUTH = DotName.createSimple(BearerAuth.class.getName());
-
-    private static final DotName INTERCEPTOR = DotName.createSimple(Interceptor.class.getName());
 
     /**
      * Logger for build-time processing.
@@ -201,43 +187,6 @@ public class TokenSheriffProcessor {
                 .addBeanClass(BearerTokenInterceptor.class)
                 .setUnremovable()
                 .build();
-    }
-
-    /**
-     * Record the class-level {@link BearerAuth} requirements of the application for
-     * {@link BearerTokenInterceptor}.
-     * <p>
-     * Inside a native image the class-level annotation of an intercepted bean is not reliably readable
-     * through runtime reflection, and the CDI interceptor bindings of a method that carries its own
-     * {@code @BearerAuth} do not include the class-level one. Reading the declarations from the index
-     * here and replaying them during static initialization gives the interceptor a source for the
-     * class-level requirement that needs no runtime reflection. Interceptor classes are skipped: on them
-     * {@code @BearerAuth} declares the binding of the interceptor, not a requirement.
-     *
-     * @param combinedIndex the application index
-     * @param recorder      the recorder that hands the requirements to the runtime registry
-     */
-    @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
-    public void recordClassLevelBearerAuth(CombinedIndexBuildItem combinedIndex, BearerAuthRecorder recorder) {
-        for (AnnotationInstance annotation : combinedIndex.getIndex().getAnnotations(BEARER_AUTH)) {
-            if (annotation.target().kind() != AnnotationTarget.Kind.CLASS) {
-                continue;
-            }
-            ClassInfo annotatedClass = annotation.target().asClass();
-            if (annotatedClass.hasDeclaredAnnotation(INTERCEPTOR)) {
-                continue;
-            }
-            recorder.registerClassLevelRequirement(annotatedClass.name().toString(),
-                    stringArrayValue(annotation, "requiredScopes"),
-                    stringArrayValue(annotation, "requiredRoles"),
-                    stringArrayValue(annotation, "requiredGroups"));
-        }
-    }
-
-    private static String[] stringArrayValue(AnnotationInstance annotation, String member) {
-        AnnotationValue value = annotation.value(member);
-        return value == null ? new String[0] : value.asStringArray();
     }
 
     /**

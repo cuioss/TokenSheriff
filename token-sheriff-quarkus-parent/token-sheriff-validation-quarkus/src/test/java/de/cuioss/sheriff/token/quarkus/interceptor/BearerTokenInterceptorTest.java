@@ -26,14 +26,10 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.quarkus.arc.Subclass;
 import jakarta.interceptor.InvocationContext;
 import jakarta.ws.rs.WebApplicationException;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
 import java.util.Set;
 
 import static org.easymock.EasyMock.*;
@@ -53,22 +49,23 @@ class BearerTokenInterceptorTest {
 
     @BeforeEach
     void setUp() {
-        ClassLevelBearerAuthRegistry.clear();
         bearerTokenProducer = createMock(BearerTokenProducer.class);
         invocationContext = createMock(InvocationContext.class);
         interceptor = new BearerTokenInterceptor(bearerTokenProducer);
     }
 
-    @AfterEach
-    void tearDown() {
-        ClassLevelBearerAuthRegistry.clear();
-    }
-
     @Test
     @DisplayName("Should proceed when validation succeeds")
     void shouldProceedWhenValidationSucceeds() throws Exception {
-        expectInvocation(TestResource.class.getMethod("methodWithScopes"), testResource);
-        expectAuthorized(Set.of("read"), Set.of(), Set.of());
+        TestTokenHolder tokenHolder = createValidToken();
+
+        expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithScopes"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
+        expect(bearerTokenProducer.getBearerTokenResult(Set.of("read"), Set.of(), Set.of()))
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -81,7 +78,8 @@ class BearerTokenInterceptorTest {
     @Test
     @DisplayName("Should throw WebApplicationException when validation fails")
     void shouldThrowWebApplicationExceptionWhenValidationFails() throws Exception {
-        expectInvocation(TestResource.class.getMethod("methodWithScopes"), testResource);
+        expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithScopes"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of("read"), Set.of(), Set.of()))
                 .andReturn(BearerTokenResult.noTokenGiven(Set.of("read"), Set.of(), Set.of()));
         replay(invocationContext, bearerTokenProducer);
@@ -96,8 +94,15 @@ class BearerTokenInterceptorTest {
     @Test
     @DisplayName("Should extract multiple scopes correctly")
     void shouldExtractMultipleScopesCorrectly() throws Exception {
-        expectInvocation(TestResource.class.getMethod("methodWithMultipleScopes"), testResource);
-        expectAuthorized(Set.of("read", "write", "admin"), Set.of(), Set.of());
+        TestTokenHolder tokenHolder = createValidToken();
+
+        expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithMultipleScopes"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
+        expect(bearerTokenProducer.getBearerTokenResult(Set.of("read", "write", "admin"), Set.of(), Set.of()))
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -109,8 +114,15 @@ class BearerTokenInterceptorTest {
     @Test
     @DisplayName("Should extract multiple roles correctly")
     void shouldExtractMultipleRolesCorrectly() throws Exception {
-        expectInvocation(TestResource.class.getMethod("methodWithRoles"), testResource);
-        expectAuthorized(Set.of(), Set.of("user", "admin"), Set.of());
+        TestTokenHolder tokenHolder = createValidToken();
+
+        expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithRoles"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
+        expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of("user", "admin"), Set.of()))
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -122,8 +134,15 @@ class BearerTokenInterceptorTest {
     @Test
     @DisplayName("Should extract multiple groups correctly")
     void shouldExtractMultipleGroupsCorrectly() throws Exception {
-        expectInvocation(TestResource.class.getMethod("methodWithGroups"), testResource);
-        expectAuthorized(Set.of(), Set.of(), Set.of("developers", "managers"));
+        TestTokenHolder tokenHolder = createValidToken();
+
+        expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithGroups"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
+        expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of("developers", "managers")))
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -135,8 +154,18 @@ class BearerTokenInterceptorTest {
     @Test
     @DisplayName("Should handle all requirements combined")
     void shouldHandleAllRequirementsCombined() throws Exception {
-        expectInvocation(TestResource.class.getMethod("methodWithAllRequirements"), testResource);
-        expectAuthorized(Set.of("read", "write"), Set.of("user"), Set.of("team-a"));
+        TestTokenHolder tokenHolder = createValidToken();
+
+        expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithAllRequirements"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
+        expect(bearerTokenProducer.getBearerTokenResult(
+                Set.of("read", "write"),
+                Set.of("user"),
+                Set.of("team-a")))
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -148,8 +177,15 @@ class BearerTokenInterceptorTest {
     @Test
     @DisplayName("Should handle empty annotation (no requirements)")
     void shouldHandleEmptyAnnotation() throws Exception {
-        expectInvocation(TestResource.class.getMethod("methodWithEmptyAnnotation"), testResource);
-        expectAuthorized(Set.of(), Set.of(), Set.of());
+        TestTokenHolder tokenHolder = createValidToken();
+
+        expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithEmptyAnnotation"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
+        expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of()))
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -161,7 +197,8 @@ class BearerTokenInterceptorTest {
     @Test
     @DisplayName("Should throw IllegalStateException when annotation not found (fail closed)")
     void shouldThrowWhenAnnotationNotFound() throws Exception {
-        expectInvocation(TestResource.class.getMethod("methodWithoutAnnotation"), testResource);
+        expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithoutAnnotation")).times(2);
+        expect(invocationContext.getTarget()).andReturn(testResource);
         replay(invocationContext, bearerTokenProducer);
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
@@ -169,14 +206,22 @@ class BearerTokenInterceptorTest {
 
         assertTrue(exception.getMessage().contains("@BearerAuth annotation not found"),
                 "Exception message should mention missing annotation");
-        verify(invocationContext, bearerTokenProducer);
+        verify(invocationContext);
     }
 
     @Test
     @DisplayName("Should extract annotation from class level")
     void shouldExtractAnnotationFromClassLevel() throws Exception {
-        expectInvocation(TestResourceClassLevel.class.getMethod("methodWithoutAnnotation"), new TestResourceClassLevel());
-        expectAuthorized(Set.of("class-scope"), Set.of(), Set.of());
+        TestTokenHolder tokenHolder = createValidToken();
+        TestResourceClassLevel resource = new TestResourceClassLevel();
+
+        expect(invocationContext.getMethod()).andReturn(TestResourceClassLevel.class.getMethod("methodWithoutAnnotation"));
+        expect(invocationContext.getTarget()).andReturn(resource);
+        expect(bearerTokenProducer.getBearerTokenResult(Set.of("class-scope"), Set.of(), Set.of()))
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
         expect(invocationContext.proceed()).andReturn("success");
         replay(invocationContext, bearerTokenProducer);
 
@@ -188,7 +233,8 @@ class BearerTokenInterceptorTest {
     @Test
     @DisplayName("Should return status 401 for missing scopes")
     void shouldReturn401ForMissingScopes() throws Exception {
-        expectInvocation(TestResource.class.getMethod("methodWithScopes"), testResource);
+        expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithScopes"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of("read"), Set.of(), Set.of()))
                 .andReturn(BearerTokenResult.builder()
                         .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
@@ -209,9 +255,16 @@ class BearerTokenInterceptorTest {
     @Test
     @DisplayName("Should return status 403 for missing roles")
     void shouldReturn403ForMissingRoles() throws Exception {
-        expectInvocation(TestResource.class.getMethod("methodWithRoles"), testResource);
+        expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithRoles"));
+        expect(invocationContext.getTarget()).andReturn(testResource);
         expect(bearerTokenProducer.getBearerTokenResult(Set.of(), Set.of("user", "admin"), Set.of()))
-                .andReturn(missingRole("user"));
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                        .requiredScopes(Set.of())
+                        .requiredRoles(Set.of("user"))
+                        .missingRoles(Set.of("user"))
+                        .requiredGroups(Set.of())
+                        .build());
         replay(invocationContext, bearerTokenProducer);
 
         WebApplicationException exception = assertThrows(WebApplicationException.class,
@@ -221,227 +274,96 @@ class BearerTokenInterceptorTest {
         verify(invocationContext, bearerTokenProducer);
     }
 
-    /**
-     * Cases where the class-level annotation is reachable reflectively on the bean class behind a
-     * simulated ArC subclass, as in JVM mode.
-     */
-    @Nested
-    @DisplayName("Reflective class-level lookup")
-    class ReflectiveClassLevel {
+    @Test
+    @DisplayName("Should read class-level annotation from bean class behind an ArC subclass")
+    void shouldReadClassLevelAnnotationThroughArcSubclass() throws Exception {
+        TestTokenHolder tokenHolder = createValidToken();
 
-        @Test
-        @DisplayName("Should read class-level annotation from bean class behind an ArC subclass")
-        void shouldReadClassLevelAnnotationThroughArcSubclass() throws Exception {
-            expectInvocation(TestResourceClassLevel.class.getMethod("methodWithoutAnnotation"), new ArcSubclassOfClassLevel());
-            expectAuthorized(Set.of("class-scope"), Set.of(), Set.of());
-            expect(invocationContext.proceed()).andReturn("success");
-            replay(invocationContext, bearerTokenProducer);
-
-            Object result = interceptor.validateBearerToken(invocationContext);
-
-            assertEquals("success", result);
-            verify(invocationContext, bearerTokenProducer);
-        }
-
-        @Test
-        @DisplayName("Should merge class and method annotations when target is an ArC subclass")
-        void shouldMergeClassAndMethodAnnotationsThroughArcSubclass() throws Exception {
-            expectInvocation(TestResourceClassAndMethodLevel.class.getMethod("methodWithScopes"),
-                    new ArcSubclassOfClassAndMethodLevel());
-            expectAuthorized(Set.of("class-scope", "method-scope"), Set.of("class-role"), Set.of());
-            expect(invocationContext.proceed()).andReturn("success");
-            replay(invocationContext, bearerTokenProducer);
-
-            interceptor.validateBearerToken(invocationContext);
-
-            verify(invocationContext, bearerTokenProducer);
-        }
-
-        @Test
-        @DisplayName("Should apply bean-class requirements to a method declared on a superclass")
-        void shouldApplyBeanClassRequirementsToSuperclassMethod() throws Exception {
-            expectInvocation(BaseResource.class.getMethod("inheritedMethod"), new ArcSubclassOfInheritingResource());
-            expectAuthorized(Set.of("bean-scope"), Set.of(), Set.of());
-            expect(invocationContext.proceed()).andReturn("success");
-            replay(invocationContext, bearerTokenProducer);
-
-            interceptor.validateBearerToken(invocationContext);
-
-            verify(invocationContext, bearerTokenProducer);
-        }
-
-        @Test
-        @DisplayName("Should fail closed when neither level is annotated behind an ArC subclass")
-        void shouldThrowWhenAnnotationNotFoundThroughArcSubclass() throws Exception {
-            expectInvocation(TestResource.class.getMethod("methodWithoutAnnotation"), new ArcSubclassOfUnannotated());
-            replay(invocationContext, bearerTokenProducer);
-
-            IllegalStateException exception = assertThrows(IllegalStateException.class,
-                    () -> interceptor.validateBearerToken(invocationContext));
-
-            assertTrue(exception.getMessage().contains("@BearerAuth annotation not found"),
-                    "Exception message should mention missing annotation");
-            verify(invocationContext, bearerTokenProducer);
-        }
-
-        @Test
-        @DisplayName("Should not walk the hierarchy for a target that is not an ArC subclass")
-        void shouldNotWalkHierarchyForPlainSubclass() throws Exception {
-            expectInvocation(TestResourceClassLevel.class.getMethod("methodWithoutAnnotation"), new PlainSubclassOfClassLevel());
-            replay(invocationContext, bearerTokenProducer);
-
-            assertThrows(IllegalStateException.class,
-                    () -> interceptor.validateBearerToken(invocationContext));
-
-            verify(invocationContext, bearerTokenProducer);
-        }
-    }
-
-    /**
-     * Cases modelling the native container: the bean class exposes no {@code @BearerAuth} through
-     * reflection, so the class-level requirement reaches the interceptor only through the build-time
-     * {@link ClassLevelBearerAuthRegistry} or the interceptor bindings of the invocation.
-     */
-    @Nested
-    @DisplayName("Class-level requirement without reflective access")
-    class WithoutReflectiveClassAnnotation {
-
-        @Test
-        @DisplayName("Should apply the class requirement from the interceptor bindings to a method without annotation")
-        void shouldApplyClassRequirementFromBindings() throws Exception {
-            expectInvocation(NativeBean.class.getMethod("classOnly"), new ArcSubclassOfNativeBean(),
-                    classLevelBinding());
-            expectAuthorized(Set.of(), Set.of("user"), Set.of());
-            expect(invocationContext.proceed()).andReturn("success");
-            replay(invocationContext, bearerTokenProducer);
-
-            Object result = interceptor.validateBearerToken(invocationContext);
-
-            assertEquals("success", result);
-            verify(invocationContext, bearerTokenProducer);
-        }
-
-        @Test
-        @DisplayName("Should apply the recorded class requirement to a method without annotation")
-        void shouldApplyRecordedClassRequirementToUnannotatedMethod() throws Exception {
-            registerClassLevel(NativeBean.class, "user");
-            expectInvocation(NativeBean.class.getMethod("classOnly"), new ArcSubclassOfNativeBean());
-            expectAuthorized(Set.of(), Set.of("user"), Set.of());
-            expect(invocationContext.proceed()).andReturn("success");
-            replay(invocationContext, bearerTokenProducer);
-
-            interceptor.validateBearerToken(invocationContext);
-
-            verify(invocationContext, bearerTokenProducer);
-        }
-
-        @Test
-        @DisplayName("Should pass the union of the recorded class and the method requirement")
-        void shouldMergeRecordedClassAndMethodRequirement() throws Exception {
-            registerClassLevel(NativeBean.class, "user");
-            // The container hands over only the method-level binding: CDI lets it replace the class-level one
-            expectInvocation(NativeBean.class.getMethod("union"), new ArcSubclassOfNativeBean(),
-                    NativeBean.class.getMethod("union").getAnnotation(BearerAuth.class));
-            expectAuthorized(Set.of("read"), Set.of("user"), Set.of());
-            expect(invocationContext.proceed()).andReturn("success");
-            replay(invocationContext, bearerTokenProducer);
-
-            interceptor.validateBearerToken(invocationContext);
-
-            verify(invocationContext, bearerTokenProducer);
-        }
-
-        @Test
-        @DisplayName("Should apply the recorded bean-class requirement to a method declared on a superclass")
-        void shouldApplyRecordedRequirementToSuperclassMethod() throws Exception {
-            registerClassLevel(NativeBean.class, "user");
-            expectInvocation(BaseResource.class.getMethod("inheritedMethod"), new ArcSubclassOfNativeBean(),
-                    classLevelBinding());
-            expectAuthorized(Set.of(), Set.of("user"), Set.of());
-            expect(invocationContext.proceed()).andReturn("success");
-            replay(invocationContext, bearerTokenProducer);
-
-            interceptor.validateBearerToken(invocationContext);
-
-            verify(invocationContext, bearerTokenProducer);
-        }
-
-        @Test
-        @DisplayName("Should not drop an unsatisfied class requirement when the method carries its own annotation")
-        void shouldRefuseWhenRecordedClassRequirementIsUnsatisfied() throws Exception {
-            registerClassLevel(NativeBean.class, "nonexistent-role");
-            expectInvocation(NativeBean.class.getMethod("union"), new ArcSubclassOfNativeBean(),
-                    NativeBean.class.getMethod("union").getAnnotation(BearerAuth.class));
-            expect(bearerTokenProducer.getBearerTokenResult(Set.of("read"), Set.of("nonexistent-role"), Set.of()))
-                    .andReturn(missingRole("nonexistent-role"));
-            replay(invocationContext, bearerTokenProducer);
-
-            WebApplicationException exception = assertThrows(WebApplicationException.class,
-                    () -> interceptor.validateBearerToken(invocationContext));
-
-            assertEquals(403, exception.getResponse().getStatus());
-            verify(invocationContext, bearerTokenProducer);
-        }
-
-        @Test
-        @DisplayName("Should fail closed when no source yields a requirement")
-        void shouldThrowWhenNoSourceYieldsRequirement() throws Exception {
-            expectInvocation(NativeBean.class.getMethod("classOnly"), new ArcSubclassOfNativeBean());
-            replay(invocationContext, bearerTokenProducer);
-
-            IllegalStateException exception = assertThrows(IllegalStateException.class,
-                    () -> interceptor.validateBearerToken(invocationContext));
-
-            assertTrue(exception.getMessage().contains("@BearerAuth annotation not found on method 'classOnly'"),
-                    "Exception message should name the method and the missing annotation");
-            verify(invocationContext, bearerTokenProducer);
-        }
-
-        @Test
-        @DisplayName("Should not apply a requirement recorded for a different class")
-        void shouldIgnoreRequirementRecordedForOtherClass() throws Exception {
-            registerClassLevel(TestResource.class, "user");
-            expectInvocation(NativeBean.class.getMethod("classOnly"), new ArcSubclassOfNativeBean());
-            replay(invocationContext, bearerTokenProducer);
-
-            assertThrows(IllegalStateException.class,
-                    () -> interceptor.validateBearerToken(invocationContext));
-
-            verify(invocationContext, bearerTokenProducer);
-        }
-    }
-
-    private void expectInvocation(Method method, Object target, Annotation... bindings) {
-        expect(invocationContext.getMethod()).andReturn(method);
-        expect(invocationContext.getTarget()).andReturn(target);
-        expect(invocationContext.getInterceptorBindings()).andReturn(Set.of(bindings));
-    }
-
-    private void expectAuthorized(Set<String> scopes, Set<String> roles, Set<String> groups) {
-        expect(bearerTokenProducer.getBearerTokenResult(scopes, roles, groups))
+        expect(invocationContext.getMethod()).andReturn(TestResourceClassLevel.class.getMethod("methodWithoutAnnotation"));
+        expect(invocationContext.getTarget()).andReturn(new ArcSubclassOfClassLevel());
+        expect(bearerTokenProducer.getBearerTokenResult(Set.of("class-scope"), Set.of(), Set.of()))
                 .andReturn(BearerTokenResult.builder()
                         .status(BearerTokenStatus.FULLY_VERIFIED)
-                        .accessTokenContent(createValidToken().asAccessTokenContent())
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
                         .build());
+        expect(invocationContext.proceed()).andReturn("success");
+        replay(invocationContext, bearerTokenProducer);
+
+        Object result = interceptor.validateBearerToken(invocationContext);
+
+        assertEquals("success", result);
+        verify(invocationContext, bearerTokenProducer);
     }
 
-    private static BearerTokenResult missingRole(String role) {
-        return BearerTokenResult.builder()
-                .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
-                .requiredScopes(Set.of())
-                .requiredRoles(Set.of(role))
-                .missingRoles(Set.of(role))
-                .requiredGroups(Set.of())
-                .build();
+    @Test
+    @DisplayName("Should merge class and method annotations when target is an ArC subclass")
+    void shouldMergeClassAndMethodAnnotationsThroughArcSubclass() throws Exception {
+        TestTokenHolder tokenHolder = createValidToken();
+
+        expect(invocationContext.getMethod()).andReturn(TestResourceClassAndMethodLevel.class.getMethod("methodWithScopes"));
+        expect(invocationContext.getTarget()).andReturn(new ArcSubclassOfClassAndMethodLevel());
+        expect(bearerTokenProducer.getBearerTokenResult(
+                Set.of("class-scope", "method-scope"),
+                Set.of("class-role"),
+                Set.of()))
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
+        expect(invocationContext.proceed()).andReturn("success");
+        replay(invocationContext, bearerTokenProducer);
+
+        interceptor.validateBearerToken(invocationContext);
+
+        verify(invocationContext, bearerTokenProducer);
     }
 
-    private static void registerClassLevel(Class<?> beanClass, String role) {
-        new BearerAuthRecorder().registerClassLevelRequirement(beanClass.getName(),
-                new String[0], new String[]{role}, new String[0]);
+    @Test
+    @DisplayName("Should apply bean-class requirements to a method declared on a superclass")
+    void shouldApplyBeanClassRequirementsToSuperclassMethod() throws Exception {
+        TestTokenHolder tokenHolder = createValidToken();
+
+        expect(invocationContext.getMethod()).andReturn(BaseResource.class.getMethod("inheritedMethod"));
+        expect(invocationContext.getTarget()).andReturn(new ArcSubclassOfInheritingResource());
+        expect(bearerTokenProducer.getBearerTokenResult(Set.of("bean-scope"), Set.of(), Set.of()))
+                .andReturn(BearerTokenResult.builder()
+                        .status(BearerTokenStatus.FULLY_VERIFIED)
+                        .accessTokenContent(tokenHolder.asAccessTokenContent())
+                        .build());
+        expect(invocationContext.proceed()).andReturn("success");
+        replay(invocationContext, bearerTokenProducer);
+
+        interceptor.validateBearerToken(invocationContext);
+
+        verify(invocationContext, bearerTokenProducer);
     }
 
-    private static BearerAuth classLevelBinding() {
-        return ClassLevelBindingCarrier.class.getAnnotation(BearerAuth.class);
+    @Test
+    @DisplayName("Should fail closed when neither level is annotated behind an ArC subclass")
+    void shouldThrowWhenAnnotationNotFoundThroughArcSubclass() throws Exception {
+        expect(invocationContext.getMethod()).andReturn(TestResource.class.getMethod("methodWithoutAnnotation")).times(2);
+        expect(invocationContext.getTarget()).andReturn(new ArcSubclassOfUnannotated());
+        replay(invocationContext, bearerTokenProducer);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> interceptor.validateBearerToken(invocationContext));
+
+        assertTrue(exception.getMessage().contains("@BearerAuth annotation not found"),
+                "Exception message should mention missing annotation");
+        verify(invocationContext, bearerTokenProducer);
+    }
+
+    @Test
+    @DisplayName("Should not walk the hierarchy for a target that is not an ArC subclass")
+    void shouldNotWalkHierarchyForPlainSubclass() throws Exception {
+        expect(invocationContext.getMethod()).andReturn(TestResourceClassLevel.class.getMethod("methodWithoutAnnotation")).times(2);
+        expect(invocationContext.getTarget()).andReturn(new PlainSubclassOfClassLevel());
+        replay(invocationContext, bearerTokenProducer);
+
+        assertThrows(IllegalStateException.class,
+                () -> interceptor.validateBearerToken(invocationContext));
+
+        verify(invocationContext, bearerTokenProducer);
     }
 
     private TestTokenHolder createValidToken() {
@@ -511,30 +433,6 @@ class BearerTokenInterceptorTest {
     }
 
     /**
-     * Stands in for a bean whose class-level {@code @BearerAuth(requiredRoles = "user")} is not visible
-     * to runtime reflection, as observed in the native container: the class itself carries no annotation,
-     * and the class-level requirement is supplied through the registry or the bindings.
-     */
-    public static class NativeBean extends BaseResource {
-        public String classOnly() {
-            return "result";
-        }
-
-        @BearerAuth(requiredScopes = {"read"})
-        public String union() {
-            return "result";
-        }
-    }
-
-    /**
-     * Supplies the {@code @BearerAuth} instance the container reports as class-level interceptor binding
-     * of {@link NativeBean}.
-     */
-    @BearerAuth(requiredRoles = {"user"})
-    static class ClassLevelBindingCarrier {
-    }
-
-    /**
      * Simulates the subclass ArC generates for an intercepted bean: it implements
      * {@link Subclass} and does not carry the bean's class-level annotations.
      */
@@ -548,9 +446,6 @@ class BearerTokenInterceptorTest {
     }
 
     static class ArcSubclassOfUnannotated extends TestResource implements Subclass {
-    }
-
-    static class ArcSubclassOfNativeBean extends NativeBean implements Subclass {
     }
 
     /**

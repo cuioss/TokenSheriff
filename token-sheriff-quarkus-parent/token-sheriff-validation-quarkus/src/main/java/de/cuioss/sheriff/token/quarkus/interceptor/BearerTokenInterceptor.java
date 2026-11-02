@@ -28,10 +28,11 @@ import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InvocationContext;
 import jakarta.ws.rs.WebApplicationException;
 
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Interceptor for declarative Bearer token validation at method level.
@@ -42,8 +43,7 @@ import java.util.List;
  * <p>
  * The interceptor:
  * <ul>
- *   <li>Extracts annotation parameters (requiredScopes, requiredRoles, requiredGroups) from the
- *       method and from the bean class, and enforces their union</li>
+ *   <li>Extracts annotation parameters (requiredScopes, requiredRoles, requiredGroups)</li>
  *   <li>Delegates validation to {@link BearerTokenProducer}</li>
  *   <li>Throws WebApplicationException with error response for failed validation</li>
  *   <li>Proceeds with method execution if validation succeeds</li>
@@ -63,14 +63,6 @@ import java.util.List;
  *     }
  * }
  * }</pre>
- * <p>
- * <strong>Class-level requirements:</strong> a class-level {@code @BearerAuth} is not read from runtime
- * reflection alone, because inside a native image the annotation of the bean class is not reliably
- * reachable that way. The deployment processor records every class-level declaration of the application
- * at build time through {@link BearerAuthRecorder}, and the interceptor merges that record with the
- * reflective and interceptor-binding sources (see {@code extractMergedAuth}). A requirement found by any
- * source is enforced; when no source yields one the interceptor refuses with an
- * {@link IllegalStateException}.
  * <p>
  * <strong>Priority:</strong> PLATFORM_BEFORE + 200 ensures security validation
  * runs after platform infrastructure but before business logic interceptors.
@@ -104,6 +96,44 @@ public class BearerTokenInterceptor {
     }
 
     /**
+     * Holds the merged authentication requirements from class-level and method-level
+     * {@link BearerAuth} annotations.
+     *
+     * @param requiredScopes the union of required scopes from both annotation levels
+     * @param requiredRoles  the union of required roles from both annotation levels
+     * @param requiredGroups the union of required groups from both annotation levels
+     */
+    private record MergedAuth(Set<String> requiredScopes, Set<String> requiredRoles, Set<String> requiredGroups) {
+
+        /**
+         * Creates a MergedAuth from a single BearerAuth annotation.
+         */
+        static MergedAuth fromAnnotation(BearerAuth annotation) {
+            return new MergedAuth(
+                    annotation.requiredScopes().length > 0 ? Set.copyOf(List.of(annotation.requiredScopes())) : Set.of(),
+                    annotation.requiredRoles().length > 0 ? Set.copyOf(List.of(annotation.requiredRoles())) : Set.of(),
+                    annotation.requiredGroups().length > 0 ? Set.copyOf(List.of(annotation.requiredGroups())) : Set.of()
+            );
+        }
+
+        /**
+         * Creates a MergedAuth by computing the union of two BearerAuth annotations.
+         */
+        static MergedAuth merge(BearerAuth classLevel, BearerAuth methodLevel) {
+            return new MergedAuth(
+                    unionOf(classLevel.requiredScopes(), methodLevel.requiredScopes()),
+                    unionOf(classLevel.requiredRoles(), methodLevel.requiredRoles()),
+                    unionOf(classLevel.requiredGroups(), methodLevel.requiredGroups())
+            );
+        }
+
+        private static Set<String> unionOf(String[] first, String[] second) {
+            return Stream.concat(Arrays.stream(first), Arrays.stream(second))
+                    .collect(Collectors.toUnmodifiableSet());
+        }
+    }
+
+    /**
      * Intercepts method calls to validate bearer tokens declaratively.
      * <p>
      * This method follows the interceptor pattern for security validation:
@@ -122,7 +152,7 @@ public class BearerTokenInterceptor {
     @AroundInvoke
     public Object validateBearerToken(InvocationContext ctx) throws Exception {
         // Extract and merge annotations from method and class level
-        BearerAuthRequirement mergedAuth = extractMergedAuth(ctx);
+        MergedAuth mergedAuth = extractMergedAuth(ctx);
 
         LOGGER.debug("Validating bearer token with scopes: %s, roles: %s, groups: %s",
                 mergedAuth.requiredScopes(), mergedAuth.requiredRoles(), mergedAuth.requiredGroups());
@@ -143,71 +173,50 @@ public class BearerTokenInterceptor {
     }
 
     /**
-     * Collects every {@link BearerAuth} requirement that applies to the intercepted invocation
-     * and merges them into one: the union of all requiredScopes, requiredRoles and requiredGroups.
+     * Extracts and merges {@link BearerAuth} annotations from both the method and the
+     * bean class of the intercepted target. If both levels are annotated, the requirements
+     * are merged (union of requiredScopes, requiredRoles, requiredGroups). If only one level
+     * is annotated, its values are used directly.
      * <p>
-     * The requirement is read from four sources, because no single one is reliable for every
-     * declaration inside a native image:
-     * <ol>
-     *   <li>the {@code @BearerAuth} on the invoked method, read reflectively from
-     *       {@link InvocationContext#getMethod()};</li>
-     *   <li>the class-level requirement the Quarkus build recorded for the bean class in
-     *       {@link ClassLevelBearerAuthRegistry} from index data, which needs no runtime reflection;</li>
-     *   <li>the {@code @BearerAuth} on the bean class, read reflectively — inside a native image this
-     *       may be absent even when the class is annotated, so it only ever adds to the other sources;</li>
-     *   <li>the {@code @BearerAuth} interceptor bindings the container exposes through
-     *       {@link InvocationContext#getInterceptorBindings()}. They carry the class-level declaration
-     *       for a method without an annotation of its own, but CDI lets a method-level binding replace
-     *       the class-level one, so they cannot supply the class level of an annotated method.</li>
-     * </ol>
-     * The bean class is resolved by {@link #resolveBeanClass(Object)}; only that single class is
-     * consulted at class level, the hierarchy above it is not walked. Taking the union means that a
-     * requirement found by any source is enforced: a source that misses a declaration can never
-     * remove a requirement another source found.
+     * The class-level annotation is read from the bean class resolved by
+     * {@link #resolveBeanClass(Object)}: under ArC the intercepted target is a generated
+     * subclass that does not carry the {@code @BearerAuth} of the bean it extends, so the
+     * annotation is read from the original bean class instead. Only that single class is
+     * inspected; the hierarchy above it is not walked.
      *
      * @param ctx the invocation context
      * @return the merged authentication requirements
-     * @throws IllegalStateException if no {@code @BearerAuth} requirement is found by any source
+     * @throws IllegalStateException if no {@code @BearerAuth} annotation is found at either level
      */
-    private BearerAuthRequirement extractMergedAuth(InvocationContext ctx) {
-        Method method = ctx.getMethod();
-        Class<?> beanClass = resolveBeanClass(ctx.getTarget());
+    private MergedAuth extractMergedAuth(InvocationContext ctx) {
+        BearerAuth methodAnnotation = ctx.getMethod().getAnnotation(BearerAuth.class);
+        BearerAuth classAnnotation = resolveBeanClass(ctx.getTarget()).getAnnotation(BearerAuth.class);
 
-        List<BearerAuthRequirement> requirements = new ArrayList<>();
-        addIfPresent(requirements, method.getAnnotation(BearerAuth.class));
-        ClassLevelBearerAuthRegistry.lookup(beanClass.getName()).ifPresent(requirements::add);
-        addIfPresent(requirements, beanClass.getAnnotation(BearerAuth.class));
-        for (Annotation binding : ctx.getInterceptorBindings()) {
-            if (binding instanceof BearerAuth bearerAuth) {
-                requirements.add(BearerAuthRequirement.of(bearerAuth));
-            }
+        if (methodAnnotation != null && classAnnotation != null) {
+            return MergedAuth.merge(classAnnotation, methodAnnotation);
+        }
+        if (methodAnnotation != null) {
+            return MergedAuth.fromAnnotation(methodAnnotation);
+        }
+        if (classAnnotation != null) {
+            return MergedAuth.fromAnnotation(classAnnotation);
         }
 
         // Fail closed: missing annotation means security configuration error
-        return requirements.stream()
-                .reduce(BearerAuthRequirement::union)
-                .orElseThrow(() -> new IllegalStateException(
-                        "@BearerAuth annotation not found on method '%s' or its declaring class. "
-                                .formatted(method.getName())
-                                + "Security interceptor cannot proceed without authentication configuration."));
-    }
-
-    private static void addIfPresent(List<BearerAuthRequirement> requirements, BearerAuth annotation) {
-        if (annotation != null) {
-            requirements.add(BearerAuthRequirement.of(annotation));
-        }
+        throw new IllegalStateException(
+                "@BearerAuth annotation not found on method '%s' or its declaring class. "
+                        .formatted(ctx.getMethod().getName())
+                        + "Security interceptor cannot proceed without authentication configuration.");
     }
 
     /**
      * Resolves the bean class of an intercepted target. ArC intercepts a bean by
      * instantiating a generated subclass that implements {@link Subclass}; for such a
      * target the original bean class is its direct superclass. Any other target is its
-     * own bean class. The resolved class is the key for the build-time
-     * {@link ClassLevelBearerAuthRegistry} lookup and the class whose annotation is read
-     * reflectively.
+     * own bean class.
      *
      * @param target the intercepted target instance
-     * @return the bean class whose class-level requirement applies to the target
+     * @return the bean class whose class-level annotations apply to the target
      */
     private static Class<?> resolveBeanClass(Object target) {
         Class<?> targetClass = target.getClass();
