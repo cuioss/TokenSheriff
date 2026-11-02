@@ -150,11 +150,12 @@ belongs to this Resource Server.
 |`sheriff.token.jwe.max-encrypted-token-size` |int |`32768` |Max JWE token size (bytes)
 |===
 
-NOTE: A configuration without any JWE property leaves JWE decryption disabled. A partial JWE
-configuration fails at application startup instead of being silently ignored: a JWE property set
-without the key source it belongs to (for example `keystore-password` without `keystore-path`, or
-`key-management-algorithms` without any key), a `decryption-keys.<kid>` entry without `.path`, and a
-`default-key-id` that names a key that was not loaded. Multi-key `decryption-keys.<kid>.*` entries are
+NOTE: A configuration without any JWE property leaves JWE decryption disabled. When at least one
+issuer is enabled, a partial JWE configuration fails at application startup instead of being silently
+ignored: a JWE property set without the key source it belongs to (for example `keystore-password`
+without `keystore-path`, or `key-management-algorithms` without any key), a `decryption-keys.<kid>`
+entry without `.path`, or a `default-key-id` that names a key that was not loaded. Without an enabled
+issuer the JWE properties are not validated at startup. Multi-key `decryption-keys.<kid>.*` entries are
 discovered from dotted property names only, not from environment-variable-only configuration.
 
 == Health Checks
