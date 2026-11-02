@@ -65,7 +65,9 @@ public final class SignatureVerificationUtil {
      * Verifies a signature using the provided public key and algorithm.
      * <p>
      * For ECDSA algorithms the raw JWS {@code r || s} signature is first range-checked
-     * ({@code 0 < r,s < n}) and then converted from IEEE P1363 to ASN.1/DER.
+     * ({@code 0 < r,s < n}) and then converted from IEEE P1363 to ASN.1/DER. The range check
+     * runs before the verifier is initialized with the key, so a malformed ECDSA signature
+     * raises its {@link SignatureException} before any key-related check of the platform verifier.
      *
      * @param signatureTemplateManager the manager providing pre-configured Signature instances
      * @param publicKey                the public key for verification
@@ -76,22 +78,25 @@ public final class SignatureVerificationUtil {
      * @throws InvalidKeyException                                    if the key is invalid for this algorithm,
      *                                                                including a non-EC key for an ECDSA algorithm
      * @throws SignatureException                                     if the signature verification process fails,
-     *                                                                or an ECDSA signature is malformed, its key
-     *                                                                lacks domain parameters, or its {@code r} or
-     *                                                                {@code s} component is out of range
+     *                                                                or an ECDSA signature is null or malformed,
+     *                                                                its key lacks domain parameters, or its
+     *                                                                {@code r} or {@code s} component is out of range
      * @throws SignatureTemplateManager.UnsupportedAlgorithmException if the algorithm is not supported
      */
     public static boolean verifySignature(SignatureTemplateManager signatureTemplateManager,
             PublicKey publicKey, String algorithm, byte[] dataBytes, byte[] signatureBytes)
             throws InvalidKeyException, SignatureException {
         Signature verifier = signatureTemplateManager.getSignatureInstance(algorithm);
+        boolean ecdsa = isEcdsaAlgorithm(algorithm);
+        if (ecdsa) {
+            checkEcdsaComponentRange(signatureBytes, publicKey);
+        }
         verifier.initVerify(publicKey);
         verifier.update(dataBytes);
 
-        // Range-check ECDSA signatures, then convert from IEEE P1363 to ASN.1/DER format
+        // Convert range-checked ECDSA signatures from IEEE P1363 to ASN.1/DER format
         byte[] verificationSignature = signatureBytes;
-        if (isEcdsaAlgorithm(algorithm)) {
-            checkEcdsaComponentRange(signatureBytes, publicKey);
+        if (ecdsa) {
             verificationSignature = EcdsaSignatureFormatConverter.toJCACompatibleSignature(signatureBytes, algorithm);
         }
 
@@ -109,11 +114,14 @@ public final class SignatureVerificationUtil {
      * @param signatureBytes the raw JWS ECDSA signature ({@code r || s})
      * @param publicKey      the public key, which must be an EC key carrying the curve order {@code n}
      * @throws InvalidKeyException if the key is not an EC public key
-     * @throws SignatureException  if the signature is empty or of odd length, the key lacks domain
+     * @throws SignatureException  if the signature is null, empty or of odd length, the key lacks domain
      *                             parameters, or a component is zero, negative, or not less than {@code n}
      */
     private static void checkEcdsaComponentRange(byte[] signatureBytes, PublicKey publicKey)
             throws InvalidKeyException, SignatureException {
+        if (signatureBytes == null) {
+            throw new SignatureException("Signature cannot be null");
+        }
         if (!(publicKey instanceof ECPublicKey ecPublicKey)) {
             throw new InvalidKeyException("ECDSA signature requires an EC public key");
         }

@@ -106,6 +106,15 @@ class SignatureVerificationUtilTest {
         }
 
         @Test
+        @DisplayName("Should reject a null ECDSA signature with SignatureException")
+        void shouldRejectNullSignature() {
+            PublicKey publicKey = InMemoryKeyMaterialHandler.getDefaultPublicKey(Algorithm.ES256);
+
+            var ex = assertThrows(SignatureException.class, () -> verify(publicKey, Algorithm.ES256, null));
+            assertEquals("Signature cannot be null", ex.getMessage(), "Message must name the null signature");
+        }
+
+        @Test
         @DisplayName("Should reject a non-EC key for an ECDSA algorithm with InvalidKeyException")
         void shouldRejectNonEcKey() {
             PublicKey rsaKey = InMemoryKeyMaterialHandler.getDefaultPublicKey(Algorithm.RS256);
