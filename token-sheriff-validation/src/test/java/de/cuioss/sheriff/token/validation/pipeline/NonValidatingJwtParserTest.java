@@ -165,39 +165,41 @@ class NonValidatingJwtParserTest {
 
     /**
      * The token is split with trailing empty segments kept, so a trailing dot adds a part instead of
-     * being silently dropped, and a JWS whose signature segment is empty stays rejected.
+     * being silently dropped, and a JWS whose signature segment is empty stays rejected. Both
+     * rejections are accounted for according to the decode mode: the normal decode logs one WARN
+     * and counts once, a quiet decode only counts, an opaque decode does neither.
      */
     @Nested
     @DisplayName("Empty Segment Tests (V-17b)")
     class EmptySegmentTests {
 
-        @Test
-        @DisplayName("Should reject a valid token with a trailing dot as INVALID_JWT_FORMAT")
-        void shouldRejectTrailingDot() {
-            SecurityEventCounter counter = new SecurityEventCounter();
-            NonValidatingJwtParser countingParser = NonValidatingJwtParser.builder().securityEventCounter(counter).build();
-
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> countingParser.decode(VALID_TOKEN + "."));
-
-            assertEquals(EventType.INVALID_JWT_FORMAT, ex.getEventType());
-            assertEquals(1, counter.getCount(EventType.INVALID_JWT_FORMAT), "Counted exactly once");
-            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
-                    JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT.resolveIdentifierString());
+        static Stream<Arguments> emptySegmentRejections() {
+            return Stream.of(
+                    Arguments.of("valid token with a trailing dot", VALID_TOKEN + ".",
+                            EventType.INVALID_JWT_FORMAT, JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT, ""),
+                    Arguments.of("empty signature segment (h.p.)", ENCODED_HEADER + "." + ENCODED_PAYLOAD + ".",
+                            EventType.INVALID_JWT_FORMAT, JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT,
+                            "empty signature segment"));
         }
 
-        @Test
-        @DisplayName("Should keep rejecting a token with an empty signature segment (h.p.) as INVALID_JWT_FORMAT")
-        void shouldRejectEmptySignatureSegment() {
+        static Stream<Arguments> modeMatrix() {
+            return ParserDecodeMode.crossProduct(emptySegmentRejections());
+        }
+
+        @ParameterizedTest(name = "{0}: {1}")
+        @MethodSource("modeMatrix")
+        @DisplayName("Should reject the token as INVALID_JWT_FORMAT, accounted for according to the decode mode")
+        void shouldRejectAndAccountPerDecodeMode(ParserDecodeMode mode, String site, String token,
+                EventType eventType, LogRecord warning, String expectedMessageFragment) {
             SecurityEventCounter counter = new SecurityEventCounter();
             NonValidatingJwtParser countingParser = NonValidatingJwtParser.builder().securityEventCounter(counter).build();
 
             TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> countingParser.decode(ENCODED_HEADER + "." + ENCODED_PAYLOAD + "."));
+                    () -> mode.decode(countingParser, token));
 
-            assertEquals(EventType.INVALID_JWT_FORMAT, ex.getEventType());
-            assertTrue(ex.getMessage().contains("empty signature segment"), ex.getMessage());
-            assertEquals(1, counter.getCount(EventType.INVALID_JWT_FORMAT), "Counted exactly once");
+            mode.assertAccounted(ex, counter, eventType, warning, site);
+            assertTrue(ex.getMessage().contains(expectedMessageFragment),
+                    "Rejection for " + site + " must come from its guard, but was: " + ex.getMessage());
         }
 
         @Test

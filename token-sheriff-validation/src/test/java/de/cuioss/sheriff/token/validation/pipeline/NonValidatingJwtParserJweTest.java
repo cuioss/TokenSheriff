@@ -571,7 +571,7 @@ class NonValidatingJwtParserJweTest {
 
     /**
      * The parser's own rejections of a decrypted inner token (oversized inner JWS, inner JWS with a
-     * wrong part count, nested JWE) and of a 5-part token without {@code enc} are accounted for
+     * wrong part count or an empty signature, nested JWE) and of a 5-part token without {@code enc} are accounted for
      * according to the decode mode, like every decryptor rejection: the normal decode logs one WARN
      * and counts once, a quiet decode only counts, an opaque decode does neither.
      */
@@ -597,6 +597,12 @@ class NonValidatingJwtParserJweTest {
                             SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
                             JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT),
                     Arguments.of("inner JWS with 4 parts", encrypt("aa.bb.cc.dd"),
+                            SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
+                            JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT),
+                    // Decodable header and payload, so only the empty-signature guard rejects it
+                    Arguments.of("inner JWS with empty signature",
+                            encrypt(noEncHeader + "." + Base64.getUrlEncoder().withoutPadding()
+                                    .encodeToString("{}".getBytes(StandardCharsets.UTF_8)) + "."),
                             SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
                             JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT),
                     Arguments.of("nested JWE", encrypt("aa.bb.cc.dd.ee"),
