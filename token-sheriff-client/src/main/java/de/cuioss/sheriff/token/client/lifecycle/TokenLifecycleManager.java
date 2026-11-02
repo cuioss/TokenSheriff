@@ -448,6 +448,7 @@ public class TokenLifecycleManager {
      * @throws de.cuioss.sheriff.token.client.token.RefreshTokenFamilyRevokedException if the family
      *                         refuses the advance as reuse; the session has been cleared first
      */
+    @SuppressWarnings("java:S107") // public compare-and-set contract: the refreshed material is passed field by field
     public Optional<StoredToken> applyRefresh(String sessionId, @Nullable String baseRefreshToken,
             String newAccessToken, @Nullable String newRefreshToken, @Nullable Instant newExpiresAt,
             @Nullable ConstraintBinding refreshedBinding, @Nullable String refreshedSubject,
