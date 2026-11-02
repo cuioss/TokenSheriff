@@ -61,7 +61,9 @@ import org.eclipse.microprofile.config.Config;
  * {@link InMemoryTokenStore} and a default {@link RefreshScheduler}. Both producers are
  * {@link DefaultBean}s: a relying party that declares its own bean of type {@link TokenStore} (for
  * example a shared, persistent store) or {@link RefreshScheduler} replaces the default, and the
- * {@link TokenLifecycleManager} is then wired with the application's bean.
+ * {@link TokenLifecycleManager} is then wired with the application's bean. The replacement only
+ * applies to a bean that is unqualified or annotated only with {@code @Named}; a bean with a custom
+ * qualifier does not replace the default.
  * <p>
  * The full guarded-exchange flow graph is also produced so an application can inject and drive the
  * engine end-to-end ({@code S0}): {@link AuthorizationCodeFlow} and {@link RefreshFlow} are assembled
@@ -161,8 +163,9 @@ public class TokenSheriffClientProducer {
 
     /**
      * Produces the default in-memory server-side token store. The producer is a {@link DefaultBean}:
-     * when the application declares its own bean of type {@link TokenStore}, that bean replaces this
-     * default and this producer is not used.
+     * when the application declares its own bean of type {@link TokenStore} that is unqualified or
+     * annotated only with {@code @Named}, that bean replaces this default and this producer is not
+     * used. A bean with a custom qualifier does not replace it.
      *
      * @return the default in-memory server-side token store
      */
@@ -175,8 +178,9 @@ public class TokenSheriffClientProducer {
 
     /**
      * Produces the proactive-refresh scheduler with its default refresh-lead window. The producer is a
-     * {@link DefaultBean}: when the application declares its own bean of type {@link RefreshScheduler},
-     * that bean replaces this default and this producer is not used.
+     * {@link DefaultBean}: when the application declares its own bean of type {@link RefreshScheduler}
+     * that is unqualified or annotated only with {@code @Named}, that bean replaces this default and
+     * this producer is not used. A bean with a custom qualifier does not replace it.
      *
      * @return the proactive-refresh scheduler with its default refresh-lead window
      */
