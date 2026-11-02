@@ -499,6 +499,42 @@ class DpopProofValidatorTest {
         }
 
         @Test
+        @DisplayName("Should reject an all-zero ES256 DPoP proof signature at the ECDSA range check (CVE-2022-21449)")
+        void shouldRejectAllZeroEs256ProofSignature() {
+            ECPublicKey ecPublicKey = (ECPublicKey) InMemoryKeyMaterialHandler.getDefaultPublicKey(Algorithm.ES256);
+            Map<String, Object> jwkMap = ecPublicKeyToJwkMap(ecPublicKey, "P-256", 32);
+            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+
+            String rawAccessToken = "some.access.token";
+            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+            String headerJson = """
+                    {"typ":"dpop+jwt","alg":"ES256","jwk":%s}""".formatted(mapToJson(jwkMap));
+            String bodyJson = """
+                    {"jti":"%s","iat":%d,"ath":"%s","htm":"GET","htu":"https://resource.example.org/protectedresource"}"""
+                    .formatted(UUID.randomUUID().toString(), System.currentTimeMillis() / 1000, computeAth(rawAccessToken));
+            String encodedHeader = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+            String encodedBody = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(bodyJson.getBytes(StandardCharsets.UTF_8));
+            String zeroSignature = Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[64]);
+            String dpopProof = encodedHeader + "." + encodedBody + "." + zeroSignature;
+
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)),
+                    "https://resource.example.org/protectedresource", "GET");
+
+            var ex = assertThrows(TokenValidationException.class,
+                    () -> validator.validate(request, accessToken, rawAccessToken));
+            assertAll("All-zero ES256 proof must be rejected by the range check",
+                    () -> assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType()),
+                    () -> assertEquals(1, securityEventCounter.getCount(EventType.DPOP_PROOF_INVALID),
+                            "DPOP_PROOF_INVALID must be counted exactly once"),
+                    () -> assertTrue(ex.getMessage().contains("ECDSA signature component out of range"),
+                            "Message must name the range check: " + ex.getMessage()));
+        }
+
+        @Test
         @DisplayName("Should pass with valid DPoP proof using EdDSA (Ed25519)")
         void shouldPassWithValidDpopProofUsingEdDSA() {
             PrivateKey edPrivateKey = InMemoryKeyMaterialHandler.getDefaultPrivateKey(Algorithm.ED_DSA);
