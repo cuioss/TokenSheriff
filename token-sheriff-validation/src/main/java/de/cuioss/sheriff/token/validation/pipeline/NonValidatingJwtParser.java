@@ -129,6 +129,11 @@ public class NonValidatingJwtParser {
     private static final CuiLogger LOGGER = new CuiLogger(NonValidatingJwtParser.class);
 
     /**
+     * Detail for the {@code INVALID_JWT_FORMAT} record when a 3-part JWS has an empty signature segment.
+     */
+    private static final String EMPTY_SIGNATURE_SEGMENT = "3 parts with an empty signature segment";
+
+    /**
      * Configuration for the parser, containing all security settings.
      */
     private final ParserConfig config;
@@ -287,8 +292,9 @@ public class NonValidatingJwtParser {
         Preconditions.checkArgument(token.getBytes(StandardCharsets.UTF_8).length <= config.getMaxTokenSize(),
                 "TokenStringValidator precondition: token size within limits (max: %s)", config.getMaxTokenSize());
 
-        // Split token and validate format
-        String[] parts = token.split("\\.");
+        // Split token and validate format. The negative limit keeps trailing empty segments, so a
+        // trailing dot ("h.p.s.") adds a part instead of being silently dropped.
+        String[] parts = token.split("\\.", -1);
 
         if (parts.length == 5) {
             // JWE token (5 parts: header.encryptedKey.iv.ciphertext.authTag)
@@ -296,16 +302,11 @@ public class NonValidatingJwtParser {
         }
 
         if (parts.length != 3) {
-            if (mode.logWarnings) {
-                LOGGER.warn(JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT, parts.length);
-            }
-            if (mode.trackSecurityEvents) {
-                securityEventCounter.increment(SecurityEventCounter.EventType.INVALID_JWT_FORMAT);
-            }
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
-                    JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT.format(parts.length)
-            );
+            throw rejectInvalidFormat(parts.length, mode.logWarnings, mode.trackSecurityEvents);
+        }
+        if (parts[2].isEmpty()) {
+            // "h.p." is a JWS without signature; reject it as before rather than accepting an unsigned shape
+            throw rejectInvalidFormat(EMPTY_SIGNATURE_SEGMENT, mode.logWarnings, mode.trackSecurityEvents);
         }
 
         try {
@@ -397,7 +398,8 @@ public class NonValidatingJwtParser {
      * Returns the 3 parts on success, throws {@link TokenValidationException} otherwise.
      */
     private String[] validateInnerJwsParts(String innerJws, boolean logWarnings) {
-        String[] innerParts = innerJws.split("\\.");
+        // Negative limit: keep trailing empty segments so a trailing dot is not silently dropped
+        String[] innerParts = innerJws.split("\\.", -1);
         if (innerParts.length == 5) {
             if (logWarnings) {
                 LOGGER.warn(JWTValidationLogMessages.WARN.JWE_NESTED_NOT_ALLOWED);
@@ -411,7 +413,35 @@ public class NonValidatingJwtParser {
                     SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
                     "Inner JWS from JWE has invalid format: expected 3 parts but got %d".formatted(innerParts.length));
         }
+        if (innerParts[2].isEmpty()) {
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
+                    "Inner JWS from JWE has invalid format: " + EMPTY_SIGNATURE_SEGMENT);
+        }
         return innerParts;
+    }
+
+    /**
+     * Rejects a token whose part structure is not a valid JWS or JWE, accounting for it according
+     * to the decode mode.
+     *
+     * @param detail               what was found instead of a valid structure (part count or description)
+     * @param logWarnings          whether the rejection is logged
+     * @param trackSecurityEvents  whether the rejection is counted
+     * @return never returns normally; declared so callers can write {@code throw rejectInvalidFormat(...)}
+     * @throws TokenValidationException always, with event type {@code INVALID_JWT_FORMAT}
+     */
+    private TokenValidationException rejectInvalidFormat(Object detail, boolean logWarnings,
+            boolean trackSecurityEvents) {
+        if (logWarnings) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT, detail);
+        }
+        if (trackSecurityEvents) {
+            securityEventCounter.increment(SecurityEventCounter.EventType.INVALID_JWT_FORMAT);
+        }
+        throw new TokenValidationException(
+                SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
+                JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT.format(detail));
     }
 
 

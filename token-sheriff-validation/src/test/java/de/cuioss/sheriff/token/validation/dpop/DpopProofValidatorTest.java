@@ -170,6 +170,26 @@ class DpopProofValidatorTest {
     }
 
     @Test
+    @DisplayName("Should reject an otherwise valid proof with a trailing dot (V-17b)")
+    void shouldRejectProofWithTrailingDot() {
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
+        Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+        String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+        String rawAccessToken = "some.access.token";
+        String requestUri = "https://resource.example.org/protectedresource";
+        DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+        String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, "GET", requestUri) + ".";
+        AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(dpopProof)), requestUri, "GET");
+
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(request, accessToken, rawAccessToken));
+        assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
+        assertTrue(ex.getMessage().contains("must have 3 parts"), ex.getMessage());
+    }
+
+    @Test
     void shouldRejectWrongTypHeader() {
         KeyPair keyPair = FIXTURE_KEY_PAIR;
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());

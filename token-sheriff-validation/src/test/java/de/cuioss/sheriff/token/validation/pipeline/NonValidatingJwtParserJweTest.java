@@ -600,6 +600,47 @@ class NonValidatingJwtParserJweTest {
         }
 
         @Test
+        @DisplayName("Should reject a valid JWE with a trailing dot (6 parts) as INVALID_JWT_FORMAT (V-17b)")
+        void shouldRejectJweWithTrailingDot() {
+            String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                    rsaEncryptionKeyPair.getPublic(),
+                    "RS256", "RSA-OAEP", "A256GCM", ISSUER, null);
+
+            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .jweDecryptionConfig(JweDecryptionConfig.builder()
+                            .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                            .build())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> parser.decode(jwe + "."));
+            assertEquals(SecurityEventCounter.EventType.INVALID_JWT_FORMAT, ex.getEventType());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.INVALID_JWT_FORMAT));
+        }
+
+        @Test
+        @DisplayName("Should reject a JWE whose decrypted inner JWS has a trailing dot as INVALID_JWT_FORMAT (V-17b)")
+        void shouldRejectInnerJwsWithTrailingDot() {
+            String innerJws = JweTestTokenFactory.createSignedJws(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(), "RS256", ISSUER) + ".";
+            String jwe = JweTestTokenFactory.encryptAsJwe(
+                    innerJws, rsaEncryptionKeyPair.getPublic(), "RSA-OAEP", "A256GCM", null);
+
+            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .jweDecryptionConfig(JweDecryptionConfig.builder()
+                            .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                            .build())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> parser.decode(jwe));
+            assertEquals(SecurityEventCounter.EventType.INVALID_JWT_FORMAT, ex.getEventType());
+        }
+
+        @Test
         @DisplayName("Should reject 4-part tokens")
         void shouldReject4PartTokens() {
             NonValidatingJwtParser parser = NonValidatingJwtParser.builder()

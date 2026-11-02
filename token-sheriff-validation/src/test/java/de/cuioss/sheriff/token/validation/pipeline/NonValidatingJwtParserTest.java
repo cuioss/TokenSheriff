@@ -162,6 +162,54 @@ class NonValidatingJwtParserTest {
         }
     }
 
+    /**
+     * The token is split with trailing empty segments kept, so a trailing dot adds a part instead of
+     * being silently dropped, and a JWS whose signature segment is empty stays rejected.
+     */
+    @Nested
+    @DisplayName("Empty Segment Tests (V-17b)")
+    class EmptySegmentTests {
+
+        @Test
+        @DisplayName("Should reject a valid token with a trailing dot as INVALID_JWT_FORMAT")
+        void shouldRejectTrailingDot() {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            NonValidatingJwtParser countingParser = NonValidatingJwtParser.builder().securityEventCounter(counter).build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> countingParser.decode(VALID_TOKEN + "."));
+
+            assertEquals(EventType.INVALID_JWT_FORMAT, ex.getEventType());
+            assertEquals(1, counter.getCount(EventType.INVALID_JWT_FORMAT), "Counted exactly once");
+            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT.resolveIdentifierString());
+        }
+
+        @Test
+        @DisplayName("Should keep rejecting a token with an empty signature segment (h.p.) as INVALID_JWT_FORMAT")
+        void shouldRejectEmptySignatureSegment() {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            NonValidatingJwtParser countingParser = NonValidatingJwtParser.builder().securityEventCounter(counter).build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> countingParser.decode(ENCODED_HEADER + "." + ENCODED_PAYLOAD + "."));
+
+            assertEquals(EventType.INVALID_JWT_FORMAT, ex.getEventType());
+            assertTrue(ex.getMessage().contains("empty signature segment"), ex.getMessage());
+            assertEquals(1, counter.getCount(EventType.INVALID_JWT_FORMAT), "Counted exactly once");
+        }
+
+        @Test
+        @DisplayName("Should pass the part count for an empty header segment and fail at the decode stage")
+        void shouldReachDecodeStageForInteriorEmptySegment() {
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> parser.decode("." + ENCODED_PAYLOAD + "." + ENCODED_SIGNATURE));
+
+            assertEquals(EventType.FAILED_TO_DECODE_JWT, ex.getEventType(),
+                    "A non-trailing empty segment is a decode failure, not a part-count failure");
+        }
+    }
+
     @Nested
     @DisplayName("Missing Field Tests")
     class MissingFieldTests {

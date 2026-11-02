@@ -244,7 +244,8 @@ public class DpopProofValidator {
      * @throws TokenValidationException if the JWT structure is invalid or cannot be decoded
      */
     private DecodedDpopProof decodeDpopProofJwt(String dpopProofString) {
-        String[] parts = dpopProofString.split("\\.");
+        // Negative limit: keep trailing empty segments so "h.p.s." is rejected as a 4-part proof
+        String[] parts = dpopProofString.split("\\.", -1);
         if (parts.length != 3) {
             rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
                     "DPoP proof must have 3 parts (header.payload.signature) but has %s".formatted(parts.length));
