@@ -165,12 +165,20 @@ class ValidationContextTest {
         }
 
         @Test
-        @DisplayName("Should not expire at exact clock skew boundary")
-        void shouldNotExpireAtExactBoundary() {
+        @DisplayName("Should expire at the exact clock skew boundary (now == exp + skew, RFC 7519 4.1.4)")
+        void shouldExpireAtExactBoundary() {
             var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW, null);
-            // Token expired exactly 60 seconds ago, clock skew is 60s
-            // expiration + clockSkew == currentTime -> isBefore returns false
-            var expiration = FIXED_TIME.minusSeconds(60);
+            // expiration + clockSkew == currentTime: the current time is no longer before exp + skew
+            var expiration = FIXED_TIME.minusSeconds(CLOCK_SKEW);
+            assertTrue(ctx.isExpired(expiration));
+        }
+
+        @Test
+        @DisplayName("Should not expire one second before the clock skew boundary")
+        void shouldNotExpireOneSecondBeforeBoundary() {
+            var ctx = new ValidationContext(FIXED_TIME, CLOCK_SKEW, null);
+            // expiration + clockSkew == currentTime + 1s: still valid
+            var expiration = FIXED_TIME.minusSeconds(CLOCK_SKEW - 1L);
             assertFalse(ctx.isExpired(expiration));
         }
 

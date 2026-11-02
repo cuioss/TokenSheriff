@@ -86,6 +86,23 @@ class ExpirationValidatorTest {
     }
 
     @Test
+    @DisplayName("Should reject a token at exactly exp + clock skew as expired (V-17c)")
+    void shouldFailValidationAtExactExpirationPlusClockSkew() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        OffsetDateTime fixedTime = OffsetDateTime.now();
+        OffsetDateTime boundaryExpiration = fixedTime.minusSeconds(60);
+        ValidationContext testContext = new ValidationContext(fixedTime, 60, null);
+        tokenHolder.withClaim(ClaimName.EXPIRATION.getName(),
+                ClaimValue.forDateTime(String.valueOf(boundaryExpiration.toEpochSecond()), boundaryExpiration));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> validator.validateNotExpired(token, testContext));
+        assertEquals(SecurityEventCounter.EventType.TOKEN_EXPIRED, exception.getEventType());
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_EXPIRED));
+    }
+
+    @Test
     @DisplayName("Should pass validation when no not-before claim present")
     void shouldPassValidationWhenNoNotBeforeClaimPresent() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
