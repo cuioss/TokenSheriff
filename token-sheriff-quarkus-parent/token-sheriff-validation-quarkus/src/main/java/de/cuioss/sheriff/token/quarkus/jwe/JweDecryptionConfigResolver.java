@@ -65,9 +65,12 @@ public class JweDecryptionConfigResolver {
     /**
      * Resolves JWE decryption configuration from properties.
      *
-     * @return the resolved config, or {@code null} if no JWE property is configured
+     * @return the resolved config, or {@code null} if no JWE property is configured. Multi-key
+     *         entries given only as environment variables are not discovered, so a configuration
+     *         consisting solely of such entries also yields {@code null} and JWE stays unconfigured
      * @throws IllegalStateException if a JWE property is set without its owning key source,
-     *         a multi-key entry has no path, or JWE is explicitly configured but key loading
+     *         a multi-key entry (including the bare form {@code decryption-keys.{kid}}) has no
+     *         {@code .path} value, or JWE is explicitly configured but key loading
      *         fails (including a {@code default-key-id} that names no loaded key)
      */
     public @Nullable JweDecryptionConfig resolveJweDecryptionConfig() {
@@ -201,6 +204,13 @@ public class JweDecryptionConfigResolver {
      * Discovers the multi-key entries configured under
      * {@code sheriff.token.jwe.decryption-keys.{kid}.*}.
      *
+     * <p>
+     * A bare property {@code sheriff.token.jwe.decryption-keys.{kid}} (no further dot segment)
+     * is not found by the dotted kid discovery, so it is collected separately and treated as a
+     * discovered kid. It therefore fails fast for a missing {@code .path} instead of being
+     * silently ignored; when the same kid also has a {@code .path} value the bare property
+     * changes nothing.
+     *
      * @return the key path per kid, in discovery order
      * @throws IllegalStateException if a discovered kid has no {@code .path} value
      */
@@ -208,7 +218,17 @@ public class JweDecryptionConfigResolver {
         Map<String, String> keyPaths = new LinkedHashMap<>();
         String multiKeyPrefix = JwtPropertyKeys.JWE.MULTI_KEY_PREFIX;
 
-        for (String kid : ConfigValueParser.discoverNameSegments(config, multiKeyPrefix)) {
+        Set<String> kids = new LinkedHashSet<>(ConfigValueParser.discoverNameSegments(config, multiKeyPrefix));
+        for (String propertyName : config.getPropertyNames()) {
+            if (propertyName.startsWith(multiKeyPrefix)) {
+                String remainder = propertyName.substring(multiKeyPrefix.length());
+                if (!remainder.isEmpty() && remainder.indexOf('.') < 0) {
+                    kids.add(remainder);
+                }
+            }
+        }
+
+        for (String kid : kids) {
             String pathProperty = multiKeyPrefix + kid + ".path";
             String path = config.getOptionalValue(pathProperty, String.class)
                     .orElseThrow(() -> new IllegalStateException(

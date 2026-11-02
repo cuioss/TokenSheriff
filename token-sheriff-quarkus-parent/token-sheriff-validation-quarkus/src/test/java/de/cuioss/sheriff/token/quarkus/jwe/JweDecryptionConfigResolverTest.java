@@ -328,6 +328,33 @@ class JweDecryptionConfigResolverTest {
     }
 
     @Test
+    @DisplayName("Should throw when only a bare decryption-keys.<kid> value is set without .path")
+    void shouldThrowWhenOnlyBareMultiKeyPropertySet() {
+        String bareProperty = JwtPropertyKeys.JWE.MULTI_KEY_PREFIX + "k1";
+        JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(
+                new TestConfig(Map.of(bareProperty, "/some/path.pem")));
+
+        var exception = assertThrows(IllegalStateException.class,
+                resolver::resolveJweDecryptionConfig);
+        assertTrue(exception.getMessage().contains(bareProperty + ".path"),
+                "Should name the missing path property: " + exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("Should still load a multi-key entry given in the dotted .path form")
+    void shouldLoadDottedPathFormForSameKid() throws Exception {
+        Path pemFile = createRsaPemFile("dotted-k1.pem");
+        JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(
+                new TestConfig(Map.of(JwtPropertyKeys.JWE.MULTI_KEY_PREFIX + "k1.path", pemFile.toString())));
+
+        JweDecryptionConfig result = resolver.resolveJweDecryptionConfig();
+
+        assertNotNull(result);
+        assertEquals(1, result.getKeyCount());
+        assertTrue(result.resolveKey("k1").isPresent());
+    }
+
+    @Test
     @DisplayName("Should not turn an env-only decryption-keys path into a multi-key entry")
     void shouldNotDiscoverEnvOnlyMultiKey() throws Exception {
         Path pemFile = createRsaPemFile("env-only.pem");

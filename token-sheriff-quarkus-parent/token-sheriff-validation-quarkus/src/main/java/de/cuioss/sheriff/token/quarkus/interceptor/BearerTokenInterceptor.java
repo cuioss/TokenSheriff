@@ -204,7 +204,7 @@ public class BearerTokenInterceptor {
 
         // Fail closed: missing annotation means security configuration error
         throw new IllegalStateException(
-                "@BearerAuth annotation not found on method '%s' or its declaring class. "
+                "@BearerAuth annotation not found on method '%s' or its bean class. "
                         .formatted(ctx.getMethod().getName())
                         + "Security interceptor cannot proceed without authentication configuration.");
     }
