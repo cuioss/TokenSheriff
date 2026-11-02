@@ -38,7 +38,8 @@ import java.security.interfaces.ECPublicKey;
 import java.util.Base64;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for {@link KeyProcessor} EC key processing: the {@code alg} of an EC JWK must equal the

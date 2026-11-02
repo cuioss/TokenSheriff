@@ -25,6 +25,7 @@ import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import de.cuioss.tools.logging.LogRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -460,6 +461,132 @@ class NonValidatingJwtParserTest {
             assertEquals(0, counter.getCount(EventType.FAILED_TO_DECODE_JWT), "Not counted: " + site);
             assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty(),
                     "No WARN may be written: " + site);
+        }
+    }
+
+    /**
+     * An oversized decoded part and a nesting-depth or array-size violation are accounted for
+     * according to the decode mode: the normal decode logs one WARN and counts once, a quiet decode
+     * only counts, an opaque decode does neither. The event type is the same in every mode.
+     */
+    @Nested
+    @DisplayName("Size and Structural-Bounds Accounting per Decode Mode")
+    class BoundsRejectionAccounting {
+
+        private static final ParserConfig SMALL_BOUNDS = ParserConfig.builder()
+                .maxPayloadSize(1024)
+                .maxTokenSize(100000)
+                .maxNestingDepth(5)
+                .maxArraySize(10)
+                .build();
+
+        static Stream<Arguments> boundsRejections() {
+            String oversizedHeader = "{\"alg\":\"RS256\",\"data\":\"" + "a".repeat(2000) + "\"}";
+            String deepHeader = "{\"alg\":\"RS256\",\"n\":{\"n\":{\"n\":{\"n\":{\"n\":{}}}}}}";
+            StringBuilder arrayHeader = new StringBuilder("{\"alg\":\"RS256\",\"a\":[0");
+            for (int i = 1; i < 20; i++) {
+                arrayHeader.append(',').append(i);
+            }
+            arrayHeader.append("]}");
+            return Stream.of(
+                    Arguments.of("oversized decoded part", jws(oversizedHeader),
+                            EventType.DECODED_PART_SIZE_EXCEEDED,
+                            JWTValidationLogMessages.WARN.DECODED_PART_SIZE_EXCEEDED),
+                    Arguments.of("nesting depth exceeded", jws(deepHeader),
+                            EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED,
+                            JWTValidationLogMessages.WARN.JSON_STRUCTURE_BOUNDS_EXCEEDED),
+                    Arguments.of("array size exceeded", jws(arrayHeader.toString()),
+                            EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED,
+                            JWTValidationLogMessages.WARN.JSON_STRUCTURE_BOUNDS_EXCEEDED));
+        }
+
+        static Stream<Arguments> modeMatrix() {
+            return ParserDecodeMode.crossProduct(boundsRejections());
+        }
+
+        private static String jws(String headerJson) {
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(headerJson.getBytes(StandardCharsets.UTF_8))
+                    + "." + ENCODED_PAYLOAD + "." + ENCODED_SIGNATURE;
+        }
+
+        @ParameterizedTest(name = "{0}: {1}")
+        @MethodSource("modeMatrix")
+        @DisplayName("The rejection is logged and counted according to the decode mode")
+        void shouldAccountPerDecodeMode(ParserDecodeMode mode, String site, String token,
+                EventType eventType, LogRecord warning) {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            NonValidatingJwtParser boundedParser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .config(SMALL_BOUNDS)
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> mode.decode(boundedParser, token));
+
+            mode.assertAccounted(ex, counter, eventType, warning, site);
+        }
+    }
+
+    /**
+     * The three decode modes of {@link NonValidatingJwtParser} and the accounting each one owes a
+     * rejection: {@code NORMAL} logs one WARN and counts once, {@code QUIET} counts once without a
+     * WARN, {@code OPAQUE} neither logs nor counts.
+     */
+    enum ParserDecodeMode {
+        NORMAL(true, true),
+        QUIET(false, true),
+        OPAQUE(false, false);
+
+        private final boolean logs;
+        private final boolean counts;
+
+        ParserDecodeMode(boolean logs, boolean counts) {
+            this.logs = logs;
+            this.counts = counts;
+        }
+
+        /**
+         * Prefixes every row of {@code rows} with each decode mode.
+         *
+         * @param rows the rejection rows
+         * @return one row per mode and rejection, the mode first
+         */
+        static Stream<Arguments> crossProduct(Stream<Arguments> rows) {
+            var materialized = rows.toList();
+            return Stream.of(values()).flatMap(mode -> materialized.stream().map(row -> {
+                Object[] original = row.get();
+                Object[] prefixed = new Object[original.length + 1];
+                prefixed[0] = mode;
+                System.arraycopy(original, 0, prefixed, 1, original.length);
+                return Arguments.of(prefixed);
+            }));
+        }
+
+        DecodedJwt decode(NonValidatingJwtParser parser, String token) {
+            return switch (this) {
+                case NORMAL -> parser.decode(token);
+                case QUIET -> parser.decodeQuietly(token);
+                case OPAQUE -> parser.decodeOpaqueToken(token);
+            };
+        }
+
+        /**
+         * Asserts the rejection carries {@code eventType}, is counted exactly once when this mode
+         * counts and never otherwise, and is the single WARN when this mode logs and absent otherwise.
+         */
+        void assertAccounted(TokenValidationException ex, SecurityEventCounter counter, EventType eventType,
+                LogRecord warning, String site) {
+            assertEquals(eventType, ex.getEventType(), site);
+            assertEquals(counts ? 1 : 0, counter.getCount(eventType),
+                    (counts ? "Counted exactly once in " : "Not counted in ") + this + ": " + site);
+            var warnings = TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN);
+            if (logs) {
+                assertEquals(1, warnings.size(), "Exactly one WARN in " + this + ": " + site);
+                assertTrue(warnings.getFirst().getMessage().contains(warning.resolveIdentifierString()),
+                        warnings.getFirst().getMessage());
+            } else {
+                assertTrue(warnings.isEmpty(), "No WARN may be written in " + this + ": " + site);
+            }
         }
     }
 

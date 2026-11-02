@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.validation.pipeline;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.JwkKey;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
@@ -565,6 +566,73 @@ class NonValidatingJwtParserJweTest {
                     "Not counted: " + site);
             assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty(),
                     "No WARN may be written: " + site);
+        }
+    }
+
+    /**
+     * The parser's own rejections of a decrypted inner token (oversized inner JWS, inner JWS with a
+     * wrong part count, nested JWE) and of a 5-part token without {@code enc} are accounted for
+     * according to the decode mode, like every decryptor rejection: the normal decode logs one WARN
+     * and counts once, a quiet decode only counts, an opaque decode does neither.
+     */
+    @Nested
+    @DisplayName("Decode Mode Honoured by Inner-Token Rejections")
+    class InnerTokenRejectionAccounting {
+
+        private static final KeyPair RECIPIENT = JweTestTokenFactory.generateRsaKeyPair();
+        private static final ParserConfig SMALL_TOKEN_SIZE = ParserConfig.builder().maxTokenSize(4096).build();
+
+        static Stream<Arguments> innerRejections() {
+            String noEncHeader = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString("{\"alg\":\"RS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
+            return Stream.of(
+                    // zip=DEF keeps the compact JWE under the token-size limit while the inner JWS exceeds it
+                    Arguments.of("oversized inner JWS",
+                            JweTestTokenFactory.createCompressedJweFromPlaintext(
+                                    "a".repeat(5000).getBytes(StandardCharsets.UTF_8),
+                                    RECIPIENT.getPublic(), "RSA-OAEP", "A256GCM"),
+                            SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED,
+                            JWTValidationLogMessages.WARN.TOKEN_SIZE_EXCEEDED),
+                    Arguments.of("inner JWS with 2 parts", encrypt("aa.bb"),
+                            SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
+                            JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT),
+                    Arguments.of("inner JWS with 4 parts", encrypt("aa.bb.cc.dd"),
+                            SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
+                            JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT),
+                    Arguments.of("nested JWE", encrypt("aa.bb.cc.dd.ee"),
+                            SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                            JWTValidationLogMessages.WARN.JWE_NESTED_NOT_ALLOWED),
+                    Arguments.of("5-part token without enc", noEncHeader + ".b.c.d.e",
+                            SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED));
+        }
+
+        static Stream<Arguments> modeMatrix() {
+            return NonValidatingJwtParserTest.ParserDecodeMode.crossProduct(innerRejections());
+        }
+
+        private static String encrypt(String innerToken) {
+            return JweTestTokenFactory.encryptAsJwe(innerToken, RECIPIENT.getPublic(), "RSA-OAEP", "A256GCM", null);
+        }
+
+        @ParameterizedTest(name = "{0}: {1}")
+        @MethodSource("modeMatrix")
+        @DisplayName("The rejection is logged and counted according to the decode mode")
+        void shouldAccountPerDecodeMode(NonValidatingJwtParserTest.ParserDecodeMode mode, String site, String token,
+                SecurityEventCounter.EventType eventType, LogRecord warning) {
+            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .config(SMALL_TOKEN_SIZE)
+                    .jweDecryptionConfig(JweDecryptionConfig.builder()
+                            .defaultDecryptionKey(RECIPIENT.getPrivate())
+                            .compressionEnabled(true)
+                            .build())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> mode.decode(parser, token));
+
+            mode.assertAccounted(ex, counter, eventType, warning, site);
         }
     }
 
