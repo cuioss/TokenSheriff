@@ -311,10 +311,35 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                     if (failure != null) {
                         reserved.completeExceptionally(failure);
                     } else {
-                        reserved.complete(loaderStatus);
+                        reserved.complete(completionStatus(loaderStatus, claimedEpoch));
                     }
                 });
         return reserved;
+    }
+
+    /**
+     * Decides the value an initialization's future completes with, re-checking under
+     * {@link #lifecycleLock} whether the initialization is still live. The status returned by the
+     * initialization body or by {@link #handleUnexpectedInitializationFailure(Throwable, long)} is
+     * decided under the lock, but a {@link #close()} can run after that lock is released and before the
+     * future completes; the closed loader then reports {@link LoaderStatus#UNDEFINED}, and so must the
+     * future. The decision is the point at which the initialization is ordered against
+     * {@code close()}: a {@code close()} that runs after it closes a loader whose initialization had
+     * already finished. The future itself is completed outside the lock, so its dependent stages never
+     * run while the lock is held.
+     *
+     * @param loaderStatus the status the initialization reached
+     * @param claimedEpoch the {@link #epoch} the initialization was claimed under
+     * @return {@code loaderStatus} while the initialization is still live, otherwise
+     *         {@link LoaderStatus#UNDEFINED}
+     */
+    private LoaderStatus completionStatus(LoaderStatus loaderStatus, long claimedEpoch) {
+        lifecycleLock.lock();
+        try {
+            return isLive(claimedEpoch) ? loaderStatus : LoaderStatus.UNDEFINED;
+        } finally {
+            lifecycleLock.unlock();
+        }
     }
 
     /**

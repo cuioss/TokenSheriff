@@ -365,6 +365,7 @@ class NonValidatingJwtParserTest {
             if (decoderCause) {
                 assertInstanceOf(IllegalArgumentException.class, ex.getCause(),
                         "Non-vacuity: the part must be rejected by the Base64Url decoder: " + site);
+                assertEquals("Failed to decode Base64Url part: invalid Base64Url encoding", ex.getMessage(), site);
                 assertFalse(ex.getMessage().contains(INVALID_BASE64URL_PART), ex.getMessage());
             }
         }

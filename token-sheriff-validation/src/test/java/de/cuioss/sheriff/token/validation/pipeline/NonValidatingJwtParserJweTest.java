@@ -541,6 +541,20 @@ class NonValidatingJwtParserJweTest {
 
         @ParameterizedTest(name = "{0}")
         @MethodSource("undecodableJweHeaders")
+        @DisplayName("A quiet decode counts once but does not log")
+        void quietDecodeShouldCountButNotLog(String site, String token, boolean decoderCause) {
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> parser.decodeQuietly(token));
+
+            assertRejection(ex, site, decoderCause);
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT),
+                    "Counted exactly once: " + site);
+            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty(),
+                    "No WARN may be written: " + site);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("undecodableJweHeaders")
         @DisplayName("An opaque decode neither logs nor counts")
         void opaqueDecodeShouldNotLogOrCount(String site, String token, boolean decoderCause) {
             TokenValidationException ex = assertThrows(TokenValidationException.class,

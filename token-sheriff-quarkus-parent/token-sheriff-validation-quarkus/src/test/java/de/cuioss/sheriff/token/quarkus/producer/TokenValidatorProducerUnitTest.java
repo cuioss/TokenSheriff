@@ -153,11 +153,14 @@ class TokenValidatorProducerUnitTest {
         void shouldPropagateOtherCloseFailure() {
             CancelFailingExecutor cacheExecutor = new CancelFailingExecutor(new IllegalStateException("unexpected"));
             TokenValidatorProducer producer = new TokenValidatorProducer(new TestConfig(Map.of()), null, null);
-            producer.tokenValidator = validatorOwning(new RecordingJwksLoader(), cacheExecutor);
+            RecordingJwksLoader loader = new RecordingJwksLoader();
+            producer.tokenValidator = validatorOwning(loader, cacheExecutor);
             try {
                 IllegalStateException failure = assertThrows(IllegalStateException.class, producer::destroy,
                         "only the documented SecurityException is contained");
                 assertEquals("unexpected", failure.getMessage());
+                assertEquals(1, loader.getCloseCount(),
+                        "the validator's JWKS loader must still be closed when the close failure propagates");
             } finally {
                 cacheExecutor.shutdownNow();
             }
