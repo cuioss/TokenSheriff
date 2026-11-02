@@ -394,4 +394,15 @@ class BearerAuthSpecIT extends BaseIntegrationTest {
                 .then()
                 .statusCode(403);
     }
+
+    @Test
+    @Order(55)
+    @DisplayName("Class-level — request without a token is refused for the class-only method")
+    void classLevelClassOnlyRejectsMissingToken() {
+        given()
+                .when()
+                .get("/jwt/class-level/class-only")
+                .then()
+                .statusCode(401);
+    }
 }
