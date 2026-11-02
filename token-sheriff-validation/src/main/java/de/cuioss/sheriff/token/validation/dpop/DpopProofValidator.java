@@ -58,10 +58,13 @@ import java.util.Optional;
  *   <li>Extraction of {@code cnf.jkt} from the access token</li>
  *   <li>DPoP proof JWT structure (typ, alg, jwk)</li>
  *   <li>DPoP proof signature using embedded JWK</li>
- *   <li>jti uniqueness (replay protection)</li>
+ *   <li>jti presence</li>
  *   <li>iat freshness check</li>
  *   <li>ath (access token hash) match</li>
+ *   <li>htm/htu match against the HTTP request</li>
  *   <li>JWK Thumbprint match against cnf.jkt</li>
+ *   <li>jti uniqueness (replay protection) — last, so that only a proof that passed every
+ *       stateless check consumes its {@code jti}</li>
  * </ol>
  * <p>
  * DPoP proof JWTs are decoded manually (not via {@code NonValidatingJwtParser})
@@ -278,7 +281,8 @@ public class DpopProofValidator {
 
     /**
      * Validates the DPoP proof header fields (alg, jwk), verifies the signature,
-     * validates claims, and checks the JWK thumbprint against the expected value.
+     * validates claims, checks the JWK thumbprint against the expected value and finally
+     * records the proof's {@code jti} for replay protection.
      */
     private void validateDpopProofHeaderAndSignature(DecodedDpopProof decoded, String expectedThumbprint,
             String rawAccessToken, AccessTokenRequest request) {
@@ -303,7 +307,7 @@ public class DpopProofValidator {
         // Validate DPoP proof signature
         verifyDpopSignature(decoded.parts().toArray(String[]::new), proofPublicKey, alg);
 
-        validateDpopClaims(decoded.bodyMap(), rawAccessToken, request);
+        String jti = validateDpopClaims(decoded.bodyMap(), rawAccessToken, request);
 
         // Validate JWK Thumbprint.
         // JwkThumbprintUtil declares IllegalArgumentException for an unsupported 'kty' or a missing
@@ -324,30 +328,37 @@ public class DpopProofValidator {
                             .formatted(computedThumbprint, expectedThumbprint));
         }
 
+        // Replay protection runs last: a proof rejected by any stateless check above must not
+        // consume its jti, otherwise it would burn the replay slot of the legitimate proof.
+        if (!replayProtection.checkAndStore(jti)) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_REPLAY_DETECTED, jti);
+            securityEventCounter.increment(EventType.DPOP_REPLAY_DETECTED);
+            throw new TokenValidationException(EventType.DPOP_REPLAY_DETECTED,
+                    "DPoP proof replay detected for jti: %s".formatted(jti));
+        }
+
         LOGGER.debug("DPoP proof validation successful");
     }
 
     /**
-     * Validates the {@code jti}, {@code iat}, {@code ath}, {@code htu}, and {@code htm} claims
-     * of a DPoP proof JWT payload per RFC 9449.
+     * Validates the {@code jti} presence and the {@code iat}, {@code ath}, {@code htu}, and
+     * {@code htm} claims of a DPoP proof JWT payload per RFC 9449.
+     * <p>
+     * The {@code jti} is only checked for presence here; its uniqueness (replay protection) is
+     * checked by the caller after every stateless check has passed.
      *
      * @param bodyMap        the decoded DPoP proof payload
      * @param rawAccessToken the raw access token string used to verify the {@code ath} claim
      * @param request        the access token request containing HTTP context for htu/htm validation
+     * @return the proof's {@code jti} value
      * @throws TokenValidationException if any claim is missing, invalid, or fails validation
      */
-    private void validateDpopClaims(MapRepresentation bodyMap, String rawAccessToken, AccessTokenRequest request) {
-        // Validate jti (replay protection)
+    private String validateDpopClaims(MapRepresentation bodyMap, String rawAccessToken, AccessTokenRequest request) {
+        // Validate jti presence (uniqueness is checked last by the caller)
         Optional<String> jti = bodyMap.getString("jti");
         if (jti.isEmpty()) {
             rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_MISSING_CLAIM,
                     "DPoP proof is missing required claim: jti");
-        }
-        if (!replayProtection.checkAndStore(jti.get())) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_REPLAY_DETECTED, jti.get());
-            securityEventCounter.increment(EventType.DPOP_REPLAY_DETECTED);
-            throw new TokenValidationException(EventType.DPOP_REPLAY_DETECTED,
-                    "DPoP proof replay detected for jti: %s".formatted(jti.get()));
         }
 
         // Validate iat (freshness)
@@ -382,6 +393,8 @@ public class DpopProofValidator {
 
         // Validate htm and htu (RFC 9449 Section 4.3)
         validateHtuHtm(bodyMap, request);
+
+        return jti.get();
     }
 
     /**

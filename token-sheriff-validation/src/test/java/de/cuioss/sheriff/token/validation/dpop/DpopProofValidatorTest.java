@@ -222,6 +222,69 @@ class DpopProofValidatorTest {
     }
 
     @Test
+    @DisplayName("A thumbprint-mismatch proof leaves no replay entry: a bound proof with the same jti is accepted (V-12)")
+    void shouldNotStoreJtiOfThumbprintMismatchProof() {
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
+        Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+        String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+        String rawAccessToken = "some.access.token";
+        String requestUri = "https://resource.example.org/protectedresource";
+        String sharedJti = UUID.randomUUID().toString();
+
+        DecodedJwt mismatchedToken = createAccessTokenJwt("wrong-thumbprint-value");
+        String rejectedProof = buildDpopProofWithJtiAndHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, sharedJti,
+                "GET", requestUri);
+        AccessTokenRequest rejectedRequest = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(rejectedProof)), requestUri, "GET");
+
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(rejectedRequest, mismatchedToken, rawAccessToken));
+        assertEquals(EventType.DPOP_THUMBPRINT_MISMATCH, ex.getEventType());
+
+        DecodedJwt boundToken = createAccessTokenJwt(thumbprint);
+        String validProof = buildDpopProofWithJtiAndHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, sharedJti,
+                "GET", requestUri);
+        AccessTokenRequest validRequest = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(validProof)), requestUri, "GET");
+
+        assertDoesNotThrow(() -> validator.validate(validRequest, boundToken, rawAccessToken),
+                "The rejected proof must not have consumed the jti of the legitimate proof");
+        assertEquals(0, securityEventCounter.getCount(EventType.DPOP_REPLAY_DETECTED),
+                "No replay must be detected");
+    }
+
+    @Test
+    @DisplayName("An ath-mismatch proof leaves no replay entry: a valid proof with the same jti is accepted (V-12)")
+    void shouldNotStoreJtiOfAthMismatchProof() {
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
+        Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+        String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+        String rawAccessToken = "some.access.token";
+        String requestUri = "https://resource.example.org/protectedresource";
+        String sharedJti = UUID.randomUUID().toString();
+        DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+        String rejectedProof = buildDpopProofInternalWithHtuHtm(keyPair, jwkMap, "RS256", "dpop+jwt", sharedJti,
+                System.currentTimeMillis() / 1000, computeAth("different.access.token"), "GET", requestUri);
+        AccessTokenRequest rejectedRequest = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(rejectedProof)), requestUri, "GET");
+
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(rejectedRequest, accessToken, rawAccessToken));
+        assertEquals(EventType.DPOP_ATH_MISMATCH, ex.getEventType());
+
+        String validProof = buildDpopProofWithJtiAndHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, sharedJti,
+                "GET", requestUri);
+        AccessTokenRequest validRequest = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(validProof)), requestUri, "GET");
+
+        assertDoesNotThrow(() -> validator.validate(validRequest, accessToken, rawAccessToken),
+                "The rejected proof must not have consumed the jti of the legitimate proof");
+        assertEquals(0, securityEventCounter.getCount(EventType.DPOP_REPLAY_DETECTED),
+                "No replay must be detected");
+    }
+
+    @Test
     @DisplayName("DpopConfig build should enforce the replay-window invariant ttl >= proofMaxAge + clockSkew (M3)")
     void shouldEnforceReplayWindowInvariantOnBuild() {
         // Under defaults the effective replay TTL must cover the full proof freshness window
