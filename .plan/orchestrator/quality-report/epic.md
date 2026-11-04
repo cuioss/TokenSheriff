@@ -106,9 +106,20 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   discovery (fix arm), TTL default documented as 360. Two operator-approved scope exceptions (integration-tests
   build script and POM property; extra JWE doc rows). No staged spec declares a path it changed. PLAN-17's
   overlap with it (`BearerAuth.java`, one file) is no longer a conflict.
+- PLAN-09 — shipped as #851 (`49ba673d`), see `landings/PLAN-09.md`. 21 merged paths vs 11 declared (11 added, the
+  declared `JwksParserTest.java` untouched): the three prose restatements of the expiry boundary, review-driven
+  tests, and the register and threat-model rows. Staged specs that declare a path it changed — PLAN-15
+  (`ExpirationValidatorTest.java`), PLAN-17 (`IssuerConfig.java`, `NonValidatingJwtParser.java`), PLAN-18
+  (`threat-model.adoc`), PLAN-19 (`cve-lessons-register.adoc`, `microprofile-jwt-compatibility.adoc`,
+  `threat-model.adoc`) and PLAN-23 (`ValidationContext.java`, `WiredNegativePathAttackTest.java`) — re-verify at
+  outline; PLAN-23 in particular names Sonar issues by file and line. PLAN-10 was clean against it.
+- PLAN-11 — shipped as #853 (`a9ce05df`), see `landings/PLAN-11.md`. 10 merged paths vs 5 declared (8 added, 3 missing:
+  the `MandatoryClaimsValidator` hypothesis was refuted and `ClaimValue` was left alone): a new `StrictStringMapper`
+  for `azp`, `ClaimName`, native-image metadata and a `security-reference.adoc` paragraph. Of the staged specs only
+  PLAN-18 and PLAN-19 declare a path it changed (`security-reference.adoc`); both re-read it at outline.
 - PLAN-23 — staged 2026-11-04 (WS-05, the 44 pre-existing SonarCloud issues on `main`; see Decisions 2026-11-04).
-  Starts after PLAN-09 merges (shares `ValidationContext.java`) and runs before PLAN-22 (shares
-  `AccessTokenCacheTest.java` and `TokenValidator.java`) and PLAN-17 (`TokenValidator.java`).
+  Its start condition, PLAN-09 merged (it shares `ValidationContext.java`), is met as of 2026-11-04. It runs before
+  PLAN-22 (shares `AccessTokenCacheTest.java` and `TokenValidator.java`) and PLAN-17 (`TokenValidator.java`).
 - PLAN-14 — runs after PLAN-06 and PLAN-10 (tests the behaviour they change).
 - PLAN-15 — after PLAN-09 (exp boundary) and PLAN-13 (dup-kid id renumber).
 - PLAN-16 — Keycloak IT cost; after PLAN-06 (C-6 callback ordering). Pair with a cheap plan.
@@ -235,6 +246,43 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   overlap is with a shipped plan. So PLAN-23 starts only after PLAN-09 has merged, and runs before PLAN-22 and
   PLAN-17, which re-read those files at their own outline. Not a third parallel plan: it goes in when PLAN-09
   merges.
+- 2026-11-04 — PLAN-09 (#851) reconciled as shipped from its inbox landing, corroborated against PR state (`merged`),
+  the merge commit on `origin/main`, the 21-path merged footprint, the merged source for each of the six spec
+  deliverables, and Sonar read directly (gate OK, 0 open on the PR; `main` still 44). Findings closed per the PR:
+  V-11, V-12, V-17b, V-17c, V-17e, plus the decode-mode residual (no finding ID); `findings-disposition.md` marks the
+  five FIXED, and this time the call sites were read in the merged source, not only taken from the PR. The landing's
+  one unfixed code-review advisory (guards "shadowed by `initVerify`") is contradicted by the merged code, where the
+  range check runs before `initVerify`; see the Watch. The 6 candidate-lesson messages (PLAN-09-001 to -006) were
+  dispositioned by me: -002 and -005 PROMOTED as the local lessons `2026-11-04-13-001` and `-002`; -001, -003, -004
+  and -006 went into the 2026-11-04 addendum of `upstream-plan-marshall-report.md` (-006 as a recurrence, the other
+  three as new items); no spec was folded and no new theme lesson was filed. About 85% confident on -004, which
+  could instead have been merged into the local lesson `2026-11-02-10-001` (a recurrence of under-pinned tests);
+  I kept it upstream because its suggested component is the marketplace skill `pm-dev-java:junit-core`, and moving
+  it is a one-step change. PLAN-23's start condition (PLAN-09 merged) is met.
+- 2026-11-04 — PLAN-11 (#853) reconciled as shipped from its inbox landing (complete, `effort=medium`), corroborated
+  against PR state (`merged`), the merge commit on `origin/main`, all 24 PR checks green, the 10-path merged
+  footprint, the merged source for each of the three spec deliverables, and Sonar read directly (gate OK, 0 open on
+  the PR). Findings closed: V-17f, TV-2, gaps VAL 1 and VAL 4 (`findings-disposition.md` marks them FIXED). The spec's
+  one hypothesis, that `MandatoryClaimsValidator` also treats `aud: []` as missing, is refuted: that file has no
+  audience handling. The two candidate-lessons (PLAN-11-001, -002) both recur items already in the upstream report
+  and went into its 2026-11-04 PLAN-11 addendum as DISCARDED locally; no local lesson, no fold, nothing sent.
+  I found one thing the landing only half says: `client_id` is still string-coerced and can satisfy the same
+  comparison when `azp` is absent. It is the operator's recorded decision, but no staged spec covers it, so it is a
+  Watch and an open operator question rather than a decision I took (confidence about 75% that a small standalone fix
+  is the right home, below the 90% bar).
+- 2026-11-04 — Two operator decisions on the PLAN-11 open items. (1) The `client_id` residual becomes a staged plan,
+  PLAN-24 (`plans/PLAN-24-client-id-strict-typing.md`, WS-01, ordinal 24 as the next free): three deliverables (map
+  `client_id` through the existing `StrictStringMapper`; settle `iss`, `sub` and `jti` at outline, where a hypothesis
+  says none is exposed; tighten the PLAN-11 `azp` assertions), so below the six-deliverable split threshold. The
+  parser reads it as declarative with 5 paths, comparison determinate, no overlap with a running plan; its one shared
+  file with PLAN-18 and PLAN-19 (`security-reference.adoc`) does not block and PLAN-24 runs before both. It can run
+  in any free slot. I added the PLAN-11-001 and -002 lessons to its Standing Constraints (no conditional "add a log
+  identifier if needed" clause; do not file the failed stand-alone `test-compile` arm as findings). (2) `CLAUDE.md`
+  rule 7 (no auto-merge unless instructed) is replaced by permission to merge through the merge queue once CI is green
+  and every reviewer comment is resolved, never bypassing protection or a failing check. This is the one edit I made
+  outside the epic tree, made because the operator asked for it directly; it sits on the local branch
+  `chore/claude-md-allow-merge` (`49f8bb3f`, one file, 3 insertions and 1 deletion) from `origin/main`. The operator
+  then asked to land everything: the branch was pushed and opened as PR #857 the same day (see the Watches item).
 
 ## Open Defects
 
@@ -257,8 +305,46 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
 - 2026-11-01 — Incomplete landing `plan-12-benchmark-build-006.md` (PLAN-12): missing key `effort` (never
   stamped, written as `unknown`). Drained and reconciled as far as it goes. Fifth of the nine landings so far
   without it (PLAN-01, 02, 04, 05, 12); PLAN-03, 06, 07 and 20 carried it.
+- 2026-11-04 — Incomplete landing `plan-09-dpop-parser-hardening-007.md` (PLAN-09): `landing-check` reports
+  `complete: false`, missing key `effort` (written as `unknown`; the landing says the stamp was absent). Drained and
+  reconciled as far as it goes. Sixth known producer with an unstamped `effort` (PLAN-01, 02, 04, 05, 12, 09). The
+  PLAN-08 and PLAN-21 landings were not re-checked for it.
 
 ## Watches
+
+- PLAN-11 residuals (read in the merged source 2026-11-04 unless marked): (1) `client_id` is still mapped by
+  `IdentityMapper`, which stringifies any non-string value, and `AuthorizedPartyValidator` (line 100) falls back to it
+  when `azp` is absent and the RFC 9068 fallback is on, so a numeric or list-typed `client_id` on an `azp`-less token
+  can still satisfy the configured-id comparison PLAN-11 closed for `azp`. Operator decision at PLAN-11. STAGED as
+  PLAN-24 on 2026-11-04 (strict mapping, an `iss`/`sub`/`jti` sweep, tightened `azp` assertions); retire this item
+  when PLAN-24 ships. (2)
+  `ClaimValue.isNotPresentForClaimValueType()` now has no production caller, only `ClaimValueTest`: dead code, a
+  cleanup candidate. (3) The three code-review advisories (landing message, not independently verified): the
+  non-string `azp` tests assert only the exception supertype; a `StrictStringMapper` rejection is not counted or
+  logged beyond the `MISSING_CLAIM` exception it throws (whether the pipeline counts it was not traced); `client_id`
+  as in (1); items (1) and the first advisory are carried by PLAN-24. (4) `.plan/marshal.json` line 133 sets
+  `final_merge_without_asking: true`, which conflicted with the `CLAUDE.md` rule against auto-merge. The operator
+  decided on 2026-11-04 to change `CLAUDE.md` to allow the merge; the change is PR #857 (branch
+  `chore/claude-md-allow-merge`, `49f8bb3f`), open and NOT merged: all CI checks passed but `license/cla` is
+  pending ("not signed" from the CLA bot; the operator must sign or ask it to recheck; I cannot). Sourcery's
+  "needs a human reviewer" remark was answered on the PR as an accepted trade-off. Until #857 merges, running
+  plans read the old rule; retire this item when it does. (5) The native-image metadata for `StrictStringMapper` (`reflect-config.json`) was not exercised in a
+  native build here. (6) Pre-push `test-compile` and `module-tests` arms degraded again (sixth plan); 120 auto-filed
+  `build-error` findings blocked the first merge dispatch until rejected. Whole-tree `verify -Ppre-commit` (3621
+  tests per the landing) not re-run.
+- PLAN-09 residuals and review (landing message + PR #851 body; the items marked "read" were corroborated
+  2026-11-04): merged after a hand-accepted scope-creep warning (six files outside the declared scope, threshold
+  five). Surface delta `expansion_detected` (11 added, 1 missing). The one unfixed advisory, as the landing words it
+  (the non-EC-key and null-domain-parameters guards in `SignatureVerificationUtil.checkEcdsaComponentRange` are
+  shadowed by `initVerify`), is REFUTED in part: read in the merged source, the check runs BEFORE `initVerify`, and
+  `SignatureVerificationUtilTest` has `shouldRejectNonEcKey` and `shouldRejectNullSignature`. Still open and
+  unverified: no test names the `params == null` branch (a defensive guard, hard to reach), and the claim that
+  `PsychicSignatureAttackTest` cannot fail without the explicit range check (the JDK rejecting all-zero signatures
+  itself) was not tested. Pre-push `module-tests` and a valid whole-tree `test-compile` arms degraded (same cause
+  as PLAN-21 and PLAN-08; covered by the whole-tree verify, 3592 tests per the landing and 3568 per the PR body, not
+  re-run). The post-merge `Run JMH Benchmarks` workflow had not finished when the run's wait hit its deadline; not
+  re-read. Two metrics rows carry placeholder figures later corrected (landing message). Sonar read directly: gate
+  OK and 0 open on #851 (a PR-scoped snapshot, not a re-run).
 
 - Sonar, verified 2026-10-30 by a direct unresolved-issue read per PR (`sonar read_open_issues` returned
   `undecidable` / `head_revision_unavailable` for all four merged PRs; the quality gate read OK on each):

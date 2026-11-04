@@ -28,6 +28,7 @@ Closed when each V/TV row in `findings-disposition.md` owned by this workstream 
 | PLAN-11-audience-semantics | staged | V-17f, TV-2, gap VAL 4 |
 | PLAN-13-log-transport-hygiene | staged | V-13, V-14/D-4, V-15, V-17a, V-17h, D-3 |
 | PLAN-15-validation-test-gaps | staged | TV-4, TV-6, TV-7, gaps VAL 2/3/5/6 |
+| PLAN-24-client-id-strict-typing | staged | PLAN-11 follow-up: `client_id` fallback string-coerced; no finding ID |
 
 ## Sequencing and Surface Notes
 
