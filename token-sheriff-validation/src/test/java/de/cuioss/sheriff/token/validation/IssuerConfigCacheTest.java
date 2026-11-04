@@ -16,7 +16,11 @@
 package de.cuioss.sheriff.token.validation;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.JwksType;
+import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
+import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.juli.LogAsserts;
@@ -26,9 +30,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -409,4 +416,136 @@ class IssuerConfigCacheTest {
         }
     }
 
+    /**
+     * Pins the loading-wait tier of {@link IssuerConfigCache#resolveConfig(String)}: each way waiting for
+     * the in-progress initial load can end without a healthy config falls through to the recovery and
+     * failure tiers, logging the outcome of the wait.
+     */
+    @Nested
+    @DisplayName("Loading Wait Tests")
+    class LoadingWaitTests {
+
+        private static final String LOADING_ISSUER = "https://loading-issuer.example.com";
+
+        private IssuerConfig configWith(FutureControlledLoader loader) {
+            return IssuerConfig.builder()
+                    .issuerIdentifier(LOADING_ISSUER)
+                    .expectedAudience("test-audience")
+                    .jwksLoader(loader)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("A failed loading future is logged and the issuer fails closed while its loader is unhealthy")
+        void failsClosedWhenLoadingFutureFails() {
+            CompletableFuture<LoaderStatus> failed = new CompletableFuture<>();
+            failed.completeExceptionally(new IllegalStateException("initial load failed"));
+            IssuerConfigCache cache = new IssuerConfigCache(
+                    List.of(configWith(new FutureControlledLoader(LoaderStatus.ERROR, failed))), securityEventCounter);
+
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> cache.resolveConfig(LOADING_ISSUER));
+
+            assertEquals(SecurityEventCounter.EventType.NO_ISSUER_CONFIG, exception.getEventType());
+            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
+                    JWTValidationLogMessages.ERROR.JWKS_LOAD_EXECUTION_FAILED.resolveIdentifierString());
+        }
+
+        @Test
+        @DisplayName("A failed loading future falls through to recovery once the loader is healthy")
+        void recoversAfterFailedLoadingFutureWhenLoaderIsHealthy() {
+            CompletableFuture<LoaderStatus> failed = new CompletableFuture<>();
+            failed.completeExceptionally(new IllegalStateException("initial load failed"));
+            IssuerConfig config = configWith(new FutureControlledLoader(LoaderStatus.OK, failed));
+            IssuerConfigCache cache = new IssuerConfigCache(List.of(config), securityEventCounter);
+
+            assertSame(config, cache.resolveConfig(LOADING_ISSUER));
+            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
+                    JWTValidationLogMessages.ERROR.JWKS_LOAD_EXECUTION_FAILED.resolveIdentifierString());
+        }
+
+        @Test
+        @DisplayName("An interrupted wait restores the interrupt flag, is logged and fails closed")
+        void restoresInterruptFlagWhenWaitIsInterrupted() {
+            IssuerConfigCache cache = new IssuerConfigCache(
+                    List.of(configWith(new FutureControlledLoader(LoaderStatus.LOADING, new CompletableFuture<>()))),
+                    securityEventCounter);
+
+            Thread.currentThread().interrupt();
+            TokenValidationException exception;
+            boolean interruptRestored;
+            try {
+                exception = assertThrows(TokenValidationException.class, () -> cache.resolveConfig(LOADING_ISSUER));
+            } finally {
+                // Clears the flag so it does not leak into later tests
+                interruptRestored = Thread.interrupted();
+            }
+
+            assertTrue(interruptRestored, "the interrupt flag must be restored after the interrupted wait");
+            assertEquals(SecurityEventCounter.EventType.NO_ISSUER_CONFIG, exception.getEventType());
+            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWKS_LOAD_INTERRUPTED.resolveIdentifierString());
+        }
+
+        @Test
+        @DisplayName("A wait that times out is logged and fails closed")
+        @Timeout(value = 30, unit = TimeUnit.SECONDS)
+        void failsClosedWhenWaitTimesOut() {
+            IssuerConfigCache cache = new IssuerConfigCache(
+                    List.of(configWith(new FutureControlledLoader(LoaderStatus.LOADING, new CompletableFuture<>()))),
+                    securityEventCounter);
+
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> cache.resolveConfig(LOADING_ISSUER));
+
+            assertEquals(SecurityEventCounter.EventType.NO_ISSUER_CONFIG, exception.getEventType());
+            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWKS_LOAD_TIMEOUT.resolveIdentifierString());
+        }
+    }
+
+    /**
+     * A JwksLoader stub with a fixed status whose initial load is represented by a caller-supplied future,
+     * so a test controls how waiting for the load ends.
+     */
+    private static final class FutureControlledLoader implements JwksLoader {
+
+        private final LoaderStatus status;
+        private final CompletableFuture<LoaderStatus> initFuture;
+
+        FutureControlledLoader(LoaderStatus status, CompletableFuture<LoaderStatus> initFuture) {
+            this.status = status;
+            this.initFuture = initFuture;
+        }
+
+        @Override
+        public LoaderStatus getLoaderStatus() {
+            return status;
+        }
+
+        @Override
+        public Optional<KeyInfo> getKeyInfo(String kid) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Set<String> getKeyIds() {
+            return Set.of();
+        }
+
+        @Override
+        public JwksType getJwksType() {
+            return JwksType.HTTP;
+        }
+
+        @Override
+        public Optional<String> getIssuerIdentifier() {
+            return Optional.of(LoadingWaitTests.LOADING_ISSUER);
+        }
+
+        @Override
+        public CompletableFuture<LoaderStatus> initJWKSLoader(SecurityEventCounter securityEventCounter) {
+            return initFuture;
+        }
+    }
 }
