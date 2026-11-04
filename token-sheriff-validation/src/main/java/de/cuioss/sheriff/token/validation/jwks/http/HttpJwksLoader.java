@@ -21,6 +21,7 @@ import de.cuioss.http.client.adapter.HttpAdapter;
 import de.cuioss.http.client.adapter.ResilientHttpAdapter;
 import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.result.HttpResult;
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.EgressPolicy;
@@ -890,8 +891,10 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         }
 
         // Log keys update: the issuer and the key ids of the installed key set, sorted so the message
-        // is deterministic
-        List<String> installedKeyIds = newLoader.getKeyIds().stream().sorted().toList();
+        // is deterministic. The key ids come from the remote JWKS and are only length-bounded, so they
+        // are neutralized against log injection (CWE-117) before they are written.
+        List<String> installedKeyIds = newLoader.getKeyIds().stream().sorted()
+                .map(ErrorTextSanitizer::sanitize).toList();
         LOGGER.info(INFO.JWKS_KEYS_UPDATED, getResolvedIssuer(), installedKeyIds);
         return true;
     }
@@ -1514,8 +1517,11 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      */
     private static void logUnusableUri(AdapterResolution resolution) {
         RuntimeException failure = resolution.unusableUriFailure();
+        // The refusal message can echo the IdP-advertised jwks_uri, which is remote document content, so
+        // it is neutralized against log injection (CWE-117) and length-bounded before it is written.
         LOGGER.warn(WARN.JWKS_URI_UNUSABLE,
-                Optional.ofNullable(resolution.issuer()).orElse(ISSUER_NOT_CONFIGURED),
-                failure == null ? "unknown reason" : failure.getMessage());
+                ErrorTextSanitizer.sanitize(
+                        Optional.ofNullable(resolution.issuer()).orElse(ISSUER_NOT_CONFIGURED)),
+                failure == null ? "unknown reason" : ErrorTextSanitizer.sanitize(failure.getMessage()));
     }
 }
