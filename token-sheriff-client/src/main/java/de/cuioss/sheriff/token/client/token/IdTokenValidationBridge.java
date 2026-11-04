@@ -20,6 +20,7 @@ import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
+import org.jspecify.annotations.Nullable;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -184,7 +185,15 @@ public class IdTokenValidationBridge {
         return tokenValidator.createIdToken(IdTokenRequest.of(idToken));
     }
 
-    private static boolean noncesMatch(String expected, String actual) {
+    /**
+     * Compares the expected and actual nonce in constant time.
+     *
+     * @param expected the nonce the client generated for this flow
+     * @param actual   the nonce the ID token carries; {@code null} when the token has no {@code nonce}
+     *                 claim, which never matches (fail closed against replay)
+     * @return whether both nonces are equal
+     */
+    private static boolean noncesMatch(String expected, @Nullable String actual) {
         if (actual == null) {
             return false;
         }

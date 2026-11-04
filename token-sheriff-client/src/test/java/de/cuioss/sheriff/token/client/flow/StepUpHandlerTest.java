@@ -134,8 +134,21 @@ class StepUpHandlerTest {
             var metadata = metadata();
             var challenge = new StepUpChallenge(ACR, null);
 
-            assertThrows(NullPointerException.class,
+            var exception = assertThrows(IllegalArgumentException.class,
                     () -> stepUpHandler.initiate(configuration, metadata, challenge));
+            assertEquals("client declares no redirect URI", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("Should fail closed when the client declares a blank redirect URI")
+        void shouldFailWithBlankRedirectUri() {
+            var configuration = config("   ");
+            var metadata = metadata();
+            var challenge = new StepUpChallenge(ACR, null);
+
+            var exception = assertThrows(IllegalArgumentException.class,
+                    () -> stepUpHandler.initiate(configuration, metadata, challenge));
+            assertEquals("client declares no redirect URI", exception.getMessage());
         }
 
         @Test

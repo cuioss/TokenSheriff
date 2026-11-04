@@ -25,6 +25,7 @@ import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.net.URI;
@@ -171,7 +172,17 @@ public class DiscoveryResolver {
         }
     }
 
-    private ProviderMetadata parse(String body, String issuer) {
+    /**
+     * Parses the discovery document body.
+     *
+     * @param body   the response body; may be {@code null}, since {@link HttpResponse#body()} crosses
+     *               the HTTP trust boundary and carries no nullness guarantee — a {@code null} or blank
+     *               body fails closed
+     * @param issuer the configured issuer, for error context
+     * @return the parsed provider metadata
+     * @throws TransportException if the body is empty, oversized or unparseable
+     */
+    private ProviderMetadata parse(@Nullable String body, String issuer) {
         if (body == null || body.isBlank()) {
             throw new TransportException(ClientLogMessages.ERROR.DISCOVERY_FAILED.format(issuer, "empty discovery response"));
         }
