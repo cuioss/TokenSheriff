@@ -257,8 +257,8 @@ public class JwtMetricsCollector {
             // Get the counter for this event type
             Counter counter = counters.get(eventType.name());
             if (counter != null) {
-                // Increment the counter by the delta
-                counter.increment(delta);
+                // Increment the counter by the delta; event-count deltas are far below 2^53, so the conversion is exact
+                counter.increment((double) delta);
                 LOGGER.debug("Updated counter for event type %s by %s (total: %s)", eventType.name(), delta, counter.count());
             } else {
                 LOGGER.warn(WARN.NO_MICROMETER_COUNTER_FOUND, eventType.name(), delta);

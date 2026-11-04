@@ -60,6 +60,8 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.INF
 public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerResponseFilter {
 
     private static final String REQUEST_START_TIME = "cui.access-log.start-time";
+    /** Separator of URI path segments, used to normalize request paths before pattern matching. */
+    private static final String PATH_SEPARATOR = "/";
     private static final CuiLogger LOGGER = new CuiLogger(CustomAccessLogFilter.class);
 
 
@@ -146,7 +148,7 @@ public class CustomAccessLogFilter implements ContainerRequestFilter, ContainerR
     private boolean isPathIncluded(String path) {
         // JAX-RS implementations differ on whether UriInfo.getPath() carries a leading
         // slash; configured patterns conventionally do — normalize before matching
-        String normalizedPath = path.startsWith("/") ? path : "/" + path;
+        String normalizedPath = path.startsWith(PATH_SEPARATOR) ? path : PATH_SEPARATOR + path;
 
         // Check exclude patterns first (take precedence)
         for (Pattern pattern : excludePathPatterns) {
