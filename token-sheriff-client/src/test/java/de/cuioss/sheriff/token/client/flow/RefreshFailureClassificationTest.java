@@ -243,8 +243,9 @@ class RefreshFailureClassificationTest {
             String laterSuccessor = Generators.letterStrings(20, 40).next();
             var family = new RefreshTokenFamily(initial);
             family.rotate(initial, next);
+            String replaySuccessor = Generators.letterStrings(20, 40).next();
             assertThrows(RefreshTokenFamilyRevokedException.class,
-                    () -> family.rotate(initial, Generators.letterStrings(20, 40).next()));
+                    () -> family.rotate(initial, replaySuccessor));
             var revoked = assertThrows(RefreshTokenFamilyRevokedException.class,
                     () -> family.rotate(next, laterSuccessor));
 
@@ -259,8 +260,9 @@ class RefreshFailureClassificationTest {
             String initial = Generators.letterStrings(20, 40).next();
             var family = new RefreshTokenFamily(initial);
             family.rotate(initial, Generators.letterStrings(20, 40).next());
+            String replaySuccessor = Generators.letterStrings(20, 40).next();
             assertThrows(RefreshTokenFamilyRevokedException.class,
-                    () -> family.rotate(initial, Generators.letterStrings(20, 40).next()));
+                    () -> family.rotate(initial, replaySuccessor));
             var revoked = assertThrows(RefreshTokenFamilyRevokedException.class, family::currentToken);
 
             var classification = RefreshFlow.classify(revoked);

@@ -124,8 +124,9 @@ class RotationReuseDetectionTest {
         String laterSuccessor = Generators.letterStrings(20, 40).next();
         var family = new RefreshTokenFamily(initial);
         family.rotate(initial, next);
+        String replaySuccessor = Generators.letterStrings(20, 40).next();
         assertThrows(RefreshTokenFamilyRevokedException.class,
-                () -> family.rotate(initial, Generators.letterStrings(20, 40).next()));
+                () -> family.rotate(initial, replaySuccessor));
 
         // The current token is presented here, so only the revoked state — not reuse — can refuse it.
         var thrown = assertThrows(RefreshTokenFamilyRevokedException.class,
@@ -144,8 +145,9 @@ class RotationReuseDetectionTest {
         String next = Generators.letterStrings(20, 40).next();
         var family = new RefreshTokenFamily(initial);
         family.rotate(initial, next);
+        String replaySuccessor = Generators.letterStrings(20, 40).next();
         assertThrows(RefreshTokenFamilyRevokedException.class,
-                () -> family.rotate(initial, Generators.letterStrings(20, 40).next()));
+                () -> family.rotate(initial, replaySuccessor));
 
         var thrown = assertThrows(RefreshTokenFamilyRevokedException.class, family::currentToken);
 
