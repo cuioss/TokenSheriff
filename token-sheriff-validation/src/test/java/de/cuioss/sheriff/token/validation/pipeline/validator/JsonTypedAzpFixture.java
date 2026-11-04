@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline.validator;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.TokenType;
@@ -117,7 +118,7 @@ final class JsonTypedAzpFixture {
                 .issuerIdentifier("test-issuer")
                 .jwksContent("{\"keys\":[]}")
                 .audienceValidationDisabled(true)
-                .build());
+                .build(), new SecurityEventCounter());
         var header = new JwtHeader(null, null, null, null, null, null, null, null, null, null);
         var decodedJwt = new DecodedJwt(header, body, null, new String[]{"", "", ""}, RAW_TOKEN);
         if (TokenType.ID_TOKEN.equals(tokenType)) {
