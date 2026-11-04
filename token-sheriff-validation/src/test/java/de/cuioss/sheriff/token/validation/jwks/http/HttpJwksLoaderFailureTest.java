@@ -32,7 +32,14 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
 import lombok.Getter;
+import mockwebserver3.Dispatcher;
+import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
+import mockwebserver3.RecordedRequest;
+import okhttp3.Headers;
+import okhttp3.HttpUrl;
+import okhttp3.tls.HandshakeCertificates;
+import okhttp3.tls.HeldCertificate;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +56,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntFunction;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -428,7 +436,9 @@ class HttpJwksLoaderFailureTest {
      * Pins that an unexpected (unchecked) failure of the initialization body never leaves the loader in
      * {@link LoaderStatus#LOADING}: it ends in {@link LoaderStatus#UNDEFINED} only when a background refresh
      * that can recover is actually scheduled, otherwise in a terminal {@link LoaderStatus#ERROR}, and the
-     * initialization future completes normally with that status.
+     * initialization future completes normally with that status. An advertised {@code jwks_uri} no HTTP
+     * handler can be built for is a terminal {@link LoaderStatus#ERROR} whether background refresh is
+     * enabled or not.
      */
     @Nested
     @DisplayName("Unexpected initialization failure")
@@ -488,18 +498,19 @@ class HttpJwksLoaderFailureTest {
         }
 
         @Test
-        @DisplayName("No handler for the advertised jwks_uri with background refresh enabled is UNDEFINED and keeps refreshing")
-        void unusableAdvertisedJwksUriWithRefreshIsUndefined() throws Exception {
+        @DisplayName("No handler for the advertised jwks_uri with background refresh enabled is a terminal ERROR")
+        void unusableAdvertisedJwksUriWithRefreshIsTerminalError() throws Exception {
             try (HttpJwksLoader loader = new HttpJwksLoader(wellKnownAdvertisingMalformedJwksUri(LONG_REFRESH_INTERVAL_SECONDS))) {
                 LoaderStatus initStatus = awaitInitialization(loader, securityEventCounter);
 
-                assertAll("the failure ends retry-pending with a scheduled refresh",
-                        () -> assertEquals(LoaderStatus.UNDEFINED, initStatus, "the future completes with the status in effect"),
-                        () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
-                        () -> assertNotEquals(LoaderStatus.LOADING, loader.getLoaderStatus()),
-                        () -> assertTrue(loader.isBackgroundRefreshActive(), "the refresh re-attempts the discovery"),
+                assertAll("an unusable advertised jwks_uri is not retried",
+                        () -> assertEquals(LoaderStatus.ERROR, initStatus, "the future completes with the status in effect"),
+                        () -> assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus()),
+                        () -> assertFalse(loader.isBackgroundRefreshActive(), "no refresh may be scheduled"),
                         () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed"));
                 assertInitializationFailureLogged();
+                LogAsserts.assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
+                        JWTValidationLogMessages.WARN.JWKS_URI_UNUSABLE.resolveIdentifierString());
             }
         }
 
@@ -585,6 +596,236 @@ class HttpJwksLoaderFailureTest {
             String jwks = InMemoryJWKSFactory.createDefaultJwks();
             String key = jwks.substring(jwks.indexOf('[') + 1, jwks.lastIndexOf(']')).strip();
             return "{\"keys\":[" + key + "," + key + "]}";
+        }
+    }
+
+    /**
+     * Pins that an advertised {@code jwks_uri} no HTTP handler can be built for ends the loader in a
+     * terminal {@link LoaderStatus#ERROR}, logged once as {@code JWKS_URI_UNUSABLE}, and is not retried:
+     * the refresh task is cancelled or never scheduled, so the discovery endpoint is not contacted again.
+     * The absence of retries is observed on the real scheduler over a short refresh interval, not through
+     * {@code performBackgroundRefresh()}, which would bypass a cancelled task.
+     */
+    @Nested
+    @DisplayName("Unusable advertised jwks_uri")
+    class UnusableAdvertisedJwksUri {
+
+        /** A jwks_uri no HTTP handler can be built for. */
+        private static final String MALFORMED_JWKS_URI = "http://[malformed";
+        private static final String LOCALHOST = "localhost";
+        private static final int SHORT_REFRESH_INTERVAL_SECONDS = 1;
+        private static final int TIMEOUT_SECONDS = 5;
+        private static final Duration NO_RETRY_WINDOW = Duration.ofMillis(2500);
+        private static final Duration NO_RETRY_DEADLINE = Duration.ofSeconds(5);
+
+        /** Certificate of the HTTPS discovery server, issued for the host name the loader contacts. */
+        private static final HeldCertificate SERVER_CERTIFICATE = new HeldCertificate.Builder()
+                .commonName(LOCALHOST)
+                .addSubjectAlternativeName(LOCALHOST)
+                .build();
+
+        private final RetryConfig fastRetry = RetryConfig.builder()
+                .initialDelay(Duration.ofMillis(1))
+                .maxDelay(Duration.ofMillis(5))
+                .build();
+
+        private MockWebServer server;
+
+        /**
+         * Exposes the enclosing class's dispatcher to the MockWebServer extension, which resolves the
+         * module dispatcher on the nested test instance.
+         *
+         * @return the shared JWKS dispatcher
+         */
+        public JwksResolveDispatcher getModuleDispatcher() {
+            return moduleDispatcher;
+        }
+
+        @BeforeEach
+        void createServer() {
+            server = new MockWebServer();
+        }
+
+        @AfterEach
+        void stopServer() {
+            server.close();
+        }
+
+        @Test
+        @DisplayName("A cleartext jwks_uri while insecure HTTP is not allowed ends in ERROR and is not retried")
+        void cleartextJwksUriWithoutInsecureHttpIsTerminalAndNotRetried() throws Exception {
+            server.useHttps(new HandshakeCertificates.Builder()
+                    .heldCertificate(SERVER_CERTIFICATE)
+                    .build()
+                    .sslSocketFactory());
+            UnusableJwksUriDispatcher dispatcher = new UnusableJwksUriDispatcher(
+                    port -> "http://%s:%d/jwks.json".formatted(LOCALHOST, port));
+            startOnLoopback(dispatcher);
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
+                    .allowInsecureHttp(false)
+                    .sslContext(new HandshakeCertificates.Builder()
+                            .addTrustedCertificate(SERVER_CERTIFICATE.certificate())
+                            .build()
+                            .sslContext())
+                    .wellKnownUrl("https://%s:%d%s".formatted(LOCALHOST, server.getPort(),
+                            UnusableJwksUriDispatcher.WELL_KNOWN_PATH))
+                    .connectTimeoutSeconds(TIMEOUT_SECONDS)
+                    .readTimeoutSeconds(TIMEOUT_SECONDS)
+                    .retryConfig(fastRetry)
+                    .refreshIntervalSeconds(SHORT_REFRESH_INTERVAL_SECONDS)
+                    .build();
+
+            assertTerminalAtInitializationAndNotRetried(config, dispatcher);
+        }
+
+        @Test
+        @DisplayName("A malformed jwks_uri ends in ERROR and is not retried")
+        void malformedJwksUriIsTerminalAndNotRetried() throws Exception {
+            UnusableJwksUriDispatcher dispatcher = new UnusableJwksUriDispatcher(port -> MALFORMED_JWKS_URI);
+            startOnLoopback(dispatcher);
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .wellKnownUrl(server.url(UnusableJwksUriDispatcher.WELL_KNOWN_PATH).toString())
+                    .retryConfig(fastRetry)
+                    .refreshIntervalSeconds(SHORT_REFRESH_INTERVAL_SECONDS)
+                    .build();
+
+            assertTerminalAtInitializationAndNotRetried(config, dispatcher);
+        }
+
+        @Test
+        @DisplayName("A refresh cycle that finds an unusable jwks_uri after an unavailable discovery ends in ERROR and cancels the refresh")
+        void unusableJwksUriFoundByRefreshIsTerminalAndCancelsTheRefresh() throws Exception {
+            UnusableJwksUriDispatcher dispatcher = new UnusableJwksUriDispatcher(port -> MALFORMED_JWKS_URI);
+            dispatcher.setAvailable(false);
+            startOnLoopback(dispatcher);
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .wellKnownUrl(server.url(UnusableJwksUriDispatcher.WELL_KNOWN_PATH).toString())
+                    .retryConfig(fastRetry)
+                    .refreshIntervalSeconds(SHORT_REFRESH_INTERVAL_SECONDS)
+                    .build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                LoaderStatus initStatus = loader.initJWKSLoader(securityEventCounter).join();
+                assertAll("an unavailable discovery is retried",
+                        () -> assertEquals(LoaderStatus.UNDEFINED, initStatus),
+                        () -> assertTrue(loader.isBackgroundRefreshActive(), "the background refresh must be scheduled"));
+                LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN,
+                        JWTValidationLogMessages.WARN.JWKS_URI_UNUSABLE.resolveIdentifierString());
+
+                dispatcher.setAvailable(true);
+                Awaitility.await().atMost(Duration.ofSeconds(10))
+                        .until(() -> loader.getLoaderStatus() == LoaderStatus.ERROR && unusableUriLogCount() == 1);
+
+                assertAll("the unusable jwks_uri found by the refresh is terminal",
+                        () -> assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus()),
+                        () -> assertFalse(loader.isBackgroundRefreshActive(), "the refresh task must be cancelled"),
+                        () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed"));
+                assertNotRetried(dispatcher);
+            }
+        }
+
+        private void startOnLoopback(UnusableJwksUriDispatcher dispatcher) throws IOException {
+            server.setDispatcher(dispatcher);
+            server.start(InetAddress.getLoopbackAddress(), 0);
+            dispatcher.setPort(server.getPort());
+        }
+
+        private void assertTerminalAtInitializationAndNotRetried(HttpJwksLoaderConfig config,
+                UnusableJwksUriDispatcher dispatcher) {
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                LoaderStatus initStatus = loader.initJWKSLoader(securityEventCounter).join();
+
+                assertAll("an unusable advertised jwks_uri is a terminal rejection",
+                        () -> assertTrue(dispatcher.discoveryRequests() >= 1, "the discovery document was fetched"),
+                        () -> assertEquals(LoaderStatus.ERROR, initStatus, "the future completes with the status in effect"),
+                        () -> assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus()),
+                        () -> assertFalse(loader.isBackgroundRefreshActive(), "no refresh may be scheduled"),
+                        () -> assertTrue(loader.getKeyIds().isEmpty(), "no key may be installed"),
+                        () -> assertEquals(1, unusableUriLogCount(), "JWKS_URI_UNUSABLE is logged exactly once"));
+                assertNotRetried(dispatcher);
+            }
+        }
+
+        /**
+         * Asserts that over several refresh intervals the discovery endpoint is not contacted again and
+         * neither {@code JWKS_URI_UNUSABLE} nor {@code BACKGROUND_REFRESH_FAILED} is logged again.
+         */
+        private void assertNotRetried(UnusableJwksUriDispatcher dispatcher) {
+            int discoveriesAtTerminal = dispatcher.discoveryRequests();
+            int refreshFailuresAtTerminal = refreshFailureLogCount();
+
+            Awaitility.await().during(NO_RETRY_WINDOW).atMost(NO_RETRY_DEADLINE)
+                    .until(() -> dispatcher.discoveryRequests() == discoveriesAtTerminal);
+
+            assertAll("the terminal rejection is not retried",
+                    () -> assertEquals(discoveriesAtTerminal, dispatcher.discoveryRequests(),
+                            "no further discovery request may be sent"),
+                    () -> assertEquals(1, unusableUriLogCount(), "JWKS_URI_UNUSABLE must not be logged again"),
+                    () -> assertEquals(refreshFailuresAtTerminal, refreshFailureLogCount(),
+                            "BACKGROUND_REFRESH_FAILED must not be logged again"));
+        }
+
+        private static int unusableUriLogCount() {
+            return TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWKS_URI_UNUSABLE.resolveIdentifierString()).size();
+        }
+
+        private static int refreshFailureLogCount() {
+            return TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.BACKGROUND_REFRESH_FAILED.resolveIdentifierString()).size();
+        }
+    }
+
+    /**
+     * Discovery dispatcher advertising an unusable {@code jwks_uri}. Discovery requests are counted; while
+     * the dispatcher is marked unavailable they are answered with HTTP 500, a transient discovery failure.
+     */
+    private static final class UnusableJwksUriDispatcher extends Dispatcher {
+
+        static final String WELL_KNOWN_PATH = "/.well-known/openid-configuration";
+
+        private final IntFunction<String> advertisedJwksUri;
+        private final AtomicInteger discoveryRequests = new AtomicInteger();
+        private volatile boolean available = true;
+        private volatile int port;
+
+        /**
+         * @param advertisedJwksUri computes the advertised {@code jwks_uri} from the server port
+         */
+        UnusableJwksUriDispatcher(IntFunction<String> advertisedJwksUri) {
+            this.advertisedJwksUri = advertisedJwksUri;
+        }
+
+        void setAvailable(boolean available) {
+            this.available = available;
+        }
+
+        void setPort(int port) {
+            this.port = port;
+        }
+
+        int discoveryRequests() {
+            return discoveryRequests.get();
+        }
+
+        @Override
+        public MockResponse dispatch(RecordedRequest request) {
+            HttpUrl url = request.getUrl();
+            if (!WELL_KNOWN_PATH.equals(url.encodedPath())) {
+                return new MockResponse(404, Headers.of(), "");
+            }
+            discoveryRequests.incrementAndGet();
+            if (!available) {
+                return new MockResponse(500, Headers.of(), "");
+            }
+            String baseUrl = url.newBuilder().encodedPath("/").build().toString();
+            String issuer = baseUrl.substring(0, baseUrl.length() - 1);
+            return new MockResponse(200, Headers.of("Content-Type", "application/json"), """
+                    {
+                      "issuer": "%s",
+                      "jwks_uri": "%s"
+                    }
+                    """.formatted(issuer, advertisedJwksUri.apply(port)));
         }
     }
 

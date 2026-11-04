@@ -520,6 +520,18 @@ public final class JWTValidationLogMessages {
                 .template("JWKS for issuer '%s' has not been refreshed successfully since %s, exceeding the configured maximum staleness of %s; the loader reports a non-OK status until a refresh succeeds")
                 .build();
 
+        /**
+         * Logged once when the {@code jwks_uri} advertised by the well-known discovery document cannot
+         * be used, for example because it is malformed or uses cleartext HTTP while insecure HTTP is not
+         * allowed. The loader ends in a terminal error status and stops retrying. Parameters: the issuer,
+         * then the reason reported by the HTTP handler configuration; no document content is logged.
+         */
+        public static final LogRecord JWKS_URI_UNUSABLE = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(172)
+                .template("Advertised jwks_uri for issuer %s cannot be used, the loader stops retrying: %s")
+                .build();
+
     }
 
 }
