@@ -34,6 +34,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.*;
@@ -56,6 +58,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestProfile(JwtTestProfile.class)
 @DisplayName("VertxServletObjectsResolver CDI Scoping Tests")
 class VertxServletObjectsResolverScopingTest {
+
+    private static final Pattern REQUEST_ID_NUMBER = Pattern.compile("concurrent-request-(\\d+)");
+    private static final Pattern TEST_DATA_NUMBER = Pattern.compile("concurrent-data-(\\d+)");
 
     @Inject
     @ServletObjectsResolver
@@ -173,10 +178,12 @@ class VertxServletObjectsResolverScopingTest {
                 assertNotNull(testDataLine, "Response should contain X-Test-Data");
 
                 // Extract the request number from both headers and verify they match
-                String requestIdNumber = requestIdLine.replaceAll(".*concurrent-request-(\\d+).*", "$1");
-                String testDataNumber = testDataLine.replaceAll(".*concurrent-data-(\\d+).*", "$1");
+                Matcher requestIdMatcher = REQUEST_ID_NUMBER.matcher(requestIdLine);
+                Matcher testDataMatcher = TEST_DATA_NUMBER.matcher(testDataLine);
+                assertTrue(requestIdMatcher.find(), "X-Request-ID should carry a request number: " + requestIdLine);
+                assertTrue(testDataMatcher.find(), "X-Test-Data should carry a request number: " + testDataLine);
 
-                assertEquals(requestIdNumber, testDataNumber,
+                assertEquals(requestIdMatcher.group(1), testDataMatcher.group(1),
                         "Request ID and test data should belong to the same request: " + response);
             }
 
