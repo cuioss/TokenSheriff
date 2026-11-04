@@ -20,7 +20,8 @@ import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 
-import java.time.Instant;
+import java.time.Duration;
+import java.time.InstantSource;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Objects;
@@ -37,6 +38,12 @@ import java.util.stream.Collectors;
  * and — when {@code max_age} was requested — the {@code auth_time} must be within it. A step-up the
  * IdP silently ignored is rejected fail-closed rather than treated as a successful elevation, so an
  * unsatisfied challenge can never be mistaken for a satisfied one.
+ * <p>
+ * The {@code auth_time} freshness check reads the current time from an injectable
+ * {@link InstantSource} and may tolerate a clock-skew allowance between the client and the
+ * authorization server. The skew only ever <em>widens</em> the {@code max_age} boundary, and only
+ * when a caller opts in: the default ({@link #StepUpResultVerifier()}) uses the system clock and a
+ * zero skew, so nothing it rejects is accepted by default.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -48,6 +55,37 @@ public class StepUpResultVerifier {
     private static final String CLAIM_ACR = "acr";
     private static final String CLAIM_AUTH_TIME = "auth_time";
 
+    private final InstantSource clock;
+    private final Duration allowedClockSkew;
+
+    /**
+     * Creates a verifier that reads the system clock and allows no clock skew: an {@code auth_time}
+     * older than {@code max_age} is rejected.
+     */
+    public StepUpResultVerifier() {
+        this(InstantSource.system(), Duration.ZERO);
+    }
+
+    /**
+     * Creates a verifier over the given clock and clock-skew allowance.
+     *
+     * @param clock            the source of the current time for the {@code auth_time} freshness check;
+     *                         must not be {@code null}
+     * @param allowedClockSkew the tolerance added to the required {@code max_age} — an
+     *                         {@code auth_time} is rejected when it is older than
+     *                         {@code max_age + allowedClockSkew} (whole seconds); must not be
+     *                         {@code null} or negative. {@link Duration#ZERO} keeps the exact
+     *                         {@code max_age} boundary
+     * @throws IllegalArgumentException if {@code allowedClockSkew} is negative
+     */
+    public StepUpResultVerifier(InstantSource clock, Duration allowedClockSkew) {
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.allowedClockSkew = Objects.requireNonNull(allowedClockSkew, "allowedClockSkew must not be null");
+        if (allowedClockSkew.isNegative()) {
+            throw new IllegalArgumentException("allowedClockSkew must not be negative");
+        }
+    }
+
     /**
      * Verifies the completed step-up against the challenge that drove it.
      *
@@ -56,7 +94,7 @@ public class StepUpResultVerifier {
      *                  {@code null}
      * @throws ClientProtocolException if the {@code acr} is absent or not among the required values, or
      *                               the {@code auth_time} is absent, unparseable, or older than the
-     *                               required {@code max_age}
+     *                               required {@code max_age} plus the configured clock-skew allowance
      */
     public void verify(StepUpChallenge challenge, IdTokenContent idToken) {
         Objects.requireNonNull(challenge, "challenge must not be null");
@@ -90,17 +128,42 @@ public class StepUpResultVerifier {
         }
     }
 
-    private static void verifyAuthTime(IdTokenContent idToken, int maxAgeSeconds) {
+    private void verifyAuthTime(IdTokenContent idToken, int maxAgeSeconds) {
         ClaimValue authTimeClaim = idToken.getClaims().get(CLAIM_AUTH_TIME);
         if (authTimeClaim == null) {
             throw new ClientProtocolException(
                     "step-up ID token carries no 'auth_time' claim; freshness cannot be verified");
         }
         long authTimeEpochSeconds = resolveAuthTimeEpochSeconds(authTimeClaim);
-        long ageSeconds = Instant.now().getEpochSecond() - authTimeEpochSeconds;
-        if (ageSeconds > maxAgeSeconds) {
+        long ageSeconds = ageSeconds(clock.instant().getEpochSecond(), authTimeEpochSeconds);
+        if (ageSeconds > maxAgeLimitSeconds(maxAgeSeconds)) {
             throw new ClientProtocolException(
                     "step-up authentication is stale: auth_time is older than the required max_age");
+        }
+    }
+
+    /**
+     * @return {@code now - authTime}, saturated instead of overflowing: an AS-supplied
+     *         {@code auth_time} far enough in the past saturates to {@link Long#MAX_VALUE} (stale), and
+     *         one far enough in the future to {@link Long#MIN_VALUE}
+     */
+    private static long ageSeconds(long nowEpochSeconds, long authTimeEpochSeconds) {
+        try {
+            return Math.subtractExact(nowEpochSeconds, authTimeEpochSeconds);
+        } catch (ArithmeticException e) {
+            return authTimeEpochSeconds < 0 ? Long.MAX_VALUE : Long.MIN_VALUE;
+        }
+    }
+
+    /**
+     * @return {@code max_age} widened by the clock-skew allowance, saturated at {@link Long#MAX_VALUE}
+     */
+    private long maxAgeLimitSeconds(int maxAgeSeconds) {
+        try {
+            return Math.addExact(maxAgeSeconds, allowedClockSkew.toSeconds());
+        } catch (ArithmeticException e) {
+            // Only a positive overflow is reachable: the skew is non-negative by construction.
+            return Long.MAX_VALUE;
         }
     }
 
