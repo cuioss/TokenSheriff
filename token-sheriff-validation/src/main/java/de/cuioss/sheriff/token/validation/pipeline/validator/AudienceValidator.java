@@ -37,10 +37,14 @@ import java.util.Set;
  * <p>
  * Validation rules:
  * <ul>
+ *   <li>The audience claim is missing only when it is absent from the token</li>
  *   <li>ID tokens require an audience claim</li>
  *   <li>Access tokens can have optional audience claims</li>
  *   <li>If audience is missing, the azp claim can serve as fallback (unless the fallback is disabled)</li>
  *   <li>At least one token audience must match an expected audience</li>
+ *   <li>A present but empty audience array matches no expected audience and is rejected as an
+ *       audience mismatch, for ID and access tokens alike; it is never eligible for the azp fallback
+ *       and is not covered by {@code accessTokenAudienceOptional}</li>
  * </ul>
  * <p>
  * The azp→audience fallback conflates the authorized-party claim with the audience claim. It can be
@@ -68,6 +72,9 @@ class AudienceValidator {
     /**
      * Whether the azp→audience fallback is enabled. When {@code false}, a missing audience claim is
      * never satisfied by a matching authorized-party (azp) claim.
+     * <p>
+     * Missing means the audience claim is absent from the token. A present but empty audience array
+     * is an audience mismatch and is never eligible for the azp fallback, whatever this flag says.
      */
     private final boolean azpAudienceFallbackEnabled;
 
@@ -85,7 +92,7 @@ class AudienceValidator {
 
         var audienceClaim = token.getClaimOption(ClaimName.AUDIENCE);
 
-        if (audienceClaim.isEmpty() || audienceClaim.get().isNotPresentForClaimValueType()) {
+        if (audienceClaim.isEmpty()) {
             handleMissingAudience(token);
             return;
         }
