@@ -31,7 +31,8 @@ Organized by package under `de.cuioss.sheriff.token.client`:
   back-channel call.
 * *Flows* (`flow`) — authorization-code flow with mandatory PKCE `S256`
   (`AuthorizationCodeFlow`, `PkceChallenge`), client-credentials (`ClientCredentialsFlow`)
-  and refresh (`RefreshFlow`) grants, pushed authorization requests (`ParClient`, RFC 9126),
+  and refresh (`RefreshFlow`) grants, pushed authorization requests (`ParClient`, RFC 9126 — a
+  building block the caller composes; `AuthorizationCodeFlow` does not use it),
   RFC 9207 `iss` mix-up defence (`IssValidator`), callback validation (`CallbackHandler`,
   `CallbackParameters`), and RFC 9470 step-up authentication (`StepUpHandler`).
 * *Client authentication* (`auth`) — `client_secret_basic` / `client_secret_post` and

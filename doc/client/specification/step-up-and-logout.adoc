@@ -54,6 +54,19 @@ a successful step-up.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9470[RFC 9470], https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest[OIDC Core §3.1.2.1].
 
+=== The `auth_time` freshness check
+
+The `max_age` check compares `auth_time` with the current time, read from an injectable clock
+(`InstantSource`), so the boundary can be tested against a fixed instant. An `auth_time` is
+rejected when it is older than `max_age` plus a clock-skew allowance:
+
+* the allowance tolerates a clock difference between the client and the authorization server.
+  It only ever *widens* the `max_age` boundary, and it is opt-in: a caller supplies it together
+  with the clock, and a negative allowance is refused;
+* the default — the one `StepUpHandler` uses — reads the system clock with an allowance of
+  *zero*: an `auth_time` exactly `max_age` seconds old is accepted, and one second older is
+  rejected.
+
 == RP-initiated logout
 
 The engine triggers logout at the IdP's `end_session_endpoint` and revokes the tokens it
