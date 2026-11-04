@@ -156,10 +156,14 @@ public enum ClaimName {
     /**
      * The "azp" (authorized party) claim identifies the party to which the ID Token was issued.
      * Optional by OpenID Connect Core 1.0 for ID_TOKEN type.
+     * <p>
+     * Mapped by {@link StrictStringMapper}: the claim must be a JSON string, so a number,
+     * boolean, array or object is rejected instead of being stringified into a value that
+     * could match a configured client id or audience.
      *
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#IDToken">OpenID Connect Core 1.0 - ID Token</a>
      */
-    AUTHORIZED_PARTY("azp", ClaimValueType.STRING, "The \"azp\" (authorized party) claim identifies the party to which the ID Token was issued. Optional by OpenID Connect Core 1.0 for ID_TOKEN type.", new IdentityMapper()),
+    AUTHORIZED_PARTY("azp", ClaimValueType.STRING, "The \"azp\" (authorized party) claim identifies the party to which the ID Token was issued. Optional by OpenID Connect Core 1.0 for ID_TOKEN type.", new StrictStringMapper()),
 
     /**
      * The "client_id" claim identifies the OAuth 2.0 client that requested the token.

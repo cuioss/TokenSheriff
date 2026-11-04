@@ -37,7 +37,12 @@ Supported algorithms (preference order: ECDSA > EdDSA > RSA-PSS > RSA PKCS#1 v1.
 * **iat** (issued at) - validated against `maxTokenAgeSeconds` when configured on the issuer (a token is rejected when `now - iat > maxTokenAgeSeconds + clockSkewSeconds`); when `maxTokenAgeSeconds` is unset it is extracted into token content without an age check
 * **nbf** (not before) - validated if present
 * **aud** (audience) - validated when `expectedAudience` is configured
+** An absent `aud` claim is the only case treated as missing. It follows the azp fallback (`IssuerConfig.azpAudienceFallbackEnabled`) and, for access tokens, `IssuerConfig.accessTokenAudienceOptional`; an ID token without `aud` and without a matching fallback is rejected as a missing claim.
+** A present `aud` claim, including an empty JSON array, must contain at least one expected audience. Otherwise the token is rejected as an audience mismatch, for ID and access tokens alike.
+** An empty `aud` array is never eligible for the azp fallback.
+** `accessTokenAudienceOptional(true)` does not accept `aud: []`. The option covers an identity provider that omits `aud`, not one that sends an empty array.
 * **azp** (authorized party) - validated when `expectedClientId` is configured
+** `azp` must be a JSON string. An array, number, boolean or object is rejected when the token is built, before any validator runs, so a non-string `azp` never satisfies the authorized-party check or the audience fallback, even when its text form equals a configured client id or audience.
 * **jti** (JWT ID) - accessible via generic claim access on the token content; the library exposes no typed accessor for it
 
 [[secure-communication]]

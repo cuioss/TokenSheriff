@@ -17,10 +17,12 @@ package de.cuioss.sheriff.token.validation.pipeline.validator;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
+import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -29,7 +31,10 @@ import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -212,5 +217,27 @@ class AuthorizedPartyValidatorTest {
         assertThrows(NullPointerException.class,
                 () -> new AccessTokenContent(claims, rawToken),
                 "Null claim values must be rejected by the defensive copy");
+    }
+
+    @Nested
+    @DisplayName("JSON-typed azp built through TokenBuilder")
+    class JsonTypedAzp {
+
+        @ParameterizedTest(name = "azp as {0}")
+        @MethodSource("de.cuioss.sheriff.token.validation.pipeline.validator.JsonTypedAzpFixture#nonStringAzpValues")
+        @DisplayName("Should never accept a non-string azp, even when its string form is a configured client id")
+        void shouldNeverAcceptNonStringAzp(String jsonType, String azpJson) {
+            MapRepresentation body = JsonTypedAzpFixture.bodyWithAzp(azpJson);
+            AuthorizedPartyValidator jsonValidator = new AuthorizedPartyValidator(
+                    JsonTypedAzpFixture.idsMatchingStringifiedAzp(body), securityEventCounter, true);
+
+            assertThrows(TokenValidationException.class,
+                    () -> buildAndValidate(jsonValidator, body),
+                    "azp as " + jsonType + " must be rejected");
+        }
+
+        private void buildAndValidate(AuthorizedPartyValidator jsonValidator, MapRepresentation body) {
+            jsonValidator.validateAuthorizedParty(JsonTypedAzpFixture.buildToken(TokenType.ACCESS_TOKEN, body));
+        }
     }
 }

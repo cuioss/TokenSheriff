@@ -116,6 +116,7 @@ class NativeImageMetadataTest {
             Map.entry("de.cuioss.sheriff.token.validation.domain.claim.mapper.OffsetDateTimeMapper", CONSTRUCTORS_ONLY),
             Map.entry("de.cuioss.sheriff.token.validation.domain.claim.mapper.ScopeMapper", CONSTRUCTORS_ONLY),
             Map.entry("de.cuioss.sheriff.token.validation.domain.claim.mapper.StringSplitterMapper", CONSTRUCTORS_ONLY),
+            Map.entry("de.cuioss.sheriff.token.validation.domain.claim.mapper.StrictStringMapper", CONSTRUCTORS_ONLY),
             Map.entry("de.cuioss.sheriff.token.commons.transport._WellKnownResult_DslJsonConverter", CONSTRUCTORS_ONLY),
             Map.entry("de.cuioss.sheriff.token.commons.transport._Jwks_DslJsonConverter", CONSTRUCTORS_ONLY),
             Map.entry("de.cuioss.sheriff.token.commons.transport._JwkKey_DslJsonConverter", CONSTRUCTORS_ONLY),

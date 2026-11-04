@@ -17,11 +17,14 @@ package de.cuioss.sheriff.token.validation.pipeline.validator;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
+import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
+import de.cuioss.sheriff.token.validation.domain.token.TokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -31,11 +34,15 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -224,5 +231,106 @@ class AudienceValidatorTest {
         assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
         assertTrue(exception.getMessage().contains("Missing required audience claim in ID token"));
         assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+    }
+
+    /**
+     * The azp situation an empty audience array is combined with.
+     */
+    enum AzpSituation {
+        /** azp fallback enabled and azp matches an expected audience. */
+        FALLBACK_ENABLED_MATCHING_AZP(true, true),
+        /** azp fallback disabled, azp still matches an expected audience. */
+        FALLBACK_DISABLED(false, true),
+        /** azp fallback enabled, but the token carries no azp claim. */
+        NO_AZP_CLAIM(true, false);
+
+        private final boolean fallbackEnabled;
+        private final boolean azpPresent;
+
+        AzpSituation(boolean fallbackEnabled, boolean azpPresent) {
+            this.fallbackEnabled = fallbackEnabled;
+            this.azpPresent = azpPresent;
+        }
+    }
+
+    static Stream<Arguments> emptyAudienceCases() {
+        return Stream.of(TokenType.ACCESS_TOKEN, TokenType.ID_TOKEN)
+                .flatMap(tokenType -> Stream.of(AzpSituation.values())
+                        .map(situation -> Arguments.of(tokenType, situation)));
+    }
+
+    @ParameterizedTest(name = "{0} with {1}")
+    @MethodSource("emptyAudienceCases")
+    @DisplayName("Should reject a present but empty audience array as audience mismatch")
+    void shouldRejectEmptyAudienceArrayAsMismatch(TokenType tokenType, AzpSituation situation) {
+        AudienceValidator audienceValidator = new AudienceValidator(EXPECTED_AUDIENCES, securityEventCounter,
+                false, situation.fallbackEnabled);
+        TokenContent token = tokenWithEmptyAudience(tokenType, situation.azpPresent);
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> audienceValidator.validateAudience(token));
+
+        assertEmptyAudienceRejectedAsMismatch(exception);
+    }
+
+    @Test
+    @DisplayName("Should reject access token with empty audience array even when audience is optional and azp matches")
+    void shouldRejectEmptyAudienceArrayEvenWhenAudienceOptional() {
+        AudienceValidator lenientValidator = new AudienceValidator(EXPECTED_AUDIENCES, securityEventCounter, true, true);
+        TokenContent token = tokenWithEmptyAudience(TokenType.ACCESS_TOKEN, true);
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> lenientValidator.validateAudience(token));
+
+        assertEmptyAudienceRejectedAsMismatch(exception);
+    }
+
+    static Stream<Arguments> nonStringAzpCases() {
+        return Stream.of(TokenType.ACCESS_TOKEN, TokenType.ID_TOKEN)
+                .flatMap(tokenType -> JsonTypedAzpFixture.nonStringAzpValues()
+                        .map(azpCase -> Arguments.of(tokenType, azpCase.get()[0], azpCase.get()[1])));
+    }
+
+    @ParameterizedTest(name = "{0} with azp as {1}")
+    @MethodSource("nonStringAzpCases")
+    @DisplayName("Should never satisfy the audience fallback with a non-string azp, even when its string form is expected")
+    void shouldNeverSatisfyAudienceFallbackWithNonStringAzp(TokenType tokenType, String jsonType, String azpJson) {
+        MapRepresentation body = JsonTypedAzpFixture.bodyWithAzp(azpJson);
+        AudienceValidator fallbackValidator = new AudienceValidator(
+                JsonTypedAzpFixture.idsMatchingStringifiedAzp(body), securityEventCounter, false, true);
+
+        assertThrows(TokenValidationException.class,
+                () -> buildAndValidate(fallbackValidator, tokenType, body),
+                tokenType + " with azp as " + jsonType + " must be rejected");
+    }
+
+    private static void buildAndValidate(AudienceValidator audienceValidator, TokenType tokenType,
+            MapRepresentation body) {
+        audienceValidator.validateAudience(JsonTypedAzpFixture.buildToken(tokenType, body));
+    }
+
+    private static TokenContent tokenWithEmptyAudience(TokenType tokenType, boolean azpPresent) {
+        TestTokenHolder tokenHolder = TokenType.ID_TOKEN.equals(tokenType)
+                ? TestTokenGenerators.idTokens().next()
+                : TestTokenGenerators.accessTokens().next();
+        Map<String, ClaimValue> claims = new HashMap<>(tokenHolder.getClaims());
+        claims.put(ClaimName.AUDIENCE.getName(), ClaimValue.forList("[]", List.of()));
+        if (azpPresent) {
+            claims.put(ClaimName.AUTHORIZED_PARTY.getName(), ClaimValue.forPlainString(EXPECTED_AUDIENCE_1));
+        } else {
+            claims.remove(ClaimName.AUTHORIZED_PARTY.getName());
+        }
+        return TokenType.ID_TOKEN.equals(tokenType)
+                ? new IdTokenContent(claims, tokenHolder.getRawToken())
+                : new AccessTokenContent(claims, tokenHolder.getRawToken());
+    }
+
+    private void assertEmptyAudienceRejectedAsMismatch(TokenValidationException exception) {
+        assertEquals(SecurityEventCounter.EventType.AUDIENCE_MISMATCH, exception.getEventType());
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.AUDIENCE_MISMATCH));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING));
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                JWTValidationLogMessages.WARN.AUDIENCE_MISMATCH.resolveIdentifierString());
     }
 }
