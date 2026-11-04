@@ -92,6 +92,7 @@ public class ParserConfig {
         public ParserConfigBuilder maxTokenSize(int bytes);      // Default: 8192 (8KB)
         public ParserConfigBuilder maxPayloadSize(int bytes);    // Default: 8192 (8KB)
         public ParserConfigBuilder maxStringLength(int bytes);   // Default: 4096 (4KB)
+        public ParserConfigBuilder maxHttpResponseSize(int bytes); // Default: 262144 (256KB), JWKS and well-known HTTP responses only
     }
 }
 ----
@@ -184,6 +185,11 @@ public class TokenValidationException extends RuntimeException {
 |DSL-JSON enforced limit on string buffer size
 |4KB
 |During JSON parsing
+
+|`maxHttpResponseSize`
+|Limits JWKS and well-known discovery HTTP response bodies only
+|256KB
+|While the response streams and after it is read
 
 |===
 

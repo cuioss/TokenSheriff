@@ -41,7 +41,7 @@ For more details about security events related to these log messages, see the Se
 |===
 |ID |Component |Message |Description
 |TokenSheriff-001 |TOKEN |TokenValidator initialized with %s |Logged when TokenValidator is initialized with issuer configurations
-|TokenSheriff-002 |JWKS |Keys updated due to data change - load state: %s |Logged when JWKS keys are updated due to data changes from the endpoint
+|TokenSheriff-002 |JWKS |JWKS keys updated for issuer %s, key ids: %s |Logged when a JWKS load or refresh installs a changed key set, naming the issuer the keys belong to and the key ids of the newly installed key set in sorted order
 |TokenSheriff-003 |JWKS |Background JWKS refresh started with interval: %s seconds |Logged when background JWKS refresh is started with specified interval
 |TokenSheriff-004 |TOKEN |Skipping disabled issuer configuration %s |Logged when an issuer configuration is skipped because it's disabled
 |TokenSheriff-007 |JWKS |JWKS loaded successfully for issuer: %s |Logged when JWKS is successfully loaded for a specific issuer
@@ -49,7 +49,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-009 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
 |===
 
-== WARN Level (100-170; identifier 156 is retired)
+== WARN Level (100-172; identifier 156 is retired)
 
 [cols="1,1,2,2", options="header"]
 |===
@@ -120,10 +120,11 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-165 |Audience |Audience claim missing but azp claim '%s' matches expected audience — using azp as fallback |Logged when the audience (aud) claim is absent but the azp claim matches the expected audience, falling back to azp for audience validation
 |TokenSheriff-166 |Audience |Access token audience validation skipped (accessTokenAudienceOptional=true). Expected audience: %s |Logged when audience validation is skipped for an access token because accessTokenAudienceOptional is enabled
 |TokenSheriff-167 |Authorized Party |azp claim missing, using client_id claim '%s' for authorized party validation (RFC 9068) |Logged when the azp claim is absent but the client_id claim (per RFC 9068) matches the expected client ID
-|TokenSheriff-168 |JWKS |SSRF egress guard blocked well-known discovery fetch: %s |Logged when the SSRF egress guard rejects the OIDC well-known discovery endpoint because its host resolves to a disallowed (loopback/link-local/site-local/ULA/metadata) address before any fetch is issued
-|TokenSheriff-168 |JWKS |Duplicate kid '%s' in JWKS: a later key overwrote an earlier one — the JWKS should carry a unique kid per key |Logged when a JWKS document contains two keys with the same key ID (note: this identifier is currently shared with the SSRF egress guard message above)
+|TokenSheriff-168 |JWKS |SSRF egress guard blocked well-known discovery fetch: %s |Logged when the SSRF egress guard rejects the OIDC well-known discovery endpoint before any fetch is issued, because its host resolves to a disallowed address: loopback (127.0.0.0/8, ::1), link-local (169.254.0.0/16, fe80::/10, including the cloud metadata address), site-local (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), IPv6 unique-local (fc00::/7), shared address space (100.64.0.0/10), "this network" (0.0.0.0/8) and the IPv6 wildcard ::, limited broadcast (255.255.255.255) or multicast (224.0.0.0/4, ff00::/8). The check resolves the host freshly before the fetch, which narrows but does not close DNS rebinding: the HTTP client resolves the host again when it connects
 |TokenSheriff-169 |JWKS |JWKS refresh for issuer '%s' produced no usable keys — retaining the current key set instead of retiring it |Logged when a JWKS refresh returns no usable keys and the previously loaded key set is kept
 |TokenSheriff-170 |JWKS |JWKS for issuer '%s' has not been refreshed successfully since %s, exceeding the configured maximum staleness of %s; the loader reports a non-OK status until a refresh succeeds |Logged once per degradation when a `maxStaleness` is configured and a failed background refresh finds the last successful JWKS load older than that bound. The loader leaves `OK` (tokens for the issuer are rejected until a refresh succeeds); no installed key is dropped
+|TokenSheriff-171 |JWKS |Duplicate kid '%s' in JWKS: a later key overwrote an earlier one — the JWKS should carry a unique kid per key |Logged when a JWKS document contains two keys with the same key ID; the later key replaces the earlier one
+|TokenSheriff-172 |JWKS |Advertised jwks_uri for issuer %s cannot be used, the loader stops retrying: %s |Logged once when the `jwks_uri` advertised by the well-known discovery document cannot be used (a malformed URI, or a cleartext `http` URI while insecure HTTP is not allowed) and no endpoint is published yet. The loader ends in the terminal `ERROR` status and makes no further retries: no refresh task is scheduled, or the running one is cancelled. The second parameter is the reason reported by the HTTP handler configuration; no document content is logged
 |===
 
 == ERROR Level (200-206)
@@ -134,7 +135,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-200 |TOKEN |Failed to validate validation signature: %s |Logged when a token signature validation fails
 |TokenSheriff-201 |JWKS |JWKS content size exceeds maximum allowed size (upperLimit=%s, actual=%s) |Logged when the JWKS content size exceeds the maximum allowed size, showing both the configured upper limit and the actual content size
 |TokenSheriff-202 |JWKS |Failed to parse JWKS JSON: %s |Logged when there is an error parsing the JWKS JSON
-|TokenSheriff-203 |JWKS |Failed to load JWKS |Logged when a JWKS load operation fails
+|TokenSheriff-203 |JWKS |Failed to load JWKS for issuer %s: %s |Logged when a JWKS load operation fails, naming the issuer and the error detail of the failed load
 |TokenSheriff-204 |WELLKNOWN |Failed to parse JSON from %s: %s |Logged when JSON parsing fails for a well-known discovery document
 |TokenSheriff-205 |JWKS |JWKS initialization failed: %s for issuer: %s |Logged when JWKS initialization fails for a specific issuer with error details
 |TokenSheriff-206 |JWKS |JWKS load execution failed: %s for issuer: %s |Logged when JWKS load execution fails for a specific issuer with error details
@@ -144,7 +145,7 @@ For more details about security events related to these log messages, see the Se
 
 This section documents log messages specific to the Quarkus integration module (token-sheriff-validation-quarkus).
 
-=== Quarkus INFO Level (001-024; identifiers 017 and 018 are retired)
+=== Quarkus INFO Level (001-025; identifiers 017 and 018 are retired)
 
 [cols="1,1,2,2", options="header"]
 |===
@@ -171,9 +172,10 @@ This section documents log messages specific to the Quarkus integration module (
 |TokenSheriff_Q-022 |JWE |No JWE decryption configuration found - JWE support disabled |Indicates that no JWE decryption configuration was found
 |TokenSheriff_Q-023 |ACCESS_LOG |CustomAccessLogFilter initialized: %s |Shows the initialized access log filter configuration
 |TokenSheriff_Q-024 |ACCESS_LOG |%s |Individual access log entry in the configured format
+|TokenSheriff_Q-025 |OBSERVABILITY |Observed TokenValidator resolution: %s |Shows which TokenValidator the observability beans (health checks, metrics, DevUI) report against: the extension's property-configured validator, a single external validator bean, or none
 |===
 
-=== Quarkus WARN Level (100-103)
+=== Quarkus WARN Level (100-104)
 
 [cols="1,1,2,2", options="header"]
 |===
@@ -182,6 +184,7 @@ This section documents log messages specific to the Quarkus integration module (
 |TokenSheriff_Q-101 |BEARER |Bearer token does not meet requirements. Missing scopes: %s, Missing roles: %s, Missing groups: %s |Details about which requirements are missing from a bearer token
 |TokenSheriff_Q-102 |BEARER |Bearer token validation failed: %s (eventType=%s) |Token validation failed with a specific event type (e.g., expired, invalid signature)
 |TokenSheriff_Q-103 |METRICS |No Micrometer counter found for event type %s, delta %s lost |Indicates that a metrics counter was not found and a delta value was lost
+|TokenSheriff_Q-104 |OBSERVABILITY |Multiple external TokenValidator beans found (%s) - unable to select one, reporting NOT_CONFIGURED |Indicates that the issuer property namespace is unpopulated and several external TokenValidator beans are present, so the observability beans cannot select one and report NOT_CONFIGURED
 |===
 
 === Quarkus ERROR Level (200)

@@ -45,9 +45,16 @@ TokenValidator validator = TokenValidator.builder()
 |4KB
 |During JSON parsing
 
+|`maxHttpResponseSize`
+|Limits JWKS and well-known discovery HTTP response bodies
+|256KB
+|While the response streams and after it is read
+
 |===
 
 Base64 encoding increases size by ~33%: an 8KB token yields ~6KB decoded content. The 8KB per-part limit accommodates header + payload; the 4KB string limit prevents individual field attacks.
+
+`maxPayloadSize` no longer bounds HTTP responses: JWKS and well-known discovery documents are bounded by `maxHttpResponseSize` alone, so a JWKS document larger than one decoded JWT part is accepted up to that ceiling.
 
 == Recommended Settings
 

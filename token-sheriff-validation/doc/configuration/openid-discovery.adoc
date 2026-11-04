@@ -55,7 +55,7 @@ The well-known endpoint returns a JSON document with issuer metadata:
 WellKnownConfig wellKnownConfig = WellKnownConfig.builder()
     .wellKnownUrl(wellKnownUrl.toString())
     .parserConfig(ParserConfig.builder()
-        .maxPayloadSize(4096)  // Limits parsed JSON payload size
+        .maxHttpResponseSize(64 * 1024)  // Bounds the discovery document (HTTP response body); default 256KB
         .build())
     .build();
 
@@ -265,6 +265,8 @@ NOTE: Use the tenant-specific Microsoft endpoint. The multi-tenant `common` endp
 Every `IssuerConfig` that loads its keys through well-known discovery compares its configured `issuerIdentifier` with the `issuer` advertised by the discovery document. A single trailing slash difference is tolerated. On a mismatch the loader stops before it fetches the advertised `jwks_uri`: no keys are loaded, an `ISSUER_MISMATCH` security event is counted, and every token for that issuer is rejected.
 
 A discovery document that advertises a `jwks_uri` but no `issuer` (or a blank one) is a terminal rejection as well: no keys are loaded, the advertised `jwks_uri` is never fetched, an `ISSUER_MISMATCH` security event is counted once, the rejection is not retried by the background refresh, and every token for that issuer is rejected. A document that lacks both `issuer` and `jwks_uri` is an unusable response instead and stays retryable.
+
+An advertised `jwks_uri` for which no HTTP handler can be built — a malformed URI, or a cleartext `http` URI while insecure HTTP is not allowed — is a terminal rejection too, when no endpoint is published yet (at initialization, or on a refresh cycle that still has no endpoint after an unavailable discovery). Retrying cannot change the outcome, so the loader ends in the terminal `ERROR` status, no refresh task is scheduled (or the running one is cancelled), nothing is fetched, and `TokenSheriff-172` (`JWKS_URI_UNUSABLE`) is logged once, naming the issuer and the reason. Tokens for that issuer are rejected. Once an endpoint is published, an unusable `jwks_uri` found by a re-discovery is rejected without changing the status, as described in xref:#key-staleness-and-rediscovery[Re-discovery of a moved `jwks_uri`].
 
 Troubleshooting an `ISSUER_MISMATCH`:
 
