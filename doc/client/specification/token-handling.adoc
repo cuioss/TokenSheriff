@@ -30,14 +30,16 @@ xref:../threat-model.adoc#T-AUD-CONFUSION[T-AUD-CONFUSION]):
 * `iss`, `aud`, `exp`, `iat` claim validation is performed by the pipeline;
 * DPoP-bound tokens are validated per `VALIDATION-8.7`.
 
-The client MUST NOT re-implement or weaken any of this. The issuance-time DPoP check — rejecting a
-token response that is not `DPoP`-typed, or whose JWT access token carries an absent or different
-`cnf.jkt` (xref:retrieval-flow.adoc#_token_response_validation[token-response validation]) — is
-not such a re-implementation: it confirms that the authorization server bound the token to the
-client's own proof key, and decides nothing about the token's trust. This is the primary *validation
-synergy*: tokens are cryptographically validated, not merely received — closing the biggest
-gap in the xref:../architecture.adoc[portal reference], where identity is taken from userinfo
-with no ID-token signature validation.
+The client MUST NOT re-implement or weaken any of this. Inheriting the pipeline is the primary
+*validation synergy*: tokens are cryptographically validated, not merely received — closing the
+biggest gap in the xref:../architecture.adoc[portal reference], where identity is taken from
+userinfo with no ID-token signature validation.
+
+The issuance-time DPoP check — rejecting a token response that is not `DPoP`-typed, or whose JWT
+access token carries an absent, malformed or different `cnf.jkt`
+(xref:retrieval-flow.adoc#_token_response_validation[token-response validation]) — is not a
+re-implementation of that validation: it confirms that the authorization server bound the token to
+the client's own proof key, and decides nothing about the token's trust.
 
 == ID-token and userinfo validation
 

@@ -143,9 +143,15 @@ public class StepUpResultVerifier {
     }
 
     /**
-     * @return {@code now - authTime}, saturated instead of overflowing: an AS-supplied
-     *         {@code auth_time} far enough in the past saturates to {@link Long#MAX_VALUE} (stale), and
-     *         one far enough in the future to {@link Long#MIN_VALUE}
+     * Computes the age of the authentication. An AS-supplied {@code auth_time} far enough in the past
+     * for the subtraction to overflow saturates to {@link Long#MAX_VALUE} and is therefore stale. A
+     * future-dated {@code auth_time} — at any distance — yields a negative age, which never exceeds the
+     * {@code max_age} limit, so it is accepted as fresh: this check bounds staleness only and does not
+     * reject an {@code auth_time} ahead of the clock. With a clock at or after the epoch the subtraction
+     * cannot overflow in the negative direction; the {@link Long#MIN_VALUE} saturation is reachable
+     * only from a clock source that reports an instant before the epoch.
+     *
+     * @return {@code now - authTime}, saturated instead of overflowing
      */
     private static long ageSeconds(long nowEpochSeconds, long authTimeEpochSeconds) {
         try {

@@ -64,4 +64,14 @@ public class AccessTokenConfirmation {
         /** The base64url-encoded RFC 7638 JWK thumbprint of the DPoP proof key. */
         public @Nullable String jkt;
     }
+
+    /**
+     * A member-less probe that only establishes whether a decoded payload is a syntactically valid
+     * JSON object. Every member is skipped, so the probe never fails on the content of a claim — which
+     * is what lets the caller tell "not a JWT" (the probe fails) apart from "a JWT with a malformed
+     * {@code cnf}" (the probe succeeds, the strict {@link AccessTokenConfirmation} read fails).
+     */
+    @CompiledJson
+    public static class JsonObjectProbe {
+    }
 }

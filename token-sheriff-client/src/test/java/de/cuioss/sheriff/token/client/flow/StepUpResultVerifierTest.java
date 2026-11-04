@@ -157,6 +157,20 @@ class StepUpResultVerifierTest {
         }
 
         @Test
+        @DisplayName("Should accept a future-dated auth_time as fresh: the check bounds staleness only")
+        void shouldAcceptFutureDatedAuthTime() {
+            var verifier = verifierWithSkew(Duration.ZERO);
+            var challenge = new StepUpChallenge(null, maxAge);
+            var nearFuture = authenticatedSecondsAgo(-Generators.integers(1, 100_000).next());
+            var farFuture = idToken(ACR, Long.toString(Long.MAX_VALUE));
+
+            assertDoesNotThrow(() -> verifier.verify(challenge, nearFuture),
+                    "an auth_time ahead of the clock yields a negative age, which never exceeds max_age");
+            assertDoesNotThrow(() -> verifier.verify(challenge, farFuture),
+                    "even a maximal future auth_time yields a negative age and is accepted as fresh");
+        }
+
+        @Test
         @DisplayName("Should not overflow the limit when the skew allowance is at its maximum")
         void shouldSaturateMaximumSkew() {
             var verifier = verifierWithSkew(Duration.ofSeconds(Long.MAX_VALUE));

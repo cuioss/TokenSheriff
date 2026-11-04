@@ -200,12 +200,13 @@ public class TokenEndpointClient {
      *       answer to a DPoP-proofed request is a downgrade to an unbound token;</li>
      *   <li>when the access token decodes as a compact JWS whose payload is a JSON object, its
      *       {@code cnf.jkt} is present and equals the proof-key thumbprint recorded in the constraint's
-     *       binding — a JWT without {@code cnf.jkt} is not bound to the proof key, and one with a
-     *       different {@code jkt} is bound to somebody else's key.</li>
+     *       binding — a JWT without {@code cnf.jkt}, or whose {@code cnf} is not an object or whose
+     *       {@code jkt} is not a string, is not bound to the proof key, and one with a different
+     *       {@code jkt} is bound to somebody else's key.</li>
      * </ol>
-     * An access token that does not decode as a JWS payload (an opaque reference token, a JWE, a
-     * malformed value) skips only the {@code cnf.jkt} comparison; the {@code token_type} condition still
-     * applies. The check runs after a success status, so the grant is already redeemed and every
+     * An access token that does not decode as a JWS whose payload is a JSON object (an opaque reference
+     * token, a JWE, a malformed value) skips only the {@code cnf.jkt} comparison; the {@code token_type}
+     * condition still applies. The check runs after a success status, so the grant is already redeemed and every
      * rejection is a {@link RedeemedResponseException}. Exception messages carry fixed text plus
      * sanitized (CWE-117) authorization-server values only.
      */
@@ -218,12 +219,12 @@ public class TokenEndpointClient {
                     "Token endpoint issued token_type '" + LogSanitizer.sanitize(tokenResponse.tokenType)
                             + "' in answer to a DPoP-constrained request; expected 'DPoP'");
         }
-        Optional<AccessTokenConfirmation> confirmation = decodeConfirmation(tokenResponse.accessToken);
-        if (confirmation.isEmpty()) {
+        Optional<byte[]> payload = jwtPayload(tokenResponse.accessToken);
+        if (payload.isEmpty()) {
             return;
         }
         String expectedJkt = senderConstraint.binding().confirmation();
-        Optional<String> issuedJkt = confirmation.get().getJkt();
+        Optional<String> issuedJkt = readConfirmation(payload.get()).getJkt();
         if (issuedJkt.isEmpty()) {
             throw new RedeemedResponseException(
                     "Token endpoint issued a DPoP JWT access token without a cnf.jkt binding");
@@ -237,16 +238,21 @@ public class TokenEndpointClient {
     }
 
     /**
-     * Decodes the payload of a compact-JWS access token into its {@code cnf} view. This is a
-     * decode-only step for the issuance-time binding check — the token's signature and claims are
-     * never validated here.
+     * Decides whether the access token is a parseable JWT: a compact JWS (exactly three dot-separated
+     * parts) whose payload part is non-empty base64url that decodes to a syntactically valid JSON
+     * object. This is a decode-only step for the issuance-time binding check — the token's signature
+     * and claims are never validated here, and the probe reads no member of the object.
+     * <p>
+     * No size guard is applied to the decoded payload: {@link #parse(String)} already rejects any
+     * response body larger than the configured payload bound, the access token is a substring of that
+     * body, and base64url decoding shrinks its input, so the decoded payload is always within the bound.
      *
-     * @return the decoded confirmation view, or empty when the access token is not a compact JWS
-     *         (not exactly three dot-separated parts), its payload is not valid base64url, the decoded
-     *         payload exceeds the configured payload bound, or the payload does not parse as a JSON
-     *         object of the expected shape
+     * @return the decoded payload bytes when the access token is a JWT, or empty when it is not (an
+     *         opaque token, a JWE, a value with the wrong part count, an empty or non-base64url payload
+     *         part, or a payload that is not a JSON object) — only then is the {@code cnf.jkt}
+     *         comparison skipped
      */
-    private Optional<AccessTokenConfirmation> decodeConfirmation(String accessToken) {
+    private Optional<byte[]> jwtPayload(String accessToken) {
         String[] parts = accessToken.split("\\.", -1);
         if (parts.length != 3 || parts[1].isEmpty()) {
             return Optional.empty();
@@ -258,17 +264,40 @@ public class TokenEndpointClient {
             LOGGER.debug("Access token payload is not base64url; skipping the cnf.jkt comparison");
             return Optional.empty();
         }
-        if (payload.length > maxContentSize) {
-            LOGGER.debug("Access token payload exceeds %s bytes; skipping the cnf.jkt comparison", maxContentSize);
-            return Optional.empty();
-        }
         try {
-            return Optional.ofNullable(
-                    dslJson.deserialize(AccessTokenConfirmation.class, payload, payload.length));
+            if (dslJson.deserialize(AccessTokenConfirmation.JsonObjectProbe.class, payload, payload.length) == null) {
+                LOGGER.debug("Access token payload is JSON null; skipping the cnf.jkt comparison");
+                return Optional.empty();
+            }
         } catch (IOException e) {
             LOGGER.debug("Access token payload is not a JSON object; skipping the cnf.jkt comparison: %s",
                     LogSanitizer.sanitize(e.getMessage()));
             return Optional.empty();
+        }
+        return Optional.of(payload);
+    }
+
+    /**
+     * Reads the {@code cnf} claim of a payload {@link #jwtPayload(String)} already established to be a
+     * JSON object. The read is strict: the access token is known to be a JWT, so a {@code cnf} that is
+     * not an object, or a {@code jkt} that is not a string, is an unbound token and fails closed — it
+     * never degrades into the "not a JWT" skip.
+     *
+     * @return the confirmation view; its {@code jkt} is empty when {@code cnf} or {@code cnf.jkt} is
+     *         absent or {@code null}
+     * @throws RedeemedResponseException when {@code cnf} cannot be read as an object carrying a string
+     *         {@code jkt}
+     */
+    private AccessTokenConfirmation readConfirmation(byte[] payload) {
+        try {
+            AccessTokenConfirmation confirmation =
+                    dslJson.deserialize(AccessTokenConfirmation.class, payload, payload.length);
+            return confirmation == null ? new AccessTokenConfirmation() : confirmation;
+        } catch (IOException e) {
+            LOGGER.debug("Access token cnf claim is malformed: %s", LogSanitizer.sanitize(e.getMessage()));
+            throw new RedeemedResponseException(
+                    "Token endpoint issued a DPoP JWT access token whose cnf claim is not an object with a string jkt",
+                    e);
         }
     }
 

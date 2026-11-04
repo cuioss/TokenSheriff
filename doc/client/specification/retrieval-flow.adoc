@@ -155,10 +155,11 @@ Before any token is used (xref:../requirements.adoc#CLIENT-14[CLIENT-14]):
   (xref:../requirements.adoc#CLIENT-11[CLIENT-11]), for every grant:
 ** a `token_type` other than `DPoP` is rejected — the AS issued a bearer token in place of the
    bound one;
-** an access token that decodes as a JWT must carry a `cnf.jkt` equal to the thumbprint of the
-   DPoP proof key; an absent or different `cnf.jkt` is rejected. An access token that does not
-   decode as a JWT (opaque, encrypted) skips only this comparison, and the `token_type` check
-   still applies;
+** an access token that decodes as a JWT — a compact JWS whose payload is a JSON object — must
+   carry a `cnf.jkt` equal to the thumbprint of the DPoP proof key; an absent or different
+   `cnf.jkt` is rejected, and so is a `cnf` that is not an object or a `jkt` that is not a string.
+   An access token that does not decode as a JWT (opaque, encrypted, or a payload that is not a
+   JSON object) skips only this comparison, and the `token_type` check still applies;
 ** a rejected response fails closed with `RedeemedResponseException`: the AS has already
    consumed the grant, so the rejection is classified as a redeemed failure. An mTLS-constrained
    or unconstrained request is not affected and keeps `token_type=Bearer`;
