@@ -167,9 +167,9 @@ class IssuerConfigCachePerformanceTest {
 
                         long duration = System.nanoTime() - startTime;
                         totalTime.addAndGet(duration);
-                        totalOperations.incrementAndGet();
 
                         assertNotNull(result);
+                        totalOperations.incrementAndGet();
                     } finally {
                         latch.countDown();
                     }
@@ -220,8 +220,8 @@ class IssuerConfigCachePerformanceTest {
                             "Thread failed");
                     long duration = System.nanoTime() - startTime;
 
-                    executionTimes.add(duration);
                     assertNotNull(result);
+                    executionTimes.add(duration);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (BrokenBarrierException e) {

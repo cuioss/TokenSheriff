@@ -156,7 +156,9 @@ public class TokenBuilder {
      * Mappers (including custom SPI implementations) can throw arbitrary runtime
      * exceptions on malformed claim values (e.g. a string-typed 'exp'). These are translated
      * to {@link TokenValidationException} to honor the documented contract of TokenValidator,
-     * and counted as {@link SecurityEventCounter.EventType#MISSING_CLAIM}.
+     * and counted as {@link SecurityEventCounter.EventType#MISSING_CLAIM}. A
+     * {@link TokenValidationException} thrown by a mapper is counted under its own event type
+     * and rethrown unchanged.
      *
      * @param mapper            the mapper configured for the claim
      * @param mapRepresentation the MapRepresentation containing the claim
@@ -168,6 +170,9 @@ public class TokenBuilder {
         try {
             return mapper.map(mapRepresentation, key);
         } catch (TokenValidationException e) {
+            // A mapper cannot count its own rejection (the SPI hands it no counter), so it is
+            // counted here under the event type it carries, and rethrown unchanged.
+            securityEventCounter.increment(e.getEventType());
             throw e;
         }
         // cui-rewrite:disable InvalidExceptionUsageRecipe

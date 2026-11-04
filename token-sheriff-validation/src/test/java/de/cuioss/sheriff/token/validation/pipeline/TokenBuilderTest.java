@@ -219,7 +219,7 @@ class TokenBuilderTest {
         }
 
         @Test
-        @DisplayName("A mapper throwing a TokenValidationException propagates it unchanged")
+        @DisplayName("A mapper throwing a TokenValidationException propagates it unchanged and counts it once under its own event type")
         void propagatesMapperTokenValidationExceptionUnchanged() {
             TokenValidationException thrown = new TokenValidationException(
                     SecurityEventCounter.EventType.INVALID_JWT_FORMAT, Generators.letterStrings(5, 20).next());
@@ -231,10 +231,31 @@ class TokenBuilderTest {
             TokenValidationException exception = assertThrows(TokenValidationException.class,
                     () -> builder.createAccessToken(decodedJwt));
 
-            assertAll("the mapper's own exception is passed through and not counted again here",
+            assertAll("the mapper's own exception is passed through unchanged and counted once under its own event type",
                     () -> assertSame(thrown, exception),
+                    () -> assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.INVALID_JWT_FORMAT),
+                            "A propagated TokenValidationException must be counted once under its own event type"),
                     () -> assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM),
-                            "A propagated TokenValidationException must not add a MISSING_CLAIM event"));
+                            "A propagated TokenValidationException of another event type must not add a MISSING_CLAIM event"));
+        }
+
+        @Test
+        @DisplayName("A mapper throwing a MISSING_CLAIM TokenValidationException is counted exactly once")
+        void countsMapperMissingClaimExceptionOnce() {
+            TokenValidationException thrown = new TokenValidationException(
+                    SecurityEventCounter.EventType.MISSING_CLAIM, Generators.letterStrings(5, 20).next());
+            TokenBuilder builder = builderWithMapper((map, name) -> {
+                throw thrown;
+            });
+            DecodedJwt decodedJwt = decodedJwtWithBody(Map.of(CUSTOM_CLAIM, Generators.letterStrings(5, 20).next()));
+
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> builder.createAccessToken(decodedJwt));
+
+            assertAll("a mapper's own MISSING_CLAIM rejection is propagated unchanged and counted once, not twice",
+                    () -> assertSame(thrown, exception),
+                    () -> assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM),
+                            "A propagated MISSING_CLAIM exception must be counted exactly once"));
         }
 
         @Test

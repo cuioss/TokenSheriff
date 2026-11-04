@@ -96,9 +96,9 @@ class IssuerConfigCacheSynchronizationTest {
 
                         long duration = System.nanoTime() - startTime;
                         totalTime.addAndGet(duration);
-                        operations.incrementAndGet();
 
                         assertNotNull(result);
+                        operations.incrementAndGet();
                     } finally {
                         latch.countDown();
                     }
