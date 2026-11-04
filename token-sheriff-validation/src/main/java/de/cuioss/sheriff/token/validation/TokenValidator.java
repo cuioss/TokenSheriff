@@ -284,7 +284,7 @@ public class TokenValidator implements Closeable {
             LOGGER.debug("Pre-created TokenSignatureValidator for issuer: %s", issuerIdentifier);
 
             // Initialize token builder
-            TokenBuilder tokenBuilder = new TokenBuilder(issuerConfig);
+            TokenBuilder tokenBuilder = new TokenBuilder(issuerConfig, this.securityEventCounter);
             tokenBuildersMap.put(issuerIdentifier, tokenBuilder);
             LOGGER.debug("Pre-created TokenBuilder for issuer: %s", issuerIdentifier);
 

@@ -57,12 +57,19 @@ public class TokenBuilder {
     // Combined mapper lookup to avoid runtime checks
     private final Map<String, ClaimMapper> allMappers;
 
+    // Counts the MISSING_CLAIM event when a claim mapper fails on a malformed claim value
+    private final SecurityEventCounter securityEventCounter;
+
     /**
      * Constructs a TokenBuilder with the specified IssuerConfig.
      *
-     * @param issuerConfig the issuer configuration
+     * @param issuerConfig         the issuer configuration
+     * @param securityEventCounter the counter for security events, incremented with
+     *                             {@link SecurityEventCounter.EventType#MISSING_CLAIM} when a claim
+     *                             mapper fails on a malformed claim value
      */
-    public TokenBuilder(IssuerConfig issuerConfig) {
+    public TokenBuilder(IssuerConfig issuerConfig, SecurityEventCounter securityEventCounter) {
+        this.securityEventCounter = securityEventCounter;
         // IssuerConfig.claimMappers is never null (defaults to Map.of() in constructor)
         Map<String, ClaimMapper> customMappers = Map.copyOf(issuerConfig.getClaimMappers());
 
@@ -148,7 +155,8 @@ public class TokenBuilder {
      * <p>
      * Mappers (including custom SPI implementations) can throw arbitrary runtime
      * exceptions on malformed claim values (e.g. a string-typed 'exp'). These are translated
-     * to {@link TokenValidationException} to honor the documented contract of TokenValidator.
+     * to {@link TokenValidationException} to honor the documented contract of TokenValidator,
+     * and counted as {@link SecurityEventCounter.EventType#MISSING_CLAIM}.
      *
      * @param mapper            the mapper configured for the claim
      * @param mapRepresentation the MapRepresentation containing the claim
@@ -156,7 +164,7 @@ public class TokenBuilder {
      * @return the mapped claim value, or {@code null} if the mapper reports the claim as absent
      * @throws TokenValidationException if the mapper fails on a malformed claim value
      */
-    private static @Nullable ClaimValue mapClaim(ClaimMapper mapper, MapRepresentation mapRepresentation, String key) {
+    private @Nullable ClaimValue mapClaim(ClaimMapper mapper, MapRepresentation mapRepresentation, String key) {
         try {
             return mapper.map(mapRepresentation, key);
         } catch (TokenValidationException e) {
@@ -166,6 +174,7 @@ public class TokenBuilder {
         // Custom SPI mappers can throw arbitrary runtime exceptions — the broad
         // catch is deliberate; TokenValidationException is rethrown above.
         catch (RuntimeException e) {
+            securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_CLAIM);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.MISSING_CLAIM,
                     "Malformed claim '" + key + "': " + e.getMessage(),
