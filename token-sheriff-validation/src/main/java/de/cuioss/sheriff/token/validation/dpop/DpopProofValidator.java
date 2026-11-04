@@ -42,6 +42,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.PublicKey;
 import java.security.SignatureException;
+import java.security.interfaces.ECPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
 import java.util.List;
@@ -56,8 +57,10 @@ import java.util.Optional;
  * <ol>
  *   <li>Presence of the DPoP HTTP header</li>
  *   <li>Extraction of {@code cnf.jkt} from the access token</li>
- *   <li>DPoP proof JWT structure (typ, alg, jwk)</li>
- *   <li>DPoP proof signature using embedded JWK</li>
+ *   <li>DPoP proof JWT structure (typ, alg, jwk), including that an ECDSA {@code alg} matches the
+ *       curve of the embedded JWK ({@code ES256}/{@code P-256}, {@code ES384}/{@code P-384},
+ *       {@code ES512}/{@code P-521}, RFC 7518 §3.4)</li>
+ *   <li>DPoP proof signature using embedded JWK, verified only after the alg-to-curve binding holds</li>
  *   <li>jti presence</li>
  *   <li>iat freshness check</li>
  *   <li>ath (access token hash) match</li>
@@ -284,6 +287,10 @@ public class DpopProofValidator {
      * Validates the DPoP proof header fields (alg, jwk), verifies the signature,
      * validates claims, checks the JWK thumbprint against the expected value and finally
      * records the proof's {@code jti} for replay protection.
+     * <p>
+     * Before the signature is verified, an ECDSA {@code alg} must match the curve of the proof JWK
+     * ({@code ES256} needs {@code P-256}, {@code ES384} needs {@code P-384}, {@code ES512} needs
+     * {@code P-521}); a mismatch is rejected as {@code DPOP_PROOF_INVALID}.
      */
     private void validateDpopProofHeaderAndSignature(DecodedDpopProof decoded, String expectedThumbprint,
             String rawAccessToken, AccessTokenRequest request) {
@@ -304,6 +311,9 @@ public class DpopProofValidator {
         }
         Map<String, Object> jwkMap = jwkOpt.get();
         PublicKey proofPublicKey = parsePublicKey(jwkMap);
+
+        // Bind an ES* alg to the curve of the proof JWK before the signature is verified
+        validateEcdsaAlgorithmMatchesCurve(alg, jwkMap, proofPublicKey);
 
         // Validate DPoP proof signature
         verifyDpopSignature(decoded.parts().toArray(String[]::new), proofPublicKey, alg);
@@ -521,6 +531,45 @@ public class DpopProofValidator {
             rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
                     "Failed to parse DPoP proof public key: %s".formatted(e.getMessage()));
             return null; // unreachable
+        }
+    }
+
+    /**
+     * Requires an ECDSA proof algorithm to match the curve of the proof JWK, per RFC 7518 §3.4:
+     * {@code ES256} needs {@code P-256}, {@code ES384} needs {@code P-384} and {@code ES512} needs
+     * {@code P-521}.
+     * <p>
+     * Without this binding an {@code ES384} or {@code ES512} proof carrying a smaller-curve key
+     * reaches signature verification, the ECDSA component-range check then uses the order
+     * {@code n} of the key's curve rather than of the curve the algorithm names, and a genuine
+     * signature made with that key under the algorithm's hash verifies. The check only
+     * applies when {@code alg} is an ECDSA algorithm and the parsed key is an {@link ECPublicKey}.
+     * An EC key with a non-ECDSA algorithm, or a non-EC key with an ECDSA algorithm, is left to
+     * the signature verification step, which rejects it as before.
+     * <p>
+     * The token path is unchanged and needs no counterpart here: {@code KeyProcessor} drops a JWKS
+     * key whose {@code alg} disagrees with its curve, and
+     * {@code TokenSignatureValidator.isAlgorithmCompatible} requires an exact algorithm match for EC
+     * keys. The check therefore lives here rather than in the shared {@link SignatureVerificationUtil}.
+     *
+     * @param alg            the proof's {@code alg} header, already checked to be supported
+     * @param jwkMap         the proof's embedded JWK
+     * @param proofPublicKey the key parsed from {@code jwkMap}
+     * @throws TokenValidationException if an ECDSA algorithm does not match the JWK curve
+     */
+    private void validateEcdsaAlgorithmMatchesCurve(String alg, Map<String, Object> jwkMap,
+            PublicKey proofPublicKey) {
+        if (!SignatureVerificationUtil.isEcdsaAlgorithm(alg) || !(proofPublicKey instanceof ECPublicKey)) {
+            return;
+        }
+        // parseEcKey has already accepted this crv (it rejects every curve but P-256, P-384 and P-521),
+        // so determineEcAlgorithm cannot throw for it and no catch is needed.
+        String curve = new MapRepresentation(jwkMap).getString("crv").orElseThrow();
+        String curveAlgorithm = JwkKeyHandler.determineEcAlgorithm(curve);
+        if (!curveAlgorithm.equals(alg)) {
+            rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
+                    "DPoP proof algorithm '%s' does not match the proof JWK curve '%s', which requires algorithm '%s'"
+                            .formatted(alg, curve, curveAlgorithm));
         }
     }
 

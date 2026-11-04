@@ -337,8 +337,8 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.7[VALIDATION-8.7: DPoP Send
 
 |DP4
 |DPoP algorithm confusion
-|DPoP proof `alg` validated against allowed asymmetric algorithms; HMAC/"none" rejected
-|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/dpop/DpopProofValidatorTest.java[DpopProofValidatorTest]
+|DPoP proof `alg` validated against allowed asymmetric algorithms; HMAC/"none" rejected. An ECDSA `alg` must also match the curve of the embedded proof JWK (`ES256` needs `P-256`, `ES384` needs `P-384`, `ES512` needs `P-521`, RFC 7518 §3.4), checked in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/dpop/DpopProofValidator.java[DpopProofValidator] before the signature is verified
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/dpop/DpopProofValidatorTest.java[DpopProofValidatorTest] (`shouldRejectEcdsaProofWhoseAlgorithmDoesNotMatchJwkCurve`)
 
 |DP5
 |HTTP method/URI mismatch
