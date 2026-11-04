@@ -322,6 +322,26 @@ class AuthorizationCodeFlowTest {
                 "the rejection must name the jkt mismatch, but was: " + thrown.getMessage());
     }
 
+    @Test
+    @DisplayName("exchange() should reject a correctly DPoP-bound access token that fails pipeline validation")
+    void shouldRejectDpopBoundAccessTokenFailingValidation(URIBuilder uriBuilder) {
+        var config = config();
+        var context = FlowContext.create(REDIRECT_URI);
+        idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
+        accessHolder.withClaim(ClaimName.ISSUER.getName(),
+                ClaimValue.forPlainString("https://attacker.example.com"));
+        var generator = new DpopProofGenerator(rsaKeyPair(), "RS256");
+        moduleDispatcher.respondWith(dpopTokenResponse(DpopBoundAccessTokens.boundTo(accessHolder, generator.jkt())));
+        var metadata = metadataWithTokenEndpoint(uriBuilder);
+        var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
+        var flow = dpopFlow(config, generator);
+        var clientAuth = auth(config);
+
+        assertThrows(TokenValidationException.class,
+                () -> flow.exchange(metadata, context, callback, clientAuth),
+                "a matching cnf.jkt passes the binding check, so the pipeline validation is what must refuse the token");
+    }
+
     private AuthorizationCodeFlow dpopFlow(ClientConfiguration config, DpopProofGenerator generator) {
         return new AuthorizationCodeFlow(config, new TokenEndpointClient(config), accessBridge, idBridge,
                 new IssValidator(), SenderConstraint.dpop(generator));

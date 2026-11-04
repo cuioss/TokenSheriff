@@ -81,8 +81,9 @@ record that boundary.
 | xref:requirements.adoc#CLIENT-10[CLIENT-10] / xref:threat-model.adoc#T-PARAM-INTEGRITY[T-PARAM-INTEGRITY]
 
 | *Sender-constrain retrieved tokens* with DPoP wherever the AS supports it; reject at issuance a
-  response the AS did not bind to the proof key (`token_type` other than `DPoP`, or an absent or
-  different `cnf.jkt`); preserve the binding through storage and refresh. DPoP is the supported
+  response the AS did not bind to the proof key (`token_type` other than `DPoP`, or, for a JWT
+  access token, an absent, malformed or different `cnf.jkt`); preserve the binding through storage
+  and refresh. DPoP is the supported
   route; the certificate-bound
   variant is preserved where it already exists, but mTLS client authentication is alpha.
 | https://www.rfc-editor.org/rfc/rfc9449[RFC 9449], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0]

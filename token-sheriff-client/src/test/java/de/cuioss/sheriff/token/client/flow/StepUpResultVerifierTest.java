@@ -135,7 +135,9 @@ class StepUpResultVerifierTest {
         @DisplayName("Should apply zero skew on the default construction path")
         void shouldApplyZeroSkewByDefault() {
             var challenge = new StepUpChallenge(null, maxAge);
-            var idToken = idToken(ACR, Long.toString(Instant.now().getEpochSecond() - maxAge - 5L));
+            // One second past max_age: any default skew of one second or more would accept it, so a regression
+            // that adds even a small default allowance fails this case.
+            var idToken = idToken(ACR, Long.toString(Instant.now().getEpochSecond() - maxAge - 1L));
             var defaultVerifier = new StepUpResultVerifier();
             var skewedVerifier = new StepUpResultVerifier(InstantSource.system(), Duration.ofSeconds(60));
 
@@ -168,6 +170,33 @@ class StepUpResultVerifierTest {
                     "an auth_time ahead of the clock yields a negative age, which never exceeds max_age");
             assertDoesNotThrow(() -> verifier.verify(challenge, farFuture),
                     "even a maximal future auth_time yields a negative age and is accepted as fresh");
+        }
+
+        @Test
+        @DisplayName("Should reject a negative max_age instead of letting the skew widen it into an accepting bound")
+        void shouldRejectNegativeMaxAge() {
+            int negativeMaxAge = -Generators.integers(1, 600).next();
+            var challenge = new StepUpChallenge(null, negativeMaxAge);
+            // The skew is |max_age| + 60, so the evaluated limit would be 60 and a just-issued token would pass
+            // without the explicit rejection: this case fails before the fix and passes after it.
+            var freshToken = authenticatedSecondsAgo(0);
+            var skewedVerifier = verifierWithSkew(Duration.ofSeconds(Math.abs((long) negativeMaxAge) + 60L));
+            var zeroSkewVerifier = verifierWithSkew(Duration.ZERO);
+
+            assertThrows(ClientProtocolException.class, () -> skewedVerifier.verify(challenge, freshToken),
+                    "a negative max_age is rejected even when the skew would make the limit non-negative");
+            assertThrows(ClientProtocolException.class, () -> zeroSkewVerifier.verify(challenge, freshToken),
+                    "a negative max_age is rejected without a skew allowance as well");
+        }
+
+        @Test
+        @DisplayName("Should accept a max_age of zero: only an authentication at the current instant is fresh")
+        void shouldAcceptZeroMaxAgeForAFreshAuthentication() {
+            var verifier = verifierWithSkew(Duration.ZERO);
+            var challenge = new StepUpChallenge(null, 0);
+
+            assertDoesNotThrow(() -> verifier.verify(challenge, authenticatedSecondsAgo(0)),
+                    "zero is a valid max_age and must not be mistaken for the negative case");
         }
 
         @Test

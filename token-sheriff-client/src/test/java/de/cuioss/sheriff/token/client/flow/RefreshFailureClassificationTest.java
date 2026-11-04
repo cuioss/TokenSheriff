@@ -23,6 +23,8 @@ import de.cuioss.sheriff.token.client.flow.RefreshFailureClassification.Kind;
 import de.cuioss.sheriff.token.client.token.RefreshTokenFamily;
 import de.cuioss.sheriff.token.client.token.RefreshTokenFamilyRevokedException;
 import de.cuioss.sheriff.token.commons.error.TransportException;
+import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
+import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
@@ -423,6 +425,49 @@ class RefreshFailureClassificationTest {
 
         assertAll("a recoverable challenge must not surface as a failure at all",
                 () -> assertEquals("a", response.accessToken),
+                () -> assertEquals(2, moduleDispatcher.getCallCount()));
+    }
+
+    @Test
+    @DisplayName("Should refuse a Bearer-typed answer to the retry after a nonce challenge")
+    void shouldRefuseABearerAnswerToTheNonceRetry(URIBuilder uriBuilder) {
+        moduleDispatcher.challengeWithNonceOnce(Generators.letterStrings(16, 32).next());
+        moduleDispatcher.respondWith(200, "{\"access_token\":\"a\",\"token_type\":\"Bearer\",\"expires_in\":300}");
+        var client = new TokenEndpointClient(config());
+        var endpoint = tokenEndpoint(uriBuilder);
+        var form = refreshForm();
+        var constraint = dpopConstraint();
+
+        var thrown = assertThrows(RedeemedResponseException.class,
+                () -> client.requestToken(endpoint, form, Map.of(), constraint),
+                "the retry's answer goes through the same binding check as a first answer");
+
+        assertAll("the downgrade is refused after exactly one retry",
+                () -> assertTrue(thrown.getMessage().contains("token_type 'Bearer'"),
+                        "the rejection must name the downgraded token_type, but was: " + thrown.getMessage()),
+                () -> assertEquals(2, moduleDispatcher.getCallCount()));
+    }
+
+    @Test
+    @DisplayName("Should refuse a JWT access token bound to a foreign key in the answer to the nonce retry")
+    void shouldRefuseAForeignJktInTheNonceRetry(URIBuilder uriBuilder) {
+        moduleDispatcher.challengeWithNonceOnce(Generators.letterStrings(16, 32).next());
+        TestTokenHolder holder = TestTokenGenerators.accessTokens().next();
+        String foreignJkt = Generators.letterStrings(43, 43).next();
+        moduleDispatcher.respondWith(200, "{\"access_token\":\"" + DpopBoundAccessTokens.boundTo(holder, foreignJkt)
+                + "\",\"token_type\":\"DPoP\",\"expires_in\":300}");
+        var client = new TokenEndpointClient(config());
+        var endpoint = tokenEndpoint(uriBuilder);
+        var form = refreshForm();
+        var constraint = dpopConstraint();
+
+        var thrown = assertThrows(RedeemedResponseException.class,
+                () -> client.requestToken(endpoint, form, Map.of(), constraint),
+                "the retry's answer goes through the same cnf.jkt comparison as a first answer");
+
+        assertAll("the foreign binding is refused after exactly one retry",
+                () -> assertTrue(thrown.getMessage().contains("does not match the DPoP proof-key thumbprint"),
+                        "the rejection must name the jkt mismatch, but was: " + thrown.getMessage()),
                 () -> assertEquals(2, moduleDispatcher.getCallCount()));
     }
 

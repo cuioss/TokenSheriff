@@ -93,7 +93,8 @@ public class StepUpResultVerifier {
      * @param idToken   the validated ID token returned by the elevated exchange; must not be
      *                  {@code null}
      * @throws ClientProtocolException if the {@code acr} is absent or not among the required values, or
-     *                               the {@code auth_time} is absent, unparseable, or older than the
+     *                               the challenge's {@code max_age} is negative, or the
+     *                               {@code auth_time} is absent, unparseable, or older than the
      *                               required {@code max_age} plus the configured clock-skew allowance
      */
     public void verify(StepUpChallenge challenge, IdTokenContent idToken) {
@@ -129,6 +130,14 @@ public class StepUpResultVerifier {
     }
 
     private void verifyAuthTime(IdTokenContent idToken, int maxAgeSeconds) {
+        if (maxAgeSeconds < 0) {
+            // Fail closed: a negative max_age is not a meaningful maximum authentication age. Evaluating
+            // it would let the skew allowance widen a nonsensical bound into an accepting one (max_age=-10
+            // with a 60 s skew accepts an auth_time 30 s old), so a constraint we cannot meaningfully
+            // evaluate is a rejection.
+            throw new ClientProtocolException(
+                    "step-up challenge carries a negative 'max_age'; the required step-up cannot be verified");
+        }
         ClaimValue authTimeClaim = idToken.getClaims().get(CLAIM_AUTH_TIME);
         if (authTimeClaim == null) {
             throw new ClientProtocolException(
