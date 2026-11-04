@@ -97,10 +97,14 @@ public final class JWTValidationLogMessages {
                 .template("TokenValidator initialized with %s")
                 .build();
 
+        /**
+         * Logged when a JWKS refresh installs a changed key set. Parameters: the issuer the keys
+         * belong to, then the key ids of the newly installed key set in sorted order.
+         */
         public static final LogRecord JWKS_KEYS_UPDATED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(2)
-                .template("Keys updated due to data change - load state: %s")
+                .template("JWKS keys updated for issuer %s, key ids: %s")
                 .build();
 
         public static final LogRecord JWKS_BACKGROUND_REFRESH_STARTED = LogRecordModel.builder()

@@ -34,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -207,15 +208,17 @@ class HttpJwksLoaderTest {
     }
 
     @Test
-    @DisplayName("Should log JWKS_KEYS_UPDATED when keys are updated")
+    @DisplayName("Should log JWKS_KEYS_UPDATED with the issuer and the installed key ids")
     void shouldLogJwksKeysUpdatedWhenKeysAreUpdated() {
         // Load a key to trigger keys update
         Optional<KeyInfo> keyInfo = httpJwksLoader.getKeyInfo(TEST_KID);
         assertTrue(keyInfo.isPresent(), "Key info should be present");
 
-        // JWKS_KEYS_UPDATED is logged when keys are successfully loaded and updated
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO,
-                JWTValidationLogMessages.INFO.JWKS_KEYS_UPDATED.resolveIdentifierString());
+        // JWKS_KEYS_UPDATED names the issuer and the installed key id, not the load state
+        String expected = JWTValidationLogMessages.INFO.JWKS_KEYS_UPDATED.format("test-issuer", List.of(TEST_KID));
+        assertFalse(expected.contains("load state"), "The rendered message must not report a load state");
+        assertFalse(expected.contains(LoaderStatus.LOADING.name()), "The rendered message must not report LOADING");
+        LogAsserts.assertSingleLogMessagePresent(TestLogLevel.INFO, expected);
     }
 
     @Test

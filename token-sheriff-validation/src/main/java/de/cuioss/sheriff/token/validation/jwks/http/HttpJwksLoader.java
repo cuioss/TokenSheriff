@@ -40,6 +40,7 @@ import org.jspecify.annotations.Nullable;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.*;
@@ -869,8 +870,10 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             }
         }
 
-        // Log keys update
-        LOGGER.info(INFO.JWKS_KEYS_UPDATED, status.get());
+        // Log keys update: the issuer and the key ids of the installed key set, sorted so the message
+        // is deterministic
+        List<String> installedKeyIds = newLoader.getKeyIds().stream().sorted().toList();
+        LOGGER.info(INFO.JWKS_KEYS_UPDATED, getResolvedIssuer(), installedKeyIds);
         return true;
     }
 
