@@ -18,7 +18,9 @@ Branch protection on `main` forbids direct pushes. Always:
 4. Open a PR against `main` via `gh pr create --repo cuioss/TokenSheriff`
 5. Wait for CI + AI reviewer(s): `gh pr checks --watch`
 6. Address every AI-reviewer comment — reply with the reason for fixing or not fixing, and resolve it. If uncertain, ask the user first.
-7. Do **not** enable auto-merge unless explicitly instructed.
+7. Merge the PR yourself, through the merge queue, once CI is green and every AI-reviewer comment is addressed and
+   resolved; no separate approval is needed. Never bypass branch protection or a required check, and never merge with
+   a failing check or an unresolved reviewer comment. If a merge is blocked, report why instead of working around it.
 8. After merge, return to `main`: `git checkout main && git pull`
 
 ## Tool Usage
