@@ -24,6 +24,7 @@ import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
+import org.jspecify.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -130,43 +131,63 @@ public class TokenBuilder {
             ClaimMapper mapper = allMappers.get(key);
 
             if (mapper != null) {
-                // Use the configured mapper (either built-in or custom).
-                // Mappers (including custom SPI implementations) can throw arbitrary runtime
-                // exceptions on malformed claim values (e.g. a string-typed 'exp'). Translate
-                // to TokenValidationException to honor the documented contract of TokenValidator.
-                ClaimValue claimValue;
-                try {
-                    claimValue = mapper.map(mapRepresentation, key);
-                } catch (TokenValidationException e) {
-                    throw e;
-                }
-                // cui-rewrite:disable InvalidExceptionUsageRecipe
-                // Custom SPI mappers can throw arbitrary runtime exceptions — the broad
-                // catch is deliberate; TokenValidationException is rethrown above.
-                catch (RuntimeException e) {
-                    throw new TokenValidationException(
-                            SecurityEventCounter.EventType.MISSING_CLAIM,
-                            "Malformed claim '" + key + "': " + e.getMessage(),
-                            e
-                    );
-                }
+                ClaimValue claimValue = mapClaim(mapper, mapRepresentation, key);
                 if (claimValue != null) {
                     claims.put(key, claimValue);
                 }
             } else {
-                // Fallback for unknown claims - use identity mapping
-                Optional<String> stringValue = mapRepresentation.getString(key);
-                if (stringValue.isPresent()) {
-                    claims.put(key, ClaimValue.forPlainString(stringValue.get()));
-                } else {
-                    // Handle non-string values by converting to string
-                    Optional<Object> value = mapRepresentation.getValue(key);
-                    value.ifPresent(o -> claims.put(key, ClaimValue.forPlainString(o.toString())));
-                }
+                mapUnknownClaim(mapRepresentation, key).ifPresent(value -> claims.put(key, value));
             }
         }
 
         return claims;
+    }
+
+    /**
+     * Maps a claim with its configured mapper (either built-in or custom).
+     * <p>
+     * Mappers (including custom SPI implementations) can throw arbitrary runtime
+     * exceptions on malformed claim values (e.g. a string-typed 'exp'). These are translated
+     * to {@link TokenValidationException} to honor the documented contract of TokenValidator.
+     *
+     * @param mapper            the mapper configured for the claim
+     * @param mapRepresentation the MapRepresentation containing the claim
+     * @param key               the claim name
+     * @return the mapped claim value, or {@code null} if the mapper reports the claim as absent
+     * @throws TokenValidationException if the mapper fails on a malformed claim value
+     */
+    private static @Nullable ClaimValue mapClaim(ClaimMapper mapper, MapRepresentation mapRepresentation, String key) {
+        try {
+            return mapper.map(mapRepresentation, key);
+        } catch (TokenValidationException e) {
+            throw e;
+        }
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
+        // Custom SPI mappers can throw arbitrary runtime exceptions — the broad
+        // catch is deliberate; TokenValidationException is rethrown above.
+        catch (RuntimeException e) {
+            throw new TokenValidationException(
+                    SecurityEventCounter.EventType.MISSING_CLAIM,
+                    "Malformed claim '" + key + "': " + e.getMessage(),
+                    e
+            );
+        }
+    }
+
+    /**
+     * Fallback for unknown claims - uses identity mapping, converting non-string values to string.
+     *
+     * @param mapRepresentation the MapRepresentation containing the claim
+     * @param key               the claim name
+     * @return the claim as a plain-string claim value, or empty if the claim has no value
+     */
+    private static Optional<ClaimValue> mapUnknownClaim(MapRepresentation mapRepresentation, String key) {
+        Optional<String> stringValue = mapRepresentation.getString(key);
+        if (stringValue.isPresent()) {
+            return Optional.of(ClaimValue.forPlainString(stringValue.get()));
+        }
+        // Handle non-string values by converting to string
+        return mapRepresentation.getValue(key).map(o -> ClaimValue.forPlainString(o.toString()));
     }
 
 
