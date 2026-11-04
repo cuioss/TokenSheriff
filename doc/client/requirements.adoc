@@ -212,7 +212,8 @@ client-authentication method.
 Having asked for the constraint, the engine MUST verify at issuance that it was granted, for
 every grant: under DPoP it MUST reject a token response whose `token_type` is not `DPoP`, and an
 access token that decodes as a JWT whose `cnf.jkt` is absent or differs from the thumbprint of the
-DPoP proof key. Both rejections fail closed (<<CLIENT-14>>). Verifying the binding when the token
+DPoP proof key, or whose `cnf` is not an object carrying a string `jkt`. These rejections fail
+closed (<<CLIENT-14>>). Verifying the binding when the token
 is *presented* to a resource server is inherited from the validation module (`VALIDATION-8.7`);
 this requirement is the client-side delta of asking for the constraint, checking that it was
 issued, and preserving it (<<CLIENT-18>>).

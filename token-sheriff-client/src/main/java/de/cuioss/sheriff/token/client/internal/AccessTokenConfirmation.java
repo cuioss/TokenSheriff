@@ -66,10 +66,14 @@ public class AccessTokenConfirmation {
     }
 
     /**
-     * A member-less probe that only establishes whether a decoded payload is a syntactically valid
-     * JSON object. Every member is skipped, so the probe never fails on the content of a claim — which
-     * is what lets the caller tell "not a JWT" (the probe fails) apart from "a JWT with a malformed
-     * {@code cnf}" (the probe succeeds, the strict {@link AccessTokenConfirmation} read fails).
+     * A member-less probe that establishes whether the JSON library can read a decoded payload as an
+     * object. It is <strong>not</strong> a strict syntactic JSON validator: it is DSL-JSON's lenient
+     * object read, which, for example, tolerates a trailing comma or trailing bytes after the closing
+     * brace. Anything the library cannot read as an object is classified "not a JWT", which only skips
+     * the {@code cnf.jkt} comparison (the {@code token_type} check still applies). Every member is
+     * skipped, so the probe never fails on the content of a claim — which is what lets the caller tell
+     * "not a JWT" (the probe fails) apart from "a JWT with a malformed {@code cnf}" (the probe succeeds,
+     * the strict {@link AccessTokenConfirmation} read fails and the token is rejected).
      */
     @CompiledJson
     public static class JsonObjectProbe {

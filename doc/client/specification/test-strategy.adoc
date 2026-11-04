@@ -381,8 +381,11 @@ an isolated-component or server-capability test alone does not qualify the row a
 
 | xref:../requirements.adoc#CLIENT-11[CLIENT-11] | T-TOKEN-REPLAY
 | *Wired-flow:* a `DPoP` header (with `ath` on resource requests) reaches the recorded token /
-  refresh / userinfo request; a `Bearer`-typed response or a `cnf.jkt` mismatch is refused before
-  access-token validation
+  refresh / userinfo request. Refusal of a `Bearer`-typed response or a `cnf.jkt` mismatch before
+  access-token validation is driven end to end only for the authorization-code flow, through its
+  orchestrator. *Component:* the shared issuance check in `TokenEndpointClient` is unit-tested;
+  the refresh and client-credentials refusals are covered through that shared seam, not driven
+  end to end
 | DPoP-bound token from KC (`createDpopRealm`) | 8
 
 | xref:../requirements.adoc#CLIENT-12[CLIENT-12] | T-STEPUP

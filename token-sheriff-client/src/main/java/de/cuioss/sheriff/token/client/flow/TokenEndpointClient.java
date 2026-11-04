@@ -148,7 +148,12 @@ public class TokenEndpointClient {
      *         {@code senderConstraint} a {@link RedeemedResponseException} is also raised when the
      *         issued token is not bound to the proof key: the {@code token_type} is not {@code DPoP}
      *         (a {@code Bearer} downgrade), or the access token is a JWT whose {@code cnf.jkt} is absent
-     *         or differs from the proof-key thumbprint
+     *         or differs from the proof-key thumbprint, or whose {@code cnf} claim is not an object
+     *         carrying a string {@code jkt}. A body the JSON library cannot read — including one
+     *         truncated inside a string escape — never escapes as an unchecked exception: after a
+     *         success status it is a {@link RedeemedResponseException}, and as a non-success error
+     *         body it is an unknown error code, so the failure is a plain {@link TransportException}
+     *         and never a {@link CredentialRejectedException}
      */
     public TokenResponse requestToken(String tokenEndpoint,
             Map<String, String> formParameters,
@@ -265,7 +270,7 @@ public class TokenEndpointClient {
             return Optional.empty();
         }
         try {
-            if (dslJson.deserialize(AccessTokenConfirmation.JsonObjectProbe.class, payload, payload.length) == null) {
+            if (deserialize(AccessTokenConfirmation.JsonObjectProbe.class, payload) == null) {
                 LOGGER.debug("Access token payload is JSON null; skipping the cnf.jkt comparison");
                 return Optional.empty();
             }
@@ -290,8 +295,7 @@ public class TokenEndpointClient {
      */
     private AccessTokenConfirmation readConfirmation(byte[] payload) {
         try {
-            AccessTokenConfirmation confirmation =
-                    dslJson.deserialize(AccessTokenConfirmation.class, payload, payload.length);
+            AccessTokenConfirmation confirmation = deserialize(AccessTokenConfirmation.class, payload);
             return confirmation == null ? new AccessTokenConfirmation() : confirmation;
         } catch (IOException e) {
             LOGGER.debug("Access token cnf claim is malformed: %s", LogSanitizer.sanitize(e.getMessage()));
@@ -340,7 +344,7 @@ public class TokenEndpointClient {
             return null;
         }
         try {
-            TokenErrorResponse errorResponse = dslJson.deserialize(TokenErrorResponse.class, bytes, bytes.length);
+            TokenErrorResponse errorResponse = deserialize(TokenErrorResponse.class, bytes);
             return errorResponse == null ? null : errorResponse.error;
         } catch (IOException e) {
             // The parse-error message can echo an AS-controlled JSON fragment; sanitize it (CWE-117)
@@ -417,7 +421,7 @@ public class TokenEndpointClient {
                     + maxContentSize + " bytes (" + BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN + ")");
         }
         try {
-            TokenResponse tokenResponse = dslJson.deserialize(TokenResponse.class, bytes, bytes.length);
+            TokenResponse tokenResponse = deserialize(TokenResponse.class, bytes);
             if (tokenResponse == null || tokenResponse.accessToken == null) {
                 throw new RedeemedResponseException("Token endpoint response is missing the access_token");
             }
@@ -435,6 +439,30 @@ public class TokenEndpointClient {
             String sanitizedError = LogSanitizer.sanitize(e.getMessage());
             LOGGER.debug("Failed to parse token endpoint response: %s", sanitizedError);
             throw new RedeemedResponseException("Failed to parse token endpoint response: " + sanitizedError, e);
+        }
+    }
+
+    /**
+     * The single JSON deserialize seam for every authorization-server-controlled payload this client
+     * reads. DSL-JSON reports some malformed input — for example a body truncated inside a string
+     * escape, i.e. ending in a backslash within an unterminated string — with an unchecked exception (an
+     * {@link ArrayIndexOutOfBoundsException}) instead of a parse error. That exception is folded into
+     * the {@link IOException} every call site already handles, so an unreadable payload always takes
+     * the site's existing parse-failure path and never escapes the documented
+     * {@link TransportException} / {@link RedeemedResponseException} contract after the grant was
+     * redeemed. The fold changes no acceptance decision: input the library reads is returned as before.
+     * The wrapping message is fixed text only; the cause is attached.
+     *
+     * @return the deserialized value, or {@code null} when the payload is the JSON literal {@code null}
+     * @throws IOException when the payload cannot be read as {@code type}, whether the library signalled
+     *         that with a parse error or with an unchecked exception
+     */
+    @Nullable
+    private <T> T deserialize(Class<T> type, byte[] bytes) throws IOException {
+        try {
+            return dslJson.deserialize(type, bytes, bytes.length);
+        } catch (RuntimeException e) {
+            throw new IOException("Unreadable JSON (" + e.getClass().getSimpleName() + ")", e);
         }
     }
 

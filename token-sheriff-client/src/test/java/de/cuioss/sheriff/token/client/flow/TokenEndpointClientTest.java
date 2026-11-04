@@ -159,6 +159,39 @@ class TokenEndpointClientTest {
     }
 
     @Test
+    @DisplayName("a 200 body truncated inside a string escape is rejected as a redeemed parse failure")
+    void shouldRejectSuccessBodyTruncatedMidEscape(URIBuilder uriBuilder) {
+        moduleDispatcher.respondWith("{\"access_token\":\"abc\\");
+        var client = new TokenEndpointClient(config());
+        String endpoint = uriBuilder.addPathSegment("token").buildAsString();
+        Map<String, String> requestParams = Map.of("grant_type", "refresh_token");
+        Map<String, String> requestHeaders = Map.of();
+
+        RedeemedResponseException thrown = assertThrows(RedeemedResponseException.class,
+                () -> client.requestToken(endpoint, requestParams, requestHeaders),
+                "an unreadable 200 body must surface as the post-redemption parse failure, never unchecked");
+
+        assertTrue(thrown.getMessage().startsWith("Failed to parse token endpoint response"),
+                "the rejection must take the existing parse-failure path, but was: " + thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("a 4xx error body truncated inside a string escape is an unknown error, not invalid_grant")
+    void shouldTreatErrorBodyTruncatedMidEscapeAsUnparseable(URIBuilder uriBuilder) {
+        moduleDispatcher.failWith("{\"error\":\"invalid_grant\\");
+
+        TransportException thrown = redeemExpectingFailure(uriBuilder, null);
+
+        assertAll("unparseable error body",
+                () -> assertFalse(thrown instanceof CredentialRejectedException,
+                        "an unreadable error body must never be classified as a dead credential"),
+                () -> assertFalse(thrown instanceof RedeemedResponseException,
+                        "a non-success response never redeemed the grant"),
+                () -> assertTrue(thrown.getMessage().contains("unexpected HTTP status 400"),
+                        "the failure must be the ordinary non-success outcome, but was: " + thrown.getMessage()));
+    }
+
+    @Test
     @DisplayName("a second use_dpop_nonce challenge on the retry does not trigger a further retry")
     void shouldNotRetryTwiceOnRepeatedNonceChallenge(URIBuilder uriBuilder) {
         moduleDispatcher.challengeWithNonce(Generators.letterStrings(16, 32).next());
@@ -352,6 +385,21 @@ class TokenEndpointClientTest {
     void shouldAcceptJsonStringPayloadUnderDpopConstraint(URIBuilder uriBuilder) {
         assertJktComparisonSkipped(uriBuilder, jws("\"" + Generators.letterStrings(8, 16).next() + "\""));
     }
+
+    @Test
+    @DisplayName("a JWS whose payload is the JSON literal null skips only the jkt comparison")
+    void shouldAcceptJsonNullPayloadUnderDpopConstraint(URIBuilder uriBuilder) {
+        String accessToken = jws("null");
+        moduleDispatcher.respondWith(tokenResponse(accessToken, "DPoP"));
+
+        TokenResponse response = redeem(uriBuilder, dpopConstraint());
+
+        assertAll("JSON null payload",
+                () -> assertEquals(accessToken, response.accessToken,
+                        "a null payload carries no readable cnf, so the token is accepted unchanged"),
+                () -> assertEquals("DPoP", response.tokenType, "the token_type check still applies"));
+    }
+
     @Test
     @DisplayName("an mTLS-constrained request still accepts a Bearer token")
     void shouldAcceptBearerUnderMtlsConstraint(URIBuilder uriBuilder) {
@@ -484,6 +532,14 @@ class TokenEndpointClientTest {
         /** The 200 success body to serve, or {@code null} to serve the malformed body. */
         private volatile String successBody;
 
+        /** The 400 error body to serve (without a nonce), or {@code null} for the other shapes. */
+        private volatile String errorBody;
+
+        /** Serve {@code body} as a 400 error response without a {@code DPoP-Nonce} on every call. */
+        void failWith(String body) {
+            this.errorBody = body;
+        }
+
         /** Serve a {@code use_dpop_nonce} challenge carrying {@code nonce} on every call. */
         void challengeWithNonce(String nonce) {
             this.challengeNonce = nonce;
@@ -502,6 +558,7 @@ class TokenEndpointClientTest {
         void reset() {
             this.challengeNonce = null;
             this.successBody = null;
+            this.errorBody = null;
             this.callCounter.set(0);
         }
 
@@ -518,6 +575,11 @@ class TokenEndpointClientTest {
         @Override
         public Optional<MockResponse> handlePost(RecordedRequest request) {
             callCounter.incrementAndGet();
+            String error = this.errorBody;
+            if (error != null) {
+                return Optional.of(new MockResponse(400,
+                        Headers.of("Content-Type", "application/json"), error));
+            }
             String nonce = this.challengeNonce;
             if (nonce == null) {
                 String body = this.successBody;
