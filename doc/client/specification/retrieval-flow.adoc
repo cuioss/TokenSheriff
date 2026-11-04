@@ -45,12 +45,22 @@ The engine constructs a single authorization request as a confidential client
 | `scope` | The requested scopes (incl. `openid` for OIDC).
 |===
 
-Where the AS advertises `pushed_authorization_request_endpoint`, the parameters are *pushed
-via PAR* over the back channel (authenticated per <<_client_authentication>>) and the
-front-channel redirect carries only the returned `request_uri`
+=== [[_pushed_authorization_requests]] Pushed authorization requests (PAR)
+
+PAR is a *building block*, not a step of the built-in flow
 (xref:../requirements.adoc#CLIENT-10[CLIENT-10],
-xref:../threat-model.adoc#T-PARAM-INTEGRITY[T-PARAM-INTEGRITY]) — keeping the authorization
-parameters off the browser and tamper-proof. PAR is mandatory under FAPI 2.0.
+xref:../threat-model.adoc#T-PARAM-INTEGRITY[T-PARAM-INTEGRITY]). `ParClient` pushes a set of
+authorization parameters to the AS's `pushed_authorization_request_endpoint` over the back
+channel, authenticated per <<_client_authentication>>, and returns the AS-issued `request_uri`.
+A front-channel redirect that carries only `client_id` and that `request_uri` keeps the
+authorization parameters off the browser and tamper-proof.
+
+The built-in `AuthorizationCodeFlow` does *not* use PAR: it builds the authorization URL with
+the parameters above on the front channel, whether or not the AS advertises a PAR endpoint. A
+caller that needs PAR — FAPI 2.0 makes it mandatory — composes `ParClient` itself: it pushes the
+parameters and builds the redirect from the returned `request_uri`. The PAR request travels the
+same owned back channel as every other call
+(xref:../architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]).
 
 == The callback and code exchange
 
@@ -127,16 +137,32 @@ xref:../threat-model.adoc#T-TOKEN-REPLAY[T-TOKEN-REPLAY]):
   (xref:../requirements.adoc#CLIENT-18[CLIENT-18]) — preserving a `cnf.x5t#S256` binding is a
   capability distinct from the alpha client-authentication method.
 
-Validation of the resulting binding is *inherited* from the validation module
-(`VALIDATION-8.7`); this spec covers only the client-side act of *asking for* the constraint.
-The binding is then preserved through storage and refresh
-(xref:token-handling.adoc[token handling], xref:../requirements.adoc#CLIENT-18[CLIENT-18]).
+Asking for the constraint is not trusted on its own: under DPoP the engine checks at issuance
+that the authorization server actually bound the token to the proof key
+(<<_token_response_validation>>), and rejects a response that is not bound. The check runs at the
+single token-endpoint seam, so every grant — `authorization_code`, `client_credentials` and
+`refresh_token` — shares it. Verifying the binding when the token is *presented* to a resource
+server stays with the validation module (`VALIDATION-8.7`). The binding is then preserved through
+storage and refresh (xref:token-handling.adoc[token handling],
+xref:../requirements.adoc#CLIENT-18[CLIENT-18]).
 
 == [[_token_response_validation]] Token-response validation
 
 Before any token is used (xref:../requirements.adoc#CLIENT-14[CLIENT-14]):
 
 * the `token_type` and the presence of the expected artifacts are checked;
+* under a DPoP sender constraint, the response is checked for the binding the client asked for
+  (xref:../requirements.adoc#CLIENT-11[CLIENT-11]), for every grant:
+** a `token_type` other than `DPoP` is rejected — the AS issued a bearer token in place of the
+   bound one;
+** an access token that decodes as a JWT — a compact JWS whose payload is a JSON object — must
+   carry a `cnf.jkt` equal to the thumbprint of the DPoP proof key; an absent or different
+   `cnf.jkt` is rejected, and so is a `cnf` that is not an object or a `jkt` that is not a string.
+   An access token that does not decode as a JWT (opaque, encrypted, or a payload that is not a
+   JSON object) skips only this comparison, and the `token_type` check still applies;
+** a rejected response fails closed with `RedeemedResponseException`: the AS has already
+   consumed the grant, so the rejection is classified as a redeemed failure. An mTLS-constrained
+   or unconstrained request is not affected and keeps `token_type=Bearer`;
 * where the AS supports it, the *issuer identity* of the response is confirmed (RFC 9207);
 * every token is then validated through the validation pipeline
   (xref:token-handling.adoc[token handling], xref:../requirements.adoc#CLIENT-15[CLIENT-15]).

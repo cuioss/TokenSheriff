@@ -86,10 +86,10 @@ leaf validator), a wired-flow test MUST drive the *real orchestrator* —
 
 * on an `iss` mismatch, the token endpoint is *never called* (dispatcher call-count == 0) —
   xref:../requirements.adoc#CLIENT-8[CLIENT-8];
-* on PAR, the front-channel redirect carries *only* the returned `request_uri`, produced by the
-  engine's `ParClient` — xref:../requirements.adoc#CLIENT-10[CLIENT-10];
 * on a sender-constrained flow, a `DPoP` header actually *reaches the recorded* token / refresh /
-  userinfo request — xref:../requirements.adoc#CLIENT-11[CLIENT-11];
+  userinfo request, and a token response the AS did not bind to the proof key (`Bearer`-typed, or
+  a JWT access token with an absent or different `cnf.jkt`) is refused before the access token is
+  validated — xref:../requirements.adoc#CLIENT-11[CLIENT-11];
 * on a step-up, the re-driven ID token's `acr` / `auth_time` are *verified*, and a non-satisfying
   response is *not* treated as a successful elevation — xref:../requirements.adoc#CLIENT-12[CLIENT-12];
 * on rotated-token reuse, the `RefreshFlow` / `TokenLifecycleManager` path routes through the
@@ -97,6 +97,10 @@ leaf validator), a wired-flow test MUST drive the *real orchestrator* —
 
 This tier also asserts the *produced Quarkus bean graph* can perform a *guarded* exchange — the
 edge wiring, not only the engine's constructors.
+
+PAR (xref:../requirements.adoc#CLIENT-10[CLIENT-10]) is not in this tier: no built-in
+orchestrator uses it, so there is no flow path to drive. `ParClient` is a building block a caller
+composes, and it is covered at the component level.
 
 [IMPORTANT]
 ====
@@ -212,8 +216,9 @@ test asserts rejection:
   from the initiating issuer → rejected *before* the code is exchanged.
 
 | xref:../threat-model.adoc#T-PARAM-INTEGRITY[T-PARAM-INTEGRITY]
-| `ParDispatcher` returns a `request_uri`; the front-channel redirect is asserted to carry
-  *only* that `request_uri`, never the raw authorization parameters.
+| `ParDispatcher` accepts the parameters `ParClient` pushes on the back channel and returns a
+  `request_uri`; the returned `request_uri` is asserted to carry none of the pushed parameters,
+  and an error response is refused.
 
 | xref:../threat-model.adoc#T-AUD-CONFUSION[T-AUD-CONFUSION] / xref:../threat-model.adoc#T-IDTOKEN-INTEGRITY[T-IDTOKEN-INTEGRITY]
 | `TokenDispatcher` / `UserInfoDispatcher` emit tampered claims (via `JwtTokenTamperingUtil`)
@@ -320,7 +325,6 @@ Each `CLIENT-N` requirement maps to its threat(s), its unit coverage, its integr
 coverage, and the increment that delivers it.
 For a requirement whose defence lives in flow orchestration
 (xref:../requirements.adoc#CLIENT-8[CLIENT-8],
-xref:../requirements.adoc#CLIENT-10[CLIENT-10],
 xref:../requirements.adoc#CLIENT-11[CLIENT-11],
 xref:../requirements.adoc#CLIENT-12[CLIENT-12],
 xref:../requirements.adoc#CLIENT-17[CLIENT-17]), the Unit column names the *wired-flow* negative
@@ -370,13 +374,18 @@ an isolated-component or server-capability test alone does not qualify the row a
 | (covered by the PKCE login) | 5
 
 | xref:../requirements.adoc#CLIENT-10[CLIENT-10] | T-PARAM-INTEGRITY
-| *Wired-flow:* the engine's `ParClient` pushes the params; the front-channel redirect carries
-  *only* the returned `request_uri`
+| *Component:* `ParClient` pushes the params on the authenticated back channel and returns a
+  `request_uri` that carries none of them (no built-in flow uses PAR, so there is no wired-flow
+  path)
 | PAR against KC (capability-gated) | 6
 
 | xref:../requirements.adoc#CLIENT-11[CLIENT-11] | T-TOKEN-REPLAY
 | *Wired-flow:* a `DPoP` header (with `ath` on resource requests) reaches the recorded token /
-  refresh / userinfo request
+  refresh / userinfo request. Refusal of a `Bearer`-typed response or a `cnf.jkt` mismatch before
+  access-token validation is driven end to end only for the authorization-code flow, through its
+  orchestrator. *Component:* the shared issuance check in `TokenEndpointClient` is unit-tested;
+  the refresh and client-credentials refusals are covered through that shared seam, not driven
+  end to end
 | DPoP-bound token from KC (`createDpopRealm`) | 8
 
 | xref:../requirements.adoc#CLIENT-12[CLIENT-12] | T-STEPUP

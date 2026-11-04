@@ -179,10 +179,14 @@ rejected at exchange.
 [#CLIENT-10]
 === CLIENT-10: Pushed Authorization Requests (PAR)
 
-Where the authorization server advertises PAR (`pushed_authorization_request_endpoint`), the
-engine SHOULD push the authorization request parameters over the back channel and drive the
-front-channel redirect with the returned `request_uri`, so authorization parameters are not
-exposed or tamperable in the browser. PAR is required by FAPI 2.0 and preferred by the BCP.
+The engine MUST provide PAR as a *building block*: a client that pushes the authorization request
+parameters to the authorization server's `pushed_authorization_request_endpoint` over the
+authenticated back channel and returns the issued `request_uri`, so a front-channel redirect that
+carries only that `request_uri` keeps the authorization parameters from being exposed or tampered
+with in the browser. The built-in authorization-code flow does *not* use PAR, whether or not the
+authorization server advertises it; a caller that needs PAR — FAPI 2.0 requires it, and the BCP
+prefers it — composes the PAR client itself and builds the redirect from the returned
+`request_uri`.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0] (PAR mandatory), https://www.rfc-editor.org/rfc/rfc9700#section-2.1[RFC 9700 §2.1].
 
@@ -205,9 +209,14 @@ transport (<<CLIENT-4>>). The certificate-bound case therefore stays specified o
 (<<CLIENT-18>>) — preserving a `cnf.x5t#S256` binding is a capability distinct from the alpha
 client-authentication method.
 
-The *validation* of the resulting binding is inherited from the validation module
-(`VALIDATION-8.7`); this requirement is the client-side delta of *asking for* the constraint
-and preserving it (<<CLIENT-18>>).
+Having asked for the constraint, the engine MUST verify at issuance that it was granted, for
+every grant: under DPoP it MUST reject a token response whose `token_type` is not `DPoP`, and an
+access token that decodes as a JWT whose `cnf.jkt` is absent or differs from the thumbprint of the
+DPoP proof key, or whose `cnf` is not an object carrying a string `jkt`. These rejections fail
+closed (<<CLIENT-14>>). Verifying the binding when the token
+is *presented* to a resource server is inherited from the validation module (`VALIDATION-8.7`);
+this requirement is the client-side delta of asking for the constraint, checking that it was
+issued, and preserving it (<<CLIENT-18>>).
 
 * Source: https://www.rfc-editor.org/rfc/rfc9449[RFC 9449], https://www.rfc-editor.org/rfc/rfc8705[RFC 8705], https://www.rfc-editor.org/rfc/rfc9700#section-4.10[RFC 9700 §4.10], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0].
 

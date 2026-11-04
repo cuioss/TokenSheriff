@@ -21,6 +21,7 @@ import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.dpop.ConstraintBinding;
 import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
+import de.cuioss.sheriff.token.client.internal.AccessTokenConfirmation;
 import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
@@ -36,6 +37,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -142,7 +144,16 @@ public class TokenEndpointClient {
      *         {@code 4xx} whose RFC 6749 §5.2 body names {@code invalid_grant}, so the server declared
      *         the presented credential dead without redeeming it; and
      *         {@link RedeemedResponseException} when the body cannot be parsed <em>after</em> a success
-     *         status, because by then the server has already redeemed the grant
+     *         status, because by then the server has already redeemed the grant. Under a DPoP
+     *         {@code senderConstraint} a {@link RedeemedResponseException} is also raised when the
+     *         issued token is not bound to the proof key: the {@code token_type} is not {@code DPoP}
+     *         (a {@code Bearer} downgrade), or the access token is a JWT whose {@code cnf.jkt} is absent
+     *         or differs from the proof-key thumbprint, or whose {@code cnf} claim is not an object
+     *         carrying a string {@code jkt}. A body the JSON library cannot read — including one
+     *         truncated inside a string escape — never escapes as an unchecked exception: after a
+     *         success status it is a {@link RedeemedResponseException}, and as a non-success error
+     *         body it is an unknown error code, so the failure is a plain {@link TransportException}
+     *         and never a {@link CredentialRejectedException}
      */
     public TokenResponse requestToken(String tokenEndpoint,
             Map<String, String> formParameters,
@@ -178,7 +189,120 @@ public class TokenEndpointClient {
             throw new TransportException(
                     "Token endpoint returned unexpected HTTP status " + response.statusCode());
         }
-        return parse(response.body());
+        TokenResponse tokenResponse = parse(response.body());
+        verifySenderConstraint(tokenResponse, senderConstraint);
+        return tokenResponse;
+    }
+
+    /**
+     * Verifies that a token issued under a DPoP sender-constraint is actually bound to the proof key
+     * (RFC 9449 §5 and §6.1). mTLS constraints and unconstrained requests are not checked here: an
+     * mTLS-bound token is presented as {@code Bearer} and its certificate binding is transport-level.
+     * <p>
+     * Under a DPoP constraint two conditions must hold, and either failure is fatal:
+     * <ol>
+     *   <li>the {@code token_type} is {@code DPoP} (case-insensitive) — a {@code Bearer} token issued in
+     *       answer to a DPoP-proofed request is a downgrade to an unbound token;</li>
+     *   <li>when the access token decodes as a compact JWS whose payload is a JSON object, its
+     *       {@code cnf.jkt} is present and equals the proof-key thumbprint recorded in the constraint's
+     *       binding — a JWT without {@code cnf.jkt}, or whose {@code cnf} is not an object or whose
+     *       {@code jkt} is not a string, is not bound to the proof key, and one with a different
+     *       {@code jkt} is bound to somebody else's key.</li>
+     * </ol>
+     * An access token that does not decode as a JWS whose payload is a JSON object (an opaque reference
+     * token, a JWE, a malformed value) skips only the {@code cnf.jkt} comparison; the {@code token_type}
+     * condition still applies. The check runs after a success status, so the grant is already redeemed and every
+     * rejection is a {@link RedeemedResponseException}. Exception messages carry fixed text plus
+     * sanitized (CWE-117) authorization-server values only.
+     */
+    private void verifySenderConstraint(TokenResponse tokenResponse, @Nullable SenderConstraint senderConstraint) {
+        if (senderConstraint == null || senderConstraint.method() != ConstraintBinding.Method.DPOP) {
+            return;
+        }
+        if (!TokenResponse.TOKEN_TYPE_DPOP.equalsIgnoreCase(tokenResponse.tokenType)) {
+            throw new RedeemedResponseException(
+                    "Token endpoint issued token_type '" + LogSanitizer.sanitize(tokenResponse.tokenType)
+                            + "' in answer to a DPoP-constrained request; expected 'DPoP'");
+        }
+        Optional<byte[]> payload = jwtPayload(tokenResponse.accessToken);
+        if (payload.isEmpty()) {
+            return;
+        }
+        String expectedJkt = senderConstraint.binding().confirmation();
+        Optional<String> issuedJkt = readConfirmation(payload.get()).getJkt();
+        if (issuedJkt.isEmpty()) {
+            throw new RedeemedResponseException(
+                    "Token endpoint issued a DPoP JWT access token without a cnf.jkt binding");
+        }
+        if (!expectedJkt.equals(issuedJkt.get())) {
+            throw new RedeemedResponseException(
+                    "Token endpoint issued a DPoP JWT access token bound to cnf.jkt '"
+                            + LogSanitizer.sanitize(issuedJkt.get())
+                            + "', which does not match the DPoP proof-key thumbprint");
+        }
+    }
+
+    /**
+     * Decides whether the access token is a parseable JWT: a compact JWS (exactly three dot-separated
+     * parts) whose payload part is non-empty base64url that decodes to a syntactically valid JSON
+     * object. This is a decode-only step for the issuance-time binding check — the token's signature
+     * and claims are never validated here, and the probe reads no member of the object.
+     * <p>
+     * No size guard is applied to the decoded payload: {@link #parse(String)} already rejects any
+     * response body larger than the configured payload bound, the access token is a substring of that
+     * body, and base64url decoding shrinks its input, so the decoded payload is always within the bound.
+     *
+     * @return the decoded payload bytes when the access token is a JWT, or empty when it is not (an
+     *         opaque token, a JWE, a value with the wrong part count, an empty or non-base64url payload
+     *         part, or a payload that is not a JSON object) — only then is the {@code cnf.jkt}
+     *         comparison skipped
+     */
+    private Optional<byte[]> jwtPayload(String accessToken) {
+        String[] parts = accessToken.split("\\.", -1);
+        if (parts.length != 3 || parts[1].isEmpty()) {
+            return Optional.empty();
+        }
+        byte[] payload;
+        try {
+            payload = Base64.getUrlDecoder().decode(parts[1]);
+        } catch (IllegalArgumentException e) {
+            LOGGER.debug("Access token payload is not base64url; skipping the cnf.jkt comparison");
+            return Optional.empty();
+        }
+        try {
+            if (deserialize(AccessTokenConfirmation.JsonObjectProbe.class, payload) == null) {
+                LOGGER.debug("Access token payload is JSON null; skipping the cnf.jkt comparison");
+                return Optional.empty();
+            }
+        } catch (IOException e) {
+            LOGGER.debug("Access token payload is not a JSON object; skipping the cnf.jkt comparison: %s",
+                    LogSanitizer.sanitize(e.getMessage()));
+            return Optional.empty();
+        }
+        return Optional.of(payload);
+    }
+
+    /**
+     * Reads the {@code cnf} claim of a payload {@link #jwtPayload(String)} already established to be a
+     * JSON object. The read is strict: the access token is known to be a JWT, so a {@code cnf} that is
+     * not an object, or a {@code jkt} that is not a string, is an unbound token and fails closed — it
+     * never degrades into the "not a JWT" skip.
+     *
+     * @return the confirmation view; its {@code jkt} is empty when {@code cnf} or {@code cnf.jkt} is
+     *         absent or {@code null}
+     * @throws RedeemedResponseException when {@code cnf} cannot be read as an object carrying a string
+     *         {@code jkt}
+     */
+    private AccessTokenConfirmation readConfirmation(byte[] payload) {
+        try {
+            AccessTokenConfirmation confirmation = deserialize(AccessTokenConfirmation.class, payload);
+            return confirmation == null ? new AccessTokenConfirmation() : confirmation;
+        } catch (IOException e) {
+            LOGGER.debug("Access token cnf claim is malformed: %s", LogSanitizer.sanitize(e.getMessage()));
+            throw new RedeemedResponseException(
+                    "Token endpoint issued a DPoP JWT access token whose cnf claim is not an object with a string jkt",
+                    e);
+        }
     }
 
     /**
@@ -220,7 +344,7 @@ public class TokenEndpointClient {
             return null;
         }
         try {
-            TokenErrorResponse errorResponse = dslJson.deserialize(TokenErrorResponse.class, bytes, bytes.length);
+            TokenErrorResponse errorResponse = deserialize(TokenErrorResponse.class, bytes);
             return errorResponse == null ? null : errorResponse.error;
         } catch (IOException e) {
             // The parse-error message can echo an AS-controlled JSON fragment; sanitize it (CWE-117)
@@ -297,7 +421,7 @@ public class TokenEndpointClient {
                     + maxContentSize + " bytes (" + BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN + ")");
         }
         try {
-            TokenResponse tokenResponse = dslJson.deserialize(TokenResponse.class, bytes, bytes.length);
+            TokenResponse tokenResponse = deserialize(TokenResponse.class, bytes);
             if (tokenResponse == null || tokenResponse.accessToken == null) {
                 throw new RedeemedResponseException("Token endpoint response is missing the access_token");
             }
@@ -315,6 +439,35 @@ public class TokenEndpointClient {
             String sanitizedError = LogSanitizer.sanitize(e.getMessage());
             LOGGER.debug("Failed to parse token endpoint response: %s", sanitizedError);
             throw new RedeemedResponseException("Failed to parse token endpoint response: " + sanitizedError, e);
+        }
+    }
+
+    /**
+     * The single JSON deserialize seam for every authorization-server-controlled payload this client
+     * reads. DSL-JSON reports some malformed input — for example a body truncated inside a string
+     * escape, i.e. ending in a backslash within an unterminated string — with an unchecked exception (an
+     * {@link ArrayIndexOutOfBoundsException}) instead of a parse error. That exception is folded into
+     * the {@link IOException} every call site already handles, so an unreadable payload always takes
+     * the site's existing parse-failure path and never escapes the documented
+     * {@link TransportException} / {@link RedeemedResponseException} contract after the grant was
+     * redeemed. The fold changes no acceptance decision: input the library reads is returned as before.
+     * The wrapping message is fixed text only; the cause is attached.
+     *
+     * @return the deserialized value, or {@code null} when the payload is the JSON literal {@code null}
+     * @throws IOException when the payload cannot be read as {@code type}, whether the library signalled
+     *         that with a parse error or with an unchecked exception
+     */
+    @Nullable
+    private <T> T deserialize(Class<T> type, byte[] bytes) throws IOException {
+        try {
+            return dslJson.deserialize(type, bytes, bytes.length);
+        }
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
+        catch (RuntimeException e) {
+            // Deliberate broad catch: the JSON library signals a payload it cannot read with unchecked
+            // exceptions that are not part of its contract (a body cut off inside a string escape throws
+            // ArrayIndexOutOfBoundsException), so no specific type can be named without leaving a hole.
+            throw new IOException("Unreadable JSON (" + e.getClass().getSimpleName() + ")", e);
         }
     }
 

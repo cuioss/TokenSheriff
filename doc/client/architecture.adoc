@@ -52,7 +52,8 @@ The engine owns three responsibilities and *delegates the rest*:
 | Concern | Where it lives
 
 | *Retrieval & flow* — construct the authorization request (PKCE, `state`, `nonce`,
-  `acr_values`, PAR); exchange the code; authenticate to the token endpoint; request
+  `acr_values`; PAR is a caller-composed building block the built-in flow does not use);
+  exchange the code; authenticate to the token endpoint; request
   sender-constrained tokens; drive step-up and RP-initiated logout.
 | *This engine* (`client`), xref:specification/retrieval-flow.adoc[retrieval-flow] +
   xref:specification/step-up-and-logout.adoc[step-up-and-logout] specs.
@@ -88,7 +89,7 @@ see <<_owned_back_channel_http>>.
 The core in-scope flow (xref:requirements.adoc#CLIENT-1[CLIENT-1], server-side, no tokens in
 the browser):
 
-image::../resources/diagrams/client-auth-code-pkce.svg["Confidential authorization-code + PKCE flow — the client builds a PKCE-protected request (optionally via PAR), the user authenticates at the AS, the form_post callback returns the code with no token in the URL, and the client verifies state/iss, exchanges the code over the back channel through commons, validates the tokens, stores them server-side, and returns only a session cookie", align=center]
+image::../resources/diagrams/client-auth-code-pkce.svg["Confidential authorization-code + PKCE flow — the client builds a PKCE-protected request, the user authenticates at the AS, the form_post callback returns the code with no token in the URL, and the client verifies state/iss, exchanges the code over the back channel, validates the tokens, stores them server-side, and returns only a session cookie", align=center]
 
 The *browser never receives a usable token*. What the browser holds is the BFF's own
 session artifact — see <<_bff_binding_shapes>>.

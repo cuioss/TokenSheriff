@@ -70,9 +70,11 @@ The client engine:
 | [[T-PARAM-INTEGRITY]]T-PARAM-INTEGRITY
 | *Authorization-request parameter tampering / exposure (front channel).* Authorization
   parameters carried through the browser can be inspected or altered before they reach the AS.
-| Where the AS advertises PAR, push the authorization parameters over the authenticated back
-  channel and drive the front-channel redirect with only the returned `request_uri`, so the
-  parameters are neither exposed nor tamperable in the browser.
+| Push the authorization parameters over the authenticated back channel and drive the
+  front-channel redirect with only the returned `request_uri`, so the parameters are neither
+  exposed nor tamperable in the browser. The engine provides this as the `ParClient` building
+  block; the built-in authorization-code flow does not use it, so a caller that needs this
+  mitigation composes `ParClient` itself.
 | https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0], https://www.rfc-editor.org/rfc/rfc9700#section-2.1[RFC 9700 §2.1]
 | xref:requirements.adoc#CLIENT-10[CLIENT-10]
 
@@ -113,8 +115,10 @@ The client engine:
 | [[T-TOKEN-REPLAY]]T-TOKEN-REPLAY
 | *Token replay (no sender-constraining).* A stolen bearer access token is replayed by any
   holder.
-| Request sender-constrained tokens — a DPoP proof — at the token endpoint; validation of the
-  binding is inherited (`VALIDATION-8.7`). DPoP (RFC 9449) is the implemented direction: it
+| Request sender-constrained tokens — a DPoP proof — at the token endpoint, and reject at
+  issuance a response the AS did not bind: a `token_type` other than `DPoP`, or a JWT access
+  token whose `cnf.jkt` is absent or differs from the proof-key thumbprint. Verifying the binding
+  at presentation is inherited (`VALIDATION-8.7`). DPoP (RFC 9449) is the implemented direction: it
   binds the issued token to the client's key without authenticating the client, so it composes
   with `private_key_jwt` rather than replacing it. The certificate-bound variant remains
   specified as a binding kind, while mTLS client authentication is alpha.
@@ -306,10 +310,10 @@ integration suite covers only threats reproducible against real providers:
 
 | T-CODE-INJECTION / T-PKCE-DOWNGRADE | `TokenDispatcher` rejects/accepts codes against the presented `code_verifier`; missing-PKCE and `plain` requests refused.
 | T-MIXUP | `WellKnownDispatcher` advertises a mismatched `issuer`; the `iss` response parameter is cross-checked before exchange.
-| T-PARAM-INTEGRITY | `ParDispatcher` accepts the pushed parameters and returns a `request_uri`; the front-channel redirect is asserted to carry only that `request_uri`, never the raw authorization parameters.
+| T-PARAM-INTEGRITY | `ParDispatcher` accepts the parameters `ParClient` pushes on the back channel and returns a `request_uri`; the returned `request_uri` is asserted to carry none of the pushed parameters, and an error response is refused.
 | T-CSRF / T-REDIRECT | Callback handling asserts session-bound `state` and exact `redirect_uri`; crafted callbacks rejected.
 | T-CLIENT-CRED | `TokenDispatcher` asserts the configured client-auth method; secret-in-URL and non-TLS attempts are not made.
-| T-TOKEN-REPLAY / T-CONSTRAINT-LOSS | `TokenDispatcher` issues DPoP / mTLS-bound responses; the binding is validated and preserved through storage/refresh.
+| T-TOKEN-REPLAY / T-CONSTRAINT-LOSS | `TokenDispatcher` issues DPoP / mTLS-bound responses; the binding is preserved through storage/refresh. Under DPoP a `Bearer`-typed response and a JWT access token whose `cnf.jkt` is absent or differs from the proof-key thumbprint are rejected at issuance.
 | T-LOGOUT | `EndSessionDispatcher` adversarial mode returns open-redirect / mismatched `post_logout_redirect_uri`, which are rejected; revocation of held tokens asserted.
 | T-REFRESH-THEFT | `TokenDispatcher` refresh mode drives rotation; a reused rotated token triggers family revocation.
 | T-REFRESH-IDENTITY | `TokenDispatcher` refresh mode returns an access token carrying a substituted `sub`; the refresh is refused and, since the dispatcher has already rotated, the session asserted quarantined. A matched positive control — a refresh whose `sub` matches — is asserted to be accepted and to rotate the bundle, so deleting the guard turns a test red rather than merely leaving one green.

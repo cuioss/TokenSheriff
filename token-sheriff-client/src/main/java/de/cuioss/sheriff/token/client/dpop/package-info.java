@@ -23,8 +23,10 @@
  * for mTLS, relies on the transport-level certificate binding) to the token request and records the
  * resulting {@link de.cuioss.sheriff.token.client.dpop.ConstraintBinding}. The binding is carried
  * alongside the stored token by the token lifecycle so the constraint survives storage and
- * refresh ({@code CLIENT-18}). Verifying that a presented token matches its confirmed key is
- * inherited from the validation pipeline ({@code VALIDATION-8.7}) and is not re-implemented here.
+ * refresh ({@code CLIENT-18}). At issuance time the client verifies a DPoP-constrained token response:
+ * the {@code token_type} must be {@code DPoP} and a JWT access token's {@code cnf.jkt} must equal the
+ * proof-key thumbprint. Verifying a presented token's confirmation at presentation time stays with
+ * the validation pipeline ({@code VALIDATION-8.7}).
  *
  * @since 1.0
  */

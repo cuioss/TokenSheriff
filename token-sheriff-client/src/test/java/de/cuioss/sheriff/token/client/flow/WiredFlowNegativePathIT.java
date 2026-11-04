@@ -31,9 +31,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -161,9 +158,10 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
     @DisplayName("Should attach a DPoP proof to the wired refresh request so a deleted binding is observable")
     void shouldAttachDpopProofToWiredRefresh(URIBuilder uriBuilder) {
         ClientConfiguration config = config();
-        getModuleDispatcher().success(accessHolder.getRawToken(), null,
+        DpopProofGenerator generator = dpopProofGenerator();
+        getModuleDispatcher().dpopSuccess(DpopBoundAccessTokens.boundTo(accessHolder, generator.jkt()), null,
                 Generators.letterStrings(20, 40).next(), 300);
-        RefreshFlow flow = dpopRefreshFlow(config);
+        RefreshFlow flow = dpopRefreshFlow(config, generator);
 
         flow.refresh(metadataWithTokenEndpoint(uriBuilder), Generators.letterStrings(20, 40).next());
 
@@ -179,10 +177,11 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
     void shouldRetryWiredRefreshWithChallengedNonce(URIBuilder uriBuilder) {
         ClientConfiguration config = config();
         String nonce = Generators.letterStrings(20, 40).next();
-        getModuleDispatcher().success(accessHolder.getRawToken(), null,
+        DpopProofGenerator generator = dpopProofGenerator();
+        getModuleDispatcher().dpopSuccess(DpopBoundAccessTokens.boundTo(accessHolder, generator.jkt()), null,
                 Generators.letterStrings(20, 40).next(), 300);
         getModuleDispatcher().challengeWithNonceOnce(nonce);
-        RefreshFlow flow = dpopRefreshFlow(config);
+        RefreshFlow flow = dpopRefreshFlow(config, generator);
 
         flow.refresh(metadataWithTokenEndpoint(uriBuilder), Generators.letterStrings(20, 40).next());
 
@@ -198,19 +197,9 @@ class WiredFlowNegativePathIT extends WiredFlowTestSupport {
      * Assembles a DPoP-constrained refresh flow, exactly as the CDI producer does when the client is
      * configured for sender-constrained tokens.
      */
-    private RefreshFlow dpopRefreshFlow(ClientConfiguration config) {
-        SenderConstraint constraint = SenderConstraint.dpop(new DpopProofGenerator(rsaKeyPair(), "RS256"));
+    private RefreshFlow dpopRefreshFlow(ClientConfiguration config, DpopProofGenerator generator) {
+        SenderConstraint constraint = SenderConstraint.dpop(generator);
         return new RefreshFlow(config, new TokenEndpointClient(config), accessBridge, clientAuth(config), constraint);
-    }
-
-    private static KeyPair rsaKeyPair() {
-        try {
-            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-            generator.initialize(2048);
-            return generator.generateKeyPair();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("RSA key pair generation failed", e);
-        }
     }
 
     private static String decodePayload(String proof) {
