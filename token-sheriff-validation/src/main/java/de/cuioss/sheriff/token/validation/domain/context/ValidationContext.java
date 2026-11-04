@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.validation.domain.context;
 
 import lombok.Getter;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 
@@ -69,7 +70,8 @@ public class ValidationContext {
     private final Integer maxTokenAgeSeconds;
 
     /**
-     * Creates a new ValidationContext, capturing the current time via {@link OffsetDateTime#now()}.
+     * Creates a new ValidationContext, capturing the current time from the system clock in the
+     * system-default zone via {@link OffsetDateTime#now(Clock)}.
      * <p>
      * Convenience constructor for callers that do not already hold a timestamp. Prefer the
      * three-argument constructor when a consistent timestamp is already available (as the
@@ -82,7 +84,7 @@ public class ValidationContext {
         if (clockSkewSeconds < 0) {
             throw new IllegalArgumentException("clockSkewSeconds must not be negative: " + clockSkewSeconds);
         }
-        this.currentTime = OffsetDateTime.now();
+        this.currentTime = OffsetDateTime.now(Clock.systemDefaultZone());
         this.clockSkewSeconds = clockSkewSeconds;
         this.maxTokenAgeSeconds = maxTokenAgeSeconds;
     }
