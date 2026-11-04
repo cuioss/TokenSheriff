@@ -146,6 +146,52 @@ class ParserConfigTest implements ShouldImplementEqualsAndHashCode<ParserConfig>
     }
 
     @Test
+    @DisplayName("Should default maxHttpResponseSize to DEFAULT_MAX_HTTP_RESPONSE_SIZE")
+    void shouldDefaultMaxHttpResponseSize() {
+        var config = ParserConfig.builder().build();
+
+        assertEquals(256 * 1024, ParserConfig.DEFAULT_MAX_HTTP_RESPONSE_SIZE);
+        assertEquals(ParserConfig.DEFAULT_MAX_HTTP_RESPONSE_SIZE, config.getMaxHttpResponseSize());
+    }
+
+    @Test
+    @DisplayName("Should accept a custom maxHttpResponseSize through the builder")
+    void shouldAcceptCustomMaxHttpResponseSize() {
+        var config = ParserConfig.builder().maxHttpResponseSize(64 * 1024).build();
+
+        assertEquals(64 * 1024, config.getMaxHttpResponseSize());
+    }
+
+    @Test
+    @DisplayName("Should reject zero maxHttpResponseSize")
+    void shouldRejectZeroMaxHttpResponseSize() {
+        var builder = ParserConfig.builder().maxHttpResponseSize(0);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxHttpResponseSize"));
+    }
+
+    @Test
+    @DisplayName("Should reject negative maxHttpResponseSize")
+    void shouldRejectNegativeMaxHttpResponseSize() {
+        var builder = ParserConfig.builder().maxHttpResponseSize(-1);
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertTrue(exception.getMessage().contains("maxHttpResponseSize"));
+    }
+
+    @Test
+    @DisplayName("Should keep maxHttpResponseSize and maxPayloadSize independent")
+    void shouldKeepHttpResponseAndPayloadLimitsIndependent() {
+        var payloadOnly = ParserConfig.builder().maxPayloadSize(512).build();
+        var httpOnly = ParserConfig.builder().maxHttpResponseSize(512).build();
+
+        assertAll("setting one limit leaves the other at its default",
+                () -> assertEquals(512, payloadOnly.getMaxPayloadSize()),
+                () -> assertEquals(ParserConfig.DEFAULT_MAX_HTTP_RESPONSE_SIZE, payloadOnly.getMaxHttpResponseSize()),
+                () -> assertEquals(512, httpOnly.getMaxHttpResponseSize()),
+                () -> assertEquals(ParserConfig.DEFAULT_MAX_PAYLOAD_SIZE, httpOnly.getMaxPayloadSize()));
+    }
+
+    @Test
     @DisplayName("Should handle large values")
     void shouldHandleLargeValues() {
         var config = ParserConfig.builder()

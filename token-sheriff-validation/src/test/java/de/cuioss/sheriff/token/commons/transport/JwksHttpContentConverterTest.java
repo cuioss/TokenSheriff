@@ -156,10 +156,50 @@ class JwksHttpContentConverterTest {
     private static final int BOUNDED_MAX = 64;
 
     /** The knob a JWKS bounded-read failure must name as the origin of its ceiling. */
-    private static final String BOUND_ORIGIN_KNOB = "ParserConfig.maxPayloadSize";
+    private static final String BOUND_ORIGIN_KNOB = "ParserConfig.maxHttpResponseSize";
+
+    /** A JWKS body larger than the 8 KiB JWT-part bound, well below the HTTP response ceiling. */
+    private static final int ABOVE_PAYLOAD_DEFAULT = 16 * 1024;
 
     private JwksHttpContentConverter boundedConverter() {
-        return new JwksHttpContentConverter(ParserConfig.builder().maxPayloadSize(BOUNDED_MAX).build());
+        return new JwksHttpContentConverter(ParserConfig.builder().maxHttpResponseSize(BOUNDED_MAX).build());
+    }
+
+    @Test
+    void shouldAcceptJwksBodyLargerThanPayloadDefaultWithDefaultConfig() {
+        byte[] body = "k".repeat(ABOVE_PAYLOAD_DEFAULT).getBytes(StandardCharsets.UTF_8);
+
+        var result = BoundedBodyHandlerTestSupport.drive(converter.getBodyHandler(), body, (long) body.length);
+
+        assertTrue(result.succeeded(), "A 16 KiB JWKS body must pass the default HTTP response ceiling");
+        assertFalse(result.cancelled(), "A body within the HTTP response ceiling must not be aborted");
+    }
+
+    @Test
+    void shouldNotLimitJwksBodyByMaxPayloadSize() {
+        int smallPayload = 128;
+        JwksHttpContentConverter smallPayloadConverter =
+                new JwksHttpContentConverter(ParserConfig.builder().maxPayloadSize(smallPayload).build());
+        byte[] body = "p".repeat(smallPayload * 4).getBytes(StandardCharsets.UTF_8);
+
+        var result = BoundedBodyHandlerTestSupport.drive(smallPayloadConverter.getBodyHandler(), body, null);
+
+        assertTrue(result.succeeded(), "maxPayloadSize must not bound the JWKS HTTP response");
+    }
+
+    @Test
+    void shouldRejectByMaxHttpResponseSizeRegardlessOfLargeMaxPayloadSize() {
+        JwksHttpContentConverter httpBounded = new JwksHttpContentConverter(ParserConfig.builder()
+                .maxPayloadSize(Integer.MAX_VALUE)
+                .maxHttpResponseSize(BOUNDED_MAX)
+                .build());
+        byte[] overLimit = "x".repeat(BOUNDED_MAX + 40).getBytes(StandardCharsets.UTF_8);
+
+        var result = BoundedBodyHandlerTestSupport.drive(httpBounded.getBodyHandler(), overLimit, null);
+
+        assertFalse(result.succeeded(), "maxHttpResponseSize bounds the JWKS HTTP response on its own");
+        assertTrue(result.failure().getMessage().contains(BOUND_ORIGIN_KNOB),
+                "Failure must name maxHttpResponseSize, but was: " + result.failure().getMessage());
     }
 
     @Test

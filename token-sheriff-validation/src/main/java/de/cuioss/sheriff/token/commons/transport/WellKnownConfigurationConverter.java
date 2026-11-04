@@ -55,7 +55,7 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
      * rejection so a reader knows which knob produced the bound and that it is settable.
      */
     private static final String BOUND_ORIGIN =
-            "WellKnownConfig.parserConfig.maxPayloadSize; settable via WellKnownConfig.builder().parserConfig(...)";
+            "WellKnownConfig.parserConfig.maxHttpResponseSize; settable via WellKnownConfig.builder().parserConfig(...)";
 
     /**
      * Constant description of the parsed source, filled into the first placeholder of

@@ -17,18 +17,28 @@ package de.cuioss.sheriff.token.commons.transport;
 
 import com.dslplatform.json.DslJson;
 import de.cuioss.http.client.ContentType;
+import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import mockwebserver3.Dispatcher;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
+import mockwebserver3.RecordedRequest;
+import okhttp3.Headers;
+import okhttp3.HttpUrl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -58,7 +68,9 @@ class WellKnownResultConverterTest {
             """;
 
     /** The knob a well-known bounded-read failure must name as the origin of its ceiling. */
-    private static final String BOUND_ORIGIN_KNOB = "WellKnownConfig.parserConfig.maxPayloadSize";
+    private static final String BOUND_ORIGIN_KNOB = "WellKnownConfig.parserConfig.maxHttpResponseSize";
+
+    private static final String WELL_KNOWN_PATH = "/.well-known/openid-configuration";
 
     /** Rendered start of every JSON_PARSE_FAILED record the converter logs: source, then the detail. */
     private static final String RENDERED_PARSE_FAILURE_PREFIX =
@@ -287,6 +299,60 @@ class WellKnownResultConverterTest {
                         + result.failure().getMessage());
         assertTrue(result.failure().getMessage().contains(String.valueOf(maxContentSize)),
                 "Streaming rejection must report the enforced ceiling, but was: " + result.failure().getMessage());
+    }
+
+    @Test
+    @DisplayName("Should accept a discovery document above 8 KiB, bounded by maxHttpResponseSize and not maxPayloadSize")
+    void shouldBoundDiscoveryDocumentByHttpResponseCeiling() throws IOException {
+        try (MockWebServer server = new MockWebServer()) {
+            server.setDispatcher(new LargeDiscoveryDispatcher());
+            server.start();
+            String wellKnownUrl = server.url(WELL_KNOWN_PATH).toString();
+
+            Optional<String> withDefaults = resolverFor(wellKnownUrl, ParserConfig.builder().build()).getJwksUri();
+            Optional<String> withSmallPayloadBound = resolverFor(wellKnownUrl,
+                    ParserConfig.builder().maxPayloadSize(1024).build()).getJwksUri();
+            Optional<String> withSmallHttpBound = resolverFor(wellKnownUrl,
+                    ParserConfig.builder().maxHttpResponseSize(1024).build()).getJwksUri();
+
+            assertAll("the discovery response is bounded by maxHttpResponseSize alone",
+                    () -> assertTrue(withDefaults.isPresent(), "a document above 8 KiB passes the default ceiling"),
+                    () -> assertTrue(withSmallPayloadBound.isPresent(), "maxPayloadSize must not bound the response"),
+                    () -> assertTrue(withSmallHttpBound.isEmpty(), "a small maxHttpResponseSize rejects the document"));
+        }
+    }
+
+    private static HttpWellKnownResolver resolverFor(String wellKnownUrl, ParserConfig parserConfig) {
+        return WellKnownConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                .wellKnownUrl(wellKnownUrl)
+                .parserConfig(parserConfig)
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build()
+                .createResolver(new SecurityEventCounter());
+    }
+
+    /**
+     * Serves a discovery document larger than the 8 KiB JWT-part bound: a valid issuer and
+     * {@code jwks_uri} followed by a long {@code scopes_supported} array.
+     */
+    private static final class LargeDiscoveryDispatcher extends Dispatcher {
+
+        @Override
+        public MockResponse dispatch(RecordedRequest request) {
+            HttpUrl url = request.getUrl();
+            if (!WELL_KNOWN_PATH.equals(url.encodedPath())) {
+                return new MockResponse(404, Headers.of(), "");
+            }
+            String issuer = url.newBuilder().encodedPath("/").build().toString();
+            String scopes = IntStream.range(0, 1500)
+                    .mapToObj("\"scope-%04d\""::formatted)
+                    .collect(Collectors.joining(","));
+            String document = """
+                    {"issuer": "%s", "jwks_uri": "%sjwks.json", "scopes_supported": [%s]}
+                    """.formatted(issuer, issuer, scopes);
+            assertTrue(document.length() > 16 * 1024, "the served document must exceed 16 KiB");
+            return new MockResponse(200, Headers.of("Content-Type", "application/json"), document);
+        }
     }
 
     @Test

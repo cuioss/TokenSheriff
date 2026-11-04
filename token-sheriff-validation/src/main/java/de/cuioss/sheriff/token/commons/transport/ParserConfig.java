@@ -34,7 +34,11 @@ import lombok.ToString;
  *   <li><strong>maxTokenSize</strong>: Limits the entire JWT token string before any processing.
  *       This prevents oversized tokens from consuming memory or processing time.</li>
  *   <li><strong>maxPayloadSize</strong>: Limits each decoded JWT part (header, payload) after Base64 decoding.
- *       Since Base64 encoding increases size by ~33%, decoded parts are smaller than the original token.</li>
+ *       Since Base64 encoding increases size by ~33%, decoded parts are smaller than the original token.
+ *       It also bounds JWKS content parsed by {@code JwksParser}, but not HTTP response bodies.</li>
+ *   <li><strong>maxHttpResponseSize</strong>: Limits the HTTP response body of the JWKS and well-known
+ *       discovery fetches, enforced while the body streams and again after it is read. It applies to these
+ *       HTTP responses only and is independent of {@code maxPayloadSize}.</li>
  *   <li><strong>maxStringLength</strong>: DSL-JSON enforced limit on maximum string buffer size.</li>
  * </ul>
  * <p>
@@ -53,6 +57,7 @@ import lombok.ToString;
  * ParserConfig config = ParserConfig.builder()
  *     .maxTokenSize(16 * 1024)
  *     .maxPayloadSize(4 * 1024)
+ *     .maxHttpResponseSize(128 * 1024)
  *     .maxStringLength(2 * 1024)
  *     .build();
  * </pre>
@@ -85,6 +90,12 @@ public final class ParserConfig {
     public static final int DEFAULT_MAX_PAYLOAD_SIZE = 8 * 1024;
 
     /**
+     * Default maximum HTTP response body size for the JWKS and well-known discovery fetches (256KB).
+     * Well above real JWKS and discovery documents, while still bounding the memory one fetch can claim.
+     */
+    public static final int DEFAULT_MAX_HTTP_RESPONSE_SIZE = 256 * 1024;
+
+    /**
      * Default maximum string length for DSL-JSON parsing (4KB).
      */
     public static final int DEFAULT_MAX_STRING_LENGTH = 4 * 1024;
@@ -113,8 +124,22 @@ public final class ParserConfig {
      * Maximum size of decoded JSON payload in bytes.
      * This limit is applied to each Base64-decoded JWT part (header, payload).
      * Since Base64 encoding increases size by ~33%, decoded parts are smaller than the original token.
+     * It also bounds JWKS content parsed by {@code JwksParser}; HTTP response bodies are bounded by
+     * {@link #maxHttpResponseSize} instead.
      */
     int maxPayloadSize = DEFAULT_MAX_PAYLOAD_SIZE;
+
+    /**
+     * Maximum size in bytes of the HTTP response body of a JWKS or well-known discovery fetch.
+     * <p>
+     * Enforced by the JWKS and discovery HTTP converters while the body streams, so an over-limit
+     * response is rejected before it is fully buffered, and again after it is read. It bounds these
+     * HTTP responses only: decoded JWT parts and {@code JwksParser} content stay bounded by
+     * {@link #maxPayloadSize}, so changing one limit never changes the other.
+     *
+     * @return the maximum HTTP response body size in bytes
+     */
+    int maxHttpResponseSize = DEFAULT_MAX_HTTP_RESPONSE_SIZE;
 
     /**
      * The maximum length for the string buffer in DSL-JSON.
@@ -172,14 +197,16 @@ public final class ParserConfig {
      *
      * @param maxTokenSize the maximum token size
      * @param maxPayloadSize the maximum payload size
+     * @param maxHttpResponseSize the maximum HTTP response body size of the JWKS and discovery fetches
      * @param maxStringLength the maximum string length
      * @param maxNestingDepth the maximum JSON nesting depth
      * @param maxArraySize the maximum JSON array size
      */
-    private ParserConfig(int maxTokenSize, int maxPayloadSize, int maxStringLength,
+    private ParserConfig(int maxTokenSize, int maxPayloadSize, int maxHttpResponseSize, int maxStringLength,
             int maxNestingDepth, int maxArraySize) {
         this.maxTokenSize = maxTokenSize;
         this.maxPayloadSize = maxPayloadSize;
+        this.maxHttpResponseSize = maxHttpResponseSize;
         this.maxStringLength = maxStringLength;
         this.maxNestingDepth = maxNestingDepth;
         this.maxArraySize = maxArraySize;
@@ -223,6 +250,7 @@ public final class ParserConfig {
     public static class ParserConfigBuilder {
         private int maxTokenSize = DEFAULT_MAX_TOKEN_SIZE;
         private int maxPayloadSize = DEFAULT_MAX_PAYLOAD_SIZE;
+        private int maxHttpResponseSize = DEFAULT_MAX_HTTP_RESPONSE_SIZE;
         private int maxStringLength = DEFAULT_MAX_STRING_LENGTH;
         private int maxNestingDepth = DEFAULT_MAX_NESTING_DEPTH;
         private int maxArraySize = DEFAULT_MAX_ARRAY_SIZE;
@@ -234,6 +262,17 @@ public final class ParserConfig {
 
         public ParserConfigBuilder maxPayloadSize(int maxPayloadSize) {
             this.maxPayloadSize = maxPayloadSize;
+            return this;
+        }
+
+        /**
+         * Sets the maximum HTTP response body size of the JWKS and well-known discovery fetches.
+         *
+         * @param maxHttpResponseSize the ceiling in bytes, must be positive
+         * @return this builder
+         */
+        public ParserConfigBuilder maxHttpResponseSize(int maxHttpResponseSize) {
+            this.maxHttpResponseSize = maxHttpResponseSize;
             return this;
         }
 
@@ -259,6 +298,9 @@ public final class ParserConfig {
             if (maxPayloadSize <= 0) {
                 throw new IllegalArgumentException("maxPayloadSize must be positive, but was: " + maxPayloadSize);
             }
+            if (maxHttpResponseSize <= 0) {
+                throw new IllegalArgumentException("maxHttpResponseSize must be positive, but was: " + maxHttpResponseSize);
+            }
             if (maxStringLength <= 0) {
                 throw new IllegalArgumentException("maxStringLength must be positive, but was: " + maxStringLength);
             }
@@ -268,7 +310,8 @@ public final class ParserConfig {
             if (maxArraySize <= 0) {
                 throw new IllegalArgumentException("maxArraySize must be positive, but was: " + maxArraySize);
             }
-            return new ParserConfig(maxTokenSize, maxPayloadSize, maxStringLength, maxNestingDepth, maxArraySize);
+            return new ParserConfig(maxTokenSize, maxPayloadSize, maxHttpResponseSize, maxStringLength,
+                    maxNestingDepth, maxArraySize);
         }
     }
 

@@ -160,7 +160,7 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
         var converter = new WellKnownConfigurationConverter(
                 config.getParserConfig().getDslJson(),
                 securityEventCounter,
-                config.getParserConfig().getMaxPayloadSize());
+                config.getParserConfig().getMaxHttpResponseSize());
 
         // Create base adapter with ETag caching
         HttpAdapter<WellKnownResult> baseAdapter = ETagAwareHttpAdapter.<WellKnownResult>builder()

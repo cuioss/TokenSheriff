@@ -37,12 +37,13 @@ import java.util.Optional;
  * It follows the CUI converter pattern by extending StringContentConverter
  * and provides proper empty value semantics for error cases.
  * <p>
- * A byte ceiling ({@link ParserConfig#getMaxPayloadSize()}) is enforced on the JWKS body while it
+ * A byte ceiling ({@link ParserConfig#getMaxHttpResponseSize()}) is enforced on the JWKS body while it
  * streams (see {@link BoundedBodyHandlers}), so an oversized key set is rejected before it is fully
  * buffered rather than being read unbounded into memory (H2). Both the streaming rejection and the
  * post-materialization rejection report the enforced bound together with its origin — the
- * {@code ParserConfig.maxPayloadSize} knob and how to set it — so a reader of the failure knows
- * which setting produced the ceiling.
+ * {@code ParserConfig.maxHttpResponseSize} knob and how to set it — so a reader of the failure knows
+ * which setting produced the ceiling. The JWT-part bound {@code maxPayloadSize} does not limit the
+ * HTTP response.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -56,7 +57,7 @@ public class JwksHttpContentConverter extends StringContentConverter<Jwks> {
      * so a reader knows which knob produced the bound and that it is settable.
      */
     private static final String BOUND_ORIGIN =
-            "ParserConfig.maxPayloadSize; settable via ParserConfig.builder().maxPayloadSize(...)";
+            "ParserConfig.maxHttpResponseSize; settable via ParserConfig.builder().maxHttpResponseSize(...)";
 
     private final DslJson<Object> dslJson;
     private final int maxContentSize;
@@ -69,7 +70,7 @@ public class JwksHttpContentConverter extends StringContentConverter<Jwks> {
     public JwksHttpContentConverter(ParserConfig parserConfig) {
         super(StandardCharsets.UTF_8);
         this.dslJson = parserConfig.getDslJson();
-        this.maxContentSize = parserConfig.getMaxPayloadSize();
+        this.maxContentSize = parserConfig.getMaxHttpResponseSize();
     }
 
     @Override
