@@ -500,7 +500,7 @@ public final class JWTValidationLogMessages {
 
         public static final LogRecord DUPLICATE_JWKS_KID = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(168)
+                .identifier(171)
                 .template("Duplicate kid '%s' in JWKS: a later key overwrote an earlier one — the JWKS should carry a unique kid per key")
                 .build();
 
