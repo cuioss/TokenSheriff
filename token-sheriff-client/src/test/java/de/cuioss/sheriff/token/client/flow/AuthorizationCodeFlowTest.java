@@ -259,20 +259,81 @@ class AuthorizationCodeFlowTest {
         var config = config();
         var context = FlowContext.create(REDIRECT_URI);
         idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
-        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(accessHolder.getRawToken(), null,
-                idHolder.getRawToken(), 300));
+        var generator = new DpopProofGenerator(rsaKeyPair(), "RS256");
+        moduleDispatcher.respondWith(dpopTokenResponse(
+                DpopBoundAccessTokens.boundTo(accessHolder, generator.jkt())));
         var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
-        SenderConstraint constraint = SenderConstraint.dpop(new DpopProofGenerator(rsaKeyPair(), "RS256"));
-        var flow = new AuthorizationCodeFlow(config, new TokenEndpointClient(config), accessBridge, idBridge,
-                new IssValidator(), constraint);
 
-        flow.exchange(metadataWithTokenEndpoint(uriBuilder), context, callback, auth(config));
+        AuthorizationCodeFlow.AuthenticationResult result = dpopFlow(config, generator)
+                .exchange(metadataWithTokenEndpoint(uriBuilder), context, callback, auth(config));
 
         RecordedRequest request = server.takeRequest();
         String proof = request.getHeaders().get("DPoP");
         assertAll("DPoP-bound code exchange",
                 () -> assertNotNull(proof, "the code redemption must carry a DPoP proof header"),
-                () -> assertEquals(3, proof.split("\\.").length, "the DPoP header is a compact proof JWT"));
+                () -> assertEquals(3, proof.split("\\.").length, "the DPoP header is a compact proof JWT"),
+                () -> assertNotNull(result.accessToken(),
+                        "a DPoP token bound to the proof key must pass the binding check and validation"));
+    }
+
+    @Test
+    @DisplayName("exchange() should reject a Bearer-typed token response to a DPoP-bound redemption before validating the access token")
+    void shouldRejectBearerDowngradeUnderDpopBeforeValidation(URIBuilder uriBuilder) {
+        var config = config();
+        var context = FlowContext.create(REDIRECT_URI);
+        idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
+        accessHolder.withClaim(ClaimName.ISSUER.getName(),
+                ClaimValue.forPlainString("https://attacker.example.com"));
+        var generator = new DpopProofGenerator(rsaKeyPair(), "RS256");
+        moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(
+                DpopBoundAccessTokens.boundTo(accessHolder, generator.jkt()), null, idHolder.getRawToken(), 300));
+        var metadata = metadataWithTokenEndpoint(uriBuilder);
+        var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
+        var flow = dpopFlow(config, generator);
+        var clientAuth = auth(config);
+
+        var thrown = assertThrows(RedeemedResponseException.class,
+                () -> flow.exchange(metadata, context, callback, clientAuth),
+                "the downgrade must be refused by the binding check, not by the later access-token validation");
+        assertTrue(thrown.getMessage().contains("token_type 'Bearer'"),
+                "the rejection must name the downgraded token_type, but was: " + thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("exchange() should reject a DPoP access token bound to a foreign cnf.jkt before validating it")
+    void shouldRejectForeignJktUnderDpopBeforeValidation(URIBuilder uriBuilder) {
+        var config = config();
+        var context = FlowContext.create(REDIRECT_URI);
+        idHolder.withClaim("nonce", ClaimValue.forPlainString(context.nonce()));
+        accessHolder.withClaim(ClaimName.ISSUER.getName(),
+                ClaimValue.forPlainString("https://attacker.example.com"));
+        var generator = new DpopProofGenerator(rsaKeyPair(), "RS256");
+        String foreignJkt = Generators.letterStrings(43, 43).next();
+        moduleDispatcher.respondWith(dpopTokenResponse(DpopBoundAccessTokens.boundTo(accessHolder, foreignJkt)));
+        var metadata = metadataWithTokenEndpoint(uriBuilder);
+        var callback = new CallbackParameters(Generators.letterStrings(20, 40).next(), context.state(), null, null, null);
+        var flow = dpopFlow(config, generator);
+        var clientAuth = auth(config);
+
+        var thrown = assertThrows(RedeemedResponseException.class,
+                () -> flow.exchange(metadata, context, callback, clientAuth),
+                "the foreign binding must be refused by the binding check, not by the later access-token validation");
+        assertTrue(thrown.getMessage().contains("does not match the DPoP proof-key thumbprint"),
+                "the rejection must name the jkt mismatch, but was: " + thrown.getMessage());
+    }
+
+    private AuthorizationCodeFlow dpopFlow(ClientConfiguration config, DpopProofGenerator generator) {
+        return new AuthorizationCodeFlow(config, new TokenEndpointClient(config), accessBridge, idBridge,
+                new IssValidator(), SenderConstraint.dpop(generator));
+    }
+
+    /**
+     * The success body a DPoP-capable authorization server returns for a DPoP-proofed code redemption:
+     * {@code token_type=DPoP} with the nonce-bound ID token of this test.
+     */
+    private String dpopTokenResponse(String accessToken) {
+        return TokenDispatcher.tokenResponse(accessToken, null, idHolder.getRawToken(), 300)
+                .replace("\"token_type\":\"Bearer\"", "\"token_type\":\"DPoP\"");
     }
 
     @Test

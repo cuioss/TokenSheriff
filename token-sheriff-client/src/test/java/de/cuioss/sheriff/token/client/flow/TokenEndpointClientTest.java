@@ -19,6 +19,7 @@ import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.dpop.DpopProofGenerator;
 import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
+import de.cuioss.sheriff.token.client.token.TokenResponse;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -35,9 +36,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -64,6 +67,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * coverage does not reach: a repeated challenge must not loop, a blank {@code DPoP-Nonce} must not be
  * treated as a challenge, and a challenge presented against an mTLS constraint must not be answered
  * with a DPoP proof.
+ * <p>
+ * <strong>Issuance-time binding:</strong> under a DPoP constraint the issued token must be bound to the
+ * proof key — {@code token_type=DPoP}, and a JWT access token's {@code cnf.jkt} equal to the proof-key
+ * thumbprint. A {@code Bearer} downgrade, a foreign {@code jkt} and a missing {@code cnf.jkt} are each
+ * rejected with {@link RedeemedResponseException}; an opaque or encrypted access token skips only the
+ * {@code jkt} comparison; mTLS and unconstrained requests are not checked.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -184,11 +193,182 @@ class TokenEndpointClientTest {
                 "an mTLS binding is transport-level; a DPoP nonce challenge is not answerable and must not be retried");
     }
 
+    @Test
+    @DisplayName("a Bearer token_type issued under a DPoP constraint is rejected as a redeemed downgrade")
+    void shouldRejectBearerTokenTypeUnderDpopConstraint(URIBuilder uriBuilder) {
+        SenderConstraint constraint = dpopConstraint();
+        moduleDispatcher.respondWith(tokenResponse(jws(cnfPayload(jktOf(constraint))), "Bearer"));
+
+        RedeemedResponseException thrown = redeemExpectingRedeemedRejection(uriBuilder, constraint);
+
+        assertTrue(thrown.getMessage().contains("token_type 'Bearer'"),
+                "the rejection must name the downgraded token_type, but was: " + thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("a DPoP JWT access token whose cnf.jkt differs from the proof-key thumbprint is rejected")
+    void shouldRejectMismatchedJktUnderDpopConstraint(URIBuilder uriBuilder) {
+        SenderConstraint constraint = dpopConstraint();
+        String foreignJkt = Generators.letterStrings(43, 43).next();
+        moduleDispatcher.respondWith(tokenResponse(jws(cnfPayload(foreignJkt)), "DPoP"));
+
+        RedeemedResponseException thrown = redeemExpectingRedeemedRejection(uriBuilder, constraint);
+
+        assertTrue(thrown.getMessage().contains("does not match the DPoP proof-key thumbprint"),
+                "the rejection must name the jkt mismatch, but was: " + thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("a DPoP JWT access token without a cnf claim is rejected as unbound")
+    void shouldRejectJwtWithoutCnfUnderDpopConstraint(URIBuilder uriBuilder) {
+        SenderConstraint constraint = dpopConstraint();
+        moduleDispatcher.respondWith(tokenResponse(jws(subjectOnlyPayload()), "DPoP"));
+
+        RedeemedResponseException thrown = redeemExpectingRedeemedRejection(uriBuilder, constraint);
+
+        assertTrue(thrown.getMessage().contains("without a cnf.jkt binding"),
+                "the rejection must name the missing binding, but was: " + thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("a DPoP JWT access token whose cnf carries no jkt member is rejected as unbound")
+    void shouldRejectCnfWithoutJktUnderDpopConstraint(URIBuilder uriBuilder) {
+        SenderConstraint constraint = dpopConstraint();
+        String x5tOnly = "{\"sub\":\"" + Generators.letterStrings(8, 16).next()
+                + "\",\"cnf\":{\"x5t#S256\":\"" + Generators.letterStrings(43, 43).next() + "\"}}";
+        moduleDispatcher.respondWith(tokenResponse(jws(x5tOnly), "DPoP"));
+
+        RedeemedResponseException thrown = redeemExpectingRedeemedRejection(uriBuilder, constraint);
+
+        assertTrue(thrown.getMessage().contains("without a cnf.jkt binding"),
+                "a cnf without jkt is not a DPoP binding, but the rejection was: " + thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("a DPoP JWT access token bound to the proof-key thumbprint is accepted")
+    void shouldAcceptMatchingJktUnderDpopConstraint(URIBuilder uriBuilder) {
+        SenderConstraint constraint = dpopConstraint();
+        String accessToken = jws(cnfPayload(jktOf(constraint)));
+        moduleDispatcher.respondWith(tokenResponse(accessToken, "DPoP"));
+
+        TokenResponse response = redeem(uriBuilder, constraint);
+
+        assertEquals(accessToken, response.accessToken, "the bound access token must be returned unchanged");
+    }
+
+    @Test
+    @DisplayName("the DPoP token_type is matched case-insensitively (RFC 6749 §5.1)")
+    void shouldAcceptLowerCaseDpopTokenType(URIBuilder uriBuilder) {
+        SenderConstraint constraint = dpopConstraint();
+        moduleDispatcher.respondWith(tokenResponse(jws(cnfPayload(jktOf(constraint))), "dpop"));
+
+        TokenResponse response = redeem(uriBuilder, constraint);
+
+        assertEquals("dpop", response.tokenType, "a lower-case DPoP token_type is the DPoP type");
+    }
+
+    @Test
+    @DisplayName("an opaque access token with token_type DPoP is accepted; only the jkt comparison is skipped")
+    void shouldAcceptOpaqueAccessTokenUnderDpopConstraint(URIBuilder uriBuilder) {
+        String opaque = Generators.letterStrings(30, 60).next();
+        moduleDispatcher.respondWith(tokenResponse(opaque, "DPoP"));
+
+        TokenResponse response = redeem(uriBuilder, dpopConstraint());
+
+        assertEquals(opaque, response.accessToken, "an opaque DPoP token carries no cnf to compare");
+    }
+
+    @Test
+    @DisplayName("an encrypted (five-part JWE) access token with token_type DPoP skips the jkt comparison")
+    void shouldAcceptJweAccessTokenUnderDpopConstraint(URIBuilder uriBuilder) {
+        String jwe = String.join(".", segment(), segment(), segment(), segment(), segment());
+        moduleDispatcher.respondWith(tokenResponse(jwe, "DPoP"));
+
+        TokenResponse response = redeem(uriBuilder, dpopConstraint());
+
+        assertEquals(jwe, response.accessToken, "a JWE payload cannot be read, so only token_type is checked");
+    }
+
+    @Test
+    @DisplayName("an mTLS-constrained request still accepts a Bearer token")
+    void shouldAcceptBearerUnderMtlsConstraint(URIBuilder uriBuilder) {
+        moduleDispatcher.respondWith(tokenResponse(jws(subjectOnlyPayload()), "Bearer"));
+        var mtls = SenderConstraint.mtls(Generators.letterStrings(20, 40).next());
+
+        TokenResponse response = redeem(uriBuilder, mtls);
+
+        assertEquals("Bearer", response.tokenType, "an mTLS-bound token is presented as Bearer");
+    }
+
+    @Test
+    @DisplayName("an unconstrained request still accepts a Bearer JWT without cnf")
+    void shouldAcceptBearerWithoutConstraint(URIBuilder uriBuilder) {
+        moduleDispatcher.respondWith(tokenResponse(jws(subjectOnlyPayload()), "Bearer"));
+
+        TokenResponse response = redeem(uriBuilder, null);
+
+        assertEquals("Bearer", response.tokenType, "no sender-constraint means no binding check");
+    }
+
+    private TokenResponse redeem(URIBuilder uriBuilder, SenderConstraint constraint) {
+        var client = new TokenEndpointClient(config());
+        String endpoint = uriBuilder.addPathSegment("token").buildAsString();
+        return client.requestToken(endpoint, Map.of("grant_type", "authorization_code"), Map.of(), constraint);
+    }
+
+    private RedeemedResponseException redeemExpectingRedeemedRejection(URIBuilder uriBuilder,
+            SenderConstraint constraint) {
+        var client = new TokenEndpointClient(config());
+        String endpoint = uriBuilder.addPathSegment("token").buildAsString();
+        Map<String, String> requestParams = Map.of("grant_type", "authorization_code");
+        Map<String, String> requestHeaders = Map.of();
+
+        RedeemedResponseException thrown = assertThrows(RedeemedResponseException.class,
+                () -> client.requestToken(endpoint, requestParams, requestHeaders, constraint),
+                "an unbound token issued under a DPoP constraint must be rejected after redemption");
+        assertEquals(1, moduleDispatcher.getCallCounter(), "the rejection follows a single, successful redemption");
+        return thrown;
+    }
+
+    private static String jktOf(SenderConstraint constraint) {
+        return constraint.binding().confirmation();
+    }
+
+    private static String tokenResponse(String accessToken, String tokenType) {
+        return "{\"access_token\":\"" + accessToken + "\",\"token_type\":\"" + tokenType
+                + "\",\"expires_in\":300}";
+    }
+
+    private static String cnfPayload(String jkt) {
+        return "{\"sub\":\"" + Generators.letterStrings(8, 16).next() + "\",\"cnf\":{\"jkt\":\"" + jkt + "\"}}";
+    }
+
+    private static String subjectOnlyPayload() {
+        return "{\"sub\":\"" + Generators.letterStrings(8, 16).next() + "\"}";
+    }
+
     /**
-     * Serves the token endpoint in one of two shapes: a syntactically malformed 200 body whose parse
-     * error echoes an embedded {@code CR}/{@code LF} (the default, driving the M8 case), or an RFC 9449
+     * Builds a compact JWS around {@code payloadJson}. The signature segment is filler: the binding
+     * check only decodes the payload and never verifies the signature.
+     */
+    private static String jws(String payloadJson) {
+        return base64Url("{\"alg\":\"RS256\",\"typ\":\"at+jwt\"}") + "." + base64Url(payloadJson) + "." + segment();
+    }
+
+    private static String segment() {
+        return base64Url(Generators.letterStrings(16, 32).next());
+    }
+
+    private static String base64Url(String value) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Serves the token endpoint in one of three shapes: a syntactically malformed 200 body whose parse
+     * error echoes an embedded {@code CR}/{@code LF} (the default, driving the M8 case); an RFC 9449
      * §8 {@code use_dpop_nonce} challenge — a 400 carrying a {@code DPoP-Nonce} header — served on
-     * <em>every</em> call, so a client that retried more than once is caught by the call counter.
+     * <em>every</em> call, so a client that retried more than once is caught by the call counter; or a
+     * configured 200 success body, driving the issuance-time sender-constraint binding cases.
      */
     static final class TokenEndpointStubDispatcher implements ModuleDispatcherElement {
 
@@ -204,9 +384,17 @@ class TokenEndpointClientTest {
         /** The {@code DPoP-Nonce} value to challenge with, or {@code null} to serve the malformed body. */
         private volatile String challengeNonce;
 
+        /** The 200 success body to serve, or {@code null} to serve the malformed body. */
+        private volatile String successBody;
+
         /** Serve a {@code use_dpop_nonce} challenge carrying {@code nonce} on every call. */
         void challengeWithNonce(String nonce) {
             this.challengeNonce = nonce;
+        }
+
+        /** Serve {@code body} as a 200 success response on every call. */
+        void respondWith(String body) {
+            this.successBody = body;
         }
 
         /** @return how many times the endpoint was called, i.e. the attempt count including retries */
@@ -216,6 +404,7 @@ class TokenEndpointClientTest {
 
         void reset() {
             this.challengeNonce = null;
+            this.successBody = null;
             this.callCounter.set(0);
         }
 
@@ -234,8 +423,9 @@ class TokenEndpointClientTest {
             callCounter.incrementAndGet();
             String nonce = this.challengeNonce;
             if (nonce == null) {
+                String body = this.successBody;
                 return Optional.of(new MockResponse(200,
-                        Headers.of("Content-Type", "application/json"), MALFORMED_BODY));
+                        Headers.of("Content-Type", "application/json"), body == null ? MALFORMED_BODY : body));
             }
             return Optional.of(new MockResponse(400,
                     Headers.of("Content-Type", "application/json", "DPoP-Nonce", nonce),

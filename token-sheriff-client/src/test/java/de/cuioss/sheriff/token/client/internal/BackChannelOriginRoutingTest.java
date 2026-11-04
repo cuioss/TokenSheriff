@@ -446,13 +446,22 @@ class BackChannelOriginRoutingTest {
                         "{\"error\":\"use_dpop_nonce\"}"));
             }
             return switch (request.getUrl().encodedPath()) {
-                case TOKEN_PATH -> json("{\"access_token\":\"opaque-access-token\",\"token_type\":\"Bearer\","
-                        + "\"expires_in\":300}");
+                case TOKEN_PATH -> json("{\"access_token\":\"opaque-access-token\",\"token_type\":\""
+                        + issuedTokenType(request) + "\",\"expires_in\":300}");
                 case PAR_PATH -> json("{\"request_uri\":\"urn:ietf:params:oauth:request_uri:routed\","
                         + "\"expires_in\":90}");
                 case REVOCATION_PATH -> Optional.of(new MockResponse(200, Headers.of(), ""));
                 default -> Optional.of(new MockResponse(404, Headers.of(), ""));
             };
+        }
+
+        /**
+         * Answers like a DPoP-capable authorization server: a request carrying a {@code DPoP} proof
+         * header is issued a {@code DPoP} token (RFC 9449 §5), any other request a {@code Bearer} token.
+         * The access token is opaque, so the client's {@code cnf.jkt} comparison does not apply.
+         */
+        private static String issuedTokenType(RecordedRequest request) {
+            return request.getHeaders().get("DPoP") == null ? "Bearer" : "DPoP";
         }
 
         private String discoveryDocument() {

@@ -93,9 +93,13 @@ class RefreshFailureClassificationTest {
     /** The issuer the assembled configuration is bound to. */
     private static final String ISSUER = "https://issuer.example.com";
 
-    /** A parseable, complete token endpoint success body — enough for the transport to normalize. */
-    private static final String SUCCESS_BODY =
-            "{\"access_token\":\"a\",\"token_type\":\"Bearer\",\"expires_in\":300}";
+    /**
+     * A parseable, complete token endpoint success body, as a DPoP-capable authorization server answers
+     * a DPoP-proofed request: the {@code DPoP} token type, and an opaque access token the client's
+     * {@code cnf.jkt} comparison skips.
+     */
+    private static final String DPOP_SUCCESS_BODY =
+            "{\"access_token\":\"a\",\"token_type\":\"DPoP\",\"expires_in\":300}";
 
     /** Cached 2048-bit RSA key pair, generated once for the whole class (DPoP proof material). */
     private static final KeyPair RSA_KEY_PAIR;
@@ -411,7 +415,7 @@ class RefreshFailureClassificationTest {
     @DisplayName("Should raise no classifiable failure when the retry after a nonce challenge succeeds")
     void shouldRaiseNoFailureWhenTheNonceRetrySucceeds(URIBuilder uriBuilder) {
         moduleDispatcher.challengeWithNonceOnce(Generators.letterStrings(16, 32).next());
-        moduleDispatcher.respondWith(200, SUCCESS_BODY);
+        moduleDispatcher.respondWith(200, DPOP_SUCCESS_BODY);
         var client = new TokenEndpointClient(config());
 
         var response = assertDoesNotThrow(() -> client.requestToken(

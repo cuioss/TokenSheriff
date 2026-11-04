@@ -167,13 +167,17 @@ abstract class WiredFlowTestSupport {
      * @return the wired, DPoP-constrained authorization-code flow
      */
     protected AuthorizationCodeFlow dpopAuthorizationCodeFlow(ClientConfiguration config) {
-        SenderConstraint constraint = SenderConstraint.dpop(new DpopProofGenerator(rsaKeyPair(), "RS256"));
+        SenderConstraint constraint = SenderConstraint.dpop(dpopProofGenerator());
         return new AuthorizationCodeFlow(config, new TokenEndpointClient(config), accessBridge, idBridge,
                 new IssValidator(), constraint);
     }
 
-    private static KeyPair rsaKeyPair() {
-        return RSA_KEY_PAIR;
+    /**
+     * @return a DPoP proof generator over the suite-wide cached RSA key pair; its {@code jkt()} is the
+     *         thumbprint a conformant DPoP token response binds the access token to
+     */
+    protected static DpopProofGenerator dpopProofGenerator() {
+        return new DpopProofGenerator(RSA_KEY_PAIR, "RS256");
     }
 
     /**
@@ -272,9 +276,23 @@ abstract class WiredFlowTestSupport {
         }
 
         void success(String accessToken, String idToken, String refreshToken, long expiresIn) {
+            success("Bearer", accessToken, idToken, refreshToken, expiresIn);
+        }
+
+        /**
+         * Serves a success body as a DPoP-capable authorization server answers a DPoP-proofed request:
+         * {@code token_type=DPoP}. The caller supplies an access token bound to the proof key
+         * ({@code cnf.jkt}), or an opaque one.
+         */
+        void dpopSuccess(String accessToken, String idToken, String refreshToken, long expiresIn) {
+            success("DPoP", accessToken, idToken, refreshToken, expiresIn);
+        }
+
+        private void success(String tokenType, String accessToken, String idToken, String refreshToken,
+                long expiresIn) {
             this.status = HTTP_OK;
             StringBuilder json = new StringBuilder("{\"access_token\":\"").append(accessToken)
-                    .append("\",\"token_type\":\"Bearer\",\"expires_in\":").append(expiresIn);
+                    .append("\",\"token_type\":\"").append(tokenType).append("\",\"expires_in\":").append(expiresIn);
             if (idToken != null) {
                 json.append(",\"id_token\":\"").append(idToken).append('"');
             }

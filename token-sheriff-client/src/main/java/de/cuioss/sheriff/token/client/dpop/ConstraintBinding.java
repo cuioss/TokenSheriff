@@ -26,9 +26,11 @@ import java.util.Objects;
  * RFC 8705). This value object carries that binding alongside the stored token so the constraint
  * survives storage and refresh (consumed by the token lifecycle, {@code CLIENT-18}).
  * <p>
- * The engine only <em>records</em> the binding here; verifying that a presented token actually
- * matches the confirmed key is inherited from the validation pipeline ({@code VALIDATION-8.7}) and
- * is not duplicated in the client.
+ * This value object only <em>records</em> the binding. At issuance the client verifies a DPoP-bound
+ * token against it: the token endpoint must answer a DPoP-constrained request with
+ * {@code token_type=DPoP}, and a JWT access token's {@code cnf.jkt} must equal this binding's proof-key
+ * thumbprint. Verifying a presented token's confirmation on the resource side remains the validation
+ * pipeline's job ({@code VALIDATION-8.7}).
  *
  * @param method       the sender-constraining method; never {@code null}
  * @param confirmation the confirmation value — the base64url JWK thumbprint ({@code jkt}) for DPoP,
