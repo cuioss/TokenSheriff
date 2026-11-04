@@ -231,6 +231,9 @@ class AccessTokenCacheTest {
     }
 
     @Test
+    // java:S1612 false positive: startLatch::await is an ambiguous method reference (CountDownLatch.await
+    // is overloaded and assertDoesNotThrow accepts both Executable and ThrowingSupplier), so it does not compile
+    @SuppressWarnings("java:S1612")
     void concurrentAccessHighContention() throws Exception {
         // Test optimistic caching under high contention (issue #131/#132 fix verification)
         // Given
@@ -299,6 +302,9 @@ class AccessTokenCacheTest {
     }
 
     @Test
+    // java:S1612 false positive: startLatch::await is an ambiguous method reference (CountDownLatch.await
+    // is overloaded and assertDoesNotThrow accepts both Executable and ThrowingSupplier), so it does not compile
+    @SuppressWarnings("java:S1612")
     void concurrentAccessMultipleTokens() throws Exception {
         // Test that different tokens can be validated in parallel without contention
         // Given
