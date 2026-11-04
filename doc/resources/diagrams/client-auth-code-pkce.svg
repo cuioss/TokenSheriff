@@ -4,7 +4,7 @@
      role="img" aria-labelledby="title desc"
      font-family="ui-sans-serif, -apple-system, system-ui, 'Segoe UI', sans-serif">
   <title id="title">Confidential authorization-code + PKCE flow (server-side)</title>
-  <desc  id="desc">A synchronous confidential-client flow across four participants: the browser, the client engine (backend), the commons transport, and the authorization server. The client builds a PKCE-protected authorization request, optionally pushed via PAR; the user authenticates at the AS front channel; the form_post callback returns the code with no token in the URL; the client verifies state and iss, exchanges the code over the back channel through commons, validates the tokens, stores them server-side, and returns only a session cookie to the browser.</desc>
+  <desc  id="desc">A synchronous confidential-client flow across four participants: the browser, the client engine (backend), the commons transport, and the authorization server. The client builds a PKCE-protected authorization request and redirects the browser with it; the user authenticates at the AS front channel; the form_post callback returns the code with no token in the URL; the client verifies state and iss, exchanges the code over the back channel through commons, validates the tokens, stores them server-side, and returns only a session cookie to the browser.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
@@ -45,8 +45,6 @@
 
   <!-- ===== activation bars ===== -->
   <rect class="activation" x="385" y="128" width="10" height="470"/>
-  <rect class="activation" x="625" y="188" width="10" height="50"/>
-  <rect class="activation" x="855" y="213" width="10" height="25"/>
   <rect class="activation" x="855" y="326" width="10" height="28"/>
   <rect class="activation" x="625" y="482" width="10" height="50"/>
   <rect class="activation" x="855" y="507" width="10" height="25"/>
@@ -62,15 +60,8 @@
   <path class="arrow" d="M 397 148 Q 447 148 447 160 Q 447 172 397 172" marker-end="url(#arrow)"/>
   <text x="455" y="156" class="arrow-lbl" text-anchor="start">build request · PKCE S256 · state · nonce</text>
 
-  <line class="arrow" x1="395" y1="192" x2="623" y2="192" marker-end="url(#arrow)"/>
-  <text x="512" y="184" class="arrow-lbl">PAR: push params</text>
-  <line class="arrow" x1="635" y1="217" x2="853" y2="217" marker-end="url(#arrow)"/>
-  <text x="744" y="209" class="arrow-lbl">POST /par</text>
-  <line class="arrow-return" x1="625" y1="238" x2="397" y2="238" marker-end="url(#arrow)"/>
-  <text x="512" y="230" class="arrow-lbl">request_uri</text>
-
   <line class="arrow-return" x1="383" y1="268" x2="122" y2="268" marker-end="url(#arrow)"/>
-  <text x="252" y="260" class="arrow-lbl">302 → authorize (request_uri)</text>
+  <text x="252" y="260" class="arrow-lbl">302 → authorize (query parameters)</text>
 
   <!-- ===== phase 2: User authenticates ===== -->
   <line class="sep" x1="30" y1="298" x2="405" y2="298"/>
