@@ -68,7 +68,7 @@ public final class JWTValidationLogMessages {
         public static final LogRecord JWKS_LOAD_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(203)
-                .template("Failed to load JWKS")
+                .template("Failed to load JWKS for issuer %s: %s")
                 .build();
 
         public static final LogRecord JWKS_INITIALIZATION_FAILED = LogRecordModel.builder()

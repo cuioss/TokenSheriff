@@ -27,6 +27,7 @@ import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.dispatcher.JwksResolveDispatcher;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
@@ -108,6 +109,17 @@ class HttpJwksLoaderFailureTest {
             // Verify the appropriate error was logged
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
                     JWTValidationLogMessages.ERROR.JWKS_LOAD_FAILED.resolveIdentifierString());
+
+            // The rendered record carries the issuer first and a non-blank error detail second
+            String renderedPrefix = "Failed to load JWKS for issuer test-issuer: ";
+            var loadFailures = TestLoggerFactory.getTestHandler()
+                    .resolveLogMessagesContaining(TestLogLevel.ERROR, renderedPrefix);
+            assertEquals(1, loadFailures.size(), "JWKS_LOAD_FAILED must render the issuer exactly once");
+            String rendered = loadFailures.getFirst().getMessage();
+            String errorDetail = rendered.substring(rendered.indexOf(renderedPrefix) + renderedPrefix.length());
+            assertAll("JWKS_LOAD_FAILED carries the error detail after the issuer",
+                    () -> assertFalse(errorDetail.isBlank(), "the error detail must not be dropped: " + rendered),
+                    () -> assertFalse(rendered.contains("%s"), "no placeholder may stay unfilled: " + rendered));
 
             // cui-http 2.0.0 classifies an unreachable host as a network error and logs
             // REQUEST_FAILED_MAX_ATTEMPTS at WARN once retries are exhausted.

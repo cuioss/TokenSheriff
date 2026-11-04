@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.commons.transport;
 
+import com.dslplatform.json.DslJson;
 import de.cuioss.http.client.ContentType;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
@@ -58,6 +59,10 @@ class WellKnownResultConverterTest {
 
     /** The knob a well-known bounded-read failure must name as the origin of its ceiling. */
     private static final String BOUND_ORIGIN_KNOB = "WellKnownConfig.parserConfig.maxPayloadSize";
+
+    /** Rendered start of every JSON_PARSE_FAILED record the converter logs: source, then the detail. */
+    private static final String RENDERED_PARSE_FAILURE_PREFIX =
+            "Failed to parse JSON from well-known discovery document: ";
 
     private WellKnownConfigurationConverter converter;
 
@@ -106,11 +111,14 @@ class WellKnownResultConverterTest {
     }
 
     @Test
-    @DisplayName("Should handle non-String input")
-    void shouldHandleNonStringInput() {
+    @DisplayName("Should render the non-String rejection as source and detail of JSON_PARSE_FAILED")
+    void shouldRenderNonStringRejectionAsSourceAndDetail() {
         Optional<WellKnownResult> result = converter.convert(12345);
 
         assertFalse(result.isPresent());
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
+                RENDERED_PARSE_FAILURE_PREFIX + "Expected String content, got: Integer");
+        assertNoUnfilledPlaceholderLogged();
     }
 
     @Test
@@ -123,6 +131,32 @@ class WellKnownResultConverterTest {
         assertFalse(result.isPresent());
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
                 TransportLogMessages.ERROR.JSON_PARSE_FAILED.resolveIdentifierString());
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR, RENDERED_PARSE_FAILURE_PREFIX);
+        assertNoUnfilledPlaceholderLogged();
+    }
+
+    @Test
+    @DisplayName("Should render an invalid configuration as source and detail of JSON_PARSE_FAILED")
+    void shouldRenderInvalidConfigurationAsSourceAndDetail() {
+        DslJson<Object> rejectingDslJson = new DslJson<>(new DslJson.Settings<>()) {
+            @Override
+            public <T> T deserialize(Class<T> manifest, byte[] body, int size) {
+                throw new IllegalArgumentException("issuer is malformed");
+            }
+        };
+        WellKnownConfigurationConverter rejectingConverter =
+                new WellKnownConfigurationConverter(rejectingDslJson, new SecurityEventCounter(), 8 * 1024);
+
+        Optional<WellKnownResult> result = rejectingConverter.convert(MINIMAL_JSON);
+
+        assertFalse(result.isPresent());
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
+                RENDERED_PARSE_FAILURE_PREFIX + "Invalid well-known configuration: issuer is malformed");
+        assertNoUnfilledPlaceholderLogged();
+    }
+
+    private static void assertNoUnfilledPlaceholderLogged() {
+        LogAsserts.assertNoLogMessagePresent(TestLogLevel.ERROR, "%s");
     }
 
     @Test

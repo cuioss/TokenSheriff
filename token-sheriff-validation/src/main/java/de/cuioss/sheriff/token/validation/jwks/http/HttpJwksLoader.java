@@ -393,7 +393,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                 return LoaderStatus.OK;
             }
         } else {
-            LOGGER.error(ERROR.JWKS_LOAD_FAILED, result.getErrorMessage().orElse("Unknown error"), getResolvedIssuer());
+            LOGGER.error(ERROR.JWKS_LOAD_FAILED, getResolvedIssuer(), result.getErrorMessage().orElse("Unknown error"));
         }
 
         // Failed load (HTTP failure or no usable keys): UNDEFINED keeps the loader retrying through
