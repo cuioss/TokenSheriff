@@ -248,8 +248,10 @@ class AccessTokenCacheTest {
             for (int i = 0; i < threadCount; i++) {
                 executor.submit(() -> {
                     try {
-                        // Wait for all threads to be ready
-                        startLatch.await();
+                        // Wait for all threads to be ready. A worker assertion failure is
+                        // swallowed by the executor's Future; the exact successCount assertion
+                        // on the test thread is the signal.
+                        assertDoesNotThrow(() -> startLatch.await(), "Thread was interrupted");
 
                         Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
                         AccessTokenContent result;
@@ -270,9 +272,6 @@ class AccessTokenCacheTest {
                         assertNotNull(result);
                         assertEquals(content, result);
                         successCount.incrementAndGet();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        fail("Thread was interrupted: " + e.getMessage());
                     } finally {
                         doneLatch.countDown();
                     }
@@ -321,7 +320,9 @@ class AccessTokenCacheTest {
                 for (int threadIndex = 0; threadIndex < threadsPerToken; threadIndex++) {
                     executor.submit(() -> {
                         try {
-                            startLatch.await();
+                            // A worker assertion failure is swallowed by the executor's Future;
+                            // the exact successCount assertion on the test thread is the signal.
+                            assertDoesNotThrow(() -> startLatch.await(), "Thread was interrupted");
 
                             Optional<AccessTokenContent> cached = cache.get(token, performanceMonitor, OffsetDateTime.now());
                             AccessTokenContent result;
@@ -335,9 +336,6 @@ class AccessTokenCacheTest {
 
                             assertNotNull(result);
                             successCount.incrementAndGet();
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            fail("Thread was interrupted: " + e.getMessage());
                         } finally {
                             doneLatch.countDown();
                         }
@@ -618,8 +616,7 @@ class AccessTokenCacheTest {
         // Given - cache whose eviction task is handed to an injected scheduler, so the test runs the
         // tick itself instead of waiting for a real one
         cache.shutdown();
-        TickCapturingScheduler scheduler = new TickCapturingScheduler();
-        try {
+        try (TickCapturingScheduler scheduler = new TickCapturingScheduler()) {
             AccessTokenCacheConfig config = AccessTokenCacheConfig.builder()
                     .maxSize(10) // Reduced size
                     .evictionIntervalSeconds(300L)
@@ -628,8 +625,6 @@ class AccessTokenCacheTest {
             cache = new AccessTokenCache(config, securityEventCounter);
 
             assertEvictionTickRemovesExpiredTokens(scheduler);
-        } finally {
-            scheduler.shutdownNow();
         }
     }
 
@@ -706,6 +701,15 @@ class AccessTokenCacheTest {
             Runnable task = periodicTask.get();
             assertNotNull(task, "The cache should have scheduled its eviction task");
             task.run();
+        }
+
+        /**
+         * Stops the scheduler immediately. The inherited {@code close()} awaits termination, which
+         * would block on the one-day placeholder task, so it is replaced by {@code shutdownNow()}.
+         */
+        @Override
+        public void close() {
+            shutdownNow();
         }
     }
 

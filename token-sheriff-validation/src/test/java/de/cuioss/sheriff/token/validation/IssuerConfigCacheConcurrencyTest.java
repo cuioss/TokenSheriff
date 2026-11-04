@@ -207,13 +207,14 @@ class IssuerConfigCacheConcurrencyTest {
                         assertNotNull(result);
                         healthySuccessCount.incrementAndGet();
                     } else {
-                        // Odd threads try unknown issuers (will throw exception)
-                        try {
-                            resolver.resolveConfig("https://unknown-issuer-" + threadIndex + ".com");
-                            fail("Should have thrown exception for unknown issuer");
-                        } catch (IllegalArgumentException | IllegalStateException | TokenValidationException e) {
-                            unhealthyExceptionCount.incrementAndGet();
-                        }
+                        // Odd threads try unknown issuers (will throw exception). An assertion
+                        // failure here is swallowed by the executor's Future, so the exact-count
+                        // assertion on the test thread is the signal that fails the test.
+                        String unknownIssuer = "https://unknown-issuer-" + threadIndex + ".com";
+                        assertThrows(TokenValidationException.class,
+                                () -> resolver.resolveConfig(unknownIssuer),
+                                "Should have thrown exception for unknown issuer");
+                        unhealthyExceptionCount.incrementAndGet();
                     }
                 } catch (IllegalArgumentException | IllegalStateException | TokenValidationException e) {
                     LOGGER.warn("Unexpected exception: %s", e.getMessage());
@@ -227,7 +228,11 @@ class IssuerConfigCacheConcurrencyTest {
         executor.shutdown();
 
         assertTrue(completed, "All threads should complete");
-        assertTrue(healthySuccessCount.get() > 0, "Should have successful healthy resolutions");
-        assertTrue(unhealthyExceptionCount.get() > 0, "Should have exceptions for unknown issuers");
+        int oddThreadCount = threadCount / 2;
+        int evenThreadCount = threadCount - oddThreadCount;
+        assertEquals(evenThreadCount, healthySuccessCount.get(),
+                "Every even-index thread should resolve its healthy issuer");
+        assertEquals(oddThreadCount, unhealthyExceptionCount.get(),
+                "Every odd-index thread should observe the unknown-issuer exception");
     }
 }
