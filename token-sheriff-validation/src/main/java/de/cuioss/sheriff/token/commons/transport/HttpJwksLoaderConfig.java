@@ -30,6 +30,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -597,11 +598,13 @@ public class HttpJwksLoaderConfig {
          * @param jwksUri the URI of the JWKS endpoint. Must not be null.
          * @return this builder instance
          * @throws IllegalArgumentException if another endpoint configuration method was already used
+         * @throws NullPointerException if {@code jwksUri} is null
          */
         public HttpJwksLoaderConfigBuilder jwksUri(URI jwksUri) {
+            Objects.requireNonNull(jwksUri, "jwksUri must not be null");
             validateEndpointExclusivity(EndpointSource.JWKS_URI);
             this.endpointSource = EndpointSource.JWKS_URI;
-            this.directJwksEndpoint = jwksUri != null ? jwksUri.toString() : null;
+            this.directJwksEndpoint = jwksUri.toString();
             httpHandlerBuilder.uri(jwksUri);
             return this;
         }
@@ -662,9 +665,10 @@ public class HttpJwksLoaderConfig {
          * @param wellKnownUri The well-known discovery endpoint URI. Must not be null.
          * @return this builder instance
          * @throws IllegalArgumentException if another endpoint configuration method was already used
-         * @throws IllegalArgumentException if {@code wellKnownUri} is null
+         * @throws NullPointerException if {@code wellKnownUri} is null
          */
         public HttpJwksLoaderConfigBuilder wellKnownUri(URI wellKnownUri) {
+            Objects.requireNonNull(wellKnownUri, "wellKnownUri must not be null");
             validateEndpointExclusivity(EndpointSource.WELL_KNOWN_URI);
             this.endpointSource = EndpointSource.WELL_KNOWN_URI;
             this.pendingWellKnownUri = wellKnownUri;
