@@ -105,3 +105,110 @@ Sender: PLAN-01-008. Component: `phase-6-finalize` (create-pr, loop-back re-entr
   refreshed (`model_unknown`) in several.
 - PLAN-07's `branch-cleanup` was recorded with the clean merge wording although a `barrier-ask-override` was
   granted, so that step alone hides the grant.
+
+## Addendum 2026-11-01: PLAN-12 and PLAN-20 (9 more messages)
+
+Recurrences of the themes above (not filed as new lessons):
+
+- Theme 3, scripts lag the docs: PLAN-12-001 and PLAN-20-003. The generated executor was 0.1.2027 while the
+  workflow docs read were 0.1.2040 (PLAN-12) and 0.1.2046 (PLAN-20). `pre_merge_gate consequence-text` and
+  `record-merge`, `review_completeness roster`, `manage-solution-outline get-deliverable --number`,
+  `manage-findings qgate query` and the `generate_trigger` selector result are missing or differ. Both senders
+  name regenerating the executor (marshall-steward executor staleness) as the likely fix. A third and fourth
+  plan hit the same drift, so a doc-version versus executor-version check before a plan run would prevent it.
+- Theme 1, CodeRabbit quota: PLAN-12-005. The required bot was quota-limited for the last two fix commits and
+  the automatic-review step could not reach completion; the merge went through under "Accept the coverage gap".
+  PLAN-20 also had two quota refusals, switched `review_rate_window_await` on after the first, and waited about
+  25 hours of wall time in all.
+- Theme 2, head binding: PLAN-20-004. A docs-only follow-up commit after the pre-push gate re-ran every
+  head-dependent finalize step, about an hour including the quota wait. PLAN-12-004 is the sibling case: the
+  pre-commit profile reformats tracked files after the last commit, so a green build is bound to a HEAD that no
+  longer matches the tree to be pushed. Suggested: run the reformatting profile before the final commit, make
+  verify fail on a dirty tree after the build, or bind verification records to the tree hash.
+- Theme 5, outline quality: PLAN-20-001. The solution outline gave two different fallbacks for the same
+  re-injection case; the phase-3 quality gate caught the contradiction. State each case's fallback in one place.
+
+New items:
+
+- PLAN-12-002 (with its correction PLAN-12-003): a code-review finding with `fix_kind correction` has no
+  applier when the review step declares `mutates_source: false`, so it loops back for an in-place correction
+  that nothing can perform, and was closed as accepted. The sender later corrected itself: on main the
+  `CoreJfrBenchmark` defect IS fixed (the token is selected once and that same token is validated), so the
+  statement in 002 that it was not fixed is wrong. What still holds is the routing gap. The related functional
+  review findings (no failing pre-fix run for `BenchmarkStateScopeTest`) were closed the same way.
+- PLAN-20-002: an advisory code-review finding about documentation claims that outrun their sources was not
+  acted on before the PR went up, and CodeRabbit then raised the same defect as an actionable comment, costing
+  an extra review round. The operator's fix-immediately policy covers it; whether the review step should
+  surface advisories of this class before push is a plan-marshall question.
+
+## Addendum 2026-11-02: PLAN-21 (6 plan-marshall messages)
+
+PLAN-21-004 (a lock/publish race plus under-pinned tests) is project-owned and was filed as the local lesson
+`2026-11-02-10-001`; it is not part of this report. The other six name `plan-marshall:*` components.
+
+Recurrences of the themes above (not filed as new lessons):
+
+- Theme 2, head binding: PLAN-21-002 and PLAN-21-003. The first sync-baseline record forwarded
+  `--head-at-completion`, which that step's workflow doc does not record. The pre-merge barrier later compared
+  the extra binding with the merge candidate and refused with `merge_candidate_not_gated`, so the record had to
+  be redone without the flag. Suggested: the recording verb rejects a head binding the step does not own. And
+  PLAN-21-003 is the third plan (after PLAN-20-004 and PLAN-12-004) where a fix commit made by triage after the
+  pre-push gate could not be pushed until the gate and the whole build re-ran: either route the re-gate
+  automatically in the triage fix loop or batch review-bot follow-ups and gate findings before the gate runs.
+- Theme 3, scripts lag the docs: no new case. PLAN-21 ran on `executor_version` 0.1.2046, equal to the plugin
+  version, so the drift reported in the first addendum is gone once marshall-steward regenerated the executor.
+- Theme 5, outline and plan quality: PLAN-21-005 and PLAN-21-006. The phase-4 description-drift Q-Gate flagged
+  ADR numbers (`17`, `18`, `16`) that the phase-4 ADR scan itself had injected into task descriptions as
+  lifecycle-contract pointers; the outline never mentions them. Both findings were accepted by hand. Suggested:
+  exempt references that originate from the ADR scan, or have the scan record its pointers so the validator can
+  read them.
+
+New items:
+
+- PLAN-21-001: the pre-push gate's `test-compile` arm cannot succeed for a module that consumes the
+  `token-sheriff-validation` generators test-jar. The test-jar is attached at `package`, so a reactor
+  `test-compile` that stops earlier cannot resolve it, yet `architecture resolve test-compile` still emits that
+  command for the consumer modules. The failed attempt filed 120 `build-error` findings with one root cause,
+  which had to be resolved by hand, and the landing recorded `test-compile` and `module-tests` as UN-GATED. The
+  same degradation was recorded for PLAN-05 and PLAN-12. Suggested: detect test-jar producer/consumer pairs and
+  either resolve `test-compile` to a goal that reaches `package` for the producer or mark it unsupported for
+  such modules; and collapse build failures that share one unresolvable artifact into one finding.
+- PLAN-21-007: `module_mapping_validator` flagged a `module_testing` task whose files were mechanical
+  caller updates after a signature change (client lifecycle code, Quarkus integration tests), because no
+  implementation task lived in the test module and `doc/developer/test-impl-mapping.adoc` does not exist.
+  Accepted. Suggested: route compile-compat caller updates into the implementation task, not into
+  `module_testing`.
+
+## Addendum 2026-11-02 (second): PLAN-08 (10 plan-marshall messages)
+
+PLAN-08-002, -004, -005, -006 and -007 are project-owned (config docs and Javadoc promising more than the code,
+`@DefaultBean` wording, a security fixture without a negative control). They were filed as the local lessons
+`2026-11-02-14-001` and `-002` and are not part of this report.
+
+Recurrences of the themes above (not filed as new lessons):
+
+- Theme 5, outline quality: PLAN-08-001. A success criterion said "any `.properties` file found is fixed here",
+  which implies writes to files the architecture inventory does not index, so the outline could not list them
+  under Affected files; phase 4 listed candidate directories as conditional changes instead. Suggested:
+  enumerate the candidate files by a direct read, or narrow the criterion to "verified none exist".
+- Theme 5 and the finalize loop: PLAN-08-003. A code-review loop-back fix touched rows of a file whose
+  per-deliverable scope had been narrowed by an overlap carve-out with another plan, so the functional review
+  flagged it as out of scope and the operator had to accept a scope exception. Suggested: attribute the fix to the
+  deliverable that owns the feature, or let the carve-out name the rows that stay open to this plan.
+- Theme 3, verbs paraphrased: PLAN-08-008 and PLAN-08-011. `manage-solution-outline get-deliverable --number`
+  (the flag is `--deliverable-number`; also seen in PLAN-12-001 and PLAN-20-003) and
+  `review_completeness check --pr-number` (the verb is plan-scoped and takes no PR number). Check whether a doc
+  quotes the short form; if not, this is one more recurrence of the argparse-rejection lesson.
+
+New items:
+
+- PLAN-08-009: `manage-tasks list --status pending,in_progress` is rejected because `--status` takes one value,
+  yet "open tasks" (pending plus in_progress) is the natural query after verification feedback adds fix tasks.
+  Suggested: accept a repeatable or comma-separated `--status`.
+- PLAN-08-010: the 5 → 6 phase transition was refused twice because commits made outside the per-deliverable
+  commit (a finalize code-review loop-back fix, triage inline fixes) carry no `kind=change` ledger row. The guard
+  is right; the inline-commit paths should append their own row. The log records only the first missing SHA.
+- Landing residue of PLAN-08: the pre-merge gate refused on 120 stale pending `build-error` findings that the
+  build tooling's dedupe had re-opened when the (pre-existing) red `test-compile` re-observed them, after a later
+  green build had resolved them. Same root cause as PLAN-21-001. Dedupe should not re-open a finding that a later
+  green build resolved.

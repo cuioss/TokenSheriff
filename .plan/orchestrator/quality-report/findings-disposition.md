@@ -59,19 +59,19 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 
 | ID | Sev | Verdict at HEAD | Owner |
 |---|---|---|---|
-| Q-1 | major | VALID — class-level `@BearerAuth` read from proxy class | PLAN-08 |
+| Q-1 | major | **FIXED** — #850 (ed172e43), PLAN-08; class-level `@BearerAuth` now read from the real bean class and merged with the method-level requirement (closed per PR; code not re-read) | PLAN-08 |
 | Q-2 | major | **FIXED** — health checks by #795; both exception mappers now registered via build steps by #834 (ef720fd0), PLAN-04 (closed per PR; code not re-read) | PLAN-04 |
 | Q-3 | major | **FIXED** — #834 (ef720fd0), PLAN-04; validator built eagerly at startup when at least one issuer is enabled (ADR 0019) (closed per PR; code not re-read) | PLAN-04 |
 | Q-4 | major | **FIXED** — #834 (ef720fd0), PLAN-04; liveness catches and reports a resolver failure, stays UP (closed per PR; code not re-read) | PLAN-04 |
-| Q-5 | minor | VALID — `TokenStore`/`RefreshScheduler` producers lack `@DefaultBean` | PLAN-08 |
-| Q-6 | minor | VALID — JWE config silent fallbacks | PLAN-08 |
-| Q-7 | minor | VALID — BOM pins jjwt with `test` scope | PLAN-12 |
+| Q-5 | minor | **FIXED** — #850 (ed172e43), PLAN-08; `tokenStore()`/`refreshScheduler()` producers are `@DefaultBean` (closed per PR; code not re-read) | PLAN-08 |
+| Q-6 | minor | **FIXED** — #850 (ed172e43), PLAN-08; unknown default key, orphaned ancillary JWE properties and path-less `decryption-keys.<kid>` entries now fail startup (closed per PR; code not re-read) | PLAN-08 |
+| Q-7 | minor | **FIXED** — #846 (17a3ef62), PLAN-12; `<scope>test</scope>` removed from the BOM's `jjwt-*` entries (closed per PR; code not re-read) | PLAN-12 |
 | Q-8 | minor | **FIXED** — #834 (ef720fd0), PLAN-04; documented as RESTEasy Classic only, no Quarkus REST support added (closed per PR; code not re-read) | PLAN-04 |
-| Q-9 | info | VALID (mechanism; env-var consequence unverified) | PLAN-08 |
-| Q-10 | major | VALID — "concurrent" benchmark is thread-scoped | PLAN-12 |
-| Q-11 | minor | VALID — metrics export last-writer-wins | PLAN-12 |
+| Q-9 | info | **FIXED** — #850 (ed172e43), PLAN-08; env-var-only issuers are discovered (anchor `SHERIFF_TOKEN_ISSUERS_<NAME>_ENABLED`; fix arm) (closed per PR; code not re-read) | PLAN-08 |
+| Q-10 | major | **FIXED** — #846 (17a3ef62), PLAN-12; five concurrency benchmarks now `@State(Scope.Benchmark)` (closed per PR; code not re-read) | PLAN-12 |
+| Q-11 | minor | **FIXED** — #846 (17a3ef62), PLAN-12; metrics exported once per trial under a per-method key (closed per PR; code not re-read) | PLAN-12 |
 | Q-12 | minor | PARTIAL — pins/hardlink fixed (#678, #679); AGENTS.md residue remains (= D-5) | PLAN-19 |
-| Q-13 | info | VALID — stale class/package references | PLAN-12 |
+| Q-13 | info | **FIXED** — #846 (17a3ef62), PLAN-12 (closed per PR; code not re-read) | PLAN-12 |
 
 ## Tests (TV / TC)
 
@@ -116,7 +116,7 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | D-5 | major | PARTIAL — = Q-12 residue in AGENTS.md | PLAN-19 |
 | D-6 | major | VALID — stale "128 KB buffer" | PLAN-18 |
 | D-7 | minor | VALID, broader — hub lists 1 of 15 ADRs; ADR-0002 "Proposed" | PLAN-19 |
-| D-8 | minor | VALID — nonce TTL default 300 vs 360 (with J-8) | PLAN-08 |
+| D-8 | minor | **FIXED** — #850 (ed172e43), PLAN-08; nonce-cache TTL default documented as 360 with the `proofMaxAge + 60` floor (closed per PR; code not re-read) | PLAN-08 |
 | D-9 | minor | PARTIAL — range fixed (#805); CLIENT-23/24 unmapped | PLAN-18 |
 | D-10 | minor | VALID — hub omissions, orphan benchmarking LogMessages | PLAN-19 |
 | D-11 | minor | VALID, worse — 66 `<<…>>` refs in 12 files | PLAN-19 |
@@ -136,7 +136,7 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | J-5 | major | VALID | PLAN-17 |
 | J-6 | major | VALID | PLAN-17 |
 | J-7 | major | VALID | PLAN-17 |
-| J-8 | minor | VALID (with D-8) | PLAN-08 |
+| J-8 | minor | **FIXED** — #850 (ed172e43), PLAN-08; `JwtPropertyKeys` Javadoc/config doc state the same (with D-8) (closed per PR; code not re-read) | PLAN-08 |
 | J-9 | minor | VALID | PLAN-17 |
 | J-10 | minor | VALID | PLAN-17 |
 | J-11 | minor | VALID | PLAN-17 |

@@ -2,10 +2,10 @@
   "id": "PLAN-08",
   "slug": "quarkus-config-cdi",
   "workstream": "WS-03",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-08-quarkus-config-cdi",
+  "pr": "850",
+  "landing": "landings/PLAN-08.md",
   "seq": 8
 }
