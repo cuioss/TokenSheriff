@@ -518,8 +518,9 @@ class WiredNegativePathAttackTest {
     // === Low-level helpers ===
 
     private EventType decryptionFailureEvent(TokenValidator validator, String jwe) {
+        AccessTokenRequest request = AccessTokenRequest.of(jwe);
         var ex = assertThrows(TokenValidationException.class,
-                () -> validator.createAccessToken(AccessTokenRequest.of(jwe)));
+                () -> validator.createAccessToken(request));
         return ex.getEventType();
     }
 

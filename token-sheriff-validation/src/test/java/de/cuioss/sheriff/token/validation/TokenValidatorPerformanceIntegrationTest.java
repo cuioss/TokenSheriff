@@ -64,12 +64,9 @@ class TokenValidatorPerformanceIntegrationTest {
 
         // Try to validate an invalid token (empty string) - this should record metrics even for failures
         var emptyRequest = AccessTokenRequest.of("");
-        try {
-            tokenValidator.createAccessToken(emptyRequest);
-            fail("Should have thrown TokenValidationException for empty token");
-        } catch (IllegalArgumentException | IllegalStateException | TokenValidationException e) {
-            // Expected - token validation should fail for empty string
-        }
+        assertThrows(TokenValidationException.class,
+                () -> tokenValidator.createAccessToken(emptyRequest),
+                "Should have thrown TokenValidationException for empty token");
 
         // Verify that complete validation time was recorded (even for failed validation)
         assertTrue(sampleCount(performanceMonitor, MeasurementType.COMPLETE_VALIDATION) > 0,
@@ -80,12 +77,9 @@ class TokenValidatorPerformanceIntegrationTest {
 
         // Try with a malformed token - this should get further in the pipeline
         var malformedRequest = AccessTokenRequest.of("not.a.valid.jwt.token");
-        try {
-            tokenValidator.createAccessToken(malformedRequest);
-            fail("Should have thrown TokenValidationException for malformed token");
-        } catch (IllegalArgumentException | IllegalStateException | TokenValidationException e) {
-            // Expected - token validation should fail for malformed token
-        }
+        assertThrows(TokenValidationException.class,
+                () -> tokenValidator.createAccessToken(malformedRequest),
+                "Should have thrown TokenValidationException for malformed token");
 
         // Verify that more measurements were recorded
         assertTrue(sampleCount(performanceMonitor, MeasurementType.COMPLETE_VALIDATION) >= 2,

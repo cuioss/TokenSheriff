@@ -87,16 +87,18 @@ class IssuerConfigCacheSynchronizationTest {
                     try {
                         long startTime = System.nanoTime();
 
-                        // First resolution hits any synchronization logic (warmup)
-                        IssuerConfig result = resolver.resolveConfig(issuerId);
+                        // First resolution hits any synchronization logic (warmup). A worker
+                        // assertion failure is swallowed by the executor's Future; the exact
+                        // operation-count assertion on the test thread is the signal.
+                        IssuerConfig result = assertDoesNotThrow(
+                                () -> resolver.resolveConfig(issuerId),
+                                "Warmup test failed");
 
                         long duration = System.nanoTime() - startTime;
                         totalTime.addAndGet(duration);
                         operations.incrementAndGet();
 
                         assertNotNull(result);
-                    } catch (IllegalArgumentException | IllegalStateException e) {
-                        fail("Warmup test failed: " + e.getMessage());
                     } finally {
                         latch.countDown();
                     }
@@ -116,7 +118,7 @@ class IssuerConfigCacheSynchronizationTest {
         // parallel surefire forks / CI CPU oversubscription while still catching a blocking
         // regression; "all operations complete" below is the real correctness gate.
         assertTrue(avgTimeMs < 20, "Operations should be reasonable during warmup (was: %.2f ms)".formatted(avgTimeMs));
-        assertEquals(operations.get(), threadsPerResolver * resolvers.size(), "All operations should complete");
+        assertEquals(threadsPerResolver * resolvers.size(), operations.get(), "All operations should complete");
     }
 
     @Test
@@ -140,16 +142,18 @@ class IssuerConfigCacheSynchronizationTest {
                 try {
                     long threadStartTime = System.nanoTime();
 
+                    // A worker assertion failure is swallowed by the executor's Future; the
+                    // exact totalOperations assertion on the test thread is the signal.
                     for (int j = 0; j < operationsPerThread; j++) {
-                        IssuerConfig result = issuerConfigCache.resolveConfig(issuerIdentifier);
+                        IssuerConfig result = assertDoesNotThrow(
+                                () -> issuerConfigCache.resolveConfig(issuerIdentifier),
+                                "Post-warmup test failed");
                         assertNotNull(result);
                         totalOperations.incrementAndGet();
                     }
 
                     long threadTime = System.nanoTime() - threadStartTime;
                     totalTime.addAndGet(threadTime);
-                } catch (IllegalArgumentException | IllegalStateException e) {
-                    fail("Post-warmup test failed: " + e.getMessage());
                 } finally {
                     latch.countDown();
                 }

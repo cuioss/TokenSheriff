@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -79,7 +80,11 @@ class IssuerConfigCachePerformanceTest {
                     for (int j = 0; j < operationsPerThread; j++) {
                         long startTime = System.nanoTime();
 
-                        IssuerConfig result = issuerConfigCache.resolveConfig(issuerIdentifier);
+                        // A worker assertion failure is swallowed by the executor's Future; the
+                        // exact successCount assertion on the test thread is the signal.
+                        IssuerConfig result = assertDoesNotThrow(
+                                () -> issuerConfigCache.resolveConfig(issuerIdentifier),
+                                "Thread execution failed");
 
                         long duration = System.nanoTime() - startTime;
                         totalNanoTime.addAndGet(duration);
@@ -91,8 +96,6 @@ class IssuerConfigCachePerformanceTest {
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                } catch (IllegalArgumentException | IllegalStateException e) {
-                    fail("Thread execution failed: " + e.getMessage());
                 } finally {
                     endLatch.countDown();
                 }
@@ -155,16 +158,18 @@ class IssuerConfigCachePerformanceTest {
                     try {
                         long startTime = System.nanoTime();
 
-                        // First call triggers warmup
-                        IssuerConfig result = resolver.resolveConfig(issuerId);
+                        // First call triggers warmup. A worker assertion failure is swallowed by
+                        // the executor's Future; the exact totalOperations assertion on the test
+                        // thread is the signal.
+                        IssuerConfig result = assertDoesNotThrow(
+                                () -> resolver.resolveConfig(issuerId),
+                                "Warmup test failed");
 
                         long duration = System.nanoTime() - startTime;
                         totalTime.addAndGet(duration);
                         totalOperations.incrementAndGet();
 
                         assertNotNull(result);
-                    } catch (IllegalArgumentException | IllegalStateException e) {
-                        fail("Warmup test failed: " + e.getMessage());
                     } finally {
                         latch.countDown();
                     }
@@ -175,6 +180,9 @@ class IssuerConfigCachePerformanceTest {
         boolean completed = latch.await(8, TimeUnit.SECONDS);
         assertTrue(completed, "Warmup test should complete quickly");
         executor.shutdown();
+
+        assertEquals(resolverCount * threadsPerResolver, totalOperations.get(),
+                "Every warmup operation should succeed");
 
         double avgTimeMs = totalTime.get() / (double) totalOperations.get() / 1_000_000;
         double throughputOpsPerSec = totalOperations.get() / (totalTime.get() / 1_000_000_000.0);
@@ -196,6 +204,7 @@ class IssuerConfigCachePerformanceTest {
         CountDownLatch latch = new CountDownLatch(threadCount);
 
         ConcurrentLinkedQueue<Long> executionTimes = new ConcurrentLinkedQueue<>();
+        AtomicReference<BrokenBarrierException> brokenBarrier = new AtomicReference<>();
 
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
@@ -204,7 +213,11 @@ class IssuerConfigCachePerformanceTest {
                     barrier.await();
 
                     long startTime = System.nanoTime();
-                    IssuerConfig result = issuerConfigCache.resolveConfig(issuerIdentifier);
+                    // A worker assertion failure is swallowed by the executor's Future; the
+                    // exact executionTimes size assertion on the test thread is the signal.
+                    IssuerConfig result = assertDoesNotThrow(
+                            () -> issuerConfigCache.resolveConfig(issuerIdentifier),
+                            "Thread failed");
                     long duration = System.nanoTime() - startTime;
 
                     executionTimes.add(duration);
@@ -212,9 +225,7 @@ class IssuerConfigCachePerformanceTest {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (BrokenBarrierException e) {
-                    fail("Barrier broken: " + e.getMessage());
-                } catch (IllegalArgumentException | IllegalStateException e) {
-                    fail("Thread failed: " + e.getMessage());
+                    brokenBarrier.compareAndSet(null, e);
                 } finally {
                     latch.countDown();
                 }
@@ -225,8 +236,9 @@ class IssuerConfigCachePerformanceTest {
         assertTrue(completed, "All threads should complete quickly");
         executor.shutdown();
 
+        assertNull(brokenBarrier.get(), "Barrier should not break");
         // Analyze timing distribution to detect convoy effect
-        assertEquals(threadCount, executionTimes.size());
+        assertEquals(threadCount, executionTimes.size(), "Every thread should record its execution time");
 
         long totalTime = 0;
         long minTime = Long.MAX_VALUE;
