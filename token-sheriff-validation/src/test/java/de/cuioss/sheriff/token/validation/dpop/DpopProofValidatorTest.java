@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -47,6 +48,7 @@ import java.security.*;
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.EdECPublicKey;
 import java.security.interfaces.RSAPublicKey;
+import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECPoint;
 import java.util.*;
 import java.util.stream.Stream;
@@ -170,6 +172,26 @@ class DpopProofValidatorTest {
     }
 
     @Test
+    @DisplayName("Should reject an otherwise valid proof with a trailing dot (V-17b)")
+    void shouldRejectProofWithTrailingDot() {
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
+        Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+        String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+        String rawAccessToken = "some.access.token";
+        String requestUri = "https://resource.example.org/protectedresource";
+        DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+        String dpopProof = buildDpopProofWithHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, "GET", requestUri) + ".";
+        AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(dpopProof)), requestUri, "GET");
+
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(request, accessToken, rawAccessToken));
+        assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
+        assertTrue(ex.getMessage().contains("must have 3 parts"), ex.getMessage());
+    }
+
+    @Test
     void shouldRejectWrongTypHeader() {
         KeyPair keyPair = FIXTURE_KEY_PAIR;
         Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
@@ -219,6 +241,69 @@ class DpopProofValidatorTest {
         var ex = assertThrows(TokenValidationException.class,
                 () -> validator.validate(request2, accessToken, rawAccessToken));
         assertEquals(EventType.DPOP_REPLAY_DETECTED, ex.getEventType());
+    }
+
+    @Test
+    @DisplayName("A thumbprint-mismatch proof leaves no replay entry: a bound proof with the same jti is accepted (V-12)")
+    void shouldNotStoreJtiOfThumbprintMismatchProof() {
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
+        Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+        String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+        String rawAccessToken = "some.access.token";
+        String requestUri = "https://resource.example.org/protectedresource";
+        String sharedJti = UUID.randomUUID().toString();
+
+        DecodedJwt mismatchedToken = createAccessTokenJwt("wrong-thumbprint-value");
+        String rejectedProof = buildDpopProofWithJtiAndHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, sharedJti,
+                "GET", requestUri);
+        AccessTokenRequest rejectedRequest = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(rejectedProof)), requestUri, "GET");
+
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(rejectedRequest, mismatchedToken, rawAccessToken));
+        assertEquals(EventType.DPOP_THUMBPRINT_MISMATCH, ex.getEventType());
+
+        DecodedJwt boundToken = createAccessTokenJwt(thumbprint);
+        String validProof = buildDpopProofWithJtiAndHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, sharedJti,
+                "GET", requestUri);
+        AccessTokenRequest validRequest = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(validProof)), requestUri, "GET");
+
+        assertDoesNotThrow(() -> validator.validate(validRequest, boundToken, rawAccessToken),
+                "The rejected proof must not have consumed the jti of the legitimate proof");
+        assertEquals(0, securityEventCounter.getCount(EventType.DPOP_REPLAY_DETECTED),
+                "No replay must be detected");
+    }
+
+    @Test
+    @DisplayName("An ath-mismatch proof leaves no replay entry: a valid proof with the same jti is accepted (V-12)")
+    void shouldNotStoreJtiOfAthMismatchProof() {
+        KeyPair keyPair = FIXTURE_KEY_PAIR;
+        Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
+        String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+        String rawAccessToken = "some.access.token";
+        String requestUri = "https://resource.example.org/protectedresource";
+        String sharedJti = UUID.randomUUID().toString();
+        DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+        String rejectedProof = buildDpopProofInternalWithHtuHtm(keyPair, jwkMap, "RS256", "dpop+jwt", sharedJti,
+                System.currentTimeMillis() / 1000, computeAth("different.access.token"), "GET", requestUri);
+        AccessTokenRequest rejectedRequest = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(rejectedProof)), requestUri, "GET");
+
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(rejectedRequest, accessToken, rawAccessToken));
+        assertEquals(EventType.DPOP_ATH_MISMATCH, ex.getEventType());
+
+        String validProof = buildDpopProofWithJtiAndHtuHtm(keyPair, jwkMap, "RS256", rawAccessToken, sharedJti,
+                "GET", requestUri);
+        AccessTokenRequest validRequest = new AccessTokenRequest(rawAccessToken,
+                Map.of("dpop", List.of(validProof)), requestUri, "GET");
+
+        assertDoesNotThrow(() -> validator.validate(validRequest, accessToken, rawAccessToken),
+                "The rejected proof must not have consumed the jti of the legitimate proof");
+        assertEquals(0, securityEventCounter.getCount(EventType.DPOP_REPLAY_DETECTED),
+                "No replay must be detected");
     }
 
     @Test
@@ -494,6 +579,92 @@ class DpopProofValidatorTest {
             AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
                     Map.of("dpop", List.of(dpopProof)),
                     "https://resource.example.org/protectedresource", "GET");
+
+            assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken));
+        }
+
+        @Test
+        @DisplayName("Should reject an all-zero ES256 DPoP proof signature at the ECDSA range check (CVE-2022-21449)")
+        void shouldRejectAllZeroEs256ProofSignature() {
+            ECPublicKey ecPublicKey = (ECPublicKey) InMemoryKeyMaterialHandler.getDefaultPublicKey(Algorithm.ES256);
+            Map<String, Object> jwkMap = ecPublicKeyToJwkMap(ecPublicKey, "P-256", 32);
+            String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
+
+            String rawAccessToken = "some.access.token";
+            DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+
+            String headerJson = """
+                    {"typ":"dpop+jwt","alg":"ES256","jwk":%s}""".formatted(mapToJson(jwkMap));
+            String bodyJson = """
+                    {"jti":"%s","iat":%d,"ath":"%s","htm":"GET","htu":"https://resource.example.org/protectedresource"}"""
+                    .formatted(UUID.randomUUID().toString(), System.currentTimeMillis() / 1000, computeAth(rawAccessToken));
+            String encodedHeader = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+            String encodedBody = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(bodyJson.getBytes(StandardCharsets.UTF_8));
+            String zeroSignature = Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[64]);
+            String dpopProof = encodedHeader + "." + encodedBody + "." + zeroSignature;
+
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)),
+                    "https://resource.example.org/protectedresource", "GET");
+
+            var ex = assertThrows(TokenValidationException.class,
+                    () -> validator.validate(request, accessToken, rawAccessToken));
+            assertAll("All-zero ES256 proof must be rejected by the range check",
+                    () -> assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType()),
+                    () -> assertEquals(1, securityEventCounter.getCount(EventType.DPOP_PROOF_INVALID),
+                            "DPOP_PROOF_INVALID must be counted exactly once"),
+                    () -> assertTrue(ex.getMessage().contains("ECDSA signature component out of range"),
+                            "Message must name the range check: " + ex.getMessage()));
+        }
+
+        static Stream<Arguments> mismatchedEcdsaAlgorithmAndCurve() {
+            return Stream.of(
+                    Arguments.of("ES256", "P-384"),
+                    Arguments.of("ES256", "P-521"),
+                    Arguments.of("ES384", "P-256"),
+                    Arguments.of("ES384", "P-521"),
+                    Arguments.of("ES512", "P-256"),
+                    Arguments.of("ES512", "P-384"));
+        }
+
+        @ParameterizedTest(name = "Should reject a {0} DPoP proof whose JWK uses curve {1}")
+        @MethodSource("mismatchedEcdsaAlgorithmAndCurve")
+        void shouldRejectEcdsaProofWhoseAlgorithmDoesNotMatchJwkCurve(String alg, String curve) {
+            String rawAccessToken = "some.access.token";
+            String requestUri = "https://resource.example.org/protectedresource";
+            KeyPair keyPair = newEcKeyPair(curve);
+            Map<String, Object> jwkMap = ecPublicKeyToJwkMap((ECPublicKey) keyPair.getPublic(), curve,
+                    ecCoordinateSize(curve));
+            DecodedJwt accessToken = createAccessTokenJwt(JwkThumbprintUtil.computeThumbprint(jwkMap));
+            String dpopProof = buildEcdsaDpopProof(keyPair, jwkMap, alg, rawAccessToken, requestUri);
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)), requestUri, "GET");
+
+            var ex = assertThrows(TokenValidationException.class,
+                    () -> validator.validate(request, accessToken, rawAccessToken));
+            assertAll("A proof whose ES* alg disagrees with its JWK curve must be rejected by the curve binding",
+                    () -> assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType()),
+                    () -> assertTrue(ex.getMessage().contains(
+                                    "DPoP proof algorithm '%s' does not match the proof JWK curve '%s'".formatted(alg, curve)),
+                            "Message must name the alg/curve mismatch: " + ex.getMessage()),
+                    () -> assertFalse(ex.getMessage().contains("ECDSA signature component out of range"),
+                            "Message must not be the range-check message: " + ex.getMessage()));
+        }
+
+        @ParameterizedTest(name = "Should pass a {0} DPoP proof whose JWK uses the matching curve {1}")
+        @CsvSource({"ES256, P-256", "ES384, P-384", "ES512, P-521"})
+        void shouldPassEcdsaProofWhoseAlgorithmMatchesJwkCurve(String alg, String curve) {
+            String rawAccessToken = "some.access.token";
+            String requestUri = "https://resource.example.org/protectedresource";
+            KeyPair keyPair = newEcKeyPair(curve);
+            Map<String, Object> jwkMap = ecPublicKeyToJwkMap((ECPublicKey) keyPair.getPublic(), curve,
+                    ecCoordinateSize(curve));
+            DecodedJwt accessToken = createAccessTokenJwt(JwkThumbprintUtil.computeThumbprint(jwkMap));
+            String dpopProof = buildEcdsaDpopProof(keyPair, jwkMap, alg, rawAccessToken, requestUri);
+            AccessTokenRequest request = new AccessTokenRequest(rawAccessToken,
+                    Map.of("dpop", List.of(dpopProof)), requestUri, "GET");
 
             assertDoesNotThrow(() -> validator.validate(request, accessToken, rawAccessToken));
         }
@@ -882,6 +1053,76 @@ class DpopProofValidatorTest {
         map.put("x", Base64.getUrlEncoder().withoutPadding().encodeToString(xBytes));
         map.put("y", Base64.getUrlEncoder().withoutPadding().encodeToString(yBytes));
         return map;
+    }
+
+    private static KeyPair newEcKeyPair(String curve) {
+        String jdkCurve = switch (curve) {
+            case "P-256" -> "secp256r1";
+            case "P-384" -> "secp384r1";
+            case "P-521" -> "secp521r1";
+            default -> throw new IllegalArgumentException("Unknown curve: " + curve);
+        };
+        try {
+            KeyPairGenerator gen = KeyPairGenerator.getInstance("EC");
+            gen.initialize(new ECGenParameterSpec(jdkCurve));
+            return gen.generateKeyPair();
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("EC curve " + curve + " not available", e);
+        }
+    }
+
+    private static int ecCoordinateSize(String curve) {
+        return switch (curve) {
+            case "P-256" -> 32;
+            case "P-384" -> 48;
+            case "P-521" -> 66;
+            default -> throw new IllegalArgumentException("Unknown curve: " + curve);
+        };
+    }
+
+    private static String ecCurveForAlgorithm(String alg) {
+        return switch (alg) {
+            case "ES256" -> "P-256";
+            case "ES384" -> "P-384";
+            case "ES512" -> "P-521";
+            default -> throw new IllegalArgumentException("Unknown ECDSA algorithm: " + alg);
+        };
+    }
+
+    /**
+     * Builds a correctly bound DPoP proof (jti, iat, ath, htm, htu) whose header carries {@code alg}
+     * and is signed with the given key using the hash {@code alg} names. The raw {@code r || s}
+     * components are each padded to the wider of the algorithm's and the key curve's component
+     * width, so a proof with a smaller-curve key carries the exact signature length {@code alg}
+     * expects and is a genuine signature over its header and payload.
+     */
+    private String buildEcdsaDpopProof(KeyPair keyPair, Map<String, Object> jwkMap, String alg,
+            String accessToken, String htu) {
+        String headerJson = """
+                {"typ":"dpop+jwt","alg":"%s","jwk":%s}""".formatted(alg, mapToJson(jwkMap));
+        String bodyJson = """
+                {"jti":"%s","iat":%d,"ath":"%s","htm":"GET","htu":"%s"}"""
+                .formatted(UUID.randomUUID().toString(), System.currentTimeMillis() / 1000,
+                        computeAth(accessToken), htu);
+        String dataToSign = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8)) + "."
+                + Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(bodyJson.getBytes(StandardCharsets.UTF_8));
+        String jcaAlgorithm = "SHA%swithECDSAinP1363Format".formatted(alg.substring(2));
+        try {
+            Signature signer = Signature.getInstance(jcaAlgorithm);
+            signer.initSign(keyPair.getPrivate());
+            signer.update(dataToSign.getBytes(StandardCharsets.UTF_8));
+            byte[] curveWidthSignature = signer.sign();
+            int curveWidth = curveWidthSignature.length / 2;
+            int width = Math.max(curveWidth, ecCoordinateSize(ecCurveForAlgorithm(alg)));
+            byte[] signature = new byte[width * 2];
+            System.arraycopy(curveWidthSignature, 0, signature, width - curveWidth, curveWidth);
+            System.arraycopy(curveWidthSignature, curveWidth, signature, 2 * width - curveWidth, curveWidth);
+            return dataToSign + "." + Base64.getUrlEncoder().withoutPadding().encodeToString(signature);
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Failed to sign DPoP proof with " + jcaAlgorithm, e);
+        }
     }
 
     private Map<String, Object> edDsaPublicKeyToJwkMap(EdECPublicKey publicKey) {

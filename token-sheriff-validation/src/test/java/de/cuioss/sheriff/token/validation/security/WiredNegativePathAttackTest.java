@@ -25,6 +25,7 @@ import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.jwe.JweAlgorithmPreferences;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
+import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler.Algorithm;
 import de.cuioss.sheriff.token.validation.test.JweTestTokenFactory;
 import de.cuioss.sheriff.token.validation.util.JwkThumbprintUtil;
 import io.jsonwebtoken.Jwts;
@@ -43,13 +44,13 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Signature;
+import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Wired negative-path attack tier (H4).
@@ -76,10 +77,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  *   <li>VTEST-14 — RSA-OAEP decryption failures are indistinguishable across every supported
  *       {@code enc} (Bleichenbacher-oracle class)</li>
  *   <li>VTEST-15 — client_id&rarr;azp fallback off by default; a token omitting azp is rejected</li>
+ *   <li>VTEST-16 — all-zero ES256 DPoP proof signature rejected at the ECDSA range check
+ *       (CVE-2022-21449 class)</li>
  * </ul>
  * <p>
  * VTEST-10 through VTEST-15 were derived from the real-world CVEs catalogued in the
- * {@code doc/validation/cve-lessons-register.adoc} hardening backlog (items B1–B4).
+ * {@code doc/validation/cve-lessons-register.adoc} hardening backlog (items B1–B4). VTEST-16 is
+ * the wired test behind the DPoP half of that register's CVE-2022-21449 entry.
  */
 @DisplayName("Wired Negative-Path Attack Tests (H4)")
 class WiredNegativePathAttackTest {
@@ -389,6 +393,32 @@ class WiredNegativePathAttackTest {
                 "With the client_id→azp fallback disabled by default, a token omitting azp must be rejected");
     }
 
+    @Test
+    @DisplayName("VTEST-16: an all-zero ES256 DPoP proof signature is rejected as DPOP_PROOF_INVALID at the ECDSA range check")
+    void shouldRejectAllZeroEs256DpopProofSignature() {
+        // The "psychic signature" (CVE-2022-21449): a JDK verifier that accepted r = s = 0 would let
+        // any proof pass for any EC key. The proof below is correctly bound (cnf.jkt matches its
+        // embedded jwk, fresh jti/iat, matching ath/htm/htu), so only the signature is wrong, and the
+        // message assertion pins the rejection to the ECDSA component-range check itself.
+        ECPublicKey proofKey = (ECPublicKey) InMemoryKeyMaterialHandler.getDefaultPublicKey(Algorithm.ES256);
+        Map<String, Object> proofJwk = ecPublicKeyToJwkMap(proofKey);
+        String token = signedAccessToken(JwkThumbprintUtil.computeThumbprint(proofJwk));
+        String headerJson = "{\"typ\":\"dpop+jwt\",\"alg\":\"ES256\",\"jwk\":%s}".formatted(mapToJson(proofJwk));
+        String bodyJson = "{\"jti\":\"%s\",\"iat\":%d,\"ath\":\"%s\",\"htm\":\"%s\",\"htu\":\"%s\"}".formatted(
+                UUID.randomUUID(), System.currentTimeMillis() / 1000, computeAth(token),
+                RESOURCE_METHOD, RESOURCE_URI);
+        String proof = base64Url(headerJson.getBytes(StandardCharsets.UTF_8)) + "."
+                + base64Url(bodyJson.getBytes(StandardCharsets.UTF_8)) + "." + base64Url(new byte[64]);
+
+        TokenValidator validator = dpopValidator();
+        var request = dpopRequest(token, proof);
+        var ex = assertThrows(TokenValidationException.class, () -> validator.createAccessToken(request));
+        assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType(),
+                "An all-zero ES256 DPoP proof signature must be rejected as an invalid proof");
+        assertTrue(ex.getMessage().contains("ECDSA signature component out of range"),
+                "The rejection must come from the ECDSA range check, but was: " + ex.getMessage());
+    }
+
     // === Validators ===
 
     private TokenValidator plainValidator() {
@@ -544,6 +574,23 @@ class WiredNegativePathAttackTest {
         map.put("n", base64Url(toUnsignedBytes(publicKey.getModulus())));
         map.put("e", base64Url(toUnsignedBytes(publicKey.getPublicExponent())));
         return map;
+    }
+
+    private static Map<String, Object> ecPublicKeyToJwkMap(ECPublicKey publicKey) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("kty", "EC");
+        map.put("crv", "P-256");
+        map.put("x", base64Url(toFixedWidth(publicKey.getW().getAffineX(), 32)));
+        map.put("y", base64Url(toFixedWidth(publicKey.getW().getAffineY(), 32)));
+        return map;
+    }
+
+    /** Encodes a non-negative coordinate as exactly {@code length} big-endian bytes (RFC 7518 §6.2.1.2). */
+    private static byte[] toFixedWidth(BigInteger value, int length) {
+        byte[] unsigned = toUnsignedBytes(value);
+        byte[] result = new byte[length];
+        System.arraycopy(unsigned, 0, result, length - unsigned.length, unsigned.length);
+        return result;
     }
 
     private static String mapToJson(Map<String, Object> map) {

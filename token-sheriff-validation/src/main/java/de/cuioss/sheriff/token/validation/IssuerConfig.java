@@ -296,7 +296,7 @@ public class IssuerConfig implements LoadingStatusProvider {
      * Clock skew tolerance in seconds for time-based claim validation (exp, nbf).
      * <p>
      * Accommodates clock drift between the token issuer and the validator in distributed systems.
-     * A token is considered expired only when {@code exp + clockSkewSeconds < now}.
+     * A token is considered expired once {@code now >= exp + clockSkewSeconds}.
      * </p>
      * <p>
      * Default value is {@code 60} seconds.
@@ -707,7 +707,7 @@ public class IssuerConfig implements LoadingStatusProvider {
          * Sets the clock skew tolerance in seconds for time-based claim validation.
          * <p>
          * Accommodates clock drift between the token issuer and the validator in distributed systems.
-         * A token is considered expired only when {@code exp + clockSkewSeconds < now}.
+         * A token is considered expired once {@code now >= exp + clockSkewSeconds}.
          * </p>
          * <p>
          * Default value is {@code 60} seconds.

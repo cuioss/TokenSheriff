@@ -337,8 +337,8 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.7[VALIDATION-8.7: DPoP Send
 
 |DP4
 |DPoP algorithm confusion
-|DPoP proof `alg` validated against allowed asymmetric algorithms; HMAC/"none" rejected
-|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/dpop/DpopProofValidatorTest.java[DpopProofValidatorTest]
+|DPoP proof `alg` validated against allowed asymmetric algorithms; HMAC/"none" rejected. An ECDSA `alg` must also match the curve of the embedded proof JWK (`ES256` needs `P-256`, `ES384` needs `P-384`, `ES512` needs `P-521`, RFC 7518 §3.4), checked in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/dpop/DpopProofValidator.java[DpopProofValidator] before the signature is verified
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/dpop/DpopProofValidatorTest.java[DpopProofValidatorTest] (`shouldRejectEcdsaProofWhoseAlgorithmDoesNotMatchJwkCurve`)
 
 |DP5
 |HTTP method/URI mismatch
@@ -376,7 +376,7 @@ A threat may only be marked *Test Covered* (and never 100% for a category) unles
 
 The 100%-covered cells above are backed by the wired negative-path attack tiers added in this remediation:
 
-* link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/WiredNegativePathAttackTest.java[WiredNegativePathAttackTest] — HMAC/RSA algorithm confusion (Spoofing/EoP), JWE decompression bomb (Denial of Service), cross-issuer key substitution (Tampering), unsupported JWE key-management algorithm, DPoP sender-binding violations (DPoP), and embedded-JWK header injection (Spoofing/EoP). Extended with the CVE-derived tier VTEST-10..15 (see xref:cve-lessons-register.adoc[CVE Lessons Register]): `alg` case-variant of "none" (Spoofing), over-depth JSON payload (Denial of Service), cross-audience token rejection (EoP), JWE header algorithm downgrade (Tampering), RSA-OAEP decryption-failure indistinguishability (Information Disclosure), and `client_id`→`azp` fallback rejection (EoP).
+* link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/WiredNegativePathAttackTest.java[WiredNegativePathAttackTest] — HMAC/RSA algorithm confusion (Spoofing/EoP), JWE decompression bomb (Denial of Service), cross-issuer key substitution (Tampering), unsupported JWE key-management algorithm, DPoP sender-binding violations (DPoP), and embedded-JWK header injection (Spoofing/EoP). Extended with the CVE-derived tier VTEST-10..16 (see xref:cve-lessons-register.adoc[CVE Lessons Register]): `alg` case-variant of "none" (Spoofing), over-depth JSON payload (Denial of Service), cross-audience token rejection (EoP), JWE header algorithm downgrade (Tampering), RSA-OAEP decryption-failure indistinguishability (Information Disclosure), `client_id`→`azp` fallback rejection (EoP), and an all-zero ES256 DPoP proof signature rejected at the ECDSA range check (Spoofing/Tampering, CVE-2022-21449 class).
 * link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/PsychicSignatureAttackTest.java[PsychicSignatureAttackTest] — zero-value ECDSA psychic-signature bypass (Tampering).
 
 Any future threat marked covered without a corresponding wired negative-path test violates this rule and must be treated as an uncovered threat.

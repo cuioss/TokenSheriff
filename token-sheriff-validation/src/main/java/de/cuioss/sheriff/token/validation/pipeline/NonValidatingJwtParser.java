@@ -26,6 +26,7 @@ import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptor;
 import de.cuioss.tools.base.Preconditions;
 import de.cuioss.tools.logging.CuiLogger;
+import de.cuioss.tools.logging.LogRecord;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import org.jspecify.annotations.Nullable;
@@ -127,6 +128,11 @@ import java.util.Objects;
 public class NonValidatingJwtParser {
 
     private static final CuiLogger LOGGER = new CuiLogger(NonValidatingJwtParser.class);
+
+    /**
+     * Detail for the {@code INVALID_JWT_FORMAT} record when a 3-part JWS has an empty signature segment.
+     */
+    private static final String EMPTY_SIGNATURE_SEGMENT = "3 parts with an empty signature segment";
 
     /**
      * Configuration for the parser, containing all security settings.
@@ -287,8 +293,9 @@ public class NonValidatingJwtParser {
         Preconditions.checkArgument(token.getBytes(StandardCharsets.UTF_8).length <= config.getMaxTokenSize(),
                 "TokenStringValidator precondition: token size within limits (max: %s)", config.getMaxTokenSize());
 
-        // Split token and validate format
-        String[] parts = token.split("\\.");
+        // Split token and validate format. The negative limit keeps trailing empty segments, so a
+        // trailing dot ("h.p.s.") adds a part instead of being silently dropped.
+        String[] parts = token.split("\\.", -1);
 
         if (parts.length == 5) {
             // JWE token (5 parts: header.encryptedKey.iv.ciphertext.authTag)
@@ -296,16 +303,11 @@ public class NonValidatingJwtParser {
         }
 
         if (parts.length != 3) {
-            if (mode.logWarnings) {
-                LOGGER.warn(JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT, parts.length);
-            }
-            if (mode.trackSecurityEvents) {
-                securityEventCounter.increment(SecurityEventCounter.EventType.INVALID_JWT_FORMAT);
-            }
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
-                    JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT.format(parts.length)
-            );
+            throw rejectInvalidFormat(parts.length, mode.logWarnings, mode.trackSecurityEvents);
+        }
+        if (parts[2].isEmpty()) {
+            // "h.p." is a JWS without signature; reject it as before rather than accepting an unsigned shape
+            throw rejectInvalidFormat(EMPTY_SIGNATURE_SEGMENT, mode.logWarnings, mode.trackSecurityEvents);
         }
 
         try {
@@ -339,9 +341,10 @@ public class NonValidatingJwtParser {
 
             // Verify this is actually a JWE (has 'enc' field)
             if (!jweHeader.isJwe()) {
-                throw new TokenValidationException(
-                        SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                        "5-part token does not have 'enc' header field — not a valid JWE");
+                throw rejectAccounted(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                        "5-part token does not have 'enc' header field — not a valid JWE",
+                        logWarnings, trackSecurityEvents,
+                        JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, "missing 'enc' header field");
             }
 
             // Decrypt to get inner JWS string. The decryptor honours this decode mode, so an
@@ -351,13 +354,14 @@ public class NonValidatingJwtParser {
 
             // Check inner JWS size
             if (innerJws.getBytes(StandardCharsets.UTF_8).length > config.getMaxTokenSize()) {
-                throw new TokenValidationException(
-                        SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED,
-                        "Inner JWS from JWE exceeds maximum token size");
+                throw rejectAccounted(SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED,
+                        "Inner JWS from JWE exceeds maximum token size",
+                        logWarnings, trackSecurityEvents,
+                        JWTValidationLogMessages.WARN.TOKEN_SIZE_EXCEEDED, config.getMaxTokenSize());
             }
 
             // Parse the inner JWS and return DecodedJwt with original JWE as rawToken
-            String[] innerParts = validateInnerJwsParts(innerJws, logWarnings);
+            String[] innerParts = validateInnerJwsParts(innerJws, logWarnings, trackSecurityEvents);
             DecodedJwt innerDecoded = decodeTokenParts(innerParts, innerJws, logWarnings, trackSecurityEvents);
             // Return with original JWE token as rawToken (for caching/logging)
             return new DecodedJwt(innerDecoded.header(), innerDecoded.body(),
@@ -395,23 +399,83 @@ public class NonValidatingJwtParser {
     /**
      * Splits the inner JWS string and validates the part count.
      * Returns the 3 parts on success, throws {@link TokenValidationException} otherwise.
+     * Each rejection is logged and counted exactly once according to the decode mode.
+     *
+     * @param innerJws             the decrypted inner JWS
+     * @param logWarnings          whether a rejection is logged
+     * @param trackSecurityEvents  whether a rejection is counted
+     * @return the three parts of the inner JWS
+     * @throws TokenValidationException if the inner token is a nested JWE or not a 3-part JWS
      */
-    private String[] validateInnerJwsParts(String innerJws, boolean logWarnings) {
-        String[] innerParts = innerJws.split("\\.");
+    private String[] validateInnerJwsParts(String innerJws, boolean logWarnings, boolean trackSecurityEvents) {
+        // Negative limit: keep trailing empty segments so a trailing dot is not silently dropped
+        String[] innerParts = innerJws.split("\\.", -1);
         if (innerParts.length == 5) {
-            if (logWarnings) {
-                LOGGER.warn(JWTValidationLogMessages.WARN.JWE_NESTED_NOT_ALLOWED);
-            }
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                    "Nested JWE tokens are not allowed");
+            throw rejectAccounted(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
+                    "Nested JWE tokens are not allowed",
+                    logWarnings, trackSecurityEvents, JWTValidationLogMessages.WARN.JWE_NESTED_NOT_ALLOWED);
         }
         if (innerParts.length != 3) {
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
-                    "Inner JWS from JWE has invalid format: expected 3 parts but got %d".formatted(innerParts.length));
+            throw rejectAccounted(SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
+                    "Inner JWS from JWE has invalid format: expected 3 parts but got %d".formatted(innerParts.length),
+                    logWarnings, trackSecurityEvents,
+                    JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT, innerParts.length);
+        }
+        if (innerParts[2].isEmpty()) {
+            throw rejectAccounted(SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
+                    "Inner JWS from JWE has invalid format: " + EMPTY_SIGNATURE_SEGMENT,
+                    logWarnings, trackSecurityEvents,
+                    JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT, EMPTY_SIGNATURE_SEGMENT);
         }
         return innerParts;
+    }
+
+    /**
+     * Rejects a token, accounting for it according to the decode mode: the warning is written only
+     * when {@code logWarnings} is set, and {@code eventType} is counted exactly once only when
+     * {@code trackSecurityEvents} is set.
+     *
+     * @param eventType            the event type carried by the exception and counted
+     * @param message              the exception message, free of raw token bytes
+     * @param logWarnings          whether the rejection is logged
+     * @param trackSecurityEvents  whether the rejection is counted
+     * @param warning              the log record written when {@code logWarnings} is set
+     * @param warningArgs          the parameters of {@code warning}
+     * @return never returns normally; declared so callers can write {@code throw rejectAccounted(...)}
+     * @throws TokenValidationException always, with the given event type and message
+     */
+    private TokenValidationException rejectAccounted(SecurityEventCounter.EventType eventType, String message,
+            boolean logWarnings, boolean trackSecurityEvents, LogRecord warning, Object... warningArgs) {
+        if (logWarnings) {
+            LOGGER.warn(warning, warningArgs);
+        }
+        if (trackSecurityEvents) {
+            securityEventCounter.increment(eventType);
+        }
+        throw new TokenValidationException(eventType, message);
+    }
+
+    /**
+     * Rejects a token whose part structure is not a valid JWS or JWE, accounting for it according
+     * to the decode mode.
+     *
+     * @param detail               what was found instead of a valid structure (part count or description)
+     * @param logWarnings          whether the rejection is logged
+     * @param trackSecurityEvents  whether the rejection is counted
+     * @return never returns normally; declared so callers can write {@code throw rejectInvalidFormat(...)}
+     * @throws TokenValidationException always, with event type {@code INVALID_JWT_FORMAT}
+     */
+    private TokenValidationException rejectInvalidFormat(Object detail, boolean logWarnings,
+            boolean trackSecurityEvents) {
+        if (logWarnings) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT, detail);
+        }
+        if (trackSecurityEvents) {
+            securityEventCounter.increment(SecurityEventCounter.EventType.INVALID_JWT_FORMAT);
+        }
+        throw new TokenValidationException(
+                SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
+                JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT.format(detail));
     }
 
 
@@ -512,18 +576,16 @@ public class NonValidatingJwtParser {
 
             // Check payload size limit to prevent memory exhaustion attacks
             if (decodedBytes.length > config.getMaxPayloadSize()) {
-                LOGGER.warn(JWTValidationLogMessages.WARN.DECODED_PART_SIZE_EXCEEDED, config.getMaxPayloadSize());
-                securityEventCounter.increment(SecurityEventCounter.EventType.DECODED_PART_SIZE_EXCEEDED);
-                throw new TokenValidationException(
-                        SecurityEventCounter.EventType.DECODED_PART_SIZE_EXCEEDED,
-                        JWTValidationLogMessages.WARN.DECODED_PART_SIZE_EXCEEDED.format(config.getMaxPayloadSize())
-                );
+                throw rejectAccounted(SecurityEventCounter.EventType.DECODED_PART_SIZE_EXCEEDED,
+                        JWTValidationLogMessages.WARN.DECODED_PART_SIZE_EXCEEDED.format(config.getMaxPayloadSize()),
+                        logWarnings, trackSecurityEvents,
+                        JWTValidationLogMessages.WARN.DECODED_PART_SIZE_EXCEEDED, config.getMaxPayloadSize());
             }
 
             // Enforce structural bounds (nesting depth / array size) before handing the bytes to
             // DSL-JSON, so a deeply-nested or oversized-array payload fails closed with a typed
             // exception rather than risking a StackOverflowError during recursive parsing.
-            enforceStructuralBounds(decodedBytes);
+            enforceStructuralBounds(decodedBytes, logWarnings, trackSecurityEvents);
 
             return decodedBytes;
         } catch (IllegalArgumentException e) {
@@ -572,11 +634,13 @@ public class NonValidatingJwtParser {
      * {@link ParserConfig#getMaxArraySize()} fails closed with a typed
      * {@link TokenValidationException}.
      *
-     * @param jsonBytes the decoded (UTF-8) JSON bytes of a single JWT part
+     * @param jsonBytes            the decoded (UTF-8) JSON bytes of a single JWT part
+     * @param logWarnings          whether a bounds violation is logged
+     * @param trackSecurityEvents  whether a bounds violation is counted
      */
     @SuppressWarnings({"java:S3776", "java:S6916"}) // single-pass state-tracking scan is a deliberate security-critical
     // DoS bound check; splitting the switch cases or the method risks introducing a subtle parsing bug
-    private void enforceStructuralBounds(byte[] jsonBytes) {
+    private void enforceStructuralBounds(byte[] jsonBytes, boolean logWarnings, boolean trackSecurityEvents) {
         final int maxDepth = config.getMaxNestingDepth();
         final int maxArraySize = config.getMaxArraySize();
         final boolean[] frameIsArray = new boolean[maxDepth + 1];
@@ -602,7 +666,8 @@ public class NonValidatingJwtParser {
                 case '{', '[' -> {
                     depth++;
                     if (depth > maxDepth) {
-                        rejectStructuralBounds("nesting depth exceeds the configured maximum of " + maxDepth);
+                        throw rejectStructuralBounds("nesting depth exceeds the configured maximum of " + maxDepth,
+                                logWarnings, trackSecurityEvents);
                     }
                     frameIsArray[depth] = c == '[';
                     frameElementCount[depth] = 0;
@@ -616,7 +681,8 @@ public class NonValidatingJwtParser {
                     if (depth > 0 && frameIsArray[depth]) {
                         frameElementCount[depth]++;
                         if (frameElementCount[depth] >= maxArraySize) {
-                            rejectStructuralBounds("array size exceeds the configured maximum of " + maxArraySize);
+                            throw rejectStructuralBounds("array size exceeds the configured maximum of " + maxArraySize,
+                                    logWarnings, trackSecurityEvents);
                         }
                     }
                 }
@@ -628,17 +694,21 @@ public class NonValidatingJwtParser {
     }
 
     /**
-     * Rejects a JWT part that violates the configured JSON structural bounds.
+     * Rejects a JWT part that violates the configured JSON structural bounds, accounting for it
+     * according to the decode mode.
      *
-     * @param reason a human-readable description of the violated bound
+     * @param reason               a human-readable description of the violated bound
+     * @param logWarnings          whether the rejection is logged
+     * @param trackSecurityEvents  whether the rejection is counted
+     * @return never returns normally; declared so callers can write {@code throw rejectStructuralBounds(...)}
+     * @throws TokenValidationException always, with event type {@code JSON_STRUCTURE_BOUNDS_EXCEEDED}
      */
-    private void rejectStructuralBounds(String reason) {
-        LOGGER.warn(JWTValidationLogMessages.WARN.JSON_STRUCTURE_BOUNDS_EXCEEDED, reason);
-        securityEventCounter.increment(SecurityEventCounter.EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED);
-        throw new TokenValidationException(
-                SecurityEventCounter.EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED,
-                "JSON structure bounds exceeded: " + reason
-        );
+    private TokenValidationException rejectStructuralBounds(String reason, boolean logWarnings,
+            boolean trackSecurityEvents) {
+        throw rejectAccounted(SecurityEventCounter.EventType.JSON_STRUCTURE_BOUNDS_EXCEEDED,
+                "JSON structure bounds exceeded: " + reason,
+                logWarnings, trackSecurityEvents,
+                JWTValidationLogMessages.WARN.JSON_STRUCTURE_BOUNDS_EXCEEDED, reason);
     }
 
 }

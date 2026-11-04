@@ -173,6 +173,11 @@ public class KeyProcessor {
 
     /**
      * Process an EC key and create a KeyInfo object.
+     * <p>
+     * The curve binds an EC key to exactly one ES algorithm (P-256 → ES256, P-384 → ES384,
+     * P-521 → ES512). A JWK whose {@code alg} disagrees with that curve-derived algorithm is
+     * dropped rather than installed under a label it cannot satisfy; an absent {@code alg} is
+     * derived from the curve.
      *
      * @param jwk the JWK object
      * @param kid the key ID
@@ -181,8 +186,15 @@ public class KeyProcessor {
     private KeyInfo processEcKey(JwkKey jwk, String kid) {
         try {
             var publicKey = JwkKeyHandler.parseEcKey(jwk);
-            // Determine algorithm
-            String alg = determineEcAlgorithm(jwk);
+            // parseEcKey has validated the curve, so the curve-derived algorithm is defined
+            String curveAlgorithm = JwkKeyHandler.determineEcAlgorithm(jwk.crv());
+            String alg = jwk.getAlg().orElse(curveAlgorithm);
+            if (!curveAlgorithm.equals(alg)) {
+                LOGGER.warn(WARN.EC_KEY_PARSE_FAILED, kid,
+                        "alg '%s' does not match curve '%s', which requires '%s'".formatted(alg, jwk.crv(), curveAlgorithm));
+                securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
+                return null;
+            }
             LOGGER.debug("Parsed EC key with ID: %s and algorithm: %s", kid, alg);
             return new KeyInfo(publicKey, alg, kid);
         } catch (InvalidKeySpecException | IllegalStateException e) {
@@ -212,23 +224,5 @@ public class KeyProcessor {
             securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
             return null;
         }
-    }
-
-    /**
-     * Determine the EC algorithm from the JWK.
-     *
-     * @param jwk the JWK object
-     * @return the algorithm
-     */
-    private String determineEcAlgorithm(JwkKey jwk) {
-        if (jwk.getAlg().isPresent()) {
-            return jwk.alg();
-        }
-
-        // Determine algorithm based on curve — null curve is rejected
-        if (jwk.crv() == null) {
-            throw new IllegalArgumentException("EC key is missing required 'crv' parameter");
-        }
-        return JwkKeyHandler.determineEcAlgorithm(jwk.crv());
     }
 }

@@ -94,7 +94,7 @@ The `upn` claim is MP-JWT's standardized human-readable principal identifier. To
 
 === Clock Skew Tolerance (`mp.jwt.verify.clock.skew`)
 
-Clock skew tolerance is applied to both `exp` and `nbf` validation, accommodating clock drift in distributed systems. A token is considered expired only when `exp + clockSkew < now`.
+Clock skew tolerance is applied to both `exp` and `nbf` validation, accommodating clock drift in distributed systems. A token is considered expired once `now >= exp + clockSkew`.
 
 Configured per issuer via `sheriff.token.issuers.<name>.clock-skew-seconds` (default: 60 seconds).
 

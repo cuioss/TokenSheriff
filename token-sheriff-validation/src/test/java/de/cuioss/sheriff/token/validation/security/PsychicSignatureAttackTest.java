@@ -38,7 +38,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * This vulnerability allowed attackers to bypass ECDSA signature verification by using all-zero
  * signatures. The library defends against it with an explicit {@code r,s} component-range check in
- * {@code TokenSignatureValidator} (H3), independent of the underlying JCA provider.
+ * {@code SignatureVerificationUtil} (H3), independent of the underlying JCA provider. Because both
+ * {@code TokenSignatureValidator} and {@code DpopProofValidator} verify through that utility, the check
+ * covers access/ID-token signatures (tested here) and DPoP proof signatures (tested in
+ * {@code DpopProofValidatorTest}).
  * <p>
  * Each test configures the issuer with the <em>matching</em> EC public key under the same {@code kid}
  * used to sign the token, so the tampered all-zero signature actually reaches the signature verifier.

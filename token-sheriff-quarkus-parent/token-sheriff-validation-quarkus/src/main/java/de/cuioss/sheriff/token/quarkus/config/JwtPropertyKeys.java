@@ -238,7 +238,7 @@ public final class JwtPropertyKeys {
          * Template: "sheriff.token.issuers.%s.clock-skew-seconds"
          * <p>
          * Accommodates clock drift between the token issuer and the validator in distributed systems.
-         * A token is considered expired only when {@code exp + clockSkewSeconds < now}.
+         * A token is considered expired once {@code now >= exp + clockSkewSeconds}.
          * </p>
          * <p>
          * Default value is {@code 60} seconds.

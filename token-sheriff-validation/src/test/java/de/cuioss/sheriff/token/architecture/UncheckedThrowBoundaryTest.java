@@ -188,8 +188,6 @@ class UncheckedThrowBoundaryTest {
                             + " getKeyFactory raises the checked InvalidKeySpecException its callers declare)"),
             Map.entry("de.cuioss.sheriff.token.validation.jwks.key.KeyInfo#<init>", LOADER_THREAD_ONLY
                     + " (constructed only by KeyProcessor; the request path only reads existing records)"),
-            Map.entry("de.cuioss.sheriff.token.validation.jwks.parser.KeyProcessor#determineEcAlgorithm",
-                    LOADER_THREAD_ONLY),
             Map.entry("de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader#initJWKSLoader",
                     "not thrown: the IllegalStateException is carried in an already-failed"
                             + " CompletableFuture that the caller observes when it re-initializes a loader"

@@ -42,6 +42,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.PublicKey;
 import java.security.SignatureException;
+import java.security.interfaces.ECPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
 import java.util.List;
@@ -56,12 +57,17 @@ import java.util.Optional;
  * <ol>
  *   <li>Presence of the DPoP HTTP header</li>
  *   <li>Extraction of {@code cnf.jkt} from the access token</li>
- *   <li>DPoP proof JWT structure (typ, alg, jwk)</li>
- *   <li>DPoP proof signature using embedded JWK</li>
- *   <li>jti uniqueness (replay protection)</li>
+ *   <li>DPoP proof JWT structure (typ, alg, jwk), including that an ECDSA {@code alg} matches the
+ *       curve of the embedded JWK ({@code ES256}/{@code P-256}, {@code ES384}/{@code P-384},
+ *       {@code ES512}/{@code P-521}, RFC 7518 §3.4)</li>
+ *   <li>DPoP proof signature using embedded JWK, verified only after the alg-to-curve binding holds</li>
+ *   <li>jti presence</li>
  *   <li>iat freshness check</li>
  *   <li>ath (access token hash) match</li>
+ *   <li>htm/htu match against the HTTP request</li>
  *   <li>JWK Thumbprint match against cnf.jkt</li>
+ *   <li>jti uniqueness (replay protection) — last, so that only a proof that passed every
+ *       stateless check consumes its {@code jti}</li>
  * </ol>
  * <p>
  * DPoP proof JWTs are decoded manually (not via {@code NonValidatingJwtParser})
@@ -241,7 +247,8 @@ public class DpopProofValidator {
      * @throws TokenValidationException if the JWT structure is invalid or cannot be decoded
      */
     private DecodedDpopProof decodeDpopProofJwt(String dpopProofString) {
-        String[] parts = dpopProofString.split("\\.");
+        // Negative limit: keep trailing empty segments so "h.p.s." is rejected as a 4-part proof
+        String[] parts = dpopProofString.split("\\.", -1);
         if (parts.length != 3) {
             rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
                     "DPoP proof must have 3 parts (header.payload.signature) but has %s".formatted(parts.length));
@@ -278,7 +285,12 @@ public class DpopProofValidator {
 
     /**
      * Validates the DPoP proof header fields (alg, jwk), verifies the signature,
-     * validates claims, and checks the JWK thumbprint against the expected value.
+     * validates claims, checks the JWK thumbprint against the expected value and finally
+     * records the proof's {@code jti} for replay protection.
+     * <p>
+     * Before the signature is verified, an ECDSA {@code alg} must match the curve of the proof JWK
+     * ({@code ES256} needs {@code P-256}, {@code ES384} needs {@code P-384}, {@code ES512} needs
+     * {@code P-521}); a mismatch is rejected as {@code DPOP_PROOF_INVALID}.
      */
     private void validateDpopProofHeaderAndSignature(DecodedDpopProof decoded, String expectedThumbprint,
             String rawAccessToken, AccessTokenRequest request) {
@@ -300,10 +312,13 @@ public class DpopProofValidator {
         Map<String, Object> jwkMap = jwkOpt.get();
         PublicKey proofPublicKey = parsePublicKey(jwkMap);
 
+        // Bind an ES* alg to the curve of the proof JWK before the signature is verified
+        validateEcdsaAlgorithmMatchesCurve(alg, jwkMap, proofPublicKey);
+
         // Validate DPoP proof signature
         verifyDpopSignature(decoded.parts().toArray(String[]::new), proofPublicKey, alg);
 
-        validateDpopClaims(decoded.bodyMap(), rawAccessToken, request);
+        String jti = validateDpopClaims(decoded.bodyMap(), rawAccessToken, request);
 
         // Validate JWK Thumbprint.
         // JwkThumbprintUtil declares IllegalArgumentException for an unsupported 'kty' or a missing
@@ -324,30 +339,37 @@ public class DpopProofValidator {
                             .formatted(computedThumbprint, expectedThumbprint));
         }
 
+        // Replay protection runs last: a proof rejected by any stateless check above must not
+        // consume its jti, otherwise it would burn the replay slot of the legitimate proof.
+        if (!replayProtection.checkAndStore(jti)) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_REPLAY_DETECTED, jti);
+            securityEventCounter.increment(EventType.DPOP_REPLAY_DETECTED);
+            throw new TokenValidationException(EventType.DPOP_REPLAY_DETECTED,
+                    "DPoP proof replay detected for jti: %s".formatted(jti));
+        }
+
         LOGGER.debug("DPoP proof validation successful");
     }
 
     /**
-     * Validates the {@code jti}, {@code iat}, {@code ath}, {@code htu}, and {@code htm} claims
-     * of a DPoP proof JWT payload per RFC 9449.
+     * Validates the {@code jti} presence and the {@code iat}, {@code ath}, {@code htu}, and
+     * {@code htm} claims of a DPoP proof JWT payload per RFC 9449.
+     * <p>
+     * The {@code jti} is only checked for presence here; its uniqueness (replay protection) is
+     * checked by the caller after every stateless check has passed.
      *
      * @param bodyMap        the decoded DPoP proof payload
      * @param rawAccessToken the raw access token string used to verify the {@code ath} claim
      * @param request        the access token request containing HTTP context for htu/htm validation
+     * @return the proof's {@code jti} value
      * @throws TokenValidationException if any claim is missing, invalid, or fails validation
      */
-    private void validateDpopClaims(MapRepresentation bodyMap, String rawAccessToken, AccessTokenRequest request) {
-        // Validate jti (replay protection)
+    private String validateDpopClaims(MapRepresentation bodyMap, String rawAccessToken, AccessTokenRequest request) {
+        // Validate jti presence (uniqueness is checked last by the caller)
         Optional<String> jti = bodyMap.getString("jti");
         if (jti.isEmpty()) {
             rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_MISSING_CLAIM,
                     "DPoP proof is missing required claim: jti");
-        }
-        if (!replayProtection.checkAndStore(jti.get())) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_REPLAY_DETECTED, jti.get());
-            securityEventCounter.increment(EventType.DPOP_REPLAY_DETECTED);
-            throw new TokenValidationException(EventType.DPOP_REPLAY_DETECTED,
-                    "DPoP proof replay detected for jti: %s".formatted(jti.get()));
         }
 
         // Validate iat (freshness)
@@ -382,6 +404,8 @@ public class DpopProofValidator {
 
         // Validate htm and htu (RFC 9449 Section 4.3)
         validateHtuHtm(bodyMap, request);
+
+        return jti.get();
     }
 
     /**
@@ -507,6 +531,45 @@ public class DpopProofValidator {
             rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
                     "Failed to parse DPoP proof public key: %s".formatted(e.getMessage()));
             return null; // unreachable
+        }
+    }
+
+    /**
+     * Requires an ECDSA proof algorithm to match the curve of the proof JWK, per RFC 7518 §3.4:
+     * {@code ES256} needs {@code P-256}, {@code ES384} needs {@code P-384} and {@code ES512} needs
+     * {@code P-521}.
+     * <p>
+     * Without this binding an {@code ES384} or {@code ES512} proof carrying a smaller-curve key
+     * reaches signature verification, the ECDSA component-range check then uses the order
+     * {@code n} of the key's curve rather than of the curve the algorithm names, and a genuine
+     * signature made with that key under the algorithm's hash verifies. The check only
+     * applies when {@code alg} is an ECDSA algorithm and the parsed key is an {@link ECPublicKey}.
+     * An EC key with a non-ECDSA algorithm, or a non-EC key with an ECDSA algorithm, is left to
+     * the signature verification step, which rejects it as before.
+     * <p>
+     * The token path is unchanged and needs no counterpart here: {@code KeyProcessor} drops a JWKS
+     * key whose {@code alg} disagrees with its curve, and
+     * {@code TokenSignatureValidator.isAlgorithmCompatible} requires an exact algorithm match for EC
+     * keys. The check therefore lives here rather than in the shared {@link SignatureVerificationUtil}.
+     *
+     * @param alg            the proof's {@code alg} header, already checked to be supported
+     * @param jwkMap         the proof's embedded JWK
+     * @param proofPublicKey the key parsed from {@code jwkMap}
+     * @throws TokenValidationException if an ECDSA algorithm does not match the JWK curve
+     */
+    private void validateEcdsaAlgorithmMatchesCurve(String alg, Map<String, Object> jwkMap,
+            PublicKey proofPublicKey) {
+        if (!SignatureVerificationUtil.isEcdsaAlgorithm(alg) || !(proofPublicKey instanceof ECPublicKey)) {
+            return;
+        }
+        // parseEcKey has already accepted this crv (it rejects every curve but P-256, P-384 and P-521),
+        // so determineEcAlgorithm cannot throw for it and no catch is needed.
+        String curve = new MapRepresentation(jwkMap).getString("crv").orElseThrow();
+        String curveAlgorithm = JwkKeyHandler.determineEcAlgorithm(curve);
+        if (!curveAlgorithm.equals(alg)) {
+            rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
+                    "DPoP proof algorithm '%s' does not match the proof JWK curve '%s', which requires algorithm '%s'"
+                            .formatted(alg, curve, curveAlgorithm));
         }
     }
 

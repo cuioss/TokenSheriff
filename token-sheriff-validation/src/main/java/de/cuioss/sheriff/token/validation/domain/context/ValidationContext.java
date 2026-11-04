@@ -122,20 +122,24 @@ public class ValidationContext {
     /**
      * Checks if a given expiration time represents an expired token.
      * <p>
-     * Applies clock skew tolerance: a token is considered expired only if its expiration time
-     * plus the clock skew tolerance is before the current time. This accommodates clock drift
-     * between the token issuer and the validator in distributed systems.
+     * Applies clock skew tolerance: a token is considered expired once the current time has
+     * reached its expiration time plus the clock skew tolerance ({@code now >= exp + skew}, an
+     * inclusive boundary). The tolerance accommodates clock drift between the token issuer and
+     * the validator in distributed systems.
      *
      * @param expirationTime the token's expiration time
-     * @return true if the token is expired (even accounting for clock skew), false otherwise
+     * @return true if the current time is at or after {@code expirationTime + clockSkew}, false otherwise
      */
     public boolean isExpired(OffsetDateTime expirationTime) {
         return isExpired(expirationTime, clockSkewSeconds, currentTime);
     }
 
     /**
-     * Shared expiry predicate: checks whether an expiration time (extended by the clock skew
-     * tolerance) lies before the given reference time.
+     * Shared expiry predicate: checks whether the reference time has reached the expiration time
+     * extended by the clock skew tolerance.
+     * <p>
+     * The boundary is inclusive: a token is expired when {@code now >= exp + skew}, because
+     * RFC 7519 §4.1.4 requires the current time to be <em>before</em> {@code exp} (plus leeway).
      * <p>
      * Centralizes the expiry semantics used by both the validation pipeline and the access
      * token cache, ensuring both apply clock skew identically.
@@ -143,10 +147,10 @@ public class ValidationContext {
      * @param expirationTime the token's expiration time
      * @param clockSkewSeconds the clock skew tolerance in seconds
      * @param now the reference time to check against
-     * @return true if the token is expired (even accounting for clock skew), false otherwise
+     * @return true if {@code now} is at or after {@code expirationTime + clockSkewSeconds}, false otherwise
      */
     public static boolean isExpired(OffsetDateTime expirationTime, int clockSkewSeconds, OffsetDateTime now) {
-        return expirationTime.plusSeconds(clockSkewSeconds).isBefore(now);
+        return !expirationTime.plusSeconds(clockSkewSeconds).isAfter(now);
     }
 
     /**
