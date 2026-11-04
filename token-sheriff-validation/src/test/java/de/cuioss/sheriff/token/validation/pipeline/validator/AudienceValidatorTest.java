@@ -24,6 +24,7 @@ import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.TokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
@@ -282,6 +283,30 @@ class AudienceValidatorTest {
                 () -> lenientValidator.validateAudience(token));
 
         assertEmptyAudienceRejectedAsMismatch(exception);
+    }
+
+    static Stream<Arguments> nonStringAzpCases() {
+        return Stream.of(TokenType.ACCESS_TOKEN, TokenType.ID_TOKEN)
+                .flatMap(tokenType -> JsonTypedAzpFixture.nonStringAzpValues()
+                        .map(azpCase -> Arguments.of(tokenType, azpCase.get()[0], azpCase.get()[1])));
+    }
+
+    @ParameterizedTest(name = "{0} with azp as {1}")
+    @MethodSource("nonStringAzpCases")
+    @DisplayName("Should never satisfy the audience fallback with a non-string azp, even when its string form is expected")
+    void shouldNeverSatisfyAudienceFallbackWithNonStringAzp(TokenType tokenType, String jsonType, String azpJson) {
+        MapRepresentation body = JsonTypedAzpFixture.bodyWithAzp(azpJson);
+        AudienceValidator fallbackValidator = new AudienceValidator(
+                JsonTypedAzpFixture.idsMatchingStringifiedAzp(body), securityEventCounter, false, true);
+
+        assertThrows(TokenValidationException.class,
+                () -> buildAndValidate(fallbackValidator, tokenType, body),
+                tokenType + " with azp as " + jsonType + " must be rejected");
+    }
+
+    private static void buildAndValidate(AudienceValidator audienceValidator, TokenType tokenType,
+            MapRepresentation body) {
+        audienceValidator.validateAudience(JsonTypedAzpFixture.buildToken(tokenType, body));
     }
 
     private static TokenContent tokenWithEmptyAudience(TokenType tokenType, boolean azpPresent) {

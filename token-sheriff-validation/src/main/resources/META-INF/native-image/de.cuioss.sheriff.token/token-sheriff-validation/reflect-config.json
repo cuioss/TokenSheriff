@@ -169,6 +169,10 @@
     "allDeclaredConstructors": true
   },
   {
+    "name": "de.cuioss.sheriff.token.validation.domain.claim.mapper.StrictStringMapper",
+    "allDeclaredConstructors": true
+  },
+  {
     "name": "de.cuioss.sheriff.token.commons.transport._WellKnownResult_DslJsonConverter",
     "allDeclaredConstructors": true
   },
