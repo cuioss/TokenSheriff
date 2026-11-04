@@ -2,10 +2,10 @@
   "id": "PLAN-11",
   "slug": "audience-semantics",
   "workstream": "WS-01",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-11-audience-semantics",
+  "pr": "853",
+  "landing": "landings/PLAN-11.md",
   "seq": 11
 }

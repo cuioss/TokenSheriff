@@ -24,18 +24,18 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | V-8 | minor | **FIXED** — #830 (1ca5ab35), PLAN-01 (closed per PR; code not re-read) | PLAN-01 |
 | V-9 | minor | **FIXED** — #833 (2ea3ef2f), PLAN-03; entries carry their issuer's clock skew (closed per PR; code not re-read) | PLAN-03 |
 | V-10 | minor | **FIXED** — #844 (50c295e6), PLAN-07; opt-in max-staleness bound (off by default, `TokenSheriff-170`) and re-discovery after three failed cycles (closed per PR; code not re-read) | PLAN-07 |
-| V-11 | minor | VALID — DPoP path lacks ECDSA range check (CVE-2022-21449) | PLAN-09 |
-| V-12 | minor | VALID — DPoP replay `checkAndStore` before thumbprint check | PLAN-09 |
+| V-11 | minor | **FIXED** — #851 (49ba673d), PLAN-09; the range check lives in `SignatureVerificationUtil.verifySignature` and runs before `initVerify`, so DPoP proofs get it too; wired all-zero ES256 DPoP test (closed per PR; call site and ordering read in merged source) | PLAN-09 |
+| V-12 | minor | **FIXED** — #851 (49ba673d), PLAN-09; `checkAndStore(jti)` runs last, after every stateless check (closed per PR; ordering read in merged source) | PLAN-09 |
 | V-13 | minor | VALID — LogRecord template/argument mismatches | PLAN-13 |
 | V-14 | minor | VALID — identifier 168 duplicated (Transport + JWTValidation) | PLAN-13 |
 | V-15 | minor | VALID — `maxPayloadSize` doubles as HTTP response ceiling | PLAN-13 |
 | V-16 | minor | **FIXED** — #830 (1ca5ab35), PLAN-01 (closed per PR; code not re-read) | PLAN-01 |
 | V-17a | info | VALID — EgressPolicy DNS-rebinding claim / missing ranges | PLAN-13 |
-| V-17b | info | VALID — trailing-dot tokens (`split("\\.")`) | PLAN-09 |
-| V-17c | info | VALID — `exp` boundary off-by-one | PLAN-09 |
+| V-17b | info | **FIXED** — #851 (49ba673d), PLAN-09; all three production splits use limit `-1` (closed per PR; the three sites read in merged source) | PLAN-09 |
+| V-17c | info | **FIXED** — #851 (49ba673d), PLAN-09; `now >= exp + skew` is expired, via one shared predicate (closed per PR; predicate read in merged source) | PLAN-09 |
 | V-17d | info | VALID — duplicate JSON keys last-wins (doc only) | PLAN-18 |
-| V-17e | info | VALID — EC JWK `alg` not cross-checked against curve | PLAN-09 |
-| V-17f | info | VALID — empty `aud` array falls to `azp` fallback | PLAN-11 |
+| V-17e | info | **FIXED** — #851 (49ba673d), PLAN-09; an EC JWK whose `alg` does not match its curve is dropped, never re-labelled (closed per PR; check read in merged source) | PLAN-09 |
+| V-17f | info | **FIXED** — #853 (a9ce05df), PLAN-11; `AudienceValidator` treats only an absent `aud` as missing, an empty array is `AUDIENCE_MISMATCH` and never reaches the `azp` fallback (code read in the merged source) | PLAN-11 |
 | V-17g | info | **FIXED** — #835 (e010c5cf), PLAN-05; random CEK on unwrap failure, CBC tag mismatch normalised to the same typed rejection (closed per PR; code not re-read) | PLAN-05 |
 | V-17h | info | VALID — observability drift (`JWKS_KEYS_UPDATED` content etc.); J-1 part owned by PLAN-17 | PLAN-13 |
 
@@ -78,7 +78,7 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | ID | Sev | Verdict at HEAD | Owner |
 |---|---|---|---|
 | TV-1 | major | **FIXED** — misnamed test removed in #795; real confusion covered by `WiredNegativePathAttackTest` (unit gap → PLAN-15) | — |
-| TV-2 | major | VALID — no empty-`aud` test | PLAN-11 |
+| TV-2 | major | **FIXED** — #853 (a9ce05df), PLAN-11; parameterized ACCESS/ID x azp-situation test plus the audience-optional case, asserting `AUDIENCE_MISMATCH` and the counter (test names and assertions read in the merged source) | PLAN-11 |
 | TV-3 | minor | **FIXED** — #795 | — |
 | TV-4 | minor | PARTIAL — EventCategory ordinal removed; LoaderStatus/MeasurementType/EventCategory valueOf tests remain | PLAN-15 |
 | TV-5 | minor | **FIXED** — #795 | — |
@@ -94,9 +94,9 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | TC-7 | minor | VALID — attack corpora collapse to non-JSON | PLAN-14 |
 | TC-8 | minor | VALID — `ClientAuthSpecIT` positive-only | PLAN-16 |
 | TC-9 | info | PARTIAL — PKCE dup removed (#796); unit hygiene → PLAN-14; IT TLS trust-all → Watch | PLAN-14 |
-| gaps VAL 1 | – | = TV-2 | PLAN-11 |
+| gaps VAL 1 | – | **FIXED** — = TV-2, #853 (a9ce05df), PLAN-11 | PLAN-11 |
 | gaps VAL 2,3,5 | – | VALID — exp/nbf fixed-clock boundaries, unit RS/HS confusion | PLAN-15 |
-| gap VAL 4 | – | VALID — list-typed `azp` | PLAN-11 |
+| gap VAL 4 | – | **FIXED** — #853 (a9ce05df), PLAN-11; new `StrictStringMapper` rejects any non-string `azp`; residual: `client_id` is still string-coerced by `IdentityMapper` (operator decision, see epic.md Watches) | PLAN-11 |
 | gap VAL 6 | – | PARTIAL — dup-kid warning pinned (#803); winning key + counter unasserted | PLAN-15 |
 | gap VAL 7 | – | = TV-6 | PLAN-15 |
 | gap VAL 8 | – | = V-1 — **FIXED** by #835 (e010c5cf), PLAN-05 | PLAN-05 |

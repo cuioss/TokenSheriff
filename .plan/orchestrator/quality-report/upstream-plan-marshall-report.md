@@ -212,3 +212,72 @@ New items:
   build tooling's dedupe had re-opened when the (pre-existing) red `test-compile` re-observed them, after a later
   green build had resolved them. Same root cause as PLAN-21-001. Dedupe should not re-open a finding that a later
   green build resolved.
+
+## Addendum 2026-11-04: PLAN-09 (4 plan-marshall messages)
+
+PLAN-09-002 (a COVERED register row needs a wired test on every path) and PLAN-09-005 (the DPoP proof path must
+enforce the same key checks as the token path) are project-owned and were filed as the local lessons
+`2026-11-04-13-001` and `-002`; they are not part of this report. The other four name marketplace components.
+
+Recurrences of the themes above (not filed as new lessons):
+
+- Theme 3, verbs paraphrased: PLAN-09-006. Two more argparse rejections, and this time both were issued by the
+  orchestrating main-context session, not by a dispatched leaf: `manage-execution-manifest record-step` with a
+  flag it does not declare (the real flags are `--plan-id --step-id --phase --outcome`, with `--phase` one of
+  `5-execute` / `6-finalize`), and `manage-findings` with `query` and `qgate query` (the real read verbs are
+  `list` / `get` and `qgate list --phase P`; `qgate query` was already named in the first addendum). The rule in
+  `agent-behavior-rules.md` § Never invent script subcommands already covers dispatched leaves. This run shows it
+  also has to bind the main-context session, which drives `manage-*` scripts ad hoc between dispatches with no
+  loaded workflow quoting the canonical invocation. Suggested: run `{script} {verb} --help` before an ad-hoc call
+  no loaded workflow spells out.
+
+New items:
+
+- PLAN-09-001: a deliverable that changes a documented semantic (here the expiry boundary `exp + skew < now`)
+  left three prose restatements of the old rule (a Javadoc in `IssuerConfig`, a config-key doc in
+  `JwtPropertyKeys`, and a specification page). Only the finalize code review found them. Fixing them added files
+  outside the declared footprint, which with two review-driven test files and one threat-model row pushed the plan
+  to six out-of-scope files (threshold five) and a hand-accepted scope-creep warning at the pre-merge gate.
+  Suggested: at outline, search the repository for the literal old expression and its key names, and list every
+  restating file in the deliverable's affected files; or have the scope-creep check treat a documentation-only
+  correction of the changed semantic as in scope.
+- PLAN-09-003 (`pm-dev-java:java-security`): inserting a new check ahead of existing steps dropped a precondition
+  the downstream step enforced implicitly (a null signature used to be rejected by the format converter; after
+  the change the new check threw `NullPointerException`, breaking the declared `SignatureException` contract), and
+  placing the check after `initVerify` made its own guard branches unreachable, so the tests passed for the wrong
+  reason. Suggested for the skill: list the preconditions a downstream step used to enforce, keep the exception
+  type and message, and place a new guard before any provider call that could reject the same input first.
+- PLAN-09-004 (`pm-dev-java:junit-core` / `persona-module-tester`): CodeRabbit found three test gaps where a guard
+  existed and no test failed when only that guard was removed: an inner-JWS empty signature masked by an earlier
+  part-count check, rejection tests run in one decode mode only, and a range check with separate `r == 0` and
+  `s == 0` conditions covered only by an all-zero input. The same class as the local lesson `2026-11-02-10-001`
+  (tests that pin less than the spec names). Suggested for the skill: one test input per reject condition, built
+  to pass every earlier check, run across every mode with the existing cross-product helpers.
+
+Landing residue of PLAN-09: the pre-push gate arms had no standalone `module-tests` and no valid whole-tree
+`test-compile` (same root cause as PLAN-21-001; the fifth plan with this degradation after PLAN-05, PLAN-08,
+PLAN-12 and PLAN-21); `effort` was not stamped again (`unknown`); two metrics rows carried placeholder figures written before
+the agent usage arrived and were followed by corrected rows; the post-merge `Run JMH Benchmarks` workflow was
+still running when the post-merge wait hit its deadline; the merge-queue squash message is platform-composed.
+
+## Addendum 2026-11-04: PLAN-11 (2 plan-marshall messages)
+
+Both messages recur items above; nothing here was sent.
+
+- PLAN-11-001 (outline / Q-Gate): a deliverable's change-per-file entry said "if a new log identifier turns out to
+  be required, add it to `JWTValidationLogMessages` and `doc/LogMessages.adoc`", and neither file was in "Files
+  expected to mutate". The Q-Gate `scope_criterion_validator` flagged it as `under_coverage` (finding 835478, warning)
+  and the phase-4 `declared_set_closure` referrer check would have caught the write. Recurrence of the "conditional
+  changes instead of declared files" items earlier in this report. Suggested: at outline, resolve a conditional
+  "if X is needed also change F" clause (commit to one branch) or require F in the declared set; a new `LogRecord`
+  always implies the doc file, so the check could add it automatically.
+- PLAN-11-002 (pre-push gate / `build-maven` canonical resolution): same root cause as PLAN-21-001. New here: the
+  failed stand-alone `test-compile` was parsed into 120 `build-error` findings that blocked the first merge
+  dispatch until each was resolved as `rejected` by hand, which PLAN-04-008 saw in smaller form. Suggested, in
+  addition to the test-jar producer/consumer detection already proposed: file one structural build failure as a
+  single finding (or a cluster) rather than one per compile error, so it cannot hold a merge behind a rejection batch.
+
+Landing residue of PLAN-11: the sixth plan with the degraded pre-push gate (after PLAN-05, PLAN-08, PLAN-09, PLAN-12
+and PLAN-21); the project default `final_merge_without_asking: true` (`.plan/marshal.json`) would have merged without
+asking, which conflicts with the repository rule in `CLAUDE.md` that auto-merge is never enabled unless told, so the
+operator authorised the merge by hand for this PR; `effort` was stamped this time.
