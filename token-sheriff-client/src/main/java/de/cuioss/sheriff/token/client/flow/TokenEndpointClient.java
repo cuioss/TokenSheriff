@@ -461,7 +461,12 @@ public class TokenEndpointClient {
     private <T> T deserialize(Class<T> type, byte[] bytes) throws IOException {
         try {
             return dslJson.deserialize(type, bytes, bytes.length);
-        } catch (RuntimeException e) {
+        }
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
+        catch (RuntimeException e) {
+            // Deliberate broad catch: the JSON library signals a payload it cannot read with unchecked
+            // exceptions that are not part of its contract (a body cut off inside a string escape throws
+            // ArrayIndexOutOfBoundsException), so no specific type can be named without leaving a hole.
             throw new IOException("Unreadable JSON (" + e.getClass().getSimpleName() + ")", e);
         }
     }
