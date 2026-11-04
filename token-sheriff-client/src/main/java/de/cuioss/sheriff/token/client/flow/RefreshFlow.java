@@ -394,8 +394,12 @@ public class RefreshFlow {
     /**
      * Resolves the refresh token to use for the next refresh: the rotated token the AS returned, or
      * the presented token when the AS chose not to rotate (RFC 6749 §6 permits omitting it).
+     *
+     * @param presented the refresh token presented in the request
+     * @param issued    the refresh token the AS returned; {@code null} or blank when it did not rotate
+     * @return the refresh token to use for the next refresh
      */
-    private static String resolveRefreshToken(String presented, String issued) {
+    private static String resolveRefreshToken(String presented, @Nullable String issued) {
         if (issued != null && !issued.isBlank()) {
             return issued;
         }
