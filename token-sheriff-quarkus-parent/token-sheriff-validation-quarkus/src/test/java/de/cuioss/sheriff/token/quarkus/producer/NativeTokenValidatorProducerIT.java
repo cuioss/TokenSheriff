@@ -21,6 +21,8 @@ import io.quarkus.test.junit.TestProfile;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static io.restassured.RestAssured.given;
+
 /**
  * Native image integration tests for the JWT validation functionality.
  * This test validates that the Quarkus application starts correctly in native mode
@@ -36,22 +38,17 @@ class NativeTokenValidatorProducerIT {
     /**
      * Test that the application starts successfully in native mode.
      * This indirectly tests that all JWT validation producers and their dependencies
-     * are correctly configured and available. The test passes if the Quarkus
-     * application starts without errors.
+     * are correctly configured and available: the started health check only reports
+     * {@code 200} once the native application has finished starting, so a startup
+     * failure of any CDI bean fails this test.
      */
     @Test
     @DisplayName("Should start application successfully in native mode")
-    @SuppressWarnings("java:S2699")
     void shouldStartApplicationInNativeMode() {
-        // Given: The Quarkus application is running in native mode
-        // When: The application has started successfully (no startup exceptions)
-        // Then: This test passes, indicating all JWT components are properly configured
-
-        // This is a basic smoke test - if the Quarkus application starts without
-        // errors, it means all CDI beans (including JWT validation components)
-        // are properly configured and can be instantiated.
-
-        // We can verify this by checking that the test environment itself works
-        assert true : "Application started successfully in native mode";
+        given()
+                .when()
+                .get("/q/health/started")
+                .then()
+                .statusCode(200);
     }
 }

@@ -139,7 +139,7 @@ class VertxServletObjectsResolverQuarkusTest {
                 String uri = resolver.resolveRequestUri();
                 String method = resolver.resolveRequestMethod();
 
-                String result = "URI: %s\nMethod: %s".formatted(uri, method);
+                String result = "URI: %s%nMethod: %s".formatted(uri, method);
                 return Response.ok(result).build();
             } catch (IllegalStateException e) {
                 return Response.serverError().entity("Error: " + e.getMessage()).build();
