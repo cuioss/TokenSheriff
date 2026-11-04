@@ -19,6 +19,7 @@ import de.cuioss.sheriff.token.commons.error.TransportException;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
+import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
@@ -35,15 +36,27 @@ import java.util.Set;
  * pointing at an internal, loopback, or cloud-metadata address
  * (e.g. {@code http://169.254.169.254/...}). This guard resolves a URL's host to its
  * {@link InetAddress}(es) immediately before the fetch and rejects any resolution that
- * lands in a disallowed range, closing the SSRF vector and — by resolving fresh at the
- * fetch site rather than trusting an earlier resolution — the DNS-rebinding vector.
+ * lands in a disallowed range, closing the SSRF vector for the addresses it sees.
  * <p>
- * The default posture is secure ({@link #secureDefault()}): loopback, link-local
- * (which covers the {@code 169.254.0.0/16} IPv4 cloud-metadata range and
- * {@code fe80::/10}), site-local ({@code 10/8}, {@code 172.16/12}, {@code 192.168/16}),
- * IPv6 unique-local ({@code fc00::/7}), wildcard, and multicast addresses are all
- * rejected. Both relaxations are explicit, discoverable inputs, never an implicit
- * test-mode:
+ * <strong>DNS rebinding:</strong> resolving fresh at the fetch site rather than trusting an
+ * earlier resolution narrows the DNS-rebinding window, but does not close it: the HTTP client
+ * resolves the host again on its own when it connects, so a DNS answer that changes between this
+ * check and that connection is not seen by the guard.
+ * <p>
+ * The default posture is secure ({@link #secureDefault()}). These addresses are rejected:
+ * <ul>
+ *   <li>loopback ({@code 127.0.0.0/8}, {@code ::1})</li>
+ *   <li>link-local ({@code 169.254.0.0/16}, which covers the IPv4 cloud-metadata range, and
+ *       {@code fe80::/10})</li>
+ *   <li>site-local ({@code 10.0.0.0/8}, {@code 172.16.0.0/12}, {@code 192.168.0.0/16})</li>
+ *   <li>IPv6 unique-local ({@code fc00::/7})</li>
+ *   <li>shared address space / carrier-grade NAT ({@code 100.64.0.0/10})</li>
+ *   <li>"this network" ({@code 0.0.0.0/8}, including the wildcard {@code 0.0.0.0}) and the IPv6
+ *       wildcard {@code ::}</li>
+ *   <li>limited broadcast ({@code 255.255.255.255})</li>
+ *   <li>multicast ({@code 224.0.0.0/4}, {@code ff00::/8})</li>
+ * </ul>
+ * Both relaxations are explicit, discoverable inputs, never an implicit test-mode:
  * <ul>
  *   <li>{@link EgressPolicyBuilder#allowLoopback(boolean) allowLoopback} — permit
  *       loopback resolutions (for local development and MockWebServer-based tests
@@ -109,9 +122,10 @@ public final class EgressPolicy {
 
     /**
      * Resolves {@code uri}'s host and rejects the request if any resolved address falls
-     * in a disallowed range. Resolving here — immediately before the fetch — is what
-     * closes the DNS-rebinding window: the check runs against the same fresh resolution
-     * the fetch will use rather than a cached earlier one.
+     * in a disallowed range. Resolving here — immediately before the fetch rather than
+     * relying on a cached earlier resolution — narrows the DNS-rebinding window. It does not
+     * close it: the HTTP client resolves the host again when it connects, and that second
+     * resolution is not checked.
      *
      * @param uri the IdP-advertised or configured URL about to be fetched
      * @throws TransportException if the URI has no host or resolves to a disallowed
@@ -149,7 +163,8 @@ public final class EgressPolicy {
                 || address.isSiteLocalAddress()
                 || address.isAnyLocalAddress()
                 || address.isMulticastAddress()
-                || isUniqueLocalIpv6(address)) {
+                || isUniqueLocalIpv6(address)
+                || isBlockedIpv4Range(address)) {
             throw new TransportException(
                     "SSRF egress blocked: URL %s resolves to disallowed address %s"
                             .formatted(uri, address.getHostAddress()));
@@ -166,6 +181,26 @@ public final class EgressPolicy {
     }
 
     /**
+     * IPv4 ranges the JDK predicates do not cover: the shared address space
+     * {@code 100.64.0.0/10} (carrier-grade NAT), the "this network" block {@code 0.0.0.0/8}
+     * ({@link InetAddress#isAnyLocalAddress()} only matches {@code 0.0.0.0}) and the limited
+     * broadcast address {@code 255.255.255.255}.
+     */
+    private static boolean isBlockedIpv4Range(InetAddress address) {
+        if (!(address instanceof Inet4Address)) {
+            return false;
+        }
+        byte[] octets = address.getAddress();
+        int first = octets[0] & 0xff;
+        int second = octets[1] & 0xff;
+        boolean sharedAddressSpace = first == 100 && second >= 64 && second <= 127;
+        boolean thisNetwork = first == 0;
+        boolean limitedBroadcast = first == 255 && second == 255
+                && (octets[2] & 0xff) == 255 && (octets[3] & 0xff) == 255;
+        return sharedAddressSpace || thisNetwork || limitedBroadcast;
+    }
+
+    /**
      * Builder for {@link EgressPolicy}, pre-set to the secure default posture.
      */
     public static final class EgressPolicyBuilder {
@@ -179,7 +214,8 @@ public final class EgressPolicy {
 
         /**
          * Permits resolutions to loopback addresses. Defaults to {@code false}. All other
-         * blocked ranges (link-local, site-local, ULA, metadata) still apply.
+         * blocked ranges (link-local, site-local, ULA, metadata, shared address space,
+         * {@code 0.0.0.0/8}, limited broadcast, multicast) still apply.
          *
          * @param allowLoopback {@code true} to allow loopback egress (local dev / tests)
          * @return this builder instance

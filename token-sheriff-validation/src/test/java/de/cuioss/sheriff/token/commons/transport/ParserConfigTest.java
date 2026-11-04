@@ -150,7 +150,7 @@ class ParserConfigTest implements ShouldImplementEqualsAndHashCode<ParserConfig>
     void shouldDefaultMaxHttpResponseSize() {
         var config = ParserConfig.builder().build();
 
-        assertEquals(256 * 1024, ParserConfig.DEFAULT_MAX_HTTP_RESPONSE_SIZE);
+        assertEquals(ParserConfig.DEFAULT_MAX_HTTP_RESPONSE_SIZE, 256 * 1024);
         assertEquals(ParserConfig.DEFAULT_MAX_HTTP_RESPONSE_SIZE, config.getMaxHttpResponseSize());
     }
 

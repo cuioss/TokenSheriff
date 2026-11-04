@@ -146,7 +146,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * that passed the egress guard is ever published, and only while the work that resolved it is
      * still live (see {@link #epoch}). The egress guard re-resolves and re-checks the fetch URI on
      * <em>every</em> background refresh, so a DNS rebind that flips the host into a blocked range after
-     * the initial fetch is rejected rather than silently trusted by the reused adapter.
+     * the initial fetch and is visible when the check runs is rejected rather than silently trusted by
+     * the reused adapter.
      */
     private final AtomicReference<JwksEndpoint> endpoint = new AtomicReference<>();
 
@@ -588,7 +589,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
         // SSRF egress guard (C1): resolve the advertised/configured JWKS URL and reject it
         // if it lands on an internal/loopback/metadata address BEFORE any fetch is issued.
-        // Resolving here — immediately before the fetch — also closes the DNS-rebinding window.
+        // Resolving here — immediately before the fetch — narrows the DNS-rebinding window; it does not
+        // close it, since the HTTP client resolves the host again when it connects.
         // The URI travels with the adapter in the endpoint so the guard can be re-applied on every
         // scheduled background refresh (C1 follow-up), not just this initial resolution.
         URI fetchUri = handler.getUri();
@@ -967,7 +969,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * every scheduled refresh, so without re-resolving and re-checking the fetch URI here, a DNS answer
      * that rebinds an initially-public host into an internal/loopback/metadata range after the first
      * fetch would be silently trusted. Re-running {@link EgressPolicy#check(URI)} on each cycle resolves
-     * the host fresh and blocks the rebound target before any bytes are fetched. The endpoint is read
+     * the host fresh and blocks a target that is already rebound when the check runs, which narrows the
+     * DNS-rebinding window. It does not close it: the HTTP client resolves the host again when it
+     * connects, and a rebind between the check and that connection is not seen. The endpoint is read
      * once, so the URI that is checked is the URI the adapter fetches.
      *
      * @param cycleEpoch the {@link #epoch} of the generation this cycle belongs to

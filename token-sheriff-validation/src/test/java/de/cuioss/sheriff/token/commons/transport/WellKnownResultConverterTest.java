@@ -33,7 +33,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
@@ -303,7 +302,7 @@ class WellKnownResultConverterTest {
 
     @Test
     @DisplayName("Should accept a discovery document above 8 KiB, bounded by maxHttpResponseSize and not maxPayloadSize")
-    void shouldBoundDiscoveryDocumentByHttpResponseCeiling() throws IOException {
+    void shouldBoundDiscoveryDocumentByHttpResponseCeiling() throws Exception {
         try (MockWebServer server = new MockWebServer()) {
             server.setDispatcher(new LargeDiscoveryDispatcher());
             server.start();
