@@ -10,7 +10,7 @@ TokenSheriff-168 is used twice (V-14 / D-4); `doc/LogMessages.adoc` misses Quark
 (D-3); `ParserConfig.maxPayloadSize` silently doubles as the ceiling for JWKS and discovery responses
 (V-15); `EgressPolicy` Javadoc overclaims DNS-rebinding protection and misses CGNAT/0.0.0.0/broadcast
 ranges (V-17a); `JWKS_KEYS_UPDATED` carries no issuer or key ids (V-17h). Closes V-13, V-14, V-15,
-V-17a, V-17h, D-3, D-4.
+V-17a, V-17h, D-3, D-4, plus one PLAN-21 residual (deliverable 6).
 
 ## Deliverables
 
@@ -25,6 +25,11 @@ V-17a, V-17h, D-3, D-4.
    resolution" Javadoc to the actual guarantee; tests.
 5. **V-17h** — `JWKS_KEYS_UPDATED` logs issuer and key ids (`getKeyIds()` from #803) at the right moment
    (not `LOADING` during init).
+6. **Unusable `jwks_uri` retry (PLAN-21 residual)** — PLAN-21's code review left one advisory open:
+   `HttpJwksLoader` keeps retrying a `jwks_uri` that can never work (unusable, not merely unreachable). Verify at
+   outline that the loader loops on such a URI, then end it in a terminal status with a LogRecord (allocate the
+   identifier by the rule in the Claim Labels; `170` is taken by PLAN-07) and test the status and the absence of
+   further retries. Under the operator's fix-immediately rule this is not left as a watch. No finding ID.
 
 ## Standing Constraints
 
@@ -53,6 +58,8 @@ V-17a, V-17h, D-3, D-4.
 - OBSERVED: `.identifier(168)` in both `TransportLogMessages` (`SSRF_EGRESS_BLOCKED_DISCOVERY`) and `JWTValidationLogMessages` (`DUPLICATE_JWKS_KID`) — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/transport/TransportLogMessages.java`
 - OBSERVED: `TokenSheriffQuarkusLogMessages` defines identifiers 25 and 104, absent from `doc/LogMessages.adoc` — read at `doc/LogMessages.adoc` § Quarkus INFO/WARN
 - OBSERVED: `JwksHttpContentConverter` and `HttpWellKnownResolver` use `parserConfig.getMaxPayloadSize()` as content ceiling — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/transport/JwksHttpContentConverter.java`
+- OBSERVED: PLAN-21 (#849, `c308f7c0`) changed `HttpJwksLoader.java` after this spec was grounded: an unexpected `initialize` failure now ends in a published terminal or retry-pending status. Re-read the class before scoping deliverables 5 and 6; `TokenSheriff-170` is also taken (PLAN-07), so any "170+ free" statement below is out of date
+- HYPOTHESIS: `HttpJwksLoader` retries an unusable `jwks_uri` without end — PLAN-21 code-review advisory (landing message; verify-at-outline)
 - HYPOTHESIS: identifier 169 is taken and 170+ free in the WARN range — confirm/refute at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/JWTValidationLogMessages.java` § WARN identifiers (verify-at-outline)
 
 ## Expected Surface
@@ -74,7 +81,7 @@ V-17a, V-17h, D-3, D-4.
 
 ## Dependencies and Sequencing
 
-- Depends on: PLAN-01 and PLAN-07 (`HttpJwksLoader.java`)
+- Depends on: PLAN-01, PLAN-07 and PLAN-21 (`HttpJwksLoader.java`; all shipped)
 - Overlaps with: PLAN-15 (`JWKSKeyLoaderTest.java`, single file)
 - Adjacent to: `token-sheriff-quarkus-parent` log classes — read-only reference for D-3
 

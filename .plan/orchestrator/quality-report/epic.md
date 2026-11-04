@@ -88,6 +88,27 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   (`NonValidatingJwtParser.java`). PLAN-22 (WS-05, docs, tests, ADRs and the sanitiser duplication) overlaps
   staged PLAN-17 (`TokenSheriffClientProcessor.java`); run it before PLAN-19. Both are claim-light: every
   residual is a landing-message claim marked verify-at-outline, and a residual that no longer exists is dropped.
+- PLAN-12 — shipped as #846 (`17a3ef62`), see `landings/PLAN-12.md`. 16 merged paths vs 10 declared: the five
+  concurrency benchmarks (three JFR ones not declared) moved to `Scope.Benchmark`, metrics exported once per
+  trial under a per-method key, the BOM scope fixed, the flaky timing bound replaced by synthetic durations.
+  `LibraryMetricsExporter.java` was deliberately not touched. No staged spec declares a path it changed.
+- PLAN-20 — shipped as #847 (`5349a3bc`), see `landings/PLAN-20.md`. Two files: the marker became the
+  sanctioned suppression (SPI carve-out) and `AGENTS.md` was reworded. The project-wide `java:S1135` query now
+  returns 0, so the open INFO from #832 is gone. PLAN-21 (`TokenLifecycleManager.java`) and PLAN-19
+  (`AGENTS.md`) declare a path it changed. Two `AGENTS.md` advisories moved to PLAN-22.
+- PLAN-21 — shipped as #849 (`c308f7c0`), see `landings/PLAN-21.md`. 21 merged paths vs 8 declared: all five
+  residuals fixed (loader init status, producer `destroy` and `TokenValidator.close`, `applyRefresh` base-token
+  compare-and-set as a breaking signature change, `iat`-less entry no longer cached under a max age, null header
+  and bad Base64Url part logged and counted). Declared paths changed: PLAN-09, PLAN-13, PLAN-17, PLAN-19, PLAN-22.
+  PLAN-09, PLAN-13 and PLAN-22 were extended with the PLAN-21 code-review residuals (see Decisions 2026-11-02).
+- PLAN-08 — shipped as #850 (`ed172e43`), see `landings/PLAN-08.md`. 19 merged paths vs 12 declared: class-level
+  `@BearerAuth` honoured under ArC, `@DefaultBean` client producers, strict JWE configuration, env-var-only issuer
+  discovery (fix arm), TTL default documented as 360. Two operator-approved scope exceptions (integration-tests
+  build script and POM property; extra JWE doc rows). No staged spec declares a path it changed. PLAN-17's
+  overlap with it (`BearerAuth.java`, one file) is no longer a conflict.
+- PLAN-23 — staged 2026-11-04 (WS-05, the 44 pre-existing SonarCloud issues on `main`; see Decisions 2026-11-04).
+  Starts after PLAN-09 merges (shares `ValidationContext.java`) and runs before PLAN-22 (shares
+  `AccessTokenCacheTest.java` and `TokenValidator.java`) and PLAN-17 (`TokenValidator.java`).
 - PLAN-14 — runs after PLAN-06 and PLAN-10 (tests the behaviour they change).
 - PLAN-15 — after PLAN-09 (exp boundary) and PLAN-13 (dup-kid id renumber).
 - PLAN-16 — Keycloak IT cost; after PLAN-06 (C-6 callback ordering). Pair with a cheap plan.
@@ -164,6 +185,56 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   duplication) was DISCARDED (operator choice D). The candidate-lesson inbox is empty: 36 messages
   dispositioned (12 project: 10 promoted into 9 lessons incl. `-12-008` and `-12-009`, 1 folded into PLAN-12,
   1 discarded; 24 plan-marshall: 24 promoted into 6 lessons).
+- 2026-11-01 — PLAN-12 (#846) and PLAN-20 (#847) reconciled as shipped from their inbox landings,
+  corroborated against PR state, merge commits, merged footprints, Sonar (gate OK, 0 open on both; the
+  project-wide `java:S1135` count is 0). Findings closed per the PRs: Q-7, Q-10, Q-11, Q-13 (PLAN-12);
+  PLAN-20 closes a PLAN-02 residual with no finding ID. `findings-disposition.md` marks the four FIXED,
+  noting the code itself was not re-read. PLAN-20 took the suppression arm. The 9 candidate-lesson messages
+  (PLAN-12-001 to -005, PLAN-20-001 to -004) were all dispositioned by me above the 90% bar as recurrences or
+  addenda of the existing six theme lessons, written into `upstream-plan-marshall-report.md` (addendum
+  2026-11-01), and archived; no new lesson was filed. Two unfixed code-review advisories on `AGENTS.md`
+  (PLAN-20) and the benchmark token-pool rotation counter (PLAN-12) were added to PLAN-22 under the
+  fix-immediately policy.
+- 2026-11-02 — PLAN-21 (#849) reconciled as shipped from its inbox landing, corroborated against PR state, the
+  merge commit, the merged footprint and Sonar (gate OK, 0 open on the PR). No finding ID, so
+  `findings-disposition.md` is unchanged. The 7 candidate-lesson messages (PLAN-21-001 to -007) were all
+  dispositioned by me above the 90% bar: -004 (lock/publish race, under-pinned tests) PROMOTED as the local
+  lesson `2026-11-02-10-001`; the other six (`plan-marshall:*` components) went into addendum 2026-11-02 of
+  `upstream-plan-marshall-report.md` as recurrences (-002, -003, -005, -006) or new items (-001, -007); no new
+  theme lesson was filed. The six code-review advisories PLAN-21 left unfixed were routed under the
+  fix-immediately policy: the `jwks_uri` retry advisory to PLAN-13 (deliverable 6, same class), the `DecodeMode`
+  gap to PLAN-09 (deliverable 6, same parser), and the Javadoc, test-row, ADR-0017 and `TokenValidator.close`
+  items to PLAN-22. The `close` fix is a behaviour change placed in a docs/tests plan on my judgement (about
+  85% confident); it is a one-line move to another plan if the operator prefers.
+- 2026-11-02 — PLAN-08 (#850) reconciled as shipped from its inbox landing, corroborated against PR state, the
+  merge commit, the merged footprint and Sonar (gate OK, 0 open on the PR). Findings closed per the PR: Q-1, Q-5,
+  Q-6, Q-9, D-8, J-8; `findings-disposition.md` marks all six FIXED, noting the code was not re-read. PLAN-09 was
+  recorded `running` on the strength of its plan worktree existing (the operator did not say "started"). The 11
+  candidate-lesson messages (PLAN-08-001 to -011) were dispositioned by me above the 90% bar: -002, -004, -006
+  merged into the local lesson `2026-11-02-14-001`, -005 folded into it, -007 filed as `2026-11-02-14-002`; the
+  other six (-001, -003, -008, -009, -010, -011) went into the second 2026-11-02 addendum of
+  `upstream-plan-marshall-report.md`. Lesson `2026-10-31-12-004` (stale `~/.m2` native IT) now records that its
+  root cause was fixed by this PR. Landing residue routed under the fix-immediately policy: the `DpopConfig`
+  Javadoc, the untested `ConfigValueParser` guard and four uncreated ADRs to PLAN-22; the native-image fixture
+  question is an open operator decision (below).
+- 2026-11-02 — Parallelism: kept at the epic's `parallelization_scope` of 2 and emitted one plan (PLAN-10, next
+  in queue order, disjoint from the running PLAN-09). The surfaces would allow three; the reasons for not
+  exceeding two are the shared CodeRabbit one-review-per-hour quota (PLAN-08's last fix commit could not be
+  re-reviewed inside the hour, PLAN-21 and PLAN-08 both merged under pair-induced waits) and token cost
+  (24 to 31 million tokens per plan, plus the 21-hour weekly-limit pause on PLAN-12). A third plan is a one-word
+  operator override; the best candidate is PLAN-22 (documentation, tests and ADRs, no behaviour risk).
+- 2026-11-04 — Operator: "Add the sonar issue to an existing or a cleanup plan - stage it now and give me the
+  command." I staged a new plan, PLAN-23 (WS-05, "Close the pre-existing SonarCloud backlog on main"), instead of
+  extending an existing one, because the 44 issues sit in 32 files over four modules and PLAN-22 is already
+  item-heavy (about seven ADR drafts). Spec built from a fresh `branch=main` issues read (44 open, the newest
+  created 2026-10-10): 27 in test sources, 17 in main sources, each with its issue key, in two tables. Order of
+  work inside the plan: test-code first (mechanical), then cognitive complexity, always-true/false conditions
+  (decide per site: remove, or dismiss with a reason where the check is a deliberate defence), nullness, minor
+  rules. Admission: one shared file with running PLAN-09 (`ValidationContext.java`), two with staged PLAN-22
+  (`AccessTokenCacheTest.java`, `TokenValidator.java`), one with PLAN-17 (`TokenValidator.java`); every other
+  overlap is with a shipped plan. So PLAN-23 starts only after PLAN-09 has merged, and runs before PLAN-22 and
+  PLAN-17, which re-read those files at their own outline. Not a third parallel plan: it goes in when PLAN-09
+  merges.
 
 ## Open Defects
 
@@ -183,6 +254,9 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   but the 24 plan-marshall-owned lessons could only be filed here through the foreign-store override.
   `upstream-plan-marshall-report.md` holds the evidence for the plan-marshall maintainers; it has NOT been
   sent. Whether to forward it is the operator's call.
+- 2026-11-01 — Incomplete landing `plan-12-benchmark-build-006.md` (PLAN-12): missing key `effort` (never
+  stamped, written as `unknown`). Drained and reconciled as far as it goes. Fifth of the nine landings so far
+  without it (PLAN-01, 02, 04, 05, 12); PLAN-03, 06, 07 and 20 carried it.
 
 ## Watches
 
@@ -207,6 +281,49 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   is measured on the wall clock; unplanned cache-hit health check in `AccessTokenValidationPipeline` (a
   behaviour change beyond the spec); the Performance Benchmark job had not finished when the post-merge
   wait timed out.
+- Sonar, 2026-11-01: gate OK and 0 open on #846 and #847; the project-wide `java:S1135` query returns 0, so
+  the one open INFO on #832 recorded above is resolved (by PLAN-20). PR-scoped snapshots, not re-runs.
+- PLAN-12 residuals and review (landing message + PR #846 body, not independently verified): merged under the
+  operator's "Accept the coverage gap" ruling at head `145f838c` (CodeRabbit quota-limited for the last two fix
+  commits); three advisory code-review notes, one named: the token pool's rotation counter can wrap around
+  (now in PLAN-22); the pre-push gate was satisfied from the whole-tree verify (3443 tests) instead of the
+  separate arms; the first TASK-5 commit lacks the Claude trailer; a roughly 21-hour pause from a weekly usage
+  limit sits in the wall-clock total.
+- PLAN-20 residuals (landing message + PR #847 body, not independently verified): two `AGENTS.md` advisories
+  (now in PLAN-22); whether an existing test pins a throwing `TokenStore.retrieve` was not shown at file level;
+  CodeRabbit refused twice and `review_rate_window_await` was switched on; the functional review skipped the
+  delta round for the second head.
+- PLAN-21 residuals (landing message + PR #849 body, not independently verified): the pre-push gate's
+  `test-compile` and `module-tests` arms were UN-GATED (the generators test-jar cannot resolve in a reactor
+  `test-compile`; whole-tree `verify -Ppre-commit` 3476 tests green at the merged head; same degradation as
+  PLAN-05); `applyRefresh` is a breaking public signature change (release notes); no ADR for the compare-and-set
+  decision (operator declined in the run); the post-merge `Run JMH Benchmarks` workflow had not finished; the
+  spec's PLAN-20 ordering was not checked by the run but holds on `main`. Advisories routed: see Decisions
+  2026-11-02. `doc/developer/test-impl-mapping.adoc` does not exist, and the plan-time `module_mapping_validator`
+  flag on cross-module test routing was accepted; whether the project wants that mapping doc is an open
+  operator-level question, not blocking.
+- PLAN-08 residuals (landing message + PR #850 body, not independently verified): OPEN, security-relevant: Q-1
+  (class-level `@BearerAuth`) was verified in a real native container only with the two fixtures that carry
+  `@RegisterForReflection`; CodeRabbit asked for a fixture without it, plus two notes marked unverified (native
+  reflection metadata for the class-level lookup; a fail-open when ArC reports an unannotated generated
+  override). Whether the unregistered case can fail open is untested and needs a native build. Also: env-only
+  multi-key JWE configuration is skipped without a startup signal (documented and pinned by a test); the
+  whole-tree `test-compile` and `module-tests` are red on unmodified `main` (test-jar not visible before
+  packaging; `verify:quality-gate` accepted in place, same cause as PLAN-21); a post-merge `Run JMH Benchmarks`
+  run had not finished.
+- Lesson store, 2026-11-02: the local store holds 7 lessons. `2026-10-31-12-003`, `-006`, `-007`, `-009` and the
+  six `2026-10-31-13-00x` theme lessons recorded as filed on 2026-10-31 are no longer there, and I do not know
+  why (no trace in this ledger's log beyond their filing). Their drafted bodies are still in the session
+  scratchpad. Not re-filed without the operator's say-so.
+- Sonar, 2026-11-02: gate OK and 0 open on #849. The project-wide query on the default branch returns 44 open
+  issues (23 MAJOR, 13 MINOR, 5 CRITICAL, 3 INFO; 41 code smells, 3 bugs; rules `java:S8714` x11, `S5778` x7,
+  `S4449` x4, `S8688`, `S8786`, `S3776`, `S2589` x3 each, others), the newest created 2026-10-10, so all predate
+  this epic's plans. None belongs to a plan's own PR, but the standing "fix every Sonar finding immediately"
+  policy covers them. Owned since 2026-11-04 by PLAN-23 (staged). Done when a `branch=main` query returns 0 open
+  or only issues with a recorded dismissal; the orchestrator re-reads it when PLAN-23 lands.
+- Executor drift: RESOLVED as of PLAN-21 (2026-11-02): `executor_version` 0.1.2046 equals `plugin_version`
+  0.1.2046 after the operator's marshall-steward run (#848). It affected PLAN-06, 07, 12 and 20. Plans started
+  while the regeneration was in flight may still show mixed versions; PLAN-08 is one of them.
 - The CodeRabbit one-review-per-hour quota is shared by concurrent plans: PLAN-06 waited roughly three hours
   behind PLAN-07's window and both merged under an override. Pairs raise the chance of this; recorded for
   the pairing decision on PLAN-08 onward.

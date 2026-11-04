@@ -80,7 +80,7 @@ Closes J-1…J-7, J-9…J-12.
 
 ## Dependencies and Sequencing
 
-- Depends on: PLAN-01, PLAN-05, PLAN-07 (examples must reflect final APIs); PLAN-04 and PLAN-08 (processor / `BearerAuth` files)
+- Depends on: PLAN-01, PLAN-05, PLAN-07 (examples must reflect final APIs); PLAN-04 and PLAN-08 (processor / `BearerAuth` files); PLAN-23 (Sonar backlog cleanup refactors a method in `TokenValidator.java`, runs first)
 - Overlaps with: many code plans via Javadoc-only edits — run late in the queue, never beside a plan touching the same files
 - Adjacent to: AsciiDoc examples — PLAN-18/19
 

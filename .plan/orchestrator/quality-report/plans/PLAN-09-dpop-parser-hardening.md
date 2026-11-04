@@ -9,7 +9,7 @@ Close five validation hardening edges: the DPoP path lacks the ECDSA psychic-sig
 (CVE-2022-21449) that the access-token path has (V-11); the DPoP replay cache stores the `jti` before
 the proof is bound to the token, so unauthenticated proofs can fill it (V-12); `split("\\.")` accepts
 trailing-dot tokens (V-17b); `exp` is accepted at exactly `exp + skew` (V-17c); EC JWK `alg` is not
-cross-checked against the curve (V-17e). Closes V-11, V-12, V-17b, V-17c, V-17e.
+cross-checked against the curve (V-17e). Closes V-11, V-12, V-17b, V-17c, V-17e, plus one PLAN-21 residual (deliverable 6).
 
 ## Deliverables
 
@@ -18,10 +18,16 @@ cross-checked against the curve (V-17e). Closes V-11, V-12, V-17b, V-17c, V-17e.
    all-zero ES256 DPoP proof test.
 2. **V-12** — `DpopProofValidator` performs `ath`/`htu`/`htm` and `cnf.jkt` checks first and
    `checkAndStore(jti)` last; test: thumbprint-mismatch proof leaves no replay entry.
-3. **V-17b** — `split("\\.", -1)` in `NonValidatingJwtParser` and `DpopProofValidator`; tests for
-   trailing-dot and empty-segment tokens.
+3. **V-17b** — `split("\\.", -1)` in `NonValidatingJwtParser` (the outer token and the inner-JWS split of a
+   decrypted JWE) and `DpopProofValidator`; tests for trailing-dot and empty-segment tokens.
 4. **V-17c** — `ValidationContext.isExpired` treats `now == exp + skew` as expired; fixed-clock boundary test.
 5. **V-17e** — `KeyProcessor` rejects/ignores an EC JWK whose `alg` does not match its `crv`; test.
+6. **Decode-mode gap (PLAN-21 residual)** — PLAN-21 made a JSON-null header and an invalid Base64Url part follow
+   the calling parser's `DecodeMode` (log once, count once, quiet mode quiet). Its code review left one advisory
+   open: size and structure rejections in `NonValidatingJwtParser` do not follow the decode mode the same way.
+   Close it here, since this plan already edits the parser's rejection paths; verify at outline that the gap
+   exists, then align the rejections and test the event type, the counter and the quiet mode. Under the
+   operator's fix-immediately rule this is not left as a watch. No finding ID.
 
 ## Standing Constraints
 
@@ -49,6 +55,8 @@ cross-checked against the curve (V-17e). Closes V-11, V-12, V-17b, V-17c, V-17e.
 - OBSERVED: `validateDpopClaims` runs `replayProtection.checkAndStore(jti)` before the `cnf.jkt` comparison — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/dpop/DpopProofValidator.java` § `validateDpopProofHeaderAndSignature`
 - OBSERVED: `token.split("\\.")` in `NonValidatingJwtParser` and `DpopProofValidator` — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/NonValidatingJwtParser.java`
 - OBSERVED: `isExpired` uses `exp.plusSeconds(skew).isBefore(now)` — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/domain/context/ValidationContext.java` § `isExpired`
+- OBSERVED: re-read against HEAD `c308f7c0` on 2026-11-02 (after PLAN-21 changed `NonValidatingJwtParser.java`): the outer `token.split("\\.")` (line 291), a second `innerJws.split("\\.")` for a decrypted JWE (line 400) and `DpopProofValidator`'s `dpopProofString.split("\\.")` (line 244) are all still single-argument splits; `ValidationContext.isExpired` still uses `plusSeconds(skew).isBefore(now)` (line 149); `TokenSignatureValidator.checkEcdsaComponentRange` is still private (line 245). Not re-checked: the `checkAndStore` ordering in `DpopProofValidator`
+- HYPOTHESIS: size and structure rejections in `NonValidatingJwtParser` bypass the `DecodeMode` handling PLAN-21 added for the null header and the Base64Url part — PLAN-21 code-review advisory (landing message; verify-at-outline)
 - OBSERVED: no `KeyProcessorTest` exists; closest are `JwksParserTest`, `KeyProcessorRsaDefaultAlgorithmTest` — swept `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/parser/`
 - HYPOTHESIS: the `exp` boundary change does not alter the cache-hit expiry semantics owned by PLAN-03 — confirm/refute at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/cache/AccessTokenCache.java` § hit check (verify-at-outline)
 
@@ -68,7 +76,7 @@ cross-checked against the curve (V-17e). Closes V-11, V-12, V-17b, V-17c, V-17e.
 
 ## Dependencies and Sequencing
 
-- Depends on: PLAN-05 (`NonValidatingJwtParser.java`)
+- Depends on: PLAN-05 and PLAN-21 (`NonValidatingJwtParser.java`; both shipped)
 - Overlaps with: PLAN-15 (test-gap plan adds fixed-clock tests near the same validators) — PLAN-15 after
 - Adjacent to: `DpopReplayProtection.java` — reordering suffices; size-cap change not required
 

@@ -2,10 +2,10 @@
   "id": "PLAN-20",
   "slug": "rewrite-marker-cleanup",
   "workstream": "WS-02",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-20-rewrite-marker-cleanup",
+  "pr": "847",
+  "landing": "landings/PLAN-20.md",
   "seq": 20
 }

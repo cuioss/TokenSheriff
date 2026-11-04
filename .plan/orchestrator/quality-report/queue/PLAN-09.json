@@ -2,9 +2,9 @@
   "id": "PLAN-09",
   "slug": "dpop-parser-hardening",
   "workstream": "WS-01",
-  "status": "staged",
+  "status": "running",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
+  "plan_marshall_plan_id": "plan-09-dpop-parser-hardening",
   "pr": "",
   "landing": "",
   "seq": 9
