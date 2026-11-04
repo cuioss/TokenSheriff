@@ -84,6 +84,28 @@ class SignatureVerificationUtilTest {
             assertTrue(ex.getMessage().contains(RANGE_MESSAGE), "Message must name the range check: " + ex.getMessage());
         }
 
+        @ParameterizedTest(name = "{0}: r == 0 with s == 1 is rejected")
+        @EnumSource(value = Algorithm.class, names = {"ES256", "ES384", "ES512"})
+        @DisplayName("Should reject a signature whose r component is zero while s is not")
+        void shouldRejectZeroRWithNonZeroS(Algorithm algorithm) {
+            PublicKey publicKey = InMemoryKeyMaterialHandler.getDefaultPublicKey(algorithm);
+            byte[] signature = concat(algorithm, BigInteger.ZERO, BigInteger.ONE);
+
+            var ex = assertThrows(SignatureException.class, () -> verify(publicKey, algorithm, signature));
+            assertTrue(ex.getMessage().contains(RANGE_MESSAGE), "Message must name the range check: " + ex.getMessage());
+        }
+
+        @ParameterizedTest(name = "{0}: r == 1 with s == 0 is rejected")
+        @EnumSource(value = Algorithm.class, names = {"ES256", "ES384", "ES512"})
+        @DisplayName("Should reject a signature whose s component is zero while r is not")
+        void shouldRejectNonZeroRWithZeroS(Algorithm algorithm) {
+            PublicKey publicKey = InMemoryKeyMaterialHandler.getDefaultPublicKey(algorithm);
+            byte[] signature = concat(algorithm, BigInteger.ONE, BigInteger.ZERO);
+
+            var ex = assertThrows(SignatureException.class, () -> verify(publicKey, algorithm, signature));
+            assertTrue(ex.getMessage().contains(RANGE_MESSAGE), "Message must name the range check: " + ex.getMessage());
+        }
+
         @Test
         @DisplayName("Should reject an odd-length ECDSA signature")
         void shouldRejectOddLengthSignature() {
