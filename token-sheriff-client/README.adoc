@@ -221,8 +221,9 @@ flow contracts and the xref:../doc/client/best-practices.adoc[Best Practices] ch
 
 NOTE: `DiscoveryResolver.resolve()` refuses two discovery responses with a `TransportException`.
 An `https` issuer whose discovery document advertises any non-`https` endpoint is refused, and
-`allowInsecureHttp` does not relax this: the flag exists for an `http` issuer in a local setup, not
-for a scheme downgrade inside an HTTPS document. A discovery response whose `Content-Type` is not
+`allowInsecureHttp` does not relax this: the flag exists for local setups (an `http` issuer, or an
+`https` issuer reached through an `http` `backChannelOrigin`), not for a scheme downgrade inside an
+HTTPS document. A discovery response whose `Content-Type` is not
 `application/json` (parameters such as `charset` are allowed), or that carries no `Content-Type`,
 is refused too — an authorization server that serves discovery as `application/jrd+json` is
 therefore rejected.

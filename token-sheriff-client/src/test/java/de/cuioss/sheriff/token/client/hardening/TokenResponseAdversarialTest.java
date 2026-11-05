@@ -80,7 +80,8 @@ class TokenResponseAdversarialTest {
     @DisplayName("Should accept a quoted numeric expires_in as the observed lenient behaviour")
     void shouldAcceptQuotedNumericExpiresIn(URIBuilder uriBuilder) {
         // Pinned as observed: the JSON library reads a quoted integer into the long field. This
-        // lenient acceptance is a documented risk of this hardening pass, not an endorsed contract.
+        // lenient acceptance is a risk named in the pull request for this hardening pass, not an
+        // endorsed contract.
         TokenResponse response = request(VALID_PREFIX + ",\"expires_in\":\"300\"}", uriBuilder);
 
         assertEquals(300L, response.getExpiresIn(), "a quoted integer is read as its numeric value");

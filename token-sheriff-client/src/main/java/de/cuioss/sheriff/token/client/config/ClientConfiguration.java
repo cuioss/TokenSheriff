@@ -119,6 +119,10 @@ public class ClientConfiguration {
      * Whether plaintext {@code http://} endpoints are permitted for discovery and back-channel
      * calls. Defaults to {@code false}, so a non-TLS issuer is rejected. Set to {@code true} only
      * for local test setups against a cleartext authorization server.
+     * <p>
+     * The flag does <strong>not</strong> relax the scheme check inside a discovery document: an
+     * {@code https} issuer whose document advertises any non-{@code https} endpoint is refused
+     * regardless of this setting.
      */
     boolean allowInsecureHttp;
 
