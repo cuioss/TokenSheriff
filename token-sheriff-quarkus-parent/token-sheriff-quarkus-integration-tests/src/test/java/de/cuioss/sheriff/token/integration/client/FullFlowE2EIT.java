@@ -33,6 +33,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -63,8 +64,8 @@ import static org.junit.jupiter.api.Assertions.*;
  *         token and rotates the refresh token (RFC 6749 §6, OAuth 2.0 Security BCP);</li>
  *     <li><strong>logout</strong> — the production {@link EndSessionFlow} builds an RP-initiated logout
  *         with the {@code id_token_hint}, an exact-matched {@code post_logout_redirect_uri}, and a
- *         session-bound {@code state}, which Keycloak accepts (RFC RP-Initiated Logout,
- *         {@code CLIENT-13}).</li>
+ *         session-bound {@code state}, which Keycloak answers with a {@code 302} to exactly that URI
+ *         carrying the echoed {@code state} (RFC RP-Initiated Logout, {@code CLIENT-13}).</li>
  * </ol>
  * The container uses a self-signed certificate, so every exchange runs against a trust-all TLS context
  * (integration-test scope only), mirroring {@link BaseIntegrationTest}'s relaxed HTTPS posture.
@@ -134,9 +135,11 @@ class FullFlowE2EIT extends BaseIntegrationTest {
 
         HttpResponse<String> logoutResponse = get(logoutUrl);
         LOGGER.debug("logout response status=%s", logoutResponse.statusCode());
-        assertTrue(logoutResponse.statusCode() == 200 || logoutResponse.statusCode() == 302,
-                "Keycloak must accept the RP-initiated logout (200 confirmation or 302 redirect), got "
-                        + logoutResponse.statusCode());
+        assertEquals(302, logoutResponse.statusCode(),
+                "Keycloak must answer the RP-initiated logout with a 302 to the post-logout redirect URI");
+        String expectedLocation = POST_LOGOUT_REDIRECT_URI + "?state=" + URLEncoder.encode(state, StandardCharsets.UTF_8);
+        assertEquals(expectedLocation, logoutResponse.headers().firstValue("Location").orElse(null),
+                "the logout redirect must target exactly the registered URI carrying the echoed state");
     }
 
     private static String fetchUserInfoSub(String accessToken) throws Exception {
