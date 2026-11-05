@@ -507,7 +507,9 @@ public class TokenValidator implements Closeable {
      * Such a failure (for example a {@link SecurityException} from an executor shutdown) is still
      * propagated to the caller, unwrapped, once the remaining steps ran; when more than one step fails,
      * the failure of the last failing step is propagated and the failure of each earlier failing step
-     * is attached to it as suppressed, so none is lost.
+     * is attached to it as suppressed, so none is lost, provided the propagated throwable has
+     * suppression enabled: {@link Throwable#addSuppressed(Throwable)} records nothing on a throwable
+     * created with suppression disabled.
      * <p>
      * This should be called when the TokenValidator is no longer needed.
      */
@@ -520,8 +522,10 @@ public class TokenValidator implements Closeable {
      * Runs the release steps in order, each one even when an earlier one failed with any
      * {@link Throwable}, an {@link Error} included. Once every step ran, the failure of the last
      * failing step is propagated unwrapped and the failure of every earlier failing step is attached
-     * to it as suppressed, so no failure is lost. An earlier failure that is the same instance as the
-     * propagated one is not attached to itself.
+     * to it as suppressed with {@link Throwable#addSuppressed(Throwable)}, so no failure is lost —
+     * provided the propagated throwable has suppression enabled; on one created with suppression
+     * disabled the earlier failures are not recorded. An earlier failure that is the same instance as
+     * the propagated one is not attached to itself.
      * <p>
      * The guarantee covers the steps as units. What happens inside a step is up to the step: for
      * {@code close()} the JWKS step contains an {@link Exception} from one loader but not an

@@ -124,10 +124,11 @@ import java.util.concurrent.locks.ReentrantLock;
  * overloads advance it when a refresh is applied, from {@link #refresh} or from outside it. Every apply
  * names the refresh token its result was derived from and is a compare-and-set against it: when the store
  * no longer holds that base token — a re-login stored a newer grant meanwhile — nothing is written, the
- * family is not advanced, and the newer bundle is returned unchanged; a refresh token the authorization
- * server rotated into that late result is left orphaned, neither stored nor revoked by
- * {@link #applyRefresh} ({@link #refresh} revokes it best-effort; an external caller must revoke it
- * itself). A late result derived from an older
+ * family is not advanced, and the newer bundle is returned unchanged. {@link #applyRefresh} neither stores
+ * nor revokes a refresh token the authorization server rotated into that late result: when it equals the
+ * refresh token of the returned bundle, the store already holds it and it must not be revoked; otherwise
+ * it is orphaned ({@link #refresh} revokes it best-effort after that comparison; an external caller must
+ * revoke it itself). A late result derived from an older
  * grant therefore never overwrites a newer one, and {@link #refresh} yields to a re-login that lands while
  * its exchange is in flight instead of reading the newer grant as reuse. A token the family knows — its
  * current token or a remembered superseded one — never reseeds it, so a stale re-store or a replay is
@@ -432,10 +433,12 @@ public class TokenLifecycleManager {
      * advanced, and the newer bundle is returned unchanged. This holds for every caller: {@link #refresh}
      * passes the refresh token its exchange presented, and an external caller passes the token its own
      * refresh presented, so a late result derived from an older grant never overwrites a newer one.
-     * A rotated {@code newRefreshToken} in such a late result is left orphaned: the authorization server
-     * issued it, but this method neither stores it nor revokes it. {@link #refresh} revokes it
-     * best-effort after the apply; an external caller that wants it out of circulation must revoke it
-     * itself (RFC 7009).
+     * This method neither stores nor revokes a rotated {@code newRefreshToken} in such a late result.
+     * Before revoking it, compare it with the refresh token of the returned bundle: when the two are
+     * equal the stored bundle already holds it — the same result was applied again after it had been
+     * stored — so it is the live credential and must not be revoked. Otherwise it is orphaned, and an
+     * external caller that wants it out of circulation must revoke it itself (RFC 7009);
+     * {@link #refresh} makes that comparison and revokes it best-effort after the apply.
      *
      * @param sessionId        the opaque session identifier; must not be {@code null} or blank
      * @param baseRefreshToken the refresh token the refreshed material was derived from, or {@code null}
@@ -1060,18 +1063,20 @@ public class TokenLifecycleManager {
 
     /**
      * The single fail-closed clear of a refused {@link #refresh} exchange: drops the session's store entry
-     * and rotation family — unless the store now holds a newer grant.
+     * and rotation family — unless the store now holds a bundle whose refresh token is not the refused one.
      * <p>
      * The exchange released the session's grant lock before it presented {@code presentedRefreshToken},
      * so a re-login may have stored a newer grant while the refused exchange was in flight. Clearing
      * unconditionally would delete that grant and force the user to log in a second time. The clear
      * therefore runs under the grant lock, and only while the store still holds the refused token — the
      * same presented-token compare the {@link #applyRefresh} compare-and-set uses. When the store holds a
-     * different bundle, that bundle was stored after the capture, so it and its family are left untouched
-     * and the decision is logged.
+     * bundle with a different refresh token, that bundle and its family are left untouched and the
+     * decision is logged.
      * <p>
-     * <strong>Only a positively newer grant is spared.</strong> When the store cannot be read, the session
-     * is cleared exactly as before: an unreadable store is never evidence that the refused credential has
+     * <strong>The spare compares the refresh token only.</strong> It does not check recency: any stored
+     * bundle whose refresh token is not {@code presentedRefreshToken} is spared, so a superseded token
+     * stored during an in-flight refresh is spared too and keeps its family. When the store cannot be
+     * read, the session is cleared: an unreadable store is never evidence that the refused credential has
      * gone. An empty store is cleared too, which also drops a family that outlived its token.
      *
      * @param sessionId             the refused session; never {@code null}

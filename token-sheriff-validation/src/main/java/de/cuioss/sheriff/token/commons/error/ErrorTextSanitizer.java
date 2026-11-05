@@ -112,14 +112,20 @@ public final class ErrorTextSanitizer {
     /**
      * Replaces every character {@link #sanitize(String)} would escape — the ASCII control characters
      * (including {@code CR}, {@code LF} and tab), DEL, the C1 control characters U+0080 to U+009F and
-     * the Unicode line separators U+2028 (LS) and U+2029 (PS) — with {@code replacement}, so the value
-     * cannot forge a new log or message line. A value longer than {@code maxLength} characters keeps
-     * its first {@code maxLength} characters followed by {@code truncationMarker}.
+     * the Unicode line separators U+2028 (LS) and U+2029 (PS) — with {@code replacement}. A value longer
+     * than {@code maxLength} characters keeps its first {@code maxLength} characters followed by
+     * {@code truncationMarker}.
+     * <p>
+     * The result cannot forge a new log or message line only when {@code replacement} and
+     * {@code truncationMarker} themselves contain no such character. This method does not validate
+     * either argument; the caller must pass safe values, such as constants.
      *
      * @param value            the untrusted value to sanitize, never {@code null}
-     * @param replacement      the character written in place of each unsafe character
+     * @param replacement      the character written in place of each unsafe character; must itself be
+     *                         neither a control character nor a line separator
      * @param maxLength        the maximum number of source characters retained
-     * @param truncationMarker appended when the value was truncated
+     * @param truncationMarker appended when the value was truncated; must contain neither a control
+     *                         character nor a line separator
      * @return the sanitized, length-bounded value
      */
     public static String sanitize(String value, char replacement, int maxLength, String truncationMarker) {
