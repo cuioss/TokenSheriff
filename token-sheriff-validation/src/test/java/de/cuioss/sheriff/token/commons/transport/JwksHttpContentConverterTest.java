@@ -99,6 +99,20 @@ class JwksHttpContentConverterTest {
                 WARN.JWKS_PARSE_IO_ERROR.resolveIdentifierString());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"keys\":[{\"kty\":\"RSA\",\"kid\":\"abc\\",
+            "{\"keys\":[{\"kty\":\"RSA\",\"kid\":\"\\u12"
+    })
+    void shouldRejectTruncatedEscapeAsParseError(String truncatedJwks) {
+        Optional<Jwks> result = assertDoesNotThrow(() -> converter.convert(truncatedJwks),
+                "A truncated escape must not leak an unchecked exception");
+
+        assertTrue(result.isEmpty(), "A truncated escape must yield no JWKS");
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                WARN.JWKS_PARSE_IO_ERROR.resolveIdentifierString());
+    }
+
     @Test
     void shouldNeutralizeLineBreaksOfMalformedJwksInParseError() {
         // Malformed JWKS whose offending text carries a raw CR and LF, echoed by the DSL-JSON parse error

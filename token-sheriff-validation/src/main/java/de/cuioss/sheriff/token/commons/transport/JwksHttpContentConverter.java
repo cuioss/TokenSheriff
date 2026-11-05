@@ -108,7 +108,10 @@ public class JwksHttpContentConverter extends StringContentConverter<Jwks> {
                     jwks.keys() != null ? jwks.keys().size() : 0);
             return Optional.of(jwks);
 
-        } catch (IOException e) {
+        } catch (IOException | ArrayIndexOutOfBoundsException e) {
+            // DSL-JSON reports a truncated escape (a trailing lone backslash, a cut-off unicode escape) by
+            // reading past the end of its buffer, i.e. as ArrayIndexOutOfBoundsException rather than
+            // IOException. It is the same malformed-input condition, so it takes the same path.
             // A DSL-JSON parse error echoes excerpts of the remote JWKS, so the message is neutralized
             // against log injection (CWE-117) before it is logged
             LOGGER.warn(TransportLogMessages.WARN.JWKS_PARSE_IO_ERROR, ErrorTextSanitizer.sanitize(e.getMessage()));

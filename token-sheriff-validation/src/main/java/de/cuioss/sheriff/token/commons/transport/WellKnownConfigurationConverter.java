@@ -133,7 +133,11 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
 
             return Optional.of(config);
 
-        } catch (IOException e) {
+        } catch (IOException | ArrayIndexOutOfBoundsException e) {
+            // DSL-JSON reports a truncated escape (a trailing lone backslash, a cut-off unicode escape) by
+            // reading past the end of its buffer, i.e. as ArrayIndexOutOfBoundsException rather than
+            // IOException. It is the same malformed-input condition, so it takes the same path; its
+            // message never matches a security-limit pattern, so it lands on the plain parse failure.
             // A DSL-JSON parse error echoes excerpts of the remote document, so the message is
             // neutralized against log injection (CWE-117) before it is logged or put into an exception
             String errorMessage = ErrorTextSanitizer.sanitize(e.getMessage());

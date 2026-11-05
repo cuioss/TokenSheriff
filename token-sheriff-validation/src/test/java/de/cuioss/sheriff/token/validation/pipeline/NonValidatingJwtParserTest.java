@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -63,6 +64,24 @@ class NonValidatingJwtParserTest {
     @BeforeEach
     void setUp() {
         parser = NonValidatingJwtParser.builder().securityEventCounter(new SecurityEventCounter()).build();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"alg\":\"RS256\",\"kid\":\"abc\\",
+            "{\"alg\":\"RS256\",\"kid\":\"\\u12"
+    })
+    @DisplayName("Should reject a header with a truncated escape as FAILED_TO_DECODE_JWT")
+    void shouldRejectHeaderWithTruncatedEscape(String truncatedHeader) {
+        String encodedHeader = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(truncatedHeader.getBytes(StandardCharsets.UTF_8));
+        String token = encodedHeader + "." + ENCODED_PAYLOAD + "." + ENCODED_SIGNATURE;
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> parser.decode(token),
+                "A truncated escape in the header must be a declared rejection, not an unchecked exception");
+
+        assertEquals(EventType.FAILED_TO_DECODE_JWT, exception.getEventType());
     }
 
     @Nested

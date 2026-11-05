@@ -27,6 +27,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 
@@ -43,6 +45,26 @@ class JwksParserTest {
     void setUp() {
         securityEventCounter = new SecurityEventCounter();
         parser = new JwksParser(ParserConfig.builder().build(), securityEventCounter);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"keys\":[{\"kty\":\"RSA\",\"kid\":\"abc\\",
+            "{\"keys\":[{\"kty\":\"RSA\",\"kid\":\"\\u12",
+            "{\"kty\":\"RSA\",\"kid\":\"abc\\",
+            "{\"kty\":\"RSA\",\"kid\":\"\\u12"
+    })
+    @DisplayName("Should reject a truncated escape in a keys member or a bare JWK as a counted parse failure")
+    void shouldRejectTruncatedEscape(String truncatedContent) {
+        long parseFailuresBefore = securityEventCounter.getCount(SecurityEventCounter.EventType.JWKS_JSON_PARSE_FAILED);
+
+        List<JwkKey> result = assertDoesNotThrow(() -> parser.parse(truncatedContent),
+                "A truncated escape must not leak an unchecked exception");
+
+        assertTrue(result.isEmpty(), "A truncated escape must yield no keys");
+        assertEquals(parseFailuresBefore + 1,
+                securityEventCounter.getCount(SecurityEventCounter.EventType.JWKS_JSON_PARSE_FAILED),
+                "A truncated escape must be counted as one JWKS parse failure");
     }
 
     @Nested
