@@ -28,6 +28,7 @@ import javax.net.ssl.SSLContext;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Configuration for well-known endpoint discovery.
@@ -246,9 +247,11 @@ public class WellKnownConfig {
          *
          * @param wellKnownUri the well-known endpoint URI. Must not be null.
          * @return this builder instance
+         * @throws NullPointerException if {@code wellKnownUri} is null
          */
         public WellKnownConfigBuilder wellKnownUri(URI wellKnownUri) {
-            this.wellKnownEndpoint = wellKnownUri != null ? wellKnownUri.toString() : null;
+            Objects.requireNonNull(wellKnownUri, "wellKnownUri must not be null");
+            this.wellKnownEndpoint = wellKnownUri.toString();
             httpHandlerBuilder.uri(wellKnownUri);
             return this;
         }

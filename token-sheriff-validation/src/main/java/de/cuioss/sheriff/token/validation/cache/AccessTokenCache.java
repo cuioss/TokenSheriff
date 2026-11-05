@@ -29,6 +29,7 @@ import de.cuioss.sheriff.token.validation.util.Sha256Util;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -106,6 +107,12 @@ public class AccessTokenCache {
      * executor is caller-supplied (and therefore not shut down).
      */
     private final ScheduledFuture<?> evictionTask;
+
+    /**
+     * Clock for the background eviction's current time. The system-default zone is exactly
+     * what the zone-less {@link OffsetDateTime#now()} resolves to.
+     */
+    private final Clock clock = Clock.systemDefaultZone();
 
     /**
      * Creates a new AccessTokenCache with the specified configuration.
@@ -349,16 +356,13 @@ public class AccessTokenCache {
      * IllegalStateException or SecurityException under normal circumstances.
      */
     private void evictExpiredTokens() {
-        OffsetDateTime now = OffsetDateTime.now();
-        List<String> expiredKeys = new ArrayList<>();
+        OffsetDateTime now = OffsetDateTime.now(clock);
 
         // Collect expired or too-old keys (thread-safe iteration)
-        for (Map.Entry<String, CachedToken> entry : cache.entrySet()) {
-            CachedToken cachedToken = entry.getValue();
-            if (cachedToken.isExpired(now) || cachedToken.isTooOld(now)) {
-                expiredKeys.add(entry.getKey());
-            }
-        }
+        List<String> expiredKeys = cache.entrySet().stream()
+                .filter(e -> e.getValue().isExpired(now) || e.getValue().isTooOld(now))
+                .map(Map.Entry::getKey)
+                .toList();
 
         if (!expiredKeys.isEmpty()) {
             // Batch remove from cache (thread-safe operations)

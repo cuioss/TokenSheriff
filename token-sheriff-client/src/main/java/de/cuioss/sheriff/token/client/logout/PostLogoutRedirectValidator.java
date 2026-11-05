@@ -19,6 +19,7 @@ import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.Set;
@@ -62,10 +63,11 @@ public class PostLogoutRedirectValidator {
     }
 
     /**
-     * @param candidate the candidate {@code post_logout_redirect_uri}
+     * @param candidate the candidate {@code post_logout_redirect_uri}; may be {@code null}, in which
+     *                  case it is never registered
      * @return whether the candidate exactly matches a registered URI
      */
-    public boolean isRegistered(String candidate) {
+    public boolean isRegistered(@Nullable String candidate) {
         return candidate != null && registeredUris.contains(candidate);
     }
 

@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.client.config;
 
 import lombok.Getter;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Optional;
 
@@ -99,7 +100,7 @@ public enum ClientAuthMethod {
      * @return the matching method, or {@link Optional#empty()} when the string is {@code null} or
      *         not recognised
      */
-    public static Optional<ClientAuthMethod> fromMetadataValue(String metadataValue) {
+    public static Optional<ClientAuthMethod> fromMetadataValue(@Nullable String metadataValue) {
         if (metadataValue == null) {
             return Optional.empty();
         }

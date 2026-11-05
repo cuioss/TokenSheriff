@@ -165,7 +165,7 @@ class DecryptionKeyLoaderTest {
     @DisplayName("Should throw with suppressed RSA exception when both RSA and EC parsing fail")
     void shouldThrowWithSuppressedExceptionForCorruptedKey() {
         // Create corrupted PKCS8 data that is valid base64 but not a valid key for RSA or EC
-        byte[] corruptedKeyBytes = new byte[]{0x30, 0x0D, 0x06, 0x09, 0x2A, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+        byte[] corruptedKeyBytes = {0x30, 0x0D, 0x06, 0x09, 0x2A, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
         String corruptedPem = "-----BEGIN PRIVATE KEY-----\n"
                 + Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(corruptedKeyBytes)
                 + "\n-----END PRIVATE KEY-----\n";

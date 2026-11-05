@@ -284,7 +284,7 @@ public class TokenValidator implements Closeable {
             LOGGER.debug("Pre-created TokenSignatureValidator for issuer: %s", issuerIdentifier);
 
             // Initialize token builder
-            TokenBuilder tokenBuilder = new TokenBuilder(issuerConfig);
+            TokenBuilder tokenBuilder = new TokenBuilder(issuerConfig, this.securityEventCounter);
             tokenBuildersMap.put(issuerIdentifier, tokenBuilder);
             LOGGER.debug("Pre-created TokenBuilder for issuer: %s", issuerIdentifier);
 
@@ -306,30 +306,9 @@ public class TokenValidator implements Closeable {
 
         // Initialize DPoP validators for issuers that have DPoP configured
         // Shared replay protection across all issuers (jti must be globally unique per RFC 9449)
-        // Use max TTL and max cache size across all DPoP-enabled issuers for consistent behavior
-        Map<String, DpopProofValidator> dpopValidatorsMap = new HashMap<>();
-        long maxNonceCacheTtl = 0;
-        int maxNonceCacheSize = 0;
-        for (IssuerConfig issuerConfig : enabledIssuerConfigs) {
-            if (issuerConfig.getDpopConfig() != null) {
-                maxNonceCacheTtl = Math.max(maxNonceCacheTtl, issuerConfig.getDpopConfig().getNonceCacheTtlSeconds());
-                maxNonceCacheSize = Math.max(maxNonceCacheSize, issuerConfig.getDpopConfig().getNonceCacheSize());
-            }
-        }
-        this.dpopReplayProtection = maxNonceCacheSize > 0
-                ? new DpopReplayProtection(maxNonceCacheTtl, maxNonceCacheSize)
-                : null;
-        for (IssuerConfig issuerConfig : enabledIssuerConfigs) {
-            if (issuerConfig.getDpopConfig() != null) {
-                DpopProofValidator dpopValidator = new DpopProofValidator(
-                        issuerConfig, this.securityEventCounter, this.dpopReplayProtection,
-                        signatureTemplateManagers.get(issuerConfig.getIssuerIdentifier()),
-                        parserConfig, parserConfig.getDslJson());
-                dpopValidatorsMap.put(issuerConfig.getIssuerIdentifier(), dpopValidator);
-                LOGGER.debug("Pre-created DpopProofValidator for issuer: %s", issuerConfig.getIssuerIdentifier());
-            }
-        }
-        Map<String, DpopProofValidator> dpopValidators = Map.copyOf(dpopValidatorsMap);
+        this.dpopReplayProtection = createDpopReplayProtection(enabledIssuerConfigs);
+        Map<String, DpopProofValidator> dpopValidators = createDpopValidators(enabledIssuerConfigs,
+                this.securityEventCounter, this.dpopReplayProtection, signatureTemplateManagers, parserConfig);
 
         // Use default cache config if not provided
         if (cacheConfig == null) {
@@ -382,6 +361,55 @@ public class TokenValidator implements Closeable {
         if (jweDecryptionConfig != null) {
             LOGGER.info(JWTValidationLogMessages.INFO.JWE_DECRYPTION_ENABLED, jweDecryptionConfig.getKeyCount());
         }
+    }
+
+    /**
+     * Creates the DPoP replay protection shared by all DPoP-enabled issuers. It is sized with the
+     * maximum nonce-cache TTL and the maximum nonce-cache size across those issuers, for consistent
+     * behavior.
+     *
+     * @param enabledIssuerConfigs the enabled issuer configurations
+     * @return the shared replay protection, or {@code null} if no issuer has DPoP enabled
+     */
+    private static @Nullable DpopReplayProtection createDpopReplayProtection(List<IssuerConfig> enabledIssuerConfigs) {
+        long maxNonceCacheTtl = 0;
+        int maxNonceCacheSize = 0;
+        for (IssuerConfig issuerConfig : enabledIssuerConfigs) {
+            if (issuerConfig.getDpopConfig() != null) {
+                maxNonceCacheTtl = Math.max(maxNonceCacheTtl, issuerConfig.getDpopConfig().getNonceCacheTtlSeconds());
+                maxNonceCacheSize = Math.max(maxNonceCacheSize, issuerConfig.getDpopConfig().getNonceCacheSize());
+            }
+        }
+        return maxNonceCacheSize > 0
+                ? new DpopReplayProtection(maxNonceCacheTtl, maxNonceCacheSize)
+                : null;
+    }
+
+    /**
+     * Creates one {@link DpopProofValidator} per DPoP-enabled issuer.
+     *
+     * @param enabledIssuerConfigs      the enabled issuer configurations
+     * @param securityEventCounter      the counter for security events
+     * @param dpopReplayProtection      the shared replay protection, {@code null} if no issuer has DPoP enabled
+     * @param signatureTemplateManagers the per-issuer signature template managers
+     * @param parserConfig              the parser configuration
+     * @return an immutable map of issuer identifier to DPoP proof validator
+     */
+    private static Map<String, DpopProofValidator> createDpopValidators(List<IssuerConfig> enabledIssuerConfigs,
+            SecurityEventCounter securityEventCounter, @Nullable DpopReplayProtection dpopReplayProtection,
+            Map<String, SignatureTemplateManager> signatureTemplateManagers, ParserConfig parserConfig) {
+        Map<String, DpopProofValidator> dpopValidatorsMap = new HashMap<>();
+        for (IssuerConfig issuerConfig : enabledIssuerConfigs) {
+            if (issuerConfig.getDpopConfig() != null) {
+                DpopProofValidator dpopValidator = new DpopProofValidator(
+                        issuerConfig, securityEventCounter, dpopReplayProtection,
+                        signatureTemplateManagers.get(issuerConfig.getIssuerIdentifier()),
+                        parserConfig, parserConfig.getDslJson());
+                dpopValidatorsMap.put(issuerConfig.getIssuerIdentifier(), dpopValidator);
+                LOGGER.debug("Pre-created DpopProofValidator for issuer: %s", issuerConfig.getIssuerIdentifier());
+            }
+        }
+        return Map.copyOf(dpopValidatorsMap);
     }
 
 

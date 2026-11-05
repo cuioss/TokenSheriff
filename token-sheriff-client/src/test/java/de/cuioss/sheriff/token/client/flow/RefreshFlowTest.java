@@ -332,8 +332,9 @@ class RefreshFlowTest {
         String initial = Generators.letterStrings(20, 40).next();
         var family = new RefreshTokenFamily(initial);
         family.rotate(initial, Generators.letterStrings(20, 40).next());
+        String replaySuccessor = Generators.letterStrings(20, 40).next();
         assertThrows(ClientProtocolException.class,
-                () -> family.rotate(initial, Generators.letterStrings(20, 40).next()));
+                () -> family.rotate(initial, replaySuccessor));
         var flow = flow(config());
         var metadata = metadata(uriBuilder);
 

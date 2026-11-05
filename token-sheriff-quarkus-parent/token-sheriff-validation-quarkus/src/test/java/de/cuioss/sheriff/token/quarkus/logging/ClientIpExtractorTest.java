@@ -72,14 +72,18 @@ class ClientIpExtractorTest {
         assertEquals("[2001:db8::1", ClientIpExtractor.extractClientIp(headers, null));
     }
 
-    @Test
-    @DisplayName("Should return unknown when no headers provided")
-    void shouldReturnUnknownWhenNoHeaders() {
+    @ParameterizedTest(name = "No proxy headers with fallbackAddress ''{0}'' should yield ''{1}''")
+    @CsvSource(nullValues = "NULL", value = {
+            "NULL,         unknown",
+            "192.168.1.50, 192.168.1.50"
+    })
+    @DisplayName("Should fall back to fallbackAddress, or unknown, when no proxy headers exist")
+    void shouldUseFallbackWhenNoProxyHeaders(String fallbackAddress, String expected) {
         MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
 
-        String result = ClientIpExtractor.extractClientIp(headers, null);
+        String result = ClientIpExtractor.extractClientIp(headers, fallbackAddress);
 
-        assertEquals("unknown", result);
+        assertEquals(expected, result);
     }
 
     @Test
@@ -155,26 +159,6 @@ class ClientIpExtractorTest {
         String result = ClientIpExtractor.extractClientIp(headers, null);
 
         assertEquals("203.0.113.100", result); // Should prioritize CF-Connecting-IP
-    }
-
-    @Test
-    @DisplayName("Should return fallbackAddress when no proxy headers exist")
-    void shouldReturnFallbackAddressWhenNoProxyHeaders() {
-        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
-
-        String result = ClientIpExtractor.extractClientIp(headers, "192.168.1.50");
-
-        assertEquals("192.168.1.50", result);
-    }
-
-    @Test
-    @DisplayName("Should return unknown when no proxy headers and fallbackAddress is null")
-    void shouldReturnUnknownWhenNoProxyHeadersAndNullFallback() {
-        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
-
-        String result = ClientIpExtractor.extractClientIp(headers, null);
-
-        assertEquals("unknown", result);
     }
 
     @Test

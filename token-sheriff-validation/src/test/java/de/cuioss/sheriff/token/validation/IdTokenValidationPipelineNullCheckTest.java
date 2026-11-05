@@ -174,7 +174,7 @@ class IdTokenValidationPipelineNullCheckTest {
                 Map.of(issuerId, new TokenSignatureValidator(
                         issuerConfig.getJwksLoader(), securityEventCounter,
                         new SignatureTemplateManager(issuerConfig.getAlgorithmPreferences()))),
-                Map.of(issuerId, new TokenBuilder(issuerConfig)),
+                Map.of(issuerId, new TokenBuilder(issuerConfig, securityEventCounter)),
                 Map.of(),
                 Map.of(issuerId, new TokenHeaderValidator(issuerConfig, securityEventCounter)),
                 securityEventCounter

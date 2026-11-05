@@ -58,6 +58,22 @@ class HttpJwksLoaderConfigTest {
     }
 
     @Test
+    @DisplayName("Should reject a null JWKS URI at the setter")
+    void shouldRejectNullJwksUri() {
+        var builder = HttpJwksLoaderConfig.builder();
+        assertThrows(NullPointerException.class, () -> builder.jwksUri(null),
+                "jwksUri(null) must fail fast because the URI must not be null");
+    }
+
+    @Test
+    @DisplayName("Should reject a null well-known URI at the setter")
+    void shouldRejectNullWellKnownUri() {
+        var builder = HttpJwksLoaderConfig.builder();
+        assertThrows(NullPointerException.class, () -> builder.wellKnownUri(null),
+                "wellKnownUri(null) must fail fast because the URI must not be null");
+    }
+
+    @Test
     @DisplayName("Should allow https:// JWKS URL when allowInsecureHttp(false)")
     void shouldAllowHttpsWhenInsecureDisallowed() {
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()

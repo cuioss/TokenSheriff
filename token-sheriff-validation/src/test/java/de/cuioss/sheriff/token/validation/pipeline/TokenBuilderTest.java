@@ -16,13 +16,16 @@
 package de.cuioss.sheriff.token.validation.pipeline;
 
 import com.dslplatform.json.DslJson;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
+import de.cuioss.sheriff.token.validation.domain.claim.mapper.ClaimMapper;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.JwtHeader;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
@@ -62,6 +65,8 @@ class TokenBuilderTest {
 
     private TokenBuilder tokenBuilder;
 
+    private SecurityEventCounter securityEventCounter;
+
     /**
      * Converts a JsonObject to MapRepresentation using DSL-JSON parsing.
      * This ensures proper DSL-JSON validation and type handling.
@@ -84,7 +89,8 @@ class TokenBuilderTest {
                 .audienceValidationDisabled(true)
                 .build();
 
-        tokenBuilder = new TokenBuilder(issuerConfig);
+        securityEventCounter = new SecurityEventCounter();
+        tokenBuilder = new TokenBuilder(issuerConfig, securityEventCounter);
     }
 
     @Nested
@@ -154,6 +160,133 @@ class TokenBuilderTest {
 
             Optional<IdTokenContent> result = tokenBuilder.createIdToken(decodedJwt);
             assertTrue(result.isEmpty(), "Should return empty Optional when body is empty");
+        }
+    }
+
+    @Nested
+    @DisplayName("Claim Mapping Tests")
+    class ClaimMappingTests {
+
+        private static final String CUSTOM_CLAIM = "custom-claim";
+
+        private TokenBuilder builderWithMapper(ClaimMapper mapper) {
+            return new TokenBuilder(IssuerConfig.builder()
+                    .issuerIdentifier("test-issuer")
+                    .jwksContent("{\"keys\":[]}")
+                    .audienceValidationDisabled(true)
+                    .claimMapper(CUSTOM_CLAIM, mapper)
+                    .build(), securityEventCounter);
+        }
+
+        private DecodedJwt decodedJwtWithBody(Map<String, Object> body) {
+            var emptyHeader = new JwtHeader(null, null, null, null, null, null, null, null, null, null);
+            return new DecodedJwt(emptyHeader, new MapRepresentation(body), null, new String[]{"", "", ""},
+                    "test-validation");
+        }
+
+        @Test
+        @DisplayName("A mapper throwing a RuntimeException is translated to a MISSING_CLAIM TokenValidationException")
+        void translatesMapperRuntimeExceptionToMissingClaim() {
+            IllegalStateException cause = new IllegalStateException(Generators.letterStrings(5, 20).next());
+            TokenBuilder builder = builderWithMapper((map, name) -> {
+                throw cause;
+            });
+            DecodedJwt decodedJwt = decodedJwtWithBody(Map.of(CUSTOM_CLAIM, Generators.letterStrings(5, 20).next()));
+
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> builder.createAccessToken(decodedJwt));
+
+            assertAll("the mapper failure is reported as a malformed claim",
+                    () -> assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType()),
+                    () -> assertEquals("Malformed claim '" + CUSTOM_CLAIM + "': " + cause.getMessage(),
+                            exception.getMessage()),
+                    () -> assertSame(cause, exception.getCause()));
+        }
+
+        @Test
+        @DisplayName("A mapper throwing a RuntimeException increments the MISSING_CLAIM count by exactly one")
+        void countsMissingClaimWhenMapperThrowsRuntimeException() {
+            TokenBuilder builder = builderWithMapper((map, name) -> {
+                throw new IllegalArgumentException(Generators.letterStrings(5, 20).next());
+            });
+            DecodedJwt decodedJwt = decodedJwtWithBody(Map.of(CUSTOM_CLAIM, Generators.letterStrings(5, 20).next()));
+            long countBefore = securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM);
+
+            assertThrows(TokenValidationException.class, () -> builder.createAccessToken(decodedJwt));
+
+            assertEquals(countBefore + 1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM),
+                    "A mapper failure must be counted as exactly one MISSING_CLAIM event");
+        }
+
+        @Test
+        @DisplayName("A mapper throwing a TokenValidationException propagates it unchanged and counts it once under its own event type")
+        void propagatesMapperTokenValidationExceptionUnchanged() {
+            TokenValidationException thrown = new TokenValidationException(
+                    SecurityEventCounter.EventType.INVALID_JWT_FORMAT, Generators.letterStrings(5, 20).next());
+            TokenBuilder builder = builderWithMapper((map, name) -> {
+                throw thrown;
+            });
+            DecodedJwt decodedJwt = decodedJwtWithBody(Map.of(CUSTOM_CLAIM, Generators.letterStrings(5, 20).next()));
+
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> builder.createAccessToken(decodedJwt));
+
+            assertAll("the mapper's own exception is passed through unchanged and counted once under its own event type",
+                    () -> assertSame(thrown, exception),
+                    () -> assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.INVALID_JWT_FORMAT),
+                            "A propagated TokenValidationException must be counted once under its own event type"),
+                    () -> assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM),
+                            "A propagated TokenValidationException of another event type must not add a MISSING_CLAIM event"));
+        }
+
+        @Test
+        @DisplayName("A mapper throwing a MISSING_CLAIM TokenValidationException is counted exactly once")
+        void countsMapperMissingClaimExceptionOnce() {
+            TokenValidationException thrown = new TokenValidationException(
+                    SecurityEventCounter.EventType.MISSING_CLAIM, Generators.letterStrings(5, 20).next());
+            TokenBuilder builder = builderWithMapper((map, name) -> {
+                throw thrown;
+            });
+            DecodedJwt decodedJwt = decodedJwtWithBody(Map.of(CUSTOM_CLAIM, Generators.letterStrings(5, 20).next()));
+
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> builder.createAccessToken(decodedJwt));
+
+            assertAll("a mapper's own MISSING_CLAIM rejection is propagated unchanged and counted once, not twice",
+                    () -> assertSame(thrown, exception),
+                    () -> assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM),
+                            "A propagated MISSING_CLAIM exception must be counted exactly once"));
+        }
+
+        @Test
+        @DisplayName("A mapper returning null omits the claim")
+        void omitsClaimWhenMapperReturnsNull() {
+            TokenBuilder builder = builderWithMapper((map, name) -> null);
+            DecodedJwt decodedJwt = decodedJwtWithBody(Map.of(
+                    CUSTOM_CLAIM, Generators.letterStrings(5, 20).next(),
+                    ClaimName.SUBJECT.getName(), Generators.letterStrings(5, 20).next()));
+
+            Map<String, ClaimValue> claims = builder.createAccessToken(decodedJwt).orElseThrow().getClaims();
+
+            assertAll("only the null-mapped claim is omitted",
+                    () -> assertFalse(claims.containsKey(CUSTOM_CLAIM)),
+                    () -> assertTrue(claims.containsKey(ClaimName.SUBJECT.getName())));
+        }
+
+        @Test
+        @DisplayName("Unknown claims are mapped by identity, non-string values stringified")
+        void mapsUnknownClaimsByIdentity() {
+            String stringValue = Generators.letterStrings(5, 20).next();
+            int numericValue = Generators.integers(1, 10_000).next();
+            DecodedJwt decodedJwt = decodedJwtWithBody(Map.of(
+                    "unknown-string", stringValue,
+                    "unknown-number", numericValue));
+
+            Map<String, ClaimValue> claims = tokenBuilder.createAccessToken(decodedJwt).orElseThrow().getClaims();
+
+            assertAll("unknown claims keep their value as a plain string",
+                    () -> assertEquals(stringValue, claims.get("unknown-string").getOriginalString()),
+                    () -> assertEquals(String.valueOf(numericValue), claims.get("unknown-number").getOriginalString()));
         }
     }
 

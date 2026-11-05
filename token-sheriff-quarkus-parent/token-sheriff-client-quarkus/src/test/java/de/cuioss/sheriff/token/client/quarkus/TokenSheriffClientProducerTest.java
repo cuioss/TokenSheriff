@@ -445,6 +445,7 @@ class TokenSheriffClientProducerTest {
             ClientConfiguration configuration = producer.clientConfiguration();
             TokenEndpointClient tokenEndpointClient = producer.tokenEndpointClient(configuration);
             ClientAuthentication clientAuthentication = producer.clientAuthentication(configuration);
+            IssValidator issValidator = producer.issValidator();
 
             assertAll("validator-dependent flow-graph wiring",
                     () -> assertThrows(NullPointerException.class, () -> producer.tokenValidationBridge(null),
@@ -453,7 +454,7 @@ class TokenSheriffClientProducerTest {
                             "the ID-token bridge rejects a null validator"),
                     () -> assertThrows(NullPointerException.class,
                             () -> producer.authorizationCodeFlow(configuration, tokenEndpointClient, null, null,
-                                    producer.issValidator()),
+                                    issValidator),
                             "the authorization-code flow rejects a null access-token bridge"),
                     () -> assertThrows(NullPointerException.class,
                             () -> producer.refreshFlow(configuration, tokenEndpointClient, null, clientAuthentication),

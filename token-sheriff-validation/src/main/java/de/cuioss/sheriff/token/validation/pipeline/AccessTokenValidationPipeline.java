@@ -36,6 +36,7 @@ import de.cuioss.sheriff.token.validation.pipeline.validator.TokenSignatureValid
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenValidationRule;
 import de.cuioss.tools.logging.CuiLogger;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -96,6 +97,8 @@ public class AccessTokenValidationPipeline {
     private final AccessTokenCache cache;
     private final SecurityEventCounter securityEventCounter;
     private final TokenValidatorMonitor performanceMonitor;
+    // System-default zone: exactly what the zone-less OffsetDateTime.now() resolves to
+    private final Clock clock = Clock.systemDefaultZone();
 
     /**
      * Creates a new AccessTokenValidationPipeline.
@@ -162,7 +165,7 @@ public class AccessTokenValidationPipeline {
         // TokenStringValidator has already checked: null, blank, size
 
         // Create current time once for cache and validation context consistency
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(clock);
 
         // 1. CHECK CACHE FIRST - before any expensive parsing.
         // The cache enforces the issuer's own expiry clock skew and max token age on every hit

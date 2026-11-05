@@ -103,9 +103,19 @@ class WellKnownConfigTest {
                 .wellKnownUrl(TEST_WELL_KNOWN_URL)
                 .allowedEgressHost("localhost")
                 .build();
+        var egressPolicy = config.getEgressPolicy();
+        URI loopbackDiscoveryUri = URI.create("https://localhost:8443/.well-known/openid-configuration");
         assertDoesNotThrow(
-                () -> config.getEgressPolicy().check(URI.create("https://localhost:8443/.well-known/openid-configuration")),
+                () -> egressPolicy.check(loopbackDiscoveryUri),
                 "An allow-listed discovery host must bypass the egress address-range checks");
+    }
+
+    @Test
+    @DisplayName("Should reject a null well-known URI at the setter")
+    void shouldRejectNullWellKnownUri() {
+        var builder = WellKnownConfig.builder();
+        assertThrows(NullPointerException.class, () -> builder.wellKnownUri(null),
+                "wellKnownUri(null) must fail fast because the URI must not be null");
     }
 
     @Test

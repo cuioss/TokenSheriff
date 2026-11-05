@@ -174,41 +174,21 @@ public class IssuerConfigCache {
     public IssuerConfig resolveConfig(String issuer) {
         // Fast path - check cache for already loaded configs
         IssuerConfig cached = getCachedConfig(issuer);
-        if (cached != null && cached.getJwksLoader().getLoaderStatus() == LoaderStatus.OK) {
+        if (cached != null && isHealthy(cached)) {
             return cached;
         }
 
-        // Check if loading is in progress
-        CompletableFuture<LoaderStatus> future = loadingFutures.get(issuer);
-        if (future != null) {
-            try {
-                // Wait for loading to complete (with timeout)
-                LoaderStatus status = future.get(LOADING_WAIT_SECONDS, TimeUnit.SECONDS);
-                if (status == LoaderStatus.OK) {
-                    // The future reports the status of the initial load only. It stays in
-                    // loadingFutures until every issuer has finished loading, so the loader may have
-                    // left OK since (for example past its maximum key staleness): re-check it.
-                    IssuerConfig loadedConfig = getCachedConfig(issuer);
-                    if (loadedConfig != null && loadedConfig.getJwksLoader().getLoaderStatus() == LoaderStatus.OK) {
-                        return loadedConfig;
-                    }
-                }
-            } catch (TimeoutException e) {
-                LOGGER.warn(WARN.JWKS_LOAD_TIMEOUT, issuer);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                LOGGER.warn(WARN.JWKS_LOAD_INTERRUPTED, issuer);
-            } catch (ExecutionException e) {
-                LOGGER.error(e.getCause(), ERROR.JWKS_LOAD_EXECUTION_FAILED, issuer);
-            }
+        // Loading wait - wait for an in-progress initial load
+        IssuerConfig loadedConfig = awaitLoadingConfig(issuer);
+        if (loadedConfig != null) {
+            return loadedConfig;
         }
 
         // Recovery path: an issuer whose initial load failed is not in the caches, but its
         // loader keeps retrying via background refresh. If it has become healthy since,
         // re-admit it instead of failing until process restart.
         IssuerConfig candidate = enabledConfigsByIssuer.get(issuer);
-        if (candidate != null && candidate.getJwksLoader() != null
-                && candidate.getJwksLoader().getLoaderStatus() == LoaderStatus.OK) {
+        if (candidate != null && isHealthy(candidate)) {
             mutableCache.put(issuer, candidate);
             LOGGER.info(INFO.ISSUER_CONFIG_LOADED, issuer);
             return candidate;
@@ -216,6 +196,54 @@ public class IssuerConfigCache {
 
         // Not found or not healthy
         throw issuerNotFound(issuer);
+    }
+
+    /**
+     * Checks whether the given configuration currently has a healthy JWKS loader.
+     *
+     * @param config the configuration to check, may be null
+     * @return {@code true} if the configuration is non-null and its JWKS loader reports
+     *         {@link LoaderStatus#OK} at the time of the call
+     */
+    private static boolean isHealthy(@Nullable IssuerConfig config) {
+        return config != null && config.getJwksLoader() != null
+                && config.getJwksLoader().getLoaderStatus() == LoaderStatus.OK;
+    }
+
+    /**
+     * Waits for the in-progress initial load of the given issuer, if any, and returns its
+     * configuration when the load succeeded and the loader is still healthy.
+     *
+     * @param issuer the issuer identifier to wait for
+     * @return the loaded configuration, or {@code null} if no load is in progress, the wait
+     *         failed, or no healthy configuration resulted from it
+     */
+    private @Nullable IssuerConfig awaitLoadingConfig(String issuer) {
+        CompletableFuture<LoaderStatus> future = loadingFutures.get(issuer);
+        if (future == null) {
+            return null;
+        }
+        try {
+            // Wait for loading to complete (with timeout)
+            LoaderStatus status = future.get(LOADING_WAIT_SECONDS, TimeUnit.SECONDS);
+            if (status == LoaderStatus.OK) {
+                // The future reports the status of the initial load only. It stays in
+                // loadingFutures until every issuer has finished loading, so the loader may have
+                // left OK since (for example past its maximum key staleness): re-check it.
+                IssuerConfig loadedConfig = getCachedConfig(issuer);
+                if (isHealthy(loadedConfig)) {
+                    return loadedConfig;
+                }
+            }
+        } catch (TimeoutException e) {
+            LOGGER.warn(WARN.JWKS_LOAD_TIMEOUT, issuer);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.warn(WARN.JWKS_LOAD_INTERRUPTED, issuer);
+        } catch (ExecutionException e) {
+            LOGGER.error(e.getCause(), ERROR.JWKS_LOAD_EXECUTION_FAILED, issuer);
+        }
+        return null;
     }
 
     /**

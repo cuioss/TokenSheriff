@@ -436,7 +436,6 @@ public class JwtTokenTamperingUtil {
      * @param token the original JWT Token
      * @return the tampered validation
      */
-    @SuppressWarnings("java:S5852") // owolff: Safe enough for unit-tests
     private static String removeKeyId(String token) {
         String[] parts = token.split("\\.");
         if (parts.length != 3) {
@@ -446,8 +445,9 @@ public class JwtTokenTamperingUtil {
         try {
             // Decode the header
             String decodedHeader = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
-            // Remove the kid claim
-            String modifiedHeader = decodedHeader.replaceAll(",?\\s*\"kid\"\\s*:\\s*\"[^\"]*\"", "");
+            // Remove the kid claim. Possessive quantifiers keep the match linear: each quantified
+            // class is disjoint from the token that follows it, so no backtracking is ever needed.
+            String modifiedHeader = decodedHeader.replaceAll(",?+\\s*+\"kid\"\\s*+:\\s*+\"[^\"]*+\"", "");
             // Encode the modified header
             String encodedHeader = Base64.getUrlEncoder().withoutPadding().encodeToString(modifiedHeader.getBytes(StandardCharsets.UTF_8));
 
