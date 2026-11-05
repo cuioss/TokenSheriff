@@ -53,27 +53,35 @@ surrounding response.
 * **Before redemption** (a connectivity failure, a DNS failure, or a non-2xx response): the
   presented refresh token is still valid at the authorization server. The session and its stored
   token bundle are left intact; nothing is cleared.
-* **After redemption** (the authorization server answered 2xx, whether or not it rotated the
-  refresh token, and any subsequent client-side check — identity binding, ID-token consistency,
-  scope policy, or response parsing — then refuses the refresh): the presented token may already
-  be burned at the authorization server. The session is cleared unless the store holds a bundle
-  whose refresh token is not the refused one: such a bundle (stored by a concurrent
-  re-authentication, say, but equally a superseded token stored during an in-flight refresh — the
-  check compares the refresh token only and does not check recency) is spared, because it is not
-  the burned credential. An empty or unreadable store is cleared. The rotation family is reset
-  exactly when the session is cleared: a spared bundle keeps its family together with it. When the
-  successor token is known, it is revoked best-effort at the authorization server, when the
-  provider advertises a revocation endpoint, whether or not the session was cleared; a transport
-  failure of that revocation is logged at debug level and otherwise ignored. When the response
-  could not be parsed at all, rotation cannot be
-  determined even in principle; the refusal is presumed-redeemed and the session and its rotation
-  family are cleared on the same condition, without inventing a successor to revoke.
+* **After redemption** (the authorization server answered 2xx and any subsequent client-side
+  check — identity binding, ID-token consistency, scope policy, or response parsing — then
+  refuses the refresh): whether the session is cleared depends on whether the presented token is
+  burned. It is burned when the authorization server issued a successor (it rotated), and it is
+  presumed burned when the response could not be parsed, because rotation then cannot be
+  determined even in principle. For a burned presented token the session is cleared unless the
+  store holds a bundle whose refresh token is not the refused one: such a bundle (stored by a
+  concurrent re-authentication, say, but equally a superseded token stored during an in-flight
+  refresh — the check compares the refresh token only and does not check recency) is spared,
+  because it is not the burned credential. An empty store, or one that cannot be read, is
+  cleared. The clear is attempted, not guaranteed: it removes the store entry and only then the
+  rotation family, so a store that throws on the removal lets that exception propagate in place
+  of the refusal, leaves the stored bundle in place, and never reaches the family reset. The
+  rotation family is therefore reset only when the store entry was removed, and a spared bundle
+  keeps its family together with it. When the successor token is known, it is revoked best-effort
+  at the authorization server, when the provider advertises a revocation endpoint, whether or not
+  the session was cleared; a transport failure of that revocation is logged at debug level and
+  otherwise ignored. When the response could not be parsed, no successor is invented to revoke.
+  When the authorization server redeemed the token without rotating it (RFC 6749 §6 permits
+  omitting a new refresh token), the presented token is still usable: the session is left
+  intact, nothing is cleared and nothing is revoked.
 
 The discriminator is observable purely from the transport layer — whether the authorization
 server's response reached a successful status — so every refusal that fires downstream of that
 observation, regardless of which validation layer produced it, is routed through the same
-fail-closed session-clearing path. A refusal that fires upstream of that observation never
-reaches it, so the session-preserving path is the only one it can take.
+dispatch. That dispatch clears the session fail-closed only when the presented token is burned
+(rotated, or rotation unknown) and leaves it intact when the server redeemed without rotating.
+A refusal that fires upstream of that observation never reaches it, so the session-preserving
+path is the only one it can take.
 
 == Consequences
 
@@ -82,7 +90,8 @@ reaches it, so the session-preserving path is the only one it can take.
 * The session-lifecycle response to a refresh refusal is derived from one architectural fact —
   whether the authorization server redeemed the presented token — rather than from an
   enumeration of which validation layer happened to produce the refusal. Every current and future
-  post-redemption refusal reaches the same fail-closed path without a per-check carve-out.
+  post-redemption refusal reaches the same dispatch without a per-check carve-out, and that
+  dispatch clears the session whenever the presented token is burned.
 * A transient client-side or network failure that never reaches the authorization server no
   longer destroys a healthy session, closing the reverse failure mode of over-eager clearing.
 * When the rotated successor is knowable, it is actively revoked rather than merely discarded,
@@ -103,10 +112,11 @@ reaches it, so the session-preserving path is the only one it can take.
 * A concurrent caller joining an in-flight refresh that fails must observe the same session state
   the failing caller produces; a discriminator that is correct for a single caller but not
   consistently visible to a joiner would reintroduce the ambiguity for concurrent access.
-* Because the session and its rotation family are cleared on every post-redemption refusal whose
-  stored bundle is the refused one, or that has no readable stored bundle (only a stored bundle whose
-  refresh token is not the refused one is spared, whatever its recency, and it keeps its family), an
-  authorization server that
+* Because the session and its rotation family are cleared on every post-redemption refusal that
+  burned the presented token and whose stored bundle is the refused one, or that has no readable
+  stored bundle (only a stored bundle whose refresh token is not the refused one is spared,
+  whatever its recency, and it keeps its family; a redeemed-but-not-rotated refusal burned
+  nothing and clears nothing), an authorization server that
   rotates on every request and refuses for reasons unrelated to token compromise (misconfigured
   local validation, for example) forces re-authentication more often than a narrower rule would.
   This is accepted as the safer failure direction: the alternative is preserving a session that

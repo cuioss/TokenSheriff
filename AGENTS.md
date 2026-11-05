@@ -242,7 +242,7 @@ its broad catch is deliberate, and these are all the forms the tree holds:
 - **An open set of SPI implementations that declare no `throws`.** `TokenBuilder`, where custom SPI
   claim mappers are translated into `TokenValidationException`, is the reference example.
   `TokenLifecycleManager` reads the `TokenStore` SPI before a fail-closed clear the same way: an
-  unreadable store is treated as no newer grant, so the session is cleared.
+  unreadable store is treated as no newer grant, so the clear is attempted.
 - **A callee whose own declared type is already the broad one**, so there is nothing narrower to
   name: `TokenValidator` closes its JWKS loaders through `AutoCloseable.close()`, which declares
   `Exception`.
