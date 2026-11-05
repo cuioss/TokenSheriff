@@ -1163,7 +1163,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             resolution = resolveJWKSAdapter(trustAnchor);
         } catch (IllegalArgumentException | IllegalStateException e) {
             // No handler could be built for the advertised jwks_uri: keep fetching the current endpoint
-            LOGGER.warn(e, WARN.JWKS_URI_RESOLUTION_FAILED);
+            logRefusedAdvertisedUri(e);
             return keepCurrentEndpoint(cycleEpoch, current, true);
         }
         JwksEndpoint resolved = resolution.endpoint();
@@ -1174,11 +1174,25 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         RuntimeException unusableUriFailure = resolution.unusableUriFailure();
         if (unusableUriFailure != null) {
             // No handler could be built for the advertised jwks_uri: keep fetching the current endpoint
-            LOGGER.warn(unusableUriFailure, WARN.JWKS_URI_RESOLUTION_FAILED);
+            logRefusedAdvertisedUri(unusableUriFailure);
             return keepCurrentEndpoint(cycleEpoch, current, true);
         }
         LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
         return keepCurrentEndpoint(cycleEpoch, current, !resolution.retryable());
+    }
+
+    /**
+     * Logs {@code JWKS_URI_RESOLUTION_FAILED} for a re-discovery whose advertised {@code jwks_uri} no HTTP
+     * handler can be built for. The refusal is not handed to the logger as a throwable: its message can
+     * echo the IdP-advertised {@code jwks_uri}, which is remote document content, and a stack trace would
+     * print it unescaped (CWE-117). The reason is kept at debug level, neutralized and length-bounded.
+     *
+     * @param failure the refusal of the configuration to build a handler for the advertised URI
+     */
+    private static void logRefusedAdvertisedUri(RuntimeException failure) {
+        LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
+        LOGGER.debug("Advertised jwks_uri refused during re-discovery: %s",
+                ErrorTextSanitizer.sanitize(failure.getMessage()));
     }
 
     /**

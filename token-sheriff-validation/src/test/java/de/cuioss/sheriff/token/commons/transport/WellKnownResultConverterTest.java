@@ -184,7 +184,9 @@ class WellKnownResultConverterTest {
                 () -> assertTrue(rendered.startsWith(TransportLogMessages.ERROR.JSON_PARSE_FAILED
                         .resolveIdentifierString() + ": " + RENDERED_PARSE_FAILURE_PREFIX)),
                 () -> assertFalse(rendered.contains("\r"), "no raw CR may be rendered"),
-                () -> assertFalse(rendered.contains("\n"), "no raw LF may be rendered"));
+                () -> assertFalse(rendered.contains("\n"), "no raw LF may be rendered"),
+                () -> assertNull(parseFailures.getFirst().getThrown(),
+                        "the parse exception is not logged, as its stack trace would print the raw remote text"));
     }
 
     private static void assertNoUnfilledPlaceholderLogged() {

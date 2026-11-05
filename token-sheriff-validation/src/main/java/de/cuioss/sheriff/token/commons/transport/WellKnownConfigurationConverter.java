@@ -146,14 +146,17 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
                 );
             }
 
-            // Regular parsing errors
-            LOGGER.error(e, TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT, errorMessage);
+            // Regular parsing errors. The exception itself is deliberately not handed to the logger: a
+            // stack trace prints its raw message, which echoes the remote document including CR and LF
+            // (CWE-117); the sanitized message above carries the diagnosis
+            LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT, errorMessage);
             return Optional.empty();
         } catch (IllegalArgumentException e) {
-            // Invalid well-known configuration (missing required fields)
+            // Invalid well-known configuration (missing required fields); the exception is not handed
+            // to the logger for the same reason as above
             String invalidConfigurationDetail = "Invalid well-known configuration: "
                     + ErrorTextSanitizer.sanitize(e.getMessage());
-            LOGGER.error(e, TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT,
+            LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT,
                     invalidConfigurationDetail);
             return Optional.empty();
         }
