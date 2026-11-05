@@ -26,8 +26,9 @@ credential-rejected state.
 A client that refreshes an OAuth 2.0 token sends the presented refresh token to the
 authorization server and, on a successful (2xx) response, receives a token response that may
 name a rotated successor. Several independent checks can still refuse the refresh after that
-response arrives: the refreshed access token can fail identity or binding validation, a
-reconciled scope can fail a configured policy, or the response body itself can fail to parse.
+response arrives: the refreshed access token can fail identity or binding validation, the
+refreshed ID token can fail pipeline validation or consistency, a reconciled scope can fail a
+configured policy, or the response body itself can fail to parse.
 Each of these refusals happens on the client side, after the authorization server has already
 processed the request.
 
@@ -54,8 +55,8 @@ surrounding response.
   presented refresh token is still valid at the authorization server. The session and its stored
   token bundle are left intact; nothing is cleared.
 * **After redemption** (the authorization server answered 2xx and any subsequent client-side
-  check — identity binding, ID-token consistency, scope policy, or response parsing — then
-  refuses the refresh): whether the session is cleared depends on whether the presented token is
+  check — identity binding, ID-token pipeline validation, ID-token consistency, scope policy, or
+  response parsing — then refuses the refresh): whether the session is cleared depends on whether the presented token is
   burned. It is burned when the authorization server issued a successor (it rotated), and it is
   presumed burned when the response could not be parsed, because rotation then cannot be
   determined even in principle. For a burned presented token the session is cleared unless the
@@ -81,8 +82,7 @@ observation and reaches one of the code paths listed below is decided by the sam
 validation layer produced it: the session is cleared fail-closed only when the presented token is
 burned (rotated, or rotation unknown) and left intact when the server redeemed without rotating.
 A refusal that fires upstream of that observation never reaches the rule, so the
-session-preserving path is the only one it can take. Not every refusal after redemption reaches
-those paths; the last paragraph of this section names the one that does not.
+session-preserving path is the only one it can take.
 
 That is one rule, not one dispatch. The lifecycle manager applies it on several code paths, and
 no single method handles every refusal after redemption:
@@ -90,11 +90,13 @@ no single method handles every refusal after redemption:
 * A refusal raised inside the token exchange (the token endpoint answering non-2xx, the
   access-token validation, the strict-scope policy, an unparseable 2xx response) is classified
   and dispatched in one place (`handleRefusedExchange`).
-* A refreshed ID token that is inconsistent with the refreshed access token, and an identity or
-  sender-constraint binding check that refuses the apply, are handled in `doRefresh`'s own
-  catches. Each calls the quarantine (`quarantineRejectedRotation`) only when the exchange
-  rotated the refresh token (`rotation.rotated()`); when it did not, the presented token is still
-  valid, nothing is revoked, and the session is left untouched.
+* A refreshed ID token that fails validation in the token-validation pipeline (signature, `iss`,
+  `aud`, `exp` / `iat`), a refreshed ID token that is inconsistent with the refreshed access
+  token, and an identity or sender-constraint binding check that refuses the apply, are handled
+  in `doRefresh`'s own catches. Each calls the quarantine (`quarantineRejectedRotation`) only
+  when the exchange rotated the refresh token (`rotation.rotated()`); when it did not, the
+  presented token is still valid, nothing is revoked, and the session is left untouched. The
+  original exception is rethrown unchanged in every case.
 * A superseded token replayed against the rotation family is handled by `revokeReusedFamily`,
   which revokes the replayed token and then the successor.
 
@@ -103,16 +105,20 @@ best-effort, in order) and then the attempted fail-closed clear (`clearRefusedSe
 spare rule is stated in the Decision above. A path that has no credential to name, such as the
 unparseable response, revokes nothing and still attempts the clear.
 
-The list names the paths that reach that shared disposition; it is not a list of every refusal
-that can follow a redemption. One path does not reach it: a refreshed ID token that fails
-validation in the token-validation pipeline (signature, `iss`, `aud`, `exp` / `iat`).
-`IdTokenValidationBridge.validateRefreshedIdToken` declares a `TokenValidationException` for it,
-and `verifiedRefreshedIdToken` calls the bridge inside `doRefresh`'s try block, whose catch names
-`IllegalStateException` only. That exception is not an `IllegalStateException` and is raised
-outside the exchange, so `handleRefusedExchange` never sees it either. It therefore propagates out
-of `doRefresh` and `refresh` without a quarantine, without a revocation and without a clear, even
-when the authorization server rotated the refresh token: the session keeps the presented token the
-authorization server has already burned. This record states that behaviour; it does not decide it.
+The list names the paths that reach that shared disposition. The refreshed ID token reaches it
+through two refusals raised by different layers: the token-validation pipeline, which rejects an
+ID token that fails signature, `iss`, `aud` or `exp` / `iat` validation, and the OIDC Core §12.2
+consistency check against the refreshed access token.
+`IdTokenValidationBridge.validateRefreshedIdToken` declares a `TokenValidationException` for the
+pipeline failure, and `verifiedRefreshedIdToken` calls the bridge inside `doRefresh`'s try block,
+whose catch names both `IllegalStateException` (the inconsistent ID token) and
+`TokenValidationException`. Neither is raised inside the exchange, so `handleRefusedExchange`
+never sees them; the catch decides the validation failure exactly as it decides the inconsistent ID
+token. When the authorization server
+rotated the refresh token, the rotated successor is revoked best-effort and the clear is attempted,
+with the spare rule stated in the Decision above; when it did not rotate, nothing is revoked or
+cleared and the presented token stays usable. The original `TokenValidationException` is rethrown
+unchanged either way.
 
 == Consequences
 
@@ -124,8 +130,8 @@ authorization server has already burned. This record states that behaviour; it d
   that reaches one of the code paths listed in the Decision is decided by the same rule without a
   per-check carve-out, whichever validation layer raised it, and that rule attempts to clear the
   session whenever the presented token is burned, subject to the spare rule stated in the
-  Decision. A refusal raised on a path that does not reach the rule, such as the refreshed-ID-token
-  pipeline validation named at the end of the Decision, is not covered by this benefit.
+  Decision. The refreshed ID token's pipeline validation, named at the end of the Decision, is
+  one of those paths.
 * A transient client-side or network failure that never reaches the authorization server no
   longer destroys a healthy session, closing the reverse failure mode of over-eager clearing.
 * When the rotated successor is knowable, it is actively revoked rather than merely discarded,

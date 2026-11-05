@@ -55,8 +55,9 @@ space has three regions and the model had two names for them.
 
 A refusal raised inside the token exchange is classified into three mutually exclusive and
 exhaustive states, and the client's session-lifecycle response to it is decided by which state
-applies. (A refreshed ID token or binding refusal is not raised inside the exchange; the
-dispatch below does not cover it, see the paragraph that closes this Decision.)
+applies. (A refreshed ID token refusal, whether the pipeline rejects the token or it is inconsistent
+with the access token, and a binding refusal are not raised inside the exchange; the dispatch below
+does not cover them, see the paragraph that closes this Decision.)
 
 * **Pre-redemption** — the authorization server never judged the presented credential. A connection
   failure, a DNS failure, an SSRF-blocked target, or a server-error status. The presented refresh
@@ -71,10 +72,11 @@ dispatch below does not cover it, see the paragraph that closes this Decision.)
   result. The disposition is unchanged from ADR-0005: a refusal raised inside the exchange carries
   what is known about rotation, a burned presented token quarantines the session, a known successor
   is revoked (RFC 7009), and an unparseable success response is presumed rotated, so a clear is
-  attempted without inventing a successor to revoke. An inconsistent refreshed ID token and a
-  refused identity or sender-constraint binding are not exchange refusals and carry no such
-  signal: they are plain `IllegalStateException`s that the lifecycle manager reads against whether
-  the exchange rotated, and they quarantine only when it did.
+  attempted without inventing a successor to revoke. A refreshed ID token that fails pipeline
+  validation, an inconsistent refreshed ID token and a refused identity or sender-constraint binding
+  are not exchange refusals and carry no such signal: the first is a `TokenValidationException`, the
+  other two are plain `IllegalStateException`s, and the lifecycle manager reads each against whether
+  the exchange rotated, quarantining only when it did.
 
 **The recognition rule for the middle state is an allow-list of exactly one error code.** The status
 must be a client error (4xx) *and* the response body must parse as an RFC 6749 §5.2 error response
@@ -108,11 +110,11 @@ mode that produced this ADR in the first place.
 
 That switch decides the disposition of a refusal raised inside the token exchange, and only that
 (`handleRefusedExchange`). It is not a single dispatch for every refusal after redemption. A
-refreshed ID token that is inconsistent, and a binding check that refuses the apply, are handled
-in `doRefresh`'s own catches and reach the quarantine (`quarantineRejectedRotation`) only when the
-exchange rotated the refresh token, so they revoke nothing when it did not; a replayed token is
-handled by `revokeReusedFamily`. None of these three passes through the classification entry
-point or this switch. What all the paths share is the disposition they end in, the best-effort
+refreshed ID token that fails pipeline validation, a refreshed ID token that is inconsistent, and a
+binding check that refuses the apply, are handled in `doRefresh`'s own catches and reach the
+quarantine (`quarantineRejectedRotation`) only when the exchange rotated the refresh token, so they
+revoke nothing when it did not; a replayed token is handled by `revokeReusedFamily`. None of these
+paths passes through the classification entry point or this switch. What all the paths share is the disposition they end in, the best-effort
 revocations followed by the attempted fail-closed clear (`revokeAndClearFailClosed`, then
 `clearRefusedSession`), not the dispatch that selects it.
 

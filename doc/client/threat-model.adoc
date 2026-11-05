@@ -255,7 +255,10 @@ The client engine:
   Where the authorization server did not rotate, nothing is revoked and the untouched session stays
   usable. Where the authorization server also returns a
   refreshed ID token, it is validated and cross-checked for `iss`/`sub` consistency against the
-  refreshed access token before it is carried forward.
+  refreshed access token before it is carried forward. A refreshed ID token that fails pipeline
+  validation, like one that is inconsistent, is refused on the same rotated-vs-not rule: the rotated
+  successor is revoked and a clear is attempted only when the authorization server rotated the
+  refresh token, and otherwise nothing is revoked or cleared.
 | https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse[OIDC Core §12.2]
 | xref:requirements.adoc#CLIENT-15[CLIENT-15], xref:requirements.adoc#CLIENT-17[CLIENT-17]
 
