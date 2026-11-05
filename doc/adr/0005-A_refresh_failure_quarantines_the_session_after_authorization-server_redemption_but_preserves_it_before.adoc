@@ -4,7 +4,7 @@
 :sectnums:
 
 // adr-metadata
-// summary: The client's response to a refused refresh is dispatched on whether the authorization server has already redeemed the presented token, not on which local check produced the refusal
+// summary: The client's response to a refused refresh is decided by whether the authorization server has already redeemed the presented token, not on which local check produced the refusal
 // tags: oauth, refresh-token, fail-closed, session-lifecycle, client
 // affects: token-sheriff-client
 // supersedes:
@@ -45,7 +45,7 @@ before parsing, and a validation refusal after a successful redemption all reach
 
 == Decision
 
-The client's session-lifecycle response to a refused refresh is dispatched on whether the
+The client's session-lifecycle response to a refused refresh is decided by whether the
 authorization server has already redeemed the presented refresh token when the refusal fires,
 not on which check produced the refusal or on the transport-level success or failure of the
 surrounding response.
@@ -85,8 +85,9 @@ observation never reaches the rule, so the session-preserving path is the only o
 That is one rule, not one dispatch. The lifecycle manager applies it on several code paths, and
 no single method handles every refusal after redemption:
 
-* A refusal raised inside the token exchange is classified and dispatched in one place
-  (`handleRefusedExchange`).
+* A refusal raised inside the token exchange (the token endpoint answering non-2xx, the
+  access-token validation, the strict-scope policy, an unparseable 2xx response) is classified
+  and dispatched in one place (`handleRefusedExchange`).
 * A refreshed ID token that is inconsistent with the refreshed access token, and an identity or
   sender-constraint binding check that refuses the apply, are handled in `doRefresh`'s own
   catches. Each calls the quarantine (`quarantineRejectedRotation`) only when the exchange
@@ -168,20 +169,24 @@ unifying rule, and was rejected implicitly by the redemption-based rule itself: 
 enumeration must be revisited every time a new refusal path is added, and a path added without
 updating the enumeration silently falls back to the session-preserving default — the exact class
 of gap the identity-binding and scope-policy refusals each independently exposed before being
-folded into the single redemption-based rule.
+decided by the same redemption-based rule and ending in the same shared disposition. The rule
+removes the per-check decision about whether to clear; it does not remove the per-path wiring,
+which is the Negative consequence above.
 
 Each rejected alternative anchors the session-lifecycle decision to something other than whether
 the authorization server actually redeemed the token — either ignoring redemption entirely
 (clear-on-every-failure), reacting to a symptom of rotation rather than to rotation itself
-(revert), or requiring per-check maintenance that a redemption-based rule makes unnecessary
-(enumeration). The adopted decision anchors the session response to the one fact that determines
+(revert), or requiring a per-check decision about whether to clear, which a redemption-based rule
+removes (enumeration). The adopted decision anchors the session response to the one fact that determines
 whether the presented credential is still valid anywhere.
 
 == References
 
 * `token-sheriff-client` refresh path — `TokenLifecycleManager`, `RefreshFlow`,
   `RefreshTokenFamily`, and the `Redeemed*` refusal-exception hierarchy that carries the
-  redemption signal from the transport layer to the session-lifecycle response
+  redemption signal from the transport layer to the session-lifecycle response for refusals
+  raised inside the exchange (the ID-token and binding refusals carry no such exception; the
+  lifecycle manager reads whether the exchange rotated directly)
 * `doc/client/threat-model.adoc` — refresh-path threat model, post-redemption quarantine control
 * `doc/client/specification/token-handling.adoc` — refresh-path specification, quarantine vs.
   preservation disposition

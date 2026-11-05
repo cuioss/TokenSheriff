@@ -568,8 +568,10 @@ public class TokenLifecycleManager {
      *       attempted.</li>
      *   <li>A refusal before the server processed the request leaves the session untouched.</li>
      * </ul>
-     * Every revocation is best-effort. What the paths that revoke or clear share is the disposition: the
-     * revocations are attempted, then a clear is attempted through the single fail-closed clear. That clear
+     * Every revocation is best-effort and is attempted only when the provider advertises a revocation
+     * endpoint. A redemption whose response could not be parsed names no successor and so revokes nothing.
+     * What the paths that revoke or clear share is the disposition: the revocations are attempted, then a
+     * clear is attempted through the single fail-closed clear. That clear
      * spares a stored bundle whose refresh token differs from the one this refresh presented, with no
      * recency check: a newer grant stored in the meantime is left in place together with its family. For
      * an empty store, or one that cannot be read, a clear is attempted. The compare runs under the

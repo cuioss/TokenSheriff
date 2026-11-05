@@ -53,8 +53,10 @@ space has three regions and the model had two names for them.
 
 == Decision
 
-A refused refresh is classified into three mutually exclusive and exhaustive states, and the client's
-session-lifecycle response is dispatched on which state applies:
+A refusal raised inside the token exchange is classified into three mutually exclusive and
+exhaustive states, and the client's session-lifecycle response to it is decided by which state
+applies. (A refreshed ID token or binding refusal is not raised inside the exchange; the
+dispatch below does not cover it, see the paragraph that closes this Decision.)
 
 * **Pre-redemption** — the authorization server never judged the presented credential. A connection
   failure, a DNS failure, an SSRF-blocked target, or a server-error status. The presented refresh
@@ -66,10 +68,13 @@ session-lifecycle response is dispatched on which state applies:
   spare rule ADR-0005 states: a stored bundle whose refresh token is not the refused one is left
   in place).
 * **Redeemed** — the authorization server consumed the grant before a client-side check refused the
-  result. The disposition is unchanged from ADR-0005: the refusal carries what is known about
-  rotation, a burned presented token quarantines the session, a known successor is revoked
-  (RFC 7009), and an unparseable success response is presumed rotated and cleared without inventing a
-  successor to revoke.
+  result. The disposition is unchanged from ADR-0005: a refusal raised inside the exchange carries
+  what is known about rotation, a burned presented token quarantines the session, a known successor
+  is revoked (RFC 7009), and an unparseable success response is presumed rotated, so a clear is
+  attempted without inventing a successor to revoke. An inconsistent refreshed ID token and a
+  refused identity or sender-constraint binding are not exchange refusals and carry no such
+  signal: they are plain `IllegalStateException`s that the lifecycle manager reads against whether
+  the exchange rotated, and they quarantine only when it did.
 
 **The recognition rule for the middle state is an allow-list of exactly one error code.** The status
 must be a client error (4xx) *and* the response body must parse as an RFC 6749 §5.2 error response
@@ -92,8 +97,9 @@ Only a response the server actually produced is ever classified. No defensive te
 this; the ordering of the transport code is what establishes it, and preserving that ordering is a
 constraint on any future change to the token-endpoint client.
 
-**The three states are dispatched with a failing default arm.** Callers classify through the
-single classification entry point rather than enumerating exception types, and dispatch on the
+**The three states are dispatched with a failing default arm.** Callers that handle a refusal
+raised by the exchange classify through the single classification entry point rather than
+enumerating exception types, and dispatch on the
 resulting kind in a switch. That switch is a statement over an enum, which Java does not check for
 exhaustiveness, so a fourth state added later would not be a compile error; the library's own switch
 therefore ends in a `default` arm that throws `IllegalStateException`. A fourth state fails loudly at
@@ -177,7 +183,8 @@ present means redeemed, absent means not. Extending it would mean adding a secon
 sentinel, alongside the first. Rejected because absence is then doing two jobs at once — "no
 redemption happened" and "no rejection happened" — and a caller that reads only one of them silently
 gets the old two-state behaviour. A total value with an explicit kind makes every caller state
-which of the three it is handling; the library's own dispatch makes an unhandled kind a visible failure.
+which of the three it is handling; the library's own dispatch of a refused exchange makes an unhandled
+kind a visible failure.
 
 *Widen the allow-list to the RFC 6749 §5.2 codes that plausibly indicate a dead credential.* More
 codes recognised means more real rejections caught. Rejected because each additional code is a new
@@ -213,7 +220,7 @@ The family refusal gets its own type, a subtype of the protocol exception it rep
 classification entry point covers it. **No fourth kind is added**: the library's own dispatch of
 the three kinds ends in a failing default arm, so a fourth would fail loudly there. The refusal maps onto
 the two existing session-ending kinds by what the authorization server has already done, which is the
-same discriminator this ADR and ADR-0005 dispatch on:
+same discriminator this ADR and ADR-0005 decide on:
 
 * **Raised while feeding a rotation into the family** — the authorization server answered and issued
   the successor before the family refused, so the presented token is redeemed and the successor is a
@@ -233,7 +240,7 @@ exactly those two sources — the refresh exchange and the family refusal — an
 matters most. Rejected for the rotation case because it is factually wrong there: the server did
 redeem the grant and did issue a successor, and credential-rejected asserts there is none. A caller
 dispatching on it would discard a live successor instead of revoking it — the "discarded rather than
-revoked" outcome ADR-0005 chose redemption-based dispatch to avoid.
+revoked" outcome ADR-0005 chose a redemption-based rule to avoid.
 
 *Add a fourth kind for a revoked family.* The most precise name for the situation. Rejected because
 it breaks the three-way dispatch, at runtime through the failing default arm of the library's own
@@ -248,8 +255,8 @@ existing kinds already express.
   reuse path (`revokeReusedFamily`) is a separate path from the exchange-refusal dispatch and shares
   only its disposition. That disposition now includes the redeemed disposition's revocation of the
   successor: it revokes **both** the replayed token and the successor the authorization server issued
-  on the refused exchange, in that order. Naming the replayed token first is what triggers family-wide revocation on a server that
-  implements it; naming the successor second is what keeps a server that does not from leaving a live
+  on the refused exchange, in that order. Naming the replayed token first is what triggers
+  family-wide revocation on a server that implements it; naming the successor second is what keeps a server that does not from leaving a live
   credential behind until it expires. The two revocations are best-effort: a transport failure of one
   is logged and does not skip the other. An unchecked exception from the first revocation is not
   caught there: it leaves the loop, so the successor revocation does not run, the client-side clear
