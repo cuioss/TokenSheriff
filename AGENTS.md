@@ -233,16 +233,31 @@ Test code violations:
 #### `InvalidExceptionUsageRecipe`: narrow the catch, do not suppress
 
 Suppression is **not** a valid strategy for `InvalidExceptionUsageRecipe`. The standing remedy is
-to narrow the caught exception type against the **throwers the callee actually declares** — except
-where the caught failures come from an **open set of SPI implementations that declare no
-`throws`**, in which case there is nothing to narrow against and suppression is legitimate.
+to narrow the caught exception type against the **throwers the callee actually declares**. A broad
+catch is sanctioned only where there is no declared thrower that would make the catch complete, and
+only in one of the forms below. Each sanctioned site carries a comment recording why its broad catch
+is deliberate, and these are all the forms the tree holds:
 
-That carve-out is the rule's single limit, and it is part of the rule rather than a footnote. The
-tree holds several sanctioned instances of it, each carrying a comment recording why the broad catch
-is deliberate. `TokenBuilder`, where custom SPI claim mappers are translated into
-`TokenValidationException`, is the reference example. The one other verified form is a callee whose
-own declared type is already the broad one, so there is nothing narrower to name: `TokenValidator`
-closes its JWKS loaders through `AutoCloseable.close()`, which declares `Exception`.
+- **An open set of SPI implementations that declare no `throws`.** `TokenBuilder`, where custom SPI
+  claim mappers are translated into `TokenValidationException`, is the reference example.
+  `TokenLifecycleManager` reads the `TokenStore` SPI before a fail-closed clear the same way: an
+  unreadable store is treated as no newer grant, so the session is cleared.
+- **A callee whose own declared type is already the broad one**, so there is nothing narrower to
+  name: `TokenValidator` closes its JWKS loaders through `AutoCloseable.close()`, which declares
+  `Exception`.
+- **A library that signals unreadable input with unchecked exceptions outside its contract.**
+  `TokenEndpointClient` catches what DSL-JSON throws at its two JSON-reading sites and folds it into
+  the `IOException` its callers already handle.
+- **A boundary that must not propagate any failure.** `TokenValidatorHealthCheck` reports a liveness
+  probe whose failure sources (CDI resolution, configuration access) are an open set of unchecked
+  exceptions as a fixed status. `HttpJwksLoader` logs any failure of a background refresh cycle,
+  because the `ScheduledExecutorService` cancels the refresh task on an uncaught exception.
+- **Release steps that must all run.** `TokenValidator` catches `Throwable` around the `Runnable`
+  release steps of `close()`, so every step runs after any failure, and rethrows the last failure
+  unwrapped once they have run, with the earlier ones attached as suppressed.
+- **A test that funnels an unanticipated failure into its own report**, in integration-test code
+  only: `RefreshProductionPathSpecIT` and `RefreshConcurrentRedemptionSpecIT`, whose engine failure
+  mode is not known in advance.
 
 A callee that declares no `throws` but documents the unchecked failure it raises is **not** such a
 boundary — narrow to the documented type. `TokenValidatorProducer.destroy()` is the worked instance:
@@ -291,10 +306,10 @@ The **catch-position** placement — a `// cui-rewrite:disable InvalidExceptionU
 comment on the line directly before the `catch` — has been observed to hold: a `-Ppre-commit` run
 (`rewrite:run` with `InvalidExceptionUsageRecipe` active) against `TokenLifecycleManager`, after its
 committed marker was replaced by that comment, re-injected no marker anywhere in the tree. Use that
-adjacent placement for new sites. `TokenLifecycleManager` and `TokenValidatorHealthCheck` use it;
-the other catch-position instances (for example `TokenBuilder` and `TokenValidator`) place
-explanatory comment lines between the directive and the `catch`, and whether the recipe honors that
-form is not recorded. Class-level and method-level suppression of
+adjacent placement for new sites. `TokenLifecycleManager`, `TokenValidatorHealthCheck` and both
+`TokenEndpointClient` sites use it; the other catch-position instances (`TokenBuilder`,
+`HttpJwksLoader` and both `TokenValidator` sites) place explanatory comment lines between the
+directive and the `catch`, and whether the recipe honors that form is not recorded. Class-level and method-level suppression of
 `InvalidExceptionUsageRecipe` were never tested, so they are **untested, not refuted**. Treat that
 as a known gap for a future investigation, not as a finding. Two live markers already sit in those
 untested positions, both in integration-test code: `RefreshProductionPathSpecIT` carries one at
