@@ -193,11 +193,11 @@ class RefreshAdversarialTest extends RefreshTestSupport {
                 () -> assertTrue(manager.get(session).isEmpty(),
                         "the store is cleared fail-closed even when revocation throws outside the narrowed catch"));
 
-        // The store clear is only half of the fail-closed guarantee: the rotation family must go with it.
-        // Asserting the empty store alone cannot see a regression confined to family clearing, so drive a
-        // re-authentication for the same session id. A retained family would still hold the superseded
-        // rt2, misclassifying this fresh bundle's first rotation as a replay; the refresh succeeding is
-        // what proves the family was cleared too.
+        // Drive a re-authentication for the same session id and assert that the fresh bundle rotates
+        // normally instead of failing as reuse: the session recovers after the fail-closed clear. This
+        // does not by itself prove that the rotation family was cleared — store() reseeds the family for
+        // a grant it does not know, so a retained family (whose current token is rt2, not a superseded
+        // one) would not misclassify rt3's first rotation as a replay either.
         String rt3 = Generators.letterStrings(20, 40).next();
         String rt4 = Generators.letterStrings(20, 40).next();
         manager.store(session, bearerBundle(rt3, null));

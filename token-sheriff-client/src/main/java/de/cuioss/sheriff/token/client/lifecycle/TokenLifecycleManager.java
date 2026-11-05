@@ -124,7 +124,10 @@ import java.util.concurrent.locks.ReentrantLock;
  * overloads advance it when a refresh is applied, from {@link #refresh} or from outside it. Every apply
  * names the refresh token its result was derived from and is a compare-and-set against it: when the store
  * no longer holds that base token — a re-login stored a newer grant meanwhile — nothing is written, the
- * family is not advanced, and the newer bundle is returned unchanged. A late result derived from an older
+ * family is not advanced, and the newer bundle is returned unchanged; a refresh token the authorization
+ * server rotated into that late result is left orphaned, neither stored nor revoked by
+ * {@link #applyRefresh} ({@link #refresh} revokes it best-effort; an external caller must revoke it
+ * itself). A late result derived from an older
  * grant therefore never overwrites a newer one, and {@link #refresh} yields to a re-login that lands while
  * its exchange is in flight instead of reading the newer grant as reuse. A token the family knows — its
  * current token or a remembered superseded one — never reseeds it, so a stale re-store or a replay is
@@ -429,6 +432,10 @@ public class TokenLifecycleManager {
      * advanced, and the newer bundle is returned unchanged. This holds for every caller: {@link #refresh}
      * passes the refresh token its exchange presented, and an external caller passes the token its own
      * refresh presented, so a late result derived from an older grant never overwrites a newer one.
+     * A rotated {@code newRefreshToken} in such a late result is left orphaned: the authorization server
+     * issued it, but this method neither stores it nor revokes it. {@link #refresh} revokes it
+     * best-effort after the apply; an external caller that wants it out of circulation must revoke it
+     * itself (RFC 7009).
      *
      * @param sessionId        the opaque session identifier; must not be {@code null} or blank
      * @param baseRefreshToken the refresh token the refreshed material was derived from, or {@code null}
