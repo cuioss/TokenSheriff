@@ -107,6 +107,32 @@ class TokenValidatorTest {
     }
 
     @Test
+    @DisplayName("Should run every release step and keep a later close failure as suppressed")
+    void shouldKeepEveryCloseFailureWhenReleasing() {
+        // The release order close() uses: the pipeline, then the DPoP replay protection, then the
+        // JWKS loaders. Both the first and the second step fail; neither failure may be lost.
+        SecurityException pipelineFailure = new SecurityException("pipeline shutdown refused");
+        SecurityException dpopFailure = new SecurityException("dpop shutdown refused");
+        Set<String> ran = new HashSet<>();
+
+        SecurityException thrown = assertThrows(SecurityException.class, () -> TokenValidator.releaseInOrder(
+                () -> {
+                    ran.add("pipeline");
+                    throw pipelineFailure;
+                },
+                () -> {
+                    ran.add("dpop");
+                    throw dpopFailure;
+                },
+                () -> ran.add("loaders")));
+
+        assertSame(pipelineFailure, thrown, "The first failure must be the one propagated");
+        assertArrayEquals(new Throwable[]{dpopFailure}, thrown.getSuppressed(),
+                "The later failure must be attached as suppressed, not dropped");
+        assertEquals(Set.of("pipeline", "dpop", "loaders"), ran, "Every release step must run");
+    }
+
+    @Test
     @DisplayName("Should ignore disabled issuer configurations during construction")
     void shouldIgnoreDisabledIssuerConfigs() {
         // Disabled configs skip build-time validation and have no JwksLoader —

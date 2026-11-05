@@ -500,22 +500,44 @@ public class TokenValidator implements Closeable {
      * token pipeline, the DPoP replay protection and the JWKS loaders are each released even when an
      * earlier one failed. Such a failure (for example a {@link SecurityException} from an executor
      * shutdown) is still propagated to the caller once the remaining resources are released; when both
-     * the pipeline and the DPoP replay protection fail, the later failure is the one propagated.
+     * the pipeline and the DPoP replay protection fail, the pipeline's failure is propagated and the
+     * DPoP replay protection's failure is attached to it as suppressed, so neither is lost.
      * <p>
      * This should be called when the TokenValidator is no longer needed.
      */
     @Override
     public void close() {
-        try {
-            accessTokenPipeline.shutdown();
-        } finally {
-            try {
-                if (dpopReplayProtection != null) {
-                    dpopReplayProtection.close();
-                }
-            } finally {
-                closeJwksLoaders();
-            }
+        releaseInOrder(accessTokenPipeline::shutdown, this::closeDpopReplayProtection, this::closeJwksLoaders);
+    }
+
+    /**
+     * Runs the three release steps in order, each one even when an earlier one failed. The first
+     * failure is propagated once every step ran; a failure of a later step is attached to it as
+     * suppressed (try-with-resources semantics), so no failure is lost.
+     *
+     * @param first  the step run first
+     * @param second the step run second
+     * @param third  the step run last
+     */
+    static void releaseInOrder(Runnable first, Runnable second, Runnable third) {
+        // Resources are released in reverse declaration order: second, then third.
+        try (ReleaseStep last = third::run; ReleaseStep next = second::run) {
+            first.run();
+        }
+    }
+
+    /**
+     * A release step for try-with-resources whose {@code close()} declares no checked exception.
+     */
+    @FunctionalInterface
+    private interface ReleaseStep extends AutoCloseable {
+        @Override
+        void close();
+    }
+
+    private void closeDpopReplayProtection() {
+        if (dpopReplayProtection != null) {
+            dpopReplayProtection.close();
         }
     }
 
