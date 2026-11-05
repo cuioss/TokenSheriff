@@ -207,8 +207,8 @@ class MixUpSpecIT extends BaseIntegrationTest {
      * The wired flow together with the collaborators the assertions observe.
      */
     private record WiredFlow(AuthorizationCodeFlow flow, ProviderMetadata metadata,
-            CountingTokenEndpointClient tokenEndpoint,
-            ClientAuthentication authentication) {
+    CountingTokenEndpointClient tokenEndpoint,
+    ClientAuthentication authentication) {
     }
 
     /**
