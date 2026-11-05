@@ -19,13 +19,10 @@ import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit test for {@link LoaderStatus} enum.
- * <p>
- * Only the overridden {@code toString()} is tested: it yields the lowercase values that health
- * output reports.
  *
  * @author Oliver Wolff
  */
@@ -33,10 +30,67 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class LoaderStatusTest {
 
     @Test
+    void shouldContainAllExpectedValues() {
+        var values = LoaderStatus.values();
+        assertEquals(4, values.length);
+
+        assertArrayEquals(new LoaderStatus[]{
+                LoaderStatus.OK,
+                LoaderStatus.ERROR,
+                LoaderStatus.LOADING,
+                LoaderStatus.UNDEFINED
+        }, values);
+    }
+
+    @Test
     void shouldProvideCorrectStringRepresentation() {
         assertEquals("ok", LoaderStatus.OK.toString());
         assertEquals("error", LoaderStatus.ERROR.toString());
         assertEquals("loading", LoaderStatus.LOADING.toString());
+        assertEquals("undefined", LoaderStatus.UNDEFINED.toString());
+    }
+
+    @Test
+    void shouldProvideValueOfFunctionality() {
+        assertEquals(LoaderStatus.OK, LoaderStatus.valueOf("OK"));
+        assertEquals(LoaderStatus.ERROR, LoaderStatus.valueOf("ERROR"));
+        assertEquals(LoaderStatus.LOADING, LoaderStatus.valueOf("LOADING"));
+        assertEquals(LoaderStatus.UNDEFINED, LoaderStatus.valueOf("UNDEFINED"));
+    }
+
+    @Test
+    void shouldThrowExceptionForInvalidValue() {
+        assertThrows(IllegalArgumentException.class, () -> LoaderStatus.valueOf("INVALID_STATUS"));
+        assertThrows(IllegalArgumentException.class, () -> LoaderStatus.valueOf(""));
+        assertThrows(IllegalArgumentException.class, () -> LoaderStatus.valueOf("ok"));
+        assertThrows(IllegalArgumentException.class, () -> LoaderStatus.valueOf("error"));
+    }
+
+    @Test
+    void shouldHandleNullValue() {
+        assertThrows(NullPointerException.class, () -> LoaderStatus.valueOf(null));
+    }
+
+    @Test
+    void shouldProvideConsistentOrdinalValues() {
+        assertEquals(0, LoaderStatus.OK.ordinal());
+        assertEquals(1, LoaderStatus.ERROR.ordinal());
+        assertEquals(2, LoaderStatus.LOADING.ordinal());
+        assertEquals(3, LoaderStatus.UNDEFINED.ordinal());
+    }
+
+    @Test
+    void shouldDistinguishBetweenNameAndToString() {
+        assertEquals("OK", LoaderStatus.OK.name());
+        assertEquals("ok", LoaderStatus.OK.toString());
+
+        assertEquals("ERROR", LoaderStatus.ERROR.name());
+        assertEquals("error", LoaderStatus.ERROR.toString());
+
+        assertEquals("LOADING", LoaderStatus.LOADING.name());
+        assertEquals("loading", LoaderStatus.LOADING.toString());
+
+        assertEquals("UNDEFINED", LoaderStatus.UNDEFINED.name());
         assertEquals("undefined", LoaderStatus.UNDEFINED.toString());
     }
 }
