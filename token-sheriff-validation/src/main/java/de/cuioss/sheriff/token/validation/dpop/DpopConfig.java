@@ -38,7 +38,11 @@ import lombok.ToString;
  *       {@link IllegalArgumentException}. A positive value below {@code proofMaxAgeSeconds + 60} is
  *       raised to that floor. The floor adds the fixed {@link #DEFAULT_CLOCK_SKEW_SECONDS} (60), not
  *       the issuer's own clock skew, so a jti stays cached for as long as its proof can remain
- *       acceptable only for an issuer whose clock skew is at most 60 seconds.</li>
+ *       acceptable only for an issuer whose clock skew is at most 60 seconds, and then only to
+ *       whole-second granularity: a proof's age is counted in whole seconds while the entry expires at
+ *       millisecond resolution, so at the full 60-second skew a jti first accepted at the earliest
+ *       instant its proof is acceptable can lapse up to just under one second before that proof stops
+ *       being acceptable.</li>
  * </ul>
  *
  * @since 1.0
@@ -58,7 +62,9 @@ public class DpopConfig {
     /**
      * Default TTL in seconds for jti replay cache entries. Set to
      * {@code DEFAULT_PROOF_MAX_AGE_SECONDS + DEFAULT_CLOCK_SKEW_SECONDS} so the default configuration
-     * already satisfies the replay-window invariant (M3) without derivation.
+     * already satisfies the replay-window invariant (M3) without derivation, for an issuer clock skew of
+     * at most {@code DEFAULT_CLOCK_SKEW_SECONDS} and up to the sub-second whole-second edge described on
+     * the class.
      */
     public static final long DEFAULT_NONCE_CACHE_TTL_SECONDS = 360;
 
@@ -66,7 +72,8 @@ public class DpopConfig {
      * Clock-skew allowance in seconds used to size the replay window (M3). Mirrors the default DPoP
      * proof {@code iat} freshness tolerance ({@code IssuerConfig.DEFAULT_CLOCK_SKEW_SECONDS}): a proof
      * is acceptable while its age lies in {@code [-clockSkew, proofMaxAge]}, so its jti must stay
-     * cached for at least {@code proofMaxAge + clockSkew} to prevent replay across that whole window.
+     * cached for at least {@code proofMaxAge + clockSkew} to prevent replay across that window, up to the
+     * sub-second whole-second edge at its end described on the class.
      */
     public static final long DEFAULT_CLOCK_SKEW_SECONDS = 60;
 
@@ -192,7 +199,10 @@ public class DpopConfig {
             // Enforce the replay-window invariant (M3): the jti replay cache must live at least as long
             // as a proof can remain acceptable — the freshness window is proofMaxAge + clock skew. If the
             // configured TTL is shorter, a jti could expire while the same proof is still fresh, opening a
-            // replay window. Derive the effective TTL up to that minimum so the window is always closed.
+            // replay window. Derive the effective TTL up to that minimum so the window is closed for an
+            // issuer clock skew of at most DEFAULT_CLOCK_SKEW_SECONDS, to within a residual of less than
+            // one second at its end: a proof's age counts whole seconds, the cache entry expires in
+            // milliseconds.
             long minReplayTtlSeconds = proofMaxAgeSeconds + DEFAULT_CLOCK_SKEW_SECONDS;
             long effectiveNonceCacheTtlSeconds = Math.max(nonceCacheTtlSeconds, minReplayTtlSeconds);
             return new DpopConfig(required, proofMaxAgeSeconds, nonceCacheSize, effectiveNonceCacheTtlSeconds);
