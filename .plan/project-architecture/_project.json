@@ -108,7 +108,7 @@
       "description": "Core library for offline OAuth/JWT token validation in multi-issuer environments. Provides the TokenValidator entry point, issuer configuration, staged validation pipelines for access/id/refresh tokens, JWKS loading, signature verification, JWE decryption, DPoP proof validation, and token caching, using standard JDK cryptographic providers.",
       "generation": {
         "by": "architecture",
-        "tree_sha": null
+        "tree_sha": "df94910019e2a3caff35c52a14f2922de74b762c83dec65b8162927fae1bbd3b"
       }
     },
     "token-sheriff-validation-quarkus": {
