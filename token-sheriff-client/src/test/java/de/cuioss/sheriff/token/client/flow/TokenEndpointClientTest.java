@@ -35,6 +35,8 @@ import okhttp3.Headers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -49,6 +51,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -61,6 +64,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * including any raw {@code CR}/{@code LF} the AS embedded. {@link TokenEndpointClient} must route that
  * fragment through {@code LogSanitizer.sanitize} (CWE-117) before it reaches the log appender or the
  * {@link TransportException} message, so the AS cannot forge a log line.
+ * <p>
+ * <strong>Client authentication:</strong> a {@code 4xx} naming {@code invalid_client}, or a {@code 401}
+ * naming {@code unauthorized_client} (Keycloak's wrong-secret answer), is the typed
+ * {@link ClientAuthenticationFailedException}; every shape outside that exact allow-list — a {@code 403}
+ * {@code unauthorized_client}, a {@code 5xx}, an unknown body — stays a plain {@link TransportException},
+ * and {@code invalid_grant} stays a {@link CredentialRejectedException}.
  * <p>
  * <strong>Nonce retry:</strong> a {@code use_dpop_nonce} challenge is retried exactly <em>once</em>, and
  * only when the challenge is genuine. The three cases below pin the boundaries the happy-path retry
@@ -189,6 +198,72 @@ class TokenEndpointClientTest {
                         "a non-success response never redeemed the grant"),
                 () -> assertTrue(thrown.getMessage().contains("unexpected HTTP status 400"),
                         "the failure must be the ordinary non-success outcome, but was: " + thrown.getMessage()));
+    }
+
+    @ParameterizedTest(name = "HTTP {0} error={1} -> ClientAuthenticationFailedException")
+    @CsvSource({
+            // RFC 6749 §5.2 names invalid_client for a failed client authentication, on 401 and on 400.
+            "401, invalid_client",
+            "400, invalid_client",
+            // Keycloak's answer to a wrong client secret: the 401 is the failed authentication.
+            "401, unauthorized_client"})
+    @DisplayName("a failed client authentication is surfaced as the typed refusal, carrying no body content")
+    void shouldRaiseClientAuthenticationFailed(int status, String errorCode, URIBuilder uriBuilder) {
+        String marker = Generators.letterStrings(16, 32).next();
+        moduleDispatcher.failWith(status,
+                "{\"error\":\"" + errorCode + "\",\"error_description\":\"" + marker + "\"}");
+
+        TransportException thrown = redeemExpectingFailure(uriBuilder, null);
+
+        assertAll("typed client-authentication refusal",
+                () -> assertInstanceOf(ClientAuthenticationFailedException.class, thrown,
+                        "the refusal must be the typed client-authentication failure, but was: " + thrown),
+                () -> assertFalse(thrown instanceof CredentialRejectedException,
+                        "a refused client says nothing about the presented grant"),
+                () -> assertTrue(thrown.getMessage().contains("HTTP " + status),
+                        "the message must name the observed status, but was: " + thrown.getMessage()),
+                () -> assertFalse(thrown.getMessage().contains(marker),
+                        "no part of the AS-controlled body may reach the message (CWE-117)"),
+                () -> assertEquals(1, moduleDispatcher.getCallCounter(), "no retry without a nonce challenge"));
+    }
+
+    @ParameterizedTest(name = "HTTP {0} body={1} -> plain TransportException")
+    @CsvSource(delimiter = '|', value = {
+            // An authenticated client refused a grant type: the RFC meaning, not a failed authentication.
+            "403 | {\"error\":\"unauthorized_client\"}",
+            // A 5xx is the server reporting its own failure, whatever error body it carries.
+            "500 | {\"error\":\"invalid_client\"}",
+            "503 | {\"error\":\"invalid_client\"}",
+            // No usable error code on a 401: each is an unknown, and an unknown is never a match.
+            "401 | { not json",
+            "401 | ",
+            "401 | {\"error\":\"invalid_client\",\"error\":\"invalid_client\"}"})
+    @DisplayName("a refusal outside the exact-shape allow-list stays a plain transport failure")
+    void shouldNotRaiseClientAuthenticationFailedOutsideAllowList(int status, String body, URIBuilder uriBuilder) {
+        moduleDispatcher.failWith(status, body == null ? "" : body);
+
+        TransportException thrown = redeemExpectingFailure(uriBuilder, null);
+
+        assertAll("plain non-success outcome",
+                () -> assertFalse(thrown instanceof ClientAuthenticationFailedException,
+                        "only the exact allow-listed shapes may be reported as a failed client authentication"),
+                () -> assertFalse(thrown instanceof CredentialRejectedException,
+                        "the refusal must not be read as a dead credential either"),
+                () -> assertTrue(thrown.getMessage().contains("unexpected HTTP status " + status),
+                        "the failure must be the ordinary non-success outcome, but was: " + thrown.getMessage()));
+    }
+
+    @Test
+    @DisplayName("invalid_grant on a 4xx is still the credential-rejected refusal, not a client-authentication one")
+    void shouldKeepInvalidGrantAsCredentialRejected(URIBuilder uriBuilder) {
+        moduleDispatcher.failWith(400, "{\"error\":\"invalid_grant\"}");
+
+        TransportException thrown = redeemExpectingFailure(uriBuilder, null);
+
+        assertAll("credential-rejected refusal unchanged",
+                () -> assertInstanceOf(CredentialRejectedException.class, thrown),
+                () -> assertFalse(thrown instanceof ClientAuthenticationFailedException,
+                        "a dead grant is not a failed client authentication"));
     }
 
     @Test
@@ -524,6 +599,8 @@ class TokenEndpointClientTest {
 
         private static final String NONCE_CHALLENGE_BODY = "{\"error\":\"use_dpop_nonce\"}";
 
+        private static final int HTTP_BAD_REQUEST = 400;
+
         private final AtomicInteger callCounter = new AtomicInteger();
 
         /** The {@code DPoP-Nonce} value to challenge with, or {@code null} to serve the malformed body. */
@@ -532,11 +609,20 @@ class TokenEndpointClientTest {
         /** The 200 success body to serve, or {@code null} to serve the malformed body. */
         private volatile String successBody;
 
-        /** The 400 error body to serve (without a nonce), or {@code null} for the other shapes. */
+        /** The error body to serve (without a nonce), or {@code null} for the other shapes. */
         private volatile String errorBody;
+
+        /** The status the {@link #errorBody} is served with. */
+        private volatile int errorStatus = HTTP_BAD_REQUEST;
 
         /** Serve {@code body} as a 400 error response without a {@code DPoP-Nonce} on every call. */
         void failWith(String body) {
+            failWith(HTTP_BAD_REQUEST, body);
+        }
+
+        /** Serve {@code body} with the non-success {@code status} and no {@code DPoP-Nonce} on every call. */
+        void failWith(int status, String body) {
+            this.errorStatus = status;
             this.errorBody = body;
         }
 
@@ -559,6 +645,7 @@ class TokenEndpointClientTest {
             this.challengeNonce = null;
             this.successBody = null;
             this.errorBody = null;
+            this.errorStatus = HTTP_BAD_REQUEST;
             this.callCounter.set(0);
         }
 
@@ -577,7 +664,7 @@ class TokenEndpointClientTest {
             callCounter.incrementAndGet();
             String error = this.errorBody;
             if (error != null) {
-                return Optional.of(new MockResponse(400,
+                return Optional.of(new MockResponse(errorStatus,
                         Headers.of("Content-Type", "application/json"), error));
             }
             String nonce = this.challengeNonce;
