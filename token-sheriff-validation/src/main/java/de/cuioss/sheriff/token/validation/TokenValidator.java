@@ -493,17 +493,21 @@ public class TokenValidator implements Closeable {
      * Every JWKS loader that is {@link AutoCloseable} is closed, which stops its background refresh
      * and releases an executor it owns. Ownership of those loaders is transferred to this validator:
      * an {@link IssuerConfig} (or a pre-built JWKS loader set on it) must not be shared with a
-     * validator that outlives this one. A failure closing one loader is logged and neither stops the
-     * remaining loaders nor the shutdown of the other resources. A loader whose close is interrupted
-     * does not stop the remaining loaders either; the calling thread's interrupt flag is restored.
+     * validator that outlives this one. An {@link Exception} closing one loader is logged and neither
+     * stops the remaining loaders nor the shutdown of the other resources. A loader whose close is
+     * interrupted does not stop the remaining loaders either; the calling thread's interrupt flag is
+     * restored. An {@link Error} thrown by the close of one loader is not contained: it leaves the loop
+     * over the loaders, so the loaders after it are not closed, and it is handled as the failure of the
+     * JWKS release step described below.
      * <p>
-     * A failure shutting down one internal resource does not prevent releasing the others: the access
-     * token pipeline, the DPoP replay protection and the JWKS loaders are each released even when an
-     * earlier one failed with any {@link Throwable}, an {@link Error} included. Such a failure (for
-     * example a {@link SecurityException} from an executor shutdown) is still propagated to the caller,
-     * unwrapped, once the remaining resources are released; when both the pipeline and the DPoP replay
-     * protection fail, the later failure (the DPoP replay protection's) is propagated and the earlier
-     * one (the pipeline's) is attached to it as suppressed, so neither is lost.
+     * The release runs in three steps: the access token pipeline shutdown, the DPoP replay protection
+     * close and the JWKS loader close. A failure of one step does not prevent the steps after it: each
+     * step runs even when an earlier step failed with any {@link Throwable}, an {@link Error} included.
+     * This guarantee holds between the three steps only, not between the loaders inside the JWKS step.
+     * Such a failure (for example a {@link SecurityException} from an executor shutdown) is still
+     * propagated to the caller, unwrapped, once the remaining steps ran; when more than one step fails,
+     * the failure of the last failing step is propagated and the failure of each earlier failing step
+     * is attached to it as suppressed, so none is lost.
      * <p>
      * This should be called when the TokenValidator is no longer needed.
      */
@@ -518,6 +522,10 @@ public class TokenValidator implements Closeable {
      * failing step is propagated unwrapped and the failure of every earlier failing step is attached
      * to it as suppressed, so no failure is lost. An earlier failure that is the same instance as the
      * propagated one is not attached to itself.
+     * <p>
+     * The guarantee covers the steps as units. What happens inside a step is up to the step: for
+     * {@code close()} the JWKS step contains an {@link Exception} from one loader but not an
+     * {@link Error}, which ends that step early and leaves the remaining loaders unclosed.
      *
      * @param steps the release steps, in the order they run
      */
