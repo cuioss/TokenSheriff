@@ -91,7 +91,7 @@ path is the only one it can take.
   whether the authorization server redeemed the presented token — rather than from an
   enumeration of which validation layer happened to produce the refusal. Every current and future
   post-redemption refusal reaches the same dispatch without a per-check carve-out, and that
-  dispatch clears the session whenever the presented token is burned.
+  dispatch attempts to clear the session whenever the presented token is burned, subject to the spare rule stated in the Decision.
 * A transient client-side or network failure that never reaches the authorization server no
   longer destroys a healthy session, closing the reverse failure mode of over-eager clearing.
 * When the rotated successor is knowable, it is actively revoked rather than merely discarded,
@@ -103,7 +103,7 @@ path is the only one it can take.
   whether redemption occurred; a new refusal path added later that bypasses this signal
   reintroduces the pre-redemption/post-redemption ambiguity this decision closes.
 * A response that fails to parse cannot report whether rotation occurred, so that branch always
-  presumes redemption and clears without a successor to revoke — a strictly more conservative
+  presumes redemption and attempts the clear, subject to the spare rule stated in the Decision, without a successor to revoke — a strictly more conservative
   outcome than a case where rotation is actually known, but one that forgoes revoking a
   successor the client cannot name.
 

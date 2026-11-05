@@ -551,8 +551,8 @@ public class TokenLifecycleManager {
      * refuses the apply, or the presented token is detected as reuse — the refusal still propagates and its
      * revocations still run, but the fail-closed teardown spares a stored bundle whose refresh token differs
      * from the one this refresh presented, with no recency check: a newer grant stored in the meantime
-     * is left in place together with its family. An empty store, or one that cannot be read, is cleared.
-     * The compare runs under the session's grant lock, so it is exact against {@link #store}.
+     * is left in place together with its family. For an empty store, or one that cannot be read, a clear is
+     * attempted. The compare runs under the session's grant lock, so it is exact against {@link #store}.
      * <p>
      * This coordinator refreshes plain-bearer sessions; it applies the refreshed material with no
      * {@code cnf} binding, so a sender-constrained stored bundle fails closed (a downgrade rather than
@@ -1075,7 +1075,7 @@ public class TokenLifecycleManager {
      * <strong>The spare compares the refresh token only.</strong> It does not check recency: any stored
      * bundle whose refresh token is not {@code presentedRefreshToken} is spared, so a superseded token
      * stored during an in-flight refresh is spared too and keeps its family. When the store cannot be
-     * read, the session is cleared: an unreadable store is never evidence that the refused credential has
+     * read, the clear is attempted: an unreadable store is never evidence that the refused credential has
      * gone. An empty store is cleared too, which also drops a family that outlived its token.
      *
      * @param sessionId             the refused session; never {@code null}
