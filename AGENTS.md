@@ -291,10 +291,10 @@ The **catch-position** placement — a `// cui-rewrite:disable InvalidExceptionU
 comment on the line directly before the `catch` — has been observed to hold: a `-Ppre-commit` run
 (`rewrite:run` with `InvalidExceptionUsageRecipe` active) against `TokenLifecycleManager`, after its
 committed marker was replaced by that comment, re-injected no marker anywhere in the tree. Use that
-adjacent placement for new sites. `TokenLifecycleManager` is the only live sanctioned instance that
-uses it: the other catch-position instances (for example `TokenBuilder`, `TokenValidator` and
-`TokenValidatorHealthCheck`) place explanatory comment lines between the directive and the `catch`,
-and whether the recipe honors that form is not recorded. Class-level and method-level suppression of
+adjacent placement for new sites. `TokenLifecycleManager` and `TokenValidatorHealthCheck` use it;
+the other catch-position instances (for example `TokenBuilder` and `TokenValidator`) place
+explanatory comment lines between the directive and the `catch`, and whether the recipe honors that
+form is not recorded. Class-level and method-level suppression of
 `InvalidExceptionUsageRecipe` were never tested, so they are **untested, not refuted**. Treat that
 as a known gap for a future investigation, not as a finding. Two live markers already sit in those
 untested positions, both in integration-test code: `RefreshProductionPathSpecIT` carries one at
