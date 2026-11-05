@@ -225,9 +225,11 @@ public class DiscoveryResolver {
             // ArrayIndexOutOfBoundsException rather than IOException; it is the same malformed-input
             // condition and takes the same TransportException, as in TokenEndpointClient.deserialize.
             // The parse-error message can echo an OP-controlled JSON fragment; sanitize it (CWE-117)
-            // before it reaches the log appender or the exception message.
+            // before it reaches the log appender or the exception message. The throwable itself is kept
+            // away from the logger, because the appender would print its raw, unsanitized message; the
+            // cause stays attached to the TransportException below.
             String sanitizedError = LogSanitizer.sanitize(e.getMessage());
-            LOGGER.error(e, ClientLogMessages.ERROR.DISCOVERY_FAILED, issuer, sanitizedError);
+            LOGGER.error(ClientLogMessages.ERROR.DISCOVERY_FAILED, issuer, sanitizedError);
             throw new TransportException(ClientLogMessages.ERROR.DISCOVERY_FAILED.format(issuer, sanitizedError), e);
         }
     }
