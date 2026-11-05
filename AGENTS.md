@@ -238,11 +238,16 @@ where the caught failures come from an **open set of SPI implementations that de
 `throws`**, in which case there is nothing to narrow against and suppression is legitimate.
 
 That carve-out is the rule's single limit, and it is part of the rule rather than a footnote. The
-tree holds several sanctioned instances of it, each at a `catch` over an open set of SPI
-implementations (or an equivalent boundary whose thrower declares nothing to narrow against), and
-each carries a comment recording why the broad catch is deliberate. `TokenBuilder`, where custom SPI
-claim mappers are translated into `TokenValidationException`, is the reference example. Everywhere
-else, narrow.
+tree holds several sanctioned instances of it, each carrying a comment recording why the broad catch
+is deliberate. `TokenBuilder`, where custom SPI claim mappers are translated into
+`TokenValidationException`, is the reference example. The one other verified form is a callee whose
+own declared type is already the broad one, so there is nothing narrower to name: `TokenValidator`
+closes its JWKS loaders through `AutoCloseable.close()`, which declares `Exception`.
+
+A callee that declares no `throws` but documents the unchecked failure it raises is **not** such a
+boundary — narrow to the documented type. `TokenValidatorProducer.destroy()` is the worked instance:
+`TokenValidator.close()` declares nothing, its executor shutdowns document a `SecurityException`,
+and the producer catches exactly that. Everywhere else, narrow.
 
 Two practical notes from the sites already narrowed:
 
@@ -291,7 +296,11 @@ uses it: the other catch-position instances (for example `TokenBuilder`, `TokenV
 `TokenValidatorHealthCheck`) place explanatory comment lines between the directive and the `catch`,
 and whether the recipe honors that form is not recorded. Class-level and method-level suppression of
 `InvalidExceptionUsageRecipe` were never tested, so they are **untested, not refuted**. Treat that
-as a known gap for a future investigation, not as a finding.
+as a known gap for a future investigation, not as a finding. Two live markers already sit in those
+untested positions, both in integration-test code: `RefreshProductionPathSpecIT` carries one at
+class level (between the class Javadoc and the class declaration, covering the catch in
+`drive(...)`), and `RefreshConcurrentRedemptionSpecIT` carries one at method level (before
+`attemptRefresh(...)`). Their presence is not evidence that the recipe honours those placements.
 
 Adjacent evidence exists but must not be over-read: this tree relies on **method-level**
 suppression of a *different* recipe (`CuiLoggerStandardsRecipe`, at the two `%n` sites), and a

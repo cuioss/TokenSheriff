@@ -234,7 +234,9 @@ existing kinds already express.
   order. Naming the replayed token first is what triggers family-wide revocation on a server that
   implements it; naming the successor second is what keeps a server that does not from leaving a live
   credential behind until it expires. The two revocations are independent and best-effort, so a failure
-  of one does not skip the other, and the client-side clear remains unconditional.
+  of one does not skip the other. The client-side clear runs whatever the revocations do, and it
+  spares only a positively newer grant the store took meanwhile: it clears the session as long as the
+  store still holds the refused token.
 
 == References
 
