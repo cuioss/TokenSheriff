@@ -15,7 +15,6 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
-import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,7 +30,6 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @EnableTestLogger
-@EnableGeneratorController
 @DisplayName("PkceChallenge S256 verifier/challenge pair (RFC 7636)")
 class PkceChallengeTest {
 
