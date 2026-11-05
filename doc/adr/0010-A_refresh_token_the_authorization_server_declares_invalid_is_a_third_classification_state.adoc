@@ -70,9 +70,12 @@ does not cover them, see the paragraph that closes this Decision.)
   in place).
 * **Redeemed** — the authorization server consumed the grant before a client-side check refused the
   result. The disposition is unchanged from ADR-0005: a refusal raised inside the exchange carries
-  what is known about rotation, a burned presented token quarantines the session, a known successor
-  is revoked (RFC 7009), and an unparseable success response is presumed rotated, so a clear is
-  attempted without inventing a successor to revoke. A refreshed ID token that fails pipeline
+  what is known about rotation, a burned presented token quarantines the session, revoking a known
+  successor is attempted (RFC 7009, best-effort, and only when the provider advertises a revocation
+  endpoint), and an unparseable success response is presumed rotated, so a clear is attempted
+  without inventing a successor to revoke. The exchange refusals that carry a rotated successor are
+  the freshly issued access token failing client-side validation and, under the opt-in
+  `strictScopeReconciliation`, a broader granted scope; the unparseable response carries none. A refreshed ID token that fails pipeline
   validation, an inconsistent refreshed ID token and a refused identity or sender-constraint binding
   are not exchange refusals and carry no such signal: the first is a `TokenValidationException`, the
   other two are plain `IllegalStateException`s, and the lifecycle manager reads each against whether
@@ -115,7 +118,7 @@ binding check that refuses the apply, are handled in `doRefresh`'s own catches a
 quarantine (`quarantineRejectedRotation`) only when the exchange rotated the refresh token, so they
 revoke nothing when it did not; a replayed token is handled by `revokeReusedFamily`. None of these
 paths passes through the classification entry point or this switch. What all the paths share is the disposition they end in, the best-effort
-revocations followed by the attempted fail-closed clear (`revokeAndClearFailClosed`, then
+revocations (each attempted only when the provider advertises a revocation endpoint) followed by the attempted fail-closed clear (`revokeAndClearFailClosed`, then
 `clearRefusedSession`), not the dispatch that selects it.
 
 == Consequences
@@ -256,13 +259,14 @@ existing kinds already express.
   catches the new subtype, and still never routes it through the classification entry point, so the
   reuse path (`revokeReusedFamily`) is a separate path from the exchange-refusal dispatch and shares
   only its disposition. That disposition now includes the redeemed disposition's revocation of the
-  successor: it revokes **both** the replayed token and the successor the authorization server issued
-  on the refused exchange, in that order. Naming the replayed token first is what triggers
+  successor: it attempts to revoke **both** the replayed token and the successor the authorization
+  server issued on the refused exchange, in that order, each only when the provider advertises a
+  revocation endpoint. Naming the replayed token first is what triggers
   family-wide revocation on a server that implements it; naming the successor second is what keeps a server that does not from leaving a live
   credential behind until it expires. The two revocations are best-effort: a transport failure of one
   is logged and does not skip the other. An unchecked exception from the first revocation is not
   caught there: it leaves the loop, so the successor revocation does not run, the client-side clear
-  still runs, and the exception then propagates. The client-side clear runs whatever the revocations
+  still runs, and the exception then propagates in place of the refusal. The client-side clear runs whatever the revocations
   do, and it spares a stored bundle whose refresh token is not the refused one, without checking its
   recency, so a superseded token stored during an in-flight refresh is spared as well and keeps its
   family. Otherwise — the store holds the refused token, is empty, or cannot be read — the clear is

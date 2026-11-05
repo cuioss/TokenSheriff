@@ -227,8 +227,8 @@ test asserts rejection:
 
 | xref:../threat-model.adoc#T-REFRESH-THEFT[T-REFRESH-THEFT]
 | `TokenDispatcher` refresh mode drives rotation; a reused rotated refresh token is refused as
-  reuse, and the lifecycle manager's own `refresh()` revokes *the replayed token and the successor*
-  the exchange issued (a reuse detected by `applyRefresh` revokes nothing).
+  reuse, and the lifecycle manager's own `refresh()` attempts to revoke *the replayed token and the
+  successor* the exchange issued (a reuse detected by `applyRefresh` revokes nothing).
 
 | xref:../threat-model.adoc#T-LOGOUT[T-LOGOUT]
 | `EndSessionDispatcher` returns an open-redirect / mismatched `post_logout_redirect_uri` →

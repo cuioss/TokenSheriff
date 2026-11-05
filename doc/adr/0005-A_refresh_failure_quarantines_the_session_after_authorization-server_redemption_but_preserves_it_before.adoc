@@ -71,7 +71,9 @@ surrounding response.
   keeps its family together with it. When the successor token is known, it is revoked best-effort
   at the authorization server, when the provider advertises a revocation endpoint, whether or not
   the session was cleared; a transport failure of that revocation is logged at debug level and
-  otherwise ignored. When the response could not be parsed, no successor is invented to revoke.
+  otherwise ignored, whereas an unchecked exception from it is not caught: the clear still runs,
+  and the exception then propagates in place of the refusal. When the response could not be
+  parsed, no successor is invented to revoke.
   When the authorization server redeemed the token without rotating it (RFC 6749 §6 permits
   omitting a new refresh token), the presented token is still usable: the session is left
   intact, nothing is cleared and nothing is revoked.
@@ -96,12 +98,16 @@ no single method handles every refusal after redemption:
   in `doRefresh`'s own catches. Each calls the quarantine (`quarantineRejectedRotation`) only
   when the exchange rotated the refresh token (`rotation.rotated()`); when it did not, the
   presented token is still valid, nothing is revoked, and the session is left untouched. The
-  original exception is rethrown unchanged in every case.
+  original exception is rethrown unchanged when the exchange did not rotate; when it did, the
+  quarantine runs before the rethrow, so the original exception is preserved only when that
+  cleanup completes without an uncaught exception (an unchecked exception from a revocation call,
+  or from the store removal, propagates in its place).
 * A superseded token replayed against the rotation family is handled by `revokeReusedFamily`,
-  which revokes the replayed token and then the successor.
+  which attempts to revoke the replayed token and then the successor.
 
 What these paths share is the disposition they end in: the revocations (`revokeAndClearFailClosed`,
-best-effort, in order) and then the attempted fail-closed clear (`clearRefusedSession`), whose
+best-effort, in order, each attempted only when the provider advertises a revocation endpoint and
+free to fail) and then the attempted fail-closed clear (`clearRefusedSession`), whose
 spare rule is stated in the Decision above. A path that has no credential to name, such as the
 unparseable response, revokes nothing and still attempts the clear.
 
@@ -115,10 +121,12 @@ whose catch names both `IllegalStateException` (the inconsistent ID token) and
 `TokenValidationException`. Neither is raised inside the exchange, so `handleRefusedExchange`
 never sees them; the catch decides the validation failure exactly as it decides the inconsistent ID
 token. When the authorization server
-rotated the refresh token, the rotated successor is revoked best-effort and the clear is attempted,
-with the spare rule stated in the Decision above; when it did not rotate, nothing is revoked or
-cleared and the presented token stays usable. The original `TokenValidationException` is rethrown
-unchanged either way.
+rotated the refresh token, revoking the rotated successor is attempted best-effort (when the
+provider advertises a revocation endpoint) and the clear is attempted, with the spare rule stated
+in the Decision above; when it did not rotate, nothing is revoked or cleared and the presented
+token stays usable. When it did not rotate, the original `TokenValidationException` is rethrown
+unchanged; when it did, it is rethrown after that cleanup and is replaced if the cleanup throws an
+uncaught exception.
 
 == Consequences
 
@@ -134,8 +142,9 @@ unchanged either way.
   one of those paths.
 * A transient client-side or network failure that never reaches the authorization server no
   longer destroys a healthy session, closing the reverse failure mode of over-eager clearing.
-* When the rotated successor is knowable, it is actively revoked rather than merely discarded,
-  removing a live but unused credential from circulation instead of leaving it to expire.
+* When the rotated successor is knowable, revoking it is actively attempted rather than merely
+  discarding it, which removes a live but unused credential from circulation instead of leaving it
+  to expire, whenever the provider advertises a revocation endpoint and the request succeeds.
 
 === Negative
 

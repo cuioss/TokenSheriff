@@ -60,11 +60,14 @@ public final class ClientLogMessages {
                 .build();
 
         /**
-         * A refused refresh exchange did not clear the session, because a newer grant (a re-login or
-         * step-up) was stored while the exchange was in flight. The refusal still propagated, and any
-         * revocation the refused path makes had already been attempted (an {@code invalid_grant} refusal
-         * makes none); only the fail-closed store and rotation-family clear was skipped, so the newer
-         * grant stays usable.
+         * A refused refresh exchange did not clear the session, because the store held a bundle with a
+         * refresh token different from the refused one: typically a newer grant (a re-login or step-up)
+         * stored while the exchange was in flight, but the guard compares the refresh token only and does
+         * not check recency. The refusal still propagated unless a revocation call threw an unchecked
+         * exception, which replaces it. Any revocation the refused path makes had already been attempted,
+         * only when the provider advertises a revocation endpoint, and it may have failed (an
+         * {@code invalid_grant} refusal attempts none); only the fail-closed store and rotation-family
+         * clear was skipped, so the stored bundle stays usable.
          */
         public static final LogRecord REFUSED_REFRESH_KEPT_NEWER_GRANT = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -136,8 +139,9 @@ public final class ClientLogMessages {
                 .build();
 
         /**
-         * Refresh-token reuse was detected on a stored session; the replayed token and its successor are
-         * revoked at the AS (best-effort) and a clear of the store is attempted.
+         * Refresh-token reuse was detected on a stored session; revocation of the replayed token and its
+         * successor at the AS is attempted (best-effort: only when the provider advertises a revocation
+         * endpoint, and a request that is made may fail) and a clear of the store is attempted.
          */
         public static final LogRecord REFRESH_REUSE_REVOCATION = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -165,7 +169,7 @@ public final class ClientLogMessages {
 
         /**
          * The authorization server granted a scope this client did not request. Reported by default,
-         * and refused only when the client opted in via
+         * and refused, instead of reported, only when the client opted in via
          * {@code ClientConfiguration.strictScopeReconciliation}. This is an anomaly report for the
          * operator and the calling application, not a violation notice.
          */
@@ -176,9 +180,18 @@ public final class ClientLogMessages {
                 .build();
 
         /**
-         * A refresh the authorization server had already rotated was refused by the identity or
-         * sender-constraint binding check; the session is quarantined fail-closed because the presented
-         * token is burned at the AS and the rotated one must not be kept.
+         * A refresh the authorization server had already rotated was refused, and the session is
+         * quarantined fail-closed because the presented token is burned at the AS and the rotated one
+         * must not be kept. The causes are exactly these: the refreshed ID token fails pipeline
+         * validation or is inconsistent with the refreshed access token; the identity or
+         * sender-constraint binding check rejects the refresh; or, when the refusal is raised inside
+         * the token exchange after the AS issued a rotated successor, the freshly issued access token
+         * fails client-side validation or {@code strictScopeReconciliation} rejects a broader granted
+         * scope. A refusal inside the exchange whose success response could not be parsed is logged as
+         * {@link #REFRESH_REDEMPTION_UNVERIFIABLE_QUARANTINE} instead, and one that names no rotated
+         * successor does not log this record. Revocation of the rotated token is attempted
+         * (best-effort: only when the provider advertises a revocation endpoint, and a request that is
+         * made may fail), together with a fail-closed clear of the session.
          */
         public static final LogRecord REFRESH_IDENTITY_REJECTED_QUARANTINE = LogRecordModel.builder()
                 .prefix(PREFIX)
