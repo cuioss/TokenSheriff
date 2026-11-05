@@ -191,6 +191,38 @@ class DpopProofValidatorTest {
         assertTrue(ex.getMessage().contains("must have 3 parts"), ex.getMessage());
     }
 
+    @ParameterizedTest(name = "should reject truncated escape in {0}")
+    @CsvSource(delimiter = '|', quoteCharacter = '`', value = {
+            "header | `{\"typ\":\"dpop+jwt\\`",
+            "header | `{\"typ\":\"dpop+jwt\",\"alg\":\"\\u12`",
+            "payload | `{\"jti\":\"abc\\`",
+            "payload | `{\"jti\":\"\\u12`"
+    })
+    @DisplayName("Should reject a proof whose header or payload JSON ends inside a string escape as DPOP_PROOF_INVALID")
+    void shouldRejectProofWithTruncatedEscape(String segment, String truncatedJson) {
+        DecodedJwt accessToken = createAccessTokenJwt("some-thumbprint");
+        String validHeader = "{\"typ\":\"dpop+jwt\",\"alg\":\"RS256\"}";
+        String validBody = "{\"jti\":\"test-jti\"}";
+        boolean truncateHeader = "header".equals(segment);
+        String proof = base64Url(truncateHeader ? truncatedJson : validHeader) + "."
+                + base64Url(truncateHeader ? validBody : truncatedJson) + ".dummy-sig";
+        AccessTokenRequest request = AccessTokenRequest.of("dummy-token", Map.of("dpop", List.of(proof)));
+
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(request, accessToken, "dummy-token"),
+                "A truncated escape in the DPoP proof must be a declared rejection, not an unchecked exception");
+
+        assertAll(
+                () -> assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType()),
+                () -> assertTrue(ex.getMessage().contains("Failed to decode DPoP proof JWT"), ex.getMessage()),
+                () -> assertEquals(1, securityEventCounter.getCount(EventType.DPOP_PROOF_INVALID),
+                        "DPOP_PROOF_INVALID must be counted exactly once"));
+    }
+
+    private static String base64Url(String json) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+    }
+
     @Test
     void shouldRejectWrongTypHeader() {
         KeyPair keyPair = FIXTURE_KEY_PAIR;

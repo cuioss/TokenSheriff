@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.validation.dpop;
 
 import com.dslplatform.json.DslJson;
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.commons.transport.JwkKey;
@@ -267,9 +268,14 @@ public class DpopProofValidator {
             }
             headerMap = MapRepresentation.fromJson(dslJson, headerBytes);
             bodyMap = MapRepresentation.fromJson(dslJson, bodyBytes);
-        } catch (IllegalArgumentException | IOException e) {
+        } catch (IllegalArgumentException | IOException | ArrayIndexOutOfBoundsException e) {
+            // DSL-JSON reports a truncated escape (a trailing lone backslash, a cut-off unicode escape) by
+            // reading past the end of its buffer, i.e. as ArrayIndexOutOfBoundsException rather than
+            // IOException; it is the same malformed-input condition and takes the same rejection.
+            // A DSL-JSON parse error quotes the client-supplied proof bytes around the failure position,
+            // so the message is neutralized against log injection (CWE-117) before it is logged or thrown.
             rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
-                    "Failed to decode DPoP proof JWT: %s".formatted(e.getMessage()));
+                    "Failed to decode DPoP proof JWT: %s".formatted(ErrorTextSanitizer.sanitize(e.getMessage())));
             return null; // unreachable but needed for compilation
         }
 
