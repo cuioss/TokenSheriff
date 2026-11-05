@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.validation.jwks.parser;
 
 import com.dslplatform.json.DslJson;
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.commons.transport.JwkKey;
@@ -114,7 +115,9 @@ public class JwksParser {
         } catch (IOException | ArrayIndexOutOfBoundsException e) {
             // If both parsers failed on malformed input, it's invalid JSON. A truncated escape surfaces
             // from DSL-JSON as ArrayIndexOutOfBoundsException and is handled the same way.
-            LOGGER.error(JWTValidationLogMessages.ERROR.JWKS_INVALID_JSON, e.getMessage());
+            // A DSL-JSON parse error echoes excerpts of the (possibly remote) JWKS, so the message is
+            // neutralized against log injection (CWE-117) before it is logged
+            LOGGER.error(JWTValidationLogMessages.ERROR.JWKS_INVALID_JSON, ErrorTextSanitizer.sanitize(e.getMessage()));
             securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
             return result;
         }
