@@ -499,11 +499,11 @@ public class TokenValidator implements Closeable {
      * <p>
      * A failure shutting down one internal resource does not prevent releasing the others: the access
      * token pipeline, the DPoP replay protection and the JWKS loaders are each released even when an
-     * earlier one failed. Such a failure (for example a {@link SecurityException} from an executor
-     * shutdown) is still propagated to the caller once the remaining resources are released; when both
-     * the pipeline and the DPoP replay protection fail, the later failure (the DPoP replay
-     * protection's) is propagated and the earlier one (the pipeline's) is attached to it as
-     * suppressed, so neither is lost.
+     * earlier one failed with any {@link Throwable}, an {@link Error} included. Such a failure (for
+     * example a {@link SecurityException} from an executor shutdown) is still propagated to the caller,
+     * unwrapped, once the remaining resources are released; when both the pipeline and the DPoP replay
+     * protection fail, the later failure (the DPoP replay protection's) is propagated and the earlier
+     * one (the pipeline's) is attached to it as suppressed, so neither is lost.
      * <p>
      * This should be called when the TokenValidator is no longer needed.
      */
@@ -513,23 +513,26 @@ public class TokenValidator implements Closeable {
     }
 
     /**
-     * Runs the release steps in order, each one even when an earlier one failed. Once every step ran,
-     * the failure of the last failing step is propagated and the failure of every earlier failing step
-     * is attached to it as suppressed, so no failure is lost.
+     * Runs the release steps in order, each one even when an earlier one failed with any
+     * {@link Throwable}, an {@link Error} included. Once every step ran, the failure of the last
+     * failing step is propagated unwrapped and the failure of every earlier failing step is attached
+     * to it as suppressed, so no failure is lost. An earlier failure that is the same instance as the
+     * propagated one is not attached to itself.
      *
      * @param steps the release steps, in the order they run
      */
     static void releaseInOrder(Runnable... steps) {
-        RuntimeException propagated = null;
-        List<RuntimeException> earlier = new ArrayList<>();
+        Throwable propagated = null;
+        List<Throwable> earlier = new ArrayList<>();
         for (Runnable step : steps) {
             try {
                 step.run();
             }
             // cui-rewrite:disable InvalidExceptionUsageRecipe
-            // Intentional catch-all: a release step may fail with any unchecked exception, and one
-            // failing step must neither stop the remaining steps nor lose its failure.
-            catch (RuntimeException e) {
+            // Intentional catch-all: a release step may fail with any unchecked exception or Error, and
+            // one failing step must neither stop the remaining steps nor lose its failure. The failure
+            // is rethrown once every step ran.
+            catch (Throwable e) {
                 if (propagated != null) {
                     earlier.add(propagated);
                 }
@@ -537,9 +540,27 @@ public class TokenValidator implements Closeable {
             }
         }
         if (propagated != null) {
-            earlier.forEach(propagated::addSuppressed);
-            throw propagated;
+            for (Throwable failure : earlier) {
+                if (failure != propagated) {
+                    propagated.addSuppressed(failure);
+                }
+            }
+            throwUnchecked(propagated);
         }
+    }
+
+    /**
+     * Rethrows a failure caught from a {@link Runnable} release step as it is, without wrapping it and
+     * without making the caller declare a checked exception. Such a failure is an unchecked exception
+     * or an {@link Error}, as {@link Runnable#run()} declares no checked exception.
+     *
+     * @param failure the failure to rethrow
+     * @param <T>     the type the compiler sees thrown, inferred as an unchecked exception at the call site
+     * @throws T always, the given failure itself
+     */
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> void throwUnchecked(Throwable failure) throws T {
+        throw (T) failure;
     }
 
     private void closeDpopReplayProtection() {
