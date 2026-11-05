@@ -240,8 +240,9 @@ public class DiscoveryResolver {
     /**
      * Refuses a scheme downgrade inside an HTTPS discovery document: when the configured issuer is
      * {@code https}, every advertised endpoint that is present must be {@code https} as well. The check
-     * is not relaxed by {@link ClientConfiguration#allowInsecureHttp}, which exists for an {@code http}
-     * issuer in a local setup, not for cleartext endpoints advertised by a TLS issuer. The refusal names
+     * is not relaxed by {@link ClientConfiguration#allowInsecureHttp}, which exists for local setups
+     * (an {@code http} issuer, or an {@code https} issuer reached through an {@code http} back-channel
+     * origin), not for cleartext endpoints advertised by a TLS issuer. The refusal names
      * the endpoint label only; the advertised URL is untrusted and is not echoed.
      */
     private static void validateEndpointSchemes(ProviderMetadata metadata, String issuer) {

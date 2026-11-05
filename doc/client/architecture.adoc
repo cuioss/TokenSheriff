@@ -166,7 +166,9 @@ target. The engine therefore *owns* an in-module egress control, applied uniform
   advertised one. The issuer identity, the published metadata and the front-channel URLs stay
   public (xref:../adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015]).
 | *Scheme / TLS enforcement* | A non-TLS (`http://`) endpoint is refused unless cleartext is
-  explicitly enabled, via the `HttpHandler` builder's TLS enforcement. This control, the
+  explicitly enabled, via the `HttpHandler` builder's TLS enforcement. Independently of that
+  setting, an `https` issuer's discovery document may advertise only `https` endpoints; a
+  cleartext endpoint inside it is refused by `DiscoveryResolver`. This control, the
   per-client trust (`sslContext`) and hostname verification are applied to the host actually
   contacted — the rewritten target when a back-channel origin applies.
 | *Bounded reads & timeouts* | Response bodies are size-capped *during* the read
