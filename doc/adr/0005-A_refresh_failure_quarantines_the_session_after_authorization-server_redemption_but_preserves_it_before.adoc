@@ -76,11 +76,13 @@ surrounding response.
   intact, nothing is cleared and nothing is revoked.
 
 The discriminator is observable purely from the transport layer — whether the authorization
-server's response reached a successful status — so every refusal that fires downstream of that
-observation is decided by the same rule, whichever validation layer produced it: the session is
-cleared fail-closed only when the presented token is burned (rotated, or rotation unknown) and
-left intact when the server redeemed without rotating. A refusal that fires upstream of that
-observation never reaches the rule, so the session-preserving path is the only one it can take.
+server's response reached a successful status — so a refusal that fires downstream of that
+observation and reaches one of the code paths listed below is decided by the same rule, whichever
+validation layer produced it: the session is cleared fail-closed only when the presented token is
+burned (rotated, or rotation unknown) and left intact when the server redeemed without rotating.
+A refusal that fires upstream of that observation never reaches the rule, so the
+session-preserving path is the only one it can take. Not every refusal after redemption reaches
+those paths; the last paragraph of this section names the one that does not.
 
 That is one rule, not one dispatch. The lifecycle manager applies it on several code paths, and
 no single method handles every refusal after redemption:
@@ -101,16 +103,29 @@ best-effort, in order) and then the attempted fail-closed clear (`clearRefusedSe
 spare rule is stated in the Decision above. A path that has no credential to name, such as the
 unparseable response, revokes nothing and still attempts the clear.
 
+The list names the paths that reach that shared disposition; it is not a list of every refusal
+that can follow a redemption. One path does not reach it: a refreshed ID token that fails
+validation in the token-validation pipeline (signature, `iss`, `aud`, `exp` / `iat`).
+`IdTokenValidationBridge.validateRefreshedIdToken` declares a `TokenValidationException` for it,
+and `verifiedRefreshedIdToken` calls the bridge inside `doRefresh`'s try block, whose catch names
+`IllegalStateException` only. That exception is not an `IllegalStateException` and is raised
+outside the exchange, so `handleRefusedExchange` never sees it either. It therefore propagates out
+of `doRefresh` and `refresh` without a quarantine, without a revocation and without a clear, even
+when the authorization server rotated the refresh token: the session keeps the presented token the
+authorization server has already burned. This record states that behaviour; it does not decide it.
+
 == Consequences
 
 === Positive
 
 * The session-lifecycle response to a refresh refusal is derived from one architectural fact —
   whether the authorization server redeemed the presented token — rather than from an
-  enumeration of which validation layer happened to produce the refusal. Every current and future
-  post-redemption refusal is decided by the same rule without a per-check carve-out, whichever
-  code path raises it, and that rule attempts to clear the session whenever the presented token is
-  burned, subject to the spare rule stated in the Decision.
+  enumeration of which validation layer happened to produce the refusal. A post-redemption refusal
+  that reaches one of the code paths listed in the Decision is decided by the same rule without a
+  per-check carve-out, whichever validation layer raised it, and that rule attempts to clear the
+  session whenever the presented token is burned, subject to the spare rule stated in the
+  Decision. A refusal raised on a path that does not reach the rule, such as the refreshed-ID-token
+  pipeline validation named at the end of the Decision, is not covered by this benefit.
 * A transient client-side or network failure that never reaches the authorization server no
   longer destroys a healthy session, closing the reverse failure mode of over-eager clearing.
 * When the rotated successor is knowable, it is actively revoked rather than merely discarded,
@@ -134,11 +149,12 @@ unparseable response, revokes nothing and still attempts the clear.
 * A concurrent caller joining an in-flight refresh that fails must observe the same session state
   the failing caller produces; a discriminator that is correct for a single caller but not
   consistently visible to a joiner would reintroduce the ambiguity for concurrent access.
-* Because the session and its rotation family are cleared on every post-redemption refusal that
-  burned the presented token and whose stored bundle is the refused one, or that has no readable
-  stored bundle (only a stored bundle whose refresh token is not the refused one is spared,
-  whatever its recency, and it keeps its family; a redeemed-but-not-rotated refusal burned
-  nothing and clears nothing), an authorization server that
+* Because a clear of the session and its rotation family is attempted on every post-redemption
+  refusal that reaches the shared disposition and burned the presented token, and whose stored bundle
+  is the refused one or is not readable (only a stored bundle whose refresh token is not the
+  refused one is spared, whatever its recency, and it keeps its family; a redeemed-but-not-rotated
+  refusal burned nothing and clears nothing; the clear can itself fail, as the Decision states),
+  an authorization server that
   rotates on every request and refuses for reasons unrelated to token compromise (misconfigured
   local validation, for example) forces re-authentication more often than a narrower rule would.
   This is accepted as the safer failure direction: the alternative is preserving a session that

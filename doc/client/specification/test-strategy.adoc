@@ -227,7 +227,8 @@ test asserts rejection:
 
 | xref:../threat-model.adoc#T-REFRESH-THEFT[T-REFRESH-THEFT]
 | `TokenDispatcher` refresh mode drives rotation; a reused rotated refresh token is refused as
-  reuse, and the client revokes *the replayed token and the successor* the exchange issued.
+  reuse, and the lifecycle manager's own `refresh()` revokes *the replayed token and the successor*
+  the exchange issued (a reuse detected by `applyRefresh` revokes nothing).
 
 | xref:../threat-model.adoc#T-LOGOUT[T-LOGOUT]
 | `EndSessionDispatcher` returns an open-redirect / mismatched `post_logout_redirect_uri` →
@@ -308,7 +309,8 @@ this specification mandates):
 | The threat-model behaviour a *real* OP can exercise: a mismatched `state` / `nonce` rejected;
   a wrong `iss` (mix-up, using two real providers) rejected before exchange; an injected /
   replayed code refused; a tampered / expired token rejected by the pipeline; a reused rotated
-  refresh token triggering family revocation; a logout open-redirect via an unmatched
+  refresh token triggering the authorization server's own family-wide revocation (the real
+  provider's behaviour, observed by the test; not a revocation the client issues); a logout open-redirect via an unmatched
   `post_logout_redirect_uri` rejected; a held token confirmed *revoked* after logout; and an
   `insufficient_user_authentication` response whose re-driven `acr` / `auth_time` does not
   satisfy the requirement *not* treated as a successful step-up.

@@ -203,10 +203,12 @@ The client engine:
 | [[T-REFRESH-THEFT]]T-REFRESH-THEFT
 | *Refresh-token theft (server-side).* A refresh token exfiltrated from the server-side store
   is used to mint fresh access tokens indefinitely.
-| Rotate refresh tokens on each use; detect reuse of a rotated token and, on detection, revoke the
-  replayed token and then the successor the authorization server issued on that exchange
-  (best-effort; a server that revokes family-wide drops the whole family on the first) and attempt
-  to clear the session; sender-constrain where available; protect the at-rest store; minimal storage.
+| Rotate refresh tokens on each use; detect reuse of a rotated token and, on detection in the
+  lifecycle manager's own `refresh()`, revoke the replayed token and then the successor the
+  authorization server issued on that exchange (best-effort; a server that revokes family-wide
+  drops the whole family on the first) and attempt to clear the session. A reuse detected by
+  `applyRefresh` clears the session but revokes nothing and leaves the successor to the caller;
+  sender-constrain where available; protect the at-rest store; minimal storage.
 | https://www.rfc-editor.org/rfc/rfc9700#section-4.14[RFC 9700 §4.14]
 | xref:requirements.adoc#CLIENT-17[CLIENT-17], xref:requirements.adoc#CLIENT-18[CLIENT-18]
 
