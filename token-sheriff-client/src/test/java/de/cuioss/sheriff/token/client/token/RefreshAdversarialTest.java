@@ -209,7 +209,7 @@ class RefreshAdversarialTest extends RefreshTestSupport {
                 .orElseThrow();
 
         assertEquals(rt4, reauthenticated.refreshToken(),
-                "the rotation family was cleared too, so the fresh bundle rotates instead of failing as reuse");
+                "the session recovers after the unchecked revocation failure: the fresh bundle rotates instead of failing as reuse");
     }
 
     @Test
