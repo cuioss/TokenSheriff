@@ -58,11 +58,12 @@ surrounding response.
   scope policy, or response parsing — then refuses the refresh): the presented token may already
   be burned at the authorization server. The session is cleared as long as the store still holds
   the refused token — a positively newer grant stored meanwhile (by a concurrent re-authentication,
-  say) is spared, because it is not the burned credential. The rotation family is reset, and — when
-  the successor token is known — it is revoked at the authorization server. When the response
-  could not be parsed at all, rotation cannot be determined even in principle; the refusal is
-  presumed-redeemed and the session is cleared on the same condition, without inventing a
-  successor to revoke.
+  say) is spared, because it is not the burned credential. The rotation family is reset exactly
+  when the session is cleared: a spared newer grant keeps its family together with its stored
+  bundle. When the successor token is known, it is revoked at the authorization server whether or
+  not the session was cleared. When the response could not be parsed at all, rotation cannot be
+  determined even in principle; the refusal is presumed-redeemed and the session and its rotation
+  family are cleared on the same condition, without inventing a successor to revoke.
 
 The discriminator is observable purely from the transport layer — whether the authorization
 server's response reached a successful status — so every refusal that fires downstream of that
@@ -98,8 +99,9 @@ reaches it, so the session-preserving path is the only one it can take.
 * A concurrent caller joining an in-flight refresh that fails must observe the same session state
   the failing caller produces; a discriminator that is correct for a single caller but not
   consistently visible to a joiner would reintroduce the ambiguity for concurrent access.
-* Because the session is cleared on every post-redemption refusal whose refused token the store
-  still holds (only a positively newer grant stored meanwhile is spared), an authorization server that
+* Because the session and its rotation family are cleared on every post-redemption refusal whose
+  refused token the store still holds (only a positively newer grant stored meanwhile is spared, and
+  it keeps its family), an authorization server that
   rotates on every request and refuses for reasons unrelated to token compromise (misconfigured
   local validation, for example) forces re-authentication more often than a narrower rule would.
   This is accepted as the safer failure direction: the alternative is preserving a session that
