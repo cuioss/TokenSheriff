@@ -56,7 +56,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * the integration user in through Keycloak's login-actions endpoint to obtain a real authorization
  * code, the production {@link CallbackHandler} validates the redirect (CSRF {@code state} binding),
  * and the code is redeemed at the token endpoint with the PKCE {@code code_verifier}. Keycloak issues
- * an ID token only when the verifier matches the challenge, proving the PKCE binding end-to-end. The
+ * an ID token only when the verifier matches the challenge, proving the PKCE binding end-to-end. Two
+ * negatives pin the refusal side: a code redeemed with a random verifier, and a code redeemed with the
+ * genuine verifier of a second, independent {@link FlowContext} (a verifier from another session), are
+ * both refused with HTTP {@code 400}. The
  * container uses a self-signed certificate, so the exchange runs against a trust-all TLS context
  * (integration-test scope only), mirroring {@link BaseIntegrationTest}'s relaxed HTTPS posture.
  */
@@ -77,35 +80,18 @@ class AuthCodePkceSpecIT extends BaseIntegrationTest {
 
     private static final Pattern FORM_ACTION = Pattern.compile("action=\"([^\"]+)\"");
 
+    /** The RFC 6749 §5.2 {@code error} member naming {@code invalid_grant} — the member, not a substring. */
+    private static final Pattern INVALID_GRANT_ERROR = Pattern.compile("\"error\"\\s*:\\s*\"invalid_grant\"");
+
     @Test
     @DisplayName("Should complete a headless authorization_code + PKCE exchange and receive an ID token")
     void shouldCompleteAuthCodePkceExchange() throws Exception {
         assertTrue(discoveryDocument().contains("S256"),
                 "Keycloak must advertise PKCE S256 in its discovery document (CLIENT-2 precondition)");
 
-        var configuration = ClientConfiguration.builder()
-                .issuer(ISSUER)
-                .clientId(CLIENT_ID)
-                .clientSecret(CLIENT_SECRET)
-                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
-                .scope("openid")
-                .redirectUri(REDIRECT_URI)
-                .allowInsecureHttp(false)
-                .build();
-        var metadata = new ProviderMetadata();
-        metadata.issuer = ISSUER;
-        metadata.authorizationEndpoint = AUTH_ENDPOINT;
-        metadata.codeChallengeMethodsSupported = List.of("S256");
-
         FlowContext context = FlowContext.create(REDIRECT_URI);
-        String authorizationUrl = new AuthorizationRequestBuilder().build(configuration, metadata, context);
-
-        HttpClient client = HttpClient.newBuilder()
-                .sslContext(trustAllContext())
-                .cookieHandler(new CookieManager())
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
+        String authorizationUrl = authorizationUrl(context);
+        HttpClient client = browserClient();
 
         String callbackQuery = login(client, authorizationUrl);
         CallbackParameters callback = CallbackParameters.parse(callbackQuery);
@@ -127,28 +113,9 @@ class AuthCodePkceSpecIT extends BaseIntegrationTest {
     @Test
     @DisplayName("Should be rejected when the code is redeemed with a mismatched PKCE verifier")
     void shouldRejectMismatchedVerifier() throws Exception {
-        var configuration = ClientConfiguration.builder()
-                .issuer(ISSUER)
-                .clientId(CLIENT_ID)
-                .clientSecret(CLIENT_SECRET)
-                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
-                .scope("openid")
-                .redirectUri(REDIRECT_URI)
-                .build();
-        var metadata = new ProviderMetadata();
-        metadata.issuer = ISSUER;
-        metadata.authorizationEndpoint = AUTH_ENDPOINT;
-        metadata.codeChallengeMethodsSupported = List.of("S256");
-
         FlowContext context = FlowContext.create(REDIRECT_URI);
-        String authorizationUrl = new AuthorizationRequestBuilder().build(configuration, metadata, context);
-
-        HttpClient client = HttpClient.newBuilder()
-                .sslContext(trustAllContext())
-                .cookieHandler(new CookieManager())
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
+        String authorizationUrl = authorizationUrl(context);
+        HttpClient client = browserClient();
 
         String callbackQuery = login(client, authorizationUrl);
         String code = new CallbackHandler().handle(context, CallbackParameters.parse(callbackQuery));
@@ -159,6 +126,67 @@ class AuthCodePkceSpecIT extends BaseIntegrationTest {
 
         assertEquals(400, tokenResponse.statusCode(),
                 "Keycloak must reject a code redeemed with a PKCE verifier that does not match the challenge");
+    }
+
+    @Test
+    @DisplayName("Should reject a code redeemed with the genuine PKCE verifier of another flow")
+    void shouldRejectVerifierFromAnotherFlow() throws Exception {
+        FlowContext contextA = FlowContext.create(REDIRECT_URI);
+        FlowContext contextB = FlowContext.create(REDIRECT_URI);
+        String verifierA = contextA.pkceChallenge().codeVerifier();
+        String verifierB = contextB.pkceChallenge().codeVerifier();
+        assertNotEquals(verifierA, verifierB,
+                "the two flows must carry distinct PKCE verifiers, or the cross-flow redemption proves nothing");
+
+        HttpClient client = browserClient();
+        String callbackQuery = login(client, authorizationUrl(contextA));
+        String codeA = new CallbackHandler().handle(contextA, CallbackParameters.parse(callbackQuery));
+        assertNotNull(codeA, "the callback for flow A must carry a validated authorization code");
+
+        HttpResponse<String> tokenResponse = redeem(client, codeA, verifierB);
+        LOGGER.debug("cross-flow verifier token response: status=%s, body=%s",
+                tokenResponse.statusCode(), tokenResponse.body());
+
+        assertAll("code A redeemed with flow B's verifier",
+                () -> assertEquals(400, tokenResponse.statusCode(),
+                        "Keycloak must refuse code A presented with another flow's genuine verifier"),
+                () -> assertTrue(INVALID_GRANT_ERROR.matcher(tokenResponse.body()).find(),
+                        "the error member must be invalid_grant, got " + tokenResponse.body()),
+                () -> assertFalse(tokenResponse.body().contains("access_token"),
+                        "the refusal must not carry an access_token"));
+    }
+
+    private static String authorizationUrl(FlowContext context) {
+        return new AuthorizationRequestBuilder().build(clientConfiguration(), providerMetadata(), context);
+    }
+
+    private static ClientConfiguration clientConfiguration() {
+        return ClientConfiguration.builder()
+                .issuer(ISSUER)
+                .clientId(CLIENT_ID)
+                .clientSecret(CLIENT_SECRET)
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                .scope("openid")
+                .redirectUri(REDIRECT_URI)
+                .allowInsecureHttp(false)
+                .build();
+    }
+
+    private static ProviderMetadata providerMetadata() {
+        var metadata = new ProviderMetadata();
+        metadata.issuer = ISSUER;
+        metadata.authorizationEndpoint = AUTH_ENDPOINT;
+        metadata.codeChallengeMethodsSupported = List.of("S256");
+        return metadata;
+    }
+
+    private static HttpClient browserClient() throws Exception {
+        return HttpClient.newBuilder()
+                .sslContext(trustAllContext())
+                .cookieHandler(new CookieManager())
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
     }
 
     private String discoveryDocument() throws Exception {
