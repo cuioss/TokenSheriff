@@ -1095,8 +1095,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             LOGGER.warn(WARN.BACKGROUND_REFRESH_PARSE_ERROR, ErrorTextSanitizer.sanitize(e.getMessage()),
                     loggableResolvedIssuer());
         } catch (IllegalStateException e) {
-            // State errors (e.g., from orElseThrow when issuer not resolved), includes CancellationException
-            LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+            // State errors (e.g., from orElseThrow when issuer not resolved), includes CancellationException.
+            // The message is neutralized against log injection (CWE-117) like the parse error above.
+            LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, ErrorTextSanitizer.sanitize(e.getMessage()));
         }
         // cui-rewrite:disable InvalidExceptionUsageRecipe
         // Intentional catch-all safety net: ScheduledExecutorService silently cancels the task
