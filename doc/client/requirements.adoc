@@ -474,7 +474,14 @@ the fetch (xref:architecture.adoc#_owned_back_channel_http[owned back-channel HT
 xref:threat-model.adoc#T-SSRF-ADVERTISED[T-SSRF-ADVERTISED]). The scope of that control is
 *path-structure and scheme*, not host-address reachability; host-address SSRF filtering
 (link-local / internal-address blocking) remains a network- / deployment-level concern, not an
-engine control.
+engine control. Every endpoint the client models and uses that an `https` issuer's discovery
+document advertises (`authorization_endpoint`, `token_endpoint`, `userinfo_endpoint`, `jwks_uri`,
+`end_session_endpoint`, `revocation_endpoint`, `introspection_endpoint`,
+`pushed_authorization_request_endpoint`) MUST be `https`, and `allowInsecureHttp` does not relax
+this; an advertised field outside that set is not read and is not checked. The discovery response MUST carry `Content-Type`
+`application/json` (parameters such as `charset` allowed); otherwise it is refused,
+`application/jrd+json` included.
+
 * Source: https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180], https://www.rfc-editor.org/rfc/rfc9700#section-2.6[RFC 9700 §2.6].
 
 NOTE: *Token-signature exclusions are not restated here.* Rejecting `alg=none`, HMAC and

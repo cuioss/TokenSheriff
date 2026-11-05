@@ -78,6 +78,10 @@ public final class ClientRuntimeConfig {
     /**
      * Whether plaintext {@code http://} endpoints are permitted for discovery and back-channel calls.
      * Property: {@code sheriff.client.allow-insecure-http}. Defaults to {@code false}.
+     * <p>
+     * It does not relax the scheme check inside a discovery document: an {@code https} issuer whose
+     * document advertises a non-{@code https} value for any endpoint the client models and uses is
+     * refused regardless of this setting.
      */
     public static final String ALLOW_INSECURE_HTTP = PREFIX + ".allow-insecure-http";
 

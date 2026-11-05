@@ -30,7 +30,7 @@ sheriff.client.client-secret=${MY_SERVICE_CLIENT_SECRET}
 |`sheriff.client.auth-method` |String |`client_secret_basic` |Client authentication method, as the RFC 8414 `token_endpoint_auth_methods_supported` value. An unrecognised value fails the mapping
 |`sheriff.client.scopes` |String (csv) |— (none requested) |OAuth 2.0 scopes to request
 |`sheriff.client.redirect-uri` |String |— |The single exact `redirect_uri` for the interactive `authorization_code` flow. Absent for non-interactive clients
-|`sheriff.client.allow-insecure-http` |boolean |`false` |Permit plaintext `http://` discovery and back-channel endpoints (testing only)
+|`sheriff.client.allow-insecure-http` |boolean |`false` |Permit plaintext `http://` discovery and back-channel endpoints (testing only). It does not relax the refusal of a non-`https` value, advertised by an `https` issuer's discovery document, for any endpoint the client models and uses
 |`sheriff.client.discovery-document-max-size` |int |`65536` |Max size in bytes of the authorization server's discovery document. Must be positive. Raise only for a server whose `.well-known/openid-configuration` exceeds the ceiling
 |`sheriff.client.strict-scope-reconciliation` |boolean |`false` |Refuse a refresh whose granted scope is *broader* than the requested scope (see NOTE below)
 |`sheriff.client.verify-hostname` |boolean |`true` |Enforce TLS hostname verification on this client's outbound calls. Set to `false` only for SAN-mismatched development certificates (see NOTE below)

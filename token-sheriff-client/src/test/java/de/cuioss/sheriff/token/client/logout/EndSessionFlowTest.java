@@ -26,6 +26,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -181,6 +182,54 @@ class EndSessionFlowTest {
                         "the query is opened with '?' before the fragment"),
                 () -> assertEquals("#frag?x=y", url.substring(fragmentStart), "fragment is kept unchanged at the end"),
                 () -> assertTrue(beforeFragment.contains("state=" + urlEncode(state)), "state precedes the fragment"));
+    }
+
+    @ParameterizedTest(name = "refuses {0}")
+    @ValueSource(strings = {
+            "https://rp.example.com/postlogout/",
+            "HTTPS://rp.example.com/postlogout",
+            "https://RP.EXAMPLE.COM/postlogout",
+            "https://rp.example.com/PostLogout"})
+    @DisplayName("Should refuse a post_logout_redirect_uri that only a URL normalization would equate with the registered one")
+    void shouldRefuseRedirectNormalizationVariant(String variant) {
+        String idTokenHint = Generators.letterStrings(30, 60).next();
+        String state = Generators.letterStrings(20, 40).next();
+
+        assertThrows(ClientProtocolException.class,
+                () -> flow.buildLogoutRedirect(END_SESSION_ENDPOINT, idTokenHint, variant, state),
+                "post_logout_redirect_uri is matched exactly, never normalized");
+    }
+
+    @Test
+    @DisplayName("Should refuse a post_logout_redirect_uri without the trailing slash the registered one carries")
+    void shouldRefuseRedirectWithRemovedTrailingSlash() {
+        String registeredWithSlash = REGISTERED_REDIRECT + "/";
+        var slashFlow = new EndSessionFlow(new PostLogoutRedirectValidator(Set.of(registeredWithSlash)));
+        String idTokenHint = Generators.letterStrings(30, 60).next();
+        String state = Generators.letterStrings(20, 40).next();
+
+        assertAll("exact match against a registered trailing slash",
+                () -> assertThrows(ClientProtocolException.class,
+                        () -> slashFlow.buildLogoutRedirect(END_SESSION_ENDPOINT, idTokenHint, REGISTERED_REDIRECT,
+                                state)),
+                () -> assertDoesNotThrow(
+                        () -> slashFlow.buildLogoutRedirect(END_SESSION_ENDPOINT, idTokenHint, registeredWithSlash,
+                                state),
+                        "the exact registered value remains the positive control"));
+    }
+
+    @Test
+    @DisplayName("Should reject an echoed post-logout state that differs only in case or surrounding whitespace (M2)")
+    void shouldRejectNormalizedPostLogoutState() {
+        String expectedState = Generators.letterStrings(20, 40).next().toLowerCase(Locale.ROOT);
+        String upperCaseState = expectedState.toUpperCase(Locale.ROOT);
+        String paddedState = " " + expectedState + " ";
+
+        assertAll("state is compared exactly",
+                () -> assertThrows(IllegalStateException.class,
+                        () -> flow.verifyPostLogoutState(expectedState, upperCaseState)),
+                () -> assertThrows(IllegalStateException.class,
+                        () -> flow.verifyPostLogoutState(expectedState, paddedState)));
     }
 
     @Test

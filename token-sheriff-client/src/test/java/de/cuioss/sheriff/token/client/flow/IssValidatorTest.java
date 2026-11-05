@@ -24,6 +24,8 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -99,6 +101,29 @@ class IssValidatorTest {
             var callback = callbackWithIssuer(EXPECTED_ISSUER + "/extra");
 
             assertThrows(ClientProtocolException.class, () -> validator.validate(EXPECTED_ISSUER, callback, false));
+        }
+
+        @ParameterizedTest(name = "iss = {0}")
+        @ValueSource(strings = {
+                "https://issuer.example.com/realms/demo/",
+                "HTTPS://issuer.example.com/realms/demo",
+                "https://ISSUER.EXAMPLE.COM/realms/demo",
+                "https://issuer.example.com/Realms/demo",
+                "https://issuer.example.com:443/realms/demo"})
+        @DisplayName("Should reject an iss that only a URL normalization would equate with the issuer (RFC 9207 exact match)")
+        void shouldRejectNormalizationVariant(String variant) {
+            var callback = callbackWithIssuer(variant);
+
+            assertThrows(ClientProtocolException.class, () -> validator.validate(EXPECTED_ISSUER, callback, true));
+        }
+
+        @Test
+        @DisplayName("Should reject an iss without the trailing slash the initiating issuer carries")
+        void shouldRejectRemovedTrailingSlash() {
+            String issuerWithSlash = EXPECTED_ISSUER + "/";
+            var callback = callbackWithIssuer(EXPECTED_ISSUER);
+
+            assertThrows(ClientProtocolException.class, () -> validator.validate(issuerWithSlash, callback, true));
         }
 
         @Test
