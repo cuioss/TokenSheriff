@@ -24,6 +24,7 @@ import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.flow.AuthorizationCodeFlow;
 import de.cuioss.sheriff.token.client.flow.CallbackHandler;
 import de.cuioss.sheriff.token.client.flow.CallbackParameters;
+import de.cuioss.sheriff.token.client.flow.CredentialRejectedException;
 import de.cuioss.sheriff.token.client.flow.FlowContext;
 import de.cuioss.sheriff.token.client.flow.IssValidator;
 import de.cuioss.sheriff.token.client.flow.TokenEndpointClient;
@@ -67,7 +68,8 @@ import static org.junit.jupiter.api.Assertions.*;
  *         and the token endpoint is never called;</li>
  *     <li>an honest callback stamped with the {@code integration} realm's own {@code iss} passes the
  *         issuer check and reaches the token endpoint exactly once — the code is not a genuine one, so
- *         Keycloak then refuses the redemption, and that refusal must not be the mix-up rejection.</li>
+ *         Keycloak then refuses the redemption with HTTP {@code 400 invalid_grant}, which surfaces as a
+ *         {@link CredentialRejectedException} rather than the mix-up rejection.</li>
  * </ul>
  * Discovery of the foreign realm's issuer runs against a trust-all TLS context (integration-test scope
  * only); the wired flow uses the chain-validating context from {@link RefreshEngineSupport}.
@@ -111,16 +113,11 @@ class MixUpSpecIT extends BaseIntegrationTest {
         FlowContext context = FlowContext.create(REDIRECT_URI);
         var honestCallback = new CallbackParameters(NON_GENUINE_CODE, context.state(), null, null, advertisedIssuer);
 
-        RuntimeException failure = assertThrows(RuntimeException.class,
+        assertThrows(CredentialRejectedException.class,
                 () -> wired.flow().exchange(wired.metadata(), context, honestCallback, wired.authentication()),
-                "Keycloak must refuse to redeem a code it never issued");
-        LOGGER.debug("honest-callback redemption failure: %s", failure.getClass().getName());
-
-        assertAll("the honest iss passes the mix-up check and reaches the token endpoint",
-                () -> assertEquals(1, wired.tokenEndpoint().calls(),
-                        "the honest callback must reach the token endpoint exactly once"),
-                () -> assertFalse(failure instanceof ClientProtocolException,
-                        "the honest iss must not be refused with the mix-up exception, got " + failure));
+                "Keycloak must refuse to redeem a code it never issued with invalid_grant, not the mix-up rejection");
+        assertEquals(1, wired.tokenEndpoint().calls(),
+                "the honest callback must pass the mix-up check and reach the token endpoint exactly once");
     }
 
     @Test

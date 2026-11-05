@@ -26,7 +26,6 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.net.URI;
-import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -54,7 +53,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *         A control proves it redirects for that registered URI, and a negative case sends a hand-built
  *         end-session URL (bypassing {@link PostLogoutRedirectValidator}, so the authorization server's
  *         own check is what is under test) with an unregistered {@code post_logout_redirect_uri}, which
- *         Keycloak must not redirect to.</li>
+ *         Keycloak must reject with a client-error page instead of redirecting to it.</li>
  * </ul>
  * The container uses a self-signed certificate, so the requests run against a trust-all TLS context
  * (integration-test scope only), mirroring {@link BaseIntegrationTest}.
@@ -74,6 +73,11 @@ class LogoutSpecIT extends BaseIntegrationTest {
     private static final String WILDCARD_CLIENT_SECRET = "integration-secret";
     private static final String EXACT_CLIENT_ID = "exact-logout-client";
     private static final String EXACT_CLIENT_SECRET = "exact-logout-secret";
+    /**
+     * The status Keycloak's end-session endpoint answers an unregistered {@code post_logout_redirect_uri} with:
+     * a client-error page, never a redirect and never a server error.
+     */
+    private static final int UNREGISTERED_URI_REJECTION_STATUS = 400;
     private static final String USERNAME = "integration-user";
     private static final String PASSWORD = "integration-password";
 
@@ -117,7 +121,9 @@ class LogoutSpecIT extends BaseIntegrationTest {
         LOGGER.debug("unregistered-uri logout response status=%s", response.statusCode());
 
         Optional<String> location = response.headers().firstValue("Location");
-        assertAll("Keycloak must not redirect to an unregistered post_logout_redirect_uri",
+        assertAll("Keycloak must reject an unregistered post_logout_redirect_uri instead of redirecting to it",
+                () -> assertEquals(UNREGISTERED_URI_REJECTION_STATUS, response.statusCode(),
+                        "Keycloak must answer an unregistered post_logout_redirect_uri with a client-error page"),
                 () -> assertFalse(isRedirect(response.statusCode()),
                         "an unregistered post_logout_redirect_uri must not be answered with a redirect, got "
                                 + response.statusCode() + " to " + location.orElse("<none>")),
@@ -144,34 +150,12 @@ class LogoutSpecIT extends BaseIntegrationTest {
         String location = response.headers().firstValue("Location").orElse(null);
         assertNotNull(location, "the logout redirect must carry a Location header");
 
-        URI actual = URI.create(location);
-        URI expected = URI.create(expectedUri);
-        assertAll("Location must be exactly the registered redirect URI with the echoed state",
-                () -> assertEquals(expected.getScheme(), actual.getScheme(), "scheme of " + location),
-                () -> assertEquals(expected.getHost(), actual.getHost(), "host of " + location),
-                () -> assertEquals(expected.getPort(), actual.getPort(), "port of " + location),
-                () -> assertEquals(expected.getPath(), actual.getPath(), "path of " + location),
-                () -> assertEquals(Map.of("state", expectedState), queryParameters(actual),
-                        "the only query parameter must be the echoed state, got " + location));
+        assertEquals(expectedUri + "?state=" + URLEncoder.encode(expectedState, StandardCharsets.UTF_8), location,
+                "Location must be exactly the registered redirect URI with the echoed state as its only parameter");
     }
 
     private static boolean isRedirect(int status) {
         return status >= 300 && status < 400;
-    }
-
-    private static Map<String, String> queryParameters(URI uri) {
-        Map<String, String> parameters = new HashMap<>();
-        String query = uri.getRawQuery();
-        if (query == null || query.isEmpty()) {
-            return parameters;
-        }
-        for (String pair : query.split("&")) {
-            int separator = pair.indexOf('=');
-            assertTrue(separator > 0, "malformed query parameter in Location: " + pair);
-            parameters.put(URLDecoder.decode(pair.substring(0, separator), StandardCharsets.UTF_8),
-                    URLDecoder.decode(pair.substring(separator + 1), StandardCharsets.UTF_8));
-        }
-        return parameters;
     }
 
     private static HttpResponse<String> get(String url) throws Exception {

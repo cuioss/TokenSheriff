@@ -123,9 +123,16 @@ class AuthCodePkceSpecIT extends BaseIntegrationTest {
         String wrongVerifier = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(freshEntropy());
         HttpResponse<String> tokenResponse = redeem(client, code, wrongVerifier);
+        LOGGER.debug("mismatched verifier token response: status=%s, body=%s",
+                tokenResponse.statusCode(), tokenResponse.body());
 
-        assertEquals(400, tokenResponse.statusCode(),
-                "Keycloak must reject a code redeemed with a PKCE verifier that does not match the challenge");
+        assertAll("code redeemed with a mismatched PKCE verifier",
+                () -> assertEquals(400, tokenResponse.statusCode(),
+                        "Keycloak must reject a code redeemed with a PKCE verifier that does not match the challenge"),
+                () -> assertTrue(INVALID_GRANT_ERROR.matcher(tokenResponse.body()).find(),
+                        "the error member must be invalid_grant, got " + tokenResponse.body()),
+                () -> assertFalse(tokenResponse.body().contains("access_token"),
+                        "the refusal must not carry an access_token"));
     }
 
     @Test
