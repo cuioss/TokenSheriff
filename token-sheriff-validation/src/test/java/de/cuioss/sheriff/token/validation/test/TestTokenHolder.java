@@ -34,7 +34,6 @@ import de.cuioss.sheriff.token.validation.test.generator.ClaimControlParameter;
 import de.cuioss.sheriff.token.validation.test.generator.RoleGenerator;
 import de.cuioss.sheriff.token.validation.test.generator.ScopeGenerator;
 import de.cuioss.test.generator.Generators;
-import de.cuioss.test.generator.TypedGenerator;
 import de.cuioss.test.generator.domain.EmailGenerator;
 import de.cuioss.test.generator.domain.FullNameGenerator;
 import de.cuioss.test.generator.domain.UUIDStringGenerator;
@@ -55,13 +54,14 @@ import java.util.*;
  *   <li>Generate content using generators analogous to AccessTokenGenerator</li>
  *   <li>Provide mutators for content</li>
  *   <li>Generate the actual token representation on demand</li>
- *   <li>Use generators for keyId and signingAlgorithm aligned with SignatureAlgorithmPreferences</li>
  * </ul>
  * <p>
  * The token is created and signed using the Jwts library when getRawToken() is called.
  * <p>
- * The keyId and signingAlgorithm are generated using Generators.fixedValues() with a defined list.
- * Uses RS256 as the default test algorithm and the default key ID.
+ * The signing algorithm and key ID are intentionally fixed to RS256 and
+ * {@link InMemoryKeyMaterialHandler#DEFAULT_KEY_ID}, so every generated token verifies against the
+ * default in-memory JWKS. A test that needs another algorithm or key ID sets it explicitly with
+ * {@link #withSigningAlgorithm(InMemoryKeyMaterialHandler.Algorithm)} or {@link #withKeyId(String)}.
  */
 public class TestTokenHolder {
 
@@ -92,18 +92,10 @@ public class TestTokenHolder {
     public static final String TEST_CLIENT_ID = "test-client-app";
 
     /**
-     * Generator for signing algorithms.
-     * Uses RS256 as the default test algorithm.
+     * The fixed signing algorithm every holder starts with; it matches the default in-memory JWKS.
      */
-    private static final TypedGenerator<InMemoryKeyMaterialHandler.Algorithm> ALGORITHM_GENERATOR =
-            Generators.fixedValues(InMemoryKeyMaterialHandler.Algorithm.RS256);
-
-    /**
-     * Generator for key IDs using a fixed list.
-     * Uses the default key ID for test consistency.
-     */
-    private static final TypedGenerator<String> KEY_ID_GENERATOR =
-            Generators.fixedValues(InMemoryKeyMaterialHandler.DEFAULT_KEY_ID);
+    private static final InMemoryKeyMaterialHandler.Algorithm DEFAULT_SIGNING_ALGORITHM =
+            InMemoryKeyMaterialHandler.Algorithm.RS256;
 
     @Getter
     private final TokenType tokenType;
@@ -119,8 +111,9 @@ public class TestTokenHolder {
 
     /**
      * Constructor for creating a token holder with specific claim control parameters.
-     * The keyId and signingAlgorithm are generated using Generators.fixedValues() with a defined list.
-     * Uses RS256 as the default test algorithm and the default key ID.
+     * The signing algorithm is fixed to RS256 and the key ID to
+     * {@link InMemoryKeyMaterialHandler#DEFAULT_KEY_ID}; use {@link #withSigningAlgorithm} or
+     * {@link #withKeyId} to change them.
      *
      * @param tokenType    the type of token to generate
      * @param claimControl the parameter object controlling which claims should be included or excluded
@@ -129,8 +122,8 @@ public class TestTokenHolder {
         this.tokenType = tokenType;
         this.claimControl = claimControl;
         this.uniqueId = new UUIDStringGenerator().next();
-        this.keyId = KEY_ID_GENERATOR.next();
-        this.signingAlgorithm = ALGORITHM_GENERATOR.next();
+        this.keyId = InMemoryKeyMaterialHandler.DEFAULT_KEY_ID;
+        this.signingAlgorithm = DEFAULT_SIGNING_ALGORITHM;
         this.claims = generateClaims();
         this.cachedRawToken = null; // Will be generated on demand
     }

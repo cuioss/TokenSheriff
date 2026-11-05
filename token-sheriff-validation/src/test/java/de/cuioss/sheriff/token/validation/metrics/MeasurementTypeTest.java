@@ -23,26 +23,11 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for {@link MeasurementType} enum.
  * <p>
- * Verifies that the enum ordinals match the pipeline execution order.
+ * Verifies that the declaration order matches the pipeline execution order and that each
+ * description is numbered by its pipeline step.
  */
 @DisplayName("MeasurementType Tests")
 class MeasurementTypeTest {
-
-    @Test
-    @DisplayName("Should have ordinals matching description numbers for pipeline steps")
-    void shouldHaveOrdinalsMatchingDescriptionNumbers() {
-        // Pipeline execution order (0-9)
-        assertEquals(0, MeasurementType.COMPLETE_VALIDATION.ordinal());
-        assertEquals(1, MeasurementType.TOKEN_PARSING.ordinal());
-        assertEquals(2, MeasurementType.ISSUER_EXTRACTION.ordinal());
-        assertEquals(3, MeasurementType.CACHE_LOOKUP.ordinal());
-        assertEquals(4, MeasurementType.ISSUER_CONFIG_RESOLUTION.ordinal());
-        assertEquals(5, MeasurementType.HEADER_VALIDATION.ordinal());
-        assertEquals(6, MeasurementType.SIGNATURE_VALIDATION.ordinal());
-        assertEquals(7, MeasurementType.TOKEN_BUILDING.ordinal());
-        assertEquals(8, MeasurementType.CLAIMS_VALIDATION.ordinal());
-        assertEquals(9, MeasurementType.CACHE_STORE.ordinal());
-    }
 
     @Test
     @DisplayName("Should have descriptions starting with ordinal number")
@@ -57,12 +42,6 @@ class MeasurementTypeTest {
         assertTrue(MeasurementType.TOKEN_BUILDING.getDescription().startsWith("7."));
         assertTrue(MeasurementType.CLAIMS_VALIDATION.getDescription().startsWith("8."));
         assertTrue(MeasurementType.CACHE_STORE.getDescription().startsWith("9."));
-    }
-
-    @Test
-    @DisplayName("Should have all 10 enum values")
-    void shouldHaveAll15EnumValues() {
-        assertEquals(10, MeasurementType.values().length);
     }
 
     @Test
@@ -82,13 +61,5 @@ class MeasurementTypeTest {
         assertSame(MeasurementType.TOKEN_BUILDING, values[7]);
         assertSame(MeasurementType.CLAIMS_VALIDATION, values[8]);
         assertSame(MeasurementType.CACHE_STORE, values[9]);
-    }
-
-    @Test
-    @DisplayName("Should verify cache lookup happens before signature validation")
-    void shouldVerifyCacheLookupHappensBeforeSignatureValidation() {
-        // This is the key optimization from issue #131
-        assertTrue(MeasurementType.CACHE_LOOKUP.ordinal() < MeasurementType.SIGNATURE_VALIDATION.ordinal(),
-                "Cache lookup should happen before expensive signature validation");
     }
 }
