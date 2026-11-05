@@ -44,7 +44,10 @@ leaf keys.
 * The anchor leaf keys are derived from the issuer property templates: `enabled` and `dpop.enabled`.
   In environment form they are the suffixes `_ENABLED` and `_DPOP_ENABLED`.
 * For every property name that starts with `SHERIFF_TOKEN_ISSUERS_`, the longest matching anchor
-  suffix is stripped and the remainder is lower-cased to become the candidate issuer name.
+  suffix that leaves a non-empty remainder is stripped and the remainder is lower-cased to become the
+  candidate issuer name. A match that would leave an empty name is passed over for the next shorter
+  anchor: for `SHERIFF_TOKEN_ISSUERS__DPOP_ENABLED` the `_DPOP_ENABLED` anchor would leave nothing, so
+  `_ENABLED` is stripped instead and the candidate issuer name is `_dpop`.
 * Every key of the candidate is then looked up in dotted form, for example
   `sheriff.token.issuers.my_idp.enabled`. The environment config source resolves that lookup through the
   same mangling, so it finds the original variable even though the reconstructed name is lossy.

@@ -185,6 +185,14 @@ When any of the three fails, the initialization ends in a terminal `ERROR`. In n
 left at `LOADING`, a key installed or `OK` published by the failed initialization. An `OK` or terminal
 `ERROR` that a refresh cycle published meanwhile is kept.
 
+The order "schedule first, then publish `UNDEFINED`" holds for the unexpected-failure path above. On
+the retryable well-known discovery failure path (the discovery was unavailable, with background
+refresh enabled) the order is the reverse: `UNDEFINED` is published first and the refresh task is
+scheduled second. A readiness read in that gap can see `UNDEFINED` — `loading` reported as
+`IN_PROGRESS` — before a retry is scheduled. When the executor then rejects the task, the rejection
+reaches the unexpected-failure handling, which cannot schedule the task either and corrects the
+status to a terminal `ERROR`.
+
 === Consequences
 
 * `UNDEFINED` and `ERROR` keep the meanings the decision gives them: `UNDEFINED` is retrying, and

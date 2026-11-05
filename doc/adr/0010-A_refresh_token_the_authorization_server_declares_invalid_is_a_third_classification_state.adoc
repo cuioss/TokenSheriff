@@ -233,10 +233,14 @@ existing kinds already express.
   replayed token and the successor the authorization server issued on the refused exchange, in that
   order. Naming the replayed token first is what triggers family-wide revocation on a server that
   implements it; naming the successor second is what keeps a server that does not from leaving a live
-  credential behind until it expires. The two revocations are independent and best-effort, so a failure
-  of one does not skip the other. The client-side clear runs whatever the revocations do, and it
-  spares only a positively newer grant the store took meanwhile: it clears the session as long as the
-  store still holds the refused token.
+  credential behind until it expires. The two revocations are best-effort: a transport failure of one
+  is logged and does not skip the other. An unchecked exception from the first revocation is not
+  caught there: it leaves the loop, so the successor revocation does not run, the client-side clear
+  still runs, and the exception then propagates. The client-side clear runs whatever the revocations
+  do, and it spares a stored bundle whose refresh token is not the refused one, without checking its
+  recency, so a superseded token stored during an in-flight refresh is spared as well and keeps its
+  family. Otherwise — the store holds the refused token, is empty, or cannot be read — the session is
+  cleared.
 
 == References
 

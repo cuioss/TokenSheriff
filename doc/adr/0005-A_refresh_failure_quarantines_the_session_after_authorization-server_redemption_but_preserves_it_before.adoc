@@ -56,12 +56,16 @@ surrounding response.
 * **After redemption** (the authorization server answered 2xx, whether or not it rotated the
   refresh token, and any subsequent client-side check — identity binding, ID-token consistency,
   scope policy, or response parsing — then refuses the refresh): the presented token may already
-  be burned at the authorization server. The session is cleared as long as the store still holds
-  the refused token — a positively newer grant stored meanwhile (by a concurrent re-authentication,
-  say) is spared, because it is not the burned credential. The rotation family is reset exactly
-  when the session is cleared: a spared newer grant keeps its family together with its stored
-  bundle. When the successor token is known, it is revoked at the authorization server whether or
-  not the session was cleared. When the response could not be parsed at all, rotation cannot be
+  be burned at the authorization server. The session is cleared unless the store holds a bundle
+  whose refresh token is not the refused one: such a bundle (stored by a concurrent
+  re-authentication, say, but equally a superseded token stored during an in-flight refresh — the
+  check compares the refresh token only and does not check recency) is spared, because it is not
+  the burned credential. An empty or unreadable store is cleared. The rotation family is reset
+  exactly when the session is cleared: a spared bundle keeps its family together with it. When the
+  successor token is known, it is revoked best-effort at the authorization server, when the
+  provider advertises a revocation endpoint, whether or not the session was cleared; a transport
+  failure of that revocation is logged at debug level and otherwise ignored. When the response
+  could not be parsed at all, rotation cannot be
   determined even in principle; the refusal is presumed-redeemed and the session and its rotation
   family are cleared on the same condition, without inventing a successor to revoke.
 
@@ -100,8 +104,9 @@ reaches it, so the session-preserving path is the only one it can take.
   the failing caller produces; a discriminator that is correct for a single caller but not
   consistently visible to a joiner would reintroduce the ambiguity for concurrent access.
 * Because the session and its rotation family are cleared on every post-redemption refusal whose
-  refused token the store still holds (only a positively newer grant stored meanwhile is spared, and
-  it keeps its family), an authorization server that
+  stored bundle is the refused one, or that has no readable stored bundle (only a stored bundle whose
+  refresh token is not the refused one is spared, whatever its recency, and it keeps its family), an
+  authorization server that
   rotates on every request and refuses for reasons unrelated to token compromise (misconfigured
   local validation, for example) forces re-authentication more often than a narrower rule would.
   This is accepted as the safer failure direction: the alternative is preserving a session that
