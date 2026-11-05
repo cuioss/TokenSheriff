@@ -48,8 +48,10 @@ stored.
   issuer's maximum token age (plus clock skew) is removed and rejected with `TOKEN_AGE_EXCEEDED`.
 * The background eviction applies the same per-entry policy, so it removes expired and too-old
   entries of each issuer by that issuer's own rules.
-* When the issuer enforces a maximum token age, a token without an `iat` claim is not cached. It stays
-  on the full validation path for every request. Without a maximum token age it is cached as usual.
+* When the issuer enforces a maximum token age, a token without an `iat` claim is not cached. The
+  full validation path already rejects such a token with `MISSING_CLAIM` before the pipeline stores
+  anything, and `AccessTokenCache.put` refuses it as well, as defence in depth. Without a maximum
+  token age it is cached as usual.
 
 The policy on the entry is the policy that was in force when the token was validated. It is not
 updated when the issuer configuration is read again.
@@ -69,8 +71,8 @@ updated when the issuer configuration is read again.
 === Negative
 
 * Each entry stores two additional values.
-* An `iat`-less token of an issuer with a maximum token age pays the full validation cost on every
-  request.
+* An `iat`-less token of an issuer with a maximum token age is never served from the cache, so every
+  request carrying one runs the full validation up to the claim check that rejects it.
 
 === Risks
 
@@ -93,9 +95,15 @@ lookup path or fall back to a cache-wide rule, and because the policy then lives
 entry and the configuration, that must be kept in step.
 
 **Cache an `iat`-less token and skip the age check for it.** The token would be served from the
-cache like any other. It was rejected because it turns the absence of a claim into a way around a
-configured bound: the uncached pipeline rejects nothing the cache would then accept, but the cache
-would accept a token past any age the issuer allows.
+cache like any other. It was rejected because a cache hit would then accept, for as long as the
+entry lives, a token whose age the issuer's maximum token age is meant to bound but that no hit can
+compute. In the current pipeline that token never reaches the cache: when the issuer enforces a
+maximum token age, the claim validation (`ExpirationValidator.validateTokenAge`) rejects a token
+without `iat` with `MISSING_CLAIM`, and the pipeline calls `AccessTokenCache.put` only after the
+claim validation has passed. The refusal in `AccessTokenCache.put` to store an `iat`-less token of
+such an issuer is therefore defence in depth. It keeps the cache from relying on that ordering, so a
+future path that stored a token without the full claim validation still could not open a way around
+the configured bound.
 
 The rejected options share one flaw. Each lets the bounds applied to a cached token differ from the
 bounds its own issuer applies on the uncached path.
