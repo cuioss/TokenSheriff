@@ -165,7 +165,9 @@ public class TokenEndpointClient {
      *         truncated inside a string escape — never escapes as an unchecked exception: after a
      *         success status it is a {@link RedeemedResponseException}, and as a non-success error
      *         body it is an unknown error code, so the failure is a plain {@link TransportException}
-     *         and never a {@link CredentialRejectedException}
+     *         and never a {@link CredentialRejectedException}. A non-success error body whose top-level
+     *         JSON object repeats a member name is likewise an unknown error code, never a
+     *         {@link CredentialRejectedException}
      */
     public TokenResponse requestToken(String tokenEndpoint,
             Map<String, String> formParameters,
@@ -342,9 +344,12 @@ public class TokenEndpointClient {
 
     /**
      * @return the RFC 6749 §5.2 {@code error} code of an error response body, or {@code null} when the
-     *         body is absent, blank, larger than the configured payload bound, unparseable, or carries
-     *         no {@code error} member. Every one of those is an "unknown", never a match — the
-     *         allow-list above only ever fires on a positively recognized code
+     *         body is absent, blank, larger than the configured payload bound, unparseable, repeats a
+     *         top-level member name, or carries no {@code error} member. Every one of those is an
+     *         "unknown", never a match — the allow-list above only ever fires on a positively
+     *         recognized code. A repeated member (for example two {@code error} members) leaves the
+     *         effective value to the parser's first-wins or last-wins choice, so the body is ambiguous
+     *         and is not read as any code
      */
     @Nullable
     private String errorCode(@Nullable String body) {
@@ -356,6 +361,13 @@ public class TokenEndpointClient {
             return null;
         }
         try {
+            Optional<String> duplicateMember = duplicateTopLevelMember(bytes);
+            if (duplicateMember.isPresent()) {
+                // The member name is AS-controlled, so sanitize it (CWE-117) before it reaches the log.
+                LOGGER.debug("Token endpoint error response repeats the top-level member '%s'; "
+                        + "treating its error code as unknown", LogSanitizer.sanitize(duplicateMember.get()));
+                return null;
+            }
             TokenErrorResponse errorResponse = deserialize(TokenErrorResponse.class, bytes);
             return errorResponse == null ? null : errorResponse.error;
         } catch (IOException e) {

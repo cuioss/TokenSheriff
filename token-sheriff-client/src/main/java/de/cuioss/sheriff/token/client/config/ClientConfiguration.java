@@ -121,8 +121,8 @@ public class ClientConfiguration {
      * for local test setups against a cleartext authorization server.
      * <p>
      * The flag does <strong>not</strong> relax the scheme check inside a discovery document: an
-     * {@code https} issuer whose document advertises any non-{@code https} endpoint is refused
-     * regardless of this setting.
+     * {@code https} issuer whose document advertises a non-{@code https} value for any endpoint the
+     * client models and uses is refused regardless of this setting.
      */
     boolean allowInsecureHttp;
 

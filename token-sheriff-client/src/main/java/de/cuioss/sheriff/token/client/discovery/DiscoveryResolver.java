@@ -34,6 +34,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -58,10 +59,12 @@ import java.util.Objects;
  * <strong>Security:</strong> a non-TLS issuer is rejected unless
  * {@link ClientConfiguration#allowInsecureHttp} is set; the discovery document's
  * {@code issuer} must match the configured issuer (OpenID Connect Discovery §4.3, a mix-up
- * precaution); an {@code https} issuer's document must advertise only {@code https} endpoints, a
- * refusal {@link ClientConfiguration#allowInsecureHttp} does not relax; the discovery response must
- * carry the {@code application/json} media type (parameters such as {@code charset} allowed), so an
- * absent or other {@code Content-Type} — {@code application/jrd+json} included — is refused; and the
+ * precaution); every endpoint the client models and uses that an {@code https} issuer's document
+ * advertises — the endpoint fields {@link ProviderMetadata} models — must be {@code https}, a refusal
+ * {@link ClientConfiguration#allowInsecureHttp} does not relax; the discovery response must
+ * carry the {@code application/json} media type on every {@code Content-Type} line (parameters such
+ * as {@code charset} allowed), so an absent, other or conflicting {@code Content-Type} —
+ * {@code application/jrd+json} included — is refused; and the
  * availability of PKCE {@code S256} is recorded so the interactive
  * {@code authorization_code} flow can refuse a downgrade ({@code CLIENT-2}).
  *
@@ -116,7 +119,8 @@ public class DiscoveryResolver {
      *         discovery request fails, the response is not successful, carries no
      *         {@code application/json} {@code Content-Type} or is unparseable, the document's issuer
      *         does not match the configured issuer, or an {@code https} issuer's document advertises a
-     *         non-{@code https} endpoint (regardless of {@link ClientConfiguration#allowInsecureHttp})
+     *         non-{@code https} value for an endpoint the client models and uses (regardless of
+     *         {@link ClientConfiguration#allowInsecureHttp})
      */
     public ProviderMetadata resolve() {
         String issuer = configuration.getIssuer();
@@ -239,7 +243,13 @@ public class DiscoveryResolver {
 
     /**
      * Refuses a scheme downgrade inside an HTTPS discovery document: when the configured issuer is
-     * {@code https}, every advertised endpoint that is present must be {@code https} as well. The check
+     * {@code https}, every endpoint the client models and uses that is present must be {@code https}
+     * as well — {@code authorization_endpoint}, {@code token_endpoint}, {@code userinfo_endpoint},
+     * {@code jwks_uri}, {@code end_session_endpoint}, {@code revocation_endpoint},
+     * {@code introspection_endpoint} and {@code pushed_authorization_request_endpoint}, the fields
+     * {@link ProviderMetadata} models. An advertised field outside that set (for example
+     * {@code device_authorization_endpoint} or {@code registration_endpoint}) is not read and is not
+     * checked. The check
      * is not relaxed by {@link ClientConfiguration#allowInsecureHttp}, which exists for local setups
      * (an {@code http} issuer, or an {@code https} issuer reached through an {@code http} back-channel
      * origin), not for cleartext endpoints advertised by a TLS issuer. The refusal names
@@ -271,15 +281,16 @@ public class DiscoveryResolver {
     }
 
     /**
-     * Whether the response declares the JSON media type: the {@code Content-Type} header is present
-     * and its media type, ignoring parameters such as {@code charset}, is {@code application/json}
-     * (case-insensitive).
+     * Whether the response declares the JSON media type: at least one {@code Content-Type} field line
+     * is present and <em>every</em> one of them carries a media type that, ignoring parameters such as
+     * {@code charset}, is {@code application/json} (case-insensitive). A response with a second,
+     * conflicting {@code Content-Type} line is refused rather than judged by whichever line comes first.
      */
     private static boolean isJsonContentType(HttpResponse<String> response) {
-        return response.headers().firstValue(CONTENT_TYPE)
+        List<String> values = response.headers().allValues(CONTENT_TYPE);
+        return !values.isEmpty() && values.stream()
                 .map(value -> value.split(";", 2)[0].trim())
-                .filter(JSON_MEDIA_TYPE::equalsIgnoreCase)
-                .isPresent();
+                .allMatch(JSON_MEDIA_TYPE::equalsIgnoreCase);
     }
 
     private void validateTokenEndpoint(ProviderMetadata metadata, String issuer) {

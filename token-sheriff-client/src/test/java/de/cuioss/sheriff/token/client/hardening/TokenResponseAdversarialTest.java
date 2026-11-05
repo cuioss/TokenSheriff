@@ -17,33 +17,29 @@ package de.cuioss.sheriff.token.client.hardening;
 
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.flow.CredentialRejectedException;
 import de.cuioss.sheriff.token.client.flow.RedeemedResponseException;
 import de.cuioss.sheriff.token.client.flow.TokenEndpointClient;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
+import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
+import de.cuioss.sheriff.token.validation.test.dispatcher.TokenDispatcher;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
-import de.cuioss.test.mockwebserver.dispatcher.HttpMethodMapper;
-import de.cuioss.test.mockwebserver.dispatcher.ModuleDispatcherElement;
 import lombok.Getter;
-import mockwebserver3.MockResponse;
-import mockwebserver3.RecordedRequest;
-import okhttp3.Headers;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Valid-JSON adversarial token-endpoint responses (TC-7). Every body below is well-formed JSON served
@@ -51,6 +47,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * it: the response <em>shape</em> is what is hostile. Each case pins the exact typed failure
  * {@link TokenEndpointClient} raises. Because every body arrives after a success status, the grant is
  * already redeemed, and every refusal is a {@link RedeemedResponseException}.
+ * <p>
+ * The error-path cases serve HTTP 400 instead: an RFC 6749 §5.2 error body that repeats its top-level
+ * {@code error} member is ambiguous, so it must stay a plain {@link TransportException} and never be
+ * read as a {@link CredentialRejectedException}, with an unambiguous {@code invalid_grant} body as the
+ * positive control.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -59,9 +60,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TokenResponseAdversarialTest {
 
     private static final String VALID_PREFIX = "{\"access_token\":\"token\",\"token_type\":\"Bearer\"";
+    private static final String DUPLICATE_MEMBER_REFUSAL = "Token endpoint response repeats the top-level member ";
 
+    /**
+     * The shared token-endpoint dispatcher; {@link TokenDispatcher#respondWith(String)} serves each case's
+     * body with HTTP 200 and {@code application/json}, so the response shape — not the status or the
+     * media type — is what must be refused.
+     */
     @Getter
-    private final TokenBodyDispatcher moduleDispatcher = new TokenBodyDispatcher();
+    private final TokenDispatcher moduleDispatcher = new TokenDispatcher();
+
+    @BeforeEach
+    void resetDispatcher() {
+        moduleDispatcher.reset();
+    }
 
     @Test
     @DisplayName("Should refuse a response without access_token")
@@ -93,8 +105,8 @@ class TokenResponseAdversarialTest {
         RedeemedResponseException thrown = assertRedeemedFailure(
                 "{\"access_token\":\"first\",\"token_type\":\"Bearer\",\"access_token\":\"second\"}", uriBuilder);
 
-        assertTrue(thrown.getMessage().contains("'access_token'"),
-                "the refusal must name the repeated member: " + thrown.getMessage());
+        assertEquals(DUPLICATE_MEMBER_REFUSAL + "'access_token'", thrown.getMessage(),
+                "the refusal must name the repeated member");
     }
 
     @Test
@@ -103,8 +115,8 @@ class TokenResponseAdversarialTest {
         RedeemedResponseException thrown = assertRedeemedFailure(
                 "{\"access_token\":\"token\",\"token_type\":\"Bearer\",\"token_type\":\"DPoP\"}", uriBuilder);
 
-        assertTrue(thrown.getMessage().contains("'token_type'"),
-                "the refusal must name the repeated member: " + thrown.getMessage());
+        assertEquals(DUPLICATE_MEMBER_REFUSAL + "'token_type'", thrown.getMessage(),
+                "the refusal must name the repeated member");
     }
 
     @Test
@@ -130,10 +142,47 @@ class TokenResponseAdversarialTest {
         assertRedeemedFailure("{\"access_token\":\"token\",\"token_type\":\"" + tokenType + "\"}", uriBuilder);
     }
 
-    private RedeemedResponseException assertRedeemedFailure(String body, URIBuilder uriBuilder) {
-        moduleDispatcher.serve(body);
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {
+            "{\"error\":\"temporarily_unavailable\",\"error\":\"invalid_grant\"}",
+            "{\"error\":\"invalid_grant\",\"error\":\"temporarily_unavailable\"}"})
+    @DisplayName("Should not read a 4xx error body repeating the error member as a rejected credential")
+    void shouldNotRejectCredentialOnDuplicateErrorMember(String body, URIBuilder uriBuilder) {
+        moduleDispatcher.respondWith(400, body);
         var client = new TokenEndpointClient(config());
-        String tokenEndpoint = uriBuilder.addPathSegment("token").buildAsString();
+        String tokenEndpoint = tokenEndpoint(uriBuilder);
+        Map<String, String> formParameters = Map.of("grant_type", "client_credentials");
+        Map<String, String> requestHeaders = Map.of();
+
+        TransportException thrown = assertThrows(TransportException.class,
+                () -> client.requestToken(tokenEndpoint, formParameters, requestHeaders));
+
+        assertEquals(TransportException.class, thrown.getClass(),
+                "an ambiguous error body must stay a plain transport failure, never a CredentialRejectedException");
+        assertEquals("Token endpoint returned unexpected HTTP status 400", thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("Should read a 4xx error body with a single invalid_grant member as a rejected credential")
+    void shouldRejectCredentialOnSingleInvalidGrant(URIBuilder uriBuilder) {
+        moduleDispatcher.respondWith(400, "{\"error\":\"invalid_grant\",\"error_description\":\"expired\"}");
+        var client = new TokenEndpointClient(config());
+        String tokenEndpoint = tokenEndpoint(uriBuilder);
+        Map<String, String> formParameters = Map.of("grant_type", "client_credentials");
+        Map<String, String> requestHeaders = Map.of();
+
+        CredentialRejectedException thrown = assertThrows(CredentialRejectedException.class,
+                () -> client.requestToken(tokenEndpoint, formParameters, requestHeaders),
+                "the positive control: an unambiguous invalid_grant body is a rejected credential");
+
+        assertEquals("Token endpoint rejected the presented credential with HTTP 400 (RFC 6749 §5.2 'invalid_grant')",
+                thrown.getMessage());
+    }
+
+    private RedeemedResponseException assertRedeemedFailure(String body, URIBuilder uriBuilder) {
+        moduleDispatcher.respondWith(body);
+        var client = new TokenEndpointClient(config());
+        String tokenEndpoint = tokenEndpoint(uriBuilder);
         Map<String, String> formParameters = Map.of("grant_type", "client_credentials");
         Map<String, String> requestHeaders = Map.of();
 
@@ -143,10 +192,14 @@ class TokenResponseAdversarialTest {
     }
 
     private TokenResponse request(String body, URIBuilder uriBuilder) {
-        moduleDispatcher.serve(body);
+        moduleDispatcher.respondWith(body);
         var client = new TokenEndpointClient(config());
-        String tokenEndpoint = uriBuilder.addPathSegment("token").buildAsString();
-        return client.requestToken(tokenEndpoint, Map.of("grant_type", "client_credentials"), Map.of());
+        return client.requestToken(tokenEndpoint(uriBuilder), Map.of("grant_type", "client_credentials"), Map.of());
+    }
+
+    /** The mock token endpoint, at the shared {@link TokenDispatcher#LOCAL_PATH}. */
+    private static String tokenEndpoint(URIBuilder uriBuilder) {
+        return uriBuilder.addPathSegments("oidc", "token").buildAsString();
     }
 
     private static ClientConfiguration config() {
@@ -156,33 +209,5 @@ class TokenResponseAdversarialTest {
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(true)
                 .build();
-    }
-
-    /**
-     * Serves a configurable body at the token endpoint with HTTP 200 and {@code application/json}, so
-     * the response shape — not the status or the media type — is what must be refused.
-     */
-    static final class TokenBodyDispatcher implements ModuleDispatcherElement {
-
-        private volatile String body = "";
-
-        void serve(String responseBody) {
-            this.body = responseBody;
-        }
-
-        @Override
-        public String getBaseUrl() {
-            return "/token";
-        }
-
-        @Override
-        public Set<HttpMethodMapper> supportedMethods() {
-            return Set.of(HttpMethodMapper.POST);
-        }
-
-        @Override
-        public Optional<MockResponse> handlePost(RecordedRequest request) {
-            return Optional.of(new MockResponse(200, Headers.of("Content-Type", "application/json"), body));
-        }
     }
 }

@@ -80,7 +80,8 @@ public final class ClientRuntimeConfig {
      * Property: {@code sheriff.client.allow-insecure-http}. Defaults to {@code false}.
      * <p>
      * It does not relax the scheme check inside a discovery document: an {@code https} issuer whose
-     * document advertises any non-{@code https} endpoint is refused regardless of this setting.
+     * document advertises a non-{@code https} value for any endpoint the client models and uses is
+     * refused regardless of this setting.
      */
     public static final String ALLOW_INSECURE_HTTP = PREFIX + ".allow-insecure-http";
 
