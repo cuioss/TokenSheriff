@@ -52,7 +52,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the refresh token the presented token is already burned at the authorization server, so the rotated
  * successor is revoked and the session cleared; when it did not rotate the presented token is still
  * usable, so nothing is revoked or cleared. Either way the original {@link TokenValidationException}
- * reaches the caller unchanged.
+ * reaches the caller unchanged in this test, because the cleanup completes here; in general the
+ * exception is preserved only when that cleanup completes without an uncaught exception (an unchecked
+ * exception from a revocation call, or from the store's removal, would replace it).
  * <p>
  * The pipeline refusal is produced by an ID token minted for a foreign issuer, which the validator
  * built over the access token's issuer configuration does not know. The inconsistent-ID-token refusal
