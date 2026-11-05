@@ -33,6 +33,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -56,7 +58,11 @@ import java.util.Objects;
  * <strong>Security:</strong> a non-TLS issuer is rejected unless
  * {@link ClientConfiguration#allowInsecureHttp} is set; the discovery document's
  * {@code issuer} must match the configured issuer (OpenID Connect Discovery §4.3, a mix-up
- * precaution); and the availability of PKCE {@code S256} is recorded so the interactive
+ * precaution); an {@code https} issuer's document must advertise only {@code https} endpoints, a
+ * refusal {@link ClientConfiguration#allowInsecureHttp} does not relax; the discovery response must
+ * carry the {@code application/json} media type (parameters such as {@code charset} allowed), so an
+ * absent or other {@code Content-Type} — {@code application/jrd+json} included — is refused; and the
+ * availability of PKCE {@code S256} is recorded so the interactive
  * {@code authorization_code} flow can refuse a downgrade ({@code CLIENT-2}).
  *
  * @since 1.0
@@ -69,6 +75,9 @@ public class DiscoveryResolver {
 
     private static final String WELL_KNOWN_SUFFIX = "/.well-known/openid-configuration";
     private static final String SCHEME_HTTPS = "https";
+    private static final String HTTPS_PREFIX = SCHEME_HTTPS + "://";
+    private static final String CONTENT_TYPE = "Content-Type";
+    private static final String JSON_MEDIA_TYPE = "application/json";
 
     /**
      * Human-readable provenance of the discovery-document byte ceiling, reported with every
@@ -104,8 +113,10 @@ public class DiscoveryResolver {
      *
      * @return the resolved provider metadata
      * @throws TransportException if the issuer is non-TLS (and cleartext is not permitted), the
-     *         discovery request fails, the response is not successful or is unparseable, or the
-     *         document's issuer does not match the configured issuer
+     *         discovery request fails, the response is not successful, carries no
+     *         {@code application/json} {@code Content-Type} or is unparseable, the document's issuer
+     *         does not match the configured issuer, or an {@code https} issuer's document advertises a
+     *         non-{@code https} endpoint (regardless of {@link ClientConfiguration#allowInsecureHttp})
      */
     public ProviderMetadata resolve() {
         String issuer = configuration.getIssuer();
@@ -116,6 +127,7 @@ public class DiscoveryResolver {
         ProviderMetadata metadata = parse(body, issuer);
 
         validateIssuer(metadata, issuer);
+        validateEndpointSchemes(metadata, issuer);
         validateTokenEndpoint(metadata, issuer);
         recordCapabilities(metadata, issuer);
 
@@ -161,6 +173,10 @@ public class DiscoveryResolver {
                 LOGGER.warn(ClientLogMessages.WARN.DISCOVERY_STATUS, issuer, response.statusCode());
                 throw new TransportException(ClientLogMessages.ERROR.DISCOVERY_FAILED.format(
                         issuer, "unexpected HTTP status " + response.statusCode()));
+            }
+            if (!isJsonContentType(response)) {
+                throw new TransportException(ClientLogMessages.ERROR.DISCOVERY_FAILED.format(
+                        issuer, "discovery response Content-Type is not application/json"));
             }
             return response.body();
         } catch (IOException e) {
@@ -219,6 +235,50 @@ public class DiscoveryResolver {
             LOGGER.warn(ClientLogMessages.WARN.ISSUER_MISMATCH, sanitized, issuer);
             throw new TransportException(ClientLogMessages.WARN.ISSUER_MISMATCH.format(sanitized, issuer));
         }
+    }
+
+    /**
+     * Refuses a scheme downgrade inside an HTTPS discovery document: when the configured issuer is
+     * {@code https}, every advertised endpoint that is present must be {@code https} as well. The check
+     * is not relaxed by {@link ClientConfiguration#allowInsecureHttp}, which exists for an {@code http}
+     * issuer in a local setup, not for cleartext endpoints advertised by a TLS issuer. The refusal names
+     * the endpoint label only; the advertised URL is untrusted and is not echoed.
+     */
+    private static void validateEndpointSchemes(ProviderMetadata metadata, String issuer) {
+        if (!hasHttpsScheme(issuer)) {
+            return;
+        }
+        Map<String, String> endpoints = new LinkedHashMap<>();
+        endpoints.put("authorization_endpoint", metadata.authorizationEndpoint);
+        endpoints.put("token_endpoint", metadata.tokenEndpoint);
+        endpoints.put("userinfo_endpoint", metadata.userinfoEndpoint);
+        endpoints.put("jwks_uri", metadata.jwksUri);
+        endpoints.put("end_session_endpoint", metadata.endSessionEndpoint);
+        endpoints.put("revocation_endpoint", metadata.revocationEndpoint);
+        endpoints.put("introspection_endpoint", metadata.introspectionEndpoint);
+        endpoints.put("pushed_authorization_request_endpoint", metadata.pushedAuthorizationRequestEndpoint);
+        endpoints.forEach((label, value) -> {
+            if (value != null && !hasHttpsScheme(value)) {
+                throw new TransportException(ClientLogMessages.ERROR.DISCOVERY_FAILED.format(
+                        issuer, "https issuer advertises a non-https " + label));
+            }
+        });
+    }
+
+    private static boolean hasHttpsScheme(String url) {
+        return url.regionMatches(true, 0, HTTPS_PREFIX, 0, HTTPS_PREFIX.length());
+    }
+
+    /**
+     * Whether the response declares the JSON media type: the {@code Content-Type} header is present
+     * and its media type, ignoring parameters such as {@code charset}, is {@code application/json}
+     * (case-insensitive).
+     */
+    private static boolean isJsonContentType(HttpResponse<String> response) {
+        return response.headers().firstValue(CONTENT_TYPE)
+                .map(value -> value.split(";", 2)[0].trim())
+                .filter(JSON_MEDIA_TYPE::equalsIgnoreCase)
+                .isPresent();
     }
 
     private void validateTokenEndpoint(ProviderMetadata metadata, String issuer) {

@@ -177,7 +177,9 @@ The client engine:
   carrying a traversal / injection / encoding-evasion path.
 | The engine drives its *own* back-channel HTTP and applies an *in-module egress control*: each
   advertised endpoint URL is run through the `de.cuioss.http.security` URL-path validation pipeline
-  and refused if it fails; a non-TLS endpoint is refused; response reads are size-bounded. Scope is
+  and refused if it fails; a non-TLS endpoint is refused, and an `https` issuer's discovery document
+  advertising any non-`https` endpoint is refused regardless of `allowInsecureHttp`; a discovery
+  response with a non-JSON or absent `Content-Type` is refused; response reads are size-bounded. Scope is
   *path-structure and scheme* — host-address reachability filtering stays a network / deployment
   concern. The optional back-channel origin (`sheriff.client.back-channel-origin`) adds no steering
   primitive: it is operator-configured only, and an advertised endpoint is retargeted to it only
@@ -319,7 +321,7 @@ integration suite covers only threats reproducible against real providers:
 | T-REFRESH-IDENTITY | `TokenDispatcher` refresh mode returns an access token carrying a substituted `sub`; the refresh is refused and, since the dispatcher has already rotated, the session asserted quarantined. A matched positive control — a refresh whose `sub` matches — is asserted to be accepted and to rotate the bundle, so deleting the guard turns a test red rather than merely leaving one green.
 | T-SCOPE-DRIFT | `TokenDispatcher` refresh mode returns broadened, narrowed, equal and absent `scope` values; each is asserted to resolve to the matching `scopeDelta`, and the broadened case is asserted accepted-and-`WARN`-logged in the default posture and refused with `ClientProtocolException` under `strictScopeReconciliation`.
 | T-IDTOKEN-INTEGRITY / T-AUD-CONFUSION | `TokenDispatcher` / `UserInfoDispatcher` emit tampered claims and `sub` mismatches; validation pipeline rejects; userinfo `sub` binding enforced.
-| T-SSRF-ADVERTISED | The `de.cuioss.http.security` attack-database corpora are driven through the back-channel egress-path validation; traversal / injection / encoding-evasion advertised paths are refused before any fetch, and a non-TLS endpoint is refused per client. With a back-channel origin configured, a same-origin endpoint is asserted retargeted with path and query kept, a foreign-origin endpoint is asserted contacted unchanged, and a traversal path on a retargeted endpoint is still refused.
+| T-SSRF-ADVERTISED | The `de.cuioss.http.security` attack-database corpora are driven through the back-channel egress-path validation; traversal / injection / encoding-evasion advertised paths are refused before any fetch, and a non-TLS endpoint is refused per client. With a back-channel origin configured, a same-origin endpoint is asserted retargeted with path and query kept, a foreign-origin endpoint is asserted contacted unchanged, and a traversal path on a retargeted endpoint is still refused. `DiscoveryAdversarialTest` asserts that an `https` issuer's document advertising an `http://` endpoint is refused, one case per endpoint field, and that a discovery response with a `text/html`, `text/plain`, `application/jrd+json` or absent `Content-Type` is refused; all-`https` endpoints and `application/json; charset=UTF-8` are the positive controls. A `302` from the discovery endpoint is refused as an unexpected status and its target is never contacted.
 |===
 
 == [[_out_of_scope_delegated]] Out of scope (delegated)
