@@ -119,7 +119,7 @@ public class JwtTokenTamperingUtil {
          * Modifies the last character of the signature.
          */
         MODIFY_SIGNATURE_LAST_CHAR("Modify the last character of the signature",
-                EventType.SIGNATURE_VALIDATION_FAILED),
+            EventType.SIGNATURE_VALIDATION_FAILED),
 
         /**
          * Modifies a random character in the signature.
