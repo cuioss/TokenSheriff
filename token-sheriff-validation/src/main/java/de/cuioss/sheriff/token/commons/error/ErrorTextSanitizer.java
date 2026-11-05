@@ -32,10 +32,16 @@ import org.jspecify.annotations.Nullable;
  * flood the output with an arbitrarily long value. When truncation occurs the marker
  * {@value #TRUNCATION_MARKER} is appended so the elision is visible.
  * <p>
+ * A second, parameterised form,
+ * {@link #sanitize(String, char, int, String)}, replaces each of the same unsafe characters with a
+ * caller-chosen replacement character instead of escaping it, and truncates to a caller-chosen length
+ * with a caller-chosen marker. The JWE header and JWK field sanitisers use it with {@code '?'},
+ * 64 characters and {@code "..."}.
+ * <p>
  * This is the single implementation of that behaviour. It lives in the {@code commons} base layer so
- * both the base layer itself ({@link InboundErrorNormalizer}) and the client engine, which may depend on
- * the base layer but not the other way round (ADR-0001), share it. The utility is stateless and has no
- * configuration surface.
+ * both the base layer itself ({@link InboundErrorNormalizer}, the JWK transport type) and the layers
+ * above it (the client engine, the JWE decryptor), which may depend on the base layer but not the
+ * other way round (ADR-0001), share it. The utility is stateless.
  *
  * @since 1.0
  * @see <a href="https://owasp.org/www-community/attacks/Log_Injection">OWASP Log Injection</a>
@@ -99,6 +105,33 @@ public final class ErrorTextSanitizer {
         }
         if (truncated) {
             sanitized.append(TRUNCATION_MARKER);
+        }
+        return sanitized.toString();
+    }
+
+    /**
+     * Replaces every character {@link #sanitize(String)} would escape — the ASCII control characters
+     * (including {@code CR}, {@code LF} and tab), DEL, the C1 control characters U+0080 to U+009F and
+     * the Unicode line separators U+2028 (LS) and U+2029 (PS) — with {@code replacement}, so the value
+     * cannot forge a new log or message line. A value longer than {@code maxLength} characters keeps
+     * its first {@code maxLength} characters followed by {@code truncationMarker}.
+     *
+     * @param value            the untrusted value to sanitize, never {@code null}
+     * @param replacement      the character written in place of each unsafe character
+     * @param maxLength        the maximum number of source characters retained
+     * @param truncationMarker appended when the value was truncated
+     * @return the sanitized, length-bounded value
+     */
+    public static String sanitize(String value, char replacement, int maxLength, String truncationMarker) {
+        boolean truncated = value.length() > maxLength;
+        String bounded = truncated ? value.substring(0, maxLength) : value;
+        StringBuilder sanitized = new StringBuilder(bounded.length() + truncationMarker.length());
+        for (int i = 0; i < bounded.length(); i++) {
+            char c = bounded.charAt(i);
+            sanitized.append(isControlCharacter(c) || isUnicodeLineSeparator(c) ? replacement : c);
+        }
+        if (truncated) {
+            sanitized.append(truncationMarker);
         }
         return sanitized.toString();
     }

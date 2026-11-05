@@ -15,6 +15,18 @@
  */
 package de.cuioss.sheriff.token.commons.error;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.JwkKey;
+import de.cuioss.sheriff.token.commons.transport.TransportLogMessages;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.json.JwtHeader;
+import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
+import de.cuioss.sheriff.token.validation.jwe.JweDecryptor;
+import de.cuioss.sheriff.token.validation.test.JweTestTokenFactory;
+import de.cuioss.test.juli.LogAsserts;
+import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
+import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,8 +40,10 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Pins the single shared sanitize behaviour once, character by character: every escaped code point
  * with its exact rendering, the neighbours just outside the escaped ranges, null handling, and the
- * truncation boundary.
+ * truncation boundary — for the default escaping form and for the replacing variant, which the JWE
+ * header and JWK field sanitisers share.
  */
+@EnableTestLogger
 @DisplayName("ErrorTextSanitizer pins the shared CWE-117 escaping and truncation contract")
 class ErrorTextSanitizerTest {
 
@@ -102,5 +116,67 @@ class ErrorTextSanitizerTest {
         assertEquals((BACKSLASH + "n").repeat(ErrorTextSanitizer.MAX_LENGTH) + ErrorTextSanitizer.TRUNCATION_MARKER,
                 ErrorTextSanitizer.sanitize(lineFeeds),
                 "the cap counts source characters, so escaping can lengthen the retained prefix");
+    }
+
+    @ParameterizedTest(name = "replaces escape {1}")
+    @MethodSource("escapedCharacters")
+    @DisplayName("The replacing variant should replace every character the default form escapes")
+    void replacingVariantShouldReplaceEveryEscapedCharacter(char unsafe, String escapeBody) {
+        assertEquals("left?right", ErrorTextSanitizer.sanitize("left" + unsafe + "right", '?', 64, "..."),
+                "the character the default form renders as escape " + escapeBody + " becomes the replacement");
+    }
+
+    @ParameterizedTest
+    @MethodSource("keptCharacters")
+    @DisplayName("The replacing variant should keep the characters just outside the unsafe ranges verbatim")
+    void replacingVariantShouldKeepBoundaryNeighbours(char kept) {
+        String single = String.valueOf(kept);
+
+        assertEquals(single, ErrorTextSanitizer.sanitize(single, '?', 64, "..."));
+    }
+
+    @Test
+    @DisplayName("The replacing variant should keep exactly maxLength characters whole and truncate one more")
+    void replacingVariantShouldTruncateExactlyAboveTheBoundary() {
+        String atLimit = "a".repeat(64);
+
+        assertAll("variant truncation boundary",
+                () -> assertEquals(atLimit, ErrorTextSanitizer.sanitize(atLimit, '?', 64, "...")),
+                () -> assertEquals(atLimit + "...", ErrorTextSanitizer.sanitize(atLimit + "b", '?', 64, "...")),
+                () -> assertEquals("?".repeat(64) + "...",
+                        ErrorTextSanitizer.sanitize(String.valueOf((char) 0x000A).repeat(65), '?', 64, "..."),
+                        "the cap counts source characters; a replacement never lengthens the value"));
+    }
+
+    /**
+     * The JWE header and the JWK field sanitisers both route through the replacing variant, so the
+     * same hostile header text renders identically at both sites. Each site is reached through its
+     * public behaviour: the JWE {@code kid} through the key-not-found rejection message, the JWK
+     * coordinate through the invalid-Base64URL WARN.
+     */
+    @Test
+    @DisplayName("The JWE header and JWK field sanitisers should render the same hostile text identically")
+    void jweHeaderAndJwkFieldShouldRenderHostileTextIdentically() {
+        String hostile = "evil" + (char) 0x000D + (char) 0x000A + (char) 0x2028 + (char) 0x2029 + (char) 0x0085
+                + "WARN forged " + "c".repeat(100);
+        String expected = ("evil?????WARN forged " + "c".repeat(100)).substring(0, 64) + "...";
+        assertEquals(expected, ErrorTextSanitizer.sanitize(hostile, '?', 64, "..."));
+
+        JwtHeader header = new JwtHeader("RSA-OAEP", null, hostile, null, null,
+                "A256GCM", null, null, null, null);
+        JweDecryptionConfig config = JweDecryptionConfig.builder()
+                .decryptionKey("other-kid", JweTestTokenFactory.generateRsaKeyPair().getPrivate())
+                .build();
+        String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
+        TokenValidationException rejection = assertThrows(TokenValidationException.class,
+                () -> new JweDecryptor().decrypt(parts, header, config, new SecurityEventCounter()));
+        assertEquals("No decryption key found for kid: " + expected, rejection.getMessage(),
+                "the JWE kid is rendered by the shared variant");
+
+        TestLoggerFactory.getTestHandler().clearRecords();
+        assertTrue(new JwkKey("EC", null, null, null, null, "P-256", hostile, "AQ")
+                .getXCoordinateAsBigInteger().isEmpty(), "the hostile coordinate is not valid Base64URL");
+        LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                TransportLogMessages.WARN.INVALID_BASE64_URL_ENCODING.format(expected));
     }
 }
