@@ -2,10 +2,10 @@
   "id": "PLAN-13",
   "slug": "log-transport-hygiene",
   "workstream": "WS-01",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-13-log-transport-hygiene",
+  "pr": "861",
+  "landing": "landings/PLAN-13.md",
   "seq": 13
 }

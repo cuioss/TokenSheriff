@@ -2,10 +2,10 @@
   "id": "PLAN-23",
   "slug": "sonar-backlog-cleanup",
   "workstream": "WS-05",
-  "status": "running",
+  "status": "shipped",
   "lane": "plan-marshall",
   "plan_marshall_plan_id": "implement-plan-23-sonar-backlog-cleanup",
-  "pr": "",
-  "landing": "",
+  "pr": "855",
+  "landing": "landings/PLAN-23.md",
   "seq": 23
 }
