@@ -52,11 +52,14 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntFunction;
+import java.util.logging.LogRecord;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -66,6 +69,17 @@ import static org.junit.jupiter.api.Assertions.*;
 class HttpJwksLoaderFailureTest {
 
     private static final String TEST_KID = InMemoryJWKSFactory.DEFAULT_KEY_ID;
+
+    /** Distinctive segment carried by advertised jwks_uri fixtures that must never reach a loader record. */
+    private static final String ADVERTISED_URI_MARKER = "advertised-uri-marker";
+
+    /** The fixed reason of JWKS_URI_UNUSABLE, pinned verbatim. */
+    private static final String UNUSABLE_URI_REASON =
+            "the advertised jwks_uri is malformed, or uses cleartext http while insecure HTTP is not allowed";
+
+    /** The fixed detail logged when the egress guard blocks the advertised jwks_uri, pinned verbatim. */
+    private static final String ADVERTISED_URI_EGRESS_BLOCKED =
+            "SSRF egress blocked: the advertised jwks_uri resolves to a disallowed address";
 
     @Getter
     private final JwksResolveDispatcher moduleDispatcher = new JwksResolveDispatcher();
@@ -87,6 +101,17 @@ class HttpJwksLoaderFailureTest {
         try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
             return socket.getLocalPort();
         }
+    }
+
+    /**
+     * Returns every captured record of the {@link HttpJwksLoader} logger, at any level, whose rendered
+     * message contains {@code text}.
+     */
+    private static List<LogRecord> loaderRecordsContaining(String text) {
+        return Arrays.stream(TestLogLevel.values())
+                .flatMap(level -> TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(level, text).stream())
+                .filter(logRecord -> HttpJwksLoader.class.getName().equals(logRecord.getLoggerName()))
+                .toList();
     }
 
     @Test
@@ -765,6 +790,75 @@ class HttpJwksLoaderFailureTest {
             }
         }
 
+        @Test
+        @DisplayName("JWKS_URI_UNUSABLE for a malformed jwks_uri logs the fixed reason, not the advertised URI")
+        void malformedJwksUriIsNotRenderedInTheRecord() throws Exception {
+            // The handler refusal of this URI quotes it verbatim ("Expected closing bracket ...: http://[...")
+            UnusableJwksUriDispatcher dispatcher = new UnusableJwksUriDispatcher(port -> "http://[" + ADVERTISED_URI_MARKER);
+            startOnLoopback(dispatcher);
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .wellKnownUrl(server.url(UnusableJwksUriDispatcher.WELL_KNOWN_PATH).toString())
+                    .retryConfig(fastRetry)
+                    .refreshIntervalSeconds(0)
+                    .build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                assertEquals(LoaderStatus.ERROR, loader.initJWKSLoader(securityEventCounter).join());
+                assertUnusableUriLoggedWithFixedReasonOnly();
+            }
+        }
+
+        @Test
+        @DisplayName("JWKS_URI_UNUSABLE for a cleartext jwks_uri logs the fixed reason, not the advertised URI")
+        void cleartextJwksUriIsNotRenderedInTheRecord() throws Exception {
+            server.useHttps(new HandshakeCertificates.Builder()
+                    .heldCertificate(SERVER_CERTIFICATE)
+                    .build()
+                    .sslSocketFactory());
+            // The handler refusal of this URI quotes it verbatim, userinfo and query included
+            UnusableJwksUriDispatcher dispatcher = new UnusableJwksUriDispatcher(
+                    port -> "http://%s:secret@%s:%d/%s/jwks.json?token=%s".formatted(ADVERTISED_URI_MARKER, LOCALHOST,
+                            port, ADVERTISED_URI_MARKER, ADVERTISED_URI_MARKER));
+            startOnLoopback(dispatcher);
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true)
+                    .allowInsecureHttp(false)
+                    .sslContext(new HandshakeCertificates.Builder()
+                            .addTrustedCertificate(SERVER_CERTIFICATE.certificate())
+                            .build()
+                            .sslContext())
+                    .wellKnownUrl("https://%s:%d%s".formatted(LOCALHOST, server.getPort(),
+                            UnusableJwksUriDispatcher.WELL_KNOWN_PATH))
+                    .connectTimeoutSeconds(TIMEOUT_SECONDS)
+                    .readTimeoutSeconds(TIMEOUT_SECONDS)
+                    .retryConfig(fastRetry)
+                    .refreshIntervalSeconds(0)
+                    .build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                assertEquals(LoaderStatus.ERROR, loader.initJWKSLoader(securityEventCounter).join());
+                assertUnusableUriLoggedWithFixedReasonOnly();
+            }
+        }
+
+        /**
+         * Asserts that {@code JWKS_URI_UNUSABLE} was logged once with the fixed reason, and that no record
+         * of the loader renders the advertised URI.
+         */
+        private static void assertUnusableUriLoggedWithFixedReasonOnly() {
+            List<LogRecord> records = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWKS_URI_UNUSABLE.resolveIdentifierString());
+            assertEquals(1, records.size(), "JWKS_URI_UNUSABLE is logged exactly once");
+            String rendered = records.getFirst().getMessage();
+            assertAll("the unusable-URI warning carries the fixed reason only",
+                    () -> assertTrue(rendered.endsWith("the loader stops retrying: " + UNUSABLE_URI_REASON),
+                            "the reason must be the fixed text: " + rendered),
+                    () -> assertFalse(rendered.contains(ADVERTISED_URI_MARKER),
+                            "the advertised jwks_uri must not be rendered: " + rendered),
+                    () -> assertNull(records.getFirst().getThrown(), "no refusal may be attached"),
+                    () -> assertEquals(List.of(), loaderRecordsContaining(ADVERTISED_URI_MARKER).stream()
+                            .map(LogRecord::getMessage).toList(), "no loader record may render the advertised jwks_uri"));
+        }
+
         private void startOnLoopback(UnusableJwksUriDispatcher dispatcher) throws IOException {
             server.setDispatcher(dispatcher);
             server.start(InetAddress.getLoopbackAddress(), 0);
@@ -814,6 +908,136 @@ class HttpJwksLoaderFailureTest {
         private static int refreshFailureLogCount() {
             return TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN,
                     JWTValidationLogMessages.WARN.BACKGROUND_REFRESH_FAILED.resolveIdentifierString()).size();
+        }
+    }
+
+    /**
+     * Pins that the further loader records which could carry the advertised {@code jwks_uri} do not render it:
+     * an egress block of the advertised URI at initialization and on a background refresh logs a fixed
+     * detail without the rejection, and a re-discovery that meets an unusable advertised URI logs no refusal
+     * text at any level.
+     */
+    @Nested
+    @DisplayName("Advertised jwks_uri in other loader records")
+    class AdvertisedJwksUriInOtherRecords {
+
+        private static final String PUBLIC_IP = "93.184.216.34";
+        private static final String METADATA_IP = "169.254.169.254";
+        private static final String BLOCKED_HOST = "blocked.example.com";
+        private static final String MARKED_JWKS_PATH = "/jwks-" + ADVERTISED_URI_MARKER + ".json";
+
+        private final RetryConfig fastRetry = RetryConfig.builder()
+                .initialDelay(Duration.ofMillis(1))
+                .maxDelay(Duration.ofMillis(5))
+                .build();
+
+        private MockWebServer server;
+
+        /**
+         * Exposes the enclosing class's dispatcher to the MockWebServer extension, which resolves the
+         * module dispatcher on the nested test instance.
+         *
+         * @return the shared JWKS dispatcher
+         */
+        public JwksResolveDispatcher getModuleDispatcher() {
+            return moduleDispatcher;
+        }
+
+        @BeforeEach
+        void createServer() {
+            server = new MockWebServer();
+        }
+
+        @AfterEach
+        void stopServer() {
+            server.close();
+        }
+
+        private HttpJwksLoaderConfig wellKnownConfig(DiscoveryGenerationDispatcher dispatcher) throws IOException {
+            server.setDispatcher(dispatcher);
+            server.start();
+            return HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .wellKnownUrl(server.url(DiscoveryGenerationDispatcher.WELL_KNOWN_PATH).toString())
+                    .retryConfig(fastRetry)
+                    .refreshIntervalSeconds(0)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("An egress block of the advertised jwks_uri at initialization logs a fixed detail, not the URI")
+        void egressBlockAtInitializationDoesNotRenderTheAdvertisedUri() throws Exception {
+            // The egress rejection message quotes the full URI it blocked
+            DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(
+                    "https://%s/%s/jwks.json?token=%s".formatted(BLOCKED_HOST, ADVERTISED_URI_MARKER, ADVERTISED_URI_MARKER)));
+            EgressPolicy blockedHostPolicy = EgressPolicy.builder().resolver(host -> new InetAddress[]{
+                    InetAddress.getByName(BLOCKED_HOST.equals(host) ? METADATA_IP : PUBLIC_IP)}).build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(wellKnownConfig(dispatcher), blockedHostPolicy)) {
+                assertEquals(LoaderStatus.ERROR, loader.initJWKSLoader(securityEventCounter).get(10, TimeUnit.SECONDS));
+
+                List<LogRecord> egressRecords = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(
+                        TestLogLevel.ERROR, ADVERTISED_URI_EGRESS_BLOCKED);
+                assertAll("the egress block is logged with the fixed detail only",
+                        () -> assertEquals(1, egressRecords.size(), "JWKS_INITIALIZATION_FAILED carries the fixed detail"),
+                        () -> assertTrue(egressRecords.getFirst().getMessage().contains(
+                                JWTValidationLogMessages.ERROR.JWKS_INITIALIZATION_FAILED.resolveIdentifierString())),
+                        () -> assertNull(egressRecords.getFirst().getThrown(), "the rejection may not be attached"),
+                        () -> assertEquals(List.of(), loaderRecordsContaining(ADVERTISED_URI_MARKER).stream()
+                                .map(LogRecord::getMessage).toList(), "no loader record may render the advertised jwks_uri"));
+            }
+        }
+
+        @Test
+        @DisplayName("An egress block of the advertised jwks_uri on a refresh logs a fixed detail, not the URI")
+        void egressBlockOnRefreshDoesNotRenderTheAdvertisedUri() throws Exception {
+            DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(MARKED_JWKS_PATH));
+            AtomicBoolean rebound = new AtomicBoolean(false);
+            EgressPolicy reboundPolicy = EgressPolicy.builder().resolver(host -> new InetAddress[]{
+                    InetAddress.getByName(rebound.get() ? METADATA_IP : PUBLIC_IP)}).build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(wellKnownConfig(dispatcher), reboundPolicy)) {
+                assertEquals(LoaderStatus.OK, loader.initJWKSLoader(securityEventCounter).get(10, TimeUnit.SECONDS));
+
+                rebound.set(true);
+                loader.performBackgroundRefresh();
+
+                List<LogRecord> egressRecords = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(
+                        TestLogLevel.WARN, ADVERTISED_URI_EGRESS_BLOCKED);
+                assertAll("the refresh egress block is logged with the fixed detail only",
+                        () -> assertEquals(1, dispatcher.jwksFetches(MARKED_JWKS_PATH), "the refresh fetches nothing"),
+                        () -> assertEquals(1, egressRecords.size(), "BACKGROUND_REFRESH_FAILED carries the fixed detail"),
+                        () -> assertTrue(egressRecords.getFirst().getMessage().contains(
+                                JWTValidationLogMessages.WARN.BACKGROUND_REFRESH_FAILED.resolveIdentifierString())),
+                        () -> assertNull(egressRecords.getFirst().getThrown(), "the rejection may not be attached"),
+                        () -> assertEquals(List.of(), loaderRecordsContaining(ADVERTISED_URI_MARKER).stream()
+                                .map(LogRecord::getMessage).toList(), "no loader record may render the advertised jwks_uri"));
+            }
+        }
+
+        @Test
+        @DisplayName("A re-discovery meeting an unusable advertised jwks_uri logs no refusal text at any level")
+        void refusedRediscoveryDoesNotRenderTheAdvertisedUri() throws Exception {
+            TestLogLevel.DEBUG.addLogger(HttpJwksLoader.class);
+            String currentPath = "/jwks-current.json";
+            DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(
+                    List.of(currentPath, "http://[" + ADVERTISED_URI_MARKER));
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(wellKnownConfig(dispatcher))) {
+                assertEquals(LoaderStatus.OK, loader.initJWKSLoader(securityEventCounter).get(10, TimeUnit.SECONDS));
+
+                dispatcher.failJwks(currentPath);
+                for (int cycle = 0; cycle <= HttpJwksLoader.REDISCOVERY_FAILURE_THRESHOLD; cycle++) {
+                    loader.performBackgroundRefresh();
+                }
+
+                assertAll("the refused re-discovery keeps the endpoint and renders no advertised URI",
+                        () -> assertEquals(2, dispatcher.discoveryRequests(), "the re-discovery consulted the document"),
+                        () -> assertEquals(Optional.of(currentPath), loader.getJwksFetchUri().map(URI::getPath)),
+                        () -> assertEquals(List.of(), loaderRecordsContaining(ADVERTISED_URI_MARKER).stream()
+                                .map(LogRecord::getMessage).toList(), "no loader record may render the advertised jwks_uri"));
+                LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                        JWTValidationLogMessages.WARN.JWKS_URI_RESOLUTION_FAILED.resolveIdentifierString());
+            }
         }
     }
 

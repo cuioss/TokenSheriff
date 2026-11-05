@@ -130,6 +130,23 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     static final String ISSUER_ABSENT = "<absent>";
 
     /**
+     * Fixed reason of the {@code JWKS_URI_UNUSABLE} warning. The refusal of the HTTP handler
+     * configuration echoes the advertised {@code jwks_uri}, which is remote document content and can
+     * carry userinfo or query secrets, so the refusal message is never written; this text names both
+     * causes the configuration refuses an advertised URI for.
+     */
+    static final String UNUSABLE_URI_REASON =
+            "the advertised jwks_uri is malformed, or uses cleartext http while insecure HTTP is not allowed";
+
+    /**
+     * Fixed detail logged when the egress guard blocks the {@code jwks_uri} advertised by the discovery
+     * document. The rejection message of the guard embeds the full URI, which is remote document content,
+     * so neither the message nor the exception (whose stack trace would print it) is logged.
+     */
+    static final String ADVERTISED_URI_EGRESS_BLOCKED =
+            "SSRF egress blocked: the advertised jwks_uri resolves to a disallowed address";
+
+    /**
      * Number of consecutive refresh cycles without installed keys after which a well-known loader
      * repeats the discovery before its next fetch.
      */
@@ -523,7 +540,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         // Check-and-publish is one step: a close() that ran since the resolution was adopted leaves
         // UNDEFINED, for the loader and for the future alike.
         LoaderStatus published = publishFailedLoadStatus(LoaderStatus.ERROR, startEpoch);
-        if (published == LoaderStatus.ERROR && resolution.isUnusableUri()) {
+        if (published == LoaderStatus.ERROR && resolution.unusableUri()) {
             logUnusableUri(resolution);
         }
         return published;
@@ -548,8 +565,14 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * {@link #resolveIssuer(String, String, SecurityEventCounter)} with an absent advertised issuer
      * and is a terminal rejection. An advertised {@code jwks_uri} for which the configuration cannot
      * build an HTTP handler (a malformed URI, or a cleartext {@code http} URI while insecure HTTP is not
-     * allowed) is a terminal rejection as well: the resolution carries the resolved issuer and the
-     * refusal ({@link AdapterResolution#unusableUriFailure()}), and nothing is fetched.
+     * allowed) is a terminal rejection as well: the resolution carries the resolved issuer and is marked
+     * as such ({@link AdapterResolution#unusableUri()}), and nothing is fetched. The refusal itself is not
+     * kept, since its message echoes the advertised URI.
+     * <p>
+     * An egress block is logged as {@code JWKS_INITIALIZATION_FAILED}. In well-known mode the blocked URI
+     * is the advertised {@code jwks_uri}, so the record carries the fixed
+     * {@value #ADVERTISED_URI_EGRESS_BLOCKED} detail and no exception; in direct mode the URI is the
+     * operator-configured one and the rejection is logged with its message and cause.
      *
      * @param trustAnchor the issuer the advertised issuer must match, {@code null} to adopt the
      *                    advertised issuer as-is (standalone loader without a configured or resolved
@@ -595,10 +618,11 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             // Use overloaded method to create handler for discovered JWKS URL. The configuration refuses
             // an advertised jwks_uri it cannot use (malformed, or cleartext http while insecure HTTP is
             // not allowed); that refusal does not go away by retrying, so it is a terminal rejection.
+            // The refusal is dropped on purpose: its message echoes the advertised URI.
             try {
                 handler = config.getHttpHandler(jwksUri.get());
-            } catch (IllegalArgumentException | IllegalStateException e) {
-                return AdapterResolution.unusableUri(issuer, e);
+            } catch (IllegalArgumentException | IllegalStateException refusal) {
+                return AdapterResolution.unusableUriRejection(issuer);
             }
         } else {
             // Direct HTTP configuration - use existing handler from config
@@ -616,9 +640,14 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         try {
             egressPolicy.check(fetchUri);
         } catch (TransportException e) {
-            LOGGER.error(e, ERROR.JWKS_INITIALIZATION_FAILED, e.getMessage(),
-                    ErrorTextSanitizer.sanitize(Optional.ofNullable(issuer).orElse(ISSUER_NOT_CONFIGURED)));
-            return new AdapterResolution(null, issuer, false, null);
+            String loggableIssuer = ErrorTextSanitizer.sanitize(Optional.ofNullable(issuer).orElse(ISSUER_NOT_CONFIGURED));
+            if (isFetchUriAdvertised()) {
+                // The rejection message embeds the advertised jwks_uri: neither it nor the exception is logged
+                LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, ADVERTISED_URI_EGRESS_BLOCKED, loggableIssuer);
+            } else {
+                LOGGER.error(e, ERROR.JWKS_INITIALIZATION_FAILED, e.getMessage(), loggableIssuer);
+            }
+            return new AdapterResolution(null, issuer, false, false);
         }
 
         // Create base adapter with ETag caching
@@ -630,7 +659,17 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
         // Wrap with retry behavior
         JwksEndpoint resolved = new JwksEndpoint(ResilientHttpAdapter.wrap(baseAdapter, config.getRetryConfig()), fetchUri);
-        return new AdapterResolution(resolved, issuer, false, null);
+        return new AdapterResolution(resolved, issuer, false, false);
+    }
+
+    /**
+     * Whether the JWKS fetch URI is the {@code jwks_uri} advertised by a discovery document, which is
+     * remote content, rather than the operator-configured {@code jwksUrl}.
+     *
+     * @return {@code true} in well-known mode
+     */
+    private boolean isFetchUriAdvertised() {
+        return config.getWellKnownConfig() != null;
     }
 
     /**
@@ -930,6 +969,11 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
     /**
      * Re-validates SSRF egress against the supplied fetch URI for one background refresh cycle.
+     * <p>
+     * A block is logged as {@code BACKGROUND_REFRESH_FAILED}. In well-known mode the fetch URI is the
+     * advertised {@code jwks_uri}, so the record carries the fixed {@value #ADVERTISED_URI_EGRESS_BLOCKED}
+     * detail and no exception, because the rejection message embeds the URI; in direct mode the URI is
+     * the operator-configured one and the rejection is logged with its message and cause.
      *
      * @param fetchUri the resolved JWKS fetch URI to re-check
      * @return {@code true} if the egress check passed and the caller should proceed with the fetch;
@@ -940,7 +984,11 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             egressPolicy.check(fetchUri);
             return true;
         } catch (TransportException e) {
-            LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+            if (isFetchUriAdvertised()) {
+                LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, ADVERTISED_URI_EGRESS_BLOCKED);
+            } else {
+                LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+            }
             return false;
         }
     }
@@ -1162,7 +1210,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         try {
             resolution = resolveJWKSAdapter(trustAnchor);
         } catch (IllegalArgumentException | IllegalStateException e) {
-            // No handler could be built for the advertised jwks_uri: keep fetching the current endpoint
+            // The re-discovery failed with a refusal: keep fetching the current endpoint
             logRefusedAdvertisedUri(e);
             return keepCurrentEndpoint(cycleEpoch, current, true);
         }
@@ -1171,28 +1219,23 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             // A cycle of a closed generation publishes nothing and fetches nothing
             return adoptResolution(resolution, cycleEpoch) ? resolved : null;
         }
-        RuntimeException unusableUriFailure = resolution.unusableUriFailure();
-        if (unusableUriFailure != null) {
-            // No handler could be built for the advertised jwks_uri: keep fetching the current endpoint
-            logRefusedAdvertisedUri(unusableUriFailure);
-            return keepCurrentEndpoint(cycleEpoch, current, true);
-        }
+        // Nothing to adopt: keep fetching the current endpoint. A rejection, including an advertised jwks_uri
+        // no handler can be built for, is not retryable and suppresses further re-discovery.
         LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
         return keepCurrentEndpoint(cycleEpoch, current, !resolution.retryable());
     }
 
     /**
-     * Logs {@code JWKS_URI_RESOLUTION_FAILED} for a re-discovery whose advertised {@code jwks_uri} no HTTP
-     * handler can be built for. The refusal is not handed to the logger as a throwable: its message can
-     * echo the IdP-advertised {@code jwks_uri}, which is remote document content, and a stack trace would
-     * print it unescaped (CWE-117). The reason is kept at debug level, neutralized and length-bounded.
+     * Logs {@code JWKS_URI_RESOLUTION_FAILED} for a re-discovery that failed with a refusal. Neither the
+     * refusal nor its message is logged: the message can echo the IdP-advertised {@code jwks_uri}, which is
+     * remote document content and can carry userinfo or query secrets. Only the type of the refusal is
+     * kept, at debug level.
      *
-     * @param failure the refusal of the configuration to build a handler for the advertised URI
+     * @param failure the refusal that ended the re-discovery
      */
     private static void logRefusedAdvertisedUri(RuntimeException failure) {
         LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
-        LOGGER.debug("Advertised jwks_uri refused during re-discovery: %s",
-                ErrorTextSanitizer.sanitize(failure.getMessage()));
+        LOGGER.debug("Advertised jwks_uri refused during re-discovery (%s)", failure.getClass().getName());
     }
 
     /**
@@ -1304,7 +1347,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             lifecycleLock.unlock();
         }
         LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
-        if (turnedTerminal && resolution.isUnusableUri()) {
+        if (turnedTerminal && resolution.unusableUri()) {
             logUnusableUri(resolution);
         }
         return null;
@@ -1515,51 +1558,42 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * @param retryable for a failed resolution, whether the failure is transient (the well-known
      *                  discovery yielded no JWKS URI) and may succeed on a later refresh cycle, as
      *                  opposed to a security rejection or an unusable advertised {@code jwks_uri}
-     * @param unusableUriFailure the refusal of the configuration to build an HTTP handler for the
-     *                  advertised {@code jwks_uri} (a malformed URI, or a cleartext {@code http} URI
-     *                  while insecure HTTP is not allowed), {@code null} unless the resolution was
-     *                  rejected for that reason
+     * @param unusableUri whether the resolution was rejected because the configuration cannot build an
+     *                  HTTP handler for the advertised {@code jwks_uri} (a malformed URI, or a cleartext
+     *                  {@code http} URI while insecure HTTP is not allowed); the refusal itself is not
+     *                  kept, since its message echoes the advertised URI
      */
     private record AdapterResolution(@Nullable JwksEndpoint endpoint, @Nullable String issuer, boolean retryable,
-    @Nullable RuntimeException unusableUriFailure) {
+    boolean unusableUri) {
 
-        static final AdapterResolution RETRYABLE_FAILURE = new AdapterResolution(null, null, true, null);
-        static final AdapterResolution REJECTED = new AdapterResolution(null, null, false, null);
+        static final AdapterResolution RETRYABLE_FAILURE = new AdapterResolution(null, null, true, false);
+        static final AdapterResolution REJECTED = new AdapterResolution(null, null, false, false);
 
         /**
          * A non-retryable rejection because no HTTP handler can be built for the advertised
          * {@code jwks_uri}.
          *
-         * @param issuer  the issuer the discovery resolved before the advertised URI was refused
-         * @param failure the refusal of the configuration
-         * @return the rejected resolution, carrying the issuer and the refusal
+         * @param issuer the issuer the discovery resolved before the advertised URI was refused
+         * @return the rejected resolution, carrying the issuer
          */
-        static AdapterResolution unusableUri(String issuer, RuntimeException failure) {
-            return new AdapterResolution(null, issuer, false, failure);
-        }
-
-        /**
-         * @return {@code true} if the resolution was rejected because the advertised {@code jwks_uri}
-         *         cannot be used
-         */
-        boolean isUnusableUri() {
-            return unusableUriFailure != null;
+        static AdapterResolution unusableUriRejection(String issuer) {
+            return new AdapterResolution(null, issuer, false, true);
         }
     }
 
     /**
      * Logs {@code JWKS_URI_UNUSABLE} for a resolution rejected because the advertised {@code jwks_uri}
      * cannot be used. The caller invokes it once per terminal transition to {@link LoaderStatus#ERROR}.
+     * The reason is the fixed {@value #UNUSABLE_URI_REASON}: the refusal of the HTTP handler configuration
+     * echoes the advertised URI, which is remote document content, so it is never written. The issuer is
+     * neutralized against log injection (CWE-117), since it can be the advertised one.
      *
-     * @param resolution the rejected resolution, {@link AdapterResolution#isUnusableUri()} must be true
+     * @param resolution the rejected resolution, {@link AdapterResolution#unusableUri()} must be true
      */
     private static void logUnusableUri(AdapterResolution resolution) {
-        RuntimeException failure = resolution.unusableUriFailure();
-        // The refusal message can echo the IdP-advertised jwks_uri, which is remote document content, so
-        // it is neutralized against log injection (CWE-117) and length-bounded before it is written.
         LOGGER.warn(WARN.JWKS_URI_UNUSABLE,
                 ErrorTextSanitizer.sanitize(
                         Optional.ofNullable(resolution.issuer()).orElse(ISSUER_NOT_CONFIGURED)),
-                failure == null ? "unknown reason" : ErrorTextSanitizer.sanitize(failure.getMessage()));
+                UNUSABLE_URI_REASON);
     }
 }

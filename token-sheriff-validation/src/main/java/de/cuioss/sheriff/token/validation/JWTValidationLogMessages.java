@@ -524,7 +524,9 @@ public final class JWTValidationLogMessages {
          * Logged once when the {@code jwks_uri} advertised by the well-known discovery document cannot
          * be used, for example because it is malformed or uses cleartext HTTP while insecure HTTP is not
          * allowed. The loader ends in a terminal error status and stops retrying. Parameters: the issuer,
-         * then the reason reported by the HTTP handler configuration; no document content is logged.
+         * then a fixed reason text naming both causes. The advertised {@code jwks_uri} and the refusal
+         * message of the HTTP handler configuration, which echoes it, are not logged; no document content
+         * is logged.
          */
         public static final LogRecord JWKS_URI_UNUSABLE = LogRecordModel.builder()
                 .prefix(PREFIX)
