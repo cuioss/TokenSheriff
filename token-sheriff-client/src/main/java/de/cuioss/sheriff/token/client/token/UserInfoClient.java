@@ -258,7 +258,11 @@ public class UserInfoClient {
                 throw new TransportException("userinfo endpoint response is missing the 'sub' claim");
             }
             return userInfo;
-        } catch (IOException e) {
+        } catch (IOException | ArrayIndexOutOfBoundsException e) {
+            // DSL-JSON reports a body truncated inside a string escape (a trailing lone backslash, a
+            // cut-off unicode escape) by reading past the end of its buffer, i.e. as
+            // ArrayIndexOutOfBoundsException rather than IOException; it is the same malformed-input
+            // condition and takes the same TransportException, as in TokenEndpointClient.deserialize.
             // The parse-error message can echo an AS-controlled JSON fragment; sanitize it (CWE-117)
             // before it reaches the log appender or the exception message.
             String sanitizedError = LogSanitizer.sanitize(e.getMessage());

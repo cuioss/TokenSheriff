@@ -34,6 +34,8 @@ import okhttp3.Headers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Optional;
 import java.util.Set;
@@ -42,6 +44,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -204,6 +207,29 @@ class UserInfoClientTest {
                         "a raw LF from the AS-controlled body must not reach the exception message"),
                 () -> assertTrue(message.contains("\\r") && message.contains("\\n"),
                         "the injected CR/LF must survive in escaped form, proving the fragment was carried and sanitized"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"sub\":\"abc\\",
+            "{\"sub\":\"\\u12"
+    })
+    @DisplayName("Should reject a response body that ends inside a string escape as a TransportException")
+    void shouldRejectTruncatedEscape(String truncatedBody, URIBuilder uriBuilder) {
+        moduleDispatcher.returnMalformedJson(truncatedBody);
+        var client = userInfoClient();
+        var endpoint = userInfoEndpoint(uriBuilder);
+        var token = Generators.nonBlankStrings().next();
+
+        TransportException thrown = assertThrows(TransportException.class,
+                () -> client.fetchUserInfo(endpoint, token),
+                "a truncated escape must be the declared TransportException, not an unchecked exception");
+
+        assertAll("declared parse failure",
+                () -> assertTrue(thrown.getMessage().startsWith("Failed to parse userinfo endpoint response"),
+                        thrown.getMessage()),
+                () -> assertInstanceOf(ArrayIndexOutOfBoundsException.class, thrown.getCause(),
+                        "the truncated-escape parse failure must be carried as the cause"));
     }
 
     @Test

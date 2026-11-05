@@ -32,9 +32,12 @@ import lombok.Getter;
 import mockwebserver3.MockResponse;
 import mockwebserver3.RecordedRequest;
 import okhttp3.Headers;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.Optional;
@@ -43,6 +46,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -53,7 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DiscoveryResolverTest {
 
     @Getter
-    private final WellKnownDispatcher moduleDispatcher = new WellKnownDispatcher();
+    private final DiscoveryTestDispatcher moduleDispatcher = new DiscoveryTestDispatcher();
 
     @BeforeEach
     void resetDispatcher() {
@@ -137,6 +141,71 @@ class DiscoveryResolverTest {
         assertEquals(0, moduleDispatcher.getCallCounter(),
                 "the non-TLS endpoint must be refused before any network call is made");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "Rejecting non-TLS issuer");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"issuer\":\"abc\\",
+            "{\"issuer\":\"\\u12"
+    })
+    @DisplayName("Should reject a discovery document that ends inside a string escape as a TransportException")
+    void shouldRejectTruncatedEscape(String truncatedBody, URIBuilder uriBuilder) {
+        moduleDispatcher.returnBody(truncatedBody);
+        var resolver = new DiscoveryResolver(configFor(uriBuilder.buildAsString()));
+
+        var failure = assertThrows(TransportException.class, resolver::resolve,
+                "a truncated escape must be the declared TransportException, not an unchecked exception");
+
+        assertAll("declared discovery failure",
+                () -> assertEquals(1, moduleDispatcher.getCallCounter(), "the document must have been fetched"),
+                () -> assertInstanceOf(ArrayIndexOutOfBoundsException.class, failure.getCause(),
+                        "the truncated-escape parse failure must be carried as the cause"));
+    }
+
+    /**
+     * Serves the {@link WellKnownDispatcher} strategies and, on demand, a fixed response body, so a
+     * malformed discovery document can be fed to the parser.
+     */
+    static final class DiscoveryTestDispatcher implements ModuleDispatcherElement {
+
+        private final WellKnownDispatcher delegate = new WellKnownDispatcher();
+        private @Nullable String fixedBody;
+
+        void returnDefault() {
+            fixedBody = null;
+            delegate.returnDefault();
+        }
+
+        void returnBody(String body) {
+            fixedBody = body;
+        }
+
+        void setCallCounter(int callCounter) {
+            delegate.setCallCounter(callCounter);
+        }
+
+        int getCallCounter() {
+            return delegate.getCallCounter();
+        }
+
+        @Override
+        public String getBaseUrl() {
+            return delegate.getBaseUrl();
+        }
+
+        @Override
+        public Set<HttpMethodMapper> supportedMethods() {
+            return delegate.supportedMethods();
+        }
+
+        @Override
+        public Optional<MockResponse> handleGet(RecordedRequest request) {
+            if (fixedBody != null) {
+                delegate.setCallCounter(delegate.getCallCounter() + 1);
+                return Optional.of(new MockResponse(200, Headers.of("Content-Type", "application/json"), fixedBody));
+            }
+            return delegate.handleGet(request);
+        }
     }
 }
 

@@ -219,9 +219,16 @@ public class DiscoveryResolver {
                         issuer, "discovery document could not be parsed"));
             }
             return metadata;
-        } catch (IOException e) {
-            LOGGER.error(e, ClientLogMessages.ERROR.DISCOVERY_FAILED, issuer, e.getMessage());
-            throw new TransportException(ClientLogMessages.ERROR.DISCOVERY_FAILED.format(issuer, e.getMessage()), e);
+        } catch (IOException | ArrayIndexOutOfBoundsException e) {
+            // DSL-JSON reports a body truncated inside a string escape (a trailing lone backslash, a
+            // cut-off unicode escape) by reading past the end of its buffer, i.e. as
+            // ArrayIndexOutOfBoundsException rather than IOException; it is the same malformed-input
+            // condition and takes the same TransportException, as in TokenEndpointClient.deserialize.
+            // The parse-error message can echo an OP-controlled JSON fragment; sanitize it (CWE-117)
+            // before it reaches the log appender or the exception message.
+            String sanitizedError = LogSanitizer.sanitize(e.getMessage());
+            LOGGER.error(e, ClientLogMessages.ERROR.DISCOVERY_FAILED, issuer, sanitizedError);
+            throw new TransportException(ClientLogMessages.ERROR.DISCOVERY_FAILED.format(issuer, sanitizedError), e);
         }
     }
 
