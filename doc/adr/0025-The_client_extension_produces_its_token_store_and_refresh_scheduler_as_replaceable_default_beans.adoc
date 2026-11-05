@@ -1,0 +1,100 @@
+= ADR-0025: The client extension produces its token store and refresh scheduler as replaceable default beans
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: The Quarkus client producer exposes TokenStore (an InMemoryTokenStore) and RefreshScheduler as @DefaultBean producers, so an application bean of either type that is unqualified or only @Named replaces the default and TokenLifecycleManager is wired with it; the other engine beans are plain producers
+// tags: quarkus-extension, cdi, default-bean, extensibility, client
+// affects: token-sheriff-client-quarkus
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+The Quarkus client extension assembles the framework-agnostic client engine as CDI beans. Most of those
+beans are fully determined by the configuration: the token-endpoint client, the discovery resolver, the
+flows. Two are not.
+
+* The `TokenStore` holds the server-side token sessions. An in-memory store is correct for a single
+  instance, but an application running several instances behind a load balancer needs a shared,
+  persistent store, and only the application knows which one.
+* The `RefreshScheduler` decides when a stored token is refreshed ahead of its expiry. Its default
+  lead window suits most applications, and some need another policy.
+
+Both are injected into the `TokenLifecycleManager`. If the extension produces them as ordinary beans, an
+application that declares its own bean of the same type creates an ambiguous dependency and the
+deployment fails, so the application cannot replace the default without disabling or rewriting the
+producer. If the extension produces neither, every application must declare both, including the
+majority for which the defaults are right.
+
+The structural choice point is how a default the extension provides can be replaced by the application
+without configuration and without ambiguity.
+
+== Decision
+
+The token store and the refresh scheduler are produced as `@DefaultBean`s; every other engine bean is a
+plain producer.
+
+* `TokenSheriffClientProducer` produces an `InMemoryTokenStore` as the `TokenStore` and a
+  `RefreshScheduler` with its default lead window, both `@ApplicationScoped` and `@DefaultBean`.
+* An application bean of type `TokenStore` or `RefreshScheduler` that is unqualified or annotated only
+  with `@Named` replaces the corresponding default. The default producer is then not used, and the
+  `TokenLifecycleManager` is wired with the application's bean.
+* A bean with a custom qualifier does not replace the default. It is a different injection point, and
+  the lifecycle manager keeps the default.
+* The beans that are fully determined by configuration are not default beans. Replacing them is not a
+  supported extension point.
+
+== Consequences
+
+=== Positive
+
+* An application gets a working token lifecycle with no extra beans, and replaces the store or the
+  scheduler by declaring one bean, without touching configuration or the extension.
+* A multi-instance deployment can plug in a shared store without the extension knowing about it.
+* The extension points are named by which producers are default beans; the rest of the bean graph stays
+  fixed.
+
+=== Negative
+
+* A replacement must match the CDI rules for a default-bean override. A bean with a custom qualifier is
+  silently not used by the lifecycle manager.
+* The in-memory default is used whenever the application declares nothing, including in a
+  multi-instance deployment where it is wrong. The extension cannot detect that case.
+
+=== Risks
+
+* An application that intends to replace the store but annotates its bean with a qualifier keeps the
+  in-memory default without any error, so sessions are not shared across instances. The rule is
+  documented on the producer.
+
+== Alternatives Considered
+
+**Plain producers for every bean.** The extension produces the store and the scheduler like the rest. It
+was rejected because an application bean of the same type is then ambiguous with the producer and the
+deployment fails, so replacing the default requires removing the extension's bean.
+
+**A configuration property that selects the store.** The application names a store implementation in
+configuration. It was rejected because the store is an application component with its own dependencies
+— a data source, a cache client — which CDI wires and a class name in a property does not.
+
+**No default.** The application must always provide both beans. It was rejected because it makes every
+application declare beans whose defaults are right for it, and an application that forgets fails at
+deployment with an unsatisfied dependency instead of working.
+
+The rejected options share one flaw. Each makes replacing a default either impossible without removing
+the extension's bean, or impossible to wire properly, or mandatory where it is not needed.
+
+== References
+
+* `token-sheriff-quarkus-parent/token-sheriff-client-quarkus/src/main/java/de/cuioss/sheriff/token/client/quarkus/TokenSheriffClientProducer.java`
+  — the default-bean producers and the replacement rule.
+* `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/lifecycle/TokenLifecycleManager.java`
+  — the lifecycle manager the store and the scheduler are injected into.

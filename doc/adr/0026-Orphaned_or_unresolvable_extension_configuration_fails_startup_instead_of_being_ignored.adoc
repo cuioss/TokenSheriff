@@ -1,0 +1,116 @@
+= ADR-0026: Orphaned or unresolvable extension configuration fails startup instead of being ignored
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: The validation extension's configuration resolvers throw an IllegalStateException naming the offending property when a property is set without the switch or key source it belongs to, or names something that cannot be resolved, so a security setting that would otherwise be silently ignored fails the validator build, which runs at startup
+// tags: quarkus-extension, configuration, fail-closed, startup, dpop, jwe
+// affects: token-sheriff-validation-quarkus
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+The validation extension reads its settings from flat properties. Many of them only take effect together
+with another property: the `dpop.*` settings of an issuer only matter when `dpop.enabled` is `true`; a
+keystore password only matters when a keystore path is set; a JWE default key id only matters when it
+names one of the configured keys.
+
+A resolver that reads only the properties it needs ignores the others. The result is a configuration
+that looks complete and is not. An operator who sets `dpop.required=true` but forgets `dpop.enabled`
+believes DPoP is enforced while no proof is checked. An operator who sets algorithm preferences for JWE
+but no decryption key believes encrypted tokens are restricted while JWE is not configured at all. A
+default key id with a typo silently falls back to another key. In each case the mistake is a security
+setting that never applies, and nothing reports it.
+
+The structural choice point is what a resolver does with a property that has no effect: ignore it, warn,
+or refuse the configuration.
+
+== Decision
+
+A property that is set but cannot take effect is a configuration error, and the resolver throws an
+`IllegalStateException` that names the property and states the fix.
+
+Issuer configuration (`IssuerConfigResolver`), for each enabled issuer:
+
+* a `dpop.*` sub-property — `dpop.required`, `dpop.proof-max-age-seconds`, `dpop.nonce-cache-size`,
+  `dpop.nonce-cache-ttl-seconds` — set while `dpop.enabled` is not `true` is rejected;
+* an HTTP JWKS URL or well-known discovery URL without an explicit `issuer-identifier` is rejected.
+
+JWE decryption configuration (`JweDecryptionConfigResolver`):
+
+* an ancillary property set without the key source it belongs to is rejected: the decryption key id
+  without a single key or keystore; the keystore password, key alias or key password without a keystore;
+  the default key id without multi-key entries; the algorithm preferences or the maximum encrypted token
+  size without any key source. The check runs before the "not configured" decision, so a configuration
+  that consists only of ancillary properties fails instead of disabling JWE;
+* a `decryption-keys.{kid}` entry without a `.path` value, including the bare `decryption-keys.{kid}`
+  form, is rejected;
+* a keystore without a key alias is rejected;
+* a default key id that names none of the loaded keys is rejected, instead of falling back to the first
+  key;
+* any key-loading failure of an explicitly configured JWE setup is rethrown as one error stating that JWE
+  is configured but could not be loaded.
+
+The errors are raised while the `TokenValidator` is built. With an enabled issuer that build runs at
+startup (ADR-0019), so the application does not start with a configuration that would silently ignore a
+setting. A configuration with no JWE property at all is not an error; JWE then stays unconfigured.
+
+== Consequences
+
+=== Positive
+
+* A security setting either applies or stops the application. No configuration can appear to enforce
+  DPoP or restrict JWE while doing neither.
+* The error names the property and the remedy, so the fix does not require reading the resolver.
+* A typo in a key id is found at startup rather than by the first token encrypted for the intended key.
+
+=== Negative
+
+* Configurations that used to start now fail, including ones where the stray property was harmless,
+  such as a `dpop.*` value left behind after DPoP was deliberately switched off.
+* Each property that depends on another has to be listed in the check. A new dependent property that is
+  not added is ignored again.
+
+=== Risks
+
+* The checks cover the properties the resolvers know about. A misspelt property name is not orphaned; it
+  is simply unknown, and it is not reported by these checks.
+* JWE multi-key entries given only as environment variables are not discovered, so a configuration made
+  up solely of such entries is treated as "JWE not configured" rather than rejected.
+* The `dpop.*` check runs only for enabled issuers. Stray settings of a disabled issuer are not reported.
+
+== Alternatives Considered
+
+**Ignore the property.** The resolver reads what it needs and nothing else. It was rejected because the
+ignored property is exactly the one the operator relied on, and the system gives no sign that it does not
+apply.
+
+**Log a warning and continue.** The application starts and the warning reports the stray property. It
+was rejected because a warning at startup is easy to miss, and the application then runs with a security
+setting the operator believes is active. For an unresolvable default key id there is no sensible way to
+continue at all, only a guess at which key was meant.
+
+**Infer the missing switch.** A `dpop.*` property would enable DPoP; a keystore password without a
+keystore would be dropped. It was rejected because inferring a security switch from a side property
+turns a mistake into a configuration the operator never wrote, and the inference cannot be right in both
+directions: the operator may have meant to disable DPoP and forgotten the leftovers.
+
+The rejected options share one flaw. Each lets the application run with a configuration whose meaning
+differs from what was written, without stopping to say so.
+
+== References
+
+* ADR-0019 — eager validator startup, which makes a configuration error fail the boot.
+* ADR-0023 — how issuer names are discovered, which determines which issuers these checks apply to.
+* `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/config/IssuerConfigResolver.java`
+  — the orphaned `dpop.*` check and the required issuer identifier.
+* `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/jwe/JweDecryptionConfigResolver.java`
+  — the orphaned JWE property checks, the multi-key path check and the default key id check.

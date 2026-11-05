@@ -1,0 +1,124 @@
+= ADR-0022: A flow context is single-use, and untrusted text is sanitised by one commons-layer utility
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: A FlowContext is used up by the first callback handled against it, whatever that call's outcome, through one atomic claim; and every CWE-117 sanitisation of untrusted text goes through ErrorTextSanitizer in the validation module's commons layer, whose default form escapes and whose parameterised form replaces
+// tags: security, single-use, csrf, cwe-117, log-injection, commons, layering
+// affects: token-sheriff-client, token-sheriff-validation
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+Two defences on the inbound side of the client and the validator share one weakness: each can be
+implemented locally, at the place that needs it, and each loses its value when it is.
+
+The first is the binding between an authorization request and its callback. A `FlowContext` holds the
+`state`, the `nonce` and the PKCE verifier of one interactive request. If a context can be presented to
+the callback handler more than once, a replayed or forged callback gets a second attempt against the
+same secrets. Leaving single use to the relying party, which is told to discard the context after the
+callback, makes the defence depend on every embedding removing it from its session store on every
+path, including the error paths.
+
+The second is the neutralisation of untrusted text before it reaches a log line or a caller-visible
+message (CWE-117). Authorization-server error descriptions, JWE header values and JWK fields are all
+attacker-controlled. Each site can write its own loop over the unsafe characters, and over time the
+loops diverge: one forgets the C1 controls, another the Unicode line separators U+2028 and U+2029, a
+third has no length bound. The sites live in different layers — the commons base layer, the
+validation module's JWE decryptor, the client engine — so a shared implementation has to sit where all
+of them may depend on it.
+
+The structural choice points are where single use is enforced, and where the one sanitiser lives.
+
+== Decision
+
+**A flow context is single-use, enforced by the library.** `CallbackHandler.handle` first claims the
+context with one atomic compare-and-set. The claim cannot be released. The first call uses the context
+up whatever its outcome — a returned code, a `state` mismatch or an error callback — and every later
+call with the same context is refused before any other check runs. When several callers race on one
+context, exactly one wins. The relying party is still required to bind one context to one request and
+to discard it after the callback, but the single-use guarantee no longer depends on it.
+
+**Untrusted text is sanitised by `ErrorTextSanitizer` in the validation module's commons layer.** It is
+the single implementation of the unsafe-character set: the ASCII control characters including CR, LF
+and tab, DEL, the C1 controls U+0080 to U+009F, and U+2028 / U+2029. It offers two forms over that one
+set:
+
+* the default form escapes each unsafe character (`\r`, `\n`, `\t`, otherwise a backslash-`u` escape),
+  truncates to 256 characters and marks a truncation with `...[truncated]`; it serves the error-text
+  surfaces, such as the inbound error normaliser and the client's log sanitiser;
+* the parameterised form replaces each unsafe character with a caller-chosen character and truncates to
+  a caller-chosen length with a caller-chosen marker; the JWE header and JWK field sanitisers use it
+  with `?`, 64 characters and `...`.
+
+No other component carries its own replacement loop. The utility sits in
+`de.cuioss.sheriff.token.commons.error` because the commons layer may be depended on by the
+validation and client layers but depends on neither (ADR-0001), so every site, including the commons
+transport types themselves, can reach it.
+
+== Consequences
+
+=== Positive
+
+* A callback can be redeemed against a context at most once, by construction, including under
+  concurrent delivery and after a failed first attempt.
+* There is one definition of what is unsafe in a log line. A character added to the set is covered at
+  every site at once.
+* Sites that need a different output shape — a compact header rendering instead of an escaped error
+  text — get it through parameters, not through a second implementation.
+
+=== Negative
+
+* A relying party that retries a callback after a transient failure of its own must start a new
+  authorization request; the used-up context cannot be reused.
+* The commons layer carries a utility whose callers are mostly in the layers above it.
+
+=== Risks
+
+* The single-use claim lives in the context instance, so it guards the callback, not the request. A
+  relying party that binds one context to two authorization requests is not detected; the one-context,
+  one-request obligation stays with the relying party.
+* The parameterised form lets a caller choose a weak replacement or a large bound. The current callers
+  use fixed constants; a new caller has to choose its own deliberately.
+
+== Alternatives Considered
+
+**Leave single use to the relying party.** The context documents that it must be discarded after the
+callback, and the handler checks only `state`. It was rejected because the guarantee then holds only on
+the paths every embedding remembers, and the error paths are the ones most often forgotten. A defence
+that the library can enforce in one compare-and-set should not depend on caller discipline.
+
+**Release the claim when the callback fails.** A failed callback would leave the context reusable for a
+retry. It was rejected because a forged or replayed callback is itself a failed callback: releasing the
+claim on failure gives the attacker the retry the claim exists to deny.
+
+**A sanitiser per site.** Each component keeps its own loop, tuned to its output. It was rejected
+because the sites diverge on which characters are unsafe, and a site that misses one character is a
+log-injection vector regardless of how well the others are written.
+
+**A separate sanitiser in each module.** The client and the validator each own a copy. It was rejected
+for the same divergence, now across modules, and because the commons transport types would still need
+a third copy.
+
+The rejected options share one flaw. Each leaves a security property to be re-established at every
+site that needs it, instead of establishing it once where all sites can reach it.
+
+== References
+
+* ADR-0001 — the commons base layer and the dependency direction that places the sanitiser there.
+* `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/FlowContext.java` — the
+  single-use claim.
+* `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/CallbackHandler.java` — the
+  check order, single use first.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/error/ErrorTextSanitizer.java`
+  — the unsafe-character set and its two forms.
+* `doc/validation/specification/token-decryption.adoc` — the JWE header value sanitisation rules the
+  parameterised form implements.
