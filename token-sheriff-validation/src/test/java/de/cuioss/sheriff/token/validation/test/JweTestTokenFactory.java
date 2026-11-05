@@ -269,8 +269,33 @@ public class JweTestTokenFactory {
      */
     public static String encryptAsEcdhEsJwe(String plaintext, KeyPair ephemeralKeyPair,
             ECPublicKey recipientPublicKey, String enc) {
+        return encryptAsEcdhEsJwe(plaintext, ephemeralKeyPair, recipientPublicKey, enc, null, null, null);
+    }
+
+    /**
+     * Encrypts a plaintext as an ECDH-ES JWE that carries the {@code apu} / {@code apv} header
+     * parameters (RFC 7518 Section 4.6.1.2 / 4.6.1.3). The producer derives the CEK with
+     * {@code producerApv}, while the header advertises {@code headerApv}; pass the same value for a
+     * well-formed token, or different values for a token whose header {@code apv} differs from the
+     * one the producer used.
+     *
+     * @param plaintext          the plaintext to encrypt, e.g. a raw JWS
+     * @param ephemeralKeyPair   the sender's ephemeral EC key pair
+     * @param recipientPublicKey the recipient's EC public key
+     * @param enc                the JWE content encryption algorithm (e.g., "A256GCM")
+     * @param apu                the Agreement PartyUInfo, written to the header and used by the KDF,
+     *                           or {@code null} to omit it
+     * @param headerApv          the Agreement PartyVInfo written to the header, or {@code null} to omit it
+     * @param producerApv        the Agreement PartyVInfo the producer feeds the KDF, or {@code null} for
+     *                           the empty value
+     * @return the JWE compact serialization string
+     * @throws IllegalStateException if the JDK crypto operations fail
+     */
+    public static String encryptAsEcdhEsJwe(String plaintext, KeyPair ephemeralKeyPair,
+            ECPublicKey recipientPublicKey, String enc, byte[] apu, byte[] headerApv, byte[] producerApv) {
         try {
-            return encryptAsEcdhEsJweChecked(plaintext, ephemeralKeyPair, recipientPublicKey, enc);
+            return encryptAsEcdhEsJweChecked(plaintext, ephemeralKeyPair, recipientPublicKey, enc,
+                    apu, headerApv, producerApv);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Failed to create ECDH-ES JWE", e);
         }
@@ -351,7 +376,8 @@ public class JweTestTokenFactory {
     }
 
     private static String encryptAsEcdhEsJweChecked(String plaintext, KeyPair ephemeralKeyPair,
-            ECPublicKey recipientPublicKey, String enc) throws GeneralSecurityException {
+            ECPublicKey recipientPublicKey, String enc, byte[] apu, byte[] headerApv, byte[] producerApv)
+            throws GeneralSecurityException {
         ECPublicKey ephemeralPublicKey = (ECPublicKey) ephemeralKeyPair.getPublic();
 
         // ECDH key agreement
@@ -362,12 +388,20 @@ public class JweTestTokenFactory {
 
         // Derive CEK via ConcatKDF
         int keyLengthBits = getCekBits(enc);
-        byte[] cek = ConcatKdf.derive(sharedSecret, keyLengthBits, enc, new byte[0], new byte[0]);
+        byte[] cek = ConcatKdf.derive(sharedSecret, keyLengthBits, enc,
+                apu == null ? new byte[0] : apu, producerApv == null ? new byte[0] : producerApv);
 
         // Build header with epk
         String epkJson = buildEpkJson(ephemeralPublicKey);
         // The epk is a nested JWK object (RFC 7518 Section 4.6.1.1), so the header is built by hand
-        String headerJson = "{\"alg\":\"ECDH-ES\",\"enc\":\"" + enc + "\",\"epk\":" + epkJson + "}";
+        StringBuilder partyInfo = new StringBuilder();
+        if (apu != null) {
+            partyInfo.append(",\"apu\":\"").append(base64Url(apu)).append('"');
+        }
+        if (headerApv != null) {
+            partyInfo.append(",\"apv\":\"").append(base64Url(headerApv)).append('"');
+        }
+        String headerJson = "{\"alg\":\"ECDH-ES\",\"enc\":\"" + enc + "\",\"epk\":" + epkJson + partyInfo + "}";
         String encodedHeader = base64Url(headerJson.getBytes(StandardCharsets.UTF_8));
 
         // ECDH-ES direct key agreement: encrypted key is empty

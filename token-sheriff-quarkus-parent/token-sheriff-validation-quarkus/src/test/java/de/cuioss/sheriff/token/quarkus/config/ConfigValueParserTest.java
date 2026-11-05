@@ -147,6 +147,20 @@ class ConfigValueParserTest {
         }
 
         @Test
+        @DisplayName("should not report an empty issuer name when nothing lies between the prefix and the anchor")
+        void shouldNotReportEmptyNameBetweenPrefixAndAnchor() {
+            // The remainder after the prefix is exactly "_ENABLED", the anchor suffix itself, so
+            // stripping the anchor would leave the empty string as a name.
+            Config config = envConfig(Map.of(
+                    "SHERIFF_TOKEN_ISSUERS__ENABLED", "true",
+                    "SHERIFF_TOKEN_ISSUERS_KEYCLOAK_ENABLED", "true"));
+
+            Set<String> names = ConfigValueParser.discoverEnvNameSegments(config, ISSUERS_PREFIX, ANCHORS, Set.of());
+
+            assertEquals(Set.of("keycloak"), names);
+        }
+
+        @Test
         @DisplayName("should ignore environment variables outside the prefix")
         void shouldIgnoreEnvVarsOutsidePrefix() {
             Config config = envConfig(Map.of(

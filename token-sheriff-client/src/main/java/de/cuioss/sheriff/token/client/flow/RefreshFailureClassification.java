@@ -49,9 +49,10 @@ import java.util.Objects;
  * when the family refused outside any exchange, where nothing was redeemed. It never maps to
  * {@link Kind#PRE_REDEMPTION}.
  * <p>
- * The three are mutually exclusive and exhaustive, which is what lets a caller dispatch on
- * {@link #kind()} in a switch with no default arm: a fourth state added later is a compile error at
- * every dispatch site rather than a silent fall-through to the session-preserving default.
+ * The three are mutually exclusive and exhaustive. A caller dispatching on {@link #kind()} in a switch
+ * statement should end it in a default arm that fails: the compiler does not check a switch statement
+ * over an enum for exhaustiveness, so without that arm a fourth state added later would fall through
+ * silently to the session-preserving default.
  *
  * @param kind       which of the three situations produced the refusal; never {@code null}
  * @param redemption what the authorization server did to the presented refresh token, carried

@@ -79,11 +79,11 @@ public class TokenValidatorHealthCheck implements HealthCheck {
             issuerCount = resolver.observedIssuerConfigs().size();
             status = statusFor(resolver.outcome());
         }
-        // cui-rewrite:disable InvalidExceptionUsageRecipe
         // Intentional catch-all: a liveness probe must never throw, and the resolver's failure
         // sources (CDI resolution, configuration access) are an open set of unchecked exceptions.
         // The failure is reported through a fixed status marker only; its message stays out of the
         // health payload (T-LEAK) and is logged at DEBUG.
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
         catch (RuntimeException e) {
             LOGGER.debug(e, "Failed to resolve the observed TokenValidator for the liveness check");
             issuerCount = 0;

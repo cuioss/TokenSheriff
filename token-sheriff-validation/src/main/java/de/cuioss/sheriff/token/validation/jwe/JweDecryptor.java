@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.jwe;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.JwkKey;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
@@ -313,7 +314,9 @@ public class JweDecryptor {
      * messages (CWE-117): control characters and the Unicode line and paragraph separators
      * (U+2028, U+2029) are replaced by {@code '?'}, and a value longer than
      * {@value #MAX_LOGGED_KID_LENGTH} characters keeps its first {@value #MAX_LOGGED_KID_LENGTH}
-     * characters followed by an {@code "..."} marker. A {@code null} value renders as {@code <none>}.
+     * characters followed by an {@code "..."} marker, through
+     * {@link ErrorTextSanitizer#sanitize(String, char, int, String)}. A {@code null} value renders as
+     * {@code <none>}.
      *
      * @param value the raw header-derived text, may be {@code null}
      * @return the sanitized text
@@ -322,18 +325,7 @@ public class JweDecryptor {
         if (value == null) {
             return "<none>";
         }
-        boolean truncated = value.length() > MAX_LOGGED_KID_LENGTH;
-        String bounded = truncated ? value.substring(0, MAX_LOGGED_KID_LENGTH) : value;
-        StringBuilder sanitized = new StringBuilder(bounded.length() + 3);
-        for (int i = 0; i < bounded.length(); i++) {
-            char c = bounded.charAt(i);
-            boolean unsafe = Character.isISOControl(c) || c == '\u2028' || c == '\u2029';
-            sanitized.append(unsafe ? '?' : c);
-        }
-        if (truncated) {
-            sanitized.append("...");
-        }
-        return sanitized.toString();
+        return ErrorTextSanitizer.sanitize(value, '?', MAX_LOGGED_KID_LENGTH, "...");
     }
 
     /**

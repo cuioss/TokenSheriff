@@ -107,6 +107,115 @@ class TokenValidatorTest {
     }
 
     @Test
+    @DisplayName("Should run every release step, propagate the later close failure and keep the earlier as suppressed")
+    void shouldKeepEveryCloseFailureWhenReleasing() {
+        // The release order close() uses: the pipeline, then the DPoP replay protection, then the
+        // JWKS loaders. Both the first and the second step fail; neither failure may be lost.
+        SecurityException pipelineFailure = new SecurityException("pipeline shutdown refused");
+        SecurityException dpopFailure = new SecurityException("dpop shutdown refused");
+        Set<String> ran = new HashSet<>();
+
+        SecurityException thrown = assertThrows(SecurityException.class, () -> TokenValidator.releaseInOrder(
+                () -> {
+                    ran.add("pipeline");
+                    throw pipelineFailure;
+                },
+                () -> {
+                    ran.add("dpop");
+                    throw dpopFailure;
+                },
+                () -> ran.add("loaders")));
+
+        assertSame(dpopFailure, thrown, "The later failure must be the one propagated");
+        assertArrayEquals(new Throwable[]{pipelineFailure}, thrown.getSuppressed(),
+                "The earlier failure must be attached as suppressed, not dropped");
+        assertEquals(Set.of("pipeline", "dpop", "loaders"), ran, "Every release step must run");
+    }
+
+    @Test
+    @DisplayName("Should attach every earlier close failure to the last one when all release steps fail")
+    void shouldAttachEveryEarlierCloseFailureToTheLastOne() {
+        IllegalStateException first = new IllegalStateException("first");
+        IllegalStateException second = new IllegalStateException("second");
+        IllegalStateException third = new IllegalStateException("third");
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> TokenValidator.releaseInOrder(
+                () -> {
+                    throw first;
+                },
+                () -> {
+                    throw second;
+                },
+                () -> {
+                    throw third;
+                }));
+
+        assertSame(third, thrown, "The last failure must be the one propagated");
+        assertArrayEquals(new Throwable[]{first, second}, thrown.getSuppressed(),
+                "Every earlier failure must be attached to the last one, in release order");
+    }
+
+    @Test
+    @DisplayName("Should run the later release steps after an Error and rethrow the Error when it is the last failure")
+    void shouldKeepReleasingAfterAnError() {
+        AssertionError pipelineError = new AssertionError("pipeline shutdown broke");
+        Set<String> ran = new HashSet<>();
+
+        AssertionError thrown = assertThrows(AssertionError.class, () -> TokenValidator.releaseInOrder(
+                () -> {
+                    ran.add("pipeline");
+                    throw pipelineError;
+                },
+                () -> ran.add("dpop"),
+                () -> ran.add("loaders")));
+
+        assertSame(pipelineError, thrown, "The Error must be rethrown unwrapped");
+        assertEquals(0, thrown.getSuppressed().length, "A single failure carries nothing suppressed");
+        assertEquals(Set.of("pipeline", "dpop", "loaders"), ran, "An Error must not stop the later release steps");
+    }
+
+    @Test
+    @DisplayName("Should propagate a later failure with an earlier Error attached as suppressed")
+    void shouldAttachAnEarlierErrorToTheLaterFailure() {
+        StackOverflowError pipelineError = new StackOverflowError("pipeline shutdown overflowed");
+        IllegalStateException loaderFailure = new IllegalStateException("loader close refused");
+        Set<String> ran = new HashSet<>();
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> TokenValidator.releaseInOrder(
+                () -> {
+                    ran.add("pipeline");
+                    throw pipelineError;
+                },
+                () -> ran.add("dpop"),
+                () -> {
+                    ran.add("loaders");
+                    throw loaderFailure;
+                }));
+
+        assertSame(loaderFailure, thrown, "The later failure must be the one propagated");
+        assertArrayEquals(new Throwable[]{pipelineError}, thrown.getSuppressed(),
+                "The earlier Error must be attached as suppressed, not dropped");
+        assertEquals(Set.of("pipeline", "dpop", "loaders"), ran, "Every release step must run");
+    }
+
+    @Test
+    @DisplayName("Should propagate the original failure when two release steps throw the same instance")
+    void shouldNotAttachAFailureToItself() {
+        IllegalStateException shared = new IllegalStateException("shared executor shutdown refused");
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> TokenValidator.releaseInOrder(
+                () -> {
+                    throw shared;
+                },
+                () -> {
+                    throw shared;
+                }));
+
+        assertSame(shared, thrown, "The original failure must propagate, not an IllegalArgumentException");
+        assertEquals(0, thrown.getSuppressed().length, "A failure must never be attached to itself");
+    }
+
+    @Test
     @DisplayName("Should ignore disabled issuer configurations during construction")
     void shouldIgnoreDisabledIssuerConfigs() {
         // Disabled configs skip build-time validation and have no JwksLoader —

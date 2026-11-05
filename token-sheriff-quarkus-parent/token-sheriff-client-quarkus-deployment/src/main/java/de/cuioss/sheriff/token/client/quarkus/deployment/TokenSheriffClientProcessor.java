@@ -39,7 +39,9 @@ import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
  * </ul>
  * <p>
  * The extension runtime jar is not part of the application's bean-discovery archive by default, so
- * both the producer and the mapper are registered explicitly here ({@code CLIENT-21}).
+ * both the producer and the mapper are registered explicitly here. The mapper is the RFC 9457 edge
+ * that maps the engine's typed exceptions to {@code application/problem+json} ({@code CLIENT-20}); the
+ * producer is the framework binding that {@code CLIENT-21} keeps outside the pure-Java engine.
  * </p>
  */
 public class TokenSheriffClientProcessor {

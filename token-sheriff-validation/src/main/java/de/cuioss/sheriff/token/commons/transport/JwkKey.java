@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.commons.transport;
 
 import com.dslplatform.json.CompiledJson;
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.math.BigInteger;
@@ -163,24 +164,14 @@ String y      // EC y coordinate (Base64url-encoded, EC only)
      * Renders an untrusted JWK field value safe for a log line (CWE-117): control characters and
      * the Unicode line and paragraph separators (U+2028, U+2029) are replaced by {@code '?'}, and
      * a value longer than {@value #MAX_LOGGED_VALUE_LENGTH} characters keeps its first
-     * {@value #MAX_LOGGED_VALUE_LENGTH} characters followed by an {@code "..."} marker.
+     * {@value #MAX_LOGGED_VALUE_LENGTH} characters followed by an {@code "..."} marker, through
+     * {@link ErrorTextSanitizer#sanitize(String, char, int, String)}.
      *
      * @param value the raw field value, never {@code null} here
      * @return the sanitized, length-bounded value
      */
     static String sanitizeForLog(String value) {
-        boolean truncated = value.length() > MAX_LOGGED_VALUE_LENGTH;
-        String bounded = truncated ? value.substring(0, MAX_LOGGED_VALUE_LENGTH) : value;
-        StringBuilder sanitized = new StringBuilder(bounded.length() + 3);
-        for (int i = 0; i < bounded.length(); i++) {
-            char c = bounded.charAt(i);
-            boolean unsafe = Character.isISOControl(c) || c == '\u2028' || c == '\u2029';
-            sanitized.append(unsafe ? '?' : c);
-        }
-        if (truncated) {
-            sanitized.append("...");
-        }
-        return sanitized.toString();
+        return ErrorTextSanitizer.sanitize(value, '?', MAX_LOGGED_VALUE_LENGTH, "...");
     }
 
     /**

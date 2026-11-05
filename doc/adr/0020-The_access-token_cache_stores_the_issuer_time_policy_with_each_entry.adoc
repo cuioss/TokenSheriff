@@ -1,0 +1,117 @@
+= ADR-0020: The access-token cache stores the issuer time policy with each entry
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: Each access-token cache entry carries the clock skew and maximum token age of the issuer that validated it, captured at store time; every hit and the background eviction re-apply that per-entry policy, and an iat-less token is not cached when its issuer enforces a maximum age
+// tags: cache, access-token, time-policy, fail-closed
+// affects: token-sheriff-validation
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+The access-token cache returns a previously validated token without repeating signature and claim
+validation. Its value depends on one property: a hit must never return a token that the uncached
+validation pipeline would reject at the same instant. Expiry and maximum token age are the two checks
+that change their answer while a token sits in the cache, so the cache has to re-apply them.
+
+Both checks depend on the issuer. Clock skew tolerance and maximum token age are configured per
+issuer, and one validator serves several issuers through one cache. A cache that applies a single,
+cache-wide policy is either too lenient for the strictest issuer or too strict for the most lenient
+one. A cache that looks the policy up again on every hit needs the issuer configuration on the hot
+path, and the background eviction, which runs without any request, has no issuer context to look it
+up from.
+
+A token without an `iat` claim adds a second failure mode. Its age cannot be computed, so a cache hit
+cannot re-check a maximum token age for it.
+
+The structural choice point is where the time policy that governs a cached token is held, and what
+the cache does with a token whose age it cannot check.
+
+== Decision
+
+Each cache entry carries the time policy of the issuer that validated it, captured when the entry is
+stored.
+
+* `AccessTokenCache.put` receives the per-issuer `ValidationContext` the token was validated with and
+  stores that issuer's clock skew tolerance and maximum token age on the entry, next to the expiry.
+* Every cache hit re-applies the stored policy before the token is returned. An entry expired under
+  its issuer's clock skew is removed and rejected with `TOKEN_EXPIRED`; an entry older than its
+  issuer's maximum token age (plus clock skew) is removed and rejected with `TOKEN_AGE_EXCEEDED`.
+* The background eviction applies the same per-entry policy, so it removes expired and too-old
+  entries of each issuer by that issuer's own rules.
+* When the issuer enforces a maximum token age, a token without an `iat` claim is not cached. The
+  full validation path already rejects such a token with `MISSING_CLAIM` before the pipeline stores
+  anything, and `AccessTokenCache.put` refuses it as well, as defence in depth. Without a maximum
+  token age it is cached as usual.
+
+The policy on the entry is the policy that was in force when the token was validated. It is not
+updated when the issuer configuration is read again.
+
+== Consequences
+
+=== Positive
+
+* A cache hit enforces the same expiry and age bounds as the uncached pipeline for the token's own
+  issuer, so caching changes the cost of validation, not its outcome.
+* The hit path needs no issuer lookup to apply the time policy, and the background eviction works
+  without request or issuer context.
+* Issuers with different tolerances share one cache without either one weakening the other.
+* A token whose age cannot be checked is never served from the cache, so the maximum token age cannot
+  be bypassed by omitting `iat`.
+
+=== Negative
+
+* Each entry stores two additional values.
+* An `iat`-less token of an issuer with a maximum token age is never served from the cache, so every
+  request carrying one runs the full validation up to the claim check that rejects it.
+
+=== Risks
+
+* The captured policy is fixed for the life of the entry. If the issuer configuration of a running
+  validator could change, entries stored under the old configuration would keep the old bounds until
+  they expire. Issuer configurations are fixed at validator construction, so the risk is confined to
+  that assumption staying true.
+
+== Alternatives Considered
+
+**One cache-wide time policy.** A single clock skew and maximum age applied to every entry. It is
+simple and stores nothing per entry. It was rejected because it cannot honour per-issuer
+configuration: whichever values are chosen, some issuer's tokens are either kept longer than that
+issuer allows or rejected earlier than the pipeline would reject them.
+
+**Look up the issuer policy on every hit.** The entry stores only the token and its issuer; the hit
+resolves the issuer configuration and reads its policy. It was rejected because the background
+eviction has no request through which to resolve the configuration, so it would either need its own
+lookup path or fall back to a cache-wide rule, and because the policy then lives in two places, the
+entry and the configuration, that must be kept in step.
+
+**Cache an `iat`-less token and skip the age check for it.** The token would be served from the
+cache like any other. It was rejected because a cache hit would then accept, for as long as the
+entry lives, a token whose age the issuer's maximum token age is meant to bound but that no hit can
+compute. In the current pipeline that token never reaches the cache: when the issuer enforces a
+maximum token age, the claim validation (`ExpirationValidator.validateTokenAge`) rejects a token
+without `iat` with `MISSING_CLAIM`, and the pipeline calls `AccessTokenCache.put` only after the
+claim validation has passed. The refusal in `AccessTokenCache.put` to store an `iat`-less token of
+such an issuer is therefore defence in depth. It keeps the cache from relying on that ordering, so a
+future path that stored a token without the full claim validation still could not open a way around
+the configured bound.
+
+The rejected options share one flaw. Each lets the bounds applied to a cached token differ from the
+bounds its own issuer applies on the uncached path.
+
+== References
+
+* ADR-0021 — the cache's rejection of an expired or too-old entry runs before the DPoP proof check.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/cache/AccessTokenCache.java`
+  — the per-entry policy, the hit checks, the eviction and the `iat`-less exclusion.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/AccessTokenValidationPipeline.java`
+  — the pipeline that stores tokens with their issuer's `ValidationContext`.

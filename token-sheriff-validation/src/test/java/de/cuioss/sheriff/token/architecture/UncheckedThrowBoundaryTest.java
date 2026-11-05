@@ -196,12 +196,12 @@ class UncheckedThrowBoundaryTest {
 
             // --- request path, already translated by an existing narrow catch ---
             Map.entry("de.cuioss.sheriff.token.validation.domain.claim.mapper.OffsetDateTimeMapper#map",
-                    ALREADY_TRANSLATED + " — TokenBuilder.extractClaims, the module's single sanctioned"
+                    ALREADY_TRANSLATED + " — TokenBuilder.mapClaim, the module's single sanctioned"
                             + " broad catch for claim mappers (AGENTS.md)"),
             Map.entry("de.cuioss.sheriff.token.validation.domain.claim.mapper.ScopeMapper#map",
-                    ALREADY_TRANSLATED + " — TokenBuilder.extractClaims"),
+                    ALREADY_TRANSLATED + " — TokenBuilder.mapClaim"),
             Map.entry("de.cuioss.sheriff.token.validation.domain.claim.mapper.StringSplitterMapper#map",
-                    ALREADY_TRANSLATED + " — TokenBuilder.extractClaims"),
+                    ALREADY_TRANSLATED + " — TokenBuilder.mapClaim"),
             Map.entry("de.cuioss.sheriff.token.validation.jwe.JweDecryptor#decryptCek",
                     ALREADY_TRANSLATED + " — JweDecryptor.decrypt narrows"
                             + " GeneralSecurityException|IllegalArgumentException and increments"

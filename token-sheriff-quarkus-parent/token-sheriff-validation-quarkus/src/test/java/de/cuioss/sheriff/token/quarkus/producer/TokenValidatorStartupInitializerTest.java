@@ -92,6 +92,25 @@ class TokenValidatorStartupInitializerTest {
         }
 
         @Test
+        @DisplayName("should dereference the resolved client proxy exactly once to force the validator build")
+        void shouldDereferenceResolvedProxyExactlyOnce() {
+            // A strict mock: resolving the handle alone does not create a lazy client proxy's bean, so
+            // the observer must call a method on it. Dropping that call fails verify(validator).
+            TokenValidator validator = createMock(TokenValidator.class);
+            expect(validator.getSecurityEventCounter()).andReturn(null).once();
+            replay(validator);
+            @SuppressWarnings("unchecked") Instance<TokenValidator> validatorHandle = createMock(Instance.class);
+            expect(validatorHandle.get()).andReturn(validator).once();
+            replay(validatorHandle);
+            TokenValidatorStartupInitializer initializer = new TokenValidatorStartupInitializer(
+                    issuerConfig("true"), validatorHandle);
+
+            initializer.onStartup(new StartupEvent());
+
+            verify(validatorHandle, validator);
+        }
+
+        @Test
         @DisplayName("should propagate a failure to build the validator out of the startup observer")
         void shouldPropagateValidatorFailure() {
             IllegalStateException failure = new IllegalStateException("invalid issuer configuration");

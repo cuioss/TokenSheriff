@@ -1,0 +1,114 @@
+= ADR-0021: A cached token is rejected for expiry or age inside the cache, before the DPoP proof is checked
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: The access-token cache itself rejects an expired or too-old entry, removing it and throwing TOKEN_EXPIRED or TOKEN_AGE_EXCEEDED, so on a cache hit the time checks run before the issuer is re-resolved and before the DPoP proof and the custom rules; the DPoP proof is never checked for a token the cache rejects, while the hit runs the time checks before the issuer resolution and the miss runs them after it
+// tags: cache, access-token, dpop, fail-closed, validation-order
+// affects: token-sheriff-validation
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+A cache hit skips signature and claim validation, but not everything can be skipped. A DPoP proof is
+fresh per request, so it must be checked on every hit, and checking it records the proof's `jti` in
+the replay store. Custom validation rules can be stateful and must also run on every hit. Expiry and
+maximum token age must be re-checked because their answer changes while the token is cached.
+
+That leaves two questions. Which component performs the time checks on a hit: the cache, or the
+pipeline after the cache has returned the token? And in which order do the time checks and the
+per-request checks run?
+
+The order matters. On the uncached path the claim validation, which includes expiry and maximum age,
+runs before the DPoP proof. A hit that checked the proof first would record the `jti` of a request
+that is about to be rejected for an expired token, and a request carrying both an expired token and
+a bad proof would be reported as a DPoP failure on a hit but as an expiry on a miss. The reported
+reason would then depend on whether the token happened to be cached.
+
+The structural choice point is whether a cache lookup may return an entry that is already invalid,
+leaving the caller to notice.
+
+== Decision
+
+The cache never returns an entry that fails its time policy. It rejects such an entry itself, inside
+the lookup.
+
+* `AccessTokenCache.get` evaluates a verified hit against the entry's stored time policy (ADR-0020).
+  An expired entry is removed and the lookup throws `TOKEN_EXPIRED`; an entry past its maximum token
+  age is removed and the lookup throws `TOKEN_AGE_EXCEEDED`. Each rejection is logged and counted.
+* Only a hit that passed both checks is returned. The pipeline then re-resolves the issuer, which
+  rejects a token whose issuer's JWKS loader is no longer `OK`, then validates the DPoP proof, then
+  runs the custom validation rules.
+* The resulting order on a hit is time policy, issuer, DPoP, custom rules. It shares one property with
+  the uncached path, where claim validation also precedes the DPoP proof and the custom rules: the
+  time checks run before the DPoP proof, so the proof is never checked for a token the time checks
+  reject. It differs from the uncached path in one respect. The uncached path resolves the issuer
+  before it validates the claims, while a hit checks the time policy before it resolves the issuer.
+
+== Consequences
+
+=== Positive
+
+* An invalid entry cannot leave the cache, so no caller of the lookup can forget to check it.
+* A request carrying an expired or too-old token and a bad DPoP proof is rejected for the token's time
+  policy whether or not the token was cached; the DPoP failure is not reported on either path.
+* A request that is rejected for its token's time policy records nothing in the DPoP replay store.
+* An expired or too-old entry is evicted at the moment it is found, not only by the next background
+  eviction.
+
+=== Negative
+
+* The lookup has a side effect beyond returning a value: it can throw, remove an entry and increment
+  security counters. A caller must treat it as a validation step, not as a plain map read.
+* For a token that is both expired (or too old) and from an issuer whose JWKS loader is no longer
+  `OK`, the reported event depends on whether the token was cached. A hit rejects it with
+  `TOKEN_EXPIRED` or `TOKEN_AGE_EXCEEDED`, because the time policy is checked before the issuer is
+  re-resolved; a miss rejects it with the issuer rejection, because the issuer is resolved before the
+  claims are validated. Both paths reject the token; only the reported reason differs.
+
+=== Risks
+
+* The shared property, time checks before the DPoP proof, holds only while both paths keep it. A
+  change that moved the DPoP check ahead of the time checks on one path and not on the other would
+  make the reported reason for an expired token with a bad proof depend on the cache state as well.
+
+== Alternatives Considered
+
+**Return the entry and let the pipeline check expiry and age.** The cache would be a plain store, and
+the pipeline would apply the time checks after the lookup. It was rejected because every caller of the
+lookup then carries the obligation, and the stored per-entry policy (ADR-0020) would have to be exposed
+to the caller to apply it. An omitted check returns an expired token.
+
+**Check the DPoP proof before the time policy on a hit.** The proof is checked first because it is the
+per-request part. It was rejected because it inverts the relative order of the time checks and the
+DPoP proof that the uncached path uses: the reported reason for a request carrying an expired token
+and a bad proof would depend on whether its token was cached, and the replay store would record
+proofs of requests that are rejected anyway.
+
+**Treat an expired entry as a cache miss.** The lookup would drop the entry and return nothing, and the
+full validation would reject the token. The outcome is the same rejection. It was rejected because it
+runs a full parse and signature check to reach a verdict the cache already has, and because the
+rejection would then be counted by the full path rather than at the point where the expiry was found.
+
+The rejected options share one flaw. Each makes the handling of a request with an expired or too-old
+token depend on more than the token: on caller discipline, on whether a request rejected for its
+token's time policy still reaches the DPoP replay store, or on a second, redundant validation.
+
+== References
+
+* ADR-0020 — the per-entry time policy the lookup applies.
+* ADR-0017 — the loader status that the re-resolution of the issuer on a hit depends on.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/cache/AccessTokenCache.java`
+  — the lookup that rejects an expired or too-old entry.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/AccessTokenValidationPipeline.java`
+  — the order of the checks on a hit and on a miss.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/dpop/DpopReplayProtection.java`
+  — the replay store a DPoP check writes to.

@@ -40,8 +40,10 @@ import org.eclipse.microprofile.config.Config;
  * agree on what "configured" means.
  * </p>
  * <ul>
- *   <li>No enabled issuer &rarr; the validator handle is not touched at all. An application that does
- *       not configure the extension, or that supplies its own {@code TokenValidator}, keeps booting.</li>
+ *   <li>No enabled issuer &rarr; the validator handle is not touched at all, so an application that
+ *       does not configure the extension keeps booting. An application that supplies its own
+ *       {@code TokenValidator} gets this only when it also configures no enabled issuer under
+ *       {@code sheriff.token.issuers.*}: the gate looks at the enabled issuers alone.</li>
  *   <li>At least one enabled issuer &rarr; the extension's default-qualified validator is resolved and
  *       its client proxy is forced to instantiate the underlying bean.</li>
  * </ul>

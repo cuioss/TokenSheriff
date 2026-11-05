@@ -16,36 +16,34 @@
 package de.cuioss.sheriff.token.validation.pipeline;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
-import de.cuioss.sheriff.token.commons.transport.JwkKey;
-import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
-import de.cuioss.sheriff.token.validation.jwe.JweDecryptor;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.test.JweTestTokenFactory;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
-import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
-import de.cuioss.tools.logging.LogRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.interfaces.ECPublicKey;
 import java.util.Base64;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * End-to-end JWE handling of {@link NonValidatingJwtParser}: RSA-OAEP and ECDH-ES tokens decode to
+ * their inner JWS, and structurally invalid tokens are rejected.
+ * <p>
+ * Decode-mode accounting of JWE failures lives in {@link NonValidatingJwtParserJweDecodeModeTest}
+ * and {@link NonValidatingJwtParserJweRejectionAccountingTest}.
+ */
 @EnableTestLogger
 @DisplayName("NonValidatingJwtParser JWE Integration Tests")
 class NonValidatingJwtParserJweTest {
@@ -60,728 +58,312 @@ class NonValidatingJwtParserJweTest {
         counter = new SecurityEventCounter();
     }
 
-    @Nested
-    @DisplayName("JWE Token Handling")
-    class JweTokenHandling {
+    @Test
+    @DisplayName("Should decrypt JWE and return inner JWS as DecodedJwt")
+    void shouldDecryptJweAndReturnInnerJws() {
+        // Create JWE token
+        String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
+                InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                rsaEncryptionKeyPair.getPublic(),
+                "RS256", "RSA-OAEP", "A256GCM", ISSUER, null);
 
-        @Test
-        @DisplayName("Should decrypt JWE and return inner JWS as DecodedJwt")
-        void shouldDecryptJweAndReturnInnerJws() {
-            // Create JWE token
-            String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
-                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
-                    "RS256", "RSA-OAEP", "A256GCM", ISSUER, null);
+        // Create parser with JWE config
+        JweDecryptionConfig config = JweDecryptionConfig.builder()
+                .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                .build();
 
-            // Create parser with JWE config
-            JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
-                    .build();
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .jweDecryptionConfig(config)
+                .build();
 
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(config)
-                    .build();
+        // Decode
+        DecodedJwt decoded = parser.decode(jwe);
 
-            // Decode
-            DecodedJwt decoded = parser.decode(jwe);
-
-            assertNotNull(decoded);
-            assertNotNull(decoded.header());
-            assertNotNull(decoded.body());
-            // The rawToken should be the original JWE string (for caching)
-            assertEquals(jwe, decoded.rawToken());
-            // The inner JWS header should have the signing algorithm
-            assertEquals("RS256", decoded.header().alg());
-            // Should have issuer from inner JWS
-            assertTrue(decoded.getIssuer().isPresent());
-            assertEquals(ISSUER, decoded.getIssuer().get());
-        }
-
-        @Test
-        @DisplayName("Should throw when JWE received but no config")
-        void shouldThrowWhenJweReceivedButNoConfig() {
-            String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
-                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
-                    "RS256", "RSA-OAEP", "A256GCM", ISSUER, null);
-
-            // Parser without JWE config
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .build();
-
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decode(jwe));
-            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_NOT_CONFIGURED, ex.getEventType());
-            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_NOT_CONFIGURED));
-        }
-
-        @Test
-        @DisplayName("Should still parse JWS tokens normally when JWE is configured")
-        void shouldStillParseJwsNormally() {
-            // Create a regular JWS token
-            String jws = JweTestTokenFactory.createSignedJws(
-                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(), "RS256", ISSUER);
-
-            // Create parser with JWE config (should not interfere with JWS)
-            JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
-                    .build();
-
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(config)
-                    .build();
-
-            DecodedJwt decoded = parser.decode(jws);
-            assertNotNull(decoded);
-            assertEquals("RS256", decoded.header().alg());
-            assertTrue(decoded.getIssuer().isPresent());
-            assertEquals(ISSUER, decoded.getIssuer().get());
-        }
+        assertNotNull(decoded);
+        assertNotNull(decoded.header());
+        assertNotNull(decoded.body());
+        // The rawToken should be the original JWE string (for caching)
+        assertEquals(jwe, decoded.rawToken());
+        // The inner JWS header should have the signing algorithm
+        assertEquals("RS256", decoded.header().alg());
+        // Should have issuer from inner JWS
+        assertTrue(decoded.getIssuer().isPresent());
+        assertEquals(ISSUER, decoded.getIssuer().get());
     }
 
-    @Nested
-    @DisplayName("ECDH-ES JWE Token Handling")
-    class EcdhEsTokenHandling {
+    @Test
+    @DisplayName("Should throw when JWE received but no config")
+    void shouldThrowWhenJweReceivedButNoConfig() {
+        String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
+                InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                rsaEncryptionKeyPair.getPublic(),
+                "RS256", "RSA-OAEP", "A256GCM", ISSUER, null);
 
-        @ParameterizedTest
-        @CsvSource({
-                "secp256r1, A128GCM",
-                "secp256r1, A256GCM",
-                "secp256r1, A128CBC-HS256",
-                "secp256r1, A256CBC-HS512",
-                "secp384r1, A128GCM",
-                "secp384r1, A256GCM",
-                "secp384r1, A128CBC-HS256",
-                "secp384r1, A256CBC-HS512"
-        })
-        @DisplayName("Should decode an ECDH-ES JWE end to end through the parser")
-        void shouldDecodeEcdhEsJwe(String curve, String enc) {
-            KeyPair recipientKeyPair = JweTestTokenFactory.generateEcKeyPair(curve);
-            String jwe = JweTestTokenFactory.createEcdhEsJweWrappedAccessToken(
-                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    JweTestTokenFactory.generateEcKeyPair(curve),
-                    (ECPublicKey) recipientKeyPair.getPublic(),
-                    enc, ISSUER);
+        // Parser without JWE config
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .build();
 
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(JweDecryptionConfig.builder()
-                            .defaultDecryptionKey(recipientKeyPair.getPrivate())
-                            .build())
-                    .build();
-
-            DecodedJwt decoded = parser.decode(jwe);
-
-            assertAll("ECDH-ES " + curve + " / " + enc,
-                    () -> assertEquals("RS256", decoded.header().alg()),
-                    () -> assertEquals(ISSUER, decoded.getIssuer().orElseThrow()),
-                    () -> assertEquals(jwe, decoded.rawToken()),
-                    () -> assertEquals(0, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT)));
-        }
-
-        @Test
-        @DisplayName("Should reject an ECDH-ES header whose epk is a JSON string")
-        void shouldRejectStringEncodedEpk() {
-            String headerJson = "{\"alg\":\"ECDH-ES\",\"enc\":\"A128GCM\","
-                    + "\"epk\":\"{\\\"kty\\\":\\\"EC\\\",\\\"crv\\\":\\\"P-256\\\"}\"}";
-            String encodedHeader = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
-            String token = encodedHeader + ".AA.AA.AA.AA";
-
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(JweDecryptionConfig.builder()
-                            .defaultDecryptionKey(JweTestTokenFactory.generateEcKeyPair("secp256r1").getPrivate())
-                            .build())
-                    .build();
-
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decode(token));
-            assertEquals(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, ex.getEventType());
-            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
-        }
-    }
-
-    @Nested
-    @DisplayName("Decode Mode Honoured by JWE Decryption")
-    class DecodeModeHandling {
-
-        private NonValidatingJwtParser parser;
-        private String undecryptableJwe;
-
-        @BeforeEach
-        void setUpParser() {
-            parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(JweDecryptionConfig.builder()
-                            .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
-                            .build())
-                    .build();
-            undecryptableJwe = JweTestTokenFactory.createJweWithTamperedAuthTag(
-                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
-                    ISSUER);
-        }
-
-        @Test
-        @DisplayName("An undecryptable JWE decoded as an opaque token is neither logged nor counted")
-        void opaqueDecodeShouldNotLogOrCount() {
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decodeOpaqueToken(undecryptableJwe));
-
-            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
-            assertEquals(0, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
-                    "An opaque decode must not count the decryption failure");
-            LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, JweDecryptor.class);
-            LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, NonValidatingJwtParser.class);
-        }
-
-        @Test
-        @DisplayName("An undecryptable JWE decoded quietly is counted but not logged")
-        void quietDecodeShouldCountButNotLog() {
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decodeQuietly(undecryptableJwe));
-
-            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
-            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
-                    "A quiet decode still counts the decryption failure exactly once");
-            LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, JweDecryptor.class);
-        }
-
-        @Test
-        @DisplayName("An undecryptable JWE on the normal decode path is logged and counted once")
-        void normalDecodeShouldLogAndCountOnce() {
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decode(undecryptableJwe));
-
-            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
-            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
-                    "The normal decode path counts the decryption failure exactly once");
-            assertNotNull(ex.getCause(), "The decryption failure should carry its cause");
-            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
-                    JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(ex.getCause().getMessage()));
-        }
+        TokenValidationException ex = assertThrows(TokenValidationException.class,
+                () -> parser.decode(jwe));
+        assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_NOT_CONFIGURED, ex.getEventType());
+        assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_NOT_CONFIGURED));
     }
 
     /**
-     * Drives every other {@code JweDecryptor} rejection site (unsupported algorithm, key not found,
-     * unsupported compression, an ECDH-ES structural rejection, a malformed {@code epk} coordinate)
-     * through the three parser decode modes.
+     * The JWE decrypts, but the payload of the recovered inner JWS cannot be decoded: it is
+     * either not valid Base64URL or not valid JSON. Either way the rejection carries a fixed
+     * message, never the raw payload text, and is logged and counted once.
      */
-    @Nested
-    @DisplayName("Decode Mode Honoured by Every JWE Rejection Site")
-    class DecodeModeRejectionSites {
+    @ParameterizedTest(name = "{0}")
+    @CsvSource({
+            "not Base64URL, not*base64url, Failed to decode Base64Url part: invalid Base64Url encoding",
+            "not JSON, eyJpc3MiOiJ4Ig, Failed to decode JWT parts: malformed or structurally invalid JSON"
+    })
+    @DisplayName("Should reject an inner JWS whose payload cannot be decoded with a fixed message")
+    void shouldRejectUndecodableInnerJwsPayload(String kind, String payloadSegment, String expectedMessage) {
+        String[] validJws = JweTestTokenFactory.createSignedJws(
+                InMemoryKeyMaterialHandler.getDefaultPrivateKey(), "RS256", ISSUER).split("\\.");
+        String innerJws = validJws[0] + "." + payloadSegment + "." + validJws[2];
+        String jwe = JweTestTokenFactory.encryptAsJwe(innerJws, rsaEncryptionKeyPair.getPublic(),
+                "RSA-OAEP", "A256GCM", null);
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .jweDecryptionConfig(JweDecryptionConfig.builder()
+                        .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                        .build())
+                .build();
 
-        private static final String KNOWN_KID = "known-kid";
-        private static final String EC_EPK = "{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"AQ\",\"y\":\"AQ\"}";
+        TokenValidationException ex = assertThrows(TokenValidationException.class, () -> parser.decode(jwe),
+                "An inner JWS payload that is " + kind + " must be rejected");
 
-        private NonValidatingJwtParser parser;
-
-        @BeforeEach
-        void setUpParser() {
-            parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(JweDecryptionConfig.builder()
-                            .decryptionKey(KNOWN_KID, rsaEncryptionKeyPair.getPrivate())
-                            .build())
-                    .build();
-        }
-
-        static Stream<Arguments> rejectionSites() {
-            return Stream.of(
-                    Arguments.of("unsupported algorithm",
-                            token("{\"alg\":\"RSA1_5\",\"enc\":\"A256GCM\",\"kid\":\"" + KNOWN_KID + "\"}", "AA"),
-                            SecurityEventCounter.EventType.JWE_UNSUPPORTED_ALGORITHM,
-                            JWTValidationLogMessages.WARN.JWE_UNSUPPORTED_ALGORITHM, ""),
-                    Arguments.of("key not found",
-                            token("{\"alg\":\"RSA-OAEP\",\"enc\":\"A256GCM\",\"kid\":\"unknown-kid\"}", "AA"),
-                            SecurityEventCounter.EventType.JWE_DECRYPTION_KEY_NOT_FOUND,
-                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_KEY_NOT_FOUND, ""),
-                    Arguments.of("unsupported compression",
-                            token("{\"alg\":\"RSA-OAEP\",\"enc\":\"A256GCM\",\"zip\":\"GZIP\",\"kid\":\""
-                                    + KNOWN_KID + "\"}", "AA"),
-                            SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, ""),
-                    // The fixture pairs an ECDH-ES header with an RSA recipient key, so later epk /
-                    // key checks would also reject it: the message fragment pins the
-                    // non-empty-Encrypted-Key guard itself.
-                    Arguments.of("ECDH-ES non-empty encrypted key",
-                            token("{\"alg\":\"ECDH-ES\",\"enc\":\"A128GCM\",\"kid\":\"" + KNOWN_KID
-                                    + "\",\"epk\":" + EC_EPK + "}", "AA"),
-                            SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED,
-                            "ECDH-ES requires an empty JWE Encrypted Key"),
-                    Arguments.of("malformed epk coordinate",
-                            token("{\"alg\":\"ECDH-ES\",\"enc\":\"A128GCM\",\"kid\":\"" + KNOWN_KID
-                                    + "\",\"epk\":{\"kty\":\"EC\",\"crv\":\"P-256\","
-                                    + "\"x\":\"AQ\\r\\nWARN forged coordinate\",\"y\":\"AQ\"}}", ""),
-                            SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED, ""),
-                    Arguments.of("non-EC epk kty",
-                            token("{\"alg\":\"ECDH-ES\",\"enc\":\"A128GCM\",\"kid\":\"" + KNOWN_KID
-                                    + "\",\"epk\":{\"kty\":\"RSA\\r\\nWARN forged kty\",\"crv\":\"P-256\","
-                                    + "\"x\":\"AQ\",\"y\":\"AQ\"}}", ""),
-                            SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED,
-                            "epk 'kty' must be 'EC'"));
-        }
-
-        /**
-         * Asserts the rejection carries the row's guard-specific message fragment; an empty
-         * fragment pins nothing beyond the event type.
-         */
-        private static void assertGuardMessage(TokenValidationException ex, String expectedMessageFragment,
-                String site) {
-            if (!expectedMessageFragment.isEmpty()) {
-                assertTrue(ex.getMessage().contains(expectedMessageFragment),
-                        "Rejection for " + site + " must come from its guard, but was: " + ex.getMessage());
-            }
-        }
-
-        private static String token(String headerJson, String encryptedKey) {
-            String encodedHeader = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
-            return encodedHeader + "." + encryptedKey + ".AA.AA.AA";
-        }
-
-        @ParameterizedTest(name = "{0}")
-        @MethodSource("rejectionSites")
-        @DisplayName("An opaque decode neither logs nor counts the rejection")
-        void opaqueDecodeShouldNotLogOrCount(String site, String token,
-                SecurityEventCounter.EventType eventType, LogRecord logRecord, String expectedMessageFragment) {
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decodeOpaqueToken(token));
-
-            assertEquals(eventType, ex.getEventType(), site);
-            assertGuardMessage(ex, expectedMessageFragment, site);
-            assertEquals(0, counter.getCount(eventType), "An opaque decode must not count: " + site);
-            assertNoWarnings(site);
-        }
-
-        @ParameterizedTest(name = "{0}")
-        @MethodSource("rejectionSites")
-        @DisplayName("A quiet decode counts the rejection once but does not log it")
-        void quietDecodeShouldCountButNotLog(String site, String token,
-                SecurityEventCounter.EventType eventType, LogRecord logRecord, String expectedMessageFragment) {
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decodeQuietly(token));
-
-            assertEquals(eventType, ex.getEventType(), site);
-            assertGuardMessage(ex, expectedMessageFragment, site);
-            assertEquals(1, counter.getCount(eventType), "A quiet decode counts exactly once: " + site);
-            assertNoWarnings(site);
-        }
-
-        @ParameterizedTest(name = "{0}")
-        @MethodSource("rejectionSites")
-        @DisplayName("A normal decode logs and counts the rejection exactly once")
-        void normalDecodeShouldLogAndCountOnce(String site, String token,
-                SecurityEventCounter.EventType eventType, LogRecord logRecord, String expectedMessageFragment) {
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decode(token));
-
-            assertEquals(eventType, ex.getEventType(), site);
-            assertGuardMessage(ex, expectedMessageFragment, site);
-            assertEquals(1, counter.getCount(eventType), "A normal decode counts exactly once: " + site);
-            LogAsserts.assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
-                    logRecord.resolveIdentifierString());
-            assertEquals(1, TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).size(),
-                    "Exactly one WARN for: " + site);
-            LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, JwkKey.class);
-            assertTrue(TestLoggerFactory.getTestHandler()
-                            .resolveLogMessagesContaining(TestLogLevel.WARN, "forged coordinate").isEmpty(),
-                    "No raw header text may reach the log: " + site);
-        }
-
-        private static void assertNoWarnings(String site) {
-            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty(),
-                    "No WARN may be written for: " + site);
-        }
+        assertEquals(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, ex.getEventType());
+        assertEquals(expectedMessage, ex.getMessage());
+        assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
+        assertEquals(0, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
+                "The JWE itself decrypts; only the inner payload is rejected");
+        LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT.format());
     }
 
-    /**
-     * A JWE header DSL-JSON cannot bind (here a string-valued {@code epk} followed by raw CR/LF and
-     * forged log text) fails in the header-decode step. DSL-JSON's parse-error message quotes the
-     * input around the failure position, so the raw header bytes must stay out of the exception
-     * message and the WARN, while the cause chain is kept.
-     */
-    @Nested
-    @DisplayName("JWE Header-Decode Failure Sanitization")
-    class HeaderDecodeFailureSanitization {
+    @Test
+    @DisplayName("Should still parse JWS tokens normally when JWE is configured")
+    void shouldStillParseJwsNormally() {
+        // Create a regular JWS token
+        String jws = JweTestTokenFactory.createSignedJws(
+                InMemoryKeyMaterialHandler.getDefaultPrivateKey(), "RS256", ISSUER);
 
-        /** DSL-JSON quotes about 20 bytes either side of the failure position, so keep the marker short. */
-        private static final String FORGED_TEXT = "WARN forged";
+        // Create parser with JWE config (should not interfere with JWS)
+        JweDecryptionConfig config = JweDecryptionConfig.builder()
+                .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                .build();
 
-        private NonValidatingJwtParser parser;
-        private String malformedHeaderJwe;
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .jweDecryptionConfig(config)
+                .build();
 
-        @BeforeEach
-        void setUpParser() {
-            parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(JweDecryptionConfig.builder()
-                            .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
-                            .build())
-                    .build();
-            String headerJson = "{\"alg\":\"ECDH-ES\",\"enc\":\"A128GCM\",\"epk\":\"\r\n" + FORGED_TEXT + "\"}";
-            malformedHeaderJwe = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8)) + ".AA.AA.AA.AA";
-        }
-
-        @Test
-        @DisplayName("The exception message carries no raw header text while the cause chain is kept")
-        void exceptionMessageShouldNotCarryRawHeaderText() {
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decode(malformedHeaderJwe));
-
-            assertEquals(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, ex.getEventType());
-            assertNotNull(ex.getCause(), "The DSL-JSON failure must stay on the cause chain");
-            assertTrue(ex.getCause().getMessage().contains("\r\n" + FORGED_TEXT),
-                    "Non-vacuity: the DSL-JSON message must quote the raw CR/LF and forged header text: "
-                            + ex.getCause().getMessage());
-            assertFalse(ex.getMessage().contains(FORGED_TEXT), ex.getMessage());
-            assertFalse(ex.getMessage().contains("\r") || ex.getMessage().contains("\n"), ex.getMessage());
-        }
-
-        @Test
-        @DisplayName("A normal decode logs one WARN free of the raw header text and counts once")
-        void normalDecodeShouldLogSanitizedWarnOnce() {
-            assertThrows(TokenValidationException.class, () -> parser.decode(malformedHeaderJwe));
-
-            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
-            var warnings = TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN);
-            assertEquals(1, warnings.size(), "Exactly one WARN");
-            var warning = warnings.getFirst();
-            assertTrue(warning.getMessage().contains(
-                    JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT.resolveIdentifierString()), warning.getMessage());
-            assertFalse(warning.getMessage().contains(FORGED_TEXT), warning.getMessage());
-            assertFalse(warning.getMessage().contains("\r") || warning.getMessage().contains("\n"),
-                    warning.getMessage());
-            assertNull(warning.getThrown(), "The WARN must not attach the DSL-JSON exception quoting raw header text");
-        }
-
-        @Test
-        @DisplayName("A quiet decode counts once but does not log")
-        void quietDecodeShouldCountButNotLog() {
-            assertThrows(TokenValidationException.class, () -> parser.decodeQuietly(malformedHeaderJwe));
-
-            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
-            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty());
-        }
-
-        @Test
-        @DisplayName("An opaque decode neither logs nor counts")
-        void opaqueDecodeShouldNotLogOrCount() {
-            assertThrows(TokenValidationException.class, () -> parser.decodeOpaqueToken(malformedHeaderJwe));
-
-            assertEquals(0, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
-            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty());
-        }
+        DecodedJwt decoded = parser.decode(jws);
+        assertNotNull(decoded);
+        assertEquals("RS256", decoded.header().alg());
+        assertTrue(decoded.getIssuer().isPresent());
+        assertEquals(ISSUER, decoded.getIssuer().get());
     }
 
-    /**
-     * A JWE header that is the top-level JSON literal {@code null}, or that is not valid Base64Url,
-     * is rejected as {@code FAILED_TO_DECODE_JWT} and accounted for according to the decode mode
-     * (see token-decryption.adoc, Header Value Sanitization).
-     */
-    @Nested
-    @DisplayName("Undecodable JWE Header Accounting per Decode Mode")
-    class UndecodableJweHeaderAccounting {
+    @ParameterizedTest
+    @CsvSource({
+            "secp256r1, A128GCM",
+            "secp256r1, A256GCM",
+            "secp256r1, A128CBC-HS256",
+            "secp256r1, A256CBC-HS512",
+            "secp384r1, A128GCM",
+            "secp384r1, A256GCM",
+            "secp384r1, A128CBC-HS256",
+            "secp384r1, A256CBC-HS512"
+    })
+    @DisplayName("Should decode an ECDH-ES JWE end to end through the parser")
+    void shouldDecodeEcdhEsJwe(String curve, String enc) {
+        KeyPair recipientKeyPair = JweTestTokenFactory.generateEcKeyPair(curve);
+        String jwe = JweTestTokenFactory.createEcdhEsJweWrappedAccessToken(
+                InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                JweTestTokenFactory.generateEcKeyPair(curve),
+                (ECPublicKey) recipientKeyPair.getPublic(),
+                enc, ISSUER);
 
-        /** {@code '*'} lies outside the Base64Url alphabet, so the JDK decoder rejects the part. */
-        private static final String INVALID_BASE64URL_HEADER = "eyJ*bGciOiJSU0EtT0FFUCJ9";
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .jweDecryptionConfig(JweDecryptionConfig.builder()
+                        .defaultDecryptionKey(recipientKeyPair.getPrivate())
+                        .build())
+                .build();
 
-        private NonValidatingJwtParser parser;
+        DecodedJwt decoded = parser.decode(jwe);
 
-        @BeforeEach
-        void setUpParser() {
-            parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(JweDecryptionConfig.builder()
-                            .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
-                            .build())
-                    .build();
-        }
-
-        static Stream<Arguments> undecodableJweHeaders() {
-            String nullHeader = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString("null".getBytes(StandardCharsets.UTF_8));
-            return Stream.of(
-                    Arguments.of("JSON null header", nullHeader + ".AA.AA.AA.AA", false),
-                    Arguments.of("invalid Base64Url header", INVALID_BASE64URL_HEADER + ".AA.AA.AA.AA", true));
-        }
-
-        private static void assertRejection(TokenValidationException ex, String site, boolean decoderCause) {
-            assertEquals(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, ex.getEventType(), site);
-            if (decoderCause) {
-                assertInstanceOf(IllegalArgumentException.class, ex.getCause(),
-                        "Non-vacuity: the header must be rejected by the Base64Url decoder: " + site);
-                assertFalse(ex.getMessage().contains(INVALID_BASE64URL_HEADER), ex.getMessage());
-            }
-        }
-
-        @ParameterizedTest(name = "{0}")
-        @MethodSource("undecodableJweHeaders")
-        @DisplayName("A normal decode logs one WARN without a throwable and counts once")
-        void normalDecodeShouldLogAndCountOnce(String site, String token, boolean decoderCause) {
-            TokenValidationException ex = assertThrows(TokenValidationException.class, () -> parser.decode(token));
-
-            assertRejection(ex, site, decoderCause);
-            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT),
-                    "Counted exactly once: " + site);
-            var warnings = TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN);
-            assertEquals(1, warnings.size(), "Exactly one WARN: " + site);
-            var warning = warnings.getFirst();
-            assertTrue(warning.getMessage().contains(
-                    JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT.resolveIdentifierString()), warning.getMessage());
-            assertNull(warning.getThrown(), "The WARN must not attach the decoder exception: " + site);
-        }
-
-        @ParameterizedTest(name = "{0}")
-        @MethodSource("undecodableJweHeaders")
-        @DisplayName("A quiet decode counts once but does not log")
-        void quietDecodeShouldCountButNotLog(String site, String token, boolean decoderCause) {
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decodeQuietly(token));
-
-            assertRejection(ex, site, decoderCause);
-            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT),
-                    "Counted exactly once: " + site);
-            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty(),
-                    "No WARN may be written: " + site);
-        }
-
-        @ParameterizedTest(name = "{0}")
-        @MethodSource("undecodableJweHeaders")
-        @DisplayName("An opaque decode neither logs nor counts")
-        void opaqueDecodeShouldNotLogOrCount(String site, String token, boolean decoderCause) {
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decodeOpaqueToken(token));
-
-            assertRejection(ex, site, decoderCause);
-            assertEquals(0, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT),
-                    "Not counted: " + site);
-            assertTrue(TestLoggerFactory.getTestHandler().resolveLogMessages(TestLogLevel.WARN).isEmpty(),
-                    "No WARN may be written: " + site);
-        }
+        assertAll("ECDH-ES " + curve + " / " + enc,
+                () -> assertEquals("RS256", decoded.header().alg()),
+                () -> assertEquals(ISSUER, decoded.getIssuer().orElseThrow()),
+                () -> assertEquals(jwe, decoded.rawToken()),
+                () -> assertEquals(0, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT)));
     }
 
-    /**
-     * The parser's own rejections of a decrypted inner token (oversized inner JWS, inner JWS with a
-     * wrong part count or an empty signature, nested JWE) and of a 5-part token without {@code enc} are accounted for
-     * according to the decode mode, like every decryptor rejection: the normal decode logs one WARN
-     * and counts once, a quiet decode only counts, an opaque decode does neither.
-     */
-    @Nested
-    @DisplayName("Decode Mode Honoured by Inner-Token Rejections")
-    class InnerTokenRejectionAccounting {
+    @Test
+    @DisplayName("Should reject an ECDH-ES header whose epk is a JSON string")
+    void shouldRejectStringEncodedEpk() {
+        String headerJson = "{\"alg\":\"ECDH-ES\",\"enc\":\"A128GCM\","
+                + "\"epk\":\"{\\\"kty\\\":\\\"EC\\\",\\\"crv\\\":\\\"P-256\\\"}\"}";
+        String encodedHeader = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+        String token = encodedHeader + ".AA.AA.AA.AA";
 
-        private static final KeyPair RECIPIENT = JweTestTokenFactory.generateRsaKeyPair();
-        private static final ParserConfig SMALL_TOKEN_SIZE = ParserConfig.builder().maxTokenSize(4096).build();
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .jweDecryptionConfig(JweDecryptionConfig.builder()
+                        .defaultDecryptionKey(JweTestTokenFactory.generateEcKeyPair("secp256r1").getPrivate())
+                        .build())
+                .build();
 
-        static Stream<Arguments> innerRejections() {
-            String noEncHeader = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString("{\"alg\":\"RS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
-            return Stream.of(
-                    // zip=DEF keeps the compact JWE under the token-size limit while the inner JWS exceeds it
-                    Arguments.of("oversized inner JWS",
-                            JweTestTokenFactory.createCompressedJweFromPlaintext(
-                                    "a".repeat(5000).getBytes(StandardCharsets.UTF_8),
-                                    RECIPIENT.getPublic(), "RSA-OAEP", "A256GCM"),
-                            SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED,
-                            JWTValidationLogMessages.WARN.TOKEN_SIZE_EXCEEDED),
-                    Arguments.of("inner JWS with 2 parts", encrypt("aa.bb"),
-                            SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
-                            JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT),
-                    Arguments.of("inner JWS with 4 parts", encrypt("aa.bb.cc.dd"),
-                            SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
-                            JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT),
-                    // Decodable header and payload, so only the empty-signature guard rejects it
-                    Arguments.of("inner JWS with empty signature",
-                            encrypt(noEncHeader + "." + Base64.getUrlEncoder().withoutPadding()
-                                    .encodeToString("{}".getBytes(StandardCharsets.UTF_8)) + "."),
-                            SecurityEventCounter.EventType.INVALID_JWT_FORMAT,
-                            JWTValidationLogMessages.WARN.INVALID_JWT_FORMAT),
-                    Arguments.of("nested JWE", encrypt("aa.bb.cc.dd.ee"),
-                            SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                            JWTValidationLogMessages.WARN.JWE_NESTED_NOT_ALLOWED),
-                    Arguments.of("5-part token without enc", noEncHeader + ".b.c.d.e",
-                            SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED,
-                            JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED));
-        }
-
-        static Stream<Arguments> modeMatrix() {
-            return NonValidatingJwtParserTest.ParserDecodeMode.crossProduct(innerRejections());
-        }
-
-        private static String encrypt(String innerToken) {
-            return JweTestTokenFactory.encryptAsJwe(innerToken, RECIPIENT.getPublic(), "RSA-OAEP", "A256GCM", null);
-        }
-
-        @ParameterizedTest(name = "{0}: {1}")
-        @MethodSource("modeMatrix")
-        @DisplayName("The rejection is logged and counted according to the decode mode")
-        void shouldAccountPerDecodeMode(NonValidatingJwtParserTest.ParserDecodeMode mode, String site, String token,
-                SecurityEventCounter.EventType eventType, LogRecord warning) {
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .config(SMALL_TOKEN_SIZE)
-                    .jweDecryptionConfig(JweDecryptionConfig.builder()
-                            .defaultDecryptionKey(RECIPIENT.getPrivate())
-                            .compressionEnabled(true)
-                            .build())
-                    .build();
-
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> mode.decode(parser, token));
-
-            mode.assertAccounted(ex, counter, eventType, warning, site);
-        }
+        TokenValidationException ex = assertThrows(TokenValidationException.class,
+                () -> parser.decode(token));
+        assertEquals(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, ex.getEventType());
+        assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
     }
 
-    @Nested
-    @DisplayName("Edge Cases")
-    class EdgeCases {
+    @Test
+    @DisplayName("Should reject nested JWE (5-part inner content)")
+    void shouldRejectNestedJwe() {
+        // Create a JWE that wraps another JWE instead of a JWS
+        // First create inner JWE
+        String innerJwe = JweTestTokenFactory.createJweWrappedAccessToken(
+                InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                rsaEncryptionKeyPair.getPublic(),
+                "RS256", "RSA-OAEP", "A256GCM", ISSUER, null);
 
-        @Test
-        @DisplayName("Should reject nested JWE (5-part inner content)")
-        void shouldRejectNestedJwe() {
-            // Create a JWE that wraps another JWE instead of a JWS
-            // First create inner JWE
-            String innerJwe = JweTestTokenFactory.createJweWrappedAccessToken(
-                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
-                    "RS256", "RSA-OAEP", "A256GCM", ISSUER, null);
+        // Then wrap in outer JWE
+        String outerJwe = JweTestTokenFactory.encryptAsJwe(
+                innerJwe, rsaEncryptionKeyPair.getPublic(), "RSA-OAEP", "A256GCM", null);
 
-            // Then wrap in outer JWE
-            String outerJwe = JweTestTokenFactory.encryptAsJwe(
-                    innerJwe, rsaEncryptionKeyPair.getPublic(), "RSA-OAEP", "A256GCM", null);
+        JweDecryptionConfig config = JweDecryptionConfig.builder()
+                .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                .build();
 
-            JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
-                    .build();
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .jweDecryptionConfig(config)
+                .build();
 
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(config)
-                    .build();
+        assertThrows(TokenValidationException.class,
+                () -> parser.decode(outerJwe));
+    }
 
-            assertThrows(TokenValidationException.class,
-                    () -> parser.decode(outerJwe));
-        }
+    @Test
+    @DisplayName("Should reject a valid JWE with a trailing dot (6 parts) as INVALID_JWT_FORMAT (V-17b)")
+    void shouldRejectJweWithTrailingDot() {
+        String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
+                InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                rsaEncryptionKeyPair.getPublic(),
+                "RS256", "RSA-OAEP", "A256GCM", ISSUER, null);
 
-        @Test
-        @DisplayName("Should reject a valid JWE with a trailing dot (6 parts) as INVALID_JWT_FORMAT (V-17b)")
-        void shouldRejectJweWithTrailingDot() {
-            String jwe = JweTestTokenFactory.createJweWrappedAccessToken(
-                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
-                    "RS256", "RSA-OAEP", "A256GCM", ISSUER, null);
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .jweDecryptionConfig(JweDecryptionConfig.builder()
+                        .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                        .build())
+                .build();
 
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(JweDecryptionConfig.builder()
-                            .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
-                            .build())
-                    .build();
+        TokenValidationException ex = assertThrows(TokenValidationException.class,
+                () -> parser.decode(jwe + "."));
+        assertEquals(SecurityEventCounter.EventType.INVALID_JWT_FORMAT, ex.getEventType());
+        assertEquals(1, counter.getCount(SecurityEventCounter.EventType.INVALID_JWT_FORMAT));
+    }
 
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decode(jwe + "."));
-            assertEquals(SecurityEventCounter.EventType.INVALID_JWT_FORMAT, ex.getEventType());
-            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.INVALID_JWT_FORMAT));
-        }
+    @Test
+    @DisplayName("Should reject a JWE whose decrypted inner JWS has a trailing dot as INVALID_JWT_FORMAT (V-17b)")
+    void shouldRejectInnerJwsWithTrailingDot() {
+        String innerJws = JweTestTokenFactory.createSignedJws(
+                InMemoryKeyMaterialHandler.getDefaultPrivateKey(), "RS256", ISSUER) + ".";
+        String jwe = JweTestTokenFactory.encryptAsJwe(
+                innerJws, rsaEncryptionKeyPair.getPublic(), "RSA-OAEP", "A256GCM", null);
 
-        @Test
-        @DisplayName("Should reject a JWE whose decrypted inner JWS has a trailing dot as INVALID_JWT_FORMAT (V-17b)")
-        void shouldRejectInnerJwsWithTrailingDot() {
-            String innerJws = JweTestTokenFactory.createSignedJws(
-                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(), "RS256", ISSUER) + ".";
-            String jwe = JweTestTokenFactory.encryptAsJwe(
-                    innerJws, rsaEncryptionKeyPair.getPublic(), "RSA-OAEP", "A256GCM", null);
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .jweDecryptionConfig(JweDecryptionConfig.builder()
+                        .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                        .build())
+                .build();
 
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(JweDecryptionConfig.builder()
-                            .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
-                            .build())
-                    .build();
+        TokenValidationException ex = assertThrows(TokenValidationException.class,
+                () -> parser.decode(jwe));
+        assertEquals(SecurityEventCounter.EventType.INVALID_JWT_FORMAT, ex.getEventType());
+    }
 
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decode(jwe));
-            assertEquals(SecurityEventCounter.EventType.INVALID_JWT_FORMAT, ex.getEventType());
-        }
+    @Test
+    @DisplayName("Should reject 4-part tokens")
+    void shouldReject4PartTokens() {
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .build();
 
-        @Test
-        @DisplayName("Should reject 4-part tokens")
-        void shouldReject4PartTokens() {
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .build();
+        assertThrows(TokenValidationException.class,
+                () -> parser.decode("a.b.c.d"));
+    }
 
-            assertThrows(TokenValidationException.class,
-                    () -> parser.decode("a.b.c.d"));
-        }
+    @Test
+    @DisplayName("Should reject 6-part tokens")
+    void shouldReject6PartTokens() {
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .build();
 
-        @Test
-        @DisplayName("Should reject 6-part tokens")
-        void shouldReject6PartTokens() {
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .build();
+        assertThrows(TokenValidationException.class,
+                () -> parser.decode("a.b.c.d.e.f"));
+    }
 
-            assertThrows(TokenValidationException.class,
-                    () -> parser.decode("a.b.c.d.e.f"));
-        }
+    @Test
+    @DisplayName("Should reject 5-part token without enc field")
+    void shouldReject5PartTokenWithoutEnc() {
+        // Create a 5-part token with a header that has no 'enc' field
+        String headerJson = "{\"alg\":\"RS256\",\"typ\":\"JWT\"}";
+        String encodedHeader = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+        String fakeToken = encodedHeader + ".b.c.d.e";
 
-        @Test
-        @DisplayName("Should reject 5-part token without enc field")
-        void shouldReject5PartTokenWithoutEnc() {
-            // Create a 5-part token with a header that has no 'enc' field
-            String headerJson = "{\"alg\":\"RS256\",\"typ\":\"JWT\"}";
-            String encodedHeader = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
-            String fakeToken = encodedHeader + ".b.c.d.e";
+        JweDecryptionConfig config = JweDecryptionConfig.builder()
+                .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                .build();
 
-            JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
-                    .build();
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .jweDecryptionConfig(config)
+                .build();
 
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(config)
-                    .build();
+        TokenValidationException ex = assertThrows(TokenValidationException.class,
+                () -> parser.decode(fakeToken));
+        assertTrue(ex.getMessage().contains("enc"));
+    }
 
-            TokenValidationException ex = assertThrows(TokenValidationException.class,
-                    () -> parser.decode(fakeToken));
-            assertTrue(ex.getMessage().contains("enc"));
-        }
+    @Test
+    @DisplayName("Should decrypt JWE with compression (zip=DEF)")
+    void shouldDecryptJweWithCompression() {
+        String jwe = JweTestTokenFactory.createCompressedJwe(
+                InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
+                rsaEncryptionKeyPair.getPublic(),
+                "RSA-OAEP", "A256GCM", ISSUER);
 
-        @Test
-        @DisplayName("Should decrypt JWE with compression (zip=DEF)")
-        void shouldDecryptJweWithCompression() {
-            String jwe = JweTestTokenFactory.createCompressedJwe(
-                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(),
-                    rsaEncryptionKeyPair.getPublic(),
-                    "RSA-OAEP", "A256GCM", ISSUER);
+        JweDecryptionConfig config = JweDecryptionConfig.builder()
+                .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                .compressionEnabled(true)
+                .build();
 
-            JweDecryptionConfig config = JweDecryptionConfig.builder()
-                    .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
-                    .compressionEnabled(true)
-                    .build();
+        NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .jweDecryptionConfig(config)
+                .build();
 
-            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
-                    .securityEventCounter(counter)
-                    .jweDecryptionConfig(config)
-                    .build();
-
-            DecodedJwt decoded = parser.decode(jwe);
-            assertNotNull(decoded);
-            assertEquals("RS256", decoded.header().alg());
-            assertTrue(decoded.getIssuer().isPresent());
-            assertEquals(ISSUER, decoded.getIssuer().get());
-        }
+        DecodedJwt decoded = parser.decode(jwe);
+        assertNotNull(decoded);
+        assertEquals("RS256", decoded.header().alg());
+        assertTrue(decoded.getIssuer().isPresent());
+        assertEquals(ISSUER, decoded.getIssuer().get());
     }
 }

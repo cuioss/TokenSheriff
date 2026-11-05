@@ -157,6 +157,50 @@ The rejected options share one flaw. Each lets the reported status diverge from 
 actually do next: either `OK` without keys, or a terminal status for something that will recover, or a retry
 of something that cannot.
 
+== Amendment: retry-pending requires a scheduled recovering refresh
+
+=== Context
+
+The decision above reads "background refresh enabled" as a promise that a refresh cycle will run.
+That promise does not always hold. An initialization can fail unexpectedly before its refresh task is
+scheduled: no HTTP handler can be built for an advertised `jwks_uri`, or the initial fetch or the key
+loading throws. The refresh executor can reject the task. And a direct-mode loader that never published
+an endpoint has nothing a refresh cycle could fetch from. In each of these cases `UNDEFINED` would
+announce a retry that never comes, and the readiness check would report `loading` as `IN_PROGRESS`
+forever.
+
+=== Decision
+
+`UNDEFINED` after a failed initialization means "a refresh cycle is going to retry", and it is
+published only when that is true. Three conditions must all hold:
+
+* background refresh is enabled;
+* a refresh cycle can recover: an endpoint is already published, or the loader is in well-known mode,
+  where a cycle re-attempts the discovery;
+* the refresh task of this initialization is actually scheduled and active. A task that was not yet
+  scheduled when the failure struck is scheduled before `UNDEFINED` is published, and a task the
+  executor rejects or that has been cancelled does not count.
+
+When any of the three fails, the initialization ends in a terminal `ERROR`. In no case is the status
+left at `LOADING`, a key installed or `OK` published by the failed initialization. An `OK` or terminal
+`ERROR` that a refresh cycle published meanwhile is kept.
+
+The order "schedule first, then publish `UNDEFINED`" holds for the unexpected-failure path above. On
+the retryable well-known discovery failure path (the discovery was unavailable, with background
+refresh enabled) the order is the reverse: `UNDEFINED` is published first and the refresh task is
+scheduled second. A readiness read in that gap can see `UNDEFINED` — `loading` reported as
+`IN_PROGRESS` — before a retry is scheduled. When the executor then rejects the task, the rejection
+reaches the unexpected-failure handling, which cannot schedule the task either and corrects the
+status to a terminal `ERROR`.
+
+=== Consequences
+
+* `UNDEFINED` and `ERROR` keep the meanings the decision gives them: `UNDEFINED` is retrying, and
+  `ERROR` is what nothing will retry. The readiness check can no longer show `IN_PROGRESS` for a loader
+  that has no refresh left to make progress.
+* A loader whose refresh executor rejects the task reports a terminal failure instead of hanging in a
+  pending state, so an executor problem is visible in the status.
+
 == References
 
 * ADR-0016 — the validator that holds the loader and releases it.

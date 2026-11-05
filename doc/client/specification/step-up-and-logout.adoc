@@ -67,6 +67,10 @@ rejected when it is older than `max_age` plus a clock-skew allowance:
   *zero*: an `auth_time` exactly `max_age` seconds old is accepted, and one second older is
   rejected.
 
+A challenge whose `max_age` is negative is rejected (fail-closed) before this arithmetic runs,
+whatever the `auth_time` and the allowance: a negative `max_age` is no meaningful bound, and
+evaluating it would let the allowance widen it into an accepting one.
+
 == RP-initiated logout
 
 The engine triggers logout at the IdP's `end_session_endpoint` and revokes the tokens it

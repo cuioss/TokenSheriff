@@ -105,7 +105,7 @@ class AccessTokenValidationPipelineTest {
     @Test
     @SuppressWarnings("java:S5778")
     // AccessTokenRequest.of(rawToken) is a pure factory call that never throws
-    @DisplayName("Should reject a cached token once it exceeds its issuer's maximum token age (V-9)")
+    @DisplayName("Should reject a cached token once it exceeds its issuer's maximum token age (V-2)")
     void shouldRejectCachedTokenExceedingIssuerMaxTokenAge() {
         int maxTokenAgeSeconds = 6;
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
@@ -164,7 +164,7 @@ class AccessTokenValidationPipelineTest {
     @Test
     @SuppressWarnings("java:S5778")
     // AccessTokenRequest.of(rawToken) is a pure factory call that never throws
-    @DisplayName("Should reject an expired cached token under its own issuer's skew, not the most lenient one (V-2)")
+    @DisplayName("Should reject an expired cached token under its own issuer's skew, not the most lenient one (V-9)")
     void shouldRejectExpiredCachedTokenUnderOwnIssuerSkew() {
         TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
         // exp a moment ahead; the token's issuer tolerates no skew, the other issuer 60 s

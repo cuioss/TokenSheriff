@@ -111,8 +111,10 @@ public class StepUpHandler {
      *                  {@code null}
      * @param idToken   the validated ID token returned by the elevated exchange; must not be
      *                  {@code null}
-     * @throws ClientProtocolException if the {@code acr} is not among the required values or the
-     *                                  authentication is older than {@code max_age}
+     * @throws ClientProtocolException if the {@code acr} is not among the required values, the
+     *                                  challenge's {@code max_age} is negative (rejected before any
+     *                                  freshness arithmetic), or the authentication is older than
+     *                                  {@code max_age}
      */
     public void verifyResult(StepUpChallenge challenge, IdTokenContent idToken) {
         resultVerifier.verify(challenge, idToken);

@@ -53,21 +53,33 @@ space has three regions and the model had two names for them.
 
 == Decision
 
-A refused refresh is classified into three mutually exclusive and exhaustive states, and the client's
-session-lifecycle response is dispatched on which state applies:
+A refusal raised inside the token exchange is classified into three mutually exclusive and
+exhaustive states, and the client's session-lifecycle response to it is decided by which state
+applies. (A refreshed ID token refusal, whether the pipeline rejects the token or it is inconsistent
+with the access token, and a binding refusal are not raised inside the exchange; the dispatch below
+does not cover them, see the paragraph that closes this Decision.)
 
 * **Pre-redemption** — the authorization server never judged the presented credential. A connection
   failure, a DNS failure, an SSRF-blocked target, or a server-error status. The presented refresh
   token is untouched and still valid: the session and its stored bundle are left intact.
 * **Credential-rejected** — the authorization server judged the presented credential and declared it
   invalid, without consuming the grant. Nothing was rotated, so no successor exists and no revocation
-  is attempted; but the credential is dead and no retry revives it, so the store entry and the
-  rotation family are cleared and the caller must re-authenticate.
+  is attempted; but the credential is dead and no retry revives it, so a clear of the store entry
+  and the rotation family is attempted and the caller must re-authenticate (the clear keeps the
+  spare rule ADR-0005 states: a stored bundle whose refresh token is not the refused one is left
+  in place).
 * **Redeemed** — the authorization server consumed the grant before a client-side check refused the
-  result. The disposition is unchanged from ADR-0005: the refusal carries what is known about
-  rotation, a burned presented token quarantines the session, a known successor is revoked
-  (RFC 7009), and an unparseable success response is presumed rotated and cleared without inventing a
-  successor to revoke.
+  result. The disposition is unchanged from ADR-0005: a refusal raised inside the exchange carries
+  what is known about rotation, a burned presented token quarantines the session, revoking a known
+  successor is attempted (RFC 7009, best-effort, and only when the provider advertises a revocation
+  endpoint), and an unparseable success response is presumed rotated, so a clear is attempted
+  without inventing a successor to revoke. The exchange refusals that carry a rotated successor are
+  the freshly issued access token failing client-side validation and, under the opt-in
+  `strictScopeReconciliation`, a broader granted scope; the unparseable response carries none. A refreshed ID token that fails pipeline
+  validation, an inconsistent refreshed ID token and a refused identity or sender-constraint binding
+  are not exchange refusals and carry no such signal: the first is a `TokenValidationException`, the
+  other two are plain `IllegalStateException`s, and the lifecycle manager reads each against whether
+  the exchange rotated, quarantining only when it did.
 
 **The recognition rule for the middle state is an allow-list of exactly one error code.** The status
 must be a client error (4xx) *and* the response body must parse as an RFC 6749 §5.2 error response
@@ -90,18 +102,31 @@ Only a response the server actually produced is ever classified. No defensive te
 this; the ordering of the transport code is what establishes it, and preserving that ordering is a
 constraint on any future change to the token-endpoint client.
 
-**The three states are dispatched exhaustively with no default arm.** Callers classify through the
-single classification entry point rather than enumerating exception types, and dispatch on the
-resulting kind in a switch with no default. A fourth state added later is then a compile error at
-every dispatch site, rather than a silent fall-through to the session-preserving default — which is
-the failure mode that produced this ADR in the first place.
+**The three states are dispatched with a failing default arm.** Callers that handle a refusal
+raised by the exchange classify through the single classification entry point rather than
+enumerating exception types, and dispatch on the
+resulting kind in a switch. That switch is a statement over an enum, which Java does not check for
+exhaustiveness, so a fourth state added later would not be a compile error; the library's own switch
+therefore ends in a `default` arm that throws `IllegalStateException`. A fourth state fails loudly at
+that dispatch site instead of silently falling through to the session-preserving default — which is the failure
+mode that produced this ADR in the first place.
+
+That switch decides the disposition of a refusal raised inside the token exchange, and only that
+(`handleRefusedExchange`). It is not a single dispatch for every refusal after redemption. A
+refreshed ID token that fails pipeline validation, a refreshed ID token that is inconsistent, and a
+binding check that refuses the apply, are handled in `doRefresh`'s own catches and reach the
+quarantine (`quarantineRejectedRotation`) only when the exchange rotated the refresh token, so they
+revoke nothing when it did not; a replayed token is handled by `revokeReusedFamily`. None of these
+paths passes through the classification entry point or this switch. What all the paths share is the disposition they end in, the best-effort
+revocations (each attempted only when the provider advertises a revocation endpoint) followed by the attempted fail-closed clear (`revokeAndClearFailClosed`, then
+`clearRefusedSession`), not the dispatch that selects it.
 
 == Consequences
 
 === Positive
 
-* A session holding a credential the authorization server has declared invalid is cleared at the
-  first refusal rather than failing identically forever, and the reason is attributable at the moment
+* A session holding a credential the authorization server has declared invalid has a clear
+  attempted at the first refusal rather than failing identically forever, and the reason is attributable at the moment
   it happens instead of being lost in an undifferentiated transport failure.
 * Deployments that take the OAuth 2.0 Security BCP posture — single-use refresh tokens with reuse
   detection and family-wide revocation — are handled correctly. Under the two-state model those were
@@ -110,9 +135,9 @@ the failure mode that produced this ADR in the first place.
 * The narrow allow-list keeps the fail-safe direction intact: the set of failures that can clear a
   session grew by exactly one recognised code, so no new class of transient fault can reach the
   clearing path.
-* Exhaustive dispatch with no default arm converts the addition of a fourth state from a silent
-  behavioural regression into a compile error, which is the structural property the two-state model
-  lacked.
+* Dispatch that ends in a failing default arm converts the addition of a fourth state from a silent
+  behavioural regression into a loud failure at the dispatch site, which is the property the two-state
+  model lacked.
 
 === Negative
 
@@ -125,7 +150,7 @@ the failure mode that produced this ADR in the first place.
   refresh token — a misconfigured or non-conforming deployment — forces re-authentication where the
   two-state model would have preserved the session. This is accepted as the safer failure direction,
   and it is the same trade ADR-0005 accepted for its own quarantine path.
-* The middle state clears the session without revoking anything, so it produces no server-side
+* The middle state attempts the clear without revoking anything, so it produces no server-side
   effect. That is correct — there is no successor, and the presented token is exactly what the server
   just refused — but it means the client's fail-closed action is purely local on this path.
 
@@ -162,8 +187,9 @@ signals; collapsing them makes a dead credential indistinguishable from a burned
 present means redeemed, absent means not. Extending it would mean adding a second optional, or a
 sentinel, alongside the first. Rejected because absence is then doing two jobs at once — "no
 redemption happened" and "no rejection happened" — and a caller that reads only one of them silently
-gets the old two-state behaviour. A total value with an exhaustive kind makes every caller state
-which of the three it is handling, and makes the omission a compile error.
+gets the old two-state behaviour. A total value with an explicit kind makes every caller state
+which of the three it is handling; the library's own dispatch of a refused exchange makes an unhandled
+kind a visible failure.
 
 *Widen the allow-list to the RFC 6749 §5.2 codes that plausibly indicate a dead credential.* More
 codes recognised means more real rejections caught. Rejected because each additional code is a new
@@ -176,8 +202,9 @@ the set of codes that unambiguously make the required statement.
 Each rejected alternative either erases a distinction the client needs in order to act correctly —
 between a fault and a judgement, between a judgement and a redemption, between one recognised code
 and a family of loosely related ones — or leaves the distinction expressible but optional to observe.
-The adopted decision makes all three states explicit, total, and exhaustively dispatched, so no
-caller can fall back to the wrong one by omission.
+The adopted decision makes all three states explicit and total, and the library's own dispatch of a
+refused exchange ends in a failing default arm, so it cannot fall back to the wrong state by omission. A relying party's own
+switch is outside the library; it should end in a failing default arm as well.
 
 == Amendment: a refresh-token family refusal maps onto the existing states
 
@@ -195,10 +222,10 @@ types' documentation invited, kept a replayed session alive.
 === Decision
 
 The family refusal gets its own type, a subtype of the protocol exception it replaces, and the
-classification entry point covers it. **No fourth kind is added**: the three kinds are dispatched
-exhaustively, so a fourth is a compile break at every consumer's dispatch site. The refusal maps onto
+classification entry point covers it. **No fourth kind is added**: the library's own dispatch of
+the three kinds ends in a failing default arm, so a fourth would fail loudly there. The refusal maps onto
 the two existing session-ending kinds by what the authorization server has already done, which is the
-same discriminator this ADR and ADR-0005 dispatch on:
+same discriminator this ADR and ADR-0005 decide on:
 
 * **Raised while feeding a rotation into the family** — the authorization server answered and issued
   the successor before the family refused, so the presented token is redeemed and the successor is a
@@ -218,23 +245,34 @@ exactly those two sources — the refresh exchange and the family refusal — an
 matters most. Rejected for the rotation case because it is factually wrong there: the server did
 redeem the grant and did issue a successor, and credential-rejected asserts there is none. A caller
 dispatching on it would discard a live successor instead of revoking it — the "discarded rather than
-revoked" outcome ADR-0005 chose redemption-based dispatch to avoid.
+revoked" outcome ADR-0005 chose a redemption-based rule to avoid.
 
 *Add a fourth kind for a revoked family.* The most precise name for the situation. Rejected because
-it breaks every consumer's exhaustive dispatch at compile time for a situation whose dispositions the
+it breaks the three-way dispatch, at runtime through the failing default arm of the library's own
+switch and silently in any consumer switch that lacks one, for a situation whose dispositions the
 existing kinds already express.
 
 === Consequences
 
 * A composed caller classifies a family refusal as session-ending, never as a transient fault.
 * The lifecycle manager keeps handling the refusal in its own `catch` of the supertype, which still
-  catches the new subtype, and still never routes it through the classification entry point. Its reuse
-  disposition is brought into line with the redeemed disposition above: it now revokes **both** the
-  replayed token and the successor the authorization server issued on the refused exchange, in that
-  order. Naming the replayed token first is what triggers family-wide revocation on a server that
-  implements it; naming the successor second is what keeps a server that does not from leaving a live
-  credential behind until it expires. The two revocations are independent and best-effort, so a failure
-  of one does not skip the other, and the client-side clear remains unconditional.
+  catches the new subtype, and still never routes it through the classification entry point, so the
+  reuse path (`revokeReusedFamily`) is a separate path from the exchange-refusal dispatch and shares
+  only its disposition. That disposition now includes the redeemed disposition's revocation of the
+  successor: it attempts to revoke **both** the replayed token and the successor the authorization
+  server issued on the refused exchange, in that order, each only when the provider advertises a
+  revocation endpoint. Naming the replayed token first is what triggers
+  family-wide revocation on a server that implements it; naming the successor second is what keeps a server that does not from leaving a live
+  credential behind until it expires. The two revocations are best-effort: a transport failure of one
+  is logged and does not skip the other. An unchecked exception from the first revocation is not
+  caught there: it leaves the loop, so the successor revocation does not run, the client-side clear
+  still runs, and the exception then propagates in place of the refusal. The client-side clear runs whatever the revocations
+  do, and it spares a stored bundle whose refresh token is not the refused one, without checking its
+  recency, so a superseded token stored during an in-flight refresh is spared as well and keeps its
+  family. Otherwise — the store holds the refused token, is empty, or cannot be read — the clear is
+  attempted: it removes the store entry and then the rotation family. A store whose removal throws
+  lets that exception propagate in place of the refusal and leaves both the stored bundle and the
+  family in place.
 
 == References
 

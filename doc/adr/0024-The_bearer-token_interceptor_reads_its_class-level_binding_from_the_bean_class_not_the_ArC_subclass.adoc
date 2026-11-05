@@ -1,0 +1,110 @@
+= ADR-0024: The bearer-token interceptor reads its class-level binding from the bean class, not the ArC subclass
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: BearerTokenInterceptor reads the class-level @BearerAuth from the bean class — the direct superclass of an ArC-generated Subclass target, otherwise the target's own class — merges it with the method-level annotation as a union, inspects no further superclass, and fails closed when neither level carries the annotation
+// tags: quarkus-extension, cdi, interceptor, security, fail-closed
+// affects: token-sheriff-validation-quarkus
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+`@BearerAuth` is an interceptor binding. Placed on a class, it states baseline requirements — scopes,
+roles, groups — for every method of the bean; placed on a method, it adds requirements for that method.
+The interceptor has to read both levels at invocation time, because the requirements are non-binding
+members of the annotation and are not part of how CDI selects the interceptor.
+
+The method-level annotation is read from the invoked `Method`. The class-level one has to be read from
+a class, and the obvious candidate, the class of the intercepted target, is the wrong one under ArC.
+ArC intercepts a bean by instantiating a generated subclass. `@BearerAuth` is not `@Inherited`, so that
+subclass does not carry the annotation of the bean it extends. Reading the class-level binding from the
+target's class finds nothing, and the class-level requirements are dropped.
+
+Dropping them is a silent widening of access. A method that carries no annotation of its own on a bean
+annotated `@BearerAuth(requiredRoles = "admin")` is still intercepted, because CDI applied the binding
+to the bean, but the interceptor finds neither annotation and the role requirement is never checked.
+A method that carries its own annotation loses the class baseline and is checked only against the
+method's additions.
+
+The structural choice point is which class the interceptor treats as the source of the class-level
+binding, and what it does when it finds no binding at all.
+
+== Decision
+
+The class-level binding is read from the bean class, and an absent binding fails closed.
+
+* The bean class is resolved from the intercepted target. A target that implements ArC's `Subclass`
+  marker is a generated subclass, and its bean class is its direct superclass. Any other target is its
+  own bean class.
+* Only that one class is inspected. The interceptor does not walk the hierarchy above the bean class, so
+  an annotation on a superclass of the bean does not apply.
+* When both levels carry `@BearerAuth`, the requirements are merged as a union of scopes, roles and
+  groups. When only one level carries it, its values are used.
+* When neither level carries it, the interceptor throws an `IllegalStateException` instead of letting
+  the call proceed: an intercepted method without a readable binding is a security configuration error,
+  not an unauthenticated endpoint.
+
+== Consequences
+
+=== Positive
+
+* A class-level `@BearerAuth` is enforced on every intercepted method of the bean, including methods
+  without an annotation of their own.
+* A method-level annotation adds to the class baseline instead of replacing it.
+* A failure to read the binding stops the call rather than skipping the check.
+
+=== Negative
+
+* The resolution depends on an ArC type, the `Subclass` marker, and on ArC's choice to intercept through
+  a direct subclass.
+* Requirements declared on a superclass of the bean are not applied; they must be repeated on the bean
+  class or on the methods.
+
+=== Risks
+
+* If ArC changed how it intercepts a bean, for example by inserting more than one generated class
+  between the bean and the target, the direct superclass would no longer be the bean class. The
+  interceptor would then find no class-level annotation, and a method without its own annotation would
+  fail closed with an `IllegalStateException`, while a method with its own annotation would lose the
+  class baseline.
+
+== Alternatives Considered
+
+**Read the annotation from the target's class.** The plain reflective approach. It was rejected because
+under ArC that class is the generated subclass, which does not carry the annotation, so the
+class-level requirements are dropped — the defect this decision exists to prevent.
+
+**Make `@BearerAuth` `@Inherited`.** The generated subclass would then report the annotation itself.
+It was rejected because inheritance would also apply the annotation to every application subclass of an
+annotated bean, which is a broader change to the annotation's meaning than the interceptor needs, and
+because the interceptor would still depend on the container's subclassing strategy, now implicitly.
+
+**Walk the whole superclass hierarchy.** The interceptor would take the first class-level annotation
+found on the target or any superclass. It was rejected because it extends the binding to superclasses
+the CDI container never treated as declaring it, so the interceptor and the container could disagree
+about which beans are secured.
+
+**Proceed when no annotation is found.** The call would continue as if no requirements were declared. It
+was rejected because the interceptor runs only where the container applied the binding, so a missing
+annotation means the configuration could not be read, and continuing would serve the method without
+checks.
+
+The rejected options share one flaw. Each lets the requirements the interceptor enforces differ from the
+requirements the bean declares, either by losing them or by extending them to classes that did not
+declare them.
+
+== References
+
+* `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/interceptor/BearerTokenInterceptor.java`
+  — the bean-class resolution, the merge and the fail-closed branch.
+* `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/annotation/BearerAuth.java`
+  — the interceptor binding and its merge contract.

@@ -73,7 +73,7 @@ CDI producer for JWT token validators:
 * link:src/main/java/de/cuioss/sheriff/token/quarkus/producer/TokenValidatorProducer.java[TokenValidatorProducer]
 * Produces one application-scoped `TokenValidator` covering every enabled issuer
 * When the `sheriff.token.issuers.*` namespace yields at least one enabled issuer, the `TokenValidator` is built at startup, so an invalid issuer configuration fails application startup instead of the first request
-* An application without an enabled issuer, or one that supplies its own `TokenValidator`, starts without building it
+* An application with no enabled issuer under `sheriff.token.issuers.*` starts without building it; an application that supplies its own `TokenValidator` gets this only when it also configures no enabled issuer there, because the startup check looks at the enabled issuers alone
 
 ==== BearerTokenProducer
 CDI producer for bearer token validation:

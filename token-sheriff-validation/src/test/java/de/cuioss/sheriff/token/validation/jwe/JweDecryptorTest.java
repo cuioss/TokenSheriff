@@ -403,7 +403,7 @@ class JweDecryptorTest {
         @Test
         @DisplayName("Should sanitize and bound an epk crv before it reaches the log (CWE-117)")
         void shouldSanitizeEpkCrvBeforeLogging() {
-            String forgedCrv = "P-256\r\nWARN forged " + "c".repeat(JweDecryptor.MAX_LOGGED_KID_LENGTH * 2);
+            String forgedCrv = "P-256\r\nWARN forged\u2028" + "c".repeat(JweDecryptor.MAX_LOGGED_KID_LENGTH * 2);
             JwkKey epk = new JwkKey("EC", null, null, null, null, forgedCrv, "AQ", "AQ");
             JwtHeader header = new JwtHeader("ECDH-ES", null, null, null, null,
                     "A128GCM", null, epk, null, null);
@@ -419,7 +419,7 @@ class JweDecryptorTest {
             assertTrue(message.startsWith("Failed to parse ephemeral EC public key: "),
                     "The rejection must come from the epk parse, but was: " + message);
             assertFalse(containsControlCharacter(message), "The message must not carry control characters");
-            assertFalse(message.indexOf(' ') >= 0, "The message must not carry U+2028");
+            assertFalse(message.indexOf('\u2028') >= 0, "The message must not carry U+2028");
             assertFalse(message.contains("c".repeat(JweDecryptor.MAX_LOGGED_KID_LENGTH)),
                     "The crv text must be length-bounded, but was: " + message);
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
@@ -431,7 +431,7 @@ class JweDecryptorTest {
         @DisplayName("Should sanitize an unsupported alg carrying CR/LF in the log and the message (CWE-117)")
         void shouldSanitizeUnsupportedAlgBeforeLogging() {
             String forgedAlg = "RSA1_5\r\nWARN forged alg";
-            String forgedEnc = "A256GCM WARN forged enc";
+            String forgedEnc = "A256GCM\u2028WARN forged enc";
             JwtHeader header = new JwtHeader(forgedAlg, null, null, null, null,
                     forgedEnc, null, null, null, null);
             String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
@@ -500,6 +500,32 @@ class JweDecryptorTest {
             assertTrue(TestLoggerFactory.getTestHandler()
                             .resolveLogMessagesContaining(TestLogLevel.WARN, "forged coordinate").isEmpty(),
                     "The raw epk coordinate must not reach any log line");
+        }
+
+        @ParameterizedTest(name = "{0} = [{1}]")
+        @CsvSource(value = {"x, NULL", "x, ''", "x, '   '", "y, NULL", "y, ''", "y, '   '"}, nullValues = "NULL")
+        @DisplayName("An absent or blank epk coordinate is rejected once by field name by the key parser")
+        void shouldRejectAbsentOrBlankEpkCoordinateByFieldName(String field, String coordinate) {
+            JwkKey epk = "x".equals(field)
+                    ? new JwkKey("EC", null, null, null, null, "P-256", coordinate, "AQ")
+                    : new JwkKey("EC", null, null, null, null, "P-256", "AQ", coordinate);
+            JwtHeader header = new JwtHeader("ECDH-ES", null, null, null, null,
+                    "A128GCM", null, epk, null, null);
+            String[] parts = {"header", "", "iv", "ciphertext", "authTag"};
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(JweTestTokenFactory.generateEcKeyPair("secp256r1").getPrivate())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter));
+
+            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
+            assertEquals("Failed to parse ephemeral EC public key: Invalid Base64 URL encoded value for '"
+                    + field + "'", ex.getMessage());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(ex.getMessage()));
+            LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, JwkKey.class);
         }
 
         @Test
@@ -609,6 +635,45 @@ class JweDecryptorTest {
             assertNotNull(innerJws);
             assertEquals(3, innerJws.split("\\.").length);
             assertEquals(0, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
+        }
+
+        @Test
+        @DisplayName("Should decrypt ECDH-ES with apu/apv and fail when the header apv differs from the producer's")
+        void shouldBindApuAndApvIntoTheDerivedKey() {
+            String curve = "secp256r1";
+            KeyPair recipientKeyPair = JweTestTokenFactory.generateEcKeyPair(curve);
+            ECPublicKey recipientPublicKey = (ECPublicKey) recipientKeyPair.getPublic();
+            String innerJws = JweTestTokenFactory.createSignedJws(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(), "RS256", ISSUER);
+            byte[] apu = "producer-party".getBytes(StandardCharsets.UTF_8);
+            byte[] apv = "recipient-party".getBytes(StandardCharsets.UTF_8);
+            byte[] otherApv = "another-recipient".getBytes(StandardCharsets.UTF_8);
+            JweDecryptionConfig config = JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(recipientKeyPair.getPrivate())
+                    .build();
+
+            String[] matching = JweTestTokenFactory.encryptAsEcdhEsJwe(innerJws,
+                    JweTestTokenFactory.generateEcKeyPair(curve), recipientPublicKey, "A128GCM",
+                    apu, apv, apv).split("\\.");
+            JwtHeader matchingHeader = parseHeader(matching[0]);
+            assertTrue(matchingHeader.getApu().isPresent() && matchingHeader.getApv().isPresent(),
+                    "The fixture header must carry apu and apv");
+
+            assertEquals(innerJws, decryptor.decrypt(matching, matchingHeader, config, counter),
+                    "A token whose header apu/apv match the producer's must decrypt to the inner JWS");
+            assertEquals(0, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
+
+            // The producer derived the CEK with otherApv but the header advertises apv: the recipient
+            // derives a different CEK, so content authentication fails
+            String[] mismatched = JweTestTokenFactory.encryptAsEcdhEsJwe(innerJws,
+                    JweTestTokenFactory.generateEcKeyPair(curve), recipientPublicKey, "A128GCM",
+                    apu, apv, otherApv).split("\\.");
+            JwtHeader mismatchedHeader = parseHeader(mismatched[0]);
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(mismatched, mismatchedHeader, config, counter));
+            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
         }
 
         @Test

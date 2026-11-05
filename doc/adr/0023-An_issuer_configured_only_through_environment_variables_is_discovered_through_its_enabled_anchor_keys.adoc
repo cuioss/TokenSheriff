@@ -1,0 +1,114 @@
+= ADR-0023: An issuer configured only through environment variables is discovered through its enabled anchor keys
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: Issuer names are discovered as the union of the dotted sheriff.token.issuers.<name>.* properties and the environment variables SHERIFF_TOKEN_ISSUERS_<NAME>_ENABLED / _DPOP_ENABLED; an environment-only name is reconstructed in lower case from the longest matching anchor suffix and resolved through the environment config source's own name mangling
+// tags: quarkus-extension, configuration, environment-variables, issuer-discovery
+// affects: token-sheriff-validation-quarkus
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Proposed
+
+== Context
+
+The Quarkus extension has no fixed list of issuers. It finds them by scanning the property names under
+`sheriff.token.issuers.` and taking the segment after the prefix as the issuer name, so
+`sheriff.token.issuers.keycloak.enabled` names the issuer `keycloak`.
+
+MicroProfile Config exposes an environment variable under its raw name. An issuer configured entirely
+through environment variables, as is usual in container deployments, appears only as names such as
+`SHERIFF_TOKEN_ISSUERS_KEYCLOAK_ENABLED`, which the dotted scan never sees. Such an issuer is not
+discovered, the extension behaves as if no issuer were configured, and the application starts without
+the validator the operator configured.
+
+Recovering the name from the environment form is not straightforward. Environment form replaces every
+non-alphanumeric character with `_` and upper-cases the rest, so `SHERIFF_TOKEN_ISSUERS_MY_IDP_ENABLED`
+could be the issuer `my` with the key `idp.enabled`, or the issuer `my_idp` with the key `enabled`, or
+`my-idp`. The prefix is unambiguous; where the name ends is not.
+
+The structural choice point is how an environment-only issuer is found, and which part of its variable
+names decides where the issuer name ends.
+
+== Decision
+
+Issuer discovery is the union of the dotted scan and an environment scan anchored on a fixed set of
+leaf keys.
+
+* The anchor leaf keys are derived from the issuer property templates: `enabled` and `dpop.enabled`.
+  In environment form they are the suffixes `_ENABLED` and `_DPOP_ENABLED`.
+* For every property name that starts with `SHERIFF_TOKEN_ISSUERS_`, the longest matching anchor
+  suffix that leaves a non-empty remainder is stripped and the remainder is lower-cased to become the
+  candidate issuer name. A match that would leave an empty name is passed over for the next shorter
+  anchor: for `SHERIFF_TOKEN_ISSUERS__DPOP_ENABLED` the `_DPOP_ENABLED` anchor would leave nothing, so
+  `_ENABLED` is stripped instead and the candidate issuer name is `_dpop`.
+* Every key of the candidate is then looked up in dotted form, for example
+  `sheriff.token.issuers.my_idp.enabled`. The environment config source resolves that lookup through the
+  same mangling, so it finds the original variable even though the reconstructed name is lossy.
+* Dotted names come first, in encounter order. A candidate whose environment form equals that of a
+  dotted name, or of an earlier candidate, is skipped, so an issuer configured both ways is reported
+  once.
+* The same union feeds both the full resolution of the issuer configurations and the enabled-issuer
+  probe that gates eager startup (ADR-0019), so the two cannot disagree about which issuers exist.
+
+An issuer is enabled only by an explicit `enabled=true`; discovery does not enable anything.
+
+== Consequences
+
+=== Positive
+
+* An issuer configured only through environment variables is found and validated like a dotted one,
+  without any extra declaration.
+* Startup gating and issuer resolution see the same issuers, whichever form they were configured in.
+* The anchor set comes from the property templates, not from a second hand-written list.
+
+=== Negative
+
+* A reconstructed name is lower-case with underscores: `MY_IDP` becomes `my_idp`, never `my-idp`. Log
+  lines and metrics name the issuer in that form.
+* An environment-only issuer is discovered only through an anchor key. An issuer whose environment
+  variables omit both anchors is not discovered. It also lacks `enabled=true` and would be disabled
+  anyway, so nothing is lost for validation, but its other variables are never read and so never
+  reported.
+
+=== Risks
+
+* The longest anchor wins. An environment-only issuer whose name ends in `dpop`, such as
+  `SHERIFF_TOKEN_ISSUERS_MY_DPOP_ENABLED`, is read as the issuer `my` with `dpop.enabled`. Such a name has
+  to be configured in dotted form.
+* Discovery relies on the environment config source applying the MicroProfile mangling rule to dotted
+  lookups. A config source that exposes environment variables without that rule would not resolve the
+  reconstructed keys.
+
+== Alternatives Considered
+
+**Dotted discovery only.** Environment variables would have to be accompanied by a dotted property, or
+the issuer list declared explicitly. It was rejected because an environment-only configuration, the
+common container case, would silently produce an unconfigured extension.
+
+**An explicit issuer-list property.** A single property such as a comma-separated list of names would
+remove the ambiguity. It was rejected because it adds a second place to keep in step with the issuer
+properties, and because the dotted form needs no such list; the two forms would then behave
+differently.
+
+**Anchor on every known leaf key.** Any issuer property, not just the enabled keys, would identify an
+issuer. It was rejected because the more anchors there are, the more names end ambiguously against one
+of them: with keys such as `jwks.url` or `well-known.url`, names ending in `jwks` or `well_known` would be
+split wrongly. The enabled keys are the ones every enabled issuer must set anyway.
+
+The rejected options share one flaw. Each either leaves an environment-only issuer undiscovered or buys
+discovery with more ambiguity or a second source of truth.
+
+== References
+
+* ADR-0019 — the enabled-issuer probe that gates eager validator startup and shares this discovery.
+* `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/config/ConfigValueParser.java`
+  — the environment name reconstruction and its limitation.
+* `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/config/IssuerConfigResolver.java`
+  — the anchor keys and the union of both discoveries.
