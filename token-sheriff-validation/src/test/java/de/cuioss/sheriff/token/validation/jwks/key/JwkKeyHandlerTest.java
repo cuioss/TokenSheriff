@@ -249,7 +249,7 @@ class JwkKeyHandlerTest {
         // The JWK sink is reachable from attacker-controlled input (the DPoP embedded jwk), so the
         // logged value must not carry line breaks and must be length-bounded (CWE-117).
         // The forged value carries CR, LF and both Unicode separators (U+2028, U+2029), written as escapes.
-        String forgedX = "AQ\r\nWARN forged  " + "c".repeat(200);
+        String forgedX = "AQ\r\nWARN forged\u2028\u2029" + "c".repeat(200);
         JwkKey jwk = createEcJwk(forgedX, "AQ");
 
         InvalidKeySpecException exception = assertThrows(

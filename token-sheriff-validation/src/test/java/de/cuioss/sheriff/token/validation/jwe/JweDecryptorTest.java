@@ -403,7 +403,7 @@ class JweDecryptorTest {
         @Test
         @DisplayName("Should sanitize and bound an epk crv before it reaches the log (CWE-117)")
         void shouldSanitizeEpkCrvBeforeLogging() {
-            String forgedCrv = "P-256\r\nWARN forged " + "c".repeat(JweDecryptor.MAX_LOGGED_KID_LENGTH * 2);
+            String forgedCrv = "P-256\r\nWARN forged\u2028" + "c".repeat(JweDecryptor.MAX_LOGGED_KID_LENGTH * 2);
             JwkKey epk = new JwkKey("EC", null, null, null, null, forgedCrv, "AQ", "AQ");
             JwtHeader header = new JwtHeader("ECDH-ES", null, null, null, null,
                     "A128GCM", null, epk, null, null);
@@ -419,7 +419,7 @@ class JweDecryptorTest {
             assertTrue(message.startsWith("Failed to parse ephemeral EC public key: "),
                     "The rejection must come from the epk parse, but was: " + message);
             assertFalse(containsControlCharacter(message), "The message must not carry control characters");
-            assertFalse(message.indexOf(' ') >= 0, "The message must not carry U+2028");
+            assertFalse(message.indexOf('\u2028') >= 0, "The message must not carry U+2028");
             assertFalse(message.contains("c".repeat(JweDecryptor.MAX_LOGGED_KID_LENGTH)),
                     "The crv text must be length-bounded, but was: " + message);
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
@@ -431,7 +431,7 @@ class JweDecryptorTest {
         @DisplayName("Should sanitize an unsupported alg carrying CR/LF in the log and the message (CWE-117)")
         void shouldSanitizeUnsupportedAlgBeforeLogging() {
             String forgedAlg = "RSA1_5\r\nWARN forged alg";
-            String forgedEnc = "A256GCM WARN forged enc";
+            String forgedEnc = "A256GCM\u2028WARN forged enc";
             JwtHeader header = new JwtHeader(forgedAlg, null, null, null, null,
                     forgedEnc, null, null, null, null);
             String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
