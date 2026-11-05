@@ -289,8 +289,8 @@ public class TokenLifecycleManager {
      * spares a stored bundle whose refresh token differs from the one that exchange presented. Two
      * concurrent grants can therefore never leave the store holding one and the family tracking the other,
      * and neither a reuse refusal nor any other refused refresh clears a grant this method stored while the
-     * refusal was in flight. Writers that bypass this manager, such as a {@link TokenStore} shared with another node, take
-     * no such lock; the refresh path's capture covers them by adopting and re-reading, and a refused
+     * refusal was in flight. Writers that bypass this manager, such as a {@link TokenStore} shared with
+     * another node, take no such lock; the refresh path's capture covers them by adopting and re-reading, and a refused
      * exchange's teardown still spares a grant such a writer stored before its compare, but not one written
      * between that compare and the clear.
      * <ul>
