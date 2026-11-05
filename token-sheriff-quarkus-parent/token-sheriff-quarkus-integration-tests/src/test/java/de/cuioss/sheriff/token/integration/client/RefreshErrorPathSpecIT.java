@@ -16,6 +16,8 @@
 package de.cuioss.sheriff.token.integration.client;
 
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.flow.CredentialRejectedException;
+import de.cuioss.sheriff.token.client.flow.RefreshFailureClassification;
 import de.cuioss.sheriff.token.client.flow.RefreshFlow;
 import de.cuioss.sheriff.token.client.lifecycle.RevocationClient;
 import de.cuioss.sheriff.token.client.token.RotationResult;
@@ -37,7 +39,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * tokens the authorization server refuses — an unknown token and an explicitly revoked one — and pins
  * that the engine surfaces the refusal as a typed {@link TransportException} raised from a
  * {@code de.cuioss.sheriff.token.client.*} frame, rather than leaking an opaque transport error or,
- * worse, returning a {@link RotationResult} built from an error body.
+ * worse, returning a {@link RotationResult} built from an error body. For the revoked token the refusal
+ * is the {@link CredentialRejectedException} subtype, which {@link RefreshFlow#classify(Throwable)}
+ * reports as {@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED} with no redemption.
  * <p>
  * It also records what the AS does with a <em>superseded</em> refresh token presented through the bare
  * 2a surface. {@link RefreshFlow} keeps no rotation-family bookkeeping of its own — reuse detection
@@ -102,10 +106,18 @@ class RefreshErrorPathSpecIT extends BaseIntegrationTest {
                 () -> refreshFlow.refresh(RefreshEngineSupport.discoveredProviderMetadata(), acquired.refreshToken()),
                 "a refresh token revoked through the production RevocationClient must no longer redeem");
 
+        RefreshFailureClassification classification = RefreshFlow.classify(failure);
         assertAll("typed refusal of a revoked refresh token",
                 () -> assertTrue(failure.getMessage().contains("400"),
                         "the failure must report the authorization server's 400 status, was: "
                                 + failure.getMessage()),
+                () -> assertInstanceOf(CredentialRejectedException.class, failure,
+                        "a revoked refresh token refused with invalid_grant is the credential-rejected "
+                                + "carrier, not a plain transport failure"),
+                () -> assertEquals(RefreshFailureClassification.Kind.CREDENTIAL_REJECTED, classification.kind(),
+                        "classify must report the revoked token as a credential the server declared dead"),
+                () -> assertNull(classification.redemption(),
+                        "nothing was redeemed, so no successor exists to revoke"),
                 () -> assertTrue(RefreshEngineSupport.productionFrame(failure).isPresent(),
                         "the refusal must be raised from a " + RefreshEngineSupport.PRODUCTION_PACKAGE
                                 + "* frame"));
