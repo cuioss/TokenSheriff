@@ -36,9 +36,10 @@ import java.io.Serial;
  * <strong>The recognition rule is an allow-list of exactly one code.</strong> Only
  * {@code invalid_grant} on a {@code 4xx} raises this type. Every other shape — an unparseable body, an
  * absent body, a body missing the {@code error} member, an oversize body, an unrecognized code such as
- * {@code invalid_client} or {@code use_dpop_nonce}, and any {@code 5xx} even when it carries an
- * {@code invalid_grant} body — falls through to a plain {@link TransportException} and stays
- * pre-redemption. The fail-safe direction is to preserve the session: mistaking a transient fault for
+ * {@code use_dpop_nonce}, and any {@code 5xx} even when it carries an {@code invalid_grant} body — falls
+ * through to a plain {@link TransportException} and stays pre-redemption. A failed client
+ * authentication ({@code invalid_client}) is reported as the sibling
+ * {@link ClientAuthenticationFailedException}, which is likewise pre-redemption. The fail-safe direction is to preserve the session: mistaking a transient fault for
  * a dead credential destroys a working session, which is the inversion this whole classification
  * exists to prevent.
  * <p>
