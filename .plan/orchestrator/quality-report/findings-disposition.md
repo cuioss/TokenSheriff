@@ -26,18 +26,18 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | V-10 | minor | **FIXED** — #844 (50c295e6), PLAN-07; opt-in max-staleness bound (off by default, `TokenSheriff-170`) and re-discovery after three failed cycles (closed per PR; code not re-read) | PLAN-07 |
 | V-11 | minor | **FIXED** — #851 (49ba673d), PLAN-09; the range check lives in `SignatureVerificationUtil.verifySignature` and runs before `initVerify`, so DPoP proofs get it too; wired all-zero ES256 DPoP test (closed per PR; call site and ordering read in merged source) | PLAN-09 |
 | V-12 | minor | **FIXED** — #851 (49ba673d), PLAN-09; `checkAndStore(jti)` runs last, after every stateless check (closed per PR; ordering read in merged source) | PLAN-09 |
-| V-13 | minor | VALID — LogRecord template/argument mismatches | PLAN-13 |
-| V-14 | minor | VALID — identifier 168 duplicated (Transport + JWTValidation) | PLAN-13 |
-| V-15 | minor | VALID — `maxPayloadSize` doubles as HTTP response ceiling | PLAN-13 |
+| V-13 | minor | **FIXED** — #861 (7145aebb), PLAN-13; `JWKS_LOAD_FAILED` and `JWKS_KEYS_UPDATED` templates now match their arguments (closed per PR; the two templates read in the merged diff, other call sites not re-read) | PLAN-13 |
+| V-14 | minor | **FIXED** — #861 (7145aebb), PLAN-13; `DUPLICATE_JWKS_KID` is now identifier 171 and `LogMessageIdentifierUniquenessTest` guards uniqueness (read in the merged diff) | PLAN-13 |
+| V-15 | minor | **FIXED** — #861 (7145aebb), PLAN-13; `ParserConfig.maxHttpResponseSize` (default 256 KB) is independent of `maxPayloadSize` (read in the merged diff); documentation gap in `architecture.adoc` and `developing.adoc` → PLAN-25 | PLAN-13 |
 | V-16 | minor | **FIXED** — #830 (1ca5ab35), PLAN-01 (closed per PR; code not re-read) | PLAN-01 |
-| V-17a | info | VALID — EgressPolicy DNS-rebinding claim / missing ranges | PLAN-13 |
+| V-17a | info | **FIXED** — #861 (7145aebb), PLAN-13; `EgressPolicy` now blocks `100.64.0.0/10`, `0.0.0.0/8` and `255.255.255.255` (read in the merged diff; the DNS-rebinding wording not re-read) | PLAN-13 |
 | V-17b | info | **FIXED** — #851 (49ba673d), PLAN-09; all three production splits use limit `-1` (closed per PR; the three sites read in merged source) | PLAN-09 |
 | V-17c | info | **FIXED** — #851 (49ba673d), PLAN-09; `now >= exp + skew` is expired, via one shared predicate (closed per PR; predicate read in merged source) | PLAN-09 |
 | V-17d | info | VALID — duplicate JSON keys last-wins (doc only) | PLAN-18 |
 | V-17e | info | **FIXED** — #851 (49ba673d), PLAN-09; an EC JWK whose `alg` does not match its curve is dropped, never re-labelled (closed per PR; check read in merged source) | PLAN-09 |
 | V-17f | info | **FIXED** — #853 (a9ce05df), PLAN-11; `AudienceValidator` treats only an absent `aud` as missing, an empty array is `AUDIENCE_MISMATCH` and never reaches the `azp` fallback (code read in the merged source) | PLAN-11 |
 | V-17g | info | **FIXED** — #835 (e010c5cf), PLAN-05; random CEK on unwrap failure, CBC tag mismatch normalised to the same typed rejection (closed per PR; code not re-read) | PLAN-05 |
-| V-17h | info | VALID — observability drift (`JWKS_KEYS_UPDATED` content etc.); J-1 part owned by PLAN-17 | PLAN-13 |
+| V-17h | info | **FIXED** (PLAN-13 part) — #861 (7145aebb); `JWKS_KEYS_UPDATED` logs issuer and key ids (read in the merged diff); J-1 part still owned by PLAN-17 | PLAN-13 |
 
 ## Client code (C)
 
@@ -45,15 +45,15 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 |---|---|---|---|
 | C-1 | major | **FIXED** — #832 (31fb2212), PLAN-02 (closed per PR; merge state corroborated, code not re-read) | PLAN-02 |
 | C-2 | minor | **FIXED** — #832 (31fb2212), PLAN-02; the PR body files this fix under "C-8b" (closed per PR; code not re-read) | PLAN-02 |
-| C-3 | minor | VALID — DPoP `token_type` / `cnf.jkt` not verified at issuance | PLAN-10 |
+| C-3 | minor | **FIXED** — #856 (02c0fd3a), PLAN-10; checked once at the token-endpoint seam, absent/malformed `cnf.jkt` also rejected (read in merged source) | PLAN-10 |
 | C-4 | minor | **FIXED** — #840 (a56b1b59), PLAN-06; shared `EndpointSchemePolicy`, query placed before a fragment (closed per PR; code not re-read) | PLAN-06 |
 | C-5 | minor | **FIXED** — #840 (a56b1b59), PLAN-06 (closed per PR; code not re-read) | PLAN-06 |
 | C-6 | minor | **FIXED** — #840 (a56b1b59), PLAN-06; `state` verified first (closed per PR; code not re-read) | PLAN-06 |
 | C-7 | info | **FIXED** — #840 (a56b1b59), PLAN-06; `FlowContext` is single use, claimed atomically (closed per PR; code not re-read) | PLAN-06 |
 | C-8a | info | **FIXED** — #840 (a56b1b59), PLAN-06; one shared `ErrorTextSanitizer` (closed per PR; code not re-read) | PLAN-06 |
 | C-8b | info | **FIXED** — #832 (31fb2212), PLAN-02; caps constructor-injectable (closed per PR; code not re-read) | PLAN-02 |
-| C-8c | info | VALID — PAR produced but never composed into a flow | PLAN-10 |
-| C-8d | info | VALID — step-up `auth_time` check without skew / clock | PLAN-10 |
+| C-8c | info | **FIXED** — #856 (02c0fd3a), PLAN-10; decided as documentation (PAR is a building block the built-in flows do not use), `requirements.adoc` states it | PLAN-10 |
+| C-8d | info | **FIXED** — #856 (02c0fd3a), PLAN-10; `StepUpResultVerifier` takes an `InstantSource` and an opt-in skew (default zero) | PLAN-10 |
 
 ## Quarkus / benchmarking / build (Q)
 
@@ -91,9 +91,9 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | TC-4 | minor | VALID — mix-up IT bypasses wired `CallbackHandler` | PLAN-16 |
 | TC-5 | minor | **FIXED** — #840 (a56b1b59), PLAN-06; pinned through `AuthorizationCodeFlow.exchange` (closed per PR; code not re-read) | PLAN-06 |
 | TC-6 | minor | **FIXED** — #832 (31fb2212), PLAN-02; reflection removed, post-eviction replay pinned (closed per PR; code not re-read) | PLAN-02 |
-| TC-7 | minor | VALID — attack corpora collapse to non-JSON | PLAN-14 |
+| TC-7 | minor | **FIXED** — #862 (f29ca9cb), PLAN-14; valid-JSON adversarial token responses added in `TokenResponseAdversarialTest`, plus a repeated-member refusal in `TokenEndpointClient` (read in the merged diff) | PLAN-14 |
 | TC-8 | minor | VALID — `ClientAuthSpecIT` positive-only | PLAN-16 |
-| TC-9 | info | PARTIAL — PKCE dup removed (#796); unit hygiene → PLAN-14; IT TLS trust-all → Watch | PLAN-14 |
+| TC-9 | info | PARTIAL — PKCE dup removed (#796); unit hygiene **FIXED** by #862 (f29ca9cb), PLAN-14 (`TokenEndpointTransportControlTest` moved, unused `@EnableGeneratorController` dropped; read in the merged diff); IT TLS trust-all → Watch | PLAN-14 |
 | gaps VAL 1 | – | **FIXED** — = TV-2, #853 (a9ce05df), PLAN-11 | PLAN-11 |
 | gaps VAL 2,3,5 | – | VALID — exp/nbf fixed-clock boundaries, unit RS/HS confusion | PLAN-15 |
 | gap VAL 4 | – | **FIXED** — #853 (a9ce05df), PLAN-11; new `StrictStringMapper` rejects any non-string `azp`; residual: `client_id` is still string-coerced by `IdentityMapper` (operator decision, see epic.md Watches) | PLAN-11 |
@@ -111,8 +111,8 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 |---|---|---|---|
 | D-1 | major | **FIXED** — root README #817; validation-quarkus README, health-checks and integration docs by #834 (ef720fd0), PLAN-04 (closed per PR; code not re-read) | PLAN-04 |
 | D-2 | major | VALID — "no HTTP of its own" in 5 places | PLAN-18 |
-| D-3 | major | VALID — Q-025 / Q-104 missing from LogMessages.adoc | PLAN-13 |
-| D-4 | major | VALID — = V-14 doc side | PLAN-13 |
+| D-3 | major | **FIXED** — #861 (7145aebb), PLAN-13; `LogMessages.adoc` now lists `TokenSheriff_Q-025` and `TokenSheriff_Q-104` (read in the merged diff) | PLAN-13 |
+| D-4 | major | **FIXED** — #861 (7145aebb), PLAN-13; the doc lists the duplicate-kid record as `TokenSheriff-171` and the new `TokenSheriff-172` (read in the merged diff) | PLAN-13 |
 | D-5 | major | PARTIAL — = Q-12 residue in AGENTS.md | PLAN-19 |
 | D-6 | major | VALID — stale "128 KB buffer" | PLAN-18 |
 | D-7 | minor | VALID, broader — hub lists 1 of 15 ADRs; ADR-0002 "Proposed" | PLAN-19 |

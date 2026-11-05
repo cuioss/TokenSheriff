@@ -3,7 +3,9 @@
 epic: quality-report
 written: 2026-10-31
 plugin version in use: 0.1.2027 (landing messages)
-status: NOT sent anywhere. Written for the operator to forward if they choose.
+status: FILED 2026-11-05 at the operator's instruction as `quality-report-001.md` in the plan-marshall repository's
+`live-blockers` inbox (`.plan/local/worktrees/_orchestrator/.plan/orchestrator/live-blockers/inbox/`), kind `finding`. Content as of the
+PLAN-23 addendum. Later addenda are not sent; the operator decides whether to file them.
 
 Twenty-four `candidate-lesson` messages from PLAN-01 to PLAN-07 name `plan-marshall:*` components, which
 this repository cannot fix. They are grouped into six themes. Each theme was also filed as one lesson in
@@ -281,3 +283,109 @@ Landing residue of PLAN-11: the sixth plan with the degraded pre-push gate (afte
 and PLAN-21); the project default `final_merge_without_asking: true` (`.plan/marshal.json`) would have merged without
 asking, which conflicts with the repository rule in `CLAUDE.md` that auto-merge is never enabled unless told, so the
 operator authorised the merge by hand for this PR; `effort` was stamped this time.
+
+## Addendum 2026-11-05: PLAN-10 (7 plan-marshall messages)
+
+Nothing here was sent. Lessons 002 (negative `max_age` plus skew) and 004 (DSL-JSON unchecked exception) are
+project-owned and are handled in the epic ledger, not here. Lesson 005's project half (write the suppression marker
+up front) is already the operator's OpenRewrite rule in the epic.
+
+- PLAN-10-001 (review / doc restatement): a best-practice paragraph restated a rule without the scope qualifier the
+  owning spec section carries ("for a JWT access token"); two functional and code review rounds over the same files
+  missed it and the external bot caught it. Suggested: when a deliverable restates a normative rule in a summary
+  document, the review compares the restatement with the owning section, not only with the code.
+- PLAN-10-003 (outline / phase 5): three finalize loop-backs (about 90 minutes of re-dispatched reviews), each on a
+  defect phase 5 should have caught: a correction deliverable that did not enumerate every file carrying the wrong
+  claim (a diagram and an architecture page), and a new fail-closed check whose "cannot decode" branch had no
+  malformed-but-present test, so unparseable was treated as absent. Suggested: outline lists every file carrying the
+  claim being corrected; phase 5 asks for one test per "cannot decode" branch of a new security check.
+- PLAN-10-005 / -006 (pre-push gate, push freshness): the `pre-push-quality-gate` step made its own source commit
+  (an OpenRewrite-inserted TODO replaced by the suppression marker), which moved HEAD past the last validated build
+  and needed a manual `freshness-reconcile` decision; a later inline-fix commit was refused with
+  `head_not_validated_by_gate` and re-fired security-audit, functional-review, code-review, the gate, push, CI-verify,
+  automatic-review and sonar-roundtrip. Related to the PLAN-12-004 and PLAN-20 head-dependent-chain items above.
+  Suggested: the gate should not commit source (or should declare the commit and re-validate itself), and inline
+  review-bot fixes should batch into one commit.
+- PLAN-10-007 (code-review verifier schema): a verifier dispatch wrote `findings_supported` where the workflow reads
+  `grading_supported` and the verdict was read as malformed. Only partly confirmed: the surviving artifact has the
+  correct key and no log line records the malformed read. Suggested: validate the verdict JSON by script at write
+  time, naming the expected key, with one shared schema for the code-review and functional-review workflows.
+- PLAN-10-008 (CodeRabbit quota, recurrence of theme 1): the re-review wait burned its full 600 seconds on a quota
+  refusal that stated an ETA of 17 minutes, then escalated; the operator chose merge-anyway under
+  `barrier-ask-override`. New detail: the unseen delta was only the bot's own two accepted suggestions. Suggested:
+  recognise the quota answer, read the ETA, wait if it fits the budget or escalate at once, and record "unseen delta
+  = the bot's own suggestions" with the override.
+- PLAN-10-009 (argparse, recurrence of theme 3): `architecture --plan-id P search ...` rejected (exit 2); the leaf
+  appended `--plan-id` by rote before the verb. One more data point for the router-scoped-flag class; no new
+  suggestion.
+
+Landing residue of PLAN-10: `effort` unknown again (runtime stamp unreadable; the model refresh found
+`model_unknown`); `total_tokens` spans mixed populations and a phase figure is over-counted by about 125 thousand;
+the post-merge CI wait hit its deadline on the non-gating `Run JMH Benchmarks` job (it finished green afterwards);
+one ADR candidate was proposed and not created.
+
+## Addendum 2026-11-05: PLAN-23 (2 plan-marshall messages)
+
+Nothing here was sent. A third message (an owed `architecture enrich` hint about `java:S1612`) is epic-local and is
+tracked in the epic's Watches.
+
+- PLAN-23-001 (`review_support test-integrity`): the default `--base-ref` is the `origin/main` tip, so on a branch
+  that lags a moved `main` the two-dot comparison attributes upstream's own assertion changes to the branch and
+  raises a false `weakened_test` (here on `RefreshFailureClassificationTest`, which PLAN-10 #856 had edited). It
+  cleared after the rebase. Two more `weakened_test` flags on this plan were judged false positives by every
+  verifier (a parameterised merge of three tests over the same inputs, and an `assert true` replaced by a real
+  check), and the functional and code reviews were closed by operator override at each head. I read both in the merged
+  diff and agree they are false positives. Suggested: anchor the default on the merge-base (three-dot semantics);
+  count a parameterised test's rows, not its methods, when comparing assertion totals; treat `assert true` ->
+  real assertion as a strengthening.
+- PLAN-23-002 (pre-push gate, Maven): the `module-tests` arm is reported as un-gated on every Maven push even though
+  the whole-tree `verify` ran the tests (3680 green). Seventh plan with the degraded arm (after PLAN-05, 08, 09, 11,
+  12, 21); the same family as PLAN-21-001 and PLAN-11-002. Suggested, in addition to the earlier items: treat a
+  resolved whole-tree `verify` that runs the test phase as satisfying the arm for Maven, or have `build-maven` declare
+  a `module-tests` canonical, and stop emitting a per-push warning for a configuration that is normal for the build
+  system.
+
+Landing residue of PLAN-23: the first `lessons-capture` run did not receive the orchestration verdict and wrote two
+lessons to the global store with `--allow-foreign-store` (both were tombstoned and re-sent to the inbox): one more
+instance of the lesson-routing gap at the top of this report; the merge went through under a `barrier-ask-override`
+because CodeRabbit's one-review-per-hour quota was spent on the previous push; the plan's wall time was about 21.6
+hours, mostly review-quota and review-override waits.
+
+## Addendum 2026-11-05 (second): PLAN-13 (5 plan-marshall messages) and PLAN-14 (3 plan-marshall messages)
+
+NOT filed upstream: the report went to the plan-marshall `live-blockers` inbox on 2026-11-05 up to the PLAN-23 addendum
+above. This addendum is written for the operator to file if they choose. Statements come from the senders' messages
+(PLAN-13 landing 007, lessons 001 to 005; PLAN-14 lessons 001 to 003) and are NOT independently verified, except
+where marked. Plugin 0.1.2046.
+
+- **Stand-alone whole-tree `test-compile` stores junk `build-error` findings** (PLAN-13-001; component `build-maven`).
+  The reactor cannot resolve the validation test-jar before `package`; the build wrapper auto-stored 130 findings that
+  were bulk-rejected. Same artefact PLAN-11 (120 findings) and PLAN-21 reported. Suggested: the wrapper recognises a
+  reactor test-jar resolution failure and does not store it.
+- **Finalize-step commits leave the change ledger unrecorded** (PLAN-13-002 and PLAN-14-002; `manage-change-ledger`,
+  `phase-6-finalize`, `phase-5-execute`). The execute-to-finalize transition refused twice with
+  `execute_commits_unrecorded` after security-audit hardening and review fix rounds (PLAN-13), and after an inline fix
+  commit (PLAN-14); rows were appended by hand with `manage-change-ledger append --kind change`. Suggested: record the
+  row at commit time for every finalize-step commit, or document the explicit call after an inline fix.
+- **A non-required third-party check stalls the arms; a quota refusal forced PR recreation** (PLAN-13-003;
+  `automatic-review`, `tools-integration-ci`). `license/cla` stayed pending 30+ minutes and alone made the review-arm and
+  sonar-arm preconditions return `arm_pending`; CodeRabbit refusals forced closing #859 and opening #861. Suggested:
+  classify non-required checks separately; offer a retry-after for the quota path.
+- **Merge-queue wait cannot tell a slow queue from a dequeued PR; the post-merge wait blocks on a benchmark**
+  (PLAN-13-004; `tools-integration-ci`, `phase-6-finalize`). The first enqueue was ejected when the merge-group
+  `e2e-tests / test` job hung to its 30-minute timeout (185 s on the PR head and the second enqueue); the 1800 s
+  landing budget ran out with the queue healthy; `checks wait --adaptive` blocked over 600 s on the post-merge
+  Performance Benchmark. Suggested: re-check queue membership before declaring the budget spent; exclude post-merge
+  benchmark workflows from the wait. (The orchestrator read the same pending JMH job after PLAN-14, PLAN-23 and
+  earlier plans.)
+- **Usage accounting skewed across the execute/finalize boundary** (PLAN-13-005; `manage-metrics`). About 374k and 363k
+  tokens of execute-phase subagent usage landed in the finalize accumulator and a zero-usage dispatch-boundary row was
+  recorded. Suggested: flush the accumulator at the phase boundary and refuse a zero-usage row.
+- **Argparse rejections from invented verbs and flags** (PLAN-14-001; `manage-findings`, `manage-architecture`): a
+  `query` verb on `manage-findings` and undeclared flags on `architecture search`, both already catalogued in the
+  agent-behavior rules; recurrence evidence only, same family as the theme 3 items.
+- **`weakened_test` (F7) fires on a pure test-file move** (PLAN-14-003; the Q-Gate check that emits F7, the same
+  `test-integrity` surface as PLAN-23 lesson 001). The TC-9 move kept both test methods; the detector read the delete
+  as a removal and fired repeatedly until the operator accepted it per head. Read by the orchestrator in the merged
+  diff: the removed and added classes carry the same two methods and display names. Suggested: pair deleted and added
+  files by rename similarity or method set before emitting.

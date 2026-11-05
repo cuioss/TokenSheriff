@@ -2,10 +2,10 @@
   "id": "PLAN-10",
   "slug": "dpop-binding-stepup",
   "workstream": "WS-02",
-  "status": "running",
+  "status": "shipped",
   "lane": "plan-marshall",
   "plan_marshall_plan_id": "plan-10-dpop-binding-stepup",
-  "pr": "",
-  "landing": "",
+  "pr": "856",
+  "landing": "landings/PLAN-10.md",
   "seq": 10
 }
