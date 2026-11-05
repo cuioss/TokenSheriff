@@ -222,12 +222,14 @@ class EndSessionFlowTest {
     @DisplayName("Should reject an echoed post-logout state that differs only in case or surrounding whitespace (M2)")
     void shouldRejectNormalizedPostLogoutState() {
         String expectedState = Generators.letterStrings(20, 40).next().toLowerCase(Locale.ROOT);
+        String upperCaseState = expectedState.toUpperCase(Locale.ROOT);
+        String paddedState = " " + expectedState + " ";
 
         assertAll("state is compared exactly",
                 () -> assertThrows(IllegalStateException.class,
-                        () -> flow.verifyPostLogoutState(expectedState, expectedState.toUpperCase(Locale.ROOT))),
+                        () -> flow.verifyPostLogoutState(expectedState, upperCaseState)),
                 () -> assertThrows(IllegalStateException.class,
-                        () -> flow.verifyPostLogoutState(expectedState, " " + expectedState + " ")));
+                        () -> flow.verifyPostLogoutState(expectedState, paddedState)));
     }
 
     @Test

@@ -145,8 +145,9 @@ public class TokenEndpointClient {
      *                         bearer-token request
      * @return the normalized token response
      * @throws TransportException if the request fails or the response is not successful (after a
-     *         nonce retry where applicable) — in both cases the authorization server never consumed
-     *         the presented grant. Two narrower subtypes carry the distinctions a caller may need to
+     *         nonce retry where applicable) — in both cases, except for the
+     *         {@link RedeemedResponseException} subtype described below, the authorization server
+     *         never consumed the presented grant. Two narrower subtypes carry the distinctions a caller may need to
      *         fail closed on: {@link CredentialRejectedException} when the non-success status is a
      *         {@code 4xx} whose RFC 6749 §5.2 body names {@code invalid_grant}, so the server declared
      *         the presented credential dead without redeeming it; and

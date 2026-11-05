@@ -165,7 +165,7 @@ public class DiscoveryResolver {
         HttpClient client = backChannel.sharedClient(handler);
         HttpRequest request = handler.requestBuilder()
                 .GET()
-                .setHeader("Accept", "application/json")
+                .setHeader("Accept", JSON_MEDIA_TYPE)
                 .build();
         try {
             HttpResponse<String> response = client.send(request, backChannel.bodyHandler());
