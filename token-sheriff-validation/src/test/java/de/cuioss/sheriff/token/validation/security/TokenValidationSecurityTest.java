@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.security;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.TokenType;
@@ -84,42 +85,30 @@ class TokenValidationSecurityTest {
         String payloadJson = new String(payloadBytes);
 
         String tamperedPayloadJson = payloadJson.replaceAll("\"sub\":\"[^\"]*\"", "\"sub\":\"tampered-subject\"");
+        assertNotEquals(payloadJson, tamperedPayloadJson, "Payload should be tampered");
         String tamperedPayload = Base64.getUrlEncoder().withoutPadding().encodeToString(tamperedPayloadJson.getBytes());
-        String tamperedToken = parts[0] + "." + tamperedPayload + ".";
+        String tamperedToken = parts[0] + "." + tamperedPayload + "." + parts[2];
 
         var request1 = AccessTokenRequest.of(tamperedToken);
-        assertThrows(TokenValidationException.class, () ->
+        TokenValidationException exception = assertThrows(TokenValidationException.class, () ->
                         tokenValidator.createAccessToken(request1),
                 "Should reject token with tampered payload");
+        assertEquals(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED, exception.getEventType(),
+                "Tampered payload under the original signature should fail signature validation");
     }
 
     @ParameterizedTest
     @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 3)
     @DisplayName("Should reject tokens with tampered signatures")
     void shouldRejectTokensWithTamperedSignatures(TestTokenHolder tokenHolder) {
-        String validToken = tokenHolder.getRawToken();
-        String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(validToken, TamperingStrategy.MODIFY_SIGNATURE_RANDOM_CHAR);
-
-        // Ensure the token was actually tampered
-        assertNotEquals(validToken, tamperedToken, "Tampered token should be different from valid token");
-
-        var request2 = AccessTokenRequest.of(tamperedToken);
-        assertThrows(TokenValidationException.class, () ->
-                        tokenValidator.createAccessToken(request2),
-                "Should reject token with tampered signature: " + tamperedToken);
+        assertRejectedWithExpectedEvent(tokenHolder, TamperingStrategy.MODIFY_SIGNATURE_RANDOM_CHAR);
     }
 
     @ParameterizedTest
     @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 3)
     @DisplayName("Should reject tokens with algorithm 'none'")
     void shouldRejectTokensWithAlgorithmNone(TestTokenHolder tokenHolder) {
-        String validToken = tokenHolder.getRawToken();
-        String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(validToken, TamperingStrategy.ALGORITHM_NONE);
-
-        var request3 = AccessTokenRequest.of(tamperedToken);
-        assertThrows(TokenValidationException.class, () ->
-                        tokenValidator.createAccessToken(request3),
-                "Should reject token with 'none' algorithm");
+        assertRejectedWithExpectedEvent(tokenHolder, TamperingStrategy.ALGORITHM_NONE);
     }
 
     @ParameterizedTest
@@ -137,25 +126,27 @@ class TokenValidationSecurityTest {
     @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 3)
     @DisplayName("Should reject tokens with algorithm downgrade")
     void shouldRejectTokensWithAlgorithmDowngrade(TestTokenHolder tokenHolder) {
-        String validToken = tokenHolder.getRawToken();
-        String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(validToken, TamperingStrategy.ALGORITHM_DOWNGRADE);
-
-        var request5 = AccessTokenRequest.of(tamperedToken);
-        assertThrows(TokenValidationException.class, () ->
-                        tokenValidator.createAccessToken(request5),
-                "Should reject token with downgraded algorithm");
+        assertRejectedWithExpectedEvent(tokenHolder, TamperingStrategy.ALGORITHM_DOWNGRADE);
     }
 
     @ParameterizedTest
     @TestTokenSource(value = TokenType.ACCESS_TOKEN, count = 3)
     @DisplayName("Should reject tokens with invalid key ID")
     void shouldRejectTokensWithInvalidKeyId(TestTokenHolder tokenHolder) {
-        String validToken = tokenHolder.getRawToken();
-        String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(validToken, TamperingStrategy.INVALID_KID);
+        assertRejectedWithExpectedEvent(tokenHolder, TamperingStrategy.INVALID_KID);
+    }
 
-        var request6 = AccessTokenRequest.of(tamperedToken);
-        assertThrows(TokenValidationException.class, () ->
-                        tokenValidator.createAccessToken(request6),
-                "Should reject token with invalid key ID");
+    private void assertRejectedWithExpectedEvent(TestTokenHolder tokenHolder, TamperingStrategy strategy) {
+        String validToken = tokenHolder.getRawToken();
+        String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(validToken, strategy);
+        assertNotEquals(validToken, tamperedToken,
+                "Token should be tampered using strategy: " + strategy.getDescription());
+
+        var request = AccessTokenRequest.of(tamperedToken);
+        TokenValidationException exception = assertThrows(TokenValidationException.class, () ->
+                        tokenValidator.createAccessToken(request),
+                "Should reject token tampered with strategy: " + strategy.getDescription());
+        assertEquals(strategy.getExpectedEvent(), exception.getEventType(),
+                "Tampered token should be rejected with the strategy's event. Strategy: " + strategy.getDescription());
     }
 }

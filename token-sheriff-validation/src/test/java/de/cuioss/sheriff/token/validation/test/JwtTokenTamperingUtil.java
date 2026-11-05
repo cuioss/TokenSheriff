@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.test;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.TypedGenerator;
 import de.cuioss.tools.logging.CuiLogger;
@@ -106,6 +107,10 @@ public class JwtTokenTamperingUtil {
 
     /**
      * Enum defining different tampering strategies for JWT tokens.
+     * <p>
+     * Each strategy carries the security event the validation pipeline must raise when it
+     * rejects a token tampered with that strategy. This is the single expected-event map every
+     * tamper test reads, so a rejection for the wrong reason fails the test.
      */
     @Getter
     @RequiredArgsConstructor
@@ -113,44 +118,60 @@ public class JwtTokenTamperingUtil {
         /**
          * Modifies the last character of the signature.
          */
-        MODIFY_SIGNATURE_LAST_CHAR("Modify the last character of the signature"),
+        MODIFY_SIGNATURE_LAST_CHAR("Modify the last character of the signature",
+                EventType.SIGNATURE_VALIDATION_FAILED),
 
         /**
          * Modifies a random character in the signature.
          */
-        MODIFY_SIGNATURE_RANDOM_CHAR("Modify a random character in the signature"),
+        MODIFY_SIGNATURE_RANDOM_CHAR("Modify a random character in the signature",
+                EventType.SIGNATURE_VALIDATION_FAILED),
 
         /**
          * Removes the signature entirely.
+         * <p>
+         * Rejected before signature validation: the parser refuses an empty signature segment
+         * as a malformed JWT.
          */
-        REMOVE_SIGNATURE("Remove the signature entirely"),
+        REMOVE_SIGNATURE("Remove the signature entirely",
+                EventType.INVALID_JWT_FORMAT),
 
         /**
          * Changes the algorithm in the header to 'none'.
          */
-        ALGORITHM_NONE("Change algorithm to 'none'"),
+        ALGORITHM_NONE("Change algorithm to 'none'",
+                EventType.UNSUPPORTED_ALGORITHM),
 
         /**
          * Changes the algorithm in the header from RS256 to HS256 (algorithm downgrade).
          */
-        ALGORITHM_DOWNGRADE("Change algorithm from RS256 to HS256"),
+        ALGORITHM_DOWNGRADE("Change algorithm from RS256 to HS256",
+                EventType.UNSUPPORTED_ALGORITHM),
 
         /**
          * Uses a completely different signature.
          */
-        DIFFERENT_SIGNATURE("Use a completely different signature"),
+        DIFFERENT_SIGNATURE("Use a completely different signature",
+                EventType.SIGNATURE_VALIDATION_FAILED),
 
         /**
          * Changes the key ID (kid) in the header to an invalid value.
          */
-        INVALID_KID("Change key ID to an invalid value"),
+        INVALID_KID("Change key ID to an invalid value",
+                EventType.KEY_NOT_FOUND),
 
         /**
          * Removes the key ID (kid) from the header.
          */
-        REMOVE_KID("Remove key ID from header");
+        REMOVE_KID("Remove key ID from header",
+                EventType.MISSING_CLAIM);
 
         private final String description;
+
+        /**
+         * The security event the pipeline raises when it rejects a token tampered with this strategy.
+         */
+        private final EventType expectedEvent;
     }
 
     /**
@@ -443,18 +464,81 @@ public class JwtTokenTamperingUtil {
         }
 
         try {
-            // Decode the header
             String decodedHeader = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
-            // Remove the kid claim. Possessive quantifiers keep the match linear: each quantified
-            // class is disjoint from the token that follows it, so no backtracking is ever needed.
-            String modifiedHeader = decodedHeader.replaceAll(",?+\\s*+\"kid\"\\s*+:\\s*+\"[^\"]*+\"", "");
-            // Encode the modified header
+            String modifiedHeader = removeKidMember(decodedHeader);
             String encodedHeader = Base64.getUrlEncoder().withoutPadding().encodeToString(modifiedHeader.getBytes(StandardCharsets.UTF_8));
-
-            // Return the modified validation
             return encodedHeader + "." + parts[1] + "." + parts[2];
         } catch (IllegalArgumentException | IllegalStateException e) {
             return token; // In case of any error, return the original validation
         }
+    }
+
+    /**
+     * Cuts the {@code "kid"} member and exactly one adjacent comma out of a flat JSON header object.
+     * <p>
+     * The scan is linear: one {@code indexOf} locates the member name, then a single forward walk
+     * finds the end of its string value. The preceding comma is removed when the member is not the
+     * first one; otherwise the following comma is removed, so the result stays valid JSON.
+     *
+     * @param headerJson the decoded header JSON
+     * @return the header JSON without the kid member, or the input unchanged if it carries no
+     *         string-valued kid member
+     */
+    static String removeKidMember(String headerJson) {
+        int memberStart = headerJson.indexOf("\"kid\"");
+        if (memberStart < 0) {
+            return headerJson;
+        }
+        int cursor = skipWhitespace(headerJson, memberStart + "\"kid\"".length());
+        if (cursor >= headerJson.length() || headerJson.charAt(cursor) != ':') {
+            return headerJson;
+        }
+        cursor = skipWhitespace(headerJson, cursor + 1);
+        if (cursor >= headerJson.length() || headerJson.charAt(cursor) != '"') {
+            return headerJson;
+        }
+        int valueEnd = findClosingQuote(headerJson, cursor + 1);
+        if (valueEnd < 0) {
+            return headerJson;
+        }
+        int cutStart = memberStart;
+        int cutEnd = valueEnd + 1;
+
+        int before = memberStart - 1;
+        while (before >= 0 && Character.isWhitespace(headerJson.charAt(before))) {
+            before--;
+        }
+        if (before >= 0 && headerJson.charAt(before) == ',') {
+            cutStart = before;
+        } else {
+            int after = skipWhitespace(headerJson, cutEnd);
+            if (after < headerJson.length() && headerJson.charAt(after) == ',') {
+                cutEnd = after + 1;
+            }
+        }
+        return headerJson.substring(0, cutStart) + headerJson.substring(cutEnd);
+    }
+
+    private static int skipWhitespace(String text, int from) {
+        int index = from;
+        while (index < text.length() && Character.isWhitespace(text.charAt(index))) {
+            index++;
+        }
+        return index;
+    }
+
+    private static int findClosingQuote(String text, int from) {
+        int index = from;
+        while (index < text.length()) {
+            char current = text.charAt(index);
+            if (current == '\\') {
+                index += 2;
+            } else if (current == '"') {
+                return index;
+            } else {
+                index++;
+            }
+        }
+        return -1;
     }
 }
