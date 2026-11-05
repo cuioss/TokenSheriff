@@ -803,6 +803,50 @@ class AccessTokenCacheTest {
     }
 
     @Test
+    void cacheHitAppliesClockSkewToTheMaxTokenAgeBoundary() {
+        // Given - an issuer policy with a 30 s clock skew and a 300 s maximum token age; the expiry is
+        // far enough out that only the age boundary can decide
+        String token = "skewed-max-age-token";
+        OffsetDateTime issuedAt = OffsetDateTime.now().minusHours(1).withNano(0);
+        OffsetDateTime expiration = issuedAt.plusHours(2);
+        cache.put(token, createAccessToken(issuedAt, expiration), issuerPolicy(30, 300), performanceMonitor);
+
+        // When/Then - at exactly iat + maxTokenAge + skew the token is still served ...
+        Optional<AccessTokenContent> lastHit = cache.get(token, performanceMonitor, issuedAt.plusSeconds(330));
+        assertTrue(lastHit.isPresent(), "At iat + maxTokenAge + skew the token is not yet too old");
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT));
+
+        // ... and one second later it is rejected as too old, not as expired
+        OffsetDateTime pastLimit = issuedAt.plusSeconds(331);
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> cache.get(token, performanceMonitor, pastLimit));
+        assertEquals(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED, exception.getEventType());
+        assertEquals(0, cache.size(), "A too-old entry must be removed from the cache");
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_EXPIRED));
+    }
+
+    @Test
+    void cacheHitAppliesClockSkewToTheExpiryBoundaryUnderMaxTokenAge() {
+        // Given - the same skewed policy, with an expiry that falls well inside the age limit
+        String token = "skewed-expiry-token";
+        OffsetDateTime issuedAt = OffsetDateTime.now().minusMinutes(1).withNano(0);
+        OffsetDateTime expiration = issuedAt.plusSeconds(120);
+        cache.put(token, createAccessToken(issuedAt, expiration), issuerPolicy(30, 300), performanceMonitor);
+
+        // When/Then - one second before exp + skew the token is still served ...
+        Optional<AccessTokenContent> lastHit = cache.get(token, performanceMonitor, expiration.plusSeconds(29));
+        assertTrue(lastHit.isPresent(), "Before exp + skew the token is not yet expired");
+
+        // ... and at exp + skew (inclusive boundary) it is rejected as expired, not as too old
+        OffsetDateTime atLimit = expiration.plusSeconds(30);
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> cache.get(token, performanceMonitor, atLimit));
+        assertEquals(SecurityEventCounter.EventType.TOKEN_EXPIRED, exception.getEventType());
+        assertEquals(0, cache.size(), "An expired entry must be removed from the cache");
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED));
+    }
+
+    @Test
     void cacheHitServesOldTokenUntilExpiryWhenAgeCheckDisabled() {
         // Given - a token issued long ago, stored under a policy with token age validation disabled
         String token = "old-token-age-check-disabled";

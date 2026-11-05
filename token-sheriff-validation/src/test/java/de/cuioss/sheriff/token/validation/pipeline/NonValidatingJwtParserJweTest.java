@@ -117,6 +117,42 @@ class NonValidatingJwtParserJweTest {
             assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_NOT_CONFIGURED));
         }
 
+        /**
+         * The JWE decrypts, but the payload of the recovered inner JWS cannot be decoded: it is
+         * either not valid Base64URL or not valid JSON. Either way the rejection carries a fixed
+         * message, never the raw payload text, and is logged and counted once.
+         */
+        @ParameterizedTest(name = "{0}")
+        @CsvSource({
+                "not Base64URL, not*base64url, Failed to decode Base64Url part: invalid Base64Url encoding",
+                "not JSON, eyJpc3MiOiJ4Ig, Failed to decode JWT parts: malformed or structurally invalid JSON"
+        })
+        @DisplayName("Should reject an inner JWS whose payload cannot be decoded with a fixed message")
+        void shouldRejectUndecodableInnerJwsPayload(String kind, String payloadSegment, String expectedMessage) {
+            String[] validJws = JweTestTokenFactory.createSignedJws(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(), "RS256", ISSUER).split("\\.");
+            String innerJws = validJws[0] + "." + payloadSegment + "." + validJws[2];
+            String jwe = JweTestTokenFactory.encryptAsJwe(innerJws, rsaEncryptionKeyPair.getPublic(),
+                    "RSA-OAEP", "A256GCM", null);
+            NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .jweDecryptionConfig(JweDecryptionConfig.builder()
+                            .defaultDecryptionKey(rsaEncryptionKeyPair.getPrivate())
+                            .build())
+                    .build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class, () -> parser.decode(jwe),
+                    "An inner JWS payload that is " + kind + " must be rejected");
+
+            assertEquals(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT, ex.getEventType());
+            assertEquals(expectedMessage, ex.getMessage());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.FAILED_TO_DECODE_JWT));
+            assertEquals(0, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED),
+                    "The JWE itself decrypts; only the inner payload is rejected");
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.FAILED_TO_DECODE_JWT.format());
+        }
+
         @Test
         @DisplayName("Should still parse JWS tokens normally when JWE is configured")
         void shouldStillParseJwsNormally() {
