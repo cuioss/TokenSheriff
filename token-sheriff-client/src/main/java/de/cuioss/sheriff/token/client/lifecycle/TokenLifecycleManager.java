@@ -31,6 +31,7 @@ import de.cuioss.sheriff.token.commons.error.TokenSheriffException;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
 
@@ -121,8 +122,14 @@ import java.util.concurrent.locks.ReentrantLock;
  * fail-closed ({@code CLIENT-5}). A
  * per-session single-flight collapses a concurrent proactive refresh onto one in-flight rotation, so
  * a benign race never redeems the same token twice and self-classifies as reuse. A refreshed ID token
- * is verified for OIDC Core §12.2 {@code iss}/{@code sub} consistency against the refreshed access
- * token and carried forward, rather than silently preserving the pre-refresh ID token.
+ * is validated through the token-validation pipeline (signature, {@code iss}, {@code aud},
+ * {@code exp} / {@code iat}), verified for OIDC Core §12.2 {@code iss}/{@code sub} consistency against
+ * the refreshed access token, and carried forward, rather than silently preserving the pre-refresh ID
+ * token. A refreshed ID token that fails the pipeline ({@link TokenValidationException}) or is
+ * inconsistent ({@link IllegalStateException}) is refused like a binding mismatch: when the
+ * authorization server rotated the refresh token the session is quarantined (the rotated successor is
+ * revoked best-effort and a clear is attempted), and when it did not rotate nothing is revoked or
+ * cleared.
  * <p>
  * <strong>The family follows every legitimate grant.</strong> {@link #store} reseeds the session's
  * family when it is handed a new grant (a re-login or step-up), and the public {@link #applyRefresh}
@@ -545,8 +552,9 @@ public class TokenLifecycleManager {
      * and the reuse is re-thrown. A concurrent proactive refresh for the same session shares the single
      * in-flight rotation rather than redeeming the token twice, so a benign race never self-classifies as
      * reuse.
-     * A refreshed ID token is verified for §12.2 {@code iss}/{@code sub} consistency against the
-     * refreshed access token before it is carried forward.
+     * A refreshed ID token is validated through the token-validation pipeline and verified for §12.2
+     * {@code iss}/{@code sub} consistency against the refreshed access token before it is carried
+     * forward.
      * <p>
      * <strong>A refresh yields to a re-login that lands while it is in flight.</strong> The family is
      * captured before the exchange and rotated on that captured instance, and the refreshed bundle is
@@ -561,9 +569,10 @@ public class TokenLifecycleManager {
      *       since nothing was redeemed and nothing rotated; it revokes nothing and a clear is attempted.</li>
      *   <li>A quarantined redemption revokes the successor when the response named one, and a clear is
      *       attempted; a redemption that did not burn the presented token revokes and clears nothing.</li>
-     *   <li>An inconsistent refreshed ID token or a refused binding check revokes the rotated successor
-     *       and attempts a clear only when the authorization server rotated the refresh token; when it did
-     *       not, nothing is revoked and the session is left untouched.</li>
+     *   <li>A refreshed ID token that fails pipeline validation, an inconsistent refreshed ID token, or a
+     *       refused binding check revokes the rotated successor and attempts a clear only when the
+     *       authorization server rotated the refresh token; when it did not, nothing is revoked and the
+     *       session is left untouched.</li>
      *   <li>A detected reuse revokes the replayed token and then the successor, and a clear is
      *       attempted.</li>
      *   <li>A refusal before the server processed the request leaves the session untouched.</li>
@@ -617,6 +626,15 @@ public class TokenLifecycleManager {
      *                               request never reached redemption ({@code PRE_REDEMPTION}) the
      *                               stored bundle is likewise left untouched, because that token is
      *                               still usable
+     * @throws TokenValidationException if the refreshed ID token fails the token-validation pipeline
+     *                               (signature, {@code iss}, {@code aud}, {@code exp} / {@code iat}).
+     *                               The original exception is rethrown unchanged. When the authorization
+     *                               server had already rotated the refresh token, the session is
+     *                               quarantined first — the rotated token is revoked best-effort
+     *                               (RFC 7009) and a clear of the store entry and rotation family is
+     *                               attempted — so the caller must re-authenticate rather than retry;
+     *                               when it had not rotated, nothing is revoked or cleared and the
+     *                               stored bundle stays usable
      * @throws IllegalStateException if the refreshed ID token is inconsistent with the refreshed
      *                               access token, or if the refreshed access token names a principal
      *                               other than the one the session is bound to. When the authorization
@@ -793,24 +811,28 @@ public class TokenLifecycleManager {
             throw refusedExchange;
         }
 
-        // OIDC Core §12.2 consistency is checked BEFORE the family is advanced, so a refusal here can
-        // never leave a half-applied rotation behind. What the refusal must do next depends on whether
-        // the AS rotated: when it did not, the presented refresh token is still valid, so the refusal
-        // propagates with the family and the store left untouched. When it did, the AS has already
-        // burned the presented token, so keeping it would leave the session holding a dead credential —
-        // the same defect the post-transform quarantine below closes. The session is therefore
-        // quarantined fail-closed on the rotated successor. The family has not been advanced at this
-        // point, and quarantineRejectedRotation does not assume it was: it revokes the rotated token and
-        // attempts to clear both the store entry and the family whether or not the family advanced.
+        // The refreshed ID token is checked BEFORE the family is advanced, so a refusal here can never
+        // leave a half-applied rotation behind. Two refusals are possible: the ID token fails the
+        // validation pipeline (signature, iss, aud, exp / iat — a TokenValidationException), or it
+        // validates but is inconsistent with the refreshed access token (OIDC Core §12.2 — an
+        // IllegalStateException). Both are treated alike. What the refusal must do next depends on
+        // whether the AS rotated: when it did not, the presented refresh token is still valid, so the
+        // refusal propagates with the family and the store left untouched. When it did, the AS has
+        // already burned the presented token, so keeping it would leave the session holding a dead
+        // credential — the same defect the post-transform quarantine below closes. The session is
+        // therefore quarantined fail-closed on the rotated successor. The family has not been advanced
+        // at this point, and quarantineRejectedRotation does not assume it was: it revokes the rotated
+        // token and attempts to clear both the store entry and the family whether or not the family
+        // advanced. The original refusal is rethrown unchanged.
         String refreshedIdToken;
         try {
             refreshedIdToken = verifiedRefreshedIdToken(rotation, idTokenValidationBridge);
-        } catch (IllegalStateException inconsistent) {
+        } catch (IllegalStateException | TokenValidationException refusedIdToken) {
             if (rotation.rotated()) {
                 quarantineRejectedRotation(sessionId, presentedRefreshToken, metadata, rotation.refreshToken(),
                         revocationClient, clientAuthentication);
             }
-            throw inconsistent;
+            throw refusedIdToken;
         }
 
         if (rotation.rotated()) {
@@ -907,8 +929,8 @@ public class TokenLifecycleManager {
      * so the control-flow contract {@code doRefresh}'s callers rely on stays unchanged.
      * <p>
      * This is not the one dispatch for every refusal after redemption. It covers refusals raised inside
-     * the exchange only. A refreshed ID token that is inconsistent, or a binding check that refuses the
-     * apply, is handled in {@code doRefresh}'s own catches, which call
+     * the exchange only. A refreshed ID token that fails pipeline validation or is inconsistent, or a
+     * binding check that refuses the apply, is handled in {@code doRefresh}'s own catches, which call
      * {@link #quarantineRejectedRotation} only when the exchange rotated the refresh token and otherwise
      * leave the session untouched; a detected reuse is handled by {@link #revokeReusedFamily}. What the
      * paths share is the disposition they end in, {@link #revokeAndClearFailClosed} and then
@@ -983,11 +1005,11 @@ public class TokenLifecycleManager {
 
     /**
      * Fails a session closed after the authorization server rotated the refresh token but the client
-     * then refused the redemption — either because the refreshed ID token is inconsistent with the
-     * refreshed access token (OIDC Core §12.2) or because the atomic store transform rejected an
-     * identity or sender-constraint binding mismatch.
+     * then refused the redemption — because the refreshed ID token fails the token-validation pipeline,
+     * because it is inconsistent with the refreshed access token (OIDC Core §12.2), or because the atomic
+     * store transform rejected an identity or sender-constraint binding mismatch.
      * <p>
-     * By the time either refusal fires, the AS has already issued {@code rotatedToken} and invalidated
+     * By the time any of these refusals fires, the AS has already issued {@code rotatedToken} and invalidated
      * the token this client presented, so there is no usable credential left to keep: restoring the
      * presented token would only hand the caller one the AS has burned. The refusal is a security event
      * on a token the AS just minted, so the rotated token is revoked at the AS (RFC 7009, best-effort)
@@ -1162,8 +1184,18 @@ public class TokenLifecycleManager {
     }
 
     /**
-     * Verifies a refreshed ID token against the refreshed access token (OIDC Core §12.2) and returns
-     * the ID token to carry forward, or {@code null} when the AS omitted one on the refresh.
+     * Validates a refreshed ID token through the token-validation pipeline, verifies it against the
+     * refreshed access token (OIDC Core §12.2) and returns the ID token to carry forward, or {@code null}
+     * when the AS omitted one on the refresh.
+     * <p>
+     * Both refusals propagate to {@link #doRefresh}, which quarantines the session when the exchange
+     * rotated the refresh token: a {@link TokenValidationException} when the pipeline rejects the ID
+     * token, and an {@link IllegalStateException} when the validated ID token is inconsistent with the
+     * access token.
+     *
+     * @throws TokenValidationException if the refreshed ID token fails pipeline validation
+     * @throws IllegalStateException    if the refreshed ID token is inconsistent with the refreshed access
+     *                                  token
      */
     @Nullable
     private static String verifiedRefreshedIdToken(RotationResult rotation,
