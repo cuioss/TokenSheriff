@@ -43,6 +43,7 @@ import lombok.Singular;
 import org.jspecify.annotations.Nullable;
 
 import java.io.Closeable;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -500,8 +501,9 @@ public class TokenValidator implements Closeable {
      * token pipeline, the DPoP replay protection and the JWKS loaders are each released even when an
      * earlier one failed. Such a failure (for example a {@link SecurityException} from an executor
      * shutdown) is still propagated to the caller once the remaining resources are released; when both
-     * the pipeline and the DPoP replay protection fail, the pipeline's failure is propagated and the
-     * DPoP replay protection's failure is attached to it as suppressed, so neither is lost.
+     * the pipeline and the DPoP replay protection fail, the later failure (the DPoP replay
+     * protection's) is propagated and the earlier one (the pipeline's) is attached to it as
+     * suppressed, so neither is lost.
      * <p>
      * This should be called when the TokenValidator is no longer needed.
      */
@@ -511,28 +513,33 @@ public class TokenValidator implements Closeable {
     }
 
     /**
-     * Runs the three release steps in order, each one even when an earlier one failed. The first
-     * failure is propagated once every step ran; a failure of a later step is attached to it as
-     * suppressed (try-with-resources semantics), so no failure is lost.
+     * Runs the release steps in order, each one even when an earlier one failed. Once every step ran,
+     * the failure of the last failing step is propagated and the failure of every earlier failing step
+     * is attached to it as suppressed, so no failure is lost.
      *
-     * @param first  the step run first
-     * @param second the step run second
-     * @param third  the step run last
+     * @param steps the release steps, in the order they run
      */
-    static void releaseInOrder(Runnable first, Runnable second, Runnable third) {
-        // Resources are released in reverse declaration order: second, then third.
-        try (ReleaseStep last = third::run; ReleaseStep next = second::run) {
-            first.run();
+    static void releaseInOrder(Runnable... steps) {
+        RuntimeException propagated = null;
+        List<RuntimeException> earlier = new ArrayList<>();
+        for (Runnable step : steps) {
+            try {
+                step.run();
+            }
+            // cui-rewrite:disable InvalidExceptionUsageRecipe
+            // Intentional catch-all: a release step may fail with any unchecked exception, and one
+            // failing step must neither stop the remaining steps nor lose its failure.
+            catch (RuntimeException e) {
+                if (propagated != null) {
+                    earlier.add(propagated);
+                }
+                propagated = e;
+            }
         }
-    }
-
-    /**
-     * A release step for try-with-resources whose {@code close()} declares no checked exception.
-     */
-    @FunctionalInterface
-    private interface ReleaseStep extends AutoCloseable {
-        @Override
-        void close();
+        if (propagated != null) {
+            earlier.forEach(propagated::addSuppressed);
+            throw propagated;
+        }
     }
 
     private void closeDpopReplayProtection() {

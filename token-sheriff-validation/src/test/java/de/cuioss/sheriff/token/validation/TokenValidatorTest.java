@@ -107,7 +107,7 @@ class TokenValidatorTest {
     }
 
     @Test
-    @DisplayName("Should run every release step and keep a later close failure as suppressed")
+    @DisplayName("Should run every release step, propagate the later close failure and keep the earlier as suppressed")
     void shouldKeepEveryCloseFailureWhenReleasing() {
         // The release order close() uses: the pipeline, then the DPoP replay protection, then the
         // JWKS loaders. Both the first and the second step fail; neither failure may be lost.
@@ -126,10 +126,33 @@ class TokenValidatorTest {
                 },
                 () -> ran.add("loaders")));
 
-        assertSame(pipelineFailure, thrown, "The first failure must be the one propagated");
-        assertArrayEquals(new Throwable[]{dpopFailure}, thrown.getSuppressed(),
-                "The later failure must be attached as suppressed, not dropped");
+        assertSame(dpopFailure, thrown, "The later failure must be the one propagated");
+        assertArrayEquals(new Throwable[]{pipelineFailure}, thrown.getSuppressed(),
+                "The earlier failure must be attached as suppressed, not dropped");
         assertEquals(Set.of("pipeline", "dpop", "loaders"), ran, "Every release step must run");
+    }
+
+    @Test
+    @DisplayName("Should attach every earlier close failure to the last one when all release steps fail")
+    void shouldAttachEveryEarlierCloseFailureToTheLastOne() {
+        IllegalStateException first = new IllegalStateException("first");
+        IllegalStateException second = new IllegalStateException("second");
+        IllegalStateException third = new IllegalStateException("third");
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> TokenValidator.releaseInOrder(
+                () -> {
+                    throw first;
+                },
+                () -> {
+                    throw second;
+                },
+                () -> {
+                    throw third;
+                }));
+
+        assertSame(third, thrown, "The last failure must be the one propagated");
+        assertArrayEquals(new Throwable[]{first, second}, thrown.getSuppressed(),
+                "Every earlier failure must be attached to the last one, in release order");
     }
 
     @Test
