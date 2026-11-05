@@ -57,7 +57,8 @@ public class TokenBuilder {
     // Combined mapper lookup to avoid runtime checks
     private final Map<String, ClaimMapper> allMappers;
 
-    // Counts the MISSING_CLAIM event when a claim mapper fails on a malformed claim value
+    // Counts a claim mapper's failure: MISSING_CLAIM for an arbitrary runtime exception, and the
+    // carried event type for a TokenValidationException the mapper throws itself
     private final SecurityEventCounter securityEventCounter;
 
     /**
@@ -66,7 +67,10 @@ public class TokenBuilder {
      * @param issuerConfig         the issuer configuration
      * @param securityEventCounter the counter for security events, incremented with
      *                             {@link SecurityEventCounter.EventType#MISSING_CLAIM} when a claim
-     *                             mapper fails on a malformed claim value
+     *                             mapper fails on a malformed claim value with a runtime exception,
+     *                             and with the event type a mapper-thrown
+     *                             {@link TokenValidationException} carries when the mapper rejects
+     *                             the claim itself
      */
     public TokenBuilder(IssuerConfig issuerConfig, SecurityEventCounter securityEventCounter) {
         this.securityEventCounter = securityEventCounter;

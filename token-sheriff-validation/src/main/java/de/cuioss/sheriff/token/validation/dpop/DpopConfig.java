@@ -33,7 +33,9 @@ import lombok.ToString;
  *       When {@code false} (default), tokens without {@code cnf.jkt} pass normally (bearer mode).</li>
  *   <li>{@code proofMaxAgeSeconds} - Maximum age of a DPoP proof JWT's {@code iat} claim (default: 300s).</li>
  *   <li>{@code nonceCacheSize} - Maximum number of jti entries for replay protection (default: 10000).</li>
- *   <li>{@code nonceCacheTtlSeconds} - TTL for jti replay entries (default: 300s).</li>
+ *   <li>{@code nonceCacheTtlSeconds} - TTL for jti replay entries (default: 360s). A configured
+ *       value below {@code proofMaxAgeSeconds + 60} is raised to that floor, so a jti stays cached for
+ *       as long as its proof can remain acceptable.</li>
  * </ul>
  *
  * @since 1.0
