@@ -62,8 +62,8 @@ JWE decryption configuration (`JweDecryptionConfigResolver`):
 The errors are raised while the `TokenValidator` is built. With an enabled issuer that build runs at
 startup (ADR-0019), so the application does not start with a configuration that would silently ignore a
 setting. The exception is an application that supplies its own `@Alternative` `TokenValidator`: it
-replaces the default bean, so `TokenValidatorProducer.init()` never runs and none of these checks run either; an
-orphaned property is then not detected. A configuration with no JWE property at all is not an error; JWE
+replaces the default bean, so the validator in use is not built by this producer and the checks above, which run
+while the producer builds it, do not apply to that validator; an orphaned property is then not detected. A configuration with no JWE property at all is not an error; JWE
 then stays unconfigured.
 
 == Consequences

@@ -1068,10 +1068,9 @@ public class TokenLifecycleManager {
      * The exchange released the session's grant lock before it presented {@code presentedRefreshToken},
      * so a re-login may have stored a newer grant while the refused exchange was in flight. Clearing
      * unconditionally would delete that grant and force the user to log in a second time. The clear
-     * therefore runs under the grant lock, and only while the store still holds the refused token — the
-     * same presented-token compare the {@link #applyRefresh} compare-and-set uses. When the store holds a
-     * bundle with a different refresh token, that bundle and its family are left untouched and the
-     * decision is logged.
+     * therefore runs under the grant lock and compares the presented refresh token — the same compare the
+     * {@link #applyRefresh} compare-and-set uses. When the store holds a bundle with a different refresh
+     * token, that bundle and its family are left untouched and the decision is logged.
      * <p>
      * <strong>The spare compares the refresh token only.</strong> It does not check recency: any stored
      * bundle whose refresh token is not {@code presentedRefreshToken} is spared, so a superseded token
