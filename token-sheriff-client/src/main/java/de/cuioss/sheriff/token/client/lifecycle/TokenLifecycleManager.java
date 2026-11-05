@@ -83,7 +83,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * every one of those reaches {@link #refresh} before any {@link RotationResult} exists, so rotation
  * cannot be read off a result. The discriminator is instead
  * {@link RefreshFlow#classify(Throwable)}, which sorts every refusal into one of three dispositions
- * this class dispatches on with no default arm:
+ * this class dispatches on in a switch that ends in a failing default arm:
  * <ul>
  *   <li>{@link RefreshFailureClassification.Kind#REDEEMED} — the server consumed the grant. The
  *       carried {@link de.cuioss.sheriff.token.client.flow.RefreshRedemption} says whether the
@@ -287,9 +287,9 @@ public class TokenLifecycleManager {
      * {@link #applyRefresh}, which takes the same lock around its update and its fail-closed reuse
      * teardown. The fail-closed teardown of a refused {@link #refresh} exchange takes it as well, and
      * spares a stored bundle whose refresh token differs from the one that exchange presented. Two
-     * concurrent grants can therefore never leave the store holding one and the family tracking the other, and neither a reuse
-     * refusal nor any other refused refresh clears a grant this method stored while the refusal was in
-     * flight. Writers that bypass this manager, such as a {@link TokenStore} shared with another node, take
+     * concurrent grants can therefore never leave the store holding one and the family tracking the other,
+     * and neither a reuse refusal nor any other refused refresh clears a grant this method stored while the
+     * refusal was in flight. Writers that bypass this manager, such as a {@link TokenStore} shared with another node, take
      * no such lock; the refresh path's capture covers them by adopting and re-reading, and a refused
      * exchange's teardown still spares a grant such a writer stored before its compare, but not one written
      * between that compare and the clear.

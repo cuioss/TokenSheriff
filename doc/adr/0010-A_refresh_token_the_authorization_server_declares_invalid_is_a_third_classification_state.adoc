@@ -112,9 +112,9 @@ mode that produced this ADR in the first place.
 * The narrow allow-list keeps the fail-safe direction intact: the set of failures that can clear a
   session grew by exactly one recognised code, so no new class of transient fault can reach the
   clearing path.
-* Exhaustive dispatch with no default arm converts the addition of a fourth state from a silent
-  behavioural regression into a compile error, which is the structural property the two-state model
-  lacked.
+* Dispatch that ends in a failing default arm converts the addition of a fourth state from a silent
+  behavioural regression into a loud failure at the dispatch site, which is the property the two-state
+  model lacked.
 
 === Negative
 
@@ -164,8 +164,8 @@ signals; collapsing them makes a dead credential indistinguishable from a burned
 present means redeemed, absent means not. Extending it would mean adding a second optional, or a
 sentinel, alongside the first. Rejected because absence is then doing two jobs at once — "no
 redemption happened" and "no rejection happened" — and a caller that reads only one of them silently
-gets the old two-state behaviour. A total value with an exhaustive kind makes every caller state
-which of the three it is handling, and makes the omission a compile error.
+gets the old two-state behaviour. A total value with an explicit kind makes every caller state
+which of the three it is handling, and makes the omission a visible failure at the dispatch site.
 
 *Widen the allow-list to the RFC 6749 §5.2 codes that plausibly indicate a dead credential.* More
 codes recognised means more real rejections caught. Rejected because each additional code is a new
@@ -178,8 +178,8 @@ the set of codes that unambiguously make the required statement.
 Each rejected alternative either erases a distinction the client needs in order to act correctly —
 between a fault and a judgement, between a judgement and a redemption, between one recognised code
 and a family of loosely related ones — or leaves the distinction expressible but optional to observe.
-The adopted decision makes all three states explicit, total, and exhaustively dispatched, so no
-caller can fall back to the wrong one by omission.
+The adopted decision makes all three states explicit, total, and dispatched with a failing default
+arm, so no caller can fall back to the wrong one by omission.
 
 == Amendment: a refresh-token family refusal maps onto the existing states
 
@@ -198,7 +198,7 @@ types' documentation invited, kept a replayed session alive.
 
 The family refusal gets its own type, a subtype of the protocol exception it replaces, and the
 classification entry point covers it. **No fourth kind is added**: the three kinds are dispatched
-exhaustively, so a fourth is a compile break at every consumer's dispatch site. The refusal maps onto
+with a failing default arm, so a fourth would fail loudly at every consumer's dispatch site. The refusal maps onto
 the two existing session-ending kinds by what the authorization server has already done, which is the
 same discriminator this ADR and ADR-0005 dispatch on:
 
@@ -223,7 +223,7 @@ dispatching on it would discard a live successor instead of revoking it — the 
 revoked" outcome ADR-0005 chose redemption-based dispatch to avoid.
 
 *Add a fourth kind for a revoked family.* The most precise name for the situation. Rejected because
-it breaks every consumer's exhaustive dispatch at compile time for a situation whose dispositions the
+it breaks every consumer's three-way dispatch, at runtime through its failing default arm, for a situation whose dispositions the
 existing kinds already express.
 
 === Consequences
