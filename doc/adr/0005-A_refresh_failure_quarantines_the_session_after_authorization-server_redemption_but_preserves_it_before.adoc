@@ -77,11 +77,28 @@ surrounding response.
 
 The discriminator is observable purely from the transport layer — whether the authorization
 server's response reached a successful status — so every refusal that fires downstream of that
-observation, regardless of which validation layer produced it, is routed through the same
-dispatch. That dispatch clears the session fail-closed only when the presented token is burned
-(rotated, or rotation unknown) and leaves it intact when the server redeemed without rotating.
-A refusal that fires upstream of that observation never reaches it, so the session-preserving
-path is the only one it can take.
+observation is decided by the same rule, whichever validation layer produced it: the session is
+cleared fail-closed only when the presented token is burned (rotated, or rotation unknown) and
+left intact when the server redeemed without rotating. A refusal that fires upstream of that
+observation never reaches the rule, so the session-preserving path is the only one it can take.
+
+That is one rule, not one dispatch. The lifecycle manager applies it on several code paths, and
+no single method handles every refusal after redemption:
+
+* A refusal raised inside the token exchange is classified and dispatched in one place
+  (`handleRefusedExchange`).
+* A refreshed ID token that is inconsistent with the refreshed access token, and an identity or
+  sender-constraint binding check that refuses the apply, are handled in `doRefresh`'s own
+  catches. Each calls the quarantine (`quarantineRejectedRotation`) only when the exchange
+  rotated the refresh token (`rotation.rotated()`); when it did not, the presented token is still
+  valid, nothing is revoked, and the session is left untouched.
+* A superseded token replayed against the rotation family is handled by `revokeReusedFamily`,
+  which revokes the replayed token and then the successor.
+
+What these paths share is the disposition they end in: the revocations (`revokeAndClearFailClosed`,
+best-effort, in order) and then the attempted fail-closed clear (`clearRefusedSession`), whose
+spare rule is stated in the Decision above. A path that has no credential to name, such as the
+unparseable response, revokes nothing and still attempts the clear.
 
 == Consequences
 
@@ -90,8 +107,9 @@ path is the only one it can take.
 * The session-lifecycle response to a refresh refusal is derived from one architectural fact —
   whether the authorization server redeemed the presented token — rather than from an
   enumeration of which validation layer happened to produce the refusal. Every current and future
-  post-redemption refusal reaches the same dispatch without a per-check carve-out, and that
-  dispatch attempts to clear the session whenever the presented token is burned, subject to the spare rule stated in the Decision.
+  post-redemption refusal is decided by the same rule without a per-check carve-out, whichever
+  code path raises it, and that rule attempts to clear the session whenever the presented token is
+  burned, subject to the spare rule stated in the Decision.
 * A transient client-side or network failure that never reaches the authorization server no
   longer destroys a healthy session, closing the reverse failure mode of over-eager clearing.
 * When the rotated successor is knowable, it is actively revoked rather than merely discarded,
@@ -101,7 +119,10 @@ path is the only one it can take.
 
 * The discriminator depends on every code path that can refuse a refresh correctly reporting
   whether redemption occurred; a new refusal path added later that bypasses this signal
-  reintroduces the pre-redemption/post-redemption ambiguity this decision closes.
+  reintroduces the pre-redemption/post-redemption ambiguity this decision closes. Because the
+  rule is applied on several code paths rather than through one dispatch, a new path must also
+  end in the shared revoke-then-attempted-clear disposition; a path that routes around it is not
+  caught by any single switch.
 * A response that fails to parse cannot report whether rotation occurred, so that branch always
   presumes redemption and attempts the clear, subject to the spare rule stated in the Decision, without a successor to revoke — a strictly more conservative
   outcome than a case where rotation is actually known, but one that forgoes revoking a
@@ -143,7 +164,7 @@ a much broader one.
 
 *Enumerate each refusal-producing check individually and hand-wire session clearing into each
 one.* This is architecturally equivalent to what a naive implementation would produce absent a
-unifying rule, and was rejected implicitly by the redemption-based dispatch itself: a per-check
+unifying rule, and was rejected implicitly by the redemption-based rule itself: a per-check
 enumeration must be revisited every time a new refusal path is added, and a path added without
 updating the enumeration silently falls back to the session-preserving default — the exact class
 of gap the identity-binding and scope-policy refusals each independently exposed before being
@@ -152,7 +173,7 @@ folded into the single redemption-based rule.
 Each rejected alternative anchors the session-lifecycle decision to something other than whether
 the authorization server actually redeemed the token — either ignoring redemption entirely
 (clear-on-every-failure), reacting to a symptom of rotation rather than to rotation itself
-(revert), or requiring per-check maintenance that a redemption-based dispatch make unnecessary
+(revert), or requiring per-check maintenance that a redemption-based rule makes unnecessary
 (enumeration). The adopted decision anchors the session response to the one fact that determines
 whether the presented credential is still valid anywhere.
 

@@ -69,9 +69,11 @@ import java.util.concurrent.locks.ReentrantLock;
  * user. Both checks run inside the same atomic transform, so neither opens a check-then-act window.
  * When the transform refuses a redemption the authorization server already <em>rotated</em>,
  * {@link #doRefresh} fails the session closed: the presented token has been burned at the AS, so
- * there is nothing left to keep using. The AS-issued successor is revoked (RFC 7009), and the store
- * entry and the session's {@link de.cuioss.sheriff.token.client.token.RefreshTokenFamily} are cleared,
- * forcing re-authentication. Restoring the presented token instead would leave the client holding a
+ * there is nothing left to keep using. The AS-issued successor is revoked best-effort (RFC 7009), and a
+ * clear of the store entry and the session's
+ * {@link de.cuioss.sheriff.token.client.token.RefreshTokenFamily} is attempted, forcing re-authentication
+ * unless the clear spares a newer grant (see {@link #clearRefusedSession}). Restoring the presented
+ * token instead would leave the client holding a
  * credential the AS has already invalidated, turning a local refusal into a remote failure on the very
  * next refresh. A refusal on a <em>non-rotated</em> redemption needs none of this: the presented token
  * is still valid at the AS and the family was never advanced, so the untouched store entry stays usable.
@@ -87,13 +89,14 @@ import java.util.concurrent.locks.ReentrantLock;
  * <ul>
  *   <li>{@link RefreshFailureClassification.Kind#REDEEMED} — the server consumed the grant. The
  *       carried {@link de.cuioss.sheriff.token.client.flow.RefreshRedemption} says whether the
- *       presented token was burned; when it was, the session is quarantined and the known successor
- *       revoked. An unparseable success response is the one redeemed case where rotation is not
- *       computable at all; it is presumed rotated and cleared, without inventing a successor to
- *       revoke.</li>
+ *       presented token was burned; when it was, the session is quarantined: the known successor is
+ *       revoked best-effort and a clear is attempted. When it was not (the server redeemed without
+ *       rotating), nothing is revoked or cleared. An unparseable success response is the one redeemed
+ *       case where rotation is not computable at all; it is presumed rotated and a clear is
+ *       attempted, without inventing a successor to revoke.</li>
  *   <li>{@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED} — the server declared the
  *       presented refresh token invalid (RFC 6749 §5.2 {@code invalid_grant}) without redeeming it.
- *       The session is cleared, but no revocation is attempted: there is no successor, and the
+ *       A clear is attempted, but no revocation is attempted: there is no successor, and the
  *       presented token is exactly what the server just refused.</li>
  *   <li>{@link RefreshFailureClassification.Kind#PRE_REDEMPTION} — the request never reached
  *       redemption (a connection failure, a DNS failure, a {@code 5xx}), so the presented token is
@@ -112,8 +115,10 @@ import java.util.concurrent.locks.ReentrantLock;
  * <strong>Refresh is reuse-detecting, single-flight, and ID-token-consistent.</strong>
  * {@link #refresh} drives the whole rotation for a session: it presents the stored refresh token
  * through {@link RefreshFlow}, routes the rotation through the session's
- * {@link RefreshTokenFamily}, and on a detected reuse of a superseded token revokes the family at the
- * authorization server (RFC 7009) and clears the store fail-closed ({@code CLIENT-5}). A
+ * {@link RefreshTokenFamily}, and on a detected reuse of a superseded token revokes the replayed token
+ * and the successor the authorization server issued on that exchange (RFC 7009, best-effort; a server
+ * that revokes family-wide drops the whole family on the first) and attempts to clear the store
+ * fail-closed ({@code CLIENT-5}). A
  * per-session single-flight collapses a concurrent proactive refresh onto one in-flight rotation, so
  * a benign race never redeems the same token twice and self-classifies as reuse. A refreshed ID token
  * is verified for OIDC Core §12.2 {@code iss}/{@code sub} consistency against the refreshed access
@@ -534,10 +539,12 @@ public class TokenLifecycleManager {
      * <p>
      * The stored refresh token is presented through {@code refreshFlow}; when the AS rotates it, the
      * rotation is routed through the session's {@link RefreshTokenFamily}. A presented token the
-     * family knows to be superseded is a reuse: the family is revoked at the authorization server via
-     * {@code revocationClient} (RFC 7009), the store is cleared fail-closed, and the reuse is
-     * re-thrown. A concurrent proactive refresh for the same session shares the single in-flight
-     * rotation rather than redeeming the token twice, so a benign race never self-classifies as reuse.
+     * family knows to be superseded is a reuse: the replayed token and the successor the authorization
+     * server issued on that exchange are revoked at the authorization server via
+     * {@code revocationClient} (RFC 7009, best-effort), a fail-closed clear of the store is attempted,
+     * and the reuse is re-thrown. A concurrent proactive refresh for the same session shares the single
+     * in-flight rotation rather than redeeming the token twice, so a benign race never self-classifies as
+     * reuse.
      * A refreshed ID token is verified for §12.2 {@code iss}/{@code sub} consistency against the
      * refreshed access token before it is carried forward.
      * <p>
@@ -546,13 +553,27 @@ public class TokenLifecycleManager {
      * applied as a compare-and-set against the presented refresh token. When {@link #store} installed a
      * newer grant in the meantime and the exchange succeeds, the in-flight result is discarded — no reuse
      * is raised and nothing is cleared — the newer bundle is returned, and the orphaned rotated successor
-     * is revoked best-effort (RFC 7009). When the exchange is refused instead — the server rejects the
-     * presented token, a redemption is quarantined, the refreshed ID token is inconsistent, a binding check
-     * refuses the apply, or the presented token is detected as reuse — the refusal still propagates and its
-     * revocations still run, but the fail-closed teardown spares a stored bundle whose refresh token differs
-     * from the one this refresh presented, with no recency check: a newer grant stored in the meantime
-     * is left in place together with its family. For an empty store, or one that cannot be read, a clear is
-     * attempted. The compare runs under the session's grant lock, so it is exact against {@link #store}.
+     * is revoked best-effort (RFC 7009). When the exchange is refused instead, the refusal still
+     * propagates, but no single rule decides what else happens: each path revokes and clears on its own
+     * terms.
+     * <ul>
+     *   <li>A server rejection of the presented token ({@code invalid_grant}) has no revocation target,
+     *       since nothing was redeemed and nothing rotated; it revokes nothing and a clear is attempted.</li>
+     *   <li>A quarantined redemption revokes the successor when the response named one, and a clear is
+     *       attempted; a redemption that did not burn the presented token revokes and clears nothing.</li>
+     *   <li>An inconsistent refreshed ID token or a refused binding check revokes the rotated successor
+     *       and attempts a clear only when the authorization server rotated the refresh token; when it did
+     *       not, nothing is revoked and the session is left untouched.</li>
+     *   <li>A detected reuse revokes the replayed token and then the successor, and a clear is
+     *       attempted.</li>
+     *   <li>A refusal before the server processed the request leaves the session untouched.</li>
+     * </ul>
+     * Every revocation is best-effort. What the paths that revoke or clear share is the disposition: the
+     * revocations are attempted, then a clear is attempted through the single fail-closed clear. That clear
+     * spares a stored bundle whose refresh token differs from the one this refresh presented, with no
+     * recency check: a newer grant stored in the meantime is left in place together with its family. For
+     * an empty store, or one that cannot be read, a clear is attempted. The compare runs under the
+     * session's grant lock, so it is exact against {@link #store}.
      * <p>
      * This coordinator refreshes plain-bearer sessions; it applies the refreshed material with no
      * {@code cnf} binding, so a sender-constrained stored bundle fails closed (a downgrade rather than
@@ -567,8 +588,9 @@ public class TokenLifecycleManager {
      * @param metadata                the resolved provider metadata (token + revocation endpoints);
      *                                must not be {@code null}
      * @param refreshFlow             the refresh-token exchange; must not be {@code null}
-     * @param revocationClient        the RFC 7009 revocation client used on detected reuse; must not be
-     *                                {@code null}
+     * @param revocationClient        the RFC 7009 revocation client used for the best-effort revocations a
+     *                                refused refresh makes (the replayed token and successor on reuse, the
+     *                                rotated successor on a quarantine); must not be {@code null}
      * @param idTokenValidationBridge the ID-token validation bridge for the §12.2 consistency check;
      *                                must not be {@code null}
      * @param clientAuthentication    the client authentication to present on revocation; must not be
@@ -576,26 +598,32 @@ public class TokenLifecycleManager {
      * @return the refreshed stored bundle, or {@link Optional#empty()} when no refreshable bundle is
      *         held
      * @throws de.cuioss.sheriff.token.commons.error.ClientProtocolException if refresh-token reuse is
-     *                               detected (the family is revoked and the store cleared first), or
+     *                               detected (the replayed token and its successor are revoked
+     *                               best-effort and a clear of the store is attempted first), or
      *                               if the granted scope is broader than requested under the opt-in
      *                               strict posture
      * @throws de.cuioss.sheriff.token.commons.error.TokenSheriffException if the exchange itself is
      *                               refused — the refreshed access token fails validation, the strict
      *                               scope posture refuses the grant, or the token request fails. When
-     *                               the authorization server had already redeemed the presented token
-     *                               the session is quarantined first; when it refused that token as
-     *                               invalid without redeeming it ({@code CREDENTIAL_REJECTED}) the
-     *                               store entry and rotation family are cleared without a revocation;
-     *                               only when the request never reached redemption
-     *                               ({@code PRE_REDEMPTION}) is the stored bundle left untouched,
-     *                               because that token is still usable
+     *                               the authorization server had already burned the presented token
+     *                               the session is quarantined first (the known successor is revoked
+     *                               and a clear is attempted); when it refused that token as
+     *                               invalid without redeeming it ({@code CREDENTIAL_REJECTED}) a clear
+     *                               of the store entry and rotation family is attempted without a
+     *                               revocation, there being no successor to name; when it redeemed
+     *                               without rotating, nothing is revoked or cleared; and when the
+     *                               request never reached redemption ({@code PRE_REDEMPTION}) the
+     *                               stored bundle is likewise left untouched, because that token is
+     *                               still usable
      * @throws IllegalStateException if the refreshed ID token is inconsistent with the refreshed
      *                               access token, or if the refreshed access token names a principal
      *                               other than the one the session is bound to. When the authorization
      *                               server had already rotated the refresh token, the session is
-     *                               quarantined first — the rotated token is revoked (RFC 7009) and the
-     *                               store entry and rotation family are cleared — so the caller must
-     *                               re-authenticate rather than retry
+     *                               quarantined first — the rotated token is revoked best-effort
+     *                               (RFC 7009) and a clear of the store entry and rotation family is
+     *                               attempted — so the caller must re-authenticate rather than retry;
+     *                               when it had not rotated, nothing is revoked or cleared and the
+     *                               stored bundle stays usable
      */
     public Optional<StoredToken> refresh(String sessionId, ProviderMetadata metadata,
             RefreshFlow refreshFlow, RevocationClient revocationClient,
@@ -771,7 +799,7 @@ public class TokenLifecycleManager {
         // the same defect the post-transform quarantine below closes. The session is therefore
         // quarantined fail-closed on the rotated successor. The family has not been advanced at this
         // point, and quarantineRejectedRotation does not assume it was: it revokes the rotated token and
-        // clears both the store entry and the family unconditionally.
+        // attempts to clear both the store entry and the family whether or not the family advanced.
         String refreshedIdToken;
         try {
             refreshedIdToken = verifiedRefreshedIdToken(rotation, idTokenValidationBridge);
@@ -875,6 +903,14 @@ public class TokenLifecycleManager {
      * <p>
      * This method decides the disposition only; it never rethrows. The refusal is rethrown by the caller
      * so the control-flow contract {@code doRefresh}'s callers rely on stays unchanged.
+     * <p>
+     * This is not the one dispatch for every refusal after redemption. It covers refusals raised inside
+     * the exchange only. A refreshed ID token that is inconsistent, or a binding check that refuses the
+     * apply, is handled in {@code doRefresh}'s own catches, which call
+     * {@link #quarantineRejectedRotation} only when the exchange rotated the refresh token and otherwise
+     * leave the session untouched; a detected reuse is handled by {@link #revokeReusedFamily}. What the
+     * paths share is the disposition they end in, {@link #revokeAndClearFailClosed} and then
+     * {@link #clearRefusedSession}.
      *
      * @param refusedExchange       the refusal the exchange raised; never {@code null}
      * @param sessionId             the session whose disposition is being decided; never {@code null}
@@ -953,7 +989,10 @@ public class TokenLifecycleManager {
      * the token this client presented, so there is no usable credential left to keep: restoring the
      * presented token would only hand the caller one the AS has burned. The refusal is a security event
      * on a token the AS just minted, so the rotated token is revoked at the AS (RFC 7009, best-effort)
-     * and both the store entry and the rotation family are dropped, forcing re-authentication.
+     * and a clear of both the store entry and the rotation family is attempted, forcing
+     * re-authentication unless the clear spares a newer grant ({@link #clearRefusedSession}). Callers
+     * reach this method only when the exchange rotated the refresh token; a refusal after a
+     * non-rotating redemption never gets here.
      */
     private void quarantineRejectedRotation(String sessionId, String presentedRefreshToken,
             ProviderMetadata metadata, String rotatedToken, RevocationClient revocationClient,
@@ -971,10 +1010,10 @@ public class TokenLifecycleManager {
      * <p>
      * The disposition follows what is actually known about rotation, and never invents a token to
      * revoke. When the authorization server issued a successor, that successor is revoked (RFC 7009)
-     * and the session cleared, exactly as the post-transform quarantine does. When the response was
-     * unparseable, no successor exists on this side and rotation is not computable even in principle:
-     * the presented token is presumed burned, so the store entry and rotation family are cleared, but
-     * no revocation is attempted because there is no token to name in it.
+     * and a clear of the session attempted, exactly as the post-transform quarantine does. When the
+     * response was unparseable, no successor exists on this side and rotation is not computable even in
+     * principle: the presented token is presumed burned, so a clear of the store entry and rotation
+     * family is attempted, but no revocation is attempted because there is no token to name in it.
      */
     private void quarantineRedeemedRefresh(String sessionId, String presentedRefreshToken,
             ProviderMetadata metadata, RefreshRedemption redemption, RevocationClient revocationClient,
@@ -997,9 +1036,10 @@ public class TokenLifecycleManager {
      * Nothing was redeemed on this path and nothing was rotated, so <strong>no revocation is
      * attempted</strong>: there is no successor to name in one, and the presented token is precisely
      * the credential the server has just told us it no longer honours. What remains is the client-side
-     * fail-closed clear — the store entry and the rotation family are dropped, forcing
-     * re-authentication — because a session left holding a credential the server has declared dead is a
-     * session that fails on its very next refresh with no way to recover.
+     * fail-closed clear — a clear of the store entry and the rotation family is attempted, forcing
+     * re-authentication unless it spares a newer grant — because a session left holding a credential
+     * the server has declared dead is a session that fails on its very next refresh with no way to
+     * recover.
      */
     private void quarantineRejectedCredential(String sessionId, String presentedRefreshToken,
             ProviderMetadata metadata, RevocationClient revocationClient,

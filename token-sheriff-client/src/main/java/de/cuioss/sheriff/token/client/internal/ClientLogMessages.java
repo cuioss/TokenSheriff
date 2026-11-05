@@ -61,9 +61,10 @@ public final class ClientLogMessages {
 
         /**
          * A refused refresh exchange did not clear the session, because a newer grant (a re-login or
-         * step-up) was stored while the exchange was in flight. The refusal still propagated and its
-         * revocations still ran; only the fail-closed store and rotation-family clear was skipped, so the
-         * newer grant stays usable.
+         * step-up) was stored while the exchange was in flight. The refusal still propagated, and any
+         * revocation the refused path makes had already been attempted (an {@code invalid_grant} refusal
+         * makes none); only the fail-closed store and rotation-family clear was skipped, so the newer
+         * grant stays usable.
          */
         public static final LogRecord REFUSED_REFRESH_KEPT_NEWER_GRANT = LogRecordModel.builder()
                 .prefix(PREFIX)
@@ -134,7 +135,10 @@ public final class ClientLogMessages {
                 .template("Post-logout redirect URI '%s' does not exactly match any registered URI; refusing RP-initiated logout (open-redirect defence)")
                 .build();
 
-        /** Refresh-token reuse was detected on a stored session; the family is revoked at the AS and the store cleared. */
+        /**
+         * Refresh-token reuse was detected on a stored session; the replayed token and its successor are
+         * revoked at the AS (best-effort) and a clear of the store is attempted.
+         */
         public static final LogRecord REFRESH_REUSE_REVOCATION = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(108)
