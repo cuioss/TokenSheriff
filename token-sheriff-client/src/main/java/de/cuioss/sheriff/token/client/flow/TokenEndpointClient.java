@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.client.flow;
 
 import com.dslplatform.json.DslJson;
+import com.dslplatform.json.JsonReader;
 import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
@@ -39,9 +40,12 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Thin transport wrapper for the OAuth 2.0 back-channel token endpoint.
@@ -72,6 +76,9 @@ public class TokenEndpointClient {
     private static final String HTTP_POST = "POST";
     private static final String DPOP_NONCE_HEADER = "DPoP-Nonce";
     private static final String FAILURE_CONTEXT = "Token endpoint request failed";
+
+    /** Marker for "no status line was received", outside every HTTP status family. */
+    private static final int NO_STATUS = -1;
 
     /**
      * The single RFC 6749 §5.2 error code this client treats as the authorization server declaring the
@@ -144,7 +151,11 @@ public class TokenEndpointClient {
      *         {@code 4xx} whose RFC 6749 §5.2 body names {@code invalid_grant}, so the server declared
      *         the presented credential dead without redeeming it; and
      *         {@link RedeemedResponseException} when the body cannot be parsed <em>after</em> a success
-     *         status, because by then the server has already redeemed the grant. Under a DPoP
+     *         status, because by then the server has already redeemed the grant. A success body whose
+     *         top-level JSON object repeats a member name is likewise a {@link RedeemedResponseException}:
+     *         neither the first nor the last occurrence is accepted. A body that cannot be read at all
+     *         after a success status line — one larger than the payload bound, for example — is a
+     *         {@link RedeemedResponseException} too, never a pre-redemption failure. Under a DPoP
      *         {@code senderConstraint} a {@link RedeemedResponseException} is also raised when the
      *         issued token is not bound to the proof key: the {@code token_type} is not {@code DPoP}
      *         (a {@code Bearer} downgrade), or the access token is a JWT whose {@code cnf.jkt} is absent
@@ -390,10 +401,22 @@ public class TokenEndpointClient {
                 .setHeader(CONTENT_TYPE, FORM_URLENCODED)
                 .POST(HttpRequest.BodyPublishers.ofString(body));
         requestHeaders.forEach(requestBuilder::setHeader);
+        HttpResponse.BodyHandler<String> boundedBody = backChannel.bodyHandler();
+        AtomicInteger observedStatus = new AtomicInteger(NO_STATUS);
         try {
-            return client.send(requestBuilder.build(), backChannel.bodyHandler());
+            return client.send(requestBuilder.build(), responseInfo -> {
+                observedStatus.set(responseInfo.statusCode());
+                return boundedBody.apply(responseInfo);
+            });
         } catch (IOException e) {
             LOGGER.debug(e, "Token endpoint request failed: %s", e.getMessage());
+            if (HttpStatusFamily.isSuccess(observedStatus.get())) {
+                // The status line was a success before the body read failed (for example a body past
+                // the payload bound): the server has already redeemed the grant, so this is a
+                // post-redemption failure, never a pre-redemption one.
+                throw new RedeemedResponseException("Token endpoint response body could not be read after HTTP "
+                        + observedStatus.get() + ": " + e.getMessage(), e);
+            }
             throw new TransportException("Token endpoint request failed: " + e.getMessage(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -421,6 +444,14 @@ public class TokenEndpointClient {
                     + maxContentSize + " bytes (" + BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN + ")");
         }
         try {
+            Optional<String> duplicateMember = duplicateTopLevelMember(bytes);
+            if (duplicateMember.isPresent()) {
+                // A repeated member leaves the effective value to the parser's last-wins or first-wins
+                // choice, so neither copy is trustworthy: refuse the body. The member name is
+                // AS-controlled, so sanitize it (CWE-117) before it reaches the exception message.
+                throw new RedeemedResponseException("Token endpoint response repeats the top-level member '"
+                        + LogSanitizer.sanitize(duplicateMember.get()) + "'");
+            }
             TokenResponse tokenResponse = deserialize(TokenResponse.class, bytes);
             if (tokenResponse == null || tokenResponse.accessToken == null) {
                 throw new RedeemedResponseException("Token endpoint response is missing the access_token");
@@ -439,6 +470,50 @@ public class TokenEndpointClient {
             String sanitizedError = LogSanitizer.sanitize(e.getMessage());
             LOGGER.debug("Failed to parse token endpoint response: %s", sanitizedError);
             throw new RedeemedResponseException("Failed to parse token endpoint response: " + sanitizedError, e);
+        }
+    }
+
+    /**
+     * Walks the member names of the top-level JSON object, skipping every value without materializing
+     * it, and reports the first name that occurs twice. Only the top level is inspected: nested objects
+     * are skipped as values. A body whose top level is not an object is left to the deserializer, which
+     * already rejects it.
+     * <p>
+     * The caller has already bounded {@code bytes} by the configured payload size, so the walk is a
+     * bounded second pass. Input the reader cannot walk — including input the library signals with an
+     * unchecked exception — is reported as an {@link IOException}, so it takes the caller's existing
+     * parse-failure path.
+     *
+     * @return the first repeated top-level member name, or empty when every name is unique
+     * @throws IOException when the top-level object cannot be walked
+     */
+    private Optional<String> duplicateTopLevelMember(byte[] bytes) throws IOException {
+        try {
+            JsonReader<Object> reader = dslJson.newReader(bytes, bytes.length);
+            if (reader.getNextToken() != '{' || reader.getNextToken() == '}') {
+                return Optional.empty();
+            }
+            Set<String> names = new HashSet<>();
+            while (true) {
+                String name = reader.readKey();
+                if (!names.add(name)) {
+                    return Optional.of(name);
+                }
+                byte next = reader.skip();
+                if (next == '}') {
+                    return Optional.empty();
+                }
+                if (next != ',') {
+                    throw new IOException("Expecting ',' or '}' after a top-level member value");
+                }
+                reader.getNextToken();
+            }
+        }
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
+        catch (RuntimeException e) {
+            // Same deliberate broad catch as deserialize(): the reader signals some unreadable input with
+            // unchecked exceptions outside its contract.
+            throw new IOException("Unreadable JSON (" + e.getClass().getSimpleName() + ")", e);
         }
     }
 
