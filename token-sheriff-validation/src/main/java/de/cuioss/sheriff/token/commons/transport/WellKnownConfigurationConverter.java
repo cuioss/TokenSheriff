@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.commons.transport;
 import com.dslplatform.json.DslJson;
 import de.cuioss.http.client.ContentType;
 import de.cuioss.http.client.converter.HttpResponseConverter;
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
@@ -133,9 +134,11 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
             return Optional.of(config);
 
         } catch (IOException e) {
+            // A DSL-JSON parse error echoes excerpts of the remote document, so the message is
+            // neutralized against log injection (CWE-117) before it is logged or put into an exception
+            String errorMessage = ErrorTextSanitizer.sanitize(e.getMessage());
             // Check if this is a security limit violation
-            String errorMessage = e.getMessage();
-            if (isSecurityLimitViolation(errorMessage)) {
+            if (isSecurityLimitViolation(e.getMessage())) {
                 LOGGER.warn(TransportLogMessages.WARN.JWKS_JSON_PARSE_FAILED, errorMessage);
                 securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
                 throw new TransportException(
@@ -148,7 +151,8 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
             return Optional.empty();
         } catch (IllegalArgumentException e) {
             // Invalid well-known configuration (missing required fields)
-            String invalidConfigurationDetail = "Invalid well-known configuration: " + e.getMessage();
+            String invalidConfigurationDetail = "Invalid well-known configuration: "
+                    + ErrorTextSanitizer.sanitize(e.getMessage());
             LOGGER.error(e, TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT,
                     invalidConfigurationDetail);
             return Optional.empty();

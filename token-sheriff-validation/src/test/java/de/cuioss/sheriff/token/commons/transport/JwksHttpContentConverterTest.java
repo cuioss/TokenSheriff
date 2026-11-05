@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.commons.transport;
 import de.cuioss.http.client.ContentType;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -96,6 +97,24 @@ class JwksHttpContentConverterTest {
         // Verify LogRecord is logged for IO error during parsing
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                 WARN.JWKS_PARSE_IO_ERROR.resolveIdentifierString());
+    }
+
+    @Test
+    void shouldNeutralizeLineBreaksOfMalformedJwksInParseError() {
+        // Malformed JWKS whose offending text carries a raw CR and LF, echoed by the DSL-JSON parse error
+        String malformedJwks = "{\"keys\": [{\"kty\": \"RSA\", \"kid\": tru\r\nFORGED-RECORD x}]}";
+
+        Optional<Jwks> result = converter.convert(malformedJwks);
+        assertTrue(result.isEmpty());
+
+        var parseErrors = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN,
+                WARN.JWKS_PARSE_IO_ERROR.resolveIdentifierString());
+        assertEquals(1, parseErrors.size(), "JWKS_PARSE_IO_ERROR is logged once");
+        String rendered = parseErrors.getFirst().getMessage();
+        assertAll("the remote JWKS cannot forge a log line: " + rendered,
+                () -> assertTrue(rendered.contains("FORGED-RECORD"), "the parse error echoes the remote text"),
+                () -> assertFalse(rendered.contains("\r"), "no raw CR may be rendered"),
+                () -> assertFalse(rendered.contains("\n"), "no raw LF may be rendered"));
     }
 
     @Test

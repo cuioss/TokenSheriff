@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.commons.transport;
 import com.dslplatform.json.DslJson;
 import de.cuioss.http.client.ContentType;
 import de.cuioss.http.client.converter.StringContentConverter;
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.io.IOException;
@@ -108,7 +109,9 @@ public class JwksHttpContentConverter extends StringContentConverter<Jwks> {
             return Optional.of(jwks);
 
         } catch (IOException e) {
-            LOGGER.warn(TransportLogMessages.WARN.JWKS_PARSE_IO_ERROR, e.getMessage());
+            // A DSL-JSON parse error echoes excerpts of the remote JWKS, so the message is neutralized
+            // against log injection (CWE-117) before it is logged
+            LOGGER.warn(TransportLogMessages.WARN.JWKS_PARSE_IO_ERROR, ErrorTextSanitizer.sanitize(e.getMessage()));
             return Optional.empty();
         }
     }

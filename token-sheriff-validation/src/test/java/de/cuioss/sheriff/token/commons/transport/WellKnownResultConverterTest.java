@@ -22,6 +22,7 @@ import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import mockwebserver3.Dispatcher;
 import mockwebserver3.MockResponse;
@@ -164,6 +165,26 @@ class WellKnownResultConverterTest {
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
                 RENDERED_PARSE_FAILURE_PREFIX + "Invalid well-known configuration: issuer is malformed");
         assertNoUnfilledPlaceholderLogged();
+    }
+
+    @Test
+    @DisplayName("Should neutralize CR and LF of the remote document in the JSON_PARSE_FAILED detail")
+    void shouldNeutralizeLineBreaksOfMalformedDocumentInParseFailure() {
+        // Malformed discovery document whose offending text carries a raw CR and LF
+        String malformedJson = "{\"issuer\": \"https://example.com\", \"jwks_uri\": tru\r\nFORGED-RECORD x}";
+
+        Optional<WellKnownResult> result = converter.convert(malformedJson);
+
+        assertFalse(result.isPresent());
+        var parseFailures = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.ERROR,
+                TransportLogMessages.ERROR.JSON_PARSE_FAILED.resolveIdentifierString());
+        assertEquals(1, parseFailures.size(), "JSON_PARSE_FAILED is logged once");
+        String rendered = parseFailures.getFirst().getMessage();
+        assertAll("the remote document cannot forge a log line: " + rendered,
+                () -> assertTrue(rendered.startsWith(TransportLogMessages.ERROR.JSON_PARSE_FAILED
+                        .resolveIdentifierString() + ": " + RENDERED_PARSE_FAILURE_PREFIX)),
+                () -> assertFalse(rendered.contains("\r"), "no raw CR may be rendered"),
+                () -> assertFalse(rendered.contains("\n"), "no raw LF may be rendered"));
     }
 
     private static void assertNoUnfilledPlaceholderLogged() {

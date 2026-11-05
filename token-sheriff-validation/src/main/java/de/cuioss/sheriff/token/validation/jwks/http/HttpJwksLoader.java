@@ -399,7 +399,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                 return LoaderStatus.OK;
             }
         } else {
-            LOGGER.error(ERROR.JWKS_LOAD_FAILED, getResolvedIssuer(), result.getErrorMessage().orElse("Unknown error"));
+            LOGGER.error(ERROR.JWKS_LOAD_FAILED, loggableResolvedIssuer(), result.getErrorMessage().orElse("Unknown error"));
         }
 
         // Failed load (HTTP failure or no usable keys): UNDEFINED keeps the loader retrying through
@@ -440,8 +440,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         Throwable cause = failure instanceof CompletionException && failure.getCause() != null
                 ? failure.getCause()
                 : failure;
-        LOGGER.error(cause, ERROR.JWKS_INITIALIZATION_FAILED, cause.getMessage(),
-                getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
+        LOGGER.error(cause, ERROR.JWKS_INITIALIZATION_FAILED, cause.getMessage(), loggableIssuerIdentifier());
 
         lifecycleLock.lock();
         try {
@@ -480,8 +479,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             try {
                 startBackgroundRefresh(claimedEpoch);
             } catch (RejectedExecutionException e) {
-                LOGGER.error(e, ERROR.JWKS_INITIALIZATION_FAILED, e.getMessage(),
-                        getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
+                LOGGER.error(e, ERROR.JWKS_INITIALIZATION_FAILED, e.getMessage(), loggableIssuerIdentifier());
                 return false;
             }
         }
@@ -515,7 +513,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         if (isWellKnownFailure) {
             LOGGER.warn(WARN.JWKS_URI_RESOLUTION_FAILED);
         }
-        LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, errorDetail, getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
+        LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, errorDetail, loggableIssuerIdentifier());
 
         if (resolution.retryable() && config.isBackgroundRefreshEnabled()) {
             publishStatus(LoaderStatus.UNDEFINED, startEpoch);
@@ -619,7 +617,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             egressPolicy.check(fetchUri);
         } catch (TransportException e) {
             LOGGER.error(e, ERROR.JWKS_INITIALIZATION_FAILED, e.getMessage(),
-                    Optional.ofNullable(issuer).orElse(ISSUER_NOT_CONFIGURED));
+                    ErrorTextSanitizer.sanitize(Optional.ofNullable(issuer).orElse(ISSUER_NOT_CONFIGURED)));
             return new AdapterResolution(null, issuer, false, null);
         }
 
@@ -745,7 +743,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                 return false;
             }
             if (logInitialLoad) {
-                LOGGER.info(INFO.JWKS_LOADED, getResolvedIssuer());
+                LOGGER.info(INFO.JWKS_LOADED, loggableResolvedIssuer());
             }
             lastSuccessfulLoad.set(Instant.now());
             consecutiveRefreshFailures.set(0);
@@ -865,7 +863,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         // set produced no usable keys, keep the current keys and leave the content reference
         // unchanged so the next scheduled refresh retries against the same content.
         if (newLoader.getLoaderStatus() != LoaderStatus.OK) {
-            LOGGER.warn(WARN.JWKS_REFRESH_RETURNED_NO_KEYS, getResolvedIssuer());
+            LOGGER.warn(WARN.JWKS_REFRESH_RETURNED_NO_KEYS, loggableResolvedIssuer());
             return false;
         }
 
@@ -891,11 +889,12 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         }
 
         // Log keys update: the issuer and the key ids of the installed key set, sorted so the message
-        // is deterministic. The key ids come from the remote JWKS and are only length-bounded, so they
-        // are neutralized against log injection (CWE-117) before they are written.
+        // is deterministic. The key ids come from the remote JWKS and are only length-bounded, and the
+        // issuer can be the one the discovery document advertised, so both are neutralized against log
+        // injection (CWE-117) before they are written.
         List<String> installedKeyIds = newLoader.getKeyIds().stream().sorted()
                 .map(ErrorTextSanitizer::sanitize).toList();
-        LOGGER.info(INFO.JWKS_KEYS_UPDATED, getResolvedIssuer(), installedKeyIds);
+        LOGGER.info(INFO.JWKS_KEYS_UPDATED, loggableResolvedIssuer(), installedKeyIds);
         return true;
     }
 
@@ -1045,7 +1044,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             }
         } catch (IllegalArgumentException e) {
             // JSON parsing or validation errors
-            LOGGER.warn(WARN.BACKGROUND_REFRESH_PARSE_ERROR, e.getMessage(), getResolvedIssuer());
+            LOGGER.warn(WARN.BACKGROUND_REFRESH_PARSE_ERROR, ErrorTextSanitizer.sanitize(e.getMessage()),
+                    loggableResolvedIssuer());
         } catch (IllegalStateException e) {
             // State errors (e.g., from orElseThrow when issuer not resolved), includes CancellationException
             LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
@@ -1234,7 +1234,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             }
             if (Duration.between(lastLoad, Instant.now()).compareTo(maxStaleness.get()) > 0) {
                 status.set(LoaderStatus.UNDEFINED);
-                LOGGER.warn(WARN.JWKS_KEYS_STALE, getResolvedIssuer(), lastLoad, maxStaleness.get());
+                LOGGER.warn(WARN.JWKS_KEYS_STALE, loggableResolvedIssuer(), lastLoad, maxStaleness.get());
             }
         } finally {
             lifecycleLock.unlock();
@@ -1369,6 +1369,28 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     }
 
     /**
+     * The resolved issuer as it is written into a log record. Without a configured issuer the loader
+     * adopts the issuer the discovery document advertises, which is remote document content, so the
+     * value is neutralized against log injection (CWE-117). {@link #getResolvedIssuer()} keeps the raw
+     * value, since the issuer is also a functional value.
+     *
+     * @return the sanitized resolved issuer, {@code null} when none is resolved yet
+     */
+    private @Nullable String loggableResolvedIssuer() {
+        return ErrorTextSanitizer.sanitize(getResolvedIssuer());
+    }
+
+    /**
+     * The issuer of {@link #getIssuerIdentifier()} as it is written into a log record, neutralized
+     * against log injection (CWE-117) for the same reason as {@link #loggableResolvedIssuer()}.
+     *
+     * @return the sanitized issuer, or {@code not-configured} when none is known
+     */
+    private @Nullable String loggableIssuerIdentifier() {
+        return ErrorTextSanitizer.sanitize(getIssuerIdentifier().orElse(ISSUER_NOT_CONFIGURED));
+    }
+
+    /**
      * Resolves the issuer identifier from discovered and configured sources.
      * Implements the issuer resolution logic with precedence rules.
      * <p>
@@ -1413,8 +1435,10 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         // issuer is a hard failure (M7)
         if (configuredIssuer != null) {
             if (discoveredIssuer == null || !issuersMatch(configuredIssuer, discoveredIssuer)) {
+                // The configured issuer is operator-controlled; the advertised one is remote document
+                // content and is neutralized against log injection (CWE-117).
                 LOGGER.warn(WARN.ISSUER_MISMATCH, configuredIssuer,
-                        discoveredIssuer == null ? ISSUER_ABSENT : discoveredIssuer);
+                        discoveredIssuer == null ? ISSUER_ABSENT : ErrorTextSanitizer.sanitize(discoveredIssuer));
                 counter.increment(SecurityEventCounter.EventType.ISSUER_MISMATCH);
                 return Optional.empty();
             }

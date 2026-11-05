@@ -137,6 +137,47 @@ class HttpJwksLoaderFailureTest {
     }
 
     @Test
+    @DisplayName("JWKS_LOAD_FAILED renders an advertised issuer carrying CR and LF in escaped form")
+    void jwksLoadFailedEscapesLineBreaksInAdvertisedIssuer() throws Exception {
+        String jwksPath = "/jwks-forged-issuer.json";
+        DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of(jwksPath));
+        // JSON escapes, so the discovery layer decodes them to a real CR and LF in the advertised issuer
+        dispatcher.advertiseIssuerFrom(0, "https://idp.example\\r\\nFORGED-RECORD");
+        dispatcher.failJwks(jwksPath);
+        RetryConfig fastRetry = RetryConfig.builder()
+                .initialDelay(Duration.ofMillis(1))
+                .maxDelay(Duration.ofMillis(5))
+                .build();
+
+        try (MockWebServer server = new MockWebServer()) {
+            server.setDispatcher(dispatcher);
+            server.start();
+            // No configured issuer: the loader adopts the issuer the discovery document advertises
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .wellKnownUrl(server.url(DiscoveryGenerationDispatcher.WELL_KNOWN_PATH).toString())
+                    .retryConfig(fastRetry)
+                    .refreshIntervalSeconds(0)
+                    .build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                assertEquals(LoaderStatus.ERROR, loader.initJWKSLoader(securityEventCounter).get(10, TimeUnit.SECONDS));
+
+                assertEquals(Optional.of("https://idp.example\r\nFORGED-RECORD"), loader.getIssuerIdentifier(),
+                        "the advertised issuer reaches the loader with its line break and stays raw as a functional value");
+                var loadFailures = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.ERROR,
+                        JWTValidationLogMessages.ERROR.JWKS_LOAD_FAILED.resolveIdentifierString());
+                assertEquals(1, loadFailures.size(), "JWKS_LOAD_FAILED is logged once");
+                String rendered = loadFailures.getFirst().getMessage();
+                assertAll("the advertised issuer cannot forge a log line",
+                        () -> assertTrue(rendered.contains("for issuer https://idp.example\\r\\nFORGED-RECORD: "),
+                                "the issuer must be rendered escaped: " + rendered),
+                        () -> assertFalse(rendered.contains("\r"), "no raw CR may be rendered: " + rendered),
+                        () -> assertFalse(rendered.contains("\n"), "no raw LF may be rendered: " + rendered));
+            }
+        }
+    }
+
+    @Test
     @DisplayName("Should log JWKS_URI_RESOLUTION_FAILED when well-known resolver cannot resolve JWKS URI")
     void shouldLogJwksUriResolutionFailedWhenWellKnownResolverFails(URIBuilder uriBuilder) {
         // Create a well-known config that will fail to resolve JWKS URI
