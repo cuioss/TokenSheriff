@@ -232,11 +232,12 @@ Test code violations:
 
 #### `InvalidExceptionUsageRecipe`: narrow the catch, do not suppress
 
-Suppression is **not** a valid strategy for `InvalidExceptionUsageRecipe`. The standing remedy is
-to narrow the caught exception type against the **throwers the callee actually declares**. A broad
-catch is sanctioned only where there is no declared thrower that would make the catch complete, and
-only in one of the forms below. Each sanctioned site carries a comment recording why its broad catch
-is deliberate, and these are all the forms the tree holds:
+Suppression is **not** a valid strategy for an unsanctioned `InvalidExceptionUsageRecipe` finding.
+The standing remedy is to narrow the caught exception type against the **throwers the callee
+actually declares**. A broad catch is sanctioned only where there is no declared thrower that would
+make the catch complete, and only in one of the forms below. A site in one of these forms carries the
+`// cui-rewrite:disable InvalidExceptionUsageRecipe` directive together with a comment recording why
+its broad catch is deliberate, and these are all the forms the tree holds:
 
 - **An open set of SPI implementations that declare no `throws`.** `TokenBuilder`, where custom SPI
   claim mappers are translated into `TokenValidationException`, is the reference example.
@@ -248,13 +249,16 @@ is deliberate, and these are all the forms the tree holds:
 - **A library that signals unreadable input with unchecked exceptions outside its contract.**
   `TokenEndpointClient` catches what DSL-JSON throws at its two JSON-reading sites and folds it into
   the `IOException` its callers already handle.
-- **A boundary that must not propagate any failure.** `TokenValidatorHealthCheck` reports a liveness
-  probe whose failure sources (CDI resolution, configuration access) are an open set of unchecked
-  exceptions as a fixed status. `HttpJwksLoader` logs any failure of a background refresh cycle,
-  because the `ScheduledExecutorService` cancels the refresh task on an uncaught exception.
+- **A boundary that must not propagate an exception of an open unchecked set.**
+  `TokenValidatorHealthCheck` catches `RuntimeException` and reports a liveness probe whose failure
+  sources (CDI resolution, configuration access) are an open set of unchecked exceptions as a fixed
+  status; an `Error` still propagates. `HttpJwksLoader` catches `Exception` around a background
+  refresh cycle and logs it, because the `ScheduledExecutorService` cancels the refresh task on an
+  uncaught exception; an `Error` is not caught there either.
 - **Release steps that must all run.** `TokenValidator` catches `Throwable` around the `Runnable`
   release steps of `close()`, so every step runs after any failure, and rethrows the last failure
-  unwrapped once they have run, with the earlier ones attached as suppressed.
+  unwrapped once they have run, with each earlier distinct failure attached as suppressed. An earlier
+  failure that is the same instance as the propagated one is not attached to itself.
 - **A test that funnels an unanticipated failure into its own report**, in integration-test code
   only: `RefreshProductionPathSpecIT` and `RefreshConcurrentRedemptionSpecIT`, whose engine failure
   mode is not known in advance.
