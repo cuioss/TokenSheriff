@@ -285,9 +285,9 @@ public class TokenLifecycleManager {
      * The token write and the family update run under the session's grant lock, so they are atomic per
      * session with respect to other {@code store} calls, to the refresh's read of the held token, and to
      * {@link #applyRefresh}, which takes the same lock around its update and its fail-closed reuse
-     * teardown. The fail-closed teardown of a refused {@link #refresh} exchange takes it as well, and clears
-     * only while the store still holds the refresh token that exchange presented. Two concurrent grants can
-     * therefore never leave the store holding one and the family tracking the other, and neither a reuse
+     * teardown. The fail-closed teardown of a refused {@link #refresh} exchange takes it as well, and
+     * spares a stored bundle whose refresh token differs from the one that exchange presented. Two
+     * concurrent grants can therefore never leave the store holding one and the family tracking the other, and neither a reuse
      * refusal nor any other refused refresh clears a grant this method stored while the refusal was in
      * flight. Writers that bypass this manager, such as a {@link TokenStore} shared with another node, take
      * no such lock; the refresh path's capture covers them by adopting and re-reading, and a refused
@@ -549,10 +549,10 @@ public class TokenLifecycleManager {
      * is revoked best-effort (RFC 7009). When the exchange is refused instead — the server rejects the
      * presented token, a redemption is quarantined, the refreshed ID token is inconsistent, a binding check
      * refuses the apply, or the presented token is detected as reuse — the refusal still propagates and its
-     * revocations still run, but the fail-closed teardown clears the store entry and the family only while
-     * the store still holds the refresh token this refresh presented: a newer grant stored in the meantime
-     * is left in place together with its family. The compare runs under the session's grant lock, so it is
-     * exact against {@link #store}; when the store cannot be read, the session is cleared as before.
+     * revocations still run, but the fail-closed teardown spares a stored bundle whose refresh token differs
+     * from the one this refresh presented, with no recency check: a newer grant stored in the meantime
+     * is left in place together with its family. An empty store, or one that cannot be read, is cleared.
+     * The compare runs under the session's grant lock, so it is exact against {@link #store}.
      * <p>
      * This coordinator refreshes plain-bearer sessions; it applies the refreshed material with no
      * {@code cnf} binding, so a sender-constrained stored bundle fails closed (a downgrade rather than
@@ -879,7 +879,7 @@ public class TokenLifecycleManager {
      * @param refusedExchange       the refusal the exchange raised; never {@code null}
      * @param sessionId             the session whose disposition is being decided; never {@code null}
      * @param presentedRefreshToken the refresh token the refused exchange presented; a fail-closed clear
-     *                              runs only while the store still holds it. Never {@code null}
+     *                              spares a stored bundle whose refresh token differs from it. Never {@code null}
      * @param metadata              the provider metadata used for any revocation call; never {@code null}
      * @param revocationClient      the client used for best-effort revocation; never {@code null}
      * @param clientAuthentication  the authentication presented on a revocation call; never {@code null}

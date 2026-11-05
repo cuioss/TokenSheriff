@@ -90,11 +90,13 @@ Only a response the server actually produced is ever classified. No defensive te
 this; the ordering of the transport code is what establishes it, and preserving that ordering is a
 constraint on any future change to the token-endpoint client.
 
-**The three states are dispatched exhaustively with no default arm.** Callers classify through the
+**The three states are dispatched with a failing default arm.** Callers classify through the
 single classification entry point rather than enumerating exception types, and dispatch on the
-resulting kind in a switch with no default. A fourth state added later is then a compile error at
-every dispatch site, rather than a silent fall-through to the session-preserving default — which is
-the failure mode that produced this ADR in the first place.
+resulting kind in a switch. That switch is a statement over an enum, which Java does not check for
+exhaustiveness, so a fourth state added later would not be a compile error; the switch therefore ends
+in a `default` arm that throws `IllegalStateException`. A fourth state fails loudly at the dispatch
+site instead of silently falling through to the session-preserving default — which is the failure
+mode that produced this ADR in the first place.
 
 == Consequences
 
