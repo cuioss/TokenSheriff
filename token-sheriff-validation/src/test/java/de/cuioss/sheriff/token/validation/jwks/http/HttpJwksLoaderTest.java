@@ -25,16 +25,20 @@ import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.dispatcher.JwksResolveDispatcher;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
 import de.cuioss.test.mockwebserver.dispatcher.ModuleDispatcher;
 import lombok.Getter;
+import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -207,15 +211,94 @@ class HttpJwksLoaderTest {
     }
 
     @Test
-    @DisplayName("Should log JWKS_KEYS_UPDATED when keys are updated")
+    @DisplayName("Should log JWKS_KEYS_UPDATED with the issuer and the installed key ids")
     void shouldLogJwksKeysUpdatedWhenKeysAreUpdated() {
         // Load a key to trigger keys update
         Optional<KeyInfo> keyInfo = httpJwksLoader.getKeyInfo(TEST_KID);
         assertTrue(keyInfo.isPresent(), "Key info should be present");
 
-        // JWKS_KEYS_UPDATED is logged when keys are successfully loaded and updated
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO,
-                JWTValidationLogMessages.INFO.JWKS_KEYS_UPDATED.resolveIdentifierString());
+        // JWKS_KEYS_UPDATED names the issuer and the installed key id, not the load state
+        String expected = JWTValidationLogMessages.INFO.JWKS_KEYS_UPDATED.format("test-issuer", List.of(TEST_KID));
+        assertFalse(expected.contains("load state"), "The rendered message must not report a load state");
+        assertFalse(expected.contains(LoaderStatus.LOADING.name()), "The rendered message must not report LOADING");
+        LogAsserts.assertSingleLogMessagePresent(TestLogLevel.INFO, expected);
+    }
+
+    @Test
+    @DisplayName("JWKS_KEYS_UPDATED renders an advertised issuer carrying CR and LF in escaped form")
+    void jwksKeysUpdatedEscapesLineBreaksInAdvertisedIssuer() throws Exception {
+        DiscoveryGenerationDispatcher dispatcher = new DiscoveryGenerationDispatcher(List.of("/jwks-forged-issuer.json"));
+        // JSON escapes, so the discovery layer decodes them to a real CR and LF in the advertised issuer
+        dispatcher.advertiseIssuerFrom(0, "https://idp.example\\r\\nFORGED-RECORD");
+
+        try (MockWebServer server = new MockWebServer()) {
+            server.setDispatcher(dispatcher);
+            server.start();
+            // No configured issuer: the loader adopts the issuer the discovery document advertises
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                    .wellKnownUrl(server.url(DiscoveryGenerationDispatcher.WELL_KNOWN_PATH).toString())
+                    .refreshIntervalSeconds(0)
+                    .build();
+
+            try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+                assertEquals(LoaderStatus.OK, loader.initJWKSLoader(securityEventCounter).get(10, TimeUnit.SECONDS));
+
+                assertEquals(Optional.of("https://idp.example\r\nFORGED-RECORD"), loader.getIssuerIdentifier(),
+                        "the advertised issuer reaches the loader with its line break and stays raw as a functional value");
+                String expected = JWTValidationLogMessages.INFO.JWKS_KEYS_UPDATED.format(
+                        "https://idp.example\\r\\nFORGED-RECORD", List.of(TEST_KID));
+                LogAsserts.assertSingleLogMessagePresent(TestLogLevel.INFO, expected);
+                // The loader of setUp logged its own JWKS_KEYS_UPDATED for test-issuer; select this loader's
+                var keysUpdated = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.INFO,
+                        JWTValidationLogMessages.INFO.JWKS_KEYS_UPDATED.resolveIdentifierString()).stream()
+                        .filter(logRecord -> logRecord.getMessage().contains("idp.example"))
+                        .toList();
+                assertAll("the advertised issuer cannot forge a log line",
+                        () -> assertEquals(1, keysUpdated.size(), "JWKS_KEYS_UPDATED is logged once"),
+                        () -> assertFalse(keysUpdated.getFirst().getMessage().contains("\r"), "no raw CR may be rendered"),
+                        () -> assertFalse(keysUpdated.getFirst().getMessage().contains("\n"), "no raw LF may be rendered"));
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("JWKS_KEYS_UPDATED renders several installed key ids sorted and with control characters escaped")
+    void jwksKeysUpdatedRendersSortedAndSanitizedKeyIds(URIBuilder uriBuilder) {
+        // Placeholder kid, replaced in the JSON by JSON escapes the parser decodes to a real CR and LF
+        String forgedKidPlaceholder = "kid-a-forged-placeholder";
+        // Supplied out of order, and more than two of them: the loader's key-id set has no stable
+        // iteration order, so with six ids an unsorted rendering matches the sorted one only by chance
+        // (about 1 in 720 runs) rather than in every other run
+        List<String> suppliedKids = List.of("kid-f", "kid-c", forgedKidPlaceholder, "kid-e", "kid-b", "kid-d");
+        String jwks = jwksWithKeyIds(suppliedKids).replace("\"" + forgedKidPlaceholder + "\"", "\"kid-a\\r\\nFORGED\"");
+        moduleDispatcher.setCustomResponse(jwks);
+
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowLoopbackEgress(true).allowInsecureHttp(true)
+                .jwksUrl(uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString())
+                .issuerIdentifier("multi-key-issuer")
+                .build();
+
+        try (HttpJwksLoader loader = new HttpJwksLoader(config)) {
+            assertEquals(LoaderStatus.OK, loader.initJWKSLoader(securityEventCounter).join());
+            assertTrue(loader.getKeyIds().contains("kid-a\r\nFORGED"),
+                    "the JWK parser must accept the key id with CR and LF, installed: " + loader.getKeyIds());
+            assertEquals(6, loader.getKeyIds().size(), "all six keys must be installed: " + loader.getKeyIds());
+
+            String expected = JWTValidationLogMessages.INFO.JWKS_KEYS_UPDATED.format("multi-key-issuer",
+                    List.of("kid-a\\r\\nFORGED", "kid-b", "kid-c", "kid-d", "kid-e", "kid-f"));
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.INFO, expected);
+        }
+    }
+
+    /**
+     * A JWKS carrying the default RS256 key once per given key id, in the given order.
+     */
+    private static String jwksWithKeyIds(List<String> keyIds) {
+        List<String> keys = keyIds.stream().map(keyId -> {
+            String single = InMemoryJWKSFactory.createValidJwksWithKeyId(keyId);
+            return single.substring(single.indexOf('[') + 1, single.lastIndexOf(']')).strip();
+        }).toList();
+        return "{\"keys\":[" + String.join(",", keys) + "]}";
     }
 
     @Test

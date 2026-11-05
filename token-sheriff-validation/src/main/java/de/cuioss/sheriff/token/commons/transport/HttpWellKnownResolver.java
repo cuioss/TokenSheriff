@@ -78,8 +78,9 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
     /**
      * SSRF egress guard applied to the discovery endpoint immediately before it is fetched (C1).
      * Resolving the discovery host fresh at each fetch — rather than trusting an earlier
-     * resolution — also closes the DNS-rebinding window for the well-known document itself,
-     * mirroring the guard {@code HttpJwksLoader} applies to the advertised {@code jwks_uri}.
+     * resolution — narrows the DNS-rebinding window for the well-known document itself, mirroring
+     * the guard {@code HttpJwksLoader} applies to the advertised {@code jwks_uri}. It does not
+     * close it: the HTTP client resolves the host again when it connects.
      */
     private final EgressPolicy egressPolicy;
 
@@ -160,7 +161,7 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
         var converter = new WellKnownConfigurationConverter(
                 config.getParserConfig().getDslJson(),
                 securityEventCounter,
-                config.getParserConfig().getMaxPayloadSize());
+                config.getParserConfig().getMaxHttpResponseSize());
 
         // Create base adapter with ETag caching
         HttpAdapter<WellKnownResult> baseAdapter = ETagAwareHttpAdapter.<WellKnownResult>builder()

@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -48,6 +49,9 @@ import static org.junit.jupiter.api.Assertions.*;
 class HttpJwksLoaderSchedulerTest {
 
     private static final String TEST_KID = InMemoryJWKSFactory.DEFAULT_KEY_ID;
+
+    /** Key id of the key set {@link JwksResolveDispatcher#switchToOtherPublicKey()} serves. */
+    private static final String ROTATED_KID = "alternative-key-id";
     private static final Duration SHORT_STALENESS_BOUND = Duration.ofMillis(50);
 
     @Getter
@@ -158,10 +162,12 @@ class HttpJwksLoaderSchedulerTest {
                 .atMost(3, SECONDS)
                 .until(() -> moduleDispatcher.getCallCounter() > initialCallCount);
 
-        // Verify background refresh update was logged
-        LogAsserts.assertLogMessagePresentContaining(
-                TestLogLevel.INFO,
-                JWTValidationLogMessages.INFO.JWKS_KEYS_UPDATED.resolveIdentifierString());
+        // Verify the background refresh update was logged with the issuer and the rotated key id
+        String expected = JWTValidationLogMessages.INFO.JWKS_KEYS_UPDATED.format("test-issuer",
+                List.of(ROTATED_KID));
+        await("Background refresh to log the rotated key set")
+                .atMost(3, SECONDS)
+                .untilAsserted(() -> LogAsserts.assertLogMessagePresent(TestLogLevel.INFO, expected));
 
         loader.close();
     }

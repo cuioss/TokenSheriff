@@ -89,6 +89,45 @@ class EgressPolicyTest {
             assertDoesNotThrow(() -> policy.check(URI.create(ATTACKER_URL)),
                     "Public addresses must be permitted");
         }
+
+        @ParameterizedTest(name = "rejects {0}")
+        @ValueSource(strings = {
+                "100.64.0.1",       // shared address space 100.64/10, lower edge
+                "100.127.255.254",  // shared address space 100.64/10, upper edge
+                "0.0.0.1",          // "this network" 0/8
+                "0.255.255.255",    // "this network" 0/8, upper edge
+                "255.255.255.255"   // limited broadcast
+        })
+        @DisplayName("Should reject the IPv4 ranges the JDK predicates do not cover")
+        @SuppressWarnings("java:S5778") // URI.create(ATTACKER_URL) is a fixed constant that never throws
+        void shouldRejectRangesBeyondJdkPredicates(String blockedIp) {
+            EgressPolicy policy = EgressPolicy.builder()
+                    .resolver(fixedResolver(blockedIp))
+                    .build();
+
+            TransportException exception = assertThrows(TransportException.class,
+                    () -> policy.check(URI.create(ATTACKER_URL)),
+                    "Egress to " + blockedIp + " must be blocked");
+            assertTrue(exception.getMessage().contains(blockedIp),
+                    "Rejection must name the blocked address, but was: " + exception.getMessage());
+        }
+
+        @ParameterizedTest(name = "allows {0}")
+        @ValueSource(strings = {
+                "100.63.255.255",   // just below 100.64/10
+                "100.128.0.1",      // just above 100.64/10
+                "1.0.0.1",          // just above 0/8
+                "255.255.255.254"   // just below the limited broadcast address
+        })
+        @DisplayName("Should allow the public neighbours of the newly blocked ranges")
+        void shouldAllowBoundaryNeighbours(String publicIp) {
+            EgressPolicy policy = EgressPolicy.builder()
+                    .resolver(fixedResolver(publicIp))
+                    .build();
+
+            assertDoesNotThrow(() -> policy.check(URI.create(ATTACKER_URL)),
+                    "Egress to " + publicIp + " must be permitted");
+        }
     }
 
     @Nested
@@ -120,6 +159,21 @@ class EgressPolicyTest {
                     () -> policy.check(URI.create(ATTACKER_URL)),
                     "Loopback opt-in must not relax site-local blocking");
         }
+
+        @ParameterizedTest(name = "still rejects {0}")
+        @ValueSource(strings = {"100.64.0.1", "0.0.0.1", "255.255.255.255"})
+        @DisplayName("Should still block shared address space, 0/8 and limited broadcast under loopback opt-in")
+        @SuppressWarnings("java:S5778") // URI.create(ATTACKER_URL) is a fixed constant that never throws
+        void shouldStillBlockNewRangesUnderLoopbackOptIn(String blockedIp) {
+            EgressPolicy policy = EgressPolicy.builder()
+                    .allowLoopback(true)
+                    .resolver(fixedResolver(blockedIp))
+                    .build();
+
+            assertThrows(TransportException.class,
+                    () -> policy.check(URI.create(ATTACKER_URL)),
+                    "Loopback opt-in must not relax blocking of " + blockedIp);
+        }
     }
 
     @Nested
@@ -150,6 +204,20 @@ class EgressPolicyTest {
             assertDoesNotThrow(
                     () -> policy.check(URI.create("https://INTERNAL.example.com/jwks")),
                     "Allow-list matching must be case-insensitive");
+        }
+
+        @ParameterizedTest(name = "bypasses {0}")
+        @ValueSource(strings = {"100.64.0.1", "0.0.0.1", "255.255.255.255"})
+        @DisplayName("Should let an allow-listed host bypass the newly blocked ranges")
+        void shouldBypassNewRangesForAllowedHost(String blockedIp) {
+            EgressPolicy policy = EgressPolicy.builder()
+                    .allowedHost("internal.example.com")
+                    .resolver(fixedResolver(blockedIp))
+                    .build();
+
+            assertDoesNotThrow(
+                    () -> policy.check(URI.create("https://internal.example.com/jwks")),
+                    "Allow-listed hosts must bypass every address-range check");
         }
     }
 

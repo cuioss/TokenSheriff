@@ -68,7 +68,7 @@ public final class JWTValidationLogMessages {
         public static final LogRecord JWKS_LOAD_FAILED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(203)
-                .template("Failed to load JWKS")
+                .template("Failed to load JWKS for issuer %s: %s")
                 .build();
 
         public static final LogRecord JWKS_INITIALIZATION_FAILED = LogRecordModel.builder()
@@ -97,10 +97,14 @@ public final class JWTValidationLogMessages {
                 .template("TokenValidator initialized with %s")
                 .build();
 
+        /**
+         * Logged when a JWKS refresh installs a changed key set. Parameters: the issuer the keys
+         * belong to, then the key ids of the newly installed key set in sorted order.
+         */
         public static final LogRecord JWKS_KEYS_UPDATED = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(2)
-                .template("Keys updated due to data change - load state: %s")
+                .template("JWKS keys updated for issuer %s, key ids: %s")
                 .build();
 
         public static final LogRecord JWKS_BACKGROUND_REFRESH_STARTED = LogRecordModel.builder()
@@ -500,7 +504,7 @@ public final class JWTValidationLogMessages {
 
         public static final LogRecord DUPLICATE_JWKS_KID = LogRecordModel.builder()
                 .prefix(PREFIX)
-                .identifier(168)
+                .identifier(171)
                 .template("Duplicate kid '%s' in JWKS: a later key overwrote an earlier one — the JWKS should carry a unique kid per key")
                 .build();
 
@@ -514,6 +518,20 @@ public final class JWTValidationLogMessages {
                 .prefix(PREFIX)
                 .identifier(170)
                 .template("JWKS for issuer '%s' has not been refreshed successfully since %s, exceeding the configured maximum staleness of %s; the loader reports a non-OK status until a refresh succeeds")
+                .build();
+
+        /**
+         * Logged once when the {@code jwks_uri} advertised by the well-known discovery document cannot
+         * be used, for example because it is malformed or uses cleartext HTTP while insecure HTTP is not
+         * allowed. The loader ends in a terminal error status and stops retrying. Parameters: the issuer,
+         * then a fixed reason text naming both causes. The advertised {@code jwks_uri} and the refusal
+         * message of the HTTP handler configuration, which echoes it, are not logged; no document content
+         * is logged.
+         */
+        public static final LogRecord JWKS_URI_UNUSABLE = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(172)
+                .template("Advertised jwks_uri for issuer %s cannot be used, the loader stops retrying: %s")
                 .build();
 
     }

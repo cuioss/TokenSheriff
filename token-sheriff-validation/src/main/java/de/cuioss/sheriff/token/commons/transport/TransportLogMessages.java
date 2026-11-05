@@ -85,6 +85,15 @@ public final class TransportLogMessages {
                 .template("Failed to parse JWKS content: %s")
                 .build();
 
+        /**
+         * The SSRF egress guard ({@link EgressPolicy}) blocked the well-known discovery fetch because
+         * the discovery host resolved to a disallowed address: loopback ({@code 127.0.0.0/8},
+         * {@code ::1}), link-local ({@code 169.254.0.0/16}, {@code fe80::/10}), site-local
+         * ({@code 10.0.0.0/8}, {@code 172.16.0.0/12}, {@code 192.168.0.0/16}), IPv6 unique-local
+         * ({@code fc00::/7}), shared address space ({@code 100.64.0.0/10}), "this network"
+         * ({@code 0.0.0.0/8}) and the IPv6 wildcard {@code ::}, limited broadcast
+         * ({@code 255.255.255.255}) or multicast ({@code 224.0.0.0/4}, {@code ff00::/8}).
+         */
         public static final LogRecord SSRF_EGRESS_BLOCKED_DISCOVERY = LogRecordModel.builder()
                 .prefix(PREFIX)
                 .identifier(168)

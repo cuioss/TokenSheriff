@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.commons.transport;
 import com.dslplatform.json.DslJson;
 import de.cuioss.http.client.ContentType;
 import de.cuioss.http.client.converter.HttpResponseConverter;
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
@@ -55,7 +56,7 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
      * rejection so a reader knows which knob produced the bound and that it is settable.
      */
     private static final String BOUND_ORIGIN =
-            "WellKnownConfig.parserConfig.maxPayloadSize; settable via WellKnownConfig.builder().parserConfig(...)";
+            "WellKnownConfig.parserConfig.maxHttpResponseSize; settable via WellKnownConfig.builder().parserConfig(...)";
 
     /**
      * Constant description of the parsed source, filled into the first placeholder of
@@ -85,8 +86,9 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
     @Override
     public Optional<WellKnownResult> convert(Object rawContent) {
         if (!(rawContent instanceof String stringContent)) {
-            LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, "Expected String content, got: %s",
-                    rawContent != null ? rawContent.getClass().getSimpleName() : "null");
+            String unexpectedTypeDetail = "Expected String content, got: "
+                    + (rawContent != null ? rawContent.getClass().getSimpleName() : "null");
+            LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT, unexpectedTypeDetail);
             return Optional.empty();
         }
 
@@ -132,9 +134,11 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
             return Optional.of(config);
 
         } catch (IOException e) {
+            // A DSL-JSON parse error echoes excerpts of the remote document, so the message is
+            // neutralized against log injection (CWE-117) before it is logged or put into an exception
+            String errorMessage = ErrorTextSanitizer.sanitize(e.getMessage());
             // Check if this is a security limit violation
-            String errorMessage = e.getMessage();
-            if (isSecurityLimitViolation(errorMessage)) {
+            if (isSecurityLimitViolation(e.getMessage())) {
                 LOGGER.warn(TransportLogMessages.WARN.JWKS_JSON_PARSE_FAILED, errorMessage);
                 securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
                 throw new TransportException(
@@ -142,12 +146,18 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
                 );
             }
 
-            // Regular parsing errors
-            LOGGER.error(e, TransportLogMessages.ERROR.JSON_PARSE_FAILED, e.getMessage());
+            // Regular parsing errors. The exception itself is deliberately not handed to the logger: a
+            // stack trace prints its raw message, which echoes the remote document including CR and LF
+            // (CWE-117); the sanitized message above carries the diagnosis
+            LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT, errorMessage);
             return Optional.empty();
         } catch (IllegalArgumentException e) {
-            // Invalid well-known configuration (missing required fields)
-            LOGGER.error(e, TransportLogMessages.ERROR.JSON_PARSE_FAILED, "Invalid well-known configuration: %s", e.getMessage());
+            // Invalid well-known configuration (missing required fields); the exception is not handed
+            // to the logger for the same reason as above
+            String invalidConfigurationDetail = "Invalid well-known configuration: "
+                    + ErrorTextSanitizer.sanitize(e.getMessage());
+            LOGGER.error(TransportLogMessages.ERROR.JSON_PARSE_FAILED, WELL_KNOWN_DOCUMENT,
+                    invalidConfigurationDetail);
             return Optional.empty();
         }
     }
