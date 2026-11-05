@@ -540,7 +540,7 @@ public class TokenValidator implements Closeable {
             // Intentional catch-all: a release step may fail with any unchecked exception or Error, and
             // one failing step must neither stop the remaining steps nor lose its failure. The failure
             // is rethrown once every step ran.
-            catch (Throwable e) {
+            catch (Throwable e) { // NOSONAR java:S1181 - every release step must run after any Throwable, an Error included
                 if (propagated != null) {
                     earlier.add(propagated);
                 }

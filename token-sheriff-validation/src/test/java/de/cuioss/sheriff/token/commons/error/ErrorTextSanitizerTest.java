@@ -168,8 +168,10 @@ class ErrorTextSanitizerTest {
                 .decryptionKey("other-kid", JweTestTokenFactory.generateRsaKeyPair().getPrivate())
                 .build();
         String[] parts = {"header", "encKey", "iv", "ciphertext", "authTag"};
+        JweDecryptor decryptor = new JweDecryptor();
+        SecurityEventCounter counter = new SecurityEventCounter();
         TokenValidationException rejection = assertThrows(TokenValidationException.class,
-                () -> new JweDecryptor().decrypt(parts, header, config, new SecurityEventCounter()));
+                () -> decryptor.decrypt(parts, header, config, counter));
         assertEquals("No decryption key found for kid: " + expected, rejection.getMessage(),
                 "the JWE kid is rendered by the shared variant");
 
