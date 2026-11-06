@@ -297,16 +297,17 @@ class AudienceValidatorTest {
     void shouldNeverSatisfyAudienceFallbackWithNonStringAzp(TokenType tokenType, String jsonType, String azpJson) {
         MapRepresentation body = JsonTypedAzpFixture.bodyWithAzp(azpJson);
         AudienceValidator fallbackValidator = new AudienceValidator(
-                JsonTypedAzpFixture.idsMatchingStringifiedAzp(body), securityEventCounter, false, true);
+                JsonTypedAzpFixture.idsMatchingStringifiedValue(body, ClaimName.AUTHORIZED_PARTY),
+                securityEventCounter, false, true);
 
         assertThrows(TokenValidationException.class,
                 () -> buildAndValidate(fallbackValidator, tokenType, body),
                 tokenType + " with azp as " + jsonType + " must be rejected");
     }
 
-    private static void buildAndValidate(AudienceValidator audienceValidator, TokenType tokenType,
+    private void buildAndValidate(AudienceValidator audienceValidator, TokenType tokenType,
             MapRepresentation body) {
-        audienceValidator.validateAudience(JsonTypedAzpFixture.buildToken(tokenType, body));
+        audienceValidator.validateAudience(JsonTypedAzpFixture.buildToken(tokenType, body, securityEventCounter));
     }
 
     private static TokenContent tokenWithEmptyAudience(TokenType tokenType, boolean azpPresent) {
