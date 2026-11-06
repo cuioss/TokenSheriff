@@ -66,7 +66,7 @@
       "description": "Framework-agnostic OIDC/OAuth client engine \u2014 the outbound counterpart to token-sheriff-validation. Implements provider discovery, client authentication (client_secret_basic/post, private_key_jwt, mTLS), the authorization-code flow with PKCE and PAR, client credentials, refresh with rotation and reuse detection, step-up authentication, DPoP proof generation, userinfo, introspection, revocation and RP-initiated end-session. Adds token lifecycle management (store, scheduler, id-token validation bridge) on the commons transport base.",
       "generation": {
         "by": "architecture",
-        "tree_sha": "b00bef1b09e0b3552778ae3007f1bf62d95d462bed410255d4aabfa634afb003"
+        "tree_sha": "d7c2d5a44b5e33404c47ac622c55354c3d542d03000088b685293b008ae2bef1"
       }
     },
     "token-sheriff-client-quarkus": {
