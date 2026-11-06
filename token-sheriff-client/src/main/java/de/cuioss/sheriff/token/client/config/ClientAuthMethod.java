@@ -23,7 +23,7 @@ import java.util.Optional;
 /**
  * The client-authentication methods this confidential client can present to an OAuth 2.0
  * authorization server's token endpoint (and the other authenticated back-channel endpoints:
- * revocation, introspection, PAR).
+ * revocation, PAR).
  * <p>
  * Each constant carries two pieces of metadata:
  * <ul>

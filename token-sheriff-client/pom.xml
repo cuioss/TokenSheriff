@@ -11,9 +11,10 @@
     <artifactId>token-sheriff-client</artifactId>
     <packaging>jar</packaging>
     <name>Token-Sheriff Client</name>
-    <description>Framework-agnostic OIDC/OAuth client engine for Token-Sheriff. Builds on the commons transport
-        base layer (shipped in token-sheriff-validation) to add the client-side flows — token retrieval,
-        userinfo, revocation, introspection, end-session and PAR. Pure Java, no framework dependency.
+    <description>Framework-agnostic OIDC/OAuth client engine for Token-Sheriff. Drives its own OIDC/OAuth
+        back channel — discovery, token, PAR, userinfo and revocation — on the shared transport
+        primitives from commons (shipped in token-sheriff-validation), and builds the end-session redirect.
+        Pure Java, no framework dependency.
     </description>
 
     <properties>

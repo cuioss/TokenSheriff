@@ -17,7 +17,7 @@
  * Client authentication strategies for the authenticated back-channel endpoints.
  * <p>
  * {@link de.cuioss.sheriff.token.client.auth.ClientAuthentication} decorates a token / PAR /
- * revocation / introspection request with the configured method:
+ * revocation request with the configured method:
  * {@link de.cuioss.sheriff.token.client.auth.ClientSecretBasicAuth} and
  * {@link de.cuioss.sheriff.token.client.auth.ClientSecretPostAuth} (shared secret over TLS),
  * {@link de.cuioss.sheriff.token.client.auth.PrivateKeyJwtAuth} (RFC 7523 signed assertion), and

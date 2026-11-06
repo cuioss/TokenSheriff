@@ -55,9 +55,10 @@ Organized by package under `de.cuioss.sheriff.token.client`:
 * *Logout* (`logout`) — RP-initiated logout / `end_session` (`EndSessionFlow`) with
   exact-match `post_logout_redirect_uri` validation (`PostLogoutRedirectValidator`).
 
-It adds *flows, not HTTP plumbing*: outbound bytes travel through the `commons` transport base
-layer (`de.cuioss.sheriff.token.commons.transport`) that ships inside `token-sheriff-validation`.
-Because it validates the tokens it retrieves, it depends on `token-sheriff-validation` and gets the
+The engine drives its own OIDC/OAuth back channel — discovery, token, PAR, userinfo and
+revocation through `BackChannelHttp` — on the `cui-http` primitives. The `commons` base layer,
+which ships inside `token-sheriff-validation`, supplies the error model, events, metrics and the
+validation-side discovery / JWKS retrieval. Because it validates the tokens it retrieves, it depends on `token-sheriff-validation` and gets the
 `commons` base layer transitively.
 
 == Quick Start

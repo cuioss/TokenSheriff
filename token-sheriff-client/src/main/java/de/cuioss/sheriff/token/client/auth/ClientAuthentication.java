@@ -21,7 +21,7 @@ import java.util.Map;
 
 /**
  * Strategy for authenticating the client on an authenticated back-channel request — the token,
- * pushed-authorization-request, revocation, or introspection endpoint.
+ * pushed-authorization-request, or revocation endpoint.
  * <p>
  * An implementation decorates the outgoing request by adding request headers and/or form
  * parameters. Credentials are only ever placed in an HTTP header or the form-encoded body — never
