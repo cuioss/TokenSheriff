@@ -7,7 +7,7 @@ workstream: WS-05
 
 Correct documentation claims that contradict the code at HEAD: the client "issues no HTTP of its own"
 (five places — D-2); a "128 KB buffer" limit that does not exist (D-6); unmapped requirements CLIENT-23/24
-(D-9); an uncaveated Quarkus version in the performance doc (D-13); introspection described as an
+(D-9); an uncaveated Quarkus version in the performance doc (D-13, already fixed, see deliverable 4); introspection described as an
 implemented authenticated flow (D-14); and the undocumented last-value-wins duplicate-JSON-key semantics
 (V-17d). Closes D-2, D-6, D-9, D-13, D-14, V-17d.
 
@@ -18,7 +18,7 @@ implemented authenticated flow (D-14); and the undocumented last-value-wins dupl
 2. **D-6 / V-17d** — replace "128 KB buffer" with the real `ParserConfig` limits; document duplicate-key
    last-wins behaviour in the security reference (align with PLAN-13's response-size ceiling if landed).
 3. **D-9** — map CLIENT-23 and CLIENT-24 (and CLIENT-21 as architectural) in the client README coverage rows.
-4. **D-13** — "at recording time (March 2026)" caveat for the Quarkus version.
+4. **D-13** — DROPPED 2026-11-06 (cleanup re-grounding): already fixed. `benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc` line 12 reads "Quarkus 3.27.2 (LTS) — version at recording time; project has since upgraded", added by `4f8f3eb6` (#336, 2026-03-23); the figure 3.34.0 no longer appears under `benchmarking/doc`. Nothing to do; D-13 is closed in `findings-disposition.md` as FIXED by that commit.
 5. **D-14** — mark introspection as "endpoint parsed, no flow implemented" (or remove) in the three client docs.
 
 ## Standing Constraints
@@ -46,10 +46,15 @@ implemented authenticated flow (D-14); and the undocumented last-value-wins dupl
 ## Claim Labels
 
 - OBSERVED: "issues no HTTP of its own" at `doc/client/README.adoc`; similar claims in `token-sheriff-client/README.adoc`, client `package-info.java`, `doc/commons/README.adoc`, `doc/README.adoc`; `BackChannelHttp` exists — read at `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/internal/BackChannelHttp.java`
+  - verdict: corroborated | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: n/a | evidence: doc/client/README.adoc:19 still says it issues no HTTP of its own; BackChannelHttp exists
 - OBSERVED: "128 KB" at `doc/validation/security-reference.adoc` and `doc/validation/threat-model.adoc`; no such constant in main code — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/transport/ParserConfig.java`
+  - verdict: corroborated | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: n/a | evidence: security-reference.adoc:58 and threat-model.adoc:92,223 still say 128 KB buffer; real default is 256 KB
 - OBSERVED: CLIENT-23/24 defined in `doc/client/requirements.adoc`, unmapped in `doc/client/README.adoc` coverage rows
+  - verdict: corroborated | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: n/a | evidence: requirements.adoc defines CLIENT-23/24, README rows omit 23, 24 and 21
 - OBSERVED: no `IntrospectionClient*` exists; `ProviderMetadata` parses only `introspection_endpoint` — swept `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/`
-- HYPOTHESIS: the "Quarkus 3.34.0" figure was the version at recording time (March 2026) — confirm/refute at `benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc` (verify-at-outline)
+  - verdict: corroborated | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: n/a | evidence: no IntrospectionClient in client main; ProviderMetadata only parses introspection_endpoint
+- HYPOTHESIS: the "Quarkus 3.34.0" figure was the version at recording time (March 2026) — confirm/refute at `benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc` (verify-at-outline). CONTRADICTED 2026-11-06: the document already carries the caveat and says 3.27.2; D-13 dropped and the spec re-scoped
+  - verdict: contradicted | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: yes | evidence: Analysis-03.2026-JFR-Profiling.adoc:12 already says Quarkus 3.27.2 version at recording time, project has since upgraded; added by 4f8f3eb6 (#336); D-13 dropped
 
 ## Expected Surface
 

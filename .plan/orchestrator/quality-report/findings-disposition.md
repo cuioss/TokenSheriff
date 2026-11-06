@@ -80,30 +80,30 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | TV-1 | major | **FIXED** — misnamed test removed in #795; real confusion covered by `WiredNegativePathAttackTest` (unit gap → PLAN-15) | — |
 | TV-2 | major | **FIXED** — #853 (a9ce05df), PLAN-11; parameterized ACCESS/ID x azp-situation test plus the audience-optional case, asserting `AUDIENCE_MISMATCH` and the counter (test names and assertions read in the merged source) | PLAN-11 |
 | TV-3 | minor | **FIXED** — #795 | — |
-| TV-4 | minor | PARTIAL — EventCategory ordinal removed; LoaderStatus/MeasurementType/EventCategory valueOf tests remain | PLAN-15 |
+| TV-4 | minor | PARTIAL — EventCategory ordinal removed; LoaderStatus/MeasurementType/EventCategory valueOf tests remain | PLAN-15 — NOT FIXED by operator decision (#867, 2026-11-06): the removals were flagged `weakened_test` and the three enum tests restored; trivial enum tests stay as a project convention |
 | TV-5 | minor | **FIXED** — #795 | — |
-| TV-6 | minor | VALID — tampered-payload tests fail at format, assert no event type | PLAN-15 |
-| TV-7 | info | VALID (intentional) — Javadoc note only | PLAN-15 |
+| TV-6 | minor | VALID — tampered-payload tests fail at format, assert no event type | PLAN-15 — FIXED in #867 (`262369d6`, 2026-11-06) |
+| TV-7 | info | VALID (intentional) — Javadoc note only | PLAN-15 — FIXED in #867 (`262369d6`): Javadoc note on `TestTokenHolder` |
 | TV-8 | info | NO-ACTION — fixture self-tests; soft assertions acceptable for fixture checks | — |
-| TC-1 | major | CHANGED — `RevocationSpecIT` replaced by `RefreshErrorPathSpecIT`; `invalid_grant` assertion residual | PLAN-16 |
+| TC-1 | major | CHANGED — `RevocationSpecIT` replaced by `RefreshErrorPathSpecIT`; `invalid_grant` assertion residual | PLAN-16 — FIXED in #868 (`306e6053`, 2026-11-06): `RefreshErrorPathSpecIT` asserts `invalid_grant` |
 | TC-2 | major | **FIXED** (CHANGED) — `RefreshProductionPathSpecIT` asserts rotation | — |
-| TC-3 | minor | VALID — logout IT accepts error page | PLAN-16 |
-| TC-4 | minor | VALID — mix-up IT bypasses wired `CallbackHandler` | PLAN-16 |
+| TC-3 | minor | VALID — logout IT accepts error page | PLAN-16 — FIXED in #868 (`306e6053`): exact `Location` plus a negative case |
+| TC-4 | minor | VALID — mix-up IT bypasses wired `CallbackHandler` | PLAN-16 — FIXED in #868 (`306e6053`): drives the wired `CallbackHandler` |
 | TC-5 | minor | **FIXED** — #840 (a56b1b59), PLAN-06; pinned through `AuthorizationCodeFlow.exchange` (closed per PR; code not re-read) | PLAN-06 |
 | TC-6 | minor | **FIXED** — #832 (31fb2212), PLAN-02; reflection removed, post-eviction replay pinned (closed per PR; code not re-read) | PLAN-02 |
 | TC-7 | minor | **FIXED** — #862 (f29ca9cb), PLAN-14; valid-JSON adversarial token responses added in `TokenResponseAdversarialTest`, plus a repeated-member refusal in `TokenEndpointClient` (read in the merged diff) | PLAN-14 |
-| TC-8 | minor | VALID — `ClientAuthSpecIT` positive-only | PLAN-16 |
+| TC-8 | minor | VALID — `ClientAuthSpecIT` positive-only | PLAN-16 — FIXED in #868 (`306e6053`): negatives added, with a production change (`ClientAuthenticationFailedException`) |
 | TC-9 | info | PARTIAL — PKCE dup removed (#796); unit hygiene **FIXED** by #862 (f29ca9cb), PLAN-14 (`TokenEndpointTransportControlTest` moved, unused `@EnableGeneratorController` dropped; read in the merged diff); IT TLS trust-all → Watch | PLAN-14 |
 | gaps VAL 1 | – | **FIXED** — = TV-2, #853 (a9ce05df), PLAN-11 | PLAN-11 |
-| gaps VAL 2,3,5 | – | VALID — exp/nbf fixed-clock boundaries, unit RS/HS confusion | PLAN-15 |
+| gaps VAL 2,3,5 | – | VALID — exp/nbf fixed-clock boundaries, unit RS/HS confusion | PLAN-15 — FIXED in #867 (`262369d6`) |
 | gap VAL 4 | – | **FIXED** — #853 (a9ce05df), PLAN-11; new `StrictStringMapper` rejects any non-string `azp`; residual: `client_id` is still string-coerced by `IdentityMapper` (operator decision, see epic.md Watches) | PLAN-11 |
-| gap VAL 6 | – | PARTIAL — dup-kid warning pinned (#803); winning key + counter unasserted | PLAN-15 |
-| gap VAL 7 | – | = TV-6 | PLAN-15 |
+| gap VAL 6 | – | PARTIAL — dup-kid warning pinned (#803); winning key + counter unasserted | PLAN-15 — FIXED in #867 (`262369d6`) |
+| gap VAL 7 | – | = TV-6 | PLAN-15 — FIXED in #867 (`262369d6`) |
 | gap VAL 8 | – | = V-1 — **FIXED** by #835 (e010c5cf), PLAN-05 | PLAN-05 |
 | gaps CLI 1,2 | – | = TC-5, TC-6 | PLAN-06, PLAN-02 |
 | gaps CLI 3,4 | – | FIXED (4: `invalid_grant` residual = TC-1) | PLAN-16 |
 | gaps CLI 7,8,9 | – | VALID — valid-JSON adversarial, discovery edges, iss/logout normalization | PLAN-14 |
-| gaps IT 5,6,10 | – | VALID — = TC-3, TC-8, PKCE code injection at AS | PLAN-16 |
+| gaps IT 5,6,10 | – | VALID — = TC-3, TC-8, PKCE code injection at AS | PLAN-16 — FIXED in #868 (`306e6053`) |
 
 ## AsciiDoc (D)
 

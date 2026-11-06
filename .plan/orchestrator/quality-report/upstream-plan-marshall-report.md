@@ -389,3 +389,72 @@ where marked. Plugin 0.1.2046.
   as a removal and fired repeatedly until the operator accepted it per head. Read by the orchestrator in the merged
   diff: the removed and added classes carry the same two methods and display names. Suggested: pair deleted and added
   files by rename similarity or method set before emitting.
+
+## Addendum 2026-11-06: PLAN-22 (3 plan-marshall messages)
+
+Read from `plan-22-residual-docs-tests-adrs-001.md` and the merged PR #863; NOT sent. Added after the 2026-11-05 filing.
+
+- **`effort` unstamped again, and the refresh cannot recover it** (PLAN-22). `landing-check` reports `complete: false`,
+  missing `effort`. The message states why: the plan status carried no `effort` stamp, and `refresh-runtime-stamp` at
+  landing returned `refreshed: false, reason: model_unknown`, keeping the start-time self-reported model. Ninth
+  producer of this gap in the epic. Suggested: stamp `effort` at phase-1-init from the same source as the model, or let
+  the refresh derive it independently of `model_unknown`.
+- **An `operator_override` acceptance carries no finding identity.** Both the functional review and the code review were
+  closed with `acceptance=operator_override`, "each accepting one residual finding", but the landing message names
+  neither finding, and the plan workspace is deleted after finalize, so the accepted findings cannot be read back by
+  the orchestrator. Suggested: list the accepted finding ids (or titles) in the landing facts next to `acceptance`.
+- **A behaviour change under a docs-only deliverable is not flagged in the PR intent.** The PR body says "two small,
+  tested behaviour changes" and names one (`TokenValidator.close`); the second (a refreshed ID token that fails
+  validation now quarantines a rotated session in `TokenLifecycleManager`, with a new 178-line test) is only visible in
+  the diff and in the CodeRabbit summary. Read by the orchestrator in the merged diff. Suggested: derive the intent's
+  behaviour-change list from the realized footprint, not only from the outline.
+
+## Addendum 2026-11-06 (second): PLAN-16 (5 plan-marshall messages)
+
+Read from `plan-16-keycloak-it-assertions-001` to `-005` and the merged PR #868; NOT sent. Added after the PLAN-22 addendum above.
+
+- **Spec authoring: a literal IdP wire value was never checked** (PLAN-16-001). The epic spec said a wrong client secret
+  answers `invalid_client`; Keycloak answers 401 `unauthorized_client`, so a test-only plan became a library change.
+  Owner of the fix is the `plan-orchestrator` spec review: a claim that names an external wire value (error code, status)
+  must be labelled HYPOTHESIS and re-grounded against a run or the IdP's documentation, and a plan asserting an unverified
+  outcome should not be scoped as test-only. The orchestrator-side lapse is acknowledged in `epic.md`.
+- **Negative-path ITs must assert the server's specific rejection** (PLAN-16-002). Four assertions accepted unrelated
+  failures (no `Location`, any 400, a `RuntimeException` supertype, a partial `Location`). Suggested for the
+  `junit-integration` and `persona-integration-tester` standards: error code, absence of the success artifact, exact
+  exception type, and a complete `Location` comparison.
+- **A post-review nitpick commit re-runs every head-bound finalize gate** (PLAN-16-003). Four trivial test-assertion
+  changes cost about 1.5 hours. Options the plan lists: batch bot fixes after every bot finished, defer trivial nitpicks
+  with a reasoned reply, or scope the gate re-run to a test-sources-only diff.
+- **An ADR number fixed at draft time collided with ADRs merged meanwhile** (PLAN-16-004). The draft took 0020; #863
+  added 0020 to 0026. Suggested: allocate through `manage-adr` as late as possible and re-check against the base branch at
+  finalize, and treat the number as a shared sequence in an epic that lands plans in parallel.
+- **A parked ADR draft has no durable home.** The plan left its draft untracked in the main checkout's `.plan/temp/`
+  because filing it would have cost another gate cycle (PLAN-16-005). Read by the orchestrator: the file exists there and
+  was copied into the ledger tree. Suggested: let `adr-propose` emit the draft into the landing message or the inbox.
+- **`effort` unstamped** (tenth producer, same cause as the PLAN-22 item above: `refresh-runtime-stamp` returned
+  `model_unknown`).
+
+## Addendum 2026-11-06 (third): PLAN-15 (6 plan-marshall messages)
+
+Read from `plan-15-validation-test-gaps-001` to `-009` and the merged PR #867; NOT sent. Added after the PLAN-16 addendum above.
+
+- **A deliverable that mandates test removal collides with the `weakened_test` check** (PLAN-15-001). The outline asked to delete
+  trivial enum tests; the finalize functional review flagged every removal as a blocking finding and the operator reversed the
+  deliverable late. Suggested: let the outline declare a sanctioned removal list the check can read, or settle up front whether
+  low-value tests may be deleted. Same check family as the PLAN-14 false positive on a pure file move.
+- **Acceptance criteria observable only after push make the pre-push functional review refuse its verdict** (PLAN-15-002). "Sonar
+  issue gone" and "PR body records X" cannot be evidenced before the push, so the verifier refused twice and the operator closed
+  the review by hand. Suggested: mark such criteria post-push at outline time, owned by `sonar-roundtrip` or `create-pr`.
+- **A defect-class survey scoped to named sites missed its siblings** (PLAN-15-003). Four named parse sites were fixed; code review
+  then found four more, costing a loop-back, two fix tasks and a scope-creep acceptance. Suggested: when the defect is a library call
+  pattern, enumerate every call site of the pattern across all modules by content search at outline.
+- **Non-discriminating test fixtures** (PLAN-15-005). A tamper helper located `kid` by the first text match and a duplicate-kid test
+  put RS256 before RS384 only; both would pass against a simpler wrong implementation and slipped past the in-run code review.
+  Suggested for the test-code review checklist: locate structured data by structure, and test an order-sensitive rule in both orders.
+- **Finalize-time commits carry no change-ledger row** (PLAN-15-006). An operator-directed commit during functional review had no
+  `kind=change` row, so the 5-execute to 6-finalize transition was refused (`execute_commits_unrecorded`). Same cause the PLAN-13
+  addendum reports for finalize commits: a second report.
+- **`effort resolve-target` rejects `--dispatch-context`** (PLAN-15-007). `lessons-capture.md` says the dispatcher passes the dispatch
+  context to the resolve seam; the script's argparse surface does not declare the flag (accepted: apply, caller, default, field, phase,
+  plan-id, role, workflow, workflow-gated). One rejected call, retry without the flag succeeded. Doc and script disagree.
+- **`effort` unstamped** (eleventh producer, same cause: `refresh-runtime-stamp` returned `model_unknown`).

@@ -51,13 +51,23 @@ Closes J-1…J-7, J-9…J-12.
 ## Claim Labels
 
 - OBSERVED: `IssuerConfig` example calls `issuerConfig.initJWKSLoader(new SecurityEventCounter())`; no such method — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/IssuerConfig.java` § class Javadoc
+  - verdict: corroborated | checked_at: 262369d6 | by: quality-report/cleanup | rescoped: n/a | evidence: IssuerConfig.java:67 javadoc calls initJWKSLoader, no such method
 - OBSERVED: `createHttpLoader(config, securityEventCounter)` vs signature `createHttpLoader(HttpJwksLoaderConfig)` — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/JwksLoaderFactory.java`
+  - verdict: corroborated | checked_at: 262369d6 | by: quality-report/cleanup | rescoped: n/a | evidence: JwksLoaderFactory.java:43 javadoc calls createHttpLoader(config, counter); only createHttpLoader(HttpJwksLoaderConfig) exists
 - OBSERVED: examples use `Optional<DecodedJwt>` / `getRawToken()`; real API `DecodedJwt decode(String)` throws, record accessor `rawToken()` — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/NonValidatingJwtParser.java`
+  - verdict: corroborated | checked_at: 262369d6 | by: quality-report/cleanup | rescoped: n/a | evidence: NonValidatingJwtParser javadoc uses Optional/getRawToken; real API is DecodedJwt decode(String), rawToken()
 - OBSERVED: `SignatureAlgorithmPreferences` has two constructors, no builder — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/security/SignatureAlgorithmPreferences.java`
+  - verdict: corroborated | checked_at: 262369d6 | by: quality-report/cleanup | rescoped: n/a | evidence: SignatureAlgorithmPreferences has two ctors, no builder; IssuerConfig.java:763 javadoc uses builder()
 - OBSERVED: `ClaimName.of` does not exist (`fromString` returns `Optional`) — read at `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/validation/DiscoverableTokenValidationRule.java`
+  - verdict: corroborated | checked_at: 262369d6 | by: quality-report/cleanup | rescoped: n/a | evidence: DiscoverableTokenValidationRule.java:39 uses ClaimName.of; only fromString exists
 - OBSERVED: `HttpJwksLoaderConfig` examples without `issuerIdentifier` throw on `build()` in `TokenValidator`, `jwks/http/package-info`, `JwksLoaderFactory` — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/transport/HttpJwksLoaderConfig.java` § `build`
+  - verdict: corroborated | checked_at: 262369d6 | by: quality-report/cleanup | rescoped: n/a | evidence: HttpJwksLoaderConfig.build() throws without issuerIdentifier; three javadoc examples omit it
 - OBSERVED: `jwks/http/package-info.java` describes `JwksHttpClient`, `JwksCacheManager`, `BackgroundRefreshManager`; none exist — swept the repository
+  - verdict: corroborated | checked_at: 262369d6 | by: quality-report/cleanup | rescoped: n/a | evidence: jwks/http/package-info.java describes JwksHttpClient, JwksCacheManager, BackgroundRefreshManager; none exist
 - HYPOTHESIS: after PLAN-01/07 the `HttpJwksLoader` public surface used in examples is unchanged — confirm/refute at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java` public methods (verify-at-outline)
+  - verdict: corroborated | checked_at: 262369d6 | by: quality-report/cleanup | rescoped: n/a | evidence: HttpJwksLoader public surface still has the methods the examples use; before/after not diffed
+- OBSERVED: PLAN-22 (#863, merge `38aefc0a`) changed two paths this spec declares: `TokenValidator.java` (+92: `close()` now runs every release step through a new `releaseInOrder` helper and attaches earlier failures as suppressed) and `TokenSheriffClientProcessor.java` (Javadoc: the `CLIENT-20` versus `CLIENT-21` text) — read in the merged diff; re-read both at outline before editing their Javadoc
+  - verdict: corroborated | checked_at: 262369d6 | by: quality-report/cleanup | rescoped: n/a | evidence: TokenValidator.close uses releaseInOrder and TokenSheriffClientProcessor javadoc has CLIENT-20/21, both by 38aefc0a
 
 ## Expected Surface
 

@@ -2,10 +2,10 @@
   "id": "PLAN-16",
   "slug": "keycloak-it-assertions",
   "workstream": "WS-03",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-16-keycloak-it-assertions",
+  "pr": "868",
+  "landing": "landings/PLAN-16.md",
   "seq": 16
 }
