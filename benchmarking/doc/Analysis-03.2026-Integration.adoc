@@ -264,7 +264,7 @@ NOTE: From JFR profiling run (50 connections). See link:Analysis-03.2026-JFR-Pro
 * **50 connections is optimal**: peak throughput for all endpoints
 * **Smooth monotonic degradation** from 50 to 300 connections across all endpoints
 * **JWT/Health latency ratio stable** at ~3.0-3.7x across all connection counts, confirming proportional scaling
-* **JWT and Direct Validation track identically** at every connection count — the gap never exceeds 210µs (<2%), confirming CDI overhead is noise (see <<_cdi_overhead>>)
+* **JWT and Direct Validation track identically** at every connection count — the gap never exceeds 210µs (<2%), confirming CDI overhead is noise (see xref:#_cdi_overhead[])
 * **At 300 connections**, JWT at 22,745 req/s with 58.52ms P99
 
 == Per-Thread and Per-CPU Efficiency (50 connections)

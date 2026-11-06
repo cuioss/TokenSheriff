@@ -23,10 +23,10 @@ The catalog builds on the foundational OAuth 2.0 threat model
 (https://www.rfc-editor.org/rfc/rfc9700[RFC 9700]). Those two are the catalog's general
 foundation, not a blanket warrant for every entry. Each entry cites *its own* source, a
 mitigation, and the covering `CLIENT-N` requirement, grouped by aspect —
-and <<T-SCOPE-DRIFT>> in particular is recorded as prudent hardening with no RFC mandate
+and xref:#T-SCOPE-DRIFT[] in particular is recorded as prudent hardening with no RFC mandate
 behind it. Threats are kept *separate by
 aspect* and *not blended* with the transport or token-trust threats owned elsewhere
-(<<_out_of_scope_delegated>>).
+(xref:#_out_of_scope_delegated[]).
 
 == System context
 
@@ -43,7 +43,7 @@ The client engine:
 * Triggers RP-initiated logout and honours step-up challenges.
 * Drives its *own* outbound OIDC/OAuth back-channel HTTP (discovery, token, userinfo, revocation,
   PAR) on the `cui-http` transport primitives, and applies an *in-module egress / path + scheme
-  control* before each fetch (<<T-SSRF-ADVERTISED>>). It inherits only the low-level transport
+  control* before each fetch (xref:#T-SSRF-ADVERTISED[]). It inherits only the low-level transport
   primitives (the `cui-http` TLS enforcement) and the validation pipeline's own JWKS retrieval;
   it does not delegate the back-channel fetches themselves.
 
@@ -351,7 +351,7 @@ integration suite covers only threats reproducible against real providers:
   `cui-http` TLS primitive and does not restate it (`T-TLS-TOKEN` above records that reliance).
   *SSRF / egress on advertised back-channel URLs is no longer delegated* — the engine owns an
   in-module path/scheme egress control and size-bounded reads on its own fetches
-  (<<T-SSRF-ADVERTISED>>); only host-address reachability filtering (link-local / internal-address
+  (xref:#T-SSRF-ADVERTISED[]); only host-address reachability filtering (link-local / internal-address
   blocking) and response-DoS on the *validation pipeline's own JWKS retrieval* stay
   commons / validation concerns (`T-DOS`, `T-DISCOVERY`).
 * *Token-trust threats* — forged signatures, `alg` confusion, claim tampering, expiry / replay

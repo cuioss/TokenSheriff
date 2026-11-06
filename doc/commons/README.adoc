@@ -41,7 +41,7 @@ xref:architecture.adoc[Architecture]).
 . xref:requirements.adoc[Requirements] — the `COMMONS-N` contract, grouped by concern.
 . xref:architecture.adoc[Architecture] — the base layer and its ArchUnit boundary.
 . xref:threat-model.adoc[Threat Model] — the transport / error-leakage threats commons owns.
-. The <<_document_map,specifications>> — how each concern is realized.
+. The xref:#_document_map[specifications] — how each concern is realized.
 
 == [[_document_map]] Document map
 

@@ -82,7 +82,7 @@ order, which checks) and *drives its own hardened OIDC/OAuth back-channel HTTP* 
 `cui-http` transport primitives (`HttpHandler`, TLS, the `de.cuioss.http.security` egress
 pipeline); validation is the *trust* layer. The engine reuses commons' transport *library*,
 but it no longer delegates the OIDC/OAuth back-channel fetches to a commons transport service —
-see <<_owned_back_channel_http>>.
+see xref:#_owned_back_channel_http[].
 
 == Confidential authorization-code + PKCE sequence
 
@@ -92,7 +92,7 @@ the browser):
 image::../resources/diagrams/client-auth-code-pkce.svg["Confidential authorization-code + PKCE flow — the client builds a PKCE-protected request, the user authenticates at the AS, the form_post callback returns the code with no token in the URL, and the client verifies state/iss, exchanges the code over the back channel, validates the tokens, stores them server-side, and returns only a session cookie", align=center]
 
 The *browser never receives a usable token*. What the browser holds is the BFF's own
-session artifact — see <<_bff_binding_shapes>>.
+session artifact — see xref:#_bff_binding_shapes[].
 
 == [[_bff_binding_shapes]] BFF binding shapes (enabled, not built here)
 
@@ -125,7 +125,7 @@ choice*; it implements neither.
 * *Engine owns its back-channel HTTP*: the engine drives its *own* outbound OIDC/OAuth
   back-channel HTTP (discovery, token, userinfo, revocation, PAR) on the `cui-http` transport
   library, and applies its own in-module egress control before each fetch
-  (<<_owned_back_channel_http>>). It reuses commons' transport *primitives* (`HttpHandler`, TLS,
+  (xref:#_owned_back_channel_http[]). It reuses commons' transport *primitives* (`HttpHandler`, TLS,
   the `de.cuioss.http.security` pipeline), not a commons transport *service*.
 * *Engine throws, edge renders*: the pure-Java engine throws commons typed exceptions
   (`COMMONS-9`); only the HTTP edge produces problem+json (`CLIENT-20`, `COMMONS-10`).
