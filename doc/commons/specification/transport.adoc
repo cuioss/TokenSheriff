@@ -61,7 +61,8 @@ xref:../requirements.adoc#COMMONS-2[COMMONS-2]. Relaxing it narrows hostname mat
 untrusted or expired certificate is still rejected — and it is reachable from two configuration
 surfaces: `sheriff.token.issuers.<name>.jwks.http.verify-hostname` (per-issuer, covering that
 issuer's JWKS and well-known fetches) and `sheriff.client.verify-hostname` (client-wide, covering
-every back-channel call the client engine makes). Both exist for SAN-mismatched development and
+every HTTPS back-channel call the client engine makes; a cleartext `http` target carries no TLS
+and so no hostname check). Both exist for SAN-mismatched development and
 test topologies, never production; see
 xref:../../adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008].
 
@@ -174,7 +175,8 @@ dispatcher per new endpoint, each following the existing pattern
 | `JwksResolveDispatcher` (existing) | Valid JWKS | Internal-range redirect, oversized JWKS
 |===
 
-The token, userinfo, revocation, introspection, end-session, and PAR doubles are driven
-by the client engine; `WellKnownDispatcher` and `JwksResolveDispatcher` back the
-validation-side Discovery/JWKS coverage. All are unit-test doubles for MockWebServer
-adversarial coverage.
+The token, userinfo, revocation and PAR doubles are driven by the client engine; the
+introspection and end-session doubles are exercised only by the direct dispatcher smoke tests
+(`EndpointDispatchersTest`), because the engine reaches neither endpoint.
+`WellKnownDispatcher` and `JwksResolveDispatcher` back the validation-side Discovery/JWKS
+coverage. All are unit-test doubles for MockWebServer adversarial coverage.
