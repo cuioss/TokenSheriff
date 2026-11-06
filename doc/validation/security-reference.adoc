@@ -55,7 +55,9 @@ TLS hostname verification is enforced by default and can be relaxed per issuer v
 [[safe-parsing]]
 === Safe Parsing
 
-`NonValidatingJwtParser` enforces: token size (8 KB), payload size (8 KB), string size (4 KB), buffer size (128 KB). Protects against memory exhaustion and malformed input attacks.
+`NonValidatingJwtParser` enforces the `ParserConfig` limits: token size 8 KB (`maxTokenSize`), each decoded header / payload part 8 KB (`maxPayloadSize`), string length 4 KB (`maxStringLength`), JSON nesting depth 10 (`maxNestingDepth`) and array size 1000 (`maxArraySize`). Protects against memory exhaustion and malformed input attacks. JWKS and well-known discovery HTTP response bodies have a separate 256 KB ceiling (`maxHttpResponseSize`), enforced while the body streams.
+
+A member name duplicated in a JWT header or payload is not rejected: the last occurrence wins. The header is deserialized by DSL-JSON into `JwtHeader` and the payload into a `Map` by `MapRepresentation.fromJson`, both of which keep the last value read. A member whose last occurrence is JSON `null` is treated as absent.
 
 [[cryptographic-agility]]
 === Cryptographic Agility
