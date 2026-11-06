@@ -48,10 +48,13 @@
  *       {@link de.cuioss.sheriff.token.validation.jwks.JwksLoader#getKeyInfo(String)} only reads the
  *       installed key set; it never triggers loading.</li>
  *   <li><strong>Background refresh:</strong> when enabled, a scheduled task re-fetches the JWKS through
- *       the ETag-aware adapter, so an unchanged key set costs an HTTP 304 instead of a download. The
- *       egress guard is re-checked on every refresh.</li>
+ *       the ETag-aware adapter, so when the server supports conditional requests an unchanged key set
+ *       may return an HTTP 304 instead of a full download. The egress guard is re-checked on every
+ *       refresh.</li>
  *   <li><strong>Key rotation grace period:</strong> a key set replaced by a refresh is retained as a
- *       retired key set for a grace period, so tokens signed with a just-rotated key still validate.</li>
+ *       retired key set for up to the configured grace period, so tokens signed with a just-rotated key
+ *       still validate. The oldest retired set is discarded sooner when the configured maximum number of
+ *       retired key sets is exceeded, and a zero grace period disables retention.</li>
  *   <li><strong>Failure handling:</strong> a failed refresh keeps the installed keys; the full status
  *       contract is documented on {@link de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader}.</li>
  * </ol>
@@ -66,6 +69,7 @@
  *     .build();
  *
  * // Create the loader and start loading the keys
+ * SecurityEventCounter securityEventCounter = new SecurityEventCounter();
  * JwksLoader loader = JwksLoaderFactory.createHttpLoader(config);
  * LoaderStatus status = loader.initJWKSLoader(securityEventCounter).join();
  *

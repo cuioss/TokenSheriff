@@ -46,6 +46,8 @@ import lombok.experimental.UtilityClass;
  * JwksLoader loader = JwksLoaderFactory.createHttpLoader(config);
  * CompletableFuture<LoaderStatus> initFuture = loader.initJWKSLoader(securityEventCounter);
  *
+ * // getKeyInfo never triggers loading: wait for the asynchronous initial load first
+ * initFuture.join();
  * // After initialization completes
  * Optional<KeyInfo> keyInfo = loader.getKeyInfo("kid123");
  * }

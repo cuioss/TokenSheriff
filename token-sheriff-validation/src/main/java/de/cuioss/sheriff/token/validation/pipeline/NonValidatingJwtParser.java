@@ -61,7 +61,9 @@ import java.util.Objects;
  *     .build();
  *
  * try {
- *     // Decode a JWT token; an invalid token is rejected with a TokenValidationException
+ *     // Decode a JWT token; parsing failures can throw a TokenValidationException.
+ *     // This parser does NOT validate the signature, and a payload of JSON null
+ *     // (e.g. Base64Url "bnVsbA") decodes to an empty body.
  *     DecodedJwt jwt = parser.decode(tokenString);
  *
  *     // Access common JWT fields with convenience methods
@@ -102,9 +104,9 @@ import java.util.Objects;
  * DecodedJwt result = customParser.decode(tokenString);
  * }
  * <p>
- * Example handling invalid tokens (a {@code null}, empty or oversized token is a precondition
- * violation that {@code TokenStringValidator} rejects before the parser is called; passing one here
- * throws an {@link IllegalArgumentException}):
+ * Example handling invalid tokens (passing a {@code null}, empty or oversized token to the parser
+ * throws an {@link IllegalArgumentException}; {@code TokenStringValidator} checks the token size before
+ * ID-token parsing, but its limit can differ from the parser limit when JWE is configured):
  * {@snippet :
  * // An invalid token format is rejected, never returned
  * try {

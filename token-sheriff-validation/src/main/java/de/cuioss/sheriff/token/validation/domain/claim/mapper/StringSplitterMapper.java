@@ -33,8 +33,9 @@ import java.util.Optional;
  * This is particularly useful for claims that contain multiple values in a single string
  * separated by a specific character (e.g., comma-separated roles, colon-separated groups).
  * <p>
- * {@link #map(MapRepresentation, String)} returns {@code null} when the claim is absent and throws an
- * {@link IllegalArgumentException} when the claim is present but not a string.
+ * {@link #map(MapRepresentation, String)} returns {@code null} when the claim is absent or has a JSON
+ * {@code null} value, and throws an {@link IllegalArgumentException} only when the claim has a non-null
+ * value that is not a string.
  * <p>
  * Example usage:
  * {@snippet :
