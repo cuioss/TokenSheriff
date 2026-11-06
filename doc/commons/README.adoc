@@ -19,9 +19,11 @@ re-packaging and the ArchUnit boundary live inside `token-sheriff-validation`.
 Commons gathers the four cross-cutting concerns every capability needs, and *nothing that
 interprets trust*:
 
-* *Transport* (`commons.transport`) — all outbound IdP HTTP (discovery, JWKS, token,
-  userinfo, revocation, introspection, end-session, PAR) with TLS enforcement, SSRF defence,
-  DoS bounds, resilience and caching.
+* *Transport* (`commons.transport`) — the validation-side outbound IdP HTTP (discovery, JWKS)
+  and the shared transport primitives: TLS enforcement, SSRF egress policy, DoS bounds,
+  resilience and caching. The client engine drives its own back channel (token, userinfo,
+  revocation, PAR) on those primitives; end-session is a front-channel redirect, and no
+  component implements introspection.
 * *Error model* (`commons.error`) — the typed-exception hierarchy libraries throw, which the
   HTTP edges render as RFC 9457 problem+json; inbound IdP errors are normalized, not passed
   through.
@@ -71,5 +73,5 @@ xref:architecture.adoc[Architecture]).
 
 * xref:../README.adoc[Documentation Hub]
 * xref:../validation/README.adoc[Validation] — the token-trust pipeline that ships alongside this base layer
-* xref:../client/README.adoc[Client] — the consumer of the extended transport
+* xref:../client/README.adoc[Client] — the consumer of the transport primitives
 * xref:../adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc[Module Architecture decision] — why commons is an enforced layer, not a separate artifact

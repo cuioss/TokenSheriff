@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 /**
- * Transport surface of the {@code commons} base layer — all outbound IdP HTTP.
+ * Transport surface of the {@code commons} base layer — validation-side discovery and JWKS
+ * retrieval plus shared transport primitives.
  * <p>
- * This package owns the framework-agnostic transport foundation that both token
- * validation and the client engine sit on: OIDC discovery
- * ({@link de.cuioss.sheriff.token.commons.transport.HttpWellKnownResolver} /
+ * This package owns the framework-agnostic transport foundation of token validation: OIDC
+ * discovery ({@link de.cuioss.sheriff.token.commons.transport.HttpWellKnownResolver} /
  * {@link de.cuioss.sheriff.token.commons.transport.WellKnownConfig}) and JWKS retrieval
  * ({@link de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig} /
- * {@link de.cuioss.sheriff.token.commons.transport.JwksHttpContentConverter}), together with
- * the shared JSON payload types ({@link de.cuioss.sheriff.token.commons.transport.Jwks},
+ * {@link de.cuioss.sheriff.token.commons.transport.JwksHttpContentConverter}). The client engine
+ * fetches its own discovery document over its own back channel and reuses only the shared
+ * primitives — the {@link de.cuioss.sheriff.token.commons.transport.ParserConfig} DSL-JSON instance
+ * and the {@code cui-http} handler. The package also provides the shared JSON payload types
+ * ({@link de.cuioss.sheriff.token.commons.transport.Jwks},
  * {@link de.cuioss.sheriff.token.commons.transport.WellKnownResult}), the JSON parser security
  * configuration ({@link de.cuioss.sheriff.token.commons.transport.ParserConfig}) and the async
  * loading-status contract

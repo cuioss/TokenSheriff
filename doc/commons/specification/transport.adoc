@@ -35,8 +35,10 @@ revocation, PAR) on these primitives
 |===
 
 Discovery and JWKS are *relocated existing code* (`wellknown`, `jwks.http`); the remaining
-six are *transport contracts* the OIDC client engine drives with its own back-channel HTTP.
-All eight are exercised by dispatchers in the `generators` test artifact.
+six are *transport contracts*. The client engine drives token,
+userinfo, revocation and PAR over its own back channel, builds the end-session redirect on the
+front channel, and implements no introspection flow. All eight are exercised by dispatchers in
+the `generators` test artifact.
 
 == Security controls
 
