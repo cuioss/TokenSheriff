@@ -241,6 +241,29 @@ class JWKSKeyLoaderTest {
         }
 
         @Test
+        @DisplayName("Should resolve a duplicate key id to the last key when the input order is reversed")
+        void shouldResolveDuplicateKeyIdToLastKeyInReverseOrder() {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            JWKSKeyLoader loader = initializedLoader(combineJwks(
+                    InMemoryJWKSFactory.createValidJwksWithKeyId(InMemoryKeyMaterialHandler.Algorithm.RS384, FIRST_KID),
+                    InMemoryJWKSFactory.createValidJwksWithKeyId(InMemoryKeyMaterialHandler.Algorithm.RS256, FIRST_KID)),
+                    counter);
+
+            Optional<KeyInfo> keyInfo = loader.getKeyInfo(FIRST_KID);
+
+            assertTrue(keyInfo.isPresent(), "The duplicated key id should resolve");
+            assertAll("Last key wins",
+                    () -> assertEquals("RS256", keyInfo.get().algorithm(), "The last key's algorithm should win"),
+                    () -> assertEquals(
+                            InMemoryKeyMaterialHandler.getPublicKey(InMemoryKeyMaterialHandler.Algorithm.RS256, FIRST_KID),
+                            keyInfo.get().key(), "The last key's material should win"),
+                    () -> assertEquals(1, counter.getCount(SecurityEventCounter.EventType.DUPLICATE_JWKS_KID),
+                            "The duplicate should be counted exactly once"));
+            LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                    WARN.DUPLICATE_JWKS_KID.resolveIdentifierString());
+        }
+
+        @Test
         @DisplayName("Should omit a blank key id that getKeyInfo cannot resolve")
         void shouldOmitBlankKeyId() {
             JWKSKeyLoader loader = initializedLoader(combineJwks(

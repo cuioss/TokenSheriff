@@ -167,6 +167,28 @@ class JwtTokenTamperingUtilTest {
     }
 
     @Test
+    @DisplayName("Should remove the kid member, not an earlier string value equal to kid")
+    void shouldRemoveKidMemberWhenAnEarlierValueEqualsKid() {
+        String header = "{\"example\":\"kid\",\"kid\":\"k1\",\"alg\":\"RS256\"}";
+        String originalToken = TestTokenGenerators.accessTokens().next().getRawToken();
+        String[] originalParts = originalToken.split("\\.");
+        String token = Base64.getUrlEncoder().withoutPadding().encodeToString(header.getBytes(StandardCharsets.UTF_8))
+                + "." + originalParts[1] + "." + originalParts[2];
+
+        String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(token, TamperingStrategy.REMOVE_KID);
+
+        String[] tamperedParts = tamperedToken.split("\\.", -1);
+        String decodedHeader = new String(Base64.getUrlDecoder().decode(tamperedParts[0]), StandardCharsets.UTF_8);
+        assertEquals("{\"example\":\"kid\",\"alg\":\"RS256\"}", decodedHeader,
+                "Only the kid member should be removed; the earlier kid value must stay untouched");
+        DecodedJwt decodedJwt = NonValidatingJwtParser.builder()
+                .securityEventCounter(new SecurityEventCounter()).build().decode(tamperedToken);
+        assertAll("Parsed header",
+                () -> assertTrue(decodedJwt.getKid().isEmpty(), "Parsed header should carry no kid"),
+                () -> assertEquals("RS256", decodedJwt.getAlg().orElse(null), "Parsed header should keep alg"));
+    }
+
+    @Test
     @DisplayName("Should apply all tampering strategies to a validation")
     void shouldApplyAllTamperingStrategiesToToken() {
 

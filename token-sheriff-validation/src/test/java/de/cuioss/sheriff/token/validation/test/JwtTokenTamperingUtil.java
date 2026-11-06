@@ -476,33 +476,23 @@ public class JwtTokenTamperingUtil {
     /**
      * Cuts the {@code "kid"} member and exactly one adjacent comma out of a flat JSON header object.
      * <p>
-     * The scan is linear: one {@code indexOf} locates the member name, then a single forward walk
-     * finds the end of its string value. The preceding comma is removed when the member is not the
-     * first one; otherwise the following comma is removed, so the result stays valid JSON.
+     * The scan is a single linear walk over the object's members — name, colon, value — so a
+     * {@code "kid"} token is only recognised in member-name position; a string <em>value</em> that
+     * happens to equal {@code kid} is skipped. The preceding comma is removed when the member is not
+     * the first one; otherwise the following comma is removed, so the result stays valid JSON.
      *
      * @param headerJson the decoded header JSON
      * @return the header JSON without the kid member, or the input unchanged if it carries no
      *         string-valued kid member
      */
     static String removeKidMember(String headerJson) {
-        int memberStart = headerJson.indexOf("\"kid\"");
-        if (memberStart < 0) {
+        int[] span = findStringKidMember(headerJson);
+        if (span.length == 0) {
             return headerJson;
         }
-        int cursor = skipWhitespace(headerJson, memberStart + "\"kid\"".length());
-        if (cursor >= headerJson.length() || headerJson.charAt(cursor) != ':') {
-            return headerJson;
-        }
-        cursor = skipWhitespace(headerJson, cursor + 1);
-        if (cursor >= headerJson.length() || headerJson.charAt(cursor) != '"') {
-            return headerJson;
-        }
-        int valueEnd = findClosingQuote(headerJson, cursor + 1);
-        if (valueEnd < 0) {
-            return headerJson;
-        }
+        int memberStart = span[0];
         int cutStart = memberStart;
-        int cutEnd = valueEnd + 1;
+        int cutEnd = span[1];
 
         int before = memberStart - 1;
         while (before >= 0 && Character.isWhitespace(headerJson.charAt(before))) {
@@ -517,6 +507,85 @@ public class JwtTokenTamperingUtil {
             }
         }
         return headerJson.substring(0, cutStart) + headerJson.substring(cutEnd);
+    }
+
+    /**
+     * Walks the members of a JSON object and locates the {@code "kid"} member whose value is a
+     * string.
+     *
+     * @param json the JSON object text
+     * @return {@code [memberStart, valueEndExclusive]} of the kid member, or an empty array if the
+     *         object carries no string-valued kid member or cannot be walked
+     */
+    private static int[] findStringKidMember(String json) {
+        int cursor = skipWhitespace(json, 0);
+        if (cursor >= json.length() || json.charAt(cursor) != '{') {
+            return new int[0];
+        }
+        cursor = skipWhitespace(json, cursor + 1);
+        while (cursor < json.length() && json.charAt(cursor) == '"') {
+            int memberStart = cursor;
+            int nameEnd = findClosingQuote(json, cursor + 1);
+            if (nameEnd < 0) {
+                return new int[0];
+            }
+            String name = json.substring(cursor + 1, nameEnd);
+            cursor = skipWhitespace(json, nameEnd + 1);
+            if (cursor >= json.length() || json.charAt(cursor) != ':') {
+                return new int[0];
+            }
+            cursor = skipWhitespace(json, cursor + 1);
+            if (cursor >= json.length()) {
+                return new int[0];
+            }
+            boolean stringValue = json.charAt(cursor) == '"';
+            int valueEnd = stringValue ? findClosingQuote(json, cursor + 1) + 1 : skipNonStringValue(json, cursor);
+            if (valueEnd <= 0) {
+                return new int[0];
+            }
+            if (stringValue && "kid".equals(name)) {
+                return new int[]{memberStart, valueEnd};
+            }
+            cursor = skipWhitespace(json, valueEnd);
+            if (cursor >= json.length() || json.charAt(cursor) != ',') {
+                return new int[0];
+            }
+            cursor = skipWhitespace(json, cursor + 1);
+        }
+        return new int[0];
+    }
+
+    /**
+     * Skips a non-string JSON value (number, literal, nested object or array).
+     *
+     * @return the index just past the value, or {@code -1} if the value is unterminated
+     */
+    private static int skipNonStringValue(String text, int from) {
+        int depth = 0;
+        int index = from;
+        while (index < text.length()) {
+            char current = text.charAt(index);
+            if (current == '"') {
+                int end = findClosingQuote(text, index + 1);
+                if (end < 0) {
+                    return -1;
+                }
+                index = end + 1;
+                continue;
+            }
+            if (current == '{' || current == '[') {
+                depth++;
+            } else if (current == '}' || current == ']') {
+                if (depth == 0) {
+                    return index;
+                }
+                depth--;
+            } else if (current == ',' && depth == 0) {
+                return index;
+            }
+            index++;
+        }
+        return depth == 0 ? index : -1;
     }
 
     private static int skipWhitespace(String text, int from) {
