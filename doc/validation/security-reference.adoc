@@ -55,9 +55,9 @@ TLS hostname verification is enforced by default and can be relaxed per issuer v
 [[safe-parsing]]
 === Safe Parsing
 
-`NonValidatingJwtParser` enforces the `ParserConfig` limits: token size 8 KB (`maxTokenSize`), each decoded header / payload part 8 KB (`maxPayloadSize`), string length 4 KB (`maxStringLength`), JSON nesting depth 10 (`maxNestingDepth`) and array size 1000 (`maxArraySize`). Protects against memory exhaustion and malformed input attacks. JWKS and well-known discovery HTTP response bodies have a separate 256 KB ceiling (`maxHttpResponseSize`), enforced while the body streams.
+`NonValidatingJwtParser` enforces the `ParserConfig` limits. The values below are the defaults; every limit is configurable on `ParserConfig`, which is the source of truth for them: token size 8 KB (`maxTokenSize`), each decoded header / payload part 8 KB (`maxPayloadSize`), string length 4 KB (`maxStringLength`), JSON nesting depth 10 (`maxNestingDepth`) and array size 1000 (`maxArraySize`). Protects against memory exhaustion and malformed input attacks. JWKS and well-known discovery HTTP response bodies have a separate default ceiling of 256 KB (`maxHttpResponseSize`), also configurable and enforced while the body streams.
 
-A member name duplicated in a JWT header or payload is not rejected: the last occurrence wins. The header is deserialized by DSL-JSON into `JwtHeader` and the payload into a `Map` by `MapRepresentation.fromJson`, both of which keep the last value read. A member whose last occurrence is JSON `null` is treated as absent.
+A member name duplicated in a JWT header or payload is not rejected as a duplicate: the last occurrence wins. The header is deserialized by DSL-JSON into `JwtHeader` and the payload into a `Map` by `MapRepresentation.fromJson`, both of which keep the last value read. The header is a typed record, so an earlier occurrence whose JSON type does not match the declared field type (for example a numeric `alg` ahead of a string `alg`) can fail deserialization before the later occurrence is read; "last occurrence wins" therefore holds for occurrences of the declared type. A member whose last occurrence is JSON `null` is treated as absent.
 
 [[cryptographic-agility]]
 === Cryptographic Agility

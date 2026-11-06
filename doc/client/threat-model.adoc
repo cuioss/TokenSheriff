@@ -35,8 +35,9 @@ The client engine:
 * Constructs authorization requests and exchanges authorization codes for tokens as a
   *confidential client*, entirely server-side (no tokens in the browser).
 * Authenticates to the token / PAR / revocation endpoints and *requests* sender-constrained
-  tokens. The `introspection_endpoint` is only parsed from discovery metadata and https-checked;
-  it is never called.
+  tokens. The `introspection_endpoint` is only parsed from discovery metadata and, like the other
+  advertised endpoints, https-checked only when the configured issuer itself uses https; it is
+  never called.
 * Holds retrieved tokens *server-side*, refreshes and revokes them, and validates them
   through the validation pipeline.
 * Triggers RP-initiated logout and honours step-up challenges.

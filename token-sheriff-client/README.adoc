@@ -81,9 +81,10 @@ ClientConfiguration config = ClientConfiguration.builder()
 <1> Optional. Supply an `SSLContext` when the authorization server presents a private-CA or
 self-signed certificate: the trust is scoped to this one client, so no process-global
 `javax.net.ssl.trustStore` override is needed. Omit it — the default — and the JVM / cui-http
-default truststore applies. When present, the context is used for every discovery and
-back-channel call this client makes (`CLIENT-23`); it selects trust material only and does not
-relax the TLS protocol floor.
+default truststore applies. When present, the context is used for every HTTPS discovery and
+back-channel call this client makes (`CLIENT-23`); a call to an `http` endpoint (reachable only
+with `allowInsecureHttp`) opens no TLS connection and carries no context. It selects trust
+material only and does not relax the TLS protocol floor.
 +
 WARNING: The supplied `SSLContext` MUST perform full certificate-chain validation. It is taken
 verbatim — a trust-all `TrustManager` silently disables server authentication for every

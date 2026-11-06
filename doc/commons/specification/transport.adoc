@@ -16,7 +16,9 @@ policy, timeouts, response-size limits, retry/backoff, the `cui-http` client, an
 discovery / JWKS caching). It *moves bytes* — it never decides whether a token is
 trustworthy. The client engine builds its *own* back-channel HTTP (token, userinfo,
 revocation, PAR) on these primitives
-(xref:../../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]).
+(xref:../../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]); the
+host-address SSRF egress policy (`EgressPolicy`) belongs to the validation-side transport, and
+the client applies its own path-structure and scheme control instead.
 
 == Endpoints
 
@@ -37,8 +39,12 @@ revocation, PAR) on these primitives
 Discovery and JWKS are *relocated existing code* (`wellknown`, `jwks.http`); the remaining
 six are *transport contracts*. The client engine drives token,
 userinfo, revocation and PAR over its own back channel, builds the end-session redirect on the
-front channel, and implements no introspection flow. All eight are exercised by dispatchers in
-the `generators` test artifact.
+front channel, and implements no introspection flow. All eight have dispatchers in the
+`generators` test artifact. The dispatchers for the six transport contracts are smoke-tested
+directly through a plain `HttpClient` (`EndpointDispatchersTest`), not through the client engine;
+the token, userinfo, revocation and PAR dispatchers are additionally driven by the client
+engine's own tests, whereas the introspection and end-session dispatchers are never reached by
+the engine, which issues no introspection request and no end-session HTTP call.
 
 == Security controls
 

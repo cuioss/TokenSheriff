@@ -111,7 +111,9 @@ grants MUST NOT be implemented (<<_security_exclusions_legacy_discouraged>>).
 === CLIENT-4: Strong token-endpoint client authentication
 
 The engine MUST authenticate to the token endpoint (and PAR / revocation endpoints). The
-`introspection_endpoint` is parsed from discovery metadata and https-checked; no introspection
+`introspection_endpoint` is parsed from discovery metadata and, like the other advertised
+endpoints, https-checked only when the configured issuer itself uses https (an `http` issuer
+admitted by `allowInsecureHttp` skips the endpoint-scheme check); no introspection
 flow is implemented. Among the strategies the caller has *configured*, the engine MUST prefer the
 *strongest method the authorization server also advertises*: `private_key_jwt` (RFC 7523)
 over a shared `client_secret`. Selection never reaches outside the configured set — a method
@@ -204,8 +206,10 @@ replacing it.
 Requesting an mTLS (RFC 8705) certificate-bound token is *not* a capability this engine has,
 and this requirement does not demand it: obtaining that binding means presenting a client
 certificate at the token endpoint, and mTLS client authentication (`tls_client_auth`) is
-alpha — declared, never selected, with no `SSLContext` client key material plumbed into the
-transport (<<CLIENT-4>>). The certificate-bound case therefore stays specified only as a
+alpha — declared, never selected, with no client key material plumbed into the transport by
+the engine (<<CLIENT-4>>); a caller-supplied `SSLContext` is applied as supplied (<<CLIENT-23>>),
+so client keys the caller puts in it are the caller's own configuration and are not
+`tls_client_auth` selection. The certificate-bound case therefore stays specified only as a
 *binding kind the server-side lifecycle preserves* where a token already carries one
 (<<CLIENT-18>>) — preserving a `cnf.x5t#S256` binding is a capability distinct from the alpha
 client-authentication method.
@@ -259,8 +263,9 @@ TLS enforcement owned by commons (`COMMONS-2`).
 === CLIENT-23: Optional per-client outbound TLS trust
 
 The engine MUST accept an *optional per-client outbound `SSLContext`* on its client
-configuration and MUST apply it to *every* discovery and back-channel call that client issues
-(discovery, token, userinfo, revocation, PAR). This is the supported way to trust a private-CA
+configuration and MUST apply it to *every* TLS discovery and back-channel call that client issues
+(discovery, token, userinfo, revocation, PAR); a call to an `http` endpoint, reachable only with
+`allowInsecureHttp`, opens no TLS connection and carries no context. This is the supported way to trust a private-CA
 or self-signed authorization server: the trust is scoped to the one client instead of being
 forced onto the whole JVM through a process-global `javax.net.ssl.trustStore` override, so two
 clients in the same process may trust two different authorization servers. When no context is

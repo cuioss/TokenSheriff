@@ -20,8 +20,9 @@
  * consumes and verifies inbound tokens, the client engine drives the outbound OIDC/OAuth flows —
  * token retrieval (RFC 6749), userinfo (OIDC Core), token revocation (RFC 7009), RP-initiated
  * end-session (a front-channel redirect) and pushed authorization requests (RFC 9126). The
- * {@code introspection_endpoint} (RFC 7662) is parsed from discovery metadata and https-checked,
- * but no introspection flow is implemented.
+ * {@code introspection_endpoint} (RFC 7662) is parsed from discovery metadata and, like the other
+ * advertised endpoints, https-checked only when the configured issuer itself uses https, but no
+ * introspection flow is implemented.
  * <p>
  * It is pure Java with no framework dependency (see the module-architecture decision:
  * {@code doc/adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc}) so it can be wired into any runtime — the Quarkus

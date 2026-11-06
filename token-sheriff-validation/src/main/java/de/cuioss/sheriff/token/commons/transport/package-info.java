@@ -23,8 +23,9 @@
  * ({@link de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig} /
  * {@link de.cuioss.sheriff.token.commons.transport.JwksHttpContentConverter}). The client engine
  * fetches its own discovery document over its own back channel and reuses only the shared
- * primitives — the {@link de.cuioss.sheriff.token.commons.transport.ParserConfig} DSL-JSON instance
- * and the {@code cui-http} handler. The package also provides the shared JSON payload types
+ * primitives — the {@link de.cuioss.sheriff.token.commons.transport.ParserConfig} security
+ * configuration (each client component builds its own DSL-JSON instance from it) and the
+ * {@code cui-http} handler. The package also provides the shared JSON payload types
  * ({@link de.cuioss.sheriff.token.commons.transport.Jwks},
  * {@link de.cuioss.sheriff.token.commons.transport.WellKnownResult}), the JSON parser security
  * configuration ({@link de.cuioss.sheriff.token.commons.transport.ParserConfig}) and the async
