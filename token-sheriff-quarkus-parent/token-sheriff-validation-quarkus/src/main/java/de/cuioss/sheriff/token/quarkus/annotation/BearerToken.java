@@ -30,9 +30,10 @@ import java.lang.annotation.Target;
  * The token source is set by
  * {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#HEADER} ({@code sheriff.token.token.header}):
  * {@code Authorization} (default) reads the {@code Bearer} token from the Authorization header, {@code Cookie}
- * reads it from the cookie named by
+ * additionally allows the cookie named by
  * {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#COOKIE_NAME}
- * ({@code sheriff.token.token.cookie-name}, default {@code Bearer}).
+ * ({@code sheriff.token.token.cookie-name}, default {@code Bearer}) as a fallback: the Authorization
+ * header is still tried first and the cookie is used only when no Authorization token is present.
  * <p>
  * This annotation allows specifying required scopes, roles, and groups that the bearer token
  * must contain for successful validation. The producer always returns a {@link de.cuioss.sheriff.token.quarkus.producer.BearerTokenResult}
@@ -99,7 +100,8 @@ import java.lang.annotation.Target;
  * <h2>Token Validation Process:</h2>
  * <ul>
  *   <li>Extracts the token from the HTTP Authorization header or, when
- *       {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#HEADER} is {@code Cookie}, from the
+ *       {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#HEADER} is {@code Cookie} and no
+ *       Authorization token is present, from the
  *       cookie named by {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#COOKIE_NAME}</li>
  *   <li>Validates the JWT signature and claims using the configured TokenValidator</li>
  *   <li>Checks that all required scopes, roles, and groups are present</li>

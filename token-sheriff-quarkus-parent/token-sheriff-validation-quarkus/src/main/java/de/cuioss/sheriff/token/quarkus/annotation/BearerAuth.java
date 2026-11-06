@@ -127,7 +127,8 @@ import java.lang.annotation.Target;
  * <ul>
  *   <li>Extracts the token from the HTTP Authorization header ({@code Bearer} prefix, the default) or,
  *       when {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#HEADER}
- *       ({@code sheriff.token.token.header}) is {@code Cookie}, from the cookie named by
+ *       ({@code sheriff.token.token.header}) is {@code Cookie} and no Authorization token is present
+ *       (the Authorization header is always tried first), from the cookie named by
  *       {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#COOKIE_NAME}
  *       ({@code sheriff.token.token.cookie-name}, default {@code Bearer})</li>
  *   <li>Validates JWT signature and claims using configured TokenValidator</li>
