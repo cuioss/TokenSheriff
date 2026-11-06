@@ -45,10 +45,18 @@ import java.util.Set;
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WARN.*;
 
 /**
- * CDI producer for extracting and validating bearer tokens from HTTP Authorization headers.
+ * CDI producer for extracting and validating bearer tokens from HTTP requests.
  * <p>
- * This producer extracts bearer tokens from the HTTP Authorization header using HttpRequestResolver,
- * validates them using the configured TokenValidator, and checks for required scopes, roles, and groups.
+ * This producer extracts the token using HttpRequestResolver, validates it using the configured
+ * TokenValidator, and checks for required scopes, roles, and groups. The token source is set by
+ * {@link JwtPropertyKeys.TOKEN#HEADER} ({@code sheriff.token.token.header}):
+ * <ul>
+ *   <li>{@code Authorization} (default) - the token is read from the HTTP {@code Authorization}
+ *       header with the {@code Bearer} prefix</li>
+ *   <li>{@code Cookie} - the token is read from the HTTP cookie named by
+ *       {@link JwtPropertyKeys.TOKEN#COOKIE_NAME} ({@code sheriff.token.token.cookie-name},
+ *       default {@code Bearer})</li>
+ * </ul>
  * <p>
  * The producer provides both service methods that return {@link BearerTokenResult} with comprehensive
  * validation information and a CDI producer method that returns {@link BearerTokenResult} directly for injection.
@@ -156,7 +164,7 @@ public class BearerTokenProducer {
     }
 
     /**
-     * Gets the current request's AccessTokenContent from the HTTP Authorization header.
+     * Gets the current request's AccessTokenContent from the configured token source.
      * This method handles tokens without specific requirements.
      *
      * @return Optional containing validated AccessTokenContent, or empty if validation fails

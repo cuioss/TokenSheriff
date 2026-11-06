@@ -175,7 +175,7 @@ public final class JwtPropertyKeys {
          * <p>
          * This configuration controls which signature algorithms are preferred and allowed
          * during token validation. It can be used to enforce security policies, such as
-         * requiring stronger algorithms or blacklisting weak ones.
+         * restricting validation to an explicit set of algorithms.
          * </p>
          *
          * @see de.cuioss.sheriff.token.validation.IssuerConfig

@@ -125,7 +125,11 @@ import java.lang.annotation.Target;
  *
  * <h2>Token Validation Process:</h2>
  * <ul>
- *   <li>Extracts token from HTTP Authorization header</li>
+ *   <li>Extracts the token from the HTTP Authorization header ({@code Bearer} prefix, the default) or,
+ *       when {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#HEADER}
+ *       ({@code sheriff.token.token.header}) is {@code Cookie}, from the cookie named by
+ *       {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#COOKIE_NAME}
+ *       ({@code sheriff.token.token.cookie-name}, default {@code Bearer})</li>
  *   <li>Validates JWT signature and claims using configured TokenValidator</li>
  *   <li>Checks all required scopes, roles, and groups are present</li>
  *   <li>Returns automatic error response if validation fails (for Response return types)</li>
