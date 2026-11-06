@@ -55,8 +55,10 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WAR
  *       header with the {@code Bearer} prefix</li>
  *   <li>{@code Cookie} - the {@code Authorization} header is still tried first; the token is read
  *       from the HTTP cookie named by {@link JwtPropertyKeys.TOKEN#COOKIE_NAME}
- *       ({@code sheriff.token.token.cookie-name}, default {@code Bearer}) only when no
- *       {@code Authorization} token is present</li>
+ *       ({@code sheriff.token.token.cookie-name}, default {@code Bearer}) only when the
+ *       {@code Authorization} header carries no {@code Bearer}-prefixed token; an {@code Authorization}
+ *       value of {@code "Bearer "} with an empty (or blank) token counts as present, does not fall back to
+ *       the cookie and yields {@link BearerTokenStatus#INVALID_REQUEST}</li>
  * </ul>
  * <p>
  * The producer provides both service methods that return {@link BearerTokenResult} with comprehensive

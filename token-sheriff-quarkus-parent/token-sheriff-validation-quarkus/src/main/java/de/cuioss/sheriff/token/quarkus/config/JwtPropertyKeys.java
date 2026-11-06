@@ -599,8 +599,9 @@ public final class JwtPropertyKeys {
      * <p>
      * These properties control how tokens are extracted from HTTP requests.
      * By default, tokens are extracted from the Authorization header.
-     * When configured for cookie-based extraction, tokens are read from
-     * a named HTTP cookie instead.
+     * When configured for cookie-based extraction, the Authorization header is
+     * still tried first and the token is read from a named HTTP cookie only as a
+     * fallback, when the Authorization header carries no {@code Bearer}-prefixed token.
      * </p>
      * <p>
      * All properties are prefixed with "sheriff.token.token".
@@ -619,13 +620,15 @@ public final class JwtPropertyKeys {
          * Supported values:
          * <ul>
          *   <li>{@code Authorization} (default) - standard Bearer token from Authorization header</li>
-         *   <li>{@code Cookie} - extract token from a named HTTP cookie</li>
+         *   <li>{@code Cookie} - try the Authorization header first and fall back to the named HTTP
+         *       cookie ({@link #COOKIE_NAME}) when the Authorization header carries no Bearer token</li>
          * </ul>
          */
         public static final String HEADER = BASE + ".header";
 
         /**
-         * The cookie name to extract the token from when header is set to Cookie.
+         * The cookie name to fall back to when header is set to Cookie and the Authorization
+         * header carries no Bearer token.
          * Property: "sheriff.token.token.cookie-name"
          * <p>
          * Default value is {@code Bearer}.
