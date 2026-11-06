@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.validation.jwks.parser;
 
 import com.dslplatform.json.DslJson;
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.commons.transport.JwkKey;
@@ -94,8 +95,10 @@ public class JwksParser {
                 return parseJwks(jwks);
             }
             jwksParsed = jwks != null;  // Remember if we parsed a JWKS structure
-        } catch (IOException e) {
-            // JSON syntax error - continue to try single JWK parsing
+        } catch (IOException | ArrayIndexOutOfBoundsException e) {
+            // JSON syntax error - continue to try single JWK parsing. DSL-JSON reports a truncated
+            // escape (a trailing lone backslash, a cut-off unicode escape) by reading past the end of its
+            // buffer, i.e. as ArrayIndexOutOfBoundsException; it is the same malformed-input condition.
         }
 
         // Design Decision: bare JWK fallback retained for real-world interoperability.
@@ -109,9 +112,12 @@ public class JwksParser {
                 result.add(singleKey);
                 return result;
             }
-        } catch (IOException e) {
-            // If both parsers threw IOException, it's invalid JSON
-            LOGGER.error(JWTValidationLogMessages.ERROR.JWKS_INVALID_JSON, e.getMessage());
+        } catch (IOException | ArrayIndexOutOfBoundsException e) {
+            // If both parsers failed on malformed input, it's invalid JSON. A truncated escape surfaces
+            // from DSL-JSON as ArrayIndexOutOfBoundsException and is handled the same way.
+            // A DSL-JSON parse error echoes excerpts of the (possibly remote) JWKS, so the message is
+            // neutralized against log injection (CWE-117) before it is logged
+            LOGGER.error(JWTValidationLogMessages.ERROR.JWKS_INVALID_JSON, ErrorTextSanitizer.sanitize(e.getMessage()));
             securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
             return result;
         }

@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.test;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.TokenValidator;
@@ -23,6 +24,8 @@ import de.cuioss.sheriff.token.validation.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.pipeline.DecodedJwt;
+import de.cuioss.sheriff.token.validation.pipeline.NonValidatingJwtParser;
 import de.cuioss.sheriff.token.validation.security.SignatureAlgorithmPreferences;
 import de.cuioss.sheriff.token.validation.test.JwtTokenTamperingUtil.TamperingStrategy;
 import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
@@ -33,6 +36,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -89,17 +95,17 @@ class JwtTokenTamperingUtilTest {
         String originalToken = TestTokenGenerators.accessTokens().next().getRawToken();
         String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(originalToken, strategy);
 
-        // Verify that the validation was actually tampered
         assertNotEquals(originalToken, tamperedToken,
                 "Token should be tampered using strategy: " + strategy.getDescription());
+        assertEquals(3, tamperedToken.split("\\.", -1).length,
+                "Tampered token should keep three segments. Strategy: " + strategy.getDescription());
         var accessTokenRequest = AccessTokenRequest.of(tamperedToken);
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> tokenValidator.createAccessToken(accessTokenRequest),
                 "Tampered token should be rejected. Strategy: " + strategy.getDescription());
 
-        // Verify the exception has a valid event type
-        assertNotNull(exception.getEventType(),
-                "Exception should have an event type. Strategy: " + strategy.getDescription());
+        assertEquals(strategy.getExpectedEvent(), exception.getEventType(),
+                "Tampered token should be rejected with the strategy's event. Strategy: " + strategy.getDescription());
     }
 
     @ParameterizedTest
@@ -110,17 +116,76 @@ class JwtTokenTamperingUtilTest {
         String originalToken = TestTokenGenerators.idTokens().next().getRawToken();
         String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(originalToken, strategy);
 
-        // Verify that the validation was actually tampered
         assertNotEquals(originalToken, tamperedToken,
                 "Token should be tampered using strategy: " + strategy.getDescription());
+        assertEquals(3, tamperedToken.split("\\.", -1).length,
+                "Tampered token should keep three segments. Strategy: " + strategy.getDescription());
         var idTokenRequest = IdTokenRequest.of(tamperedToken);
         TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> tokenValidator.createIdToken(idTokenRequest),
                 "Tampered token should be rejected. Strategy: " + strategy.getDescription());
 
-        // Verify the exception has a valid event type
-        assertNotNull(exception.getEventType(),
-                "Exception should have an event type. Strategy: " + strategy.getDescription());
+        assertEquals(strategy.getExpectedEvent(), exception.getEventType(),
+                "Tampered token should be rejected with the strategy's event. Strategy: " + strategy.getDescription());
+    }
+
+    @Test
+    @DisplayName("Should remove kid from header while keeping a parseable header and the original payload and signature")
+    void shouldRemoveKidAndKeepParseableHeader() {
+        String originalToken = TestTokenGenerators.accessTokens().next().getRawToken();
+        String[] originalParts = originalToken.split("\\.");
+
+        String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(originalToken, TamperingStrategy.REMOVE_KID);
+
+        String[] tamperedParts = tamperedToken.split("\\.", -1);
+        assertEquals(3, tamperedParts.length, "Tampered token should keep three segments");
+        assertEquals(originalParts[1], tamperedParts[1], "Payload should be unchanged");
+        assertEquals(originalParts[2], tamperedParts[2], "Signature should be unchanged");
+        String decodedHeader = new String(Base64.getUrlDecoder().decode(tamperedParts[0]), StandardCharsets.UTF_8);
+        assertFalse(decodedHeader.contains("\"kid\""), "Header should no longer contain kid: " + decodedHeader);
+        DecodedJwt decodedJwt = NonValidatingJwtParser.builder()
+                .securityEventCounter(new SecurityEventCounter()).build().decode(tamperedToken);
+        assertAll("Parsed header",
+                () -> assertTrue(decodedJwt.getKid().isEmpty(), "Parsed header should carry no kid"),
+                () -> assertTrue(decodedJwt.getAlg().isPresent(), "Parsed header should keep alg"));
+    }
+
+    @Test
+    @DisplayName("Should cut kid and exactly one adjacent comma in every member position")
+    void shouldCutKidMemberInEveryPosition() {
+        assertAll("kid member positions",
+                () -> assertEquals("{\"alg\":\"RS256\",\"typ\":\"JWT\"}",
+                        JwtTokenTamperingUtil.removeKidMember("{\"alg\":\"RS256\",\"kid\":\"k1\",\"typ\":\"JWT\"}")),
+                () -> assertEquals("{\"alg\":\"RS256\"}",
+                        JwtTokenTamperingUtil.removeKidMember("{\"kid\":\"k1\",\"alg\":\"RS256\"}")),
+                () -> assertEquals("{\"alg\":\"RS256\" }",
+                        JwtTokenTamperingUtil.removeKidMember("{\"alg\":\"RS256\" , \"kid\" : \"k1\"}")),
+                () -> assertEquals("{}",
+                        JwtTokenTamperingUtil.removeKidMember("{\"kid\":\"k\\\"1\"}")),
+                () -> assertEquals("{\"alg\":\"RS256\"}",
+                        JwtTokenTamperingUtil.removeKidMember("{\"alg\":\"RS256\"}")));
+    }
+
+    @Test
+    @DisplayName("Should remove the kid member, not an earlier string value equal to kid")
+    void shouldRemoveKidMemberWhenAnEarlierValueEqualsKid() {
+        String header = "{\"example\":\"kid\",\"kid\":\"k1\",\"alg\":\"RS256\"}";
+        String originalToken = TestTokenGenerators.accessTokens().next().getRawToken();
+        String[] originalParts = originalToken.split("\\.");
+        String token = Base64.getUrlEncoder().withoutPadding().encodeToString(header.getBytes(StandardCharsets.UTF_8))
+                + "." + originalParts[1] + "." + originalParts[2];
+
+        String tamperedToken = JwtTokenTamperingUtil.applyTamperingStrategy(token, TamperingStrategy.REMOVE_KID);
+
+        String[] tamperedParts = tamperedToken.split("\\.", -1);
+        String decodedHeader = new String(Base64.getUrlDecoder().decode(tamperedParts[0]), StandardCharsets.UTF_8);
+        assertEquals("{\"example\":\"kid\",\"alg\":\"RS256\"}", decodedHeader,
+                "Only the kid member should be removed; the earlier kid value must stay untouched");
+        DecodedJwt decodedJwt = NonValidatingJwtParser.builder()
+                .securityEventCounter(new SecurityEventCounter()).build().decode(tamperedToken);
+        assertAll("Parsed header",
+                () -> assertTrue(decodedJwt.getKid().isEmpty(), "Parsed header should carry no kid"),
+                () -> assertEquals("RS256", decodedJwt.getAlg().orElse(null), "Parsed header should keep alg"));
     }
 
     @Test

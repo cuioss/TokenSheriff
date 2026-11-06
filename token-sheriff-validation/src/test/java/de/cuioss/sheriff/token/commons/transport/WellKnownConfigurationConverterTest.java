@@ -17,12 +17,17 @@ package de.cuioss.sheriff.token.commons.transport;
 
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.test.juli.LogAsserts;
+import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -102,5 +107,26 @@ class WellKnownConfigurationConverterTest {
     @DisplayName("Should expose a non-null bounded body handler")
     void shouldExposeBoundedBodyHandler() {
         assertNotNull(newConverter().getBodyHandler());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"jwks_uri\":\"https://idp/certs\\",
+            "{\"jwks_uri\":\"https://idp/\\u12"
+    })
+    @DisplayName("Should reject a truncated escape as a plain parse failure, not a security-limit violation")
+    void shouldRejectTruncatedEscapeAsParseFailure(String truncatedDocument) {
+        SecurityEventCounter counter = new SecurityEventCounter();
+        WellKnownConfigurationConverter converter = new WellKnownConfigurationConverter(
+                ParserConfig.builder().build().getDslJson(), counter, MAX_CONTENT_SIZE);
+
+        Optional<WellKnownResult> result = assertDoesNotThrow(() -> converter.convert(truncatedDocument),
+                "A truncated escape must neither leak an unchecked exception nor raise a TransportException");
+
+        assertTrue(result.isEmpty(), "A truncated escape must yield no well-known result");
+        assertEquals(0, counter.getCount(SecurityEventCounter.EventType.JWKS_JSON_PARSE_FAILED),
+                "A truncated escape is not a security-limit violation");
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.ERROR,
+                TransportLogMessages.ERROR.JSON_PARSE_FAILED.resolveIdentifierString());
     }
 }

@@ -30,6 +30,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -100,6 +101,53 @@ class ExpirationValidatorTest {
                 () -> validator.validateNotExpired(token, testContext));
         assertEquals(SecurityEventCounter.EventType.TOKEN_EXPIRED, exception.getEventType());
         assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_EXPIRED));
+    }
+
+    @Test
+    @DisplayName("Should pass a token whose exp equals now when a 60 s clock skew applies")
+    void shouldPassValidationAtExactExpirationWithClockSkew() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        OffsetDateTime fixedTime = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        ValidationContext testContext = new ValidationContext(fixedTime, 60, null);
+        tokenHolder.withClaim(ClaimName.EXPIRATION.getName(),
+                ClaimValue.forDateTime(String.valueOf(fixedTime.toEpochSecond()), fixedTime));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
+
+        assertDoesNotThrow(() -> validator.validateNotExpired(token, testContext));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_EXPIRED));
+    }
+
+    @Test
+    @DisplayName("Should reject a token whose exp equals now without clock skew (inclusive expiry boundary)")
+    void shouldFailValidationAtExactExpirationWithoutClockSkew() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        OffsetDateTime fixedTime = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        ValidationContext testContext = new ValidationContext(fixedTime, 0, null);
+        tokenHolder.withClaim(ClaimName.EXPIRATION.getName(),
+                ClaimValue.forDateTime(String.valueOf(fixedTime.toEpochSecond()), fixedTime));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> validator.validateNotExpired(token, testContext));
+        assertEquals(SecurityEventCounter.EventType.TOKEN_EXPIRED, exception.getEventType());
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_EXPIRED));
+    }
+
+    @Test
+    @DisplayName("Should reject a token whose nbf is one second beyond now + clock skew")
+    void shouldFailValidationOneSecondPastClockSkewBoundary() {
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        OffsetDateTime fixedTime = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        OffsetDateTime notBefore = fixedTime.plusSeconds(61);
+        ValidationContext testContext = new ValidationContext(fixedTime, 60, null);
+        tokenHolder.withClaim(ClaimName.NOT_BEFORE.getName(),
+                ClaimValue.forDateTime(String.valueOf(notBefore.toEpochSecond()), notBefore));
+        AccessTokenContent token = new AccessTokenContent(tokenHolder.getClaims(), tokenHolder.getRawToken());
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> validator.validateNotBefore(token, testContext));
+        assertEquals(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE, exception.getEventType());
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_NBF_FUTURE));
     }
 
     @Test

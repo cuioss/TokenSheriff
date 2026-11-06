@@ -42,6 +42,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -262,6 +264,40 @@ class TokenSignatureValidatorTest {
 
         // Verify security event was recorded
         assertEquals(initialCount + 1, securityEventCounter.getCount(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM));
+    }
+
+    @Test
+    @DisplayName("Should reject HS256 token MACed with the RSA public key before any MAC verification (key confusion)")
+    void shouldRejectHs256TokenSignedWithRsaPublicKey() throws Exception {
+        String[] rsaTokenParts = createToken().split("\\.");
+        String header = "{\"alg\":\"HS256\",\"typ\":\"JWT\",\"kid\":\"" + InMemoryJWKSFactory.DEFAULT_KEY_ID + "\"}";
+        String encodedHeader = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(header.getBytes(StandardCharsets.UTF_8));
+        String signingInput = encodedHeader + "." + rsaTokenParts[1];
+        Mac hmac = Mac.getInstance("HmacSHA256");
+        hmac.init(new SecretKeySpec(InMemoryKeyMaterialHandler.getDefaultPublicKey().getEncoded(), "HmacSHA256"));
+        String signature = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(hmac.doFinal(signingInput.getBytes(StandardCharsets.UTF_8)));
+        DecodedJwt decodedJwt = jwtParser.decode(signingInput + "." + signature);
+
+        JwksLoader jwksLoader = JwksLoaderFactory.createInMemoryLoader(InMemoryJWKSFactory.createDefaultJwks());
+        jwksLoader.initJWKSLoader(securityEventCounter);
+        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter,
+                new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
+        long unsupportedBefore = securityEventCounter.getCount(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM);
+        long signatureFailedBefore = securityEventCounter.getCount(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED);
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> validator.validateSignature(decodedJwt));
+
+        assertAll("Key-confusion rejection",
+                () -> assertEquals(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM, exception.getEventType()),
+                () -> assertEquals(unsupportedBefore + 1,
+                        securityEventCounter.getCount(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM),
+                        "UNSUPPORTED_ALGORITHM should be counted exactly once"),
+                () -> assertEquals(signatureFailedBefore,
+                        securityEventCounter.getCount(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED),
+                        "No MAC verification should have been attempted"));
     }
 
     /**
