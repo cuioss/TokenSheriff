@@ -425,6 +425,28 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   FOLDED into PLAN-25 deliverable 6; 008 (client tests need the validation test-jar) was run as an `architecture enrich` hint and
   goes through its own small PR. All on the standing "leftovers go into the one final plan" instruction, confidence above 90%, so I did
   not ask. PLAN-25 stays at seven deliverables. Slots: 0 of 3 occupied; PLAN-24 is the next candidate, not emitted.
+- 2026-11-06 — `next` emitted PLAN-17, PLAN-18 and PLAN-24 as one block (N=3, R=0, `auto_emit` false; the gate admitted all
+  three, no overlap prompt: PLAN-18 and PLAN-24 share only `security-reference.adoc`, one file). PLAN-19 held back (depends on
+  PLAN-18, 8 shared doc files), PLAN-25 last by design. The operator then reported all three started; recorded as `launched`,
+  not `running`.
+- 2026-11-06 — PLAN-24 (#876, `90f8474a`) analysed from its inbox landing (complete, `effort=medium`, `model` self-reported),
+  `landings/PLAN-24.md` written. Corroborated against the merge diff (6 files), PR state (merged 16:42:18Z, 24 checks, none
+  failing), and Sonar read directly (PR gate OK, its one `java:S5778` issue `CLOSED`/`FIXED`, `main` 0 open). One read-only
+  leaf did the three-layer reading and I re-read every `checked` point. No blocker or major defect: the production change is one
+  line (`ClaimName.java:179`) and fail-closed. Minor findings: the spec had no Done-when and its "an azp-present token is
+  unchanged" contradicts its own mechanism (the PR states the narrowing); the `sub` sentence at `security-reference.adoc:35`
+  is overstated (`IdentityMapper` stringifies, `TokenLifecycleManager` compares the two subjects as strings); an explicit JSON
+  `null` is dropped by `MapRepresentation.fromJson` and reads as absent (verified, pre-existing from #511), so "must be a JSON
+  string" is slightly broad; the eight-row client_id matrix tests one behaviour; fixture names drifted. Row stamped (pr 876).
+  PLAN-24's Expected Surface now names `AudienceValidatorTest.java` (the gate under-declared it; mechanical call-site edit).
+  The doc and test residuals are folded into PLAN-25 as new item 7(i) (the `sub` sentence, null-is-absent wording and test
+  with one operator question on rejecting null, test hygiene), surface +7 entries, `corpus surfaces` reads it declarative with
+  38 paths; confidence above 90% (standing "leftovers go into the one final plan" instruction; a question, not a behaviour
+  change), so I did not ask. Four candidate-lessons: 001 (`architecture search` has no `--module`), 002 (`qgate query` is not a
+  verb) and 003 (`java:S5778` slips past the pre-commit profile, suggested for `pm-dev-java:junit-core`) are plan-marshall-owned
+  and went into a fourth 2026-11-06 addendum of `upstream-plan-marshall-report.md` as DISCARDED locally, NOT sent; 004 (null
+  claim dropped before any mapper) FOLDED into PLAN-25 item 7(i). Slots: PLAN-17 and PLAN-18 launched (PRs #878, #877 open),
+  PLAN-24 shipped, so 1 of 3 free. PLAN-19 waits for PLAN-18.
 
 ## Open Defects
 
@@ -473,6 +495,11 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
 
 ## Watches
 
+- 2026-11-06 — e2e teardown hang (PLAN-24 landing, #876): the `e2e-tests` job was cancelled by its 30-minute job timeout
+  after all 30 tests passed, and the landing says it recurs on `main`; a rerun cleared it (`SUCCESS` at this analysis). Unverified
+  beyond the landing message and the PR's final check state; no plan staged, a follow-up on the teardown is owed. Retire it
+  when a clean e2e run on `main` is observed twice or a cause is found. Seen once before as the PLAN-13 merge-queue ejection on a
+  hung `e2e-tests` job (see the PLAN-13 and PLAN-14 residuals below).
 - PLAN-13 and PLAN-14 residuals (2026-11-05; verified in the merged source or the PR unless marked): (1) PLAN-14
   merged under a `barrier-ask-override` (CodeRabbit rate-limited, head `15eb888a`); PLAN-13 recreated its PR (#859 to
   #861) to get a review after a quota refusal and had a merge-queue ejection on a hung `e2e-tests` job (landing

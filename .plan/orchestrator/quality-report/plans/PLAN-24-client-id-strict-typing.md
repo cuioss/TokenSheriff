@@ -95,6 +95,7 @@ plan may narrow acceptance, never widen it.
 - OBSERVED: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/validator/JsonTypedAzpFixture.java`
 - HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/domain/claim/ClaimNameTest.java` (verify-at-outline)
 - HYPOTHESIS: `doc/validation/security-reference.adoc` (verify-at-outline — one sentence on the identifier-claim typing; also declared by PLAN-18 and PLAN-19)
+- OBSERVED: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/validator/AudienceValidatorTest.java` (added 2026-11-06 at the landing analysis: the #876 merge touched it as a mechanical call-site migration forced by the `JsonTypedAzpFixture.buildToken` signature change, and the staged declaration omitted it)
 
 ## Dependencies and Sequencing
 

@@ -458,3 +458,29 @@ Read from `plan-15-validation-test-gaps-001` to `-009` and the merged PR #867; N
   context to the resolve seam; the script's argparse surface does not declare the flag (accepted: apply, caller, default, field, phase,
   plan-id, role, workflow, workflow-gated). One rejected call, retry without the flag succeeded. Doc and script disagree.
 - **`effort` unstamped** (eleventh producer, same cause: `refresh-runtime-stamp` returned `model_unknown`).
+
+## Addendum 2026-11-06 (fourth): PLAN-24 (3 plan-marshall messages and 3 landing residues)
+
+Read from `plan-24-client-id-strict-typing-001` to `-005` and the merged PR #876 (`90f8474a`); NOT sent. Added after the PLAN-15 addendum above.
+
+- **`architecture search` has no `--module` flag** (PLAN-24-001). The refine agent carried `--module` over from the sibling verbs
+  `commands`, `derived-module` and `files`; `search` declares only `--pattern`, `--content`, `--category`, `--ignore-case`, `--literal`,
+  `--pre`, `--pre-ref`, `--plan-id`, `--project-dir`, so argparse rejected the call (exit 2). Suggested: either accept `--module` on
+  `search` (a content sweep scoped to one module is a natural request) or have `client-api.md` § search say how to narrow by module.
+  Same argparse-rejection family as the PLAN-13/14 verb-paraphrase report.
+- **`manage-findings qgate` has no `query` verb** (PLAN-24-002). The outline entry called `qgate query`; the noun registers only `add`,
+  `clear`, `list`, `resolve`, `resolve-by-rule`, `resolve-evidenced`. The read verb is `list`. A third verb-paraphrase rejection in this
+  epic (`query` here, `get`/`read` earlier): the Canonical invocations block is not being quoted verbatim by the issuing step.
+- **Sonar `java:S5778` slips past `verify -Ppre-commit` in new `assertThrows` tests** (PLAN-24-003). The whole-tree verify (3870 tests)
+  was green and the smell surfaced only in the post-PR Sonar analysis (`AuthorizedPartyValidatorTest.java:266`), costing a fix commit and a
+  second pre-push/CI/review loop. Suggested for `pm-dev-java:junit-core` (test-code review rules): put exactly one call inside the
+  `assertThrows` lambda and build every argument in the Arrange block. This repository's own PLAN-23 already fixed S5778 sites, so it recurs.
+- **Post-merge `checks wait --adaptive` hung for 10 minutes with no output** (landing residue). The lane stopped it by hand. Suggested: a
+  hard wall-clock bound with a progress line, so a silent hang is distinguishable from a long wait.
+- **The e2e job was cancelled by its 30-minute job timeout after all 30 tests passed** (landing residue; a teardown hang that the lane says
+  recurs on `main`). Cleared with a rerun. Not a plan-marshall defect as such; recorded as a project Watch, and noted here because the
+  finalize arms treat a cancelled check and a failed check alike.
+- **The pre-push gate recorded "test-compile not run"** (landing residue): the stand-alone test-compile and module-tests arms were
+  degraded, the whole-tree verify was green. The gate does not say why the arms degraded.
+- **`effort` and `model` self-reported** (twelfth producer with a failed runtime read: `refresh-runtime-stamp` returned `model_unknown`).
+  Unlike the earlier landings this one carried `effort=medium`, so `landing-check` reported it complete.

@@ -82,7 +82,24 @@ two ADRs, client response-strictness decisions). Fail-closed only: nothing here 
    holds 0001 to 0026, so the tooling allocates the next free one, expected 0027 or later, re-checked against `main` at
    finalize because sibling plans add ADRs concurrently), and add the sentence the client specification and threat model
    lack on the new exception (no file under `doc/client` mentions `invalid_client` or `unauthorized_client`). This plan also
-   adds the `doc/README.adoc` index rows for the ADRs it files, because PLAN-19, which indexes the ADRs, runs before it.
+   adds the `doc/README.adoc` index rows for the ADRs it files, because PLAN-19, which indexes the ADRs, runs before it;
+   (i) PLAN-24 follow-up (folded 2026-11-06, from the #876 landing and its three-layer reading): (1) the sentence at
+   `doc/validation/security-reference.adoc` line 35, "so a non-string `sub` cannot satisfy a comparison", is not true as
+   worded: `SUBJECT` is mapped by `IdentityMapper`, which stringifies, and `TokenLifecycleManager` compares the access-token
+   subject with the ID-token subject as strings, so a numeric access-token `sub` equals the same text in the ID token. The
+   comparison is token to token and both tokens are signature-verified, so it is no acceptance defect; correct the sentence
+   to say that, or make the comparison type-aware if the operator prefers (a behaviour change, ask once). (2) One question for
+   the operator, recorded: explicit JSON `null` for an identifier claim (`iss`, `sub`, `jti`, `client_id`, `azp`) is dropped by
+   `MapRepresentation.fromJson` and so reads as absent (fail-closed for `client_id` with `azp` absent, accepted with a valid
+   `azp`); the default where the operator does not answer is "pin as observed": add a `ClaimNameTest` row stating that null is
+   treated as absent, and reword `ClaimName.java` line 173 and `security-reference.adoc` line 46 from "must be a JSON string" to
+   "a present value must be a JSON string; an explicit `null` is treated as absent". Rejecting null needs `MapRepresentation`
+   to keep null-valued keys, a cross-claim change: only on the operator's word, with a test per claim. (3) Test hygiene, no
+   behaviour: `AudienceValidatorTest` (about line 297) still asserts only `assertThrows(TokenValidationException)` for a
+   non-string `azp`, so tighten it to the event type and counts the `AuthorizedPartyValidatorTest` azp test now asserts; rename
+   `JsonTypedAzpFixture` and `nonStringAzpValues`, which now also serve `client_id`; the eight-row
+   `shouldRejectNonStringClientIdAtBuild` matrix tests one behaviour (the build throws before the validator is reached), so
+   drop the `fallbackEnabled` parameter or add a row that reaches the validator. Origin: PLAN-24 (#876).
 
 Scope guard: seven deliverables, above the six-deliverable threshold, so a rationale is recorded (2026-11-05). The
 operator asked for ONE final plan for all leftovers, and each item is small and independent of the others; this is the
@@ -175,6 +192,7 @@ rest together.
 - OBSERVED: no weak IT assertion shape remains in `token-sheriff-quarkus-integration-tests/src/test` (grep for `assertThrows(RuntimeException|Exception|Throwable.class` and `200 || 302` style predicates returns nothing) — read at `306e6053`; PLAN-16 lesson 002 therefore needs no project sweep
   - verdict: corroborated | checked_at: 262369d6 | by: quality-report/cleanup | rescoped: n/a | evidence: no weak IT assertion shape remains in the integration-tests sources
 - OBSERVED: PLAN-15 (#867, merge `262369d6`, 23 files) added `ArrayIndexOutOfBoundsException` to the catch of `DiscoveryResolver` (also now sanitising its logged message), `ParClient`, `UserInfoClient`, `DpopProofValidator`, `JwksParser` (both reads, and the `JWKS_INVALID_JSON` message is sanitised), `NonValidatingJwtParser` (two catches) and both transport converters, with tests for the three client sites; the only `dslJson` read not covered in its own method is `MapRepresentation.fromJson`, covered by its two callers — read in the merged diff and a `git grep` at `262369d6`
+- OBSERVED (read 2026-11-06 at `90f8474a`, the PLAN-24 merge): `MapRepresentation.fromJson` filters null-valued entries (`token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/json/MapRepresentation.java` lines 108-115, from #511), so an explicit JSON `null` claim never reaches `TokenBuilder.extractClaims` or a mapper; `ClaimName.CLIENT_ID` (line 179) and `AUTHORIZED_PARTY` (line 166) use `StrictStringMapper`, while `SUBJECT` (line 52), `ISSUER` (line 44) and `TOKEN_ID` (line 95) use `IdentityMapper`; `TokenLifecycleManager` (around line 1273) compares access-token and ID-token subjects as strings
 - OBSERVED: PLAN-15 left TV-4 open by operator decision (the three enum tests restored, files identical to `main`); trivial enum tests stay as a project convention, no item here
 
 ## Expected Surface
@@ -210,6 +228,13 @@ rest together.
 - OBSERVED: `doc/adr/0017-A_JWKS_loader_reports_OK_only_with_usable_keys_and_retries_only_transient_discovery_failures.adoc`
 - HYPOTHESIS: `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/TokenEndpointClient.java` (verify-at-outline — only if the operator wants the response `Content-Type` or the quoted `expires_in` tightened)
 - HYPOTHESIS: `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/hardening/TokenResponseAdversarialTest.java` (verify-at-outline)
+- OBSERVED: `doc/validation/security-reference.adoc` (item 7(i), PLAN-24 follow-up: the `sub` sentence at line 35 and the `client_id` wording at line 46)
+- HYPOTHESIS: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/domain/claim/ClaimName.java` (verify-at-outline — Javadoc wording on null, item 7(i)(2))
+- HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/domain/claim/ClaimNameTest.java` (verify-at-outline — a null-is-absent row, item 7(i)(2))
+- HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/validator/AuthorizedPartyValidatorTest.java` (verify-at-outline — matrix trim and fixture rename, item 7(i)(3))
+- HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/validator/AudienceValidatorTest.java` (verify-at-outline — tighten the non-string azp assertion, item 7(i)(3))
+- HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/validator/JsonTypedAzpFixture.java` (verify-at-outline — rename, item 7(i)(3))
+- HYPOTHESIS: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/json/MapRepresentation.java` (verify-at-outline — only if the operator wants an explicit JSON null rejected, item 7(i)(2))
 
 ## Dependencies and Sequencing
 
