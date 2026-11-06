@@ -43,6 +43,8 @@ import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
  * that maps the engine's typed exceptions to {@code application/problem+json} ({@code CLIENT-20}); the
  * producer is the framework binding that {@code CLIENT-21} keeps outside the pure-Java engine.
  * </p>
+ *
+ * @since 1.0
  */
 public class TokenSheriffClientProcessor {
 

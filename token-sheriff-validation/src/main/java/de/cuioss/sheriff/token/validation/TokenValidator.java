@@ -78,10 +78,11 @@ import java.util.Map;
  * entry point that encapsulates significant complexity.
  * <p>
  * Usage example:
- * <pre>
- * // Configure HTTP-based JWKS loading
+ * {@snippet :
+ * // Configure HTTP-based JWKS loading (a direct jwksUrl requires the issuer identifier)
  * HttpJwksLoaderConfig httpConfig = HttpJwksLoaderConfig.builder()
  *     .jwksUrl("https://example.com/.well-known/jwks.json")
+ *     .issuerIdentifier("https://example.com")
  *     .refreshIntervalSeconds(60)
  *     .build();
  *
@@ -127,10 +128,10 @@ import java.util.Map;
  *
  * // Access the performance monitor for detailed pipeline metrics
  * TokenValidatorMonitor performanceMonitor = tokenValidator.getPerformanceMonitor();
- * Optional&lt;StripedRingBufferStatistics&gt; metrics =
+ * Optional<StripedRingBufferStatistics> metrics =
  *         performanceMonitor.getValidationMetrics(MeasurementType.SIGNATURE_VALIDATION);
- * Optional&lt;Duration&gt; p50SignatureTime = metrics.map(StripedRingBufferStatistics::p50);
- * </pre>
+ * Optional<Duration> p50SignatureTime = metrics.map(StripedRingBufferStatistics::p50);
+ * }
  * <p>
  * Implements requirements:
  * <ul>

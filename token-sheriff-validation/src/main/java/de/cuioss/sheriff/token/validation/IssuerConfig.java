@@ -51,7 +51,7 @@ import java.util.*;
  * </p>
  * <p>
  * Usage example:
- * <pre>
+ * {@snippet :
  * // Create an issuer configuration with HTTP-based JWKS loading (well-known discovery)
  * IssuerConfig issuerConfig = IssuerConfig.builder()
  *     .issuerIdentifier("https://example.com")
@@ -63,11 +63,8 @@ import java.util.*;
  *     .build(); // Validation happens automatically during build(); the identifier is
  *               // compared with the issuer advertised by the discovery document
  *
- * // Initialize the security event counter -> This is usually done by TokenValidator
- * issuerConfig.initJWKSLoader(new SecurityEventCounter());
- *
  * String issuer = issuerConfig.getIssuerIdentifier();
- * </pre>
+ * }
  * <p>
  * Implements requirements:
  * <ul>
@@ -749,23 +746,23 @@ public class IssuerConfig implements LoadingStatusProvider {
         /**
          * Sets the signature algorithm preferences for token validation.
          * <p>
-         * This configuration controls which signature algorithms are preferred and allowed
-         * during token validation. It can be used to enforce security policies, such as
-         * requiring stronger algorithms or blacklisting weak ones.
+         * This configuration controls which signature algorithms are accepted during token
+         * validation, in order of preference. It can be used to enforce security policies, such as
+         * restricting validation to an explicit set of algorithms. An algorithm is supported only if
+         * it is in the preferred list and not rejected.
          * </p>
          * <p>
-         * If not explicitly set, default algorithm preferences will be used that include
-         * commonly used secure algorithms like RS256, RS384, RS512, ES256, ES384, ES512, PS256, PS384, and PS512.
+         * If not explicitly set, the default preferences ({@code new SignatureAlgorithmPreferences()})
+         * are used: the {@link de.cuioss.sheriff.token.validation.security.JwsAlgorithm} catalog in its
+         * declared preference order.
          * </p>
          * <p>
          * Example usage:
-         * <pre>
-         * SignatureAlgorithmPreferences preferences = SignatureAlgorithmPreferences.builder()
-         *     .preferredAlgorithms(List.of("RS256", "ES256"))
-         *     .allowedAlgorithms(List.of("RS256", "RS384", "ES256", "ES384"))
-         *     .build();
+         * {@snippet :
+         * SignatureAlgorithmPreferences preferences =
+         *     new SignatureAlgorithmPreferences(List.of("RS256", "ES256"));
          * builder.algorithmPreferences(preferences);
-         * </pre>
+         * }
          *
          * @param algorithmPreferences the signature algorithm preferences to use
          * @return this builder instance for method chaining

@@ -111,8 +111,7 @@ Custom rules run after all built-in validation and before cache storage. They re
 [source,java]
 ----
 TokenValidationRule tenantRule = (token, context) -> {
-    var tenantId = token.getClaimOption(ClaimName.of("tenant_id"));
-    if (tenantId.isEmpty()) {
+    if (token.getClaims().get("tenant_id") == null) {
         throw new TokenValidationException(
             SecurityEventCounter.EventType.CUSTOM_RULE_REJECTED,
             "Missing required tenant_id claim"
@@ -125,6 +124,8 @@ TokenValidator validator = TokenValidator.builder()
     .tokenValidationRule(tenantRule)
     .build();
 ----
+
+`ClaimName.fromString(String)` returns an `Optional` and resolves registered claims only, so `getClaimOption(ClaimName)` serves registered claims and `getClaims()` serves custom claims such as `tenant_id`.
 
 Rules are immutable after startup. Multiple rules execute in insertion order; the first failure rejects the token.
 

@@ -29,23 +29,28 @@ import lombok.experimental.UtilityClass;
  * <ul>
  *   <li>Creates appropriate loader based on the JWKS URL</li>
  *   <li>Supports HTTP and file-based JWKS sources</li>
- *   <li>Integrates with SecurityEventCounter for security event tracking</li>
+ *   <li>Creates loaders without a SecurityEventCounter: the counter is supplied afterwards through
+ *       {@link JwksLoader#initJWKSLoader(de.cuioss.sheriff.token.commons.events.SecurityEventCounter)},
+ *       which also starts loading the keys</li>
  * </ul>
  * <p>
- * Usage example:
- * <pre>
+ * Usage example (exercised by {@code JwksLoaderFactoryTest}):
+ * {@snippet :
  * SecurityEventCounter securityEventCounter = new SecurityEventCounter();
  * HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
  *     .jwksUrl("https://auth.example.com/.well-known/jwks.json")
+ *     .issuerIdentifier("https://auth.example.com") // required for a direct jwksUrl
  *     .refreshIntervalSeconds(60)
  *     .build();
  *
- * JwksLoader loader = JwksLoaderFactory.createHttpLoader(config, securityEventCounter);
- * CompletableFuture&lt;LoaderStatus&gt; initFuture = loader.initJWKSLoader(securityEventCounter);
+ * JwksLoader loader = JwksLoaderFactory.createHttpLoader(config);
+ * CompletableFuture<LoaderStatus> initFuture = loader.initJWKSLoader(securityEventCounter);
  *
+ * // getKeyInfo never triggers loading: wait for the asynchronous initial load first
+ * initFuture.join();
  * // After initialization completes
- * Optional&lt;KeyInfo&gt; keyInfo = loader.getKeyInfo("kid123");
- * </pre>
+ * Optional<KeyInfo> keyInfo = loader.getKeyInfo("kid123");
+ * }
  * <p>
  * See specification: <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#jwks-integration">Technical Components Specification - JwksLoader</a>
  *

@@ -24,7 +24,19 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * CDI qualifier for injecting BearerTokenResult with validated token information from HTTP Authorization header.
+ * CDI qualifier for injecting BearerTokenResult with validated token information from the HTTP
+ * Authorization header or, when configured, from an HTTP cookie.
+ * <p>
+ * The token source is set by
+ * {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#HEADER} ({@code sheriff.token.token.header}):
+ * {@code Authorization} (default) reads the {@code Bearer} token from the Authorization header, {@code Cookie}
+ * additionally allows the cookie named by
+ * {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#COOKIE_NAME}
+ * ({@code sheriff.token.token.cookie-name}, default {@code Bearer}) as a fallback: the Authorization
+ * header is still tried first and the cookie is used only when the Authorization header carries no
+ * {@code Bearer}-prefixed token. An Authorization header whose value is {@code "Bearer "} with an empty
+ * (or blank) token counts as present: it does not fall back to the cookie and yields an
+ * {@code INVALID_REQUEST} result.
  * <p>
  * This annotation allows specifying required scopes, roles, and groups that the bearer token
  * must contain for successful validation. The producer always returns a {@link de.cuioss.sheriff.token.quarkus.producer.BearerTokenResult}
@@ -90,7 +102,12 @@ import java.lang.annotation.Target;
  *
  * <h2>Token Validation Process:</h2>
  * <ul>
- *   <li>Extracts the token from the HTTP Authorization header</li>
+ *   <li>Extracts the token from the HTTP Authorization header or, when
+ *       {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#HEADER} is {@code Cookie} and the
+ *       Authorization header carries no {@code Bearer}-prefixed token, from the
+ *       cookie named by {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#COOKIE_NAME};
+ *       an Authorization value of {@code "Bearer "} with an empty token is treated as present and
+ *       yields {@code INVALID_REQUEST} instead of falling back to the cookie</li>
  *   <li>Validates the JWT signature and claims using the configured TokenValidator</li>
  *   <li>Checks that all required scopes, roles, and groups are present</li>
  *   <li>Returns a BearerTokenResult with detailed status information</li>

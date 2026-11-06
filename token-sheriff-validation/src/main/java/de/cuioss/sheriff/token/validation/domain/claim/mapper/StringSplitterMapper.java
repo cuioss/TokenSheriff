@@ -33,15 +33,19 @@ import java.util.Optional;
  * This is particularly useful for claims that contain multiple values in a single string
  * separated by a specific character (e.g., comma-separated roles, colon-separated groups).
  * <p>
+ * {@link #map(MapRepresentation, String)} returns {@code null} when the claim is absent or has a JSON
+ * {@code null} value, and throws an {@link IllegalArgumentException} only when the claim has a non-null
+ * value that is not a string.
+ * <p>
  * Example usage:
- * <pre>
+ * {@snippet :
  * // Create a mapper that splits by comma
  * StringSplitterMapper commaMapper = new StringSplitterMapper(',');
- * 
+ *
  * // Use with a claim that contains comma-separated values
  * // e.g., "roles": "admin,user,manager"
- * ClaimValue roles = commaMapper.map(jsonObject, "roles");
- * </pre>
+ * ClaimValue roles = commaMapper.map(mapRepresentation, "roles"); // null if "roles" is absent
+ * }
  *
  * @apiNote This mapper is part of the public SPI for library consumers building custom claim
  * configurations. It is not used by any built-in {@link de.cuioss.sheriff.token.validation.domain.claim.ClaimName}

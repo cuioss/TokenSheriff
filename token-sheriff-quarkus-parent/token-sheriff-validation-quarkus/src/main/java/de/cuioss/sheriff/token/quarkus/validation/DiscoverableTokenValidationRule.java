@@ -36,8 +36,7 @@ import de.cuioss.sheriff.token.validation.pipeline.validator.TokenValidationRule
  *     &#64;Override
  *     public TokenValidationRule getRule() {
  *         return (token, context) -&gt; {
- *             var tenantId = token.getClaimOption(ClaimName.of("tenant_id"));
- *             if (tenantId.isEmpty()) {
+ *             if (token.getClaims().get("tenant_id") == null) {
  *                 throw new TokenValidationException(
  *                     SecurityEventCounter.EventType.CUSTOM_RULE_REJECTED,
  *                     "Missing required tenant_id claim"
@@ -47,6 +46,14 @@ import de.cuioss.sheriff.token.validation.pipeline.validator.TokenValidationRule
  *     }
  * }
  * </pre>
+ * <p>
+ * {@code token.getClaims()} serves custom claims such as {@code tenant_id}: it returns every
+ * claim of the token by name and {@code null} for an absent one.
+ * {@link de.cuioss.sheriff.token.validation.domain.claim.ClaimName#fromString(String)} resolves only
+ * registered claims (its {@code Optional} is empty for {@code tenant_id}), so
+ * {@code token.getClaimOption(ClaimName)} serves registered claims only. The rule shape is exercised
+ * by {@code TokenValidationRuleTest}.
+ * </p>
  * <p>
  * Rules are immutable after startup. Runtime registration is not supported.
  * </p>

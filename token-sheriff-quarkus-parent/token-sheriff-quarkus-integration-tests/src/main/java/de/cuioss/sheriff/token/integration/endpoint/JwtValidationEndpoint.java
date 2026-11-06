@@ -39,6 +39,8 @@ import java.util.Map;
 /**
  * REST endpoint for JWT validation operations.
  * Focused on core JWT validation use cases for integration testing.
+ *
+ * @since 1.0
  */
 @Path("/jwt")
 @Produces(MediaType.APPLICATION_JSON)
