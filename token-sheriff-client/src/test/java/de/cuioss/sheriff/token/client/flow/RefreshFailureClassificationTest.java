@@ -335,6 +335,10 @@ class RefreshFailureClassificationTest {
             // the client registration, the grant type, and a missing DPoP nonce respectively.
             "400 | {\"error\":\"invalid_request\"}        | PRE_REDEMPTION",
             "400 | {\"error\":\"invalid_client\"}         | PRE_REDEMPTION",
+            // A failed client authentication, including Keycloak's 401 unauthorized_client answer to a
+            // wrong client secret: the client was refused, the presented refresh token was not.
+            "401 | {\"error\":\"invalid_client\"}         | PRE_REDEMPTION",
+            "401 | {\"error\":\"unauthorized_client\"}    | PRE_REDEMPTION",
             "400 | {\"error\":\"unsupported_grant_type\"} | PRE_REDEMPTION",
             "400 | {\"error\":\"use_dpop_nonce\"}         | PRE_REDEMPTION",
             // No usable error code at all. An unparseable body, an absent body and a well-formed body
@@ -354,6 +358,20 @@ class RefreshFailureClassificationTest {
                         "the server never answered a success status, so nothing was redeemed"),
                 () -> assertEquals(1, moduleDispatcher.getCallCount(),
                         "a bearer exchange makes exactly one attempt"));
+    }
+
+    @Test
+    @DisplayName("Should classify a failed client authentication as pre-redemption, not as a dead credential")
+    void shouldClassifyClientAuthenticationFailedAsPreRedemption() {
+        var failure = new ClientAuthenticationFailedException(
+                "Token endpoint refused the client authentication with HTTP 401");
+
+        RefreshFailureClassification classification = RefreshFlow.classify(failure);
+
+        assertAll("a misconfigured client credential leaves the presented refresh token untouched",
+                () -> assertEquals(Kind.PRE_REDEMPTION, classification.kind(),
+                        "a refused client must never end the session as a dead refresh credential"),
+                () -> assertNull(classification.redemption()));
     }
 
     @Test

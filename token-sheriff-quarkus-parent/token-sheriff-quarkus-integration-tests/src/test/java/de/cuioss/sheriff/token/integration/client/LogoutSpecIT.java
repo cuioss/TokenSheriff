@@ -34,20 +34,31 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Increment-9 RP-initiated logout spec against the real Keycloak container ({@code CLIENT-13}).
  * <p>
- * Obtains an ID token via the direct-access grant, builds the end-session request through the
- * production {@link EndSessionFlow} with an exact-matched {@code post_logout_redirect_uri},
- * {@code id_token_hint}, and session-bound {@code state}, and confirms Keycloak accepts the RP-initiated
- * logout. The container uses a self-signed certificate, so the request runs against a trust-all TLS
- * context (integration-test scope only), mirroring {@link BaseIntegrationTest}.
+ * Obtains an ID token via the direct-access grant and drives the end-session endpoint of realm
+ * {@code integration} with two clients:
+ * <ul>
+ *     <li>{@code integration-client} registers the {@code *} wildcard as its post-logout redirect URI.
+ *         The end-session request is built through the production {@link EndSessionFlow} with an
+ *         exact-matched {@code post_logout_redirect_uri}, {@code id_token_hint}, and session-bound
+ *         {@code state}; Keycloak must answer with a {@code 302} whose {@code Location} is exactly the
+ *         redirect URI carrying the echoed {@code state}.</li>
+ *     <li>{@code exact-logout-client} registers the single exact URI {@code https://localhost/callback}.
+ *         A control proves it redirects for that registered URI, and a negative case sends a hand-built
+ *         end-session URL (bypassing {@link PostLogoutRedirectValidator}, so the authorization server's
+ *         own check is what is under test) with an unregistered {@code post_logout_redirect_uri}, which
+ *         Keycloak must reject with a client-error page instead of redirecting to it.</li>
+ * </ul>
+ * The container uses a self-signed certificate, so the requests run against a trust-all TLS context
+ * (integration-test scope only), mirroring {@link BaseIntegrationTest}.
  */
 @DisplayName("RP-initiated logout against real Keycloak")
 class LogoutSpecIT extends BaseIntegrationTest {
@@ -59,40 +70,110 @@ class LogoutSpecIT extends BaseIntegrationTest {
     private static final String END_SESSION_ENDPOINT =
             "https://localhost:1443/realms/integration/protocol/openid-connect/logout";
     private static final String POST_LOGOUT_REDIRECT_URI = "https://localhost/callback";
-    private static final String CLIENT_ID = "integration-client";
-    private static final String CLIENT_SECRET = "integration-secret";
+    private static final String UNREGISTERED_REDIRECT_URI = "https://localhost/not-registered";
+    private static final String WILDCARD_CLIENT_ID = "integration-client";
+    private static final String WILDCARD_CLIENT_SECRET = "integration-secret";
+    private static final String EXACT_CLIENT_ID = "exact-logout-client";
+    private static final String EXACT_CLIENT_SECRET = "exact-logout-secret";
+    /**
+     * The status Keycloak's end-session endpoint answers an unregistered {@code post_logout_redirect_uri} with:
+     * a client-error page, never a redirect and never a server error.
+     */
+    private static final int UNREGISTERED_URI_REJECTION_STATUS = 400;
     private static final String USERNAME = "integration-user";
     private static final String PASSWORD = "integration-password";
 
     @Test
-    @DisplayName("Should accept an RP-initiated logout with id_token_hint, exact redirect, and state")
+    @DisplayName("Should redirect an RP-initiated logout to the exact redirect URI with the echoed state")
     void shouldPerformRpInitiatedLogout() throws Exception {
-        String idToken = obtainIdToken();
+        String idToken = obtainIdToken(WILDCARD_CLIENT_ID, WILDCARD_CLIENT_SECRET);
         assertNotNull(idToken, "Keycloak must issue an id_token for the openid-scoped grant");
 
         var flow = new EndSessionFlow(new PostLogoutRedirectValidator(Set.of(POST_LOGOUT_REDIRECT_URI)));
         String state = UUID.randomUUID().toString();
         String logoutUrl = flow.buildLogoutRedirect(END_SESSION_ENDPOINT, idToken, POST_LOGOUT_REDIRECT_URI, state);
 
+        HttpResponse<String> response = get(logoutUrl);
+        LOGGER.debug("logout response status=%s", response.statusCode());
+
+        assertRedirectedTo(response, POST_LOGOUT_REDIRECT_URI, state);
+    }
+
+    @Test
+    @DisplayName("Should redirect the exact-registration client to its registered post-logout URI")
+    void shouldRedirectExactClientToRegisteredUri() throws Exception {
+        String idToken = obtainIdToken(EXACT_CLIENT_ID, EXACT_CLIENT_SECRET);
+        assertNotNull(idToken, "Keycloak must issue an id_token for the exact-logout client");
+
+        String state = UUID.randomUUID().toString();
+        HttpResponse<String> response = get(handBuiltLogoutUrl(idToken, POST_LOGOUT_REDIRECT_URI, state));
+        LOGGER.debug("registered-uri logout response status=%s", response.statusCode());
+
+        assertRedirectedTo(response, POST_LOGOUT_REDIRECT_URI, state);
+    }
+
+    @Test
+    @DisplayName("Should refuse to redirect to a post-logout URI the client never registered")
+    void shouldNotRedirectToUnregisteredUri() throws Exception {
+        String idToken = obtainIdToken(EXACT_CLIENT_ID, EXACT_CLIENT_SECRET);
+        assertNotNull(idToken, "Keycloak must issue an id_token for the exact-logout client");
+
+        String state = UUID.randomUUID().toString();
+        HttpResponse<String> response = get(handBuiltLogoutUrl(idToken, UNREGISTERED_REDIRECT_URI, state));
+        LOGGER.debug("unregistered-uri logout response status=%s", response.statusCode());
+
+        Optional<String> location = response.headers().firstValue("Location");
+        assertAll("Keycloak must reject an unregistered post_logout_redirect_uri instead of redirecting to it",
+                () -> assertEquals(UNREGISTERED_URI_REJECTION_STATUS, response.statusCode(),
+                        "Keycloak must answer an unregistered post_logout_redirect_uri with a client-error page"),
+                () -> assertFalse(isRedirect(response.statusCode()),
+                        "an unregistered post_logout_redirect_uri must not be answered with a redirect, got "
+                                + response.statusCode() + " to " + location.orElse("<none>")),
+                () -> assertFalse(location.filter(value -> value.startsWith(UNREGISTERED_REDIRECT_URI)).isPresent(),
+                        "no Location may point at the unregistered URI, got " + location.orElse("<none>")));
+    }
+
+    /**
+     * Builds the end-session URL by hand, deliberately not through {@link EndSessionFlow}: the production
+     * {@link PostLogoutRedirectValidator} would refuse an unregistered URI before the request is sent, and
+     * the negative case must prove the authorization server's check, not the client's.
+     */
+    private static String handBuiltLogoutUrl(String idToken, String postLogoutRedirectUri, String state) {
+        return END_SESSION_ENDPOINT
+                + "?" + param("id_token_hint", idToken)
+                + "&" + param("client_id", EXACT_CLIENT_ID)
+                + "&" + param("post_logout_redirect_uri", postLogoutRedirectUri)
+                + "&" + param("state", state);
+    }
+
+    private static void assertRedirectedTo(HttpResponse<String> response, String expectedUri, String expectedState) {
+        assertEquals(302, response.statusCode(),
+                "Keycloak must answer the RP-initiated logout with a 302 to the post-logout redirect URI");
+        String location = response.headers().firstValue("Location").orElse(null);
+        assertNotNull(location, "the logout redirect must carry a Location header");
+
+        assertEquals(expectedUri + "?state=" + URLEncoder.encode(expectedState, StandardCharsets.UTF_8), location,
+                "Location must be exactly the registered redirect URI with the echoed state as its only parameter");
+    }
+
+    private static boolean isRedirect(int status) {
+        return status >= 300 && status < 400;
+    }
+
+    private static HttpResponse<String> get(String url) throws Exception {
         HttpClient client = HttpClient.newBuilder()
                 .sslContext(trustAllContext())
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
-        HttpResponse<String> response = client.send(
-                HttpRequest.newBuilder().uri(URI.create(logoutUrl)).GET().build(),
+        return client.send(HttpRequest.newBuilder().uri(URI.create(url)).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
-        LOGGER.debug("logout response status=%s", response.statusCode());
-
-        assertTrue(response.statusCode() == 200 || response.statusCode() == 302,
-                "Keycloak must accept the RP-initiated logout (200 confirmation or 302 to the redirect), got "
-                        + response.statusCode());
     }
 
-    private static String obtainIdToken() throws Exception {
+    private static String obtainIdToken(String clientId, String clientSecret) throws Exception {
         String form = param("grant_type", "password")
-                + "&" + param("client_id", CLIENT_ID)
-                + "&" + param("client_secret", CLIENT_SECRET)
+                + "&" + param("client_id", clientId)
+                + "&" + param("client_secret", clientSecret)
                 + "&" + param("username", USERNAME)
                 + "&" + param("password", PASSWORD)
                 + "&" + param("scope", "openid");

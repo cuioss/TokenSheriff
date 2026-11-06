@@ -145,6 +145,27 @@
         "token.endpoint.auth.signing.alg": "RS256",
         "use.jwks.string": "true"
       }
+    },
+    {
+      "clientId": "exact-logout-client",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "exact-logout-secret",
+      "redirectUris": ["https://localhost/callback"],
+      "webOrigins": ["*"],
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "defaultClientScopes": ["openid", "profile", "email", "roles", "web-origins", "read"],
+      "optionalClientScopes": ["address", "phone", "offline_access", "microprofile-jwt"],
+      "attributes": {
+        "post.logout.redirect.uris": "https://localhost/callback",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.revoke.offline.tokens": "false"
+      }
     }
   ],
   "users": [

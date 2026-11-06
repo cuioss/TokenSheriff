@@ -86,6 +86,17 @@ public class TokenEndpointClient {
      */
     private static final String ERROR_INVALID_GRANT = "invalid_grant";
 
+    /** The RFC 6749 §5.2 error code for a failed client authentication: see {@link #clientAuthenticationFailed}. */
+    private static final String ERROR_INVALID_CLIENT = "invalid_client";
+
+    /**
+     * The error code Keycloak pairs with HTTP 401 for a wrong client secret; recognized as a failed client
+     * authentication on {@value #HTTP_UNAUTHORIZED} only: see {@link #clientAuthenticationFailed}.
+     */
+    private static final String ERROR_UNAUTHORIZED_CLIENT = "unauthorized_client";
+
+    private static final int HTTP_UNAUTHORIZED = 401;
+
     private final DslJson<Object> dslJson;
     private final int maxContentSize;
     private final BackChannelHttp backChannel;
@@ -113,7 +124,8 @@ public class TokenEndpointClient {
      * @return the normalized token response
      * @throws TransportException if the request fails or the response is not successful; the
      *         {@link CredentialRejectedException} subtype when the authorization server declared the
-     *         presented credential invalid, and the {@link RedeemedResponseException} subtype when the
+     *         presented credential invalid, the {@link ClientAuthenticationFailedException} subtype when
+     *         it refused the client's own authentication, and the {@link RedeemedResponseException} subtype when the
      *         response was successful but its body could not be parsed — see
      *         {@link #requestToken(String, Map, Map, SenderConstraint)}
      */
@@ -147,8 +159,13 @@ public class TokenEndpointClient {
      * @throws TransportException if the request fails or the response is not successful (after a
      *         nonce retry where applicable) — in both cases, except for the
      *         {@link RedeemedResponseException} subtype described below, the authorization server
-     *         never consumed the presented grant. Two narrower subtypes carry the distinctions a caller may need to
-     *         fail closed on: {@link CredentialRejectedException} when the non-success status is a
+     *         never consumed the presented grant. Three narrower subtypes carry the distinctions a caller may need to
+     *         fail closed on: {@link ClientAuthenticationFailedException} when the non-success status is
+     *         a {@code 4xx} whose RFC 6749 §5.2 body names {@code invalid_client}, or exactly
+     *         {@code 401} with {@code unauthorized_client} (Keycloak's wrong-secret answer), so the
+     *         server refused the client before processing the grant — {@code unauthorized_client} on
+     *         any other status, and any {@code 5xx}, stay a plain {@link TransportException};
+     *         {@link CredentialRejectedException} when the non-success status is a
      *         {@code 4xx} whose RFC 6749 §5.2 body names {@code invalid_grant}, so the server declared
      *         the presented credential dead without redeeming it; and
      *         {@link RedeemedResponseException} when the body cannot be parsed <em>after</em> a success
@@ -165,9 +182,9 @@ public class TokenEndpointClient {
      *         truncated inside a string escape — never escapes as an unchecked exception: after a
      *         success status it is a {@link RedeemedResponseException}, and as a non-success error
      *         body it is an unknown error code, so the failure is a plain {@link TransportException}
-     *         and never a {@link CredentialRejectedException}. A non-success error body whose top-level
-     *         JSON object repeats a member name is likewise an unknown error code, never a
-     *         {@link CredentialRejectedException}
+     *         and never a {@link CredentialRejectedException} or {@link ClientAuthenticationFailedException}.
+     *         A non-success error body whose top-level JSON object repeats a member name is likewise an
+     *         unknown error code, never either subtype
      */
     public TokenResponse requestToken(String tokenEndpoint,
             Map<String, String> formParameters,
@@ -192,6 +209,13 @@ public class TokenEndpointClient {
             }
         }
         if (!HttpStatusFamily.isSuccess(response.statusCode())) {
+            if (clientAuthenticationFailed(response)) {
+                // Status and fixed text only, exactly as below: no AS-controlled value is interpolated
+                // (CWE-117).
+                throw new ClientAuthenticationFailedException(
+                        "Token endpoint refused the client authentication with HTTP "
+                                + response.statusCode() + " (RFC 6749 §5.2 'invalid_client')");
+            }
             if (credentialRejected(response)) {
                 // The detail message is composed from the observed status and fixed text only: no part
                 // of the AS-controlled error body is interpolated into it (CWE-117), which is what
@@ -334,12 +358,38 @@ public class TokenEndpointClient {
      * transient fault merely delays the discovery until the next refresh. A {@code 5xx} is the server
      * saying it failed, not that this credential is bad, so the {@code error} body it happens to carry
      * is not evidence about the credential.
+     * <p>
+     * It is evaluated after {@link #clientAuthenticationFailed}: a failed client authentication is
+     * reported as {@link ClientAuthenticationFailedException}, which says nothing about the presented
+     * grant, and the two allow-lists share no error code, so neither ever shadows the other.
      */
     private boolean credentialRejected(HttpResponse<String> response) {
         if (!HttpStatusFamily.isClientError(response.statusCode())) {
             return false;
         }
         return ERROR_INVALID_GRANT.equals(errorCode(response.body()));
+    }
+
+    /**
+     * Whether the authorization server refused the client's own authentication, as opposed to the grant.
+     * <p>
+     * The predicate is an <strong>allow-list of exact shapes</strong>: the status is a client error
+     * ({@code 4xx}) and the RFC 6749 §5.2 {@code error} member is exactly {@value #ERROR_INVALID_CLIENT};
+     * or the status is exactly {@value #HTTP_UNAUTHORIZED} and the {@code error} member is exactly
+     * {@value #ERROR_UNAUTHORIZED_CLIENT} — Keycloak's answer to a wrong client secret. Everything else
+     * answers {@code false}: {@code unauthorized_client} on any other status (a {@code 403} is an
+     * authenticated client refused a grant type), any {@code 5xx} whatever its body, and every body
+     * {@link #errorCode} reports as unknown. A refusal answering {@code false} here falls through to the
+     * {@link #credentialRejected} check and otherwise to a plain {@link TransportException}.
+     */
+    private boolean clientAuthenticationFailed(HttpResponse<String> response) {
+        int status = response.statusCode();
+        if (!HttpStatusFamily.isClientError(status)) {
+            return false;
+        }
+        String code = errorCode(response.body());
+        return ERROR_INVALID_CLIENT.equals(code)
+                || (status == HTTP_UNAUTHORIZED && ERROR_UNAUTHORIZED_CLIENT.equals(code));
     }
 
     /**
