@@ -152,7 +152,7 @@ When `sheriff.token.token.header=Cookie`, the token is extracted from the named 
 |Token-Sheriff's multi-issuer `IssuerConfigCache` with per-issuer JWKS loading, algorithm constraints, and claim validation is a core differentiator. MP-JWT assumes one issuer per application.
 |===
 
-== Token-Sheriff Advantages Beyond MP-JWT
+== [[_tokensheriff_advantages_beyond_mp_jwt]]Token-Sheriff Advantages Beyond MP-JWT
 
 The following capabilities have no equivalent in MP-JWT 2.1:
 
