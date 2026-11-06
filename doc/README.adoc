@@ -5,13 +5,38 @@
 :sectnums:
 :source-highlighter: highlight.js
 
-This is the central navigation for TokenSheriff documentation.
+This is the central navigation for Token-Sheriff documentation.
 
 == Architecture Decisions
 
 Standing architectural decisions, recorded as durable ADRs under `doc/adr/`.
 
 * xref:adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc[ADR-0001: Validation and Client Module Split with a Commons Base Layer] - Two Maven modules (validation + client) in one repository, with the `commons` base layer enforced by ArchUnit rather than carved out as a third artifact
+* xref:adr/0002-Observability_beans_observe_the_resolved_TokenValidator_not_the_issuer_property_namespace.adoc[ADR-0002: Observability beans observe the resolved TokenValidator, not the issuer property namespace] - Observability beans resolve against the `TokenValidator` actually produced (any qualifier), never against the extension's own property-derived issuer state
+* xref:adr/0003-Scope_refresh-path_coverage_gates_by_class_granularity_not_module-wide_threshold.adoc[ADR-0003: Scope refresh-path coverage gates by class granularity, not module-wide threshold] - A regression confined to a small subset of a module needs a granularity-matched gate; a module-wide threshold dilutes it to invisibility
+* xref:adr/0004-Scope_broadening_on_refresh_is_accepted_and_reported_by_default_refused_only_under_opt-in_strict_mode.adoc[ADR-0004: Scope broadening on refresh is accepted and reported by default, refused only under opt-in strict mode] - The client accepts and reports a broadened refresh grant by default and refuses it only under an opt-in strict posture
+* xref:adr/0005-A_refresh_failure_quarantines_the_session_after_authorization-server_redemption_but_preserves_it_before.adoc[ADR-0005: A refresh failure quarantines the session after authorization-server redemption, but preserves it before] - The response to a refused refresh is decided by whether the authorization server already redeemed the token (superseded by ADR-0010)
+* xref:adr/0006-A_cross-cutting_signal_on_a_public_subclassable_method_rides_subtype_exceptions_never_a_preferred_overload.adoc[ADR-0006: A cross-cutting signal on a public subclassable method rides subtype exceptions, never a preferred overload] - A new signal travels on a thrown-type hierarchy so the single overridable entry point keeps dispatching to subclass overrides
+* xref:adr/0007-The_refresh_path_binds_identity_against_a_retained_session_subject_not_a_re-parsed_stored_ID_token.adoc[ADR-0007: The refresh path binds identity against a retained session subject, not a re-parsed stored ID token] - The refreshed principal is compared against a subject retained on the stored session record, inside the atomic store transform
+* xref:adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008: Adopt the upstream cui-http verifyHostname knob rather than a local trust manager] - Outbound TLS hostname verification is a default-on setting delegated to the upstream cui-http `HttpHandlerBuilder`, not a local trust manager
+* xref:adr/0009-Single_JWS_algorithm_catalog_with_per-consumer_EC_format_composition.adoc[ADR-0009: Single JWS algorithm catalog with per-consumer EC format composition] - Signing-algorithm facts are defined once in the `JwsAlgorithm` catalog; the EC JCA name stays per-consumer because JOSE and `java.security.Signature` differ on ECDSA wire format
+* xref:adr/0010-A_refresh_token_the_authorization_server_declares_invalid_is_a_third_classification_state.adoc[ADR-0010: A refresh token the authorization server declares invalid is a third classification state] - A refused refresh is classified as pre-redemption, credential-rejected or redeemed
+* xref:adr/0011-Integration-test_skip_state_binds_through_POM_properties_not_plugin_configuration.adoc[ADR-0011: Integration-test skip state binds through POM properties, not plugin configuration] - The Failsafe skip flag is wired to `skipTests` via POM properties so a command-line override keeps precedence
+* xref:adr/0012-mTLS_client_authentication_is_an_alpha_capability_DPoP_is_the_sender-constraining_and_client-authentication_direction.adoc[ADR-0012: mTLS client authentication is an alpha capability, DPoP is the sender-constraining and client-authentication direction] - `MtlsClientAuth` is a declared but never-selected alpha surface; DPoP is the direction for first production
+* xref:adr/0013-Reject_a_compatibility_shim_that_would_resurrect_a_removed_silent-drop_defect_class.adoc[ADR-0013: Reject a compatibility shim that would resurrect a removed silent-drop defect class] - No two-argument `AuthenticationResult` constructor; callers migrate to the full-arity constructor
+* xref:adr/0014-Optional_record_components_are_typed_nullable_while_accessor_APIs_expose_Optional.adoc[ADR-0014: Optional record components are typed nullable while accessor APIs expose Optional] - Optional record components are `@Nullable` under the `@NullMarked` posture, while hand-written getters keep returning `Optional`
+* xref:adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015: DPoP htu names the back-channel URL actually contacted] - A DPoP proof's `htu` names the URL the client actually dials, including a rewritten back-channel origin
+* xref:adr/0016-TokenValidator_owns_and_closes_the_JWKS_loaders_of_its_issuer_configs.adoc[ADR-0016: TokenValidator owns and closes the JWKS loaders of its issuer configs] - `TokenValidator` closes every `AutoCloseable` JWKS loader of its enabled issuer configs in `close()`
+* xref:adr/0017-A_JWKS_loader_reports_OK_only_with_usable_keys_and_retries_only_transient_discovery_failures.adoc[ADR-0017: A JWKS loader reports OK only with usable keys and retries only transient discovery failures] - OK only while a usable key set is installed; failed first loads recover in the background; security rejections stay terminal
+* xref:adr/0018-A_JWKS_loader_fences_stale_work_with_one_lifecycle_lock_and_a_generation_epoch.adoc[ADR-0018: A JWKS loader fences stale work with one lifecycle lock and a generation epoch] - `HttpJwksLoader` guards its lifecycle with one lock and a generation epoch, so work of a closed generation publishes nothing
+* xref:adr/0019-Eager_TokenValidator_startup_is_gated_at_runtime_on_enabled-issuer_presence.adoc[ADR-0019: Eager TokenValidator startup is gated at runtime on enabled-issuer presence] - A `StartupEvent` observer builds the validator when an enabled issuer is configured; an invalid enabled configuration fails boot
+* xref:adr/0020-The_access-token_cache_stores_the_issuer_time_policy_with_each_entry.adoc[ADR-0020: The access-token cache stores the issuer time policy with each entry] - Each cache entry carries its issuer's clock skew and maximum token age, re-applied on every hit and eviction
+* xref:adr/0021-A_cached_token_is_rejected_for_expiry_or_age_inside_the_cache_before_the_DPoP_proof_is_checked.adoc[ADR-0021: A cached token is rejected for expiry or age inside the cache, before the DPoP proof is checked] - The cache rejects an expired or too-old entry itself, so the DPoP proof is never checked for a token the cache rejects
+* xref:adr/0022-A_flow_context_is_single-use_and_untrusted_text_is_sanitised_by_one_commons-layer_utility.adoc[ADR-0022: A flow context is single-use, and untrusted text is sanitised by one commons-layer utility] - A `FlowContext` is used up by the first callback through one atomic claim; every CWE-117 sanitisation goes through `ErrorTextSanitizer`
+* xref:adr/0023-An_issuer_configured_only_through_environment_variables_is_discovered_through_its_enabled_anchor_keys.adoc[ADR-0023: An issuer configured only through environment variables is discovered through its enabled anchor keys] - Issuer names are discovered from the dotted properties and the `SHERIFF_TOKEN_ISSUERS_<NAME>_ENABLED` / `_DPOP_ENABLED` environment variables
+* xref:adr/0024-The_bearer-token_interceptor_reads_its_class-level_binding_from_the_bean_class_not_the_ArC_subclass.adoc[ADR-0024: The bearer-token interceptor reads its class-level binding from the bean class, not the ArC subclass] - `BearerTokenInterceptor` merges the bean class's `@BearerAuth` with the method-level annotation and fails closed when neither carries it
+* xref:adr/0025-The_client_extension_produces_its_token_store_and_refresh_scheduler_as_replaceable_default_beans.adoc[ADR-0025: The client extension produces its token store and refresh scheduler as replaceable default beans] - `TokenStore` and `RefreshScheduler` are `@DefaultBean` producers an application bean can replace
+* xref:adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_startup_instead_of_being_ignored.adoc[ADR-0026: Orphaned or unresolvable extension configuration fails startup instead of being ignored] - The configuration resolvers throw an `IllegalStateException` naming the offending property, failing the validator build at startup
 
 == Commons (base layer)
 
@@ -43,6 +68,7 @@ The token validation capability — its requirements, architecture, security mod
 
 * xref:validation/threat-model.adoc[Threat Model] - STRIDE threat analysis with coverage status
 * xref:validation/security-reference.adoc[Security Reference] - Attack mitigations, controls, and best practices
+* xref:validation/cve-lessons-register.adoc[CVE Lessons Register] - Real-world CVEs in other OAuth/OIDC/JWT/JOSE libraries mapped against Token-Sheriff's controls
 
 === Specifications
 
@@ -95,7 +121,7 @@ implemented; this document set remains the normative specification.
 * xref:../token-sheriff-quarkus-parent/README.adoc[token-sheriff-quarkus-parent] - Quarkus extensions
 ** xref:../token-sheriff-quarkus-parent/doc/README.adoc[Module Documentation]
 ** `token-sheriff-validation-quarkus` (+ `-deployment`) - validation extension
-** `token-sheriff-client-quarkus` (+ `-deployment`) - client extension
+** xref:../token-sheriff-quarkus-parent/token-sheriff-client-quarkus/README.adoc[token-sheriff-client-quarkus] (+ `-deployment`) - client extension
 
 == Benchmarking
 
@@ -103,6 +129,7 @@ implemented; this document set remains the normative specification.
 * xref:../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis (March 2026)]
 * xref:../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis (March 2026)]
 * xref:../benchmarking/doc/performance-scoring.adoc[Performance Scoring]
+* xref:../benchmarking/benchmarking-common/doc/LogMessages.adoc[Benchmarking Log Messages]
 
 == Configuration
 
