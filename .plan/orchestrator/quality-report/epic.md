@@ -467,6 +467,19 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   its text and surface updated, and it is now emittable: 2 of 3 slots free, no shared path with the launched PLAN-17.
   PLAN-25 runs last.
 
+- 2026-11-06 — PLAN-17 SHIPPED (#878, merge `d0fa0c7f`, 19 files +198/-162, `landings/PLAN-17.md`); inbox drained (seven
+  messages `plan-17-javadoc-examples-001` to `-007`, archived). Closes J-1 to J-7 and J-9 to J-12 (`findings-disposition.md`
+  updated). Three-layer reading by one read-only leaf, every `checked` point re-read: ONE layer-3 DEFECT (major, pre-existing,
+  fail-closed): with JWE configured `TokenStringValidator` admits up to 32 KiB while `NonValidatingJwtParser.decodeInternal`
+  rejects above 8 KiB with `IllegalArgumentException`, which the refresh pipeline and `BearerTokenProducer` do not catch; reported to
+  the operator at once and folded into PLAN-25 item 7(k) with a required fail-before test, NOT fixed inline (the lane's `finding`
+  message 006 had it unverified; the reading confirmed it). Eight minor Javadoc residuals (the lane's four follow-ups plus
+  `BearerTokenStatus`, `IssuerConfig` "order of preference", `NonValidatingJwtParser` `@throws`, two test-coverage overclaims)
+  folded into 7(k); the empty `Bearer ` statement is not settled by reading. The Expected Surface under-declared by three files
+  (19 touched, 16 declared) for the third time in this epic. Candidate-lessons 001 to 005 are plan-marshall-owned: DISCARDED locally
+  and written to a sixth 2026-11-06 addendum of `upstream-plan-marshall-report.md`, NOT sent; 001's project-owned half (read the branch
+  before writing behaviour prose) is carried by 7(k). The landing is `complete: false` (missing `effort`). PLAN-19 is still running.
+
 ## Open Defects
 
 - 2026-10-29 — Incomplete landing `plan-01-jwks-loader-lifecycle-009.md` (PLAN-01): `landing-check`
@@ -516,8 +529,25 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   Twelfth known producer with an unstamped `effort` (PLAN-01, 02, 04, 05, 12, 09, 10, 14, 22, 16, 15, 18). PLAN-24 carried it. The
   landing also omits the `emit-landing` and `archive-plan` steps (not yet recorded when it was assembled).
 
+- 2026-11-06 — Incomplete landing `plan-17-javadoc-examples-007.md` (PLAN-17): `landing-check` reports `complete: false`, missing key
+  `effort` (written as `unknown`; the plan carries no effort stamp). Drained and reconciled as far as it goes. Thirteenth known producer
+  with an unstamped `effort` (PLAN-01, 02, 04, 05, 12, 09, 10, 14, 22, 16, 15, 18, 17). The landing lists `emit-landing` as
+  `in_progress` and `archive-plan` as `pending` (written before either recorded), and its token total includes a known double-count of
+  about 186k execute-phase tokens.
+- 2026-11-06 — Open defect in merged code (PLAN-17 three-layer reading, not yet owned by a running plan): JWE tokens of 8193 to 32768
+  bytes fail with an unhandled `IllegalArgumentException` instead of a `TokenValidationException` (`NonValidatingJwtParser.java:294-295`
+  against `TokenStringValidator.java:65-67,96`); fail-closed but unusable above 8 KiB; PLAN-25 item 7(k)(1), operator decision on the
+  fix direction recorded there. Retire when a fix plan lands with its test.
+
 ## Watches
 
+- 2026-11-06 — PLAN-17 landing residue (#878; landing message, partly verified): (1) `boundary_monotonicity` flagged `6-finalize` and
+  the execute-phase tokens were counted twice (about 186k), so the 22,258,542 total is an overstatement; the lane noted it in its
+  decision log and did not fix it. (2) Phase subagents self-transitioned the plan and skipped the orchestrator's Q-gates and the
+  `phase-boundary` stamp, an inline review-fix commit wrote no change-ledger row, and CodeRabbit's quota refusal needed a manual
+  re-review (all upstream-owned; sixth addendum). (3) The CodeRabbit check ended `NEUTRAL`; ten of its eleven comments needed a fix
+  commit, which is the cost of prose written from names and intent (see 7(k)). (4) The 400-line test budget Watch and the e2e teardown
+  hang are unchanged. Retire (1) to (3) once the operator accepts them; they need nothing further from this epic.
 - 2026-11-06 — PLAN-18 landing residue (#877; landing message, partly verified): (1) the squash commit on `main` carries the
   CodeRabbit "Summary by CodeRabbit" block and a second `Co-authored-by` trailer; the merge-queue path offers no per-enqueue
   message override and `ci repo` has no verb for the default merge-message setting (commit body read on `af19b9c2`, the cause not

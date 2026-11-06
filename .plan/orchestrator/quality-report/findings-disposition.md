@@ -37,7 +37,7 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | V-17e | info | **FIXED** — #851 (49ba673d), PLAN-09; an EC JWK whose `alg` does not match its curve is dropped, never re-labelled (closed per PR; check read in merged source) | PLAN-09 |
 | V-17f | info | **FIXED** — #853 (a9ce05df), PLAN-11; `AudienceValidator` treats only an absent `aud` as missing, an empty array is `AUDIENCE_MISMATCH` and never reaches the `azp` fallback (code read in the merged source) | PLAN-11 |
 | V-17g | info | **FIXED** — #835 (e010c5cf), PLAN-05; random CEK on unwrap failure, CBC tag mismatch normalised to the same typed rejection (closed per PR; code not re-read) | PLAN-05 |
-| V-17h | info | **FIXED** (PLAN-13 part) — #861 (7145aebb); `JWKS_KEYS_UPDATED` logs issuer and key ids (read in the merged diff); J-1 part still owned by PLAN-17 | PLAN-13 |
+| V-17h | info | **FIXED** (PLAN-13 part) — #861 (7145aebb); `JWKS_KEYS_UPDATED` logs issuer and key ids (read in the merged diff); J-1 part FIXED by PLAN-17 (#878, d0fa0c7f) | PLAN-13 |
 
 ## Client code (C)
 
@@ -129,18 +129,18 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 
 | ID | Sev | Verdict at HEAD | Owner |
 |---|---|---|---|
-| J-1 | major | VALID (example edited by #818, still broken) | PLAN-17 |
-| J-2 | major | VALID | PLAN-17 |
-| J-3 | major | VALID | PLAN-17 |
-| J-4 | major | VALID | PLAN-17 |
-| J-5 | major | VALID | PLAN-17 |
-| J-6 | major | VALID | PLAN-17 |
-| J-7 | major | VALID | PLAN-17 |
+| J-1 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading | PLAN-17 |
+| J-2 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading; residual: `JwksLoaderFactory` lines 30-31, PLAN-25 item 7(k) | PLAN-17 |
+| J-3 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading; residual: `NonValidatingJwtParser` lines 107, 208-212, 230-234 and the JWE size mismatch, PLAN-25 item 7(k) | PLAN-17 |
+| J-4 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading | PLAN-17 |
+| J-5 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading; residual: `DiscoverableTokenValidationRule` line 54 test claim, PLAN-25 item 7(k) | PLAN-17 |
+| J-6 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading | PLAN-17 |
+| J-7 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading | PLAN-17 |
 | J-8 | minor | **FIXED** — #850 (ed172e43), PLAN-08; `JwtPropertyKeys` Javadoc/config doc state the same (with D-8) (closed per PR; code not re-read) | PLAN-08 |
-| J-9 | minor | VALID | PLAN-17 |
-| J-10 | minor | VALID | PLAN-17 |
-| J-11 | minor | VALID | PLAN-17 |
-| J-12 | info | VALID | PLAN-17 |
+| J-9 | minor | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading; residual: `JwtPropertyKeys` line 176, `IssuerConfig` lines 749-756, `threat-model.adoc:66` 'blacklisting', PLAN-25 item 7(k) | PLAN-17 |
+| J-10 | minor | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading; residual: `BearerTokenProducer` line 376, `BearerTokenStatus` lines 41/50/91, PLAN-25 item 7(k) | PLAN-17 |
+| J-11 | minor | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading | PLAN-17 |
+| J-12 | info | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading | PLAN-17 |
 
 ## Tally
 

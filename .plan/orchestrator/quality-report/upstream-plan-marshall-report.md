@@ -522,3 +522,34 @@ Read from `plan-18-doc-accuracy-001` to `-008` and the merged PR #877 (`af19b9c2
   finalize token total is a slight overstatement (landing residue).
 - **`effort` was never stamped** (the twelfth known producer with an unstamped `effort`; `landing-check` `complete: false`); the `emit-landing` and `archive-plan`
   steps had not recorded when the landing was assembled, so they are absent from `steps`.
+
+## Addendum 2026-11-06 (sixth): PLAN-17 (5 plan-marshall messages and 3 landing residues)
+
+Source: `plan-17-javadoc-examples-001` to `-007` (#878). Written locally, NOT sent.
+
+- **Javadoc prose that states behaviour was written from names and intent, and only a code review caught it** (PLAN-17-001). The
+  examples were checked against signatures; ten of eleven review comments were about the prose around them (precedence, fallback,
+  empty and null inputs). Suggested for `pm-dev-java:javadoc`: when Javadoc states how something behaves, read the implementing branch
+  and cover the empty, null and exceptional inputs before writing the sentence; a compile check proves the example, not its prose. The
+  project-owned half is in PLAN-25 item 7(k).
+- **Phase subagents self-transition the plan status and skip the orchestrator's gates and metrics boundary** (PLAN-17-002). 3-outline to
+  4-plan, 4-plan to 5-execute and 5-execute to 6-finalize were moved by the dispatched bodies, so Q-gates, the handshake and the
+  `phase-boundary` stamp were skipped each time and repaired late (`boundary-status`). Execute-phase tokens were also counted twice
+  (about 186k). Suggested for `phase-5-execute` and the dispatch contract: a dispatched body returns its result and leaves the
+  transition to the orchestrator, or runs the gates and the stamp the transition owns.
+- **An inline finalize commit leaves no change-ledger row, and a commit with nothing staged reports FETCH_FAILURE** (PLAN-17-003).
+  `git-workflow commit` with an empty index fails as `FETCH_FAILURE` (wrong layer); a review fix committed inline wrote no
+  `manage-change-ledger` row, so `5-execute` to `6-finalize` refused with `execute_commits_unrecorded`. Suggested for
+  `workflow-integration-git`: report an empty index as such, and have a loop-back commit through the sanctioned verb append its own
+  ledger row (or let the guard recognise it).
+- **A whole-tree `test-compile` gate is not performable while a sibling test-jar is built at `package`** (PLAN-17-004). In
+  TokenSheriff `token-sheriff-validation` publishes its test-jar at `package`, so `test-compile` over the tree fails downstream (20
+  errors, none in touched files) while `verify` is green (3852 tests). Suggested for `build-maven`: mark the arm not performable in the
+  module profile and carry that in the canonical command set instead of each plan re-deriving it.
+- **With `review_rate_window_await=false` a required bot's quota refusal has no recovery path inside the step** (PLAN-17-005). The
+  orchestrator waited about 540 s and re-triggered by hand with `github_re_review re-review`. Recurrence of the PLAN-13, PLAN-14, PLAN-18
+  and PLAN-23 residuals. Suggested for `automatic-review`: say plainly that it is escalating; never demote a required bot to optional.
+- **Landing residue.** `effort` was never stamped (the thirteenth known producer; `landing-check` `complete: false`); `emit-landing` and
+  `archive-plan` were not yet recorded when the landing was assembled; the PR body carries the attribution footer although the template
+  says none; the per-module quality-gate sweep was replaced by one whole-tree `verify -Ppre-commit` and delta review rounds by full rounds
+  (lane-reported deviations).

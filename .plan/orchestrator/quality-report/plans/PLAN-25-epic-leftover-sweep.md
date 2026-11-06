@@ -137,6 +137,40 @@ two ADRs, client response-strictness decisions). Fail-closed only: nothing here 
    `doc/client/requirements.adoc` line 208 (PLAN-19 D-11 sweeps `<<>>` references). Because PLAN-19 edits many of these
    same docs first, re-read each line at outline. Origin: PLAN-18 (#877).
 
+   (k) PLAN-17 follow-up (folded 2026-11-06, from the #878 landing, its eight inbox messages and its three-layer reading;
+   every `file:line` below was re-read at `d0fa0c7f`, re-read again at outline). (1) JWE size mismatch (major, a defect that
+   pre-dates #878 and is still fail-closed): with JWE configured, `TokenStringValidator` (lines 65-67, 96) admits a token
+   string up to `maxEncryptedTokenSize` (default 32768, `JweDecryptionConfig` line 51), but `NonValidatingJwtParser.decodeInternal`
+   (lines 294-295) rejects anything above the parser's own `maxTokenSize` (default 8192, `ParserConfig` line 85) with
+   `IllegalArgumentException`, not `TokenValidationException`. A token string of 8193 to 32768 bytes (a 5-part JWE, an opaque
+   refresh token or garbage) therefore escapes `RefreshTokenValidationPipeline` (catch at line 100) and `BearerTokenProducer`
+   (catch at line 252) as an unhandled `IllegalArgumentException`, with no WARN and no security event, and every legitimate JWE above
+   8 KiB is unusable although `JwtPropertyKeys` line 938 documents 32 KB. No test pairs `maxEncryptedTokenSize` with an oversized
+   token. Required: a test that fails before and passes after, driven through the production entry points (`TokenValidator`
+   create-access/id/refresh paths and `BearerTokenProducer`) with a 5-part token of about 10 KiB under a JWE-enabled issuer. The
+   fix direction is an operator decision (ONE QUESTION, recorded): make the parser limit follow the effective limit of
+   `TokenStringValidator` so a JWE up to 32 KiB works (documented intent; widens acceptance only for JWE-enabled issuers and only
+   up to the documented limit), or keep 8 KiB and map the failure to a `TokenValidationException` with a WARN and a security event
+   (stays rejecting; the 32 KB documentation then changes). Default where the operator does not answer: the second, because the
+   standing constraint forbids widening acceptance unless the deliverable says so. Becomes a separate fix plan on the operator's
+   word (recommended: it is the epic's only remaining behavioural change besides 7(i), and this plan is above six deliverables).
+   (2) Javadoc that contradicts the code or claims test coverage that does not exist (minor, all comment text only):
+   `NonValidatingJwtParser.java` line 107 (the size pre-check is run by all three pipelines, not "ID-token parsing", and
+   "its limit can differ" is the defect in (1)); lines 208-212 and 230-234 (`decode` and `decodeOpaqueToken` declare only
+   `TokenValidationException` although the class text promises `IllegalArgumentException`); line 54 ("exercised by
+   `NonValidatingJwtParserTest`" does not hold for the null, empty, oversized and JSON-null cases); `DiscoverableTokenValidationRule.java`
+   line 54 ("exercised by `TokenValidationRuleTest`", which never reads `getClaims()` or `tenant_id`); `BearerTokenProducer.java`
+   line 376 (the Authorization header only; the cookie is the fallback); `BearerTokenStatus.java` lines 41, 50 and 91 (same);
+   `JwksLoaderFactory.java` lines 30-31 (the two bullets do not match the three explicit methods and the new line 32 contradicts
+   the first); `JwtPropertyKeys.java` line 176 ("preferred and allowed": there is one list plus the rejected set);
+   `IssuerConfig.java` lines 749-750 and 756 ("in order of preference": membership only, the order changes nothing);
+   `doc/validation/threat-model.adoc` line 66 ("Token blacklisting", a terminology leftover in a file PLAN-19 edits first).
+   Either soften the claim or add the test the sentence names. (3) Not settled by reading (verify at outline with a run, or
+   soften): the statement in `BearerTokenProducer` line 59 and `BearerToken` lines 37-40 and 105-110 that
+   `Authorization: Bearer ` with an empty token gives `INVALID_REQUEST` and no cookie fallback; HTTP servers normally strip
+   trailing whitespace, so a real request may arrive as `Bearer` and fall back to the cookie. Also: `{@snippet}` bodies are
+   not compiled, so prefer examples mirrored by a test where feasible. Origin: PLAN-17 (#878).
+
 Scope guard: seven deliverables, above the six-deliverable threshold, so a rationale is recorded (2026-11-05). The
 operator asked for ONE final plan for all leftovers, and each item is small and independent of the others; this is the
 epic's last plan and it is not emitted until PLAN-13 to PLAN-24 have landed and their own residuals are folded in. The
@@ -232,6 +266,8 @@ rest together.
 - OBSERVED: PLAN-15 left TV-4 open by operator decision (the three enum tests restored, files identical to `main`); trivial enum tests stay as a project convention, no item here
 - OBSERVED: at `af19b9c2` (the PLAN-18 merge) `EgressPolicy` is referenced by main code only in `HttpWellKnownResolver`, `HttpJwksLoader` (plus their config types, `TransportException`, `TransportLogMessages` and the Quarkus `IssuerConfigResolver`), never by a client class; while `doc/commons/requirements.adoc` lines 81-85, `doc/commons/specification/transport.adoc` lines 127-132 and `doc/commons/threat-model.adoc` lines 43-48 still say every IdP-advertised URL, `userinfo` included, is host allow-listed; no client test imports the shared `RevocationDispatcher`, `IntrospectionDispatcher` or `EndSessionDispatcher`, and `doc/client/specification/test-strategy.adoc` lines 128-132 and 233-235 and `step-up-and-logout.adoc` lines 112-114 still credit them (item 7(j))
   - verdict: corroborated | checked_at: af19b9c2 | by: quality-report/analyze | rescoped: n/a | evidence: re-read at the lines named, git grep EgressPolicy over main code, client test imports; RevocationClientTest.java:168 declares its own nested class
+- OBSERVED: at `d0fa0c7f` (the PLAN-17 merge) with JWE configured `TokenStringValidator` (lines 65-67, 96) admits a token string up to `maxEncryptedTokenSize` (default 32768) while `NonValidatingJwtParser.decodeInternal` (lines 294-295) rejects anything above the parser's `maxTokenSize` (default 8192) with `IllegalArgumentException`, which `RefreshTokenValidationPipeline` (line 100) and `BearerTokenProducer` (line 252) do not catch, and no test pairs `maxEncryptedTokenSize` with an oversized token (item 7(k))
+  - verdict: corroborated | checked_at: d0fa0c7f | by: quality-report/analyze | rescoped: n/a | evidence: re-read at d0fa0c7f: TokenStringValidator:65-67,96; ParserConfig:85; JweDecryptionConfig:51; NonValidatingJwtParser:294-295; RefreshTokenValidationPipeline:100; BearerTokenProducer:252; no test names maxEncryptedTokenSize
 
 ## Expected Surface
 
@@ -287,6 +323,17 @@ rest together.
 - OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/transport/package-info.java` (item 7(j): lines 35-37, comment text only)
 - HYPOTHESIS: `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/lifecycle/RevocationClientTest.java` (verify-at-outline — only if the operator wants the shared revocation dispatcher driven by the client tests, item 7(j)(2))
 - HYPOTHESIS: `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/internal/BackChannelHttp.java` (verify-at-outline — only if the operator wants a host-address egress policy on the client back channel, item 7(j)(1))
+- OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/NonValidatingJwtParser.java` (item 7(k): lines 54, 107, 208-212, 230-234 comment text; line 294-295 the size precondition only if the operator picks a code fix)
+- OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/validator/TokenStringValidator.java` (item 7(k): lines 65-67 and 96, read for the effective JWE limit; edited only if the fix aligns the two limits there)
+- OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/RefreshTokenValidationPipeline.java` (item 7(k): the catch at line 100, read; edited only if the fix is a wider catch)
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/producer/BearerTokenProducer.java` (item 7(k): comment lines 59 and 376; the catch at line 252 is read, edited only if the fix is a wider catch)
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/producer/BearerTokenStatus.java` (item 7(k): comment lines 41, 50, 91)
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/annotation/BearerToken.java` (item 7(k): comment lines 37-40 and 105-110, the empty `Bearer ` statement)
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/validation/DiscoverableTokenValidationRule.java` (item 7(k): comment line 54, the test-coverage sentence)
+- OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/JwksLoaderFactory.java` (item 7(k): comment lines 30-31)
+- OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/IssuerConfig.java` (item 7(k): comment lines 749-750 and 756)
+- OBSERVED: `doc/validation/threat-model.adoc` (item 7(k): line 66; PLAN-19 edits this file first)
+- HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/TokenStringValidatorJweSizeTest.java` (verify-at-outline — the new test class for item 7(k)(1), named by role; the file does not exist yet)
 - HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/NonValidatingJwtParserTest.java` (verify-at-outline — a duplicate-header-member test, or soften the sentence, item 7(j)(4))
 
 ## Dependencies and Sequencing
