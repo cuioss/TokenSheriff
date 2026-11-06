@@ -24,9 +24,13 @@ transport layer — a success status means the grant was consumed, anything else
 The two-state model is correct about the region it was designed for and silently wrong about one
 shape inside the other. Everything short of a success status was treated as one undifferentiated
 "the server never processed this" verdict, on the reasoning that a credential the server never
-looked at cannot have been harmed. That reasoning holds for a connection failure, a DNS failure, an
-SSRF-blocked target, and a server-error status — the request did not arrive, or the server failed
-before judging the grant, and the presented token is untouched.
+looked at cannot have been harmed. For a connection failure, a DNS failure, an SSRF-blocked target,
+and a server-error status the client has no evidence that the server judged the grant, so it keeps
+the stored bundle — the presented token is untouched locally. That is a statement about what the
+client holds, not about the server: a token request is a non-idempotent `POST` (RFC 9110 §9.2.2),
+and a connection failure after the server applied the request, or a server-error status returned
+after redemption, can leave the server having rotated the token while the client never saw the
+response. The preserved token may then no longer be valid at the server.
 
 It does not hold for a client-error status the server issued *because of the credential itself*.
 RFC 6749 §5.2 gives the authorization server a vocabulary for exactly that, and the code
@@ -59,9 +63,12 @@ applies. (A refreshed ID token refusal, whether the pipeline rejects the token o
 with the access token, and a binding refusal are not raised inside the exchange; the dispatch below
 does not cover them, see the paragraph that closes this Decision.)
 
-* **Pre-redemption** — the authorization server never judged the presented credential. A connection
-  failure, a DNS failure, an SSRF-blocked target, or a server-error status. The presented refresh
-  token is untouched and still valid: the session and its stored bundle are left intact.
+* **Pre-redemption** — the client has no evidence that the authorization server judged the presented
+  credential. A connection failure, a DNS failure, an SSRF-blocked target, or a server-error status.
+  The client preserves the presented refresh token: the session and its stored bundle are left
+  intact. Local preservation is not server-side validity — when the server redeemed the token and
+  the response was then lost, including behind a server-error status, the preserved token may
+  already be rotated at the server, and the next refresh can be refused.
 * **Credential-rejected** — the authorization server judged the presented credential and declared it
   invalid, without consuming the grant. Nothing was rotated, so no successor exists and no revocation
   is attempted; but the credential is dead and no retry revives it, so a clear of the store entry
@@ -160,6 +167,14 @@ revocations (each attempted only when the provider advertises a revocation endpo
   4xx, is classified pre-redemption and the session is preserved. This residual gap is deliberate:
   the alternative is a wider allow-list whose false positives destroy working sessions. Closing it
   for a specific deployment is a per-code decision, not a widening of the rule.
+* Pre-redemption preserves the stored bundle, but it cannot establish that the preserved refresh
+  token is still valid at the server. A connection failure after the server applied the request, or
+  a server-error status returned after redemption, can leave the client holding a token the server
+  has already rotated; under reuse detection a retry presenting it can be refused and revoke the
+  family. This is accepted as the fail-safe direction: the client cannot tell a lost redemption from
+  a request the server never processed, and preserving the session only defers the discovery to the
+  next refresh, which the credential-rejected state classifies and clears when the server answers
+  it with `invalid_grant`.
 * The pre-redemption guarantee rests on transport-code ordering rather than on an assertion. A future
   refactor that made a connection failure reach the status check — by synthesising a response object
   for a failed send, for example — would reintroduce exactly the inversion this ADR forbids, and no
@@ -289,3 +304,5 @@ existing kinds already express.
   preservation disposition
 * https://www.rfc-editor.org/rfc/rfc6749#section-5.2[RFC 6749 §5.2] — the error-response vocabulary
   the allow-list draws its single code from
+* https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2[RFC 9110 §9.2.2] — idempotent methods; a
+  token request is a `POST`, so a lost response leaves its server-side effect unknown
