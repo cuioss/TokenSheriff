@@ -162,7 +162,7 @@ de.cuioss.benchmarking.common/
 
 === Utilities (`util/`)
 
-* **BenchmarkingLogMessages** - Centralized log message definitions
+* **BenchmarkingLogMessages** - Centralized log message definitions, documented in xref:doc/LogMessages.adoc[Log Messages]
   - Consistent logging format across modules
   - CUI logging framework integration
 
@@ -315,3 +315,4 @@ For comprehensive benchmarking documentation:
 * link:../doc/Architecture.adoc[Module Architecture] - Detailed architecture and code placement guidelines
 * link:../doc/workflow.adoc[Benchmark Workflow] - Complete execution workflow
 * link:../doc/local-testing.adoc[Local Testing] - How to view results locally
+* xref:doc/LogMessages.adoc[Log Messages] - Structured log messages of BenchmarkingLogMessages

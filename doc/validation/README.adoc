@@ -33,7 +33,7 @@ a consumer that needs only validation (e.g. `nifi-extensions`) pulls a single ar
 . xref:requirements.adoc[Requirements] — the `VALIDATION-N` contract and the OAuth 2.1 compatibility statement.
 . xref:architecture.adoc[Architecture] — the multi-stage validation pipeline and its components.
 . xref:threat-model.adoc[Threat Model] & xref:security-reference.adoc[Security Reference] — the STRIDE analysis and the consolidated attack-mitigation controls.
-. The <<_document_map,specifications>> and the module xref:../../token-sheriff-validation/doc/usage-guide.adoc[usage guide].
+. The xref:#_document_map[specifications] and the module xref:../../token-sheriff-validation/doc/usage-guide.adoc[usage guide].
 
 == [[_document_map]] Document map
 

@@ -33,11 +33,11 @@ The following standards and specifications are referenced in this document:
 
 == OAuth 2.1 Compatibility
 
-TokenSheriff is a **resource server token validation library**. It validates JWT tokens passed as strings and does not handle authorization flows, token issuance, redirect URIs, or HTTP transport.
+Token-Sheriff is a **resource server token validation library**. It validates JWT tokens passed as strings and does not handle authorization flows, token issuance, redirect URIs, or HTTP transport of incoming tokens. When configured with HTTP JWKS or discovery endpoints, it fetches keys and discovery documents over HTTP.
 
-The major changes in https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1] (mandatory PKCE, removal of implicit and ROPC grants, exact redirect URI matching, refresh token rotation) target **authorization servers and clients**, not resource servers. **Tokens issued by OAuth 2.1 compliant servers validate correctly with TokenSheriff as-is**, since OAuth 2.1 does not change the JWT structure or introduce new mandatory claims for access tokens.
+The major changes in https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1[OAuth 2.1] (mandatory PKCE, removal of implicit and ROPC grants, exact redirect URI matching, refresh token rotation) target **authorization servers and clients**, not resource servers. **Tokens issued by OAuth 2.1 compliant servers validate correctly with Token-Sheriff as-is** when they are signed with an algorithm Token-Sheriff supports and satisfy its other validation requirements, since OAuth 2.1 does not change the JWT structure or introduce new mandatory claims for access tokens. Symmetric (HMAC) signatures such as HS256, which OAuth 2.1 does not forbid, are rejected, because the library processes asymmetric key material only.
 
-TokenSheriff already satisfies the OAuth 2.1 resource server requirements:
+Token-Sheriff already satisfies the OAuth 2.1 resource server requirements:
 
 * **Scope enforcement** - `scope` claim accessible via `AccessTokenContent.getScopes()` for application-level validation; enforced declaratively via Quarkus `@BearerAuth`
 * **Audience validation** - Supported via `expected-audience` configuration; mandatory for ID tokens

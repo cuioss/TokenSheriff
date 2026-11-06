@@ -42,7 +42,7 @@ It does not split space-separated or comma-separated strings, and treats nested 
 { "roles": "admin,user,manager" }
 ----
 
-NOTE: Character-separated strings can be handled using the `StringSplitterMapper`. See <<Using StringSplitterMapper for Delimited Strings>>.
+NOTE: Character-separated strings can be handled using the `StringSplitterMapper`. See xref:#string-splitter-mapper[Using StringSplitterMapper for Delimited Strings].
 
 == Using Roles and Groups
 
@@ -57,7 +57,7 @@ Set<String> missingRoles = accessToken.determineMissingRoles(requiredRoles);
 
 == Custom Mapping for Roles and Groups
 
-[[Using StringSplitterMapper for Delimited Strings]]
+[#string-splitter-mapper]
 === Using StringSplitterMapper for Delimited Strings
 
 [source,java]

@@ -62,6 +62,7 @@ invocation. Activate the profiles and narrow to the module that the claim is act
 ### Project Structure
 Multi-module Maven project:
 - `token-sheriff-validation/` - The core Token-Sheriff validation library
+- `token-sheriff-client/` - The framework-agnostic OIDC/OAuth client engine
 - `token-sheriff-quarkus-parent/` - Quarkus framework integration
 - `benchmarking/` - Performance benchmarking modules
 - `bom/` - Bill of Materials for dependency management
@@ -371,7 +372,7 @@ This project includes custom commands for common workflows:
 
 ### verifyCuiLoggingGuidelines
 Comprehensive logging standards audit:
-1. Analyze CUI logging standards from `/Users/oliver/git/cui-llm-rules/standards/logging`
+1. Analyze CUI logging standards from `https://github.com/cuioss/cui-llm-rules/tree/main/standards/logging`
 2. Scan for logging violations in token-sheriff-validation module
 3. Check LogRecord compliance
 4. Validate documentation in `doc/LogMessages.adoc`
@@ -398,13 +399,15 @@ Execute comprehensive quality verification and commit workflow for a specific mo
 
 The project includes custom skills in `.claude/skills/`:
 
+- `release` - Cut a release: bump the version in `.github/project.yml`, merge the release PR, wait for the Release workflow, then reformat the generated release notes
 - `run-benchmark-suite` - Run full benchmark suite with ablation sweep, connection sweep, JFR profiling, and doc updates
+- `semantic-code-analysis` - Semantic analysis of production code for security issues, API design problems, dead code, unnecessary complexity, and semantic duplication
 
 ## Documentation Standards
 
 - **Format**: AsciiDoc with `.adoc` extension
 - **Key documents**:
-  - `README.adoc` - Project overview
+  - `README.md` - Project overview
   - `doc/README.adoc` - Documentation hub
   - `doc/validation/requirements.adoc` - Functional requirements
   - `doc/validation/architecture.adoc` - Architecture reference

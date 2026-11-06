@@ -1,0 +1,26 @@
+= Token-Sheriff Client Quarkus Runtime
+:toc: left
+:toclevels: 3
+:sectnumlevels: 1
+:source-highlighter: highlight.js
+:toc-title: Table of Contents
+:sectnums:
+
+
+Runtime module of the Quarkus extension for the Token-Sheriff OIDC/OAuth client engine. It exposes the framework-agnostic `token-sheriff-client` engine as CDI beans through `TokenSheriffClientProducer`, maps the `sheriff.client.*` configuration through `ClientConfigMapper`, and maps client transport failures onto responses through `ClientExceptionMapper`. The extension builds on the validation extension (`token-sheriff-validation-quarkus`) and reuses its CDI wiring; its build-time counterpart is `token-sheriff-client-quarkus-deployment`.
+
+== Maven Coordinates
+
+[source,xml]
+----
+<dependency>
+    <groupId>de.cuioss.sheriff.token</groupId>
+    <artifactId>token-sheriff-client-quarkus</artifactId>
+</dependency>
+----
+
+== Documentation
+
+* xref:src/main/resources/META-INF/quarkus-config-doc.adoc[Configuration Reference] - All `sheriff.client.*` properties of the client extension
+* xref:../README.adoc[Token-Sheriff Quarkus Integration] - Overview of the Quarkus extensions
+* xref:../../doc/client/README.adoc[Client Documentation] - Requirements, architecture and specification of the client engine

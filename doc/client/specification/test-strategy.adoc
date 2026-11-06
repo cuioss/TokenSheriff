@@ -105,7 +105,7 @@ composes, and it is covered at the component level.
 [IMPORTANT]
 ====
 *Coverage rule (binding).* A requirement MUST NOT be marked *covered* in the
-<<_traceability>> matrix on the strength of an isolated-component or server-capability test
+xref:#_traceability[] matrix on the strength of an isolated-component or server-capability test
 alone. Where the defence lives in flow orchestration, its matrix entry MUST be backed by a
 wired-flow negative test of the shape above. Isolated-component green does not, by itself, imply
 the requirement is met.
@@ -174,7 +174,7 @@ standards (`cui-test-mockwebserver-junit5`):
 
 | *Adversarial (fail-closed)*
 | Drive each dispatcher's *adversarial* mode and assert the engine *rejects* — see
-  <<_adversarial_coverage>>. Every threat in the xref:../threat-model.adoc[threat model] MUST
+  xref:#_adversarial_coverage[]. Every threat in the xref:../threat-model.adoc[threat model] MUST
   have a unit test that fails closed.
 
 | *Thread safety* (xref:../requirements.adoc#CLIENT-22[CLIENT-22])
@@ -330,7 +330,7 @@ For a requirement whose defence lives in flow orchestration
 xref:../requirements.adoc#CLIENT-11[CLIENT-11],
 xref:../requirements.adoc#CLIENT-12[CLIENT-12],
 xref:../requirements.adoc#CLIENT-17[CLIENT-17]), the Unit column names the *wired-flow* negative
-test that drives the real orchestrator — per the binding coverage rule in <<_wired_flow_tier>>,
+test that drives the real orchestrator — per the binding coverage rule in xref:#_wired_flow_tier[],
 an isolated-component or server-capability test alone does not qualify the row as covered.
 
 [cols="1,1,2,2,1", options="header"]
@@ -471,9 +471,9 @@ This is the test-side complement of the per-increment definition of done. For ea
   table).
 * [ ] *Integration — attack*: the increment's threat behaviour a real OP can exercise.
 * [ ] *Traceability*: each `CLIENT-N` the increment delivers is linked to code + unit test +
-  integration test in <<_traceability>>.
+  integration test in xref:#_traceability[].
 * [ ] Build green: `./mvnw -Ppre-commit clean verify` then `./mvnw clean install`; no source
-  artifacts; JaCoCo coverage recorded (see <<_coverage_gates>>).
+  artifacts; JaCoCo coverage recorded (see xref:#_coverage_gates[]).
 
 == [[_coverage_gates]] Coverage gates
 
@@ -517,7 +517,7 @@ rule; other classes in the module carry their own, lower coverage and are out of
 by design.
 
 The discipline for keeping these gates honest — and for keeping every other check in this
-repository honest — is <<_signal_integrity>>.
+repository honest — is xref:#_signal_integrity[].
 
 == [[_signal_integrity]] Signal integrity: prove the check discriminates before trusting its verdict
 
@@ -620,7 +620,7 @@ derivation cannot quietly empty.
 
 == See also
 
-* <<_signal_integrity>> — the project-wide rule set every coverage gate and assertion in this
+* xref:#_signal_integrity[] — the project-wide rule set every coverage gate and assertion in this
   repository is held to
 * xref:retrieval-flow.adoc[Retrieval & flow specification] — the mechanics under test
 * xref:step-up-and-logout.adoc[Step-up & logout specification]

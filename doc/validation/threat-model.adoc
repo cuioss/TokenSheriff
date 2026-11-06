@@ -42,7 +42,7 @@ _See Requirements xref:requirements.adoc#VALIDATION-8.1[VALIDATION-8.1] and xref
 
 |S2
 |JWKS endpoint impersonation
-|TLS 1.2+ enforced for all JWKS communication via `SecureSSLContextProvider` (from cui-http-client dependency); HTTPS-only endpoints
+|HTTPS required by default for JWKS and well-known discovery endpoints, with TLS 1.2+ enforced via `SecureSSLContextProvider` (from cui-http dependency). Exception: an explicit per-issuer cleartext opt-in (`allowInsecureHttp(true)` on `HttpJwksLoaderConfig` / `WellKnownConfig`, `sheriff.token.issuers.<name>.jwks.http.allow-insecure-http=true` in Quarkus) permits `http://` endpoints without TLS, which leaves them open to impersonation; intended for local development and tests only
 |Integration tests verify HTTPS
 
 |S3
@@ -186,7 +186,7 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.3[VALIDATION-8.3: Secure Co
 
 |I6
 |Insecure JWKS communication
-|TLS 1.2+ enforced via `SecureSSLContextProvider` (cui-http-client); configurable minimum TLS version
+|By default, HTTPS required and TLS 1.2+ enforced via `SecureSSLContextProvider` (cui-http); configurable minimum TLS version. Exception: the explicit per-issuer cleartext opt-in (`allowInsecureHttp(true)`, `sheriff.token.issuers.<name>.jwks.http.allow-insecure-http=true` in Quarkus) fetches `http://` JWKS and discovery endpoints without TLS, exposing key material and discovery documents in transit; intended for local development and tests only
 |Integration tests verify HTTPS
 |===
 
@@ -210,7 +210,7 @@ _See Requirements xref:requirements.adoc#VALIDATION-8.1[VALIDATION-8.1: Token Si
 
 |D1
 |JWKS endpoint flooding
-|JWKS refresh interval controls (default 600s); caching in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java[HttpJwksLoader]; retry behavior via cui-http-client `ResilientHttpAdapter`
+|JWKS refresh interval controls (default 600s); caching in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java[HttpJwksLoader]; retry behavior via cui-http `ResilientHttpAdapter`
 |link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderGracePeriodTest.java[HttpJwksLoaderGracePeriodTest]
 
 |D2

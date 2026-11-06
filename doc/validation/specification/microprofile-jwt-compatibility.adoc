@@ -9,7 +9,7 @@ xref:../architecture.adoc[Back to Architecture Reference]
 
 == Overview
 
-This document describes TokenSheriff's relationship to the https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html[Eclipse MicroProfile JWT Auth 2.1] specification. TokenSheriff implements select MP-JWT 2.1 primitives as a compatibility layer while retaining its advanced multi-issuer, multi-token-type architecture.
+This document describes Token-Sheriff's relationship to the https://download.eclipse.org/microprofile/microprofile-jwt-auth-2.1/microprofile-jwt-auth-spec-2.1.html[Eclipse MicroProfile JWT Auth 2.1] specification. Token-Sheriff implements select MP-JWT 2.1 primitives as a compatibility layer while retaining its advanced multi-issuer, multi-token-type architecture.
 
 === Document Navigation
 
@@ -24,14 +24,14 @@ This document describes TokenSheriff's relationship to the https://download.ecli
 
 == Design Rationale
 
-TokenSheriff is **not** an MP-JWT implementation. It is a purpose-built, production-grade JWT/OAuth 2.0/OpenID Connect token validation library that provides capabilities beyond what MP-JWT defines. Rather than conforming to the MP-JWT specification's single-issuer, single-token-type model, TokenSheriff adopts **select primitives** from the spec where they provide value.
+Token-Sheriff is **not** an MP-JWT implementation. It is a purpose-built, production-grade JWT/OAuth 2.0/OpenID Connect token validation library that provides capabilities beyond what MP-JWT defines. Rather than conforming to the MP-JWT specification's single-issuer, single-token-type model, Token-Sheriff adopts **select primitives** from the spec where they provide value.
 
 The approach is:
 
 * **Core types**: `TokenContent` is framework-agnostic — no dependency on `JsonWebToken`
 * **Quarkus adapter**: `JsonWebTokenAdapter` wraps `TokenContent` to provide the `JsonWebToken` interface for CDI injection
 * **Clean API separation**: Core uses `Optional`-returning accessors; the adapter bridges to MP-JWT's nullable contract
-* **TokenSheriff extensions**: Multi-issuer support, DPoP, custom claim mappers, sealed token hierarchy, security event tracking — all preserved as additional API surface
+* **Token-Sheriff extensions**: Multi-issuer support, DPoP, custom claim mappers, sealed token hierarchy, security event tracking — all preserved as additional API surface
 
 == Adopted Features
 
@@ -45,7 +45,7 @@ The Quarkus module provides a `JsonWebTokenAdapter` that wraps `TokenContent` an
 @Inject Principal principal;            // Jakarta Security standard injection
 ----
 
-The adapter bridges between TokenSheriff's clean API and the MP-JWT spec signatures:
+The adapter bridges between Token-Sheriff's clean API and the MP-JWT spec signatures:
 
 [cols="3,2,2"]
 |===
@@ -86,7 +86,7 @@ The adapter bridges between TokenSheriff's clean API and the MP-JWT spec signatu
 
 === `upn` Claim (User Principal Name)
 
-The `upn` claim is MP-JWT's standardized human-readable principal identifier. TokenSheriff's `ClaimName` enum includes `UPN` with the spec-defined fallback chain for `Principal.getName()`:
+The `upn` claim is MP-JWT's standardized human-readable principal identifier. Token-Sheriff's `ClaimName` enum includes `UPN` with the spec-defined fallback chain for `Principal.getName()`:
 
 1. `upn` claim (if present)
 2. `preferred_username` claim (fallback)
@@ -134,25 +134,25 @@ When `sheriff.token.token.header=Cookie`, the token is extracted from the named 
 |MP-JWT Feature |Rationale
 
 |`@RolesAllowed` annotation
-|TokenSheriff uses `@BearerAuth` which provides superior multi-dimensional authorization (scopes AND roles AND groups). The standard `@RolesAllowed` only checks one dimension.
+|Token-Sheriff uses `@BearerAuth` which provides superior multi-dimensional authorization (scopes AND roles AND groups). The standard `@RolesAllowed` only checks one dimension.
 
 |`@Claim` CDI qualifier injection
-|TokenSheriff's programmatic `getClaimOption(ClaimName)` with custom `ClaimMapper` pipeline provides type-safe, extensible claim access. `@Claim` injection is less flexible for custom claim types and multi-issuer scenarios.
+|Token-Sheriff's programmatic `getClaimOption(ClaimName)` with custom `ClaimMapper` pipeline provides type-safe, extensible claim access. `@Claim` injection is less flexible for custom claim types and multi-issuer scenarios.
 
 |`@LoginConfig` annotation
-|Not applicable to Quarkus extension model. TokenSheriff activates via `@BearerAuth` interceptor binding and configuration properties.
+|Not applicable to Quarkus extension model. Token-Sheriff activates via `@BearerAuth` interceptor binding and configuration properties.
 
 |`mp.jwt.*` config namespace
-|`sheriff.token.*` is the established convention. TokenSheriff's per-issuer configuration model (`sheriff.token.issuers.<name>.*`) has no equivalent in the single-issuer `mp.jwt.*` namespace.
+|`sheriff.token.*` is the established convention. Token-Sheriff's per-issuer configuration model (`sheriff.token.issuers.<name>.*`) has no equivalent in the single-issuer `mp.jwt.*` namespace.
 
 |`ClaimValue<T>` (MP-JWT version)
-|TokenSheriff's `ClaimValue` with `ClaimMapper` pipeline (e.g., `ScopeMapper`, `KeycloakDefaultRolesMapper`) is more powerful. MP-JWT's `ClaimValue` is a simple typed wrapper.
+|Token-Sheriff's `ClaimValue` with `ClaimMapper` pipeline (e.g., `ScopeMapper`, `KeycloakDefaultRolesMapper`) is more powerful. MP-JWT's `ClaimValue` is a simple typed wrapper.
 
 |Single-issuer model
-|TokenSheriff's multi-issuer `IssuerConfigCache` with per-issuer JWKS loading, algorithm constraints, and claim validation is a core differentiator. MP-JWT assumes one issuer per application.
+|Token-Sheriff's multi-issuer `IssuerConfigCache` with per-issuer JWKS loading, algorithm constraints, and claim validation is a core differentiator. MP-JWT assumes one issuer per application.
 |===
 
-== TokenSheriff Advantages Beyond MP-JWT
+== [[_tokensheriff_advantages_beyond_mp_jwt]]Token-Sheriff Advantages Beyond MP-JWT
 
 The following capabilities have no equivalent in MP-JWT 2.1:
 
@@ -171,19 +171,19 @@ The following capabilities have no equivalent in MP-JWT 2.1:
 
 [cols="2,2,1"]
 |===
-|MP-JWT Property |TokenSheriff Equivalent |Notes
+|MP-JWT Property |Token-Sheriff Equivalent |Notes
 
 |`mp.jwt.verify.issuer`
 |`sheriff.token.issuers.<name>.issuer-identifier`
-|Per-issuer in TokenSheriff; the explicit `issuer-identifier` is the default and recommended form, also together with `well-known-url`, and is enforced per issuer (see xref:../requirements.adoc#VALIDATION-3.1[VALIDATION-3.1])
+|Per-issuer in Token-Sheriff; the explicit `issuer-identifier` is the default and recommended form, also together with `well-known-url`, and is enforced per issuer (see xref:../requirements.adoc#VALIDATION-3.1[VALIDATION-3.1])
 
 |`mp.jwt.verify.audiences`
 |`sheriff.token.issuers.<name>.expected-audience`
-|Per-issuer in TokenSheriff
+|Per-issuer in Token-Sheriff
 
 |`mp.jwt.verify.publickey.location`
 |`sheriff.token.issuers.<name>.jwks.http.well-known-url`
-|TokenSheriff uses OIDC discovery or direct JWKS URL
+|Token-Sheriff uses OIDC discovery or direct JWKS URL
 
 |`mp.jwt.verify.publickey.algorithm`
 |`sheriff.token.issuers.<name>.algorithm-preferences`
@@ -191,11 +191,11 @@ The following capabilities have no equivalent in MP-JWT 2.1:
 
 |`mp.jwt.verify.clock.skew`
 |`sheriff.token.issuers.<name>.clock-skew-seconds`
-|Per-issuer in TokenSheriff
+|Per-issuer in Token-Sheriff
 
 |`mp.jwt.verify.token.age`
 |`sheriff.token.issuers.<name>.max-token-age-seconds`
-|Per-issuer in TokenSheriff
+|Per-issuer in Token-Sheriff
 
 |`mp.jwt.token.header`
 |`sheriff.token.token.header`
@@ -221,4 +221,4 @@ The following capabilities have no equivalent in MP-JWT 2.1:
 * https://datatracker.ietf.org/doc/html/rfc9068[RFC 9068 - JWT Profile for OAuth 2.0 Access Tokens]
 * https://datatracker.ietf.org/doc/html/rfc8725[RFC 8725 - JSON Web Token Best Current Practices]
 * https://datatracker.ietf.org/doc/html/rfc9449[RFC 9449 - OAuth 2.0 Demonstrating Proof of Possession (DPoP)]
-* xref:../architecture.adoc[TokenSheriff Architecture Reference]
+* xref:../architecture.adoc[Token-Sheriff Architecture Reference]

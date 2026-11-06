@@ -7,7 +7,7 @@
 
 == Overview
 
-TokenSheriff validates JWT tokens from any standards-compliant OIDC provider. To verify this claim beyond a single provider, multi-IDP integration testing exercises the validation pipeline against multiple identity providers running simultaneously.
+Token-Sheriff validates JWT tokens from any standards-compliant OIDC provider. To verify this claim beyond a single provider, multi-IDP integration testing exercises the validation pipeline against multiple identity providers running simultaneously.
 
 This specification covers the architecture, provider selection, and usage of the multi-IDP testing infrastructure.
 
@@ -41,14 +41,14 @@ image::../../resources/diagrams/multi-idp-test-topology.svg["Multi-IdP integrati
 |~30MB
 |~2s
 |None (memory storage)
-|Lightweight, OpenID Certified, ROPC via `passwordConnector`. Federation broker with fixed claim model — supports groups but not roles or custom scopes (see <<dex-limitations>>).
+|Lightweight, OpenID Certified, ROPC via `passwordConnector`. Federation broker with fixed claim model — supports groups but not roles or custom scopes (see xref:#dex-limitations[]).
 
 |**Zitadel**
 |Active (Phase 2)
 |~100MB
 |~40s
 |PostgreSQL 17
-|Full-featured, OpenID Certified (Apache 2.0). Supports roles (via project grants), groups (via Actions + user metadata), JWT access tokens. Does not support ROPC — uses `client_credentials` grant instead. Does not support custom scopes (only standard OIDC + URN scopes). See <<zitadel-details>>.
+|Full-featured, OpenID Certified (Apache 2.0). Supports roles (via project grants), groups (via Actions + user metadata), JWT access tokens. Does not support ROPC — uses `client_credentials` grant instead. Does not support custom scopes (only standard OIDC + URN scopes). See xref:#zitadel-details[].
 
 |FusionAuth
 |Deferred
@@ -158,7 +158,7 @@ Checklist for adding a new OIDC provider:
 |Yes
 |No
 |No
-|Keycloak: realm roles. Dex has no roles concept. Zitadel Actions are configured but not yet exercised in tests (see <<zitadel-details>>).
+|Keycloak: realm roles. Dex has no roles concept. Zitadel Actions are configured but not yet exercised in tests (see xref:#zitadel-details[]).
 
 |Bearer with-groups
 |Yes
@@ -225,7 +225,7 @@ The `bearerAuthProviders()` method source requires `ROLES + GROUPS + CUSTOM_SCOP
 
 === Dex's value in the test suite
 
-Despite these limitations, Dex proves that TokenSheriff correctly handles:
+Despite these limitations, Dex proves that Token-Sheriff correctly handles:
 
 * A **different OIDC-certified issuer** with different token structure
 * **Missing optional claims** (no `scope` claim — RFC 9068 compliance)

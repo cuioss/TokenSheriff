@@ -37,7 +37,7 @@ channel — discovery, token, PAR, userinfo and revocation calls through the sha
 . xref:requirements.adoc[Requirements] — the `CLIENT-N` contract, grouped by aspect.
 . xref:threat-model.adoc[Threat Model] — the attack catalog each requirement answers.
 . xref:architecture.adoc[Architecture] — where the engine sits and what it delegates.
-. The <<_document_map,specifications>> — how each requirement is realized.
+. The xref:#_document_map[specifications] — how each requirement is realized.
 . xref:specification/test-strategy.adoc[Test Strategy] — how each requirement and threat is verified (unit + integration).
 
 == [[_document_map]] Document map

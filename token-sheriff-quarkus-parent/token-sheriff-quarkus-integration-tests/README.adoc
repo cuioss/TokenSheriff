@@ -15,7 +15,7 @@ Integration tests for the Token-Sheriff Quarkus extensions with native container
 * **Application Internal**: `8443` (HTTPS inside container)
 * **External Test**: `10443` (Docker mapped port)
 * **Keycloak External**: `1443` (Docker mapped HTTPS port)
-* **Retry Probe External**: `10444` (Docker mapped HTTPS port of the second application container, see <<_retry_probe>>)
+* **Retry Probe External**: `10444` (Docker mapped HTTPS port of the second application container, see xref:#_retry_probe[])
 
 == Features
 
@@ -230,11 +230,11 @@ This ensures reliable cleanup of native executables and build artifacts without 
 Tests use `@ParameterizedTest` with `@MethodSource` to run against multiple OIDC providers. Each spec declares required capabilities — providers are filtered by `TestProviders`.
 
 * **token/TokenValidationSpecIT**: Access/ID/refresh token validation (parameterized over all providers with matching capabilities)
-* **token/WellKnownRetryConfigSpecIT**: Configured retry settings reach well-known discovery (reads the retry probe, see <<_retry_probe>>)
+* **token/WellKnownRetryConfigSpecIT**: Configured retry settings reach well-known discovery (reads the retry probe, see xref:#_retry_probe[])
 * **bearer/BearerAuthSpecIT**: Bearer token producers and interceptors (Keycloak-only — requires ROLES, GROUPS, CUSTOM_SCOPES)
 * **security/DpopSpecIT**: DPoP RFC 9449 validation (parameterized over DPoP-capable providers)
 * **security/JweDecryptionSpecIT**: JWE RFC 7516 decryption (parameterized over JWE-capable providers)
-* `client/**`: Client-engine specs against a real Keycloak — discovery (`DiscoverySpecIT`), client authentication with the `client_credentials` grant (`ClientAuthSpecIT`), authorization-code + PKCE (`AuthCodePkceSpecIT`), mix-up defence (`MixUpSpecIT`), PAR (`ParSpecIT`), userinfo (`UserInfoSpecIT`), DPoP-bound tokens (`DpopBoundSpecIT`), a DPoP-constrained code exchange and refresh through a mapped back-channel origin (`DpopBackChannelOriginSpecIT`, see <<_back_channel_origin_spec>>), RP-initiated logout (`LogoutSpecIT`), step-up (`StepUpSpecIT`), the full-flow E2E (`FullFlowE2EIT`), and the refresh specs (`Refresh*SpecIT`) — among them refresh with rotation through the production `RefreshFlow` (`RefreshProductionPathSpecIT`) and the refusal of an unknown and of a revoked refresh token (`RefreshErrorPathSpecIT`)
+* `client/**`: Client-engine specs against a real Keycloak — discovery (`DiscoverySpecIT`), client authentication with the `client_credentials` grant (`ClientAuthSpecIT`), authorization-code + PKCE (`AuthCodePkceSpecIT`), mix-up defence (`MixUpSpecIT`), PAR (`ParSpecIT`), userinfo (`UserInfoSpecIT`), DPoP-bound tokens (`DpopBoundSpecIT`), a DPoP-constrained code exchange and refresh through a mapped back-channel origin (`DpopBackChannelOriginSpecIT`, see xref:#_back_channel_origin_spec[]), RP-initiated logout (`LogoutSpecIT`), step-up (`StepUpSpecIT`), the full-flow E2E (`FullFlowE2EIT`), and the refresh specs (`Refresh*SpecIT`) — among them refresh with rotation through the production `RefreshFlow` (`RefreshProductionPathSpecIT`) and the refusal of an unknown and of a revoked refresh token (`RefreshErrorPathSpecIT`)
 * **health/HealthCheckIntegrationIT**: Health endpoint validation
 * **health/HealthCheckResponsivenessIT**: Health endpoint responsiveness testing
 * **api/ApiValidationSpecIT**: API input validation (provider-independent)
@@ -282,7 +282,7 @@ With the `multi-idp` compose profile the script also starts the identity provide
 The integration tests use **four Keycloak realms** to validate different JWT configuration patterns.
 Keycloak runs with the static hostname `KC_HOSTNAME=https://localhost:1443` and no realm carries a
 `frontendUrl`, so every realm advertises the same public authority (see
-<<_single_public_authority>>):
+xref:#_single_public_authority[]):
 
 [cols="1,2,2", options="header"]
 |===
@@ -313,7 +313,7 @@ static hostname the discovery document advertises its `jwks_uri` on `localhost:1
 the compose network resolves to the application container itself. `hostname-backchannel-dynamic` is
 deliberately not set and no realm carries a `frontendUrl`, so no discovery path that works inside the
 compose network remains; the issuer therefore switched to the direct JWKS URL. Well-known discovery
-stays covered by the retry probe (<<_retry_probe>>), the `%multi-idp` Dex issuer and the client-side
+stays covered by the retry probe (xref:#_retry_probe[]), the `%multi-idp` Dex issuer and the client-side
 `DiscoverySpecIT`.
 
 ==== Integration Realm (Direct JWKS)

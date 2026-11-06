@@ -129,7 +129,7 @@ class MyCdiTest {
 
 == Framework Selection
 
-* **QuarkusExtensionTest**: Extension registration, Quarkus subsystems, ConfigMapping (tagged `quarkus-boot`, see <<Fork Groups>>)
+* **QuarkusExtensionTest**: Extension registration, Quarkus subsystems, ConfigMapping (tagged `quarkus-boot`, see xref:#_fork_groups[Fork Groups])
 * **WeldJunit5**: CDI beans in isolation, dependency injection testing
 * **Plain JUnit5**: Pure Java code, utilities, fastest execution
 

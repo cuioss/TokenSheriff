@@ -12,7 +12,7 @@
 
 == Status
 
-Proposed
+Accepted
 
 == Context
 
@@ -43,17 +43,20 @@ refresh. The refresh path's identity-binding comparison runs inside the same ato
 retrieve-transform-store operation that already applies the refresh result to the stored record
 — the single fail-closed transform seam that also enforces the session's binding-downgrade
 refusal — so the comparison and the write that would otherwise race against it happen as one
-indivisible step. A session stored with no known subject skips the comparison rather than failing
-closed unconditionally; a session with a retained subject that disagrees with the refreshed
-principal fails closed.
+indivisible step. A session stored with no known subject skips the comparison on a refresh rather
+than failing closed unconditionally, and its successor adopts the subject the refreshed token
+names, when it names one; from that adoption on the session is bound and every later refresh is
+compared. A session with a retained subject that disagrees with the refreshed principal, or a
+refresh that names no principal for a bound session, fails closed.
 
 == Consequences
 
 === Positive
 
-* The identity comparison covers every session the client manages, including a session
-  established through a plain OAuth 2.0 grant with no ID token at all — a re-parsed-ID-token
-  approach could bind nothing for exactly that class of session.
+* The identity comparison covers every session that carries a retained subject, including a
+  session established through a plain OAuth 2.0 grant with no ID token at all — a
+  re-parsed-ID-token approach could bind nothing for exactly that class of session. A session
+  stored without a subject is covered from the refresh at which it adopts one.
 * Running the comparison inside the atomic store transform closes the check-then-act window a
   comparison performed before the transform would leave open: a concurrent operation on the same
   session cannot invalidate a decision already made and not yet written, because the decision and
@@ -67,15 +70,19 @@ principal fails closed.
   construction site of that record — in production code and in tests — to be updated to the wider
   form; there is no way to introduce the field without touching every caller that builds the
   record directly.
-* A session established before its principal was known, or established through a grant type that
-  never yields one, carries no subject and permanently skips the check for that session's
-  lifetime; there is no retroactive way to bind identity to a session that was never given one.
+* A session established before its principal was known carries no subject, so its first refresh is
+  unbound: the comparison is skipped and the successor adopts whichever principal the refreshed
+  token names. Binding takes effect only from that adoption; there is no retroactive way to check
+  that the adopted principal is the one the session was originally established for. A session
+  whose refreshed tokens never name a principal stays unbound for as long as that holds.
 
 === Risks
 
-* The `null`-subject skip is a deliberate, permanent exception to the fail-closed default for any
-  session stored without a known principal. A caller that assumes every session is identity-bound
-  is trusting an invariant this decision does not actually provide for that subset of sessions.
+* The `null`-subject skip is a deliberate exception to the fail-closed default for a session stored
+  without a known principal, and it lasts until a refresh names one: the first such refresh is
+  unbound and can adopt whichever principal the refreshed token names. A caller that assumes every
+  session is identity-bound from its establishment is trusting an invariant this decision does not
+  provide for that subset of sessions.
 * Because the record shape change removes the previous construction arity outright rather than
   introducing it alongside a compatibility shim, any relying party that constructs the stored
   session record directly, outside this codebase, breaks on upgrade with no transitional period.
@@ -105,13 +112,15 @@ an absent subject as itself a binding violation.* Considered and rejected as the
 a client that has legitimate sessions with no known subject — because they were never given one,
 not because anything is wrong — would have every refresh of such a session refused, which is a
 functional regression for a class of session the identity binding was never meant to police. The
-null-subject skip is the accepted alternative, at the cost of leaving that class of session
-unbound, documented as a residual risk rather than closed.
+null-subject skip is the accepted alternative: such a session's first refresh is unbound and adopts
+the principal the refreshed token names, and the session is bound from then on. The unbound first
+refresh is documented as a residual risk rather than closed.
 
 Each rejected alternative either fails to cover the full population of sessions the retained-field
 approach covers, repeats work the retained-field approach does once, or introduces a race window
 the atomic-transform placement closes. The adopted decision is the one shape that covers every
-session class, does the comparison work exactly once per refresh, and runs it inside the same
+session class once a subject is retained, with or without an ID token, does the comparison work
+exactly once per refresh, and runs it inside the same
 atomic step that already enforces the session's other fail-closed guard.
 
 == References

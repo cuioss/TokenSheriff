@@ -19,7 +19,7 @@ Technical configuration for optimizing Quarkus native images for JWT validation 
 quarkus.native.additional-build-args=--enable-url-protocols=https,--enable-http,--enable-https,-O2
 ----
 
-`quarkus.native.monitoring` is not set in `application.properties`. The `jfr` Maven profile of the integration-test module sets it, see <<_jfr_monitoring_dual_image_maven_profiles>>.
+`quarkus.native.monitoring` is not set in `application.properties`. The `jfr` Maven profile of the integration-test module sets it, see xref:#_jfr_monitoring_dual_image_maven_profiles[].
 
 === GraalVM/Mandrel 25 Features
 

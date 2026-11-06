@@ -11,7 +11,7 @@ The Quarkus extensions for Token-Sheriff, consisting of:
 
 * xref:token-sheriff-validation-quarkus/README.adoc[token-sheriff-validation-quarkus] - Runtime module with CDI producers and JWT validation
 * xref:token-sheriff-validation-quarkus-deployment/README.adoc[token-sheriff-validation-quarkus-deployment] - Build-time deployment processor
-* `token-sheriff-client-quarkus` (+ `-deployment`) - Client-engine extension: CDI producer (`TokenSheriffClientProducer`), configuration mapping (`ClientRuntimeConfig`), and exception mapping (`ClientExceptionMapper`), building on the validation extension
+* xref:token-sheriff-client-quarkus/README.adoc[token-sheriff-client-quarkus] (+ `-deployment`) - Client-engine extension: CDI producer (`TokenSheriffClientProducer`), configuration mapping (`ClientRuntimeConfig`), and exception mapping (`ClientExceptionMapper`), building on the validation extension
 * xref:token-sheriff-quarkus-integration-tests/README.adoc[token-sheriff-quarkus-integration-tests] - Integration test suite
 
 == Building and Running
@@ -294,7 +294,7 @@ The project consists of the following modules:
 
 * xref:token-sheriff-validation-quarkus-deployment/README.adoc[token-sheriff-validation-quarkus-deployment] - Contains the Quarkus deployment code for the validation extension
 * xref:token-sheriff-validation-quarkus/README.adoc[token-sheriff-validation-quarkus] - Contains the runtime code for the validation extension
-* `token-sheriff-client-quarkus` / `token-sheriff-client-quarkus-deployment` - Runtime and deployment code for the client-engine extension
+* xref:token-sheriff-client-quarkus/README.adoc[token-sheriff-client-quarkus] / `token-sheriff-client-quarkus-deployment` - Runtime and deployment code for the client-engine extension
 * xref:token-sheriff-quarkus-integration-tests/README.adoc[token-sheriff-quarkus-integration-tests] - Provides integration tests
 * link:e-2-e-playwright/[e-2-e-playwright] - End-to-end Playwright tests for Dev-UI
 * xref:doc/README.adoc[doc] - Contains additional documentation
