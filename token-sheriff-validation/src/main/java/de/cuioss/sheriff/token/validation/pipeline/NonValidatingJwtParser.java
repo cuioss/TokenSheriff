@@ -51,42 +51,39 @@ import java.util.Objects;
  *   <li>JSON string size limits to prevent memory exhaustion</li>
  * </ul>
  * <p>
+ * The examples below are exercised by {@code NonValidatingJwtParserTest}.
+ * <p>
  * Basic usage example:
- * <pre>
+ * {@snippet :
  * // Create a parser with default settings
  * NonValidatingJwtParser parser = NonValidatingJwtParser.builder()
  *     .securityEventCounter(securityEventCounter)
  *     .build();
  *
- * // Decode a JWT token
- * Optional&lt;DecodedJwt&gt; decodedJwt = parser.decode(tokenString);
+ * try {
+ *     // Decode a JWT token; an invalid token is rejected with a TokenValidationException
+ *     DecodedJwt jwt = parser.decode(tokenString);
  *
- * // Access decoded JWT information using convenience methods
- * decodedJwt.ifPresent(jwt -> {
  *     // Access common JWT fields with convenience methods
  *     jwt.getAlg().ifPresent(alg -> LOGGER.debug("Algorithm: %s", alg));
  *     jwt.getIssuer().ifPresent(issuer -> LOGGER.debug("Issuer: %s", issuer));
  *     jwt.getKid().ifPresent(kid -> LOGGER.debug("Key ID: %s", kid));
  *
  *     // Access the raw token
- *     String rawToken = jwt.getRawToken();
+ *     String rawToken = jwt.rawToken();
  *
- *     // For more complex operations, access the header and body via record accessors
- *     var header = jwt.header();
- *     if (header != null) {
- *         // Process header fields not covered by convenience methods
- *     }
- *
- *     var body = jwt.body();
- *     if (!body.isEmpty()) {
- *         // Process custom claims in the body
- *         body.getString("custom_claim").ifPresent(customValue -> {});
- *     }
- * });
- * </pre>
+ *     // For more complex operations, access the header and body via record accessors;
+ *     // both are guaranteed to be non-null
+ *     JwtHeader header = jwt.header();
+ *     MapRepresentation body = jwt.body();
+ *     Optional<String> customValue = body.getString("custom_claim");
+ * } catch (TokenValidationException e) {
+ *     LOGGER.debug("Token rejected: %s", e.getEventType());
+ * }
+ * }
  * <p>
  * Example with custom security settings:
- * <pre>
+ * {@snippet :
  * // Create a parser with custom security settings using ParserConfig
  * ParserConfig config = ParserConfig.builder()
  *     .maxTokenSize(1024)      // 1KB max token size
@@ -102,19 +99,21 @@ import java.util.Objects;
  *     .build();
  *
  * // Decode a token with the custom parser
- * Optional&lt;DecodedJwt&gt; result = customParser.decode(tokenString);
- * </pre>
+ * DecodedJwt result = customParser.decode(tokenString);
+ * }
  * <p>
- * Example handling empty or invalid tokens:
- * <pre>
- * // Handle empty or null tokens
- * Optional&lt;DecodedJwt&gt; emptyResult = parser.decode("");
- * assertFalse(emptyResult.isPresent());
- *
- * // Handle invalid token format
- * Optional&lt;DecodedJwt&gt; invalidResult = parser.decode("invalid.token.format");
- * assertFalse(invalidResult.isPresent());
- * </pre>
+ * Example handling invalid tokens (a {@code null}, empty or oversized token is a precondition
+ * violation that {@code TokenStringValidator} rejects before the parser is called; passing one here
+ * throws an {@link IllegalArgumentException}):
+ * {@snippet :
+ * // An invalid token format is rejected, never returned
+ * try {
+ *     parser.decode("invalid.token.format");
+ * } catch (TokenValidationException e) {
+ *     // The event type names the reason, e.g. INVALID_JWT_FORMAT or FAILED_TO_DECODE_JWT
+ *     SecurityEventCounter.EventType reason = e.getEventType();
+ * }
+ * }
  * <p>
  * For more details on the security aspects, see the
  * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/security-reference.adoc">Security Specification</a>

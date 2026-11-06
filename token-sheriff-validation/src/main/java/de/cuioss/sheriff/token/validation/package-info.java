@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 /**
- * Provides a comprehensive framework for handling OAuth2 and OpenID Connect tokens
- * in a Portal environment. This package focuses on JWT token parsing, validation,
+ * Provides a framework for the offline validation of OAuth2 and OpenID Connect tokens
+ * in multi-issuer environments. This package focuses on JWT token parsing, validation,
  * and management with support for multiple token issuers.
  * <p>
  * Key components:

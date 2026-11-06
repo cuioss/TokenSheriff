@@ -14,96 +14,65 @@
  * limitations under the License.
  */
 /**
- * <h2>HTTP-based JWKS Loading and Caching</h2>
- * 
- * <p>This package provides components for loading JSON Web Key Sets (JWKS) from HTTP endpoints
- * with advanced caching, reliability, and performance features.</p>
- * 
+ * <h2>HTTP-based JWKS Loading</h2>
+ *
+ * <p>This package loads JSON Web Key Sets (JWKS) from HTTP endpoints, either from a direct JWKS URL
+ * or through OpenID Connect well-known discovery, and keeps them current with a scheduled
+ * background refresh.</p>
+ *
  * <h3>Key Components</h3>
  * <ul>
- *   <li>{@link de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader} - Main component that implements
+ *   <li>{@link de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader} - the
  *       {@link de.cuioss.sheriff.token.validation.jwks.JwksLoader} for HTTP-based JWKS sources</li>
- *   <li>{@link de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig} - Configuration parameters
- *       for the HTTP JWKS loader</li>
- *   <li>JwksHttpClient - Client for making HTTP requests
- *       to JWKS endpoints</li>
- *   <li>JwksCacheManager - Manages caching of JWKS keys</li>
- *   <li>BackgroundRefreshManager - Manages background
- *       refresh of JWKS content</li>
+ *   <li>{@link de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig} - its configuration:
+ *       JWKS URL or well-known URL, issuer identifier, refresh interval, TLS settings and egress policy</li>
+ *   <li>The cui-http adapters the loader composes: {@code de.cuioss.http.client.adapter.ETagAwareHttpAdapter}
+ *       for ETag / HTTP 304 "Not Modified" handling, wrapped by
+ *       {@code de.cuioss.http.client.adapter.ResilientHttpAdapter} for retry</li>
+ *   <li>{@link de.cuioss.sheriff.token.commons.transport.HttpWellKnownResolver} - resolves the
+ *       {@code jwks_uri} and the advertised issuer from the discovery document</li>
+ *   <li>{@link de.cuioss.sheriff.token.commons.transport.EgressPolicy} - the SSRF egress guard applied
+ *       to every JWKS fetch</li>
  * </ul>
- * 
+ *
  * <h3>Component Interactions</h3>
- * <p>The components in this package work together to provide a robust solution for loading and 
- * caching JWKS from HTTP endpoints:</p>
- * 
  * <ol>
- *   <li><strong>Configuration and Initialization:</strong> 
- *     <ul>
- *       <li>{@code HttpJwksLoaderConfig} is created with parameters like JWKS URI, refresh interval, 
- *           SSL context, etc.</li>
- *       <li>{@code HttpJwksLoader} is initialized with this configuration</li>
- *       <li>During initialization, {@code HttpJwksLoader} creates instances of {@code JwksHttpClient}, 
- *           {@code JwksCacheManager}, and {@code BackgroundRefreshManager}</li>
- *     </ul>
- *   </li>
- *   
- *   <li><strong>Key Retrieval Flow:</strong>
- *     <ul>
- *       <li>When a key is requested, {@code HttpJwksLoader} first tries to get it from the cache 
- *           via {@code JwksCacheManager}</li>
- *       <li>If the key is not in the cache or the cache is expired, {@code JwksCacheManager} calls 
- *           back to {@code HttpJwksLoader} to load fresh JWKS content</li>
- *       <li>{@code HttpJwksLoader} uses {@code JwksHttpClient} to fetch the content from the 
- *           JWKS endpoint</li>
- *       <li>{@code JwksHttpClient} includes the ETag in the request if available, enabling 
- *           HTTP 304 "Not Modified" handling</li>
- *       <li>The response is processed and either the existing keys are reused (for 304 responses) 
- *           or new keys are created from the fresh content</li>
- *     </ul>
- *   </li>
- *   
- *   <li><strong>Background Refresh:</strong>
- *     <ul>
- *       <li>{@code BackgroundRefreshManager} schedules periodic refresh tasks</li>
- *       <li>These tasks preemptively refresh the cache before keys expire</li>
- *       <li>The refresh percentage is configurable (e.g., refresh at 80% of the expiration time)</li>
- *     </ul>
- *   </li>
- *   
- *   <li><strong>Fallback Mechanisms:</strong>
- *     <ul>
- *       <li>If a refresh attempt fails, {@code JwksCacheManager} provides the last valid result</li>
- *       <li>This ensures that temporary network issues don't cause authentication failures</li>
- *     </ul>
- *   </li>
+ *   <li><strong>Construction:</strong> {@code HttpJwksLoader} is created from an
+ *       {@code HttpJwksLoaderConfig}; the constructor performs no I/O.</li>
+ *   <li><strong>Initialization:</strong>
+ *       {@link de.cuioss.sheriff.token.validation.jwks.JwksLoader#initJWKSLoader(de.cuioss.sheriff.token.commons.events.SecurityEventCounter)}
+ *       supplies the security event counter and starts the asynchronous initial load. In well-known
+ *       mode the loader first resolves the discovery document and compares its advertised issuer with
+ *       the configured issuer identifier; the {@code jwks_uri} it advertises must pass the egress guard.</li>
+ *   <li><strong>Key retrieval:</strong>
+ *       {@link de.cuioss.sheriff.token.validation.jwks.JwksLoader#getKeyInfo(String)} only reads the
+ *       installed key set; it never triggers loading.</li>
+ *   <li><strong>Background refresh:</strong> when enabled, a scheduled task re-fetches the JWKS through
+ *       the ETag-aware adapter, so an unchanged key set costs an HTTP 304 instead of a download. The
+ *       egress guard is re-checked on every refresh.</li>
+ *   <li><strong>Key rotation grace period:</strong> a key set replaced by a refresh is retained as a
+ *       retired key set for a grace period, so tokens signed with a just-rotated key still validate.</li>
+ *   <li><strong>Failure handling:</strong> a failed refresh keeps the installed keys; the full status
+ *       contract is documented on {@link de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoader}.</li>
  * </ol>
- * 
- * <h3>Performance and Reliability Features</h3>
- * <ul>
- *   <li><strong>HTTP 304 "Not Modified" handling:</strong> Uses the ETag header to avoid unnecessary downloads</li>
- *   <li><strong>Content-based caching:</strong> Only creates new key loaders when content actually changes</li>
- *   <li><strong>Fallback mechanism:</strong> Uses the last valid result if a new request fails</li>
- *   <li><strong>Multi-issuer support:</strong> Efficiently caches keys for multiple issuers</li>
- *   <li><strong>Adaptive caching:</strong> Adjusts cache behavior based on usage patterns</li>
- *   <li><strong>Background refresh:</strong> Preemptively refreshes keys before they expire</li>
- *   <li><strong>Cache size limits:</strong> Prevents memory issues in multi-issuer environments</li>
- * </ul>
- * 
+ *
  * <h3>Usage Example</h3>
- * <pre>
- * // Create configuration
+ * {@snippet :
+ * // Create configuration (a direct jwksUrl requires the issuer identifier)
  * HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
  *     .jwksUrl("https://auth.example.com/.well-known/jwks.json")
+ *     .issuerIdentifier("https://auth.example.com")
  *     .refreshIntervalSeconds(60)
  *     .build();
- *     
- * // Create loader
+ *
+ * // Create the loader and start loading the keys
  * JwksLoader loader = JwksLoaderFactory.createHttpLoader(config);
- * 
- * // Get key by ID
- * Optional&lt;KeyInfo&gt; keyInfo = loader.getKeyInfo("kid123");
- * </pre>
- * 
+ * LoaderStatus status = loader.initJWKSLoader(securityEventCounter).join();
+ *
+ * // Get key by ID once the initial load completed
+ * Optional<KeyInfo> keyInfo = loader.getKeyInfo("kid123");
+ * }
+ *
  * <p>Implements requirements:</p>
  * <ul>
  *   <li><a href="../../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-4.1">VALIDATION-4.1: JWKS Endpoint Support</a></li>
@@ -113,7 +82,7 @@
  * <p>
  * For more detailed specifications, see the
  * <a href="https://github.com/cuioss/TokenSheriff/tree/main/doc/validation/architecture.adoc#_jwksloader">Technical Components Specification - JwksLoader</a>
- * 
+ *
  * @author Oliver Wolff
  */
 package de.cuioss.sheriff.token.validation.jwks.http;
