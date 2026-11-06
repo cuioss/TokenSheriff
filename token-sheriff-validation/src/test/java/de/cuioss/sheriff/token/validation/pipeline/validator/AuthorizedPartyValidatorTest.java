@@ -254,18 +254,26 @@ class AuthorizedPartyValidatorTest {
     @DisplayName("JSON-typed client_id built through TokenBuilder")
     class JsonTypedClientId {
 
+        /**
+         * Builds the token and hands it to a validator whose configured ids match the stringified
+         * client_id. The build must throw first, so the validator is never reached.
+         */
+        private void buildAndValidate(MapRepresentation body, boolean fallbackEnabled) {
+            AuthorizedPartyValidator jsonValidator = new AuthorizedPartyValidator(
+                    JsonTypedAzpFixture.idsMatchingStringifiedValue(body, ClaimName.CLIENT_ID),
+                    securityEventCounter, fallbackEnabled);
+            TokenContent token = JsonTypedAzpFixture.buildToken(TokenType.ACCESS_TOKEN, body, securityEventCounter);
+            jsonValidator.validateAuthorizedParty(token);
+        }
+
         @ParameterizedTest(name = "client_id as {0}, fallback enabled: {2}")
         @MethodSource("de.cuioss.sheriff.token.validation.pipeline.validator.AuthorizedPartyValidatorTest#nonStringClientIdCases")
         @DisplayName("Should reject a non-string client_id at token build, even when its string form is a configured client id")
         void shouldRejectNonStringClientIdAtBuild(String jsonType, String clientIdJson, boolean fallbackEnabled) {
             MapRepresentation body = JsonTypedAzpFixture.bodyWithClientId(clientIdJson);
-            AuthorizedPartyValidator jsonValidator = new AuthorizedPartyValidator(
-                    JsonTypedAzpFixture.idsMatchingStringifiedValue(body, ClaimName.CLIENT_ID),
-                    securityEventCounter, fallbackEnabled);
 
             TokenValidationException exception = assertThrows(TokenValidationException.class,
-                    () -> jsonValidator.validateAuthorizedParty(
-                            JsonTypedAzpFixture.buildToken(TokenType.ACCESS_TOKEN, body, securityEventCounter)),
+                    () -> buildAndValidate(body, fallbackEnabled),
                     "client_id as " + jsonType + " must be rejected");
 
             assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
