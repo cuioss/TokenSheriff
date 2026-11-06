@@ -7,7 +7,7 @@ workstream: WS-05
 
 Bring the documentation entry points and conventions in order: `AGENTS.md` residue (machine-specific path,
 missing `token-sheriff-client` module, `README.adoc` vs `README.md`, incomplete skills list — D-5/Q-12);
-the hub lists 1 of 15 ADRs and ADR-0002 is still "Proposed" (D-7); hub omissions and an orphaned
+the hub lists 1 of 26 ADRs (15 when staged; PLAN-22 added 0020 to 0026) and ADR-0002 is still "Proposed" (D-7); hub omissions and an orphaned
 benchmarking LogMessages file (D-10); 66 `<<…>>` cross-references in 12 files plus a missing blank line
 (D-11); "TokenSheriff" vs "Token-Sheriff" prose spelling (D-12); missing client-quarkus README and
 "cui-http-client" naming (D-15). Closes D-5, Q-12, D-7, D-10, D-11, D-12, D-15.
@@ -49,10 +49,17 @@ benchmarking LogMessages file (D-10); 66 `<<…>>` cross-references in 12 files 
 ## Claim Labels
 
 - OBSERVED: `AGENTS.md` still carries `/Users/oliver/git/cui-llm-rules/...`, omits `token-sheriff-client/`, names `README.adoc`, lists one skill — read at `AGENTS.md`
-- OBSERVED: `doc/adr/` holds ADR-0001…0015; `doc/README.adoc` lists only ADR-0001; ADR-0002 status "Proposed" — read at `doc/README.adoc`
-- OBSERVED (derived count): 66 `<<…>>` references across the 12 files listed below — counted with `git grep` at `aa77acd9`
+  - verdict: corroborated | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: n/a | evidence: AGENTS.md:374 still has /Users/oliver path; omits token-sheriff-client; says README.adoc; lists one skill
+- OBSERVED: `doc/adr/` holds ADR-0001…0015; `doc/README.adoc` lists only ADR-0001; ADR-0002 status "Proposed" — read at `doc/README.adoc`. CONTRADICTED 2026-11-06 in the count and re-scoped: `doc/adr/` now holds ADR-0001…0026 (PLAN-22 added 0020 to 0026); the hub still lists only ADR-0001 (line 14) and ADR-0002 is still `Proposed` (line 20)
+  - verdict: contradicted | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: yes | evidence: doc/adr now holds 0001 to 0026; hub lists only ADR-0001 (line 14); ADR-0002 still Proposed (line 20); spec re-scoped
+- OBSERVED (derived count): 66 `<<…>>` references across the 12 files listed below — counted with `git grep` at `aa77acd9`. CONTRADICTED 2026-11-06 in the count and re-scoped: `git grep` at `306e6053` finds 68 across the same 12 files (requirements 25, retrieval-flow 7, test-strategy 7, commons/requirements 7, token-handling 6, threat-model 4, others 1 to 3); all 12 still contain `<<`, so the scope holds and the number is 68
+  - verdict: contradicted | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: yes | evidence: git grep at 306e6053 finds 68 << refs across the same 12 files, not 66; spec re-scoped to 68
 - OBSERVED: "cui-http-client" appears in `doc/validation/architecture.adoc`, `doc/validation/security-reference.adoc`, `doc/validation/threat-model.adoc`
+  - verdict: corroborated | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: n/a | evidence: cui-http-client still in architecture.adoc:89, security-reference.adoc:51, threat-model.adoc:45,189
 - OBSERVED: no README in `token-sheriff-quarkus-parent/token-sheriff-client-quarkus/`
+  - verdict: corroborated | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: n/a | evidence: client-quarkus module holds only pom.xml and src, no README
+- OBSERVED: the ADR claim above is stale. PLAN-22 (#863, merge `38aefc0a`) added ADR-0020 to ADR-0026 (the tree now holds 0001 to 0026) and amended ADR-0005, ADR-0010 and ADR-0017; `doc/README.adoc` was not touched — read with `git show --stat` and `ls doc/adr`. No ADR file contains the word "provisional". `AGENTS.md` also changed in PLAN-22 (+60/-: the two PLAN-20 advisories). Re-read `doc/adr/`, `doc/README.adoc` and `AGENTS.md` at outline; the index covers the whole of 0001 to 0026
+  - verdict: corroborated | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: n/a | evidence: 38aefc0a is an ancestor of origin/main; added ADR 0020 to 0026, changed 0005, 0010, 0017, not doc/README.adoc; no provisional marker; AGENTS.md +44/-16
 
 ## Expected Surface
 

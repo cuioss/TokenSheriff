@@ -2,10 +2,10 @@
   "id": "PLAN-22",
   "slug": "residual-docs-tests-adrs",
   "workstream": "WS-05",
-  "status": "running",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-22-residual-docs-tests-adrs",
+  "pr": "863",
+  "landing": "landings/PLAN-22.md",
   "seq": 22
 }

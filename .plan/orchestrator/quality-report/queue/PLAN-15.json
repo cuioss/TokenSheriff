@@ -2,10 +2,10 @@
   "id": "PLAN-15",
   "slug": "validation-test-gaps",
   "workstream": "WS-01",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-15-validation-test-gaps",
+  "pr": "867",
+  "landing": "landings/PLAN-15.md",
   "seq": 15
 }
