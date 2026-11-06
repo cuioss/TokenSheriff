@@ -110,8 +110,9 @@ grants MUST NOT be implemented (<<_security_exclusions_legacy_discouraged>>).
 [#CLIENT-4]
 === CLIENT-4: Strong token-endpoint client authentication
 
-The engine MUST authenticate to the token endpoint (and PAR / revocation / introspection
-endpoints). Among the strategies the caller has *configured*, the engine MUST prefer the
+The engine MUST authenticate to the token endpoint (and PAR / revocation endpoints). The
+`introspection_endpoint` is parsed from discovery metadata and https-checked; no introspection
+flow is implemented. Among the strategies the caller has *configured*, the engine MUST prefer the
 *strongest method the authorization server also advertises*: `private_key_jwt` (RFC 7523)
 over a shared `client_secret`. Selection never reaches outside the configured set — a method
 the caller did not configure is never chosen, however the authorization server advertises it.
@@ -379,7 +380,7 @@ Retrieved tokens are held *server-side* and never returned to the browser in usa
 (the BFF binding — server-side store or encrypted cookie — is the application's choice,
 <<CLIENT-19>>). The engine MUST: refresh access tokens with `refresh_token`, applying
 *refresh-token rotation* and *revoking on detected misuse / reuse*; revoke held tokens at
-logout (<<CLIENT-13>>) via the commons revocation transport (RFC 7009); protect tokens at
+logout (<<CLIENT-13>>) through the engine's own revocation back-channel call (RFC 7009); protect tokens at
 rest; and prefer short-lived access tokens.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700#section-4.14[RFC 9700 §4.14] (refresh-token protection / rotation), https://www.rfc-editor.org/rfc/rfc7009[RFC 7009] (revocation), https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[Browser-Based Apps] (tokens held server-side).

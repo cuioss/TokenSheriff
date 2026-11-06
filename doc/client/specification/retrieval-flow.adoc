@@ -7,8 +7,8 @@
 
 == Overview
 
-_Realizes xref:../requirements.adoc#CLIENT-1[CLIENT-1]–xref:../requirements.adoc#CLIENT-11[CLIENT-11]
-and xref:../requirements.adoc#CLIENT-14[CLIENT-14]. See xref:../threat-model.adoc[Threat Model],
+_Realizes xref:../requirements.adoc#CLIENT-1[CLIENT-1]–xref:../requirements.adoc#CLIENT-11[CLIENT-11],
+xref:../requirements.adoc#CLIENT-14[CLIENT-14] and xref:../requirements.adoc#CLIENT-23[CLIENT-23]. See xref:../threat-model.adoc[Threat Model],
 xref:../best-practices.adoc[Best Practices] and xref:../architecture.adoc[Architecture]._
 
 This specification covers the net-new aspect the client capability owns: the
@@ -24,7 +24,10 @@ The engine performs its *own* outbound OIDC/OAuth back-channel HTTP for every st
 in-module egress / path-validation and TLS-scheme control before each fetch
 (xref:../architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]), rather than
 delegating to a commons transport service. It reuses the `cui-http` transport *primitives*
-(`COMMONS-1`), not a commons transport façade.
+(`COMMONS-1`), not a commons transport façade. The optional per-client `SSLContext`
+(`ClientConfiguration.sslContext`) is applied to every one of these back-channel calls and
+selects trust material only — it does not relax the TLS policy
+(xref:../requirements.adoc#CLIENT-23[CLIENT-23]).
 
 == The authorization request
 
@@ -101,9 +104,11 @@ The engine supports the secure subset of token-endpoint grants
 
 == [[_client_authentication]] Client authentication
 
-The engine authenticates to the token, PAR, revocation and introspection endpoints, choosing
-the *strongest configured method the AS also advertises* — never a method the caller did not
-configure (xref:../requirements.adoc#CLIENT-4[CLIENT-4],
+The engine authenticates to the token, PAR and revocation endpoints. The
+`introspection_endpoint` is parsed from discovery metadata and https-checked; no introspection
+flow is implemented. For each authenticated endpoint the engine chooses the *strongest
+configured method the AS also advertises* — never a method the caller did not configure
+(xref:../requirements.adoc#CLIENT-4[CLIENT-4],
 xref:../threat-model.adoc#T-CLIENT-CRED[T-CLIENT-CRED]):
 
 [cols="1,2,1", options="header"]
