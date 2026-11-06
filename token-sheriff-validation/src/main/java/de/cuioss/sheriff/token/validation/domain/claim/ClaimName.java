@@ -169,10 +169,14 @@ public enum ClaimName {
      * The "client_id" claim identifies the OAuth 2.0 client that requested the token.
      * Defined by RFC 9068 Section 2.2 for JWT access tokens. Used as a fallback
      * when the "azp" claim is absent for authorized party validation.
+     * <p>
+     * Mapped by {@link StrictStringMapper}: the claim must be a JSON string, so a number,
+     * boolean, array or object is rejected instead of being stringified into a value that
+     * could match a configured client id.
      *
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-2.2">RFC 9068 - JWT Access Tokens</a>
      */
-    CLIENT_ID("client_id", ClaimValueType.STRING, "The \"client_id\" claim identifies the OAuth 2.0 client that requested the token. Defined by RFC 9068 Section 2.2 for JWT access tokens.", new IdentityMapper()),
+    CLIENT_ID("client_id", ClaimValueType.STRING, "The \"client_id\" claim identifies the OAuth 2.0 client that requested the token. Defined by RFC 9068 Section 2.2 for JWT access tokens.", new StrictStringMapper()),
 
     // Design Decision: UPN is a MicroProfile JWT Auth invention, not an RFC or OIDC claim.
     // It lives in core (not the Quarkus layer) because ClaimName is a framework-agnostic

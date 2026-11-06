@@ -16,8 +16,13 @@
 package de.cuioss.sheriff.token.validation.domain.claim;
 
 import com.dslplatform.json.DslJson;
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
+import de.cuioss.sheriff.token.validation.domain.claim.mapper.ClaimMapper;
+import de.cuioss.sheriff.token.validation.domain.claim.mapper.StrictStringMapper;
+import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
+import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.valueobjects.junit5.contracts.ShouldHandleObjectContracts;
@@ -323,6 +328,44 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
             Optional<ClaimName> result = ClaimName.fromString(claimName.getName());
             assertTrue(result.isPresent(), "Should find ClaimName for " + claimName.getName());
             assertEquals(claimName, result.get(), "Should return correct ClaimName for " + claimName.getName());
+        }
+    }
+
+    @Test
+    @DisplayName("Should map client_id with the strict string mapper")
+    void shouldMapClientIdWithStrictStringMapper() {
+        assertInstanceOf(StrictStringMapper.class, ClaimName.CLIENT_ID.getClaimMapper(),
+                "client_id must be mapped strictly, never stringified");
+    }
+
+    static Stream<Arguments> nonStringClientIdValues() {
+        return Stream.of(
+                Arguments.of("number", String.valueOf(Generators.integers(1, 1_000_000).next())),
+                Arguments.of("boolean", String.valueOf(Generators.booleans().next())),
+                Arguments.of("array", "[\"my-client\"]"),
+                Arguments.of("object", "{\"client_id\":\"my-client\"}"));
+    }
+
+    @ParameterizedTest(name = "client_id as {0}")
+    @MethodSource("nonStringClientIdValues")
+    @DisplayName("Should reject a non-string client_id instead of stringifying it")
+    void shouldRejectNonStringClientId(String jsonType, String clientIdJson) {
+        MapRepresentation body = parseJson("{\"client_id\":" + clientIdJson + "}");
+        ClaimMapper mapper = ClaimName.CLIENT_ID.getClaimMapper();
+        String claimName = ClaimName.CLIENT_ID.getName();
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> mapper.map(body, claimName),
+                "client_id as " + jsonType + " must be rejected");
+
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
+    }
+
+    private static MapRepresentation parseJson(String json) {
+        try {
+            return MapRepresentation.fromJson(ParserConfig.builder().build().getDslJson(), json);
+        } catch (IOException e) {
+            throw new AssertionError("Failed to parse test JSON: " + json, e);
         }
     }
 

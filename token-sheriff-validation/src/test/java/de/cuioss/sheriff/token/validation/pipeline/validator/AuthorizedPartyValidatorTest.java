@@ -21,6 +21,7 @@ import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
+import de.cuioss.sheriff.token.validation.domain.token.TokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
@@ -34,11 +35,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -56,6 +59,7 @@ class AuthorizedPartyValidatorTest {
     private static final String EXPECTED_CLIENT_ID_2 = "client2";
     private static final String UNEXPECTED_CLIENT_ID = "unknown-client";
     private static final Set<String> EXPECTED_CLIENT_IDS = Set.of(EXPECTED_CLIENT_ID_1, EXPECTED_CLIENT_ID_2);
+    private static final String MALFORMED_CLIENT_ID_MESSAGE = "Malformed claim 'client_id'";
 
 
     private SecurityEventCounter securityEventCounter;
@@ -225,19 +229,86 @@ class AuthorizedPartyValidatorTest {
 
         @ParameterizedTest(name = "azp as {0}")
         @MethodSource("de.cuioss.sheriff.token.validation.pipeline.validator.JsonTypedAzpFixture#nonStringAzpValues")
-        @DisplayName("Should never accept a non-string azp, even when its string form is a configured client id")
+        @DisplayName("Should reject a non-string azp at token build, before any validator runs")
         void shouldNeverAcceptNonStringAzp(String jsonType, String azpJson) {
             MapRepresentation body = JsonTypedAzpFixture.bodyWithAzp(azpJson);
-            AuthorizedPartyValidator jsonValidator = new AuthorizedPartyValidator(
-                    JsonTypedAzpFixture.idsMatchingStringifiedAzp(body), securityEventCounter, true);
 
-            assertThrows(TokenValidationException.class,
-                    () -> buildAndValidate(jsonValidator, body),
-                    "azp as " + jsonType + " must be rejected");
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> JsonTypedAzpFixture.buildToken(TokenType.ACCESS_TOKEN, body, securityEventCounter),
+                    "azp as " + jsonType + " must be rejected at build");
+
+            assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
+            assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+            assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.AZP_MISMATCH));
+        }
+    }
+
+    static Stream<Arguments> nonStringClientIdCases() {
+        return JsonTypedAzpFixture.nonStringAzpValues()
+                .flatMap(clientIdCase -> Stream.of(true, false)
+                        .map(fallbackEnabled -> Arguments.of(clientIdCase.get()[0], clientIdCase.get()[1],
+                                fallbackEnabled)));
+    }
+
+    @Nested
+    @DisplayName("JSON-typed client_id built through TokenBuilder")
+    class JsonTypedClientId {
+
+        /**
+         * Builds the token and hands it to a validator whose configured ids match the stringified
+         * client_id. The build must throw first, so the validator is never reached.
+         */
+        private void buildAndValidate(MapRepresentation body, boolean fallbackEnabled) {
+            AuthorizedPartyValidator jsonValidator = new AuthorizedPartyValidator(
+                    JsonTypedAzpFixture.idsMatchingStringifiedValue(body, ClaimName.CLIENT_ID),
+                    securityEventCounter, fallbackEnabled);
+            TokenContent token = JsonTypedAzpFixture.buildToken(TokenType.ACCESS_TOKEN, body, securityEventCounter);
+            jsonValidator.validateAuthorizedParty(token);
         }
 
-        private void buildAndValidate(AuthorizedPartyValidator jsonValidator, MapRepresentation body) {
-            jsonValidator.validateAuthorizedParty(JsonTypedAzpFixture.buildToken(TokenType.ACCESS_TOKEN, body));
+        @ParameterizedTest(name = "client_id as {0}, fallback enabled: {2}")
+        @MethodSource("de.cuioss.sheriff.token.validation.pipeline.validator.AuthorizedPartyValidatorTest#nonStringClientIdCases")
+        @DisplayName("Should reject a non-string client_id at token build, even when its string form is a configured client id")
+        void shouldRejectNonStringClientIdAtBuild(String jsonType, String clientIdJson, boolean fallbackEnabled) {
+            MapRepresentation body = JsonTypedAzpFixture.bodyWithClientId(clientIdJson);
+
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> buildAndValidate(body, fallbackEnabled),
+                    "client_id as " + jsonType + " must be rejected");
+
+            assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
+            assertTrue(exception.getMessage().contains(MALFORMED_CLIENT_ID_MESSAGE),
+                    "client_id as " + jsonType + " must be rejected by the mapper at build, not by the validator: "
+                            + exception.getMessage());
+            assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+            assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.AZP_MISMATCH));
+        }
+
+        @ParameterizedTest(name = "client_id as {0}")
+        @MethodSource("de.cuioss.sheriff.token.validation.pipeline.validator.JsonTypedAzpFixture#nonStringAzpValues")
+        @DisplayName("Should reject a non-string client_id even when a valid string azp matches a configured client id")
+        void shouldRejectNonStringClientIdBesideMatchingStringAzp(String jsonType, String clientIdJson) {
+            MapRepresentation body = JsonTypedAzpFixture.bodyWithStringAzpAndClientId(EXPECTED_CLIENT_ID_1, clientIdJson);
+
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> JsonTypedAzpFixture.buildToken(TokenType.ACCESS_TOKEN, body, securityEventCounter),
+                    "client_id as " + jsonType + " must be rejected at build despite a matching azp");
+
+            assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
+            assertTrue(exception.getMessage().contains(MALFORMED_CLIENT_ID_MESSAGE), exception.getMessage());
+            assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+        }
+
+        @Test
+        @DisplayName("Should accept a JSON-string client_id matching a configured client id when azp is absent")
+        void shouldAcceptStringClientIdFallback() {
+            MapRepresentation body = JsonTypedAzpFixture.bodyWithClientId("\"" + EXPECTED_CLIENT_ID_1 + "\"");
+
+            TokenContent token = JsonTypedAzpFixture.buildToken(TokenType.ACCESS_TOKEN, body, securityEventCounter);
+
+            assertDoesNotThrow(() -> validator.validateAuthorizedParty(token));
+            assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+            assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.AZP_MISMATCH));
         }
     }
 }

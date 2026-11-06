@@ -36,9 +36,9 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * Builds tokens whose {@code azp} claim carries a real non-string JSON type (array, number,
- * boolean, object), by parsing a JSON body with the production DSL-JSON configuration and running
- * it through {@link TokenBuilder}.
+ * Builds tokens whose {@code azp} or {@code client_id} claim carries a real JSON type, including the
+ * non-string types (array, number, boolean, object), by parsing a JSON body with the production
+ * DSL-JSON configuration and running it through {@link TokenBuilder}.
  * <p>
  * Validator tests that construct {@link ClaimValue} instances directly cannot express the JSON type
  * of a claim; this fixture exercises the real mapping path.
@@ -50,11 +50,14 @@ final class JsonTypedAzpFixture {
 
     private static final String RAW_TOKEN = "json-typed-azp-token";
 
+    private static final String BODY_PREFIX = "{\"iss\":\"test-issuer\",\"sub\":\"test-subject\"";
+
     private JsonTypedAzpFixture() {
     }
 
     /**
-     * Provides one case per non-string JSON type: a display name and the JSON literal of the azp value.
+     * Provides one case per non-string JSON type: a display name and the JSON literal of the value.
+     * The cases serve both the azp and the client_id claim.
      *
      * @return the array, number, boolean and object cases
      */
@@ -73,7 +76,32 @@ final class JsonTypedAzpFixture {
      * @return the parsed body
      */
     static MapRepresentation bodyWithAzp(String azpJson) {
-        String json = "{\"iss\":\"test-issuer\",\"sub\":\"test-subject\",\"azp\":" + azpJson + "}";
+        return parse(BODY_PREFIX + ",\"azp\":" + azpJson + "}");
+    }
+
+    /**
+     * Parses a token body carrying the given client_id JSON literal, no azp and no audience claim.
+     *
+     * @param clientIdJson the JSON literal of the client_id value
+     * @return the parsed body
+     */
+    static MapRepresentation bodyWithClientId(String clientIdJson) {
+        return parse(BODY_PREFIX + ",\"client_id\":" + clientIdJson + "}");
+    }
+
+    /**
+     * Parses a token body carrying a JSON-string azp together with the given client_id JSON literal,
+     * and no audience claim.
+     *
+     * @param azp          the azp value, written as a JSON string
+     * @param clientIdJson the JSON literal of the client_id value
+     * @return the parsed body
+     */
+    static MapRepresentation bodyWithStringAzpAndClientId(String azp, String clientIdJson) {
+        return parse(BODY_PREFIX + ",\"azp\":\"" + azp + "\",\"client_id\":" + clientIdJson + "}");
+    }
+
+    private static MapRepresentation parse(String json) {
         try {
             return MapRepresentation.fromJson(ParserConfig.builder().build().getDslJson(), json);
         } catch (IOException e) {
@@ -82,43 +110,48 @@ final class JsonTypedAzpFixture {
     }
 
     /**
-     * The string an identity mapping would derive from the azp value, i.e. the value a token
-     * would have carried before azp became strictly string-typed.
+     * The string an identity mapping would derive from the value of the given claim, i.e. the value
+     * a token would have carried before the claim became strictly string-typed.
      *
-     * @param body the parsed body
-     * @return the stringified azp value
+     * @param body  the parsed body
+     * @param claim the claim whose value is stringified
+     * @return the stringified claim value
      */
-    static String identityMappedAzp(MapRepresentation body) {
+    static String identityMappedValue(MapRepresentation body, ClaimName claim) {
         ClaimValue mapped = Objects.requireNonNull(
-                new IdentityMapper().map(body, ClaimName.AUTHORIZED_PARTY.getName()),
-                "body must carry an azp claim");
+                new IdentityMapper().map(body, claim.getName()),
+                "body must carry a " + claim.getName() + " claim");
         return mapped.getOriginalString();
     }
 
     /**
-     * The configured ids for a case: the embedded client id plus the stringified azp value, so a
-     * token is only rejected because its azp is not a JSON string, never because nothing matches.
+     * The configured ids for a case: the embedded client id plus the stringified value of the given
+     * claim, so a token is only rejected because the claim is not a JSON string, never because
+     * nothing matches.
      *
-     * @param body the parsed body
+     * @param body  the parsed body
+     * @param claim the claim whose stringified value is configured
      * @return the configured ids
      */
-    static Set<String> idsMatchingStringifiedAzp(MapRepresentation body) {
-        return Set.of(EMBEDDED_CLIENT_ID, identityMappedAzp(body));
+    static Set<String> idsMatchingStringifiedValue(MapRepresentation body, ClaimName claim) {
+        return Set.of(EMBEDDED_CLIENT_ID, identityMappedValue(body, claim));
     }
 
     /**
      * Builds a token of the given type from the parsed body through {@link TokenBuilder}.
      *
-     * @param tokenType ACCESS_TOKEN or ID_TOKEN
-     * @param body the parsed body
+     * @param tokenType            ACCESS_TOKEN or ID_TOKEN
+     * @param body                 the parsed body
+     * @param securityEventCounter the counter the builder records a mapper rejection on
      * @return the built token
      */
-    static TokenContent buildToken(TokenType tokenType, MapRepresentation body) {
+    static TokenContent buildToken(TokenType tokenType, MapRepresentation body,
+            SecurityEventCounter securityEventCounter) {
         TokenBuilder tokenBuilder = new TokenBuilder(IssuerConfig.builder()
                 .issuerIdentifier("test-issuer")
                 .jwksContent("{\"keys\":[]}")
                 .audienceValidationDisabled(true)
-                .build(), new SecurityEventCounter());
+                .build(), securityEventCounter);
         var header = new JwtHeader(null, null, null, null, null, null, null, null, null, null);
         var decodedJwt = new DecodedJwt(header, body, null, new String[]{"", "", ""}, RAW_TOKEN);
         if (TokenType.ID_TOKEN.equals(tokenType)) {

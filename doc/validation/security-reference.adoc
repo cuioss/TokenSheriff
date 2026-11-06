@@ -31,8 +31,8 @@ Supported algorithms (preference order: ECDSA > EdDSA > RSA-PSS > RSA PKCS#1 v1.
 [[claims-validation]]
 === Claims Validation
 
-* **iss** (issuer) - validated by `IssuerConfigCache` during issuer resolution
-* **sub** (subject) - mandatory by default (RFC 7519 §4.1.2), validated by `TokenClaimValidator`; may be made optional per issuer via `IssuerConfig.claimSubOptional(true)`
+* **iss** (issuer) - validated by `IssuerConfigCache` during issuer resolution. A non-string `iss` is already rejected, because issuer resolution reads it as a JSON string only.
+* **sub** (subject) - mandatory by default (RFC 7519 §4.1.2), validated by `TokenClaimValidator`; may be made optional per issuer via `IssuerConfig.claimSubOptional(true)`. No comparison against a configured value reads `sub`, and the client's token-to-token `sub` binding compares two signature-verified tokens from the same issuer, so a non-string `sub` cannot satisfy a comparison.
 * **exp** (expiration) - mandatory, with configurable clock skew
 * **iat** (issued at) - validated against `maxTokenAgeSeconds` when configured on the issuer (a token is rejected when `now - iat > maxTokenAgeSeconds + clockSkewSeconds`); when `maxTokenAgeSeconds` is unset it is extracted into token content without an age check
 * **nbf** (not before) - validated if present
@@ -43,7 +43,8 @@ Supported algorithms (preference order: ECDSA > EdDSA > RSA-PSS > RSA PKCS#1 v1.
 ** `accessTokenAudienceOptional(true)` does not accept `aud: []`. The option covers an identity provider that omits `aud`, not one that sends an empty array.
 * **azp** (authorized party) - validated when `expectedClientId` is configured
 ** `azp` must be a JSON string. An array, number, boolean or object is rejected when the token is built, before any validator runs, so a non-string `azp` never satisfies the authorized-party check or the audience fallback, even when its text form equals a configured client id or audience.
-* **jti** (JWT ID) - accessible via generic claim access on the token content; the library exposes no typed accessor for it
+** `client_id`, the RFC 9068 fallback for an absent `azp`, must be a JSON string. An array, number, boolean or object is rejected when the token is built, before any validator runs, including when a valid `azp` is present, so a non-string `client_id` never satisfies the authorized-party check, even when its text form equals a configured client id.
+* **jti** (JWT ID) - accessible via generic claim access on the token content; the library exposes no typed accessor for it. No comparison reads `jti`.
 
 [[secure-communication]]
 === Secure Communication
