@@ -49,7 +49,7 @@ Supported algorithms (preference order: ECDSA > EdDSA > RSA-PSS > RSA PKCS#1 v1.
 [[secure-communication]]
 === Secure Communication
 
-TLS 1.2+ enforced for all JWKS and well-known endpoint communication via `SecureSSLContextProvider` (from cui-http). Configurable minimum TLS version.
+JWKS and well-known endpoint communication requires HTTPS by default, with TLS 1.2+ enforced via `SecureSSLContextProvider` (from cui-http) and a configurable minimum TLS version; a cleartext `http://` URL is rejected. An operator can opt in to cleartext per issuer with `allowInsecureHttp(true)` on `HttpJwksLoaderConfig` and `WellKnownConfig`, or `sheriff.token.issuers.<name>.jwks.http.allow-insecure-http=true` in the Quarkus extension. With that opt-in, a discovery or JWKS endpoint with an `http://` URL is fetched without TLS, so its key material and discovery document are open to interception and tampering; the TLS settings still apply to every endpoint of that issuer that uses `https://`. The opt-in is intended for local development and integration tests, never production.
 
 TLS hostname verification is enforced by default and can be relaxed per issuer via `sheriff.token.issuers.<name>.jwks.http.verify-hostname=false`, which narrows hostname matching only — chain trust, expiry and algorithm constraints remain enforced — is scoped to that issuer's JWKS and well-known fetches, and is intended for SAN-mismatched development certificates, never production (see xref:../adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008]).
 
