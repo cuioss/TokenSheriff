@@ -68,6 +68,8 @@ import org.jboss.jandex.DotName;
  * auto-detects from the jar — for Quarkus and non-Quarkus native builds alike. Core types therefore
  * belong in that metadata, never in this processor.
  * </p>
+ *
+ * @since 1.0
  */
 public class TokenSheriffProcessor {
 

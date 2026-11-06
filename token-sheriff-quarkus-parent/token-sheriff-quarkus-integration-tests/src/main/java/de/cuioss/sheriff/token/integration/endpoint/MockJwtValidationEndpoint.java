@@ -47,6 +47,7 @@ import java.util.*;
  * extraction, claims map construction, JSON serialization) from the library
  * validation cost (77µs measured by JMH).
  *
+ * @since 1.0
  * @see JwtValidationEndpoint
  */
 @Path("/mock-jwt")

@@ -24,6 +24,8 @@ import io.quarkus.runtime.annotations.QuarkusMain;
  * <p>
  * This application provides endpoints for testing JWT validation,
  * health checks, and metrics in a containerized environment.
+ *
+ * @since 1.0
  */
 @QuarkusMain
 public class TestApplication implements QuarkusApplication {
