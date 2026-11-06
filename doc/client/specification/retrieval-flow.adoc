@@ -7,8 +7,8 @@
 
 == Overview
 
-_Realizes xref:../requirements.adoc#CLIENT-1[CLIENT-1]–xref:../requirements.adoc#CLIENT-11[CLIENT-11]
-and xref:../requirements.adoc#CLIENT-14[CLIENT-14]. See xref:../threat-model.adoc[Threat Model],
+_Realizes xref:../requirements.adoc#CLIENT-1[CLIENT-1]–xref:../requirements.adoc#CLIENT-11[CLIENT-11],
+xref:../requirements.adoc#CLIENT-14[CLIENT-14] and xref:../requirements.adoc#CLIENT-23[CLIENT-23]. See xref:../threat-model.adoc[Threat Model],
 xref:../best-practices.adoc[Best Practices] and xref:../architecture.adoc[Architecture]._
 
 This specification covers the net-new aspect the client capability owns: the
@@ -24,7 +24,11 @@ The engine performs its *own* outbound OIDC/OAuth back-channel HTTP for every st
 in-module egress / path-validation and TLS-scheme control before each fetch
 (xref:../architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]), rather than
 delegating to a commons transport service. It reuses the `cui-http` transport *primitives*
-(`COMMONS-1`), not a commons transport façade.
+(`COMMONS-1`), not a commons transport façade. The optional per-client `SSLContext`
+(`ClientConfiguration.sslContext`) is applied to the HTTPS back-channel calls and selects trust
+material only — it does not relax the TLS policy. A call to an `http` endpoint (reachable only
+with `allowInsecureHttp`) opens no TLS connection, so the context is not applied and the call has
+no TLS protection (xref:../requirements.adoc#CLIENT-23[CLIENT-23]).
 
 == The authorization request
 
@@ -101,9 +105,13 @@ The engine supports the secure subset of token-endpoint grants
 
 == [[_client_authentication]] Client authentication
 
-The engine authenticates to the token, PAR, revocation and introspection endpoints, choosing
-the *strongest configured method the AS also advertises* — never a method the caller did not
-configure (xref:../requirements.adoc#CLIENT-4[CLIENT-4],
+The engine authenticates to the token, PAR and revocation endpoints. The
+`introspection_endpoint` is parsed from discovery metadata and, like the other advertised
+endpoints, https-checked only when the configured issuer itself uses https (an `http` issuer
+admitted by `allowInsecureHttp` skips the endpoint-scheme check); no introspection
+flow is implemented. For each authenticated endpoint the engine chooses the *strongest
+configured method the AS also advertises* — never a method the caller did not configure
+(xref:../requirements.adoc#CLIENT-4[CLIENT-4],
 xref:../threat-model.adoc#T-CLIENT-CRED[T-CLIENT-CRED]):
 
 [cols="1,2,1", options="header"]
@@ -111,7 +119,7 @@ xref:../threat-model.adoc#T-CLIENT-CRED[T-CLIENT-CRED]):
 | Method | Notes | Source
 
 | `private_key_jwt` | Preferred — the key-based method ranked first among the configured strategies; asymmetric client assertion, no shared secret in transit. | https://www.rfc-editor.org/rfc/rfc7523[RFC 7523]
-| mTLS (`tls_client_auth`) | Alpha — declared so an advertised entry resolves, never selected; the transport plumbs no client key material, leaving `private_key_jwt` as the supported strong client-authentication route. DPoP (RFC 9449) is the sender-constraining direction, not a client-authentication method (<<_sender_constrained_tokens>>). | https://www.rfc-editor.org/rfc/rfc8705[RFC 8705]
+| mTLS (`tls_client_auth`) | Alpha — declared so an advertised entry resolves, never selected; the engine plumbs no client key material into the transport, leaving `private_key_jwt` as the supported strong client-authentication route. A caller-supplied `SSLContext` is applied as supplied, so one that carries client keys lets an HTTPS peer that requests a certificate receive it; that is the caller's own configuration, not `tls_client_auth` selection. DPoP (RFC 9449) is the sender-constraining direction, not a client-authentication method (<<_sender_constrained_tokens>>). | https://www.rfc-editor.org/rfc/rfc8705[RFC 8705]
 | `client_secret_basic` / `client_secret_post` | Fallback only; secret sent over TLS, never in a URL. | https://www.rfc-editor.org/rfc/rfc6749#section-2.3[RFC 6749 §2.3]
 |===
 

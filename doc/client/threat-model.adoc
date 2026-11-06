@@ -34,8 +34,10 @@ The client engine:
 
 * Constructs authorization requests and exchanges authorization codes for tokens as a
   *confidential client*, entirely server-side (no tokens in the browser).
-* Authenticates to the token / PAR / revocation / introspection endpoints and *requests*
-  sender-constrained tokens.
+* Authenticates to the token / PAR / revocation endpoints and *requests* sender-constrained
+  tokens. The `introspection_endpoint` is only parsed from discovery metadata and, like the other
+  advertised endpoints, https-checked only when the configured issuer itself uses https; it is
+  never called.
 * Holds retrieved tokens *server-side*, refreshes and revokes them, and validates them
   through the validation pipeline.
 * Triggers RP-initiated logout and honours step-up challenges.
@@ -155,11 +157,13 @@ The client engine:
 | *Token-endpoint TLS downgrade / MITM.* An on-path attacker downgrades or MITMs a token /
   PAR / revocation request to substitute responses or capture secrets.
 | *Delegated to commons* — TLS 1.2+ with certificate validation on every outbound request
-  (`COMMONS-2`); the flow relies on it and adds no transport of its own. It inherits the
+  (`COMMONS-2`); the TLS primitive is commons / `cui-http`, applied by the engine's own
+  back-channel transport (`BackChannelHttp`). It inherits the
   `COMMONS-2` hostname-matching carve-out as the symmetric peer of the commons
   xref:../commons/threat-model.adoc#T-TLS[T-TLS] row, reached here by
-  `sheriff.client.verify-hostname` — a client-wide, default-ON knob covering every back-channel
-  call (token, userinfo, revocation, PAR). Relaxing it narrows hostname matching only — chain
+  `sheriff.client.verify-hostname` — a client-wide, default-ON knob covering every HTTPS
+  back-channel call (token, userinfo, revocation, PAR); a cleartext `http` target carries no TLS
+  and so no hostname check. Relaxing it narrows hostname matching only — chain
   trust, expiry and algorithm constraints stay enforced — and the residual exposure is recorded
   with the delegated control, in the commons threat model's
   xref:../commons/threat-model.adoc#_residual_risks[residual risks]. When the optional

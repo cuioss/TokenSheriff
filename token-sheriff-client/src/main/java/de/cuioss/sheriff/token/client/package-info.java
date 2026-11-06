@@ -18,20 +18,24 @@
  * <p>
  * This module is the client-side counterpart to {@code token-sheriff-validation}. Where validation
  * consumes and verifies inbound tokens, the client engine drives the outbound OIDC/OAuth flows —
- * token retrieval (RFC 6749), userinfo (OIDC Core), token revocation (RFC 7009), introspection
- * (RFC 7662), RP-initiated end-session and pushed authorization requests (RFC 9126).
+ * token retrieval (RFC 6749), userinfo (OIDC Core), token revocation (RFC 7009), RP-initiated
+ * end-session (a front-channel redirect) and pushed authorization requests (RFC 9126). The
+ * {@code introspection_endpoint} (RFC 7662) is parsed from discovery metadata and, like the other
+ * advertised endpoints, https-checked only when the configured issuer itself uses https, but no
+ * introspection flow is implemented.
  * <p>
  * It is pure Java with no framework dependency (see the module-architecture decision:
  * {@code doc/adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc}) so it can be wired into any runtime — the Quarkus
  * extension {@code token-sheriff-client-quarkus} is one such binding; a CDI/RESTEasy portal adapter
- * is another. The engine builds on the {@code commons} base layer (transport, error model, events,
- * metrics) that ships inside {@code token-sheriff-validation}; it adds flows, not HTTP plumbing —
- * outbound bytes travel through {@code de.cuioss.sheriff.token.commons.transport}. Because it
- * validates the tokens it retrieves, it depends on {@code token-sheriff-validation} and gets the
- * {@code commons} base layer transitively.
+ * is another. The {@code commons} base layer that ships inside {@code token-sheriff-validation}
+ * supplies the error model, events, metrics and the validation-side discovery / JWKS retrieval;
+ * the engine drives its own OIDC/OAuth back channel (discovery, token, PAR, userinfo, revocation)
+ * through {@code de.cuioss.sheriff.token.client.internal.BackChannelHttp} on the {@code cui-http}
+ * primitives. Because it validates the tokens it retrieves, it depends on
+ * {@code token-sheriff-validation} and gets the {@code commons} base layer transitively.
  * <p>
- * The client-side flows — token retrieval, userinfo, revocation, introspection, RP-initiated
- * end-session and PAR — are implemented here; the requirements and specification live under
+ * The client-side flows — token retrieval, userinfo, revocation, RP-initiated end-session and
+ * PAR — are implemented here; the requirements and specification live under
  * {@code doc/client/}. See {@code doc/client/architecture.adoc} for the module map.
  *
  * @author Oliver Wolff

@@ -21,9 +21,12 @@ Standards owned by other capabilities are *cited here, not restated*:
 * *Transport* standards — discovery (RFC 8414, OIDC Discovery), JWKS (RFC 7517), the
   extended IdP endpoints (token, userinfo, revocation, introspection, end-session, PAR
   transport) and the *RFC 9457 error model* — belong to
-  xref:../commons/references.adoc[commons] (`COMMONS-N`). The client *uses* them and cites
-  the `COMMONS-N` requirements; it does not respecify fetching, TLS, SSRF or the problem+json
-  rendering.
+  xref:../commons/references.adoc[commons] (`COMMONS-N`). The client drives its own
+  back-channel HTTP (discovery, token, userinfo, revocation, PAR) on the shared transport
+  primitives and owns its in-module egress control
+  (xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]); introspection and
+  end-session are cited standards, not client-driven back-channel transport. The client does not
+  respecify TLS or the problem+json rendering.
 * *Token-trust* standards — signature/algorithm policy (RFC 8725), JWT access tokens
   (RFC 9068), DPoP proof validation (RFC 9449), OIDC ID-token validation (OIDC Core) — belong
   to the xref:../validation/requirements.adoc[validation requirements] and are *inherited* by

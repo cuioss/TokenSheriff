@@ -30,7 +30,7 @@ restated here.
 
 == Transport requirements
 
-_All outbound IdP HTTP. See xref:specification/transport.adoc[Transport specification] and
+_Validation-side outbound IdP HTTP and the shared transport primitives. See xref:specification/transport.adoc[Transport specification] and
 xref:threat-model.adoc[Threat Model]._
 
 [#COMMONS-1]
@@ -118,11 +118,13 @@ keys remain in validation.
 [#COMMONS-7]
 === COMMONS-7: Extended IdP endpoints (client-facing)
 
-Commons defines the transport contract for the endpoints the OIDC client capability
-drives: token (RFC 6749), userinfo (OIDC Core), revocation (RFC 7009), introspection
-(RFC 7662), end-session / RP-initiated logout, and PAR (RFC 9126). Each is exercised by a
-dedicated MockWebServer dispatcher in the `generators` test artifact (default + adversarial
-modes), so the contract is testable independently of the client engine.
+Commons defines the transport contract for the extended IdP endpoints: token (RFC 6749),
+userinfo (OIDC Core), revocation (RFC 7009), introspection (RFC 7662), end-session /
+RP-initiated logout, and PAR (RFC 9126). Each is exercised by a dedicated MockWebServer
+dispatcher in the `generators` test artifact (default + adversarial modes), so the contract
+is testable independently of the client engine. The client drives token, userinfo,
+revocation and PAR over its own back channel; end-session is a front-channel redirect the
+client builds; introspection has a dispatcher only and no client flow.
 
 * Source: https://www.rfc-editor.org/rfc/rfc6749[RFC 6749], https://www.rfc-editor.org/rfc/rfc7009[RFC 7009], https://www.rfc-editor.org/rfc/rfc7662[RFC 7662], https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OIDC RP-Initiated Logout 1.0].
 

@@ -89,7 +89,7 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.2[VALIDATION-8.2: Safe Pars
 
 |T3
 |Parser manipulation
-|Size limits (token 8 KB, payload 8 KB, string 4 KB, buffer 128 KB) in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/NonValidatingJwtParser.java[NonValidatingJwtParser]; immutable token objects
+|Configurable size limits (defaults: token 8 KB, decoded part 8 KB, string 4 KB, nesting depth 10, array size 1000) in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/pipeline/NonValidatingJwtParser.java[NonValidatingJwtParser]; immutable token objects
 |link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/NonValidatingJwtParserTest.java[NonValidatingJwtParserTest]
 
 |T4
@@ -220,7 +220,7 @@ _See Requirements xref:requirements.adoc#VALIDATION-8.1[VALIDATION-8.1: Token Si
 
 |D3
 |Complex token structures
-|Payload size limit 8 KB, string size 4 KB, buffer 128 KB; safe JSON parsing
+|Configurable limits (defaults: payload size 8 KB, string size 4 KB, nesting depth 10, array size 1000); safe JSON parsing
 |link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/NonValidatingJwtParserTest.java[NonValidatingJwtParserTest]
 
 |D4

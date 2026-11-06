@@ -16,15 +16,19 @@ functional code are delivered protocol-by-protocol.
 
 == Scope at a glance
 
-The engine *owns* two aspects and *delegates the rest* — it issues no HTTP of its own and adds
-no signature policy (the seam is detailed in xref:architecture.adoc[Architecture]):
+The engine *owns* two aspects and *delegates the rest*. It also owns its OIDC/OAuth back
+channel — discovery, token, PAR, userinfo and revocation calls through the shared
+`BackChannelHttp` helper, built on the `cui-http` primitives — and adds no signature policy
+(the seam is detailed in xref:architecture.adoc[Architecture]):
 
 * *Retrieval & flow* (net-new) — auth-code + PKCE, the token-endpoint grants, client
   authentication, flow integrity (`state` / `nonce` / exact `redirect_uri`), mix-up defence,
   PAR, step-up, RP-initiated logout, and sender-constraint requests.
 * *Token* (lifecycle delta) — validate every retrieved token, then hold / refresh / revoke it
   server-side and preserve its sender-constraint.
-* *Delegated* — outbound IdP HTTP, TLS and SSRF defence to xref:../commons/requirements.adoc[commons];
+* *Delegated* — the low-level transport primitives (the `cui-http` handler, TLS, the
+  `de.cuioss.http.security` pipeline) and the validation-side discovery / JWKS retrieval to
+  xref:../commons/requirements.adoc[commons];
   token trust (signatures, claims, algorithm policy) to xref:../validation/requirements.adoc[validation];
   RFC 9457 problem+json rendering to the HTTP edge.
 
@@ -46,7 +50,7 @@ no signature policy (the seam is detailed in xref:architecture.adoc[Architecture
 | `CLIENT-1`–`CLIENT-24`, grouped by aspect; each sourced and threat-driven.
 
 | xref:architecture.adoc[Architecture]
-| The engine seam, its commons / validation boundaries, the auth-code + PKCE sequence, and the BFF binding shapes it must keep viable.
+| The engine seam, its commons / validation boundaries, the auth-code + PKCE sequence, and the BFF binding shapes it must keep viable — `CLIENT-21` (engine boundary) and `CLIENT-24` (the back-channel origin of the xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP], specified in xref:../commons/specification/transport.adoc#client_back_channel_origin[commons transport — client back-channel origin]).
 
 | xref:threat-model.adoc[Threat Model]
 | Acquisition / flow and token-lifecycle threats, each with a mitigation, a source and the covering requirement.
@@ -58,7 +62,7 @@ no signature policy (the seam is detailed in xref:architecture.adoc[Architecture
 | Bibliography — standards new to the client, and those reused (cited, not restated) from commons / validation.
 
 | xref:specification/retrieval-flow.adoc[Spec — Retrieval & flow]
-| Auth-code + PKCE flow, grants, client authentication, `state` / `nonce`, mix-up, PAR, sender-constraint requests (`CLIENT-1`–`CLIENT-11`, `CLIENT-14`).
+| Auth-code + PKCE flow, grants, client authentication, `state` / `nonce`, mix-up, PAR, sender-constraint requests, per-client back-channel trust (`CLIENT-1`–`CLIENT-11`, `CLIENT-14`, `CLIENT-23`).
 
 | xref:specification/step-up-and-logout.adoc[Spec — Step-up & logout]
 | RFC 9470 step-up authentication and RP-initiated logout (`CLIENT-12`, `CLIENT-13`).

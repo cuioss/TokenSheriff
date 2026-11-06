@@ -50,7 +50,8 @@ import java.util.Objects;
  * The commons {@code HttpWellKnownResolver} only surfaces {@code issuer} and {@code jwks_uri},
  * whereas the client flows need the full endpoint set and capability flags; this resolver
  * therefore parses the document directly into the richer {@link ProviderMetadata} record, reusing
- * the commons {@link ParserConfig} DSL-JSON instance (secure limits, native-image friendly).
+ * the commons {@link ParserConfig} configuration to build its own DSL-JSON instance (secure limits,
+ * native-image friendly).
  * <p>
  * The response is bounded during the read by
  * {@link ClientConfiguration#getDiscoveryDocumentMaxSize()} — the discovery document's own ceiling,

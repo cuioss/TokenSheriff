@@ -110,8 +110,11 @@ grants MUST NOT be implemented (<<_security_exclusions_legacy_discouraged>>).
 [#CLIENT-4]
 === CLIENT-4: Strong token-endpoint client authentication
 
-The engine MUST authenticate to the token endpoint (and PAR / revocation / introspection
-endpoints). Among the strategies the caller has *configured*, the engine MUST prefer the
+The engine MUST authenticate to the token endpoint (and PAR / revocation endpoints). The
+`introspection_endpoint` is parsed from discovery metadata and, like the other advertised
+endpoints, https-checked only when the configured issuer itself uses https (an `http` issuer
+admitted by `allowInsecureHttp` skips the endpoint-scheme check); no introspection
+flow is implemented. Among the strategies the caller has *configured*, the engine MUST prefer the
 *strongest method the authorization server also advertises*: `private_key_jwt` (RFC 7523)
 over a shared `client_secret`. Selection never reaches outside the configured set — a method
 the caller did not configure is never chosen, however the authorization server advertises it.
@@ -203,8 +206,10 @@ replacing it.
 Requesting an mTLS (RFC 8705) certificate-bound token is *not* a capability this engine has,
 and this requirement does not demand it: obtaining that binding means presenting a client
 certificate at the token endpoint, and mTLS client authentication (`tls_client_auth`) is
-alpha — declared, never selected, with no `SSLContext` client key material plumbed into the
-transport (<<CLIENT-4>>). The certificate-bound case therefore stays specified only as a
+alpha — declared, never selected, with no client key material plumbed into the transport by
+the engine (<<CLIENT-4>>); a caller-supplied `SSLContext` is applied as supplied (<<CLIENT-23>>),
+so client keys the caller puts in it are the caller's own configuration and are not
+`tls_client_auth` selection. The certificate-bound case therefore stays specified only as a
 *binding kind the server-side lifecycle preserves* where a token already carries one
 (<<CLIENT-18>>) — preserving a `cnf.x5t#S256` binding is a capability distinct from the alpha
 client-authentication method.
@@ -258,8 +263,9 @@ TLS enforcement owned by commons (`COMMONS-2`).
 === CLIENT-23: Optional per-client outbound TLS trust
 
 The engine MUST accept an *optional per-client outbound `SSLContext`* on its client
-configuration and MUST apply it to *every* discovery and back-channel call that client issues
-(discovery, token, userinfo, revocation, PAR). This is the supported way to trust a private-CA
+configuration and MUST apply it to *every* TLS discovery and back-channel call that client issues
+(discovery, token, userinfo, revocation, PAR); a call to an `http` endpoint, reachable only with
+`allowInsecureHttp`, opens no TLS connection and carries no context. This is the supported way to trust a private-CA
 or self-signed authorization server: the trust is scoped to the one client instead of being
 forced onto the whole JVM through a process-global `javax.net.ssl.trustStore` override, so two
 clients in the same process may trust two different authorization servers. When no context is
@@ -379,7 +385,7 @@ Retrieved tokens are held *server-side* and never returned to the browser in usa
 (the BFF binding — server-side store or encrypted cookie — is the application's choice,
 <<CLIENT-19>>). The engine MUST: refresh access tokens with `refresh_token`, applying
 *refresh-token rotation* and *revoking on detected misuse / reuse*; revoke held tokens at
-logout (<<CLIENT-13>>) via the commons revocation transport (RFC 7009); protect tokens at
+logout (<<CLIENT-13>>) through the engine's own revocation back-channel call (RFC 7009); protect tokens at
 rest; and prefer short-lived access tokens.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700#section-4.14[RFC 9700 §4.14] (refresh-token protection / rotation), https://www.rfc-editor.org/rfc/rfc7009[RFC 7009] (revocation), https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[Browser-Based Apps] (tokens held server-side).
@@ -510,7 +516,7 @@ dependency.
 The engine MUST be thread-safe (shared per-issuer configuration, concurrent flows). Each
 `CLIENT-N` flow / token requirement MUST be exercised by unit tests driving the commons
 `generators` dispatchers in both default and *adversarial* modes (the token / userinfo /
-end-session / PAR dispatchers, `COMMONS-7`), plus real-IdP integration tests. The two-layer verification model, the
+revocation / PAR dispatchers, `COMMONS-7`), plus real-IdP integration tests. The two-layer verification model, the
 adversarial coverage, and the full `CLIENT-N` → threat → test traceability are specified in
 xref:specification/test-strategy.adoc[Test strategy].
 
