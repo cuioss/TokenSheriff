@@ -229,21 +229,17 @@ class AuthorizedPartyValidatorTest {
 
         @ParameterizedTest(name = "azp as {0}")
         @MethodSource("de.cuioss.sheriff.token.validation.pipeline.validator.JsonTypedAzpFixture#nonStringAzpValues")
-        @DisplayName("Should never accept a non-string azp, even when its string form is a configured client id")
+        @DisplayName("Should reject a non-string azp at token build, before any validator runs")
         void shouldNeverAcceptNonStringAzp(String jsonType, String azpJson) {
             MapRepresentation body = JsonTypedAzpFixture.bodyWithAzp(azpJson);
-            AuthorizedPartyValidator jsonValidator = new AuthorizedPartyValidator(
-                    JsonTypedAzpFixture.idsMatchingStringifiedValue(body, ClaimName.AUTHORIZED_PARTY),
-                    securityEventCounter, true);
 
-            assertThrows(TokenValidationException.class,
-                    () -> buildAndValidate(jsonValidator, body),
-                    "azp as " + jsonType + " must be rejected");
-        }
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> JsonTypedAzpFixture.buildToken(TokenType.ACCESS_TOKEN, body, securityEventCounter),
+                    "azp as " + jsonType + " must be rejected at build");
 
-        private void buildAndValidate(AuthorizedPartyValidator jsonValidator, MapRepresentation body) {
-            jsonValidator.validateAuthorizedParty(
-                    JsonTypedAzpFixture.buildToken(TokenType.ACCESS_TOKEN, body, securityEventCounter));
+            assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
+            assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+            assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.AZP_MISMATCH));
         }
     }
 
