@@ -2,10 +2,10 @@
   "id": "PLAN-18",
   "slug": "doc-accuracy",
   "workstream": "WS-05",
-  "status": "launched",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-18-doc-accuracy",
+  "pr": "877",
+  "landing": "landings/PLAN-18.md",
   "seq": 18
 }

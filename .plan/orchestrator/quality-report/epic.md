@@ -447,6 +447,25 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   and went into a fourth 2026-11-06 addendum of `upstream-plan-marshall-report.md` as DISCARDED locally, NOT sent; 004 (null
   claim dropped before any mapper) FOLDED into PLAN-25 item 7(i). Slots: PLAN-17 and PLAN-18 launched (PRs #878, #877 open),
   PLAN-24 shipped, so 1 of 3 free. PLAN-19 waits for PLAN-18.
+- 2026-11-06 — PLAN-18 (#877, `af19b9c2`) analysed from its inbox landing (`landing-check` `complete: false`, `effort` missing,
+  see Open Defects), `landings/PLAN-18.md` written. Corroborated against the merge diff (20 files, +134/-79), PR state (merged
+  18:30:25Z, 24 checks, none failing) and Sonar read directly (PR gate OK, `main` 0 open). One read-only leaf did the three-layer
+  reading and I re-read the `checked` points I rely on, including all four major ones. The six findings are FIXED in
+  `findings-disposition.md` (D-2, D-6, D-9, D-13, D-14, V-17d). Layer 1: the spec's D-13 drop was mis-grounded (the cleanup
+  re-grounding checked the contrast file `benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc`, not the defect site
+  `jwt-validation-performance.adoc:18` the source report named), so D-13 is recorded as fixed by #877, not by `4f8f3eb6`; the
+  Expected Surface under-declared 9 of 20 files. Layer 3, REPORTED TO THE OPERATOR: four major documentation contradictions of
+  the code remain in docs #877 did not edit or half-edited (the COMMONS-3 SSRF allow-list scope across three docs, the
+  `DiscoveryResolver` class Javadoc, and two client test-strategy claims), plus six minor wording points; none is a code defect.
+  FOLDED into PLAN-25 as new item 7(j) on the standing "leftovers go into the one final plan" instruction (confidence above
+  90%), surface +15 entries, one new corroborated claim, with ONE operator question recorded inside it (apply a host-address
+  egress policy to the client back channel, or make the docs follow the code; default: docs follow the code). The seven
+  candidate-lessons are plan-marshall-owned process notes: DISCARDED locally and written to a fifth 2026-11-06 addendum of
+  `upstream-plan-marshall-report.md`, NOT sent; 006 (`qgate query`) is a recurrence of PLAN-24-002. PLAN-19 was re-grounded at
+  `af19b9c2` (six stale verdicts re-stamped; the `<<` count is 69 not 68, `doc/client/requirements.adoc` gained one from #877, plus
+  one `<<` outside the 12 files; `security-reference.adoc` and `threat-model.adoc` `cui-http-client` lines moved or newly listed),
+  its text and surface updated, and it is now emittable: 2 of 3 slots free, no shared path with the launched PLAN-17.
+  PLAN-25 runs last.
 
 ## Open Defects
 
@@ -492,9 +511,20 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
 - 2026-11-06 — Incomplete landing `plan-15-validation-test-gaps-009.md` (PLAN-15): `landing-check` reports `complete: false`, missing
   key `effort`. Drained and reconciled as far as it goes. Eleventh known producer with an unstamped `effort` (PLAN-01, 02, 04, 05, 12, 09,
   10, 14, 22, 16, 15). PLAN-13 carried it.
+- 2026-11-06 — Incomplete landing `plan-18-doc-accuracy-008.md` (PLAN-18): `landing-check` reports `complete: false`, missing key
+  `effort` (written as `unknown`; the landing says the stamp was never written at init). Drained and reconciled as far as it goes.
+  Twelfth known producer with an unstamped `effort` (PLAN-01, 02, 04, 05, 12, 09, 10, 14, 22, 16, 15, 18). PLAN-24 carried it. The
+  landing also omits the `emit-landing` and `archive-plan` steps (not yet recorded when it was assembled).
 
 ## Watches
 
+- 2026-11-06 — PLAN-18 landing residue (#877; landing message, partly verified): (1) the squash commit on `main` carries the
+  CodeRabbit "Summary by CodeRabbit" block and a second `Co-authored-by` trailer; the merge-queue path offers no per-enqueue
+  message override and `ci repo` has no verb for the default merge-message setting (commit body read on `af19b9c2`, the cause not
+  checked). (2) Two phase-6 usage figures were entered as estimates, so the finalize token total (19,870,958 overall) is a slight
+  overstatement. (3) Functional-review round 1 was closed by operator override over an unevidenceable PR-body criterion; later
+  rounds evidenced it. Retire (1) when a merge-message mechanism exists or the operator accepts the residue; (2) and (3) need
+  nothing further. The CodeRabbit quota stall recurs (see the PLAN-13 and PLAN-14 residuals below).
 - 2026-11-06 — e2e teardown hang (PLAN-24 landing, #876): the `e2e-tests` job was cancelled by its 30-minute job timeout
   after all 30 tests passed, and the landing says it recurs on `main`; a rerun cleared it (`SUCCESS` at this analysis). Unverified
   beyond the landing message and the PR's final check state; no plan staged, a follow-up on the teardown is owed. Retire it

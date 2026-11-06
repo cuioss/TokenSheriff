@@ -484,3 +484,41 @@ Read from `plan-24-client-id-strict-typing-001` to `-005` and the merged PR #876
   degraded, the whole-tree verify was green. The gate does not say why the arms degraded.
 - **`effort` and `model` self-reported** (twelfth producer with a failed runtime read: `refresh-runtime-stamp` returned `model_unknown`).
   Unlike the earlier landings this one carried `effort=medium`, so `landing-check` reported it complete.
+
+## Addendum 2026-11-06 (fifth): PLAN-18 (7 plan-marshall messages and 3 landing residues)
+
+Read from `plan-18-doc-accuracy-001` to `-008` and the merged PR #877 (`af19b9c2`); NOT sent. Added after the PLAN-24 addendum above.
+
+- **Outline scopes a wording-defect plan to the files the finding names** (PLAN-18-001 and -002). The 4-plan scope-criterion validator
+  found the same defect phrase in `commons/transport/package-info.java`, which no deliverable covered, and the plan looped back
+  4-plan to 3-outline to 4-plan; the docs-only plan then took three functional-review and two code-review rounds, each finding one more
+  sibling of the same claim. Suggested for `phase-3-outline`: for a doc-accuracy or wording-defect plan, run `architecture search --content`
+  for the defect phrases and their paraphrases across the whole tree (docs, Javadoc, README, POM descriptions) before fixing the
+  affected-files set, and include every hit or record an exclusion; and have the review grep the phrase tree-wide once. The project-owned
+  half (the residual sibling claims) is in PLAN-25 item 7(j).
+- **A success criterion that names the PR body cannot be evidenced by the pre-push functional review** (PLAN-18-003 and -004). "D-13 is
+  recorded against this PR in the PR body" was graded `unevidenced_criterion`, then again as a residual, two blocking findings that each
+  needed an operator acceptance for a deliverable that was fine. Suggested: outline should not phrase criteria against artifacts that exist
+  only after `create-pr` (put the finding id on `pr_title` or the commit message), or the functional review should classify them as
+  deferred to `create-pr`; per-deliverable commit messages should carry the finding ids they fix.
+- **A new doc claim ignored a conditional branch in the code it described** (PLAN-18-005, part 1). The rewritten client docs said the
+  advertised `introspection_endpoint` scheme is https-checked; `DiscoveryResolver.validateEndpointSchemes` returns early when the issuer is
+  not https. sourcery caught it after the PR was opened; four places were reworded. Suggested for `pm-documents:ref-documentation`: when a doc
+  states a security check, read every early return and guard in the checking method and state the condition under which it applies.
+- **A review-bot quota refusal stalled required-bot participation** (PLAN-18-005, part 2). CodeRabbit's free-tier quota refusal read as
+  neither "participated" nor "pending", and progressed only after `review_rate_window_await` was enabled and the bot re-triggered. Seen
+  before on PLAN-13, PLAN-14 and PLAN-23 (see the earlier addenda); `automatic-review` should recognise the refusal as its own state.
+- **`manage-findings qgate query` again** (PLAN-18-006). Two more `argparse_rejection` calls in one run (exit 2; the registered verbs are
+  `add`, `clear`, `list`, `resolve`, `resolve-by-rule`, `resolve-evidenced`). This is the same invented verb as PLAN-24-002 above, so it is
+  a live recurrence across two plans: look for prose on the Q-Gate loop-back path ("query the Q-Gate findings") that invites it, or accept
+  `query` as a read alias.
+- **The remote-merge gate asks about a rebase the merge queue skips** (PLAN-18-007). With `auto_rebase_threshold=no_overlap_only` and
+  `use_merge_queue=true` the gate blocked and asked the operator about a clean one-file overlap, although under the merge queue the rebase is
+  skipped anyway. Suggested for `phase-6-finalize`: evaluate the threshold only on the path that rebases, or downgrade it to a log line
+  under `use_merge_queue=true`.
+- **The squash commit on `main` carries the CodeRabbit "Summary by CodeRabbit" block and a second `Co-authored-by` trailer** (landing
+  residue). The merge-queue path offers no per-enqueue message override and `ci repo` has no verb for the default merge-message setting.
+- **Two phase-6 usage figures were entered as estimates** (about 1,000 and 13,000 tokens) before the real subagent usage arrived, so the
+  finalize token total is a slight overstatement (landing residue).
+- **`effort` was never stamped** (the twelfth known producer with an unstamped `effort`; `landing-check` `complete: false`); the `emit-landing` and `archive-plan`
+  steps had not recorded when the landing was assembled, so they are absent from `steps`.

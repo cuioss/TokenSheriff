@@ -101,6 +101,42 @@ two ADRs, client response-strictness decisions). Fail-closed only: nothing here 
    `shouldRejectNonStringClientIdAtBuild` matrix tests one behaviour (the build throws before the validator is reached), so
    drop the `fallbackEnabled` parameter or add a row that reaches the validator. Origin: PLAN-24 (#876).
 
+   (j) PLAN-18 follow-up (folded 2026-11-06, from the #877 landing and its three-layer reading; every `file:line` below was
+   re-read at `af19b9c2`, re-read again at outline): documentation that still contradicts the code, the residuals the lane
+   named plus what the reading added. (1) SSRF allow-list scope (major): `doc/commons/requirements.adoc` lines 81-85
+   (COMMONS-3), `doc/commons/specification/transport.adoc` lines 127-132 and `doc/commons/threat-model.adoc` lines 43-48
+   and 125 say every IdP-advertised URL (`jwks_uri`, discovery, `userinfo`, any advertised endpoint) is host allow-listed
+   by `EgressPolicy`. `EgressPolicy` is used only by `HttpWellKnownResolver` and `HttpJwksLoader`; the client back channel
+   (`BackChannelHttp`: token, PAR, userinfo, revocation, discovery) checks path structure and scheme only, as
+   `doc/client/architecture.adoc` and the new `doc/commons/README.adoc` lines 24-27 already say. The
+   `DiscoveryResolver.java` class Javadoc lines 45-48 ("the same TLS/SSRF-hardened transport primitive ... adds no new
+   transport control of its own") is wrong in the same way (the resolver goes through `BackChannelHttp`, which adds egress
+   path validation, a scheme check, the origin rewrite and a bounded read). Default where the operator does not answer:
+   correct the docs and the Javadoc to the code. ONE QUESTION for the operator, recorded: should the client back channel
+   apply a host-address egress policy of its own (a behaviour change that could refuse a configured endpoint; a fail-closed
+   direction, with a test per endpoint kind), or do the docs follow the code? Applying it only on the operator's word.
+   (2) Client test claims (major): `doc/client/specification/test-strategy.adoc` lines 128-132 and 233-235 and
+   `doc/client/specification/step-up-and-logout.adoc` lines 112-114 credit the client tests with the shared
+   `RevocationDispatcher`, `IntrospectionDispatcher` and `EndSessionDispatcher`; no client test imports them
+   (`RevocationClientTest.java` line 168 declares its own nested class of that name), and the engine makes no end-session
+   HTTP call (it builds the redirect). The same overstatement for the revocation dispatcher is in the text #877 wrote at
+   `doc/commons/specification/transport.adoc` lines 45-47 and 178-180 and `doc/client/requirements.adoc` line 519. Correct
+   to what the tests drive (token, userinfo, PAR), or add the missing tests if the operator wants the coverage claimed.
+   (3) Incomplete wording (minor): `transport.adoc` lines 53-55 and `doc/commons/requirements.adoc` lines 51-53 (COMMONS-2)
+   say plain-HTTP endpoints are rejected, but cleartext is admitted on explicit opt-in on both sides;
+   `token-sheriff-client/README.adoc` lines 30-31 still says "every discovery and back-channel call" where the sibling
+   claim at lines 84-87 was qualified to HTTPS; the "shared transport primitives ... resilience and caching" and "shared TLS /
+   SSRF / resilience primitives" wording in `doc/commons/README.adoc` lines 22-23 and `doc/README.adoc` line 30 (the client
+   has no retry or discovery cache, and `EgressPolicy` is validation-side only), and the client README "Delegated" bullet
+   (lines 29-31: `cui-http` and `de.cuioss.http.security` belong to the upstream library, and discovery is not delegated to
+   commons) and the client pom `<description>`; and the unchanged paragraph in `commons/transport/package-info.java` lines
+   35-37, which should say the allow-list is not applied to the client. (4) Verify at outline, not by reading: the header
+   half of the duplicate-member sentence at `doc/validation/security-reference.adoc` line 61 ("a numeric `alg` ahead of a
+   string `alg` can fail deserialization") rests on the generated DSL-JSON converter for `JwtHeader` and has no test; pin it
+   with a test through the production parser, or soften the sentence. NOT in this item: the `<<CLIENT-23>>` at
+   `doc/client/requirements.adoc` line 208 (PLAN-19 D-11 sweeps `<<>>` references). Because PLAN-19 edits many of these
+   same docs first, re-read each line at outline. Origin: PLAN-18 (#877).
+
 Scope guard: seven deliverables, above the six-deliverable threshold, so a rationale is recorded (2026-11-05). The
 operator asked for ONE final plan for all leftovers, and each item is small and independent of the others; this is the
 epic's last plan and it is not emitted until PLAN-13 to PLAN-24 have landed and their own residuals are folded in. The
@@ -194,6 +230,8 @@ rest together.
 - OBSERVED: PLAN-15 (#867, merge `262369d6`, 23 files) added `ArrayIndexOutOfBoundsException` to the catch of `DiscoveryResolver` (also now sanitising its logged message), `ParClient`, `UserInfoClient`, `DpopProofValidator`, `JwksParser` (both reads, and the `JWKS_INVALID_JSON` message is sanitised), `NonValidatingJwtParser` (two catches) and both transport converters, with tests for the three client sites; the only `dslJson` read not covered in its own method is `MapRepresentation.fromJson`, covered by its two callers — read in the merged diff and a `git grep` at `262369d6`
 - OBSERVED (read 2026-11-06 at `90f8474a`, the PLAN-24 merge): `MapRepresentation.fromJson` filters null-valued entries (`token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/json/MapRepresentation.java` lines 108-115, from #511), so an explicit JSON `null` claim never reaches `TokenBuilder.extractClaims` or a mapper; `ClaimName.CLIENT_ID` (line 179) and `AUTHORIZED_PARTY` (line 166) use `StrictStringMapper`, while `SUBJECT` (line 52), `ISSUER` (line 44) and `TOKEN_ID` (line 95) use `IdentityMapper`; `TokenLifecycleManager` (around line 1273) compares access-token and ID-token subjects as strings
 - OBSERVED: PLAN-15 left TV-4 open by operator decision (the three enum tests restored, files identical to `main`); trivial enum tests stay as a project convention, no item here
+- OBSERVED: at `af19b9c2` (the PLAN-18 merge) `EgressPolicy` is referenced by main code only in `HttpWellKnownResolver`, `HttpJwksLoader` (plus their config types, `TransportException`, `TransportLogMessages` and the Quarkus `IssuerConfigResolver`), never by a client class; while `doc/commons/requirements.adoc` lines 81-85, `doc/commons/specification/transport.adoc` lines 127-132 and `doc/commons/threat-model.adoc` lines 43-48 still say every IdP-advertised URL, `userinfo` included, is host allow-listed; no client test imports the shared `RevocationDispatcher`, `IntrospectionDispatcher` or `EndSessionDispatcher`, and `doc/client/specification/test-strategy.adoc` lines 128-132 and 233-235 and `step-up-and-logout.adoc` lines 112-114 still credit them (item 7(j))
+  - verdict: corroborated | checked_at: af19b9c2 | by: quality-report/analyze | rescoped: n/a | evidence: re-read at the lines named, git grep EgressPolicy over main code, client test imports; RevocationClientTest.java:168 declares its own nested class
 
 ## Expected Surface
 
@@ -235,6 +273,21 @@ rest together.
 - HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/validator/AudienceValidatorTest.java` (verify-at-outline — tighten the non-string azp assertion, item 7(i)(3))
 - HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/validator/JsonTypedAzpFixture.java` (verify-at-outline — rename, item 7(i)(3))
 - HYPOTHESIS: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/json/MapRepresentation.java` (verify-at-outline — only if the operator wants an explicit JSON null rejected, item 7(i)(2))
+- OBSERVED: `doc/commons/requirements.adoc` (item 7(j), PLAN-18 follow-up: COMMONS-3 lines 81-85 and COMMONS-2 lines 51-53)
+- OBSERVED: `doc/commons/specification/transport.adoc` (item 7(j): lines 53-55, 127-132, plus the #877 text at 45-47 and 178-180)
+- OBSERVED: `doc/commons/threat-model.adoc` (item 7(j): T-SSRF lines 43-48 and 125)
+- OBSERVED: `doc/commons/README.adoc` (item 7(j): the "shared primitives" wording at lines 22-23)
+- OBSERVED: `doc/README.adoc` (item 7(j): the hub line at line 30)
+- OBSERVED: `doc/client/README.adoc` (item 7(j): the "Delegated" bullet at lines 29-31)
+- OBSERVED: `doc/client/requirements.adoc` (item 7(j): the dispatcher list at line 519)
+- OBSERVED: `doc/client/specification/test-strategy.adoc` (item 7(j): lines 128-132 and 233-235)
+- OBSERVED: `doc/client/specification/step-up-and-logout.adoc` (item 7(j): lines 112-114)
+- OBSERVED: `token-sheriff-client/README.adoc` (item 7(j): lines 30-31)
+- OBSERVED: `token-sheriff-client/pom.xml` (item 7(j): the `<description>` text only)
+- OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/transport/package-info.java` (item 7(j): lines 35-37, comment text only)
+- HYPOTHESIS: `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/lifecycle/RevocationClientTest.java` (verify-at-outline — only if the operator wants the shared revocation dispatcher driven by the client tests, item 7(j)(2))
+- HYPOTHESIS: `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/internal/BackChannelHttp.java` (verify-at-outline — only if the operator wants a host-address egress policy on the client back channel, item 7(j)(1))
+- HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/pipeline/NonValidatingJwtParserTest.java` (verify-at-outline — a duplicate-header-member test, or soften the sentence, item 7(j)(4))
 
 ## Dependencies and Sequencing
 

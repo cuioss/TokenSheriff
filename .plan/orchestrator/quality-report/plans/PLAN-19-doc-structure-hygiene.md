@@ -49,17 +49,17 @@ benchmarking LogMessages file (D-10); 66 `<<…>>` cross-references in 12 files 
 ## Claim Labels
 
 - OBSERVED: `AGENTS.md` still carries `/Users/oliver/git/cui-llm-rules/...`, omits `token-sheriff-client/`, names `README.adoc`, lists one skill — read at `AGENTS.md`
-  - verdict: corroborated | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: n/a | evidence: AGENTS.md:374 still has /Users/oliver path; omits token-sheriff-client; says README.adoc; lists one skill
+  - verdict: corroborated | checked_at: af19b9c2 | by: quality-report/analyze | rescoped: n/a | evidence: AGENTS.md:374 still has the /Users/oliver path; line 407 names README.adoc (the root file is README.md); .claude/skills holds 3 skills, AGENTS.md:399-401 lists one; no module-layout entry for token-sheriff-client
 - OBSERVED: `doc/adr/` holds ADR-0001…0015; `doc/README.adoc` lists only ADR-0001; ADR-0002 status "Proposed" — read at `doc/README.adoc`. CONTRADICTED 2026-11-06 in the count and re-scoped: `doc/adr/` now holds ADR-0001…0026 (PLAN-22 added 0020 to 0026); the hub still lists only ADR-0001 (line 14) and ADR-0002 is still `Proposed` (line 20)
-  - verdict: contradicted | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: yes | evidence: doc/adr now holds 0001 to 0026; hub lists only ADR-0001 (line 14); ADR-0002 still Proposed (line 20); spec re-scoped
-- OBSERVED (derived count): 66 `<<…>>` references across the 12 files listed below — counted with `git grep` at `aa77acd9`. CONTRADICTED 2026-11-06 in the count and re-scoped: `git grep` at `306e6053` finds 68 across the same 12 files (requirements 25, retrieval-flow 7, test-strategy 7, commons/requirements 7, token-handling 6, threat-model 4, others 1 to 3); all 12 still contain `<<`, so the scope holds and the number is 68
-  - verdict: contradicted | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: yes | evidence: git grep at 306e6053 finds 68 << refs across the same 12 files, not 66; spec re-scoped to 68
-- OBSERVED: "cui-http-client" appears in `doc/validation/architecture.adoc`, `doc/validation/security-reference.adoc`, `doc/validation/threat-model.adoc`
-  - verdict: corroborated | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: n/a | evidence: cui-http-client still in architecture.adoc:89, security-reference.adoc:51, threat-model.adoc:45,189
+  - verdict: contradicted | checked_at: af19b9c2 | by: quality-report/analyze | rescoped: yes | evidence: doc/adr holds 0001 to 0026; doc/README.adoc line 14 lists only ADR-0001; ADR-0002 Status is still Proposed (line 20); spec already re-scoped, unchanged by #877
+- OBSERVED (derived count): 66 `<<…>>` references across the 12 files listed below — counted with `git grep` at `aa77acd9`. CONTRADICTED 2026-11-06 in the count and re-scoped: `git grep` at `306e6053` finds 68 across the same 12 files (requirements 25, retrieval-flow 7, test-strategy 7, commons/requirements 7, token-handling 6, threat-model 4, others 1 to 3); all 12 still contain `<<`, so the scope holds and the number is 68. UPDATED 2026-11-06 at `af19b9c2` (after PLAN-18, #877): 69 occurrences across the same 12 files (`doc/client/requirements.adoc` 26, PLAN-18 added one `(<<CLIENT-23>>)` at line 208; the rest unchanged); one more `<<` sits outside the 12, in `token-sheriff-validation/doc/configuration/roles-groups-mapping.adoc` line 45 (since #511), which the plan decides at outline
+  - verdict: contradicted | checked_at: af19b9c2 | by: quality-report/analyze | rescoped: yes | evidence: git grep at af19b9c2 finds 69 << occurrences across the same 12 files (client/requirements 26, +1 from #877 CLIENT-23 at line 208), plus one outside at token-sheriff-validation/doc/configuration/roles-groups-mapping.adoc:45; spec updated to 69
+- OBSERVED: "cui-http-client" appears in `doc/validation/architecture.adoc`, `doc/validation/security-reference.adoc`, `doc/validation/threat-model.adoc`; at `af19b9c2` the hits are `architecture.adoc:89`, `security-reference.adoc:52` (moved from 51 by PLAN-18) and `threat-model.adoc:45`, `:189` and `:213` (the third hit is new in this listing)
+  - verdict: corroborated | checked_at: af19b9c2 | by: quality-report/analyze | rescoped: n/a | evidence: cui-http-client at architecture.adoc:89, security-reference.adoc:52, threat-model.adoc:45,189,213
 - OBSERVED: no README in `token-sheriff-quarkus-parent/token-sheriff-client-quarkus/`
-  - verdict: corroborated | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: n/a | evidence: client-quarkus module holds only pom.xml and src, no README
+  - verdict: corroborated | checked_at: af19b9c2 | by: quality-report/analyze | rescoped: n/a | evidence: token-sheriff-client-quarkus holds pom.xml, src and target, no README
 - OBSERVED: the ADR claim above is stale. PLAN-22 (#863, merge `38aefc0a`) added ADR-0020 to ADR-0026 (the tree now holds 0001 to 0026) and amended ADR-0005, ADR-0010 and ADR-0017; `doc/README.adoc` was not touched — read with `git show --stat` and `ls doc/adr`. No ADR file contains the word "provisional". `AGENTS.md` also changed in PLAN-22 (+60/-: the two PLAN-20 advisories). Re-read `doc/adr/`, `doc/README.adoc` and `AGENTS.md` at outline; the index covers the whole of 0001 to 0026
-  - verdict: corroborated | checked_at: 306e6053 | by: quality-report/cleanup | rescoped: n/a | evidence: 38aefc0a is an ancestor of origin/main; added ADR 0020 to 0026, changed 0005, 0010, 0017, not doc/README.adoc; no provisional marker; AGENTS.md +44/-16
+  - verdict: corroborated | checked_at: af19b9c2 | by: quality-report/analyze | rescoped: n/a | evidence: doc/adr holds 26 files; PLAN-22 facts unchanged; hub unchanged by #877 beyond the PLAN-18 wording edits
 
 ## Expected Surface
 
@@ -85,6 +85,7 @@ benchmarking LogMessages file (D-10); 66 `<<…>>` cross-references in 12 files 
 - OBSERVED: `doc/validation/security-reference.adoc`
 - OBSERVED: `doc/validation/threat-model.adoc`
 - HYPOTHESIS: new `token-sheriff-quarkus-parent/token-sheriff-client-quarkus/README.adoc` (verify-at-outline)
+- HYPOTHESIS: `token-sheriff-validation/doc/configuration/roles-groups-mapping.adoc` (verify-at-outline — the one `<<` outside the 12 files, line 45)
 
 ## Dependencies and Sequencing
 
