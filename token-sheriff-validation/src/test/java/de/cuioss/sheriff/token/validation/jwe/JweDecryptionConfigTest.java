@@ -18,6 +18,8 @@ package de.cuioss.sheriff.token.validation.jwe;
 import de.cuioss.sheriff.token.validation.test.JweTestTokenFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.security.KeyPair;
 
@@ -90,6 +92,33 @@ class JweDecryptionConfigTest {
 
         assertEquals(32 * 1024, config.getMaxEncryptedTokenSize());
         assertFalse(config.isCompressionEnabled());
+    }
+
+    @Test
+    @DisplayName("Should accept a max encrypted token size of exactly 32 KiB")
+    void shouldAcceptMaxSizeAtUpperBound() {
+        KeyPair kp = JweTestTokenFactory.generateRsaKeyPair();
+        var config = JweDecryptionConfig.builder()
+                .defaultDecryptionKey(kp.getPrivate())
+                .maxEncryptedTokenSize(JweDecryptionConfig.DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE)
+                .build();
+
+        assertEquals(JweDecryptionConfig.DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE, config.getMaxEncryptedTokenSize());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {JweDecryptionConfig.DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE + 1, 64 * 1024, 0, -1})
+    @DisplayName("Should refuse a max encrypted token size above 32 KiB or not positive")
+    void shouldRefuseMaxSizeOutOfBounds(int maxEncryptedTokenSize) {
+        KeyPair kp = JweTestTokenFactory.generateRsaKeyPair();
+        var builder = JweDecryptionConfig.builder()
+                .defaultDecryptionKey(kp.getPrivate())
+                .maxEncryptedTokenSize(maxEncryptedTokenSize);
+
+        var exception = assertThrows(IllegalArgumentException.class, builder::build);
+
+        assertTrue(exception.getMessage().contains(String.valueOf(maxEncryptedTokenSize)),
+                "The refusal must name the rejected value: " + exception.getMessage());
     }
 
     @Test

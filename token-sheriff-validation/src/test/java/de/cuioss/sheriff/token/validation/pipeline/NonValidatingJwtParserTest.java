@@ -22,6 +22,7 @@ import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
+import de.cuioss.sheriff.token.validation.test.JweTestTokenFactory;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
@@ -343,8 +344,7 @@ class NonValidatingJwtParserTest {
     @DisplayName("Token Size Tests")
     class TokenSizeTests {
 
-        // Note: Token size validation is now handled by TokenStringValidator (precondition).
-        // Max token size tests have been moved to TokenStringValidatorTest.
+        // The raw token size limit the parser applies is pinned in EffectiveSizeLimitTests below.
 
         @Test
         @DisplayName("Should count DECODED_PART_SIZE_EXCEEDED event")
@@ -621,6 +621,147 @@ class NonValidatingJwtParserTest {
     }
 
     /**
+     * The parser bounds the raw token by the effective limit: a 5-part compact JWE by
+     * {@link JweDecryptionConfig#getMaxEncryptedTokenSize()} when JWE is configured, every other token
+     * by {@link ParserConfig#getMaxTokenSize()}. A token above its limit is a typed
+     * {@code TOKEN_SIZE_EXCEEDED} rejection accounted for according to the decode mode, never an
+     * unchecked exception.
+     */
+    @Nested
+    @DisplayName("Effective Size Limit Tests")
+    class EffectiveSizeLimitTests {
+
+        private static final int JWS_LIMIT = ParserConfig.DEFAULT_MAX_TOKEN_SIZE;
+        private static final int JWE_LIMIT = JweDecryptionConfig.DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE;
+
+        private static JweDecryptionConfig jweConfig() {
+            return JweDecryptionConfig.builder()
+                    .defaultDecryptionKey(InMemoryKeyMaterialHandler.getDefaultPrivateKey(
+                            InMemoryKeyMaterialHandler.Algorithm.RS256))
+                    .build();
+        }
+
+        private static NonValidatingJwtParser parser(SecurityEventCounter counter, boolean jweEnabled) {
+            var builder = NonValidatingJwtParser.builder().securityEventCounter(counter);
+            if (jweEnabled) {
+                builder.jweDecryptionConfig(jweConfig());
+            }
+            return builder.build();
+        }
+
+        /**
+         * @return a token of exactly {@code totalBytes} ASCII bytes made of {@code parts} dot-separated
+         *         segments; only the size and the part count matter, the content is not decodable
+         */
+        private static String tokenOf(int totalBytes, int parts) {
+            String tail = ".b".repeat(parts - 1);
+            return "a".repeat(totalBytes - tail.length()) + tail;
+        }
+
+        static Stream<Arguments> oversizedTokens() {
+            return Stream.of(
+                    Arguments.of("3-part JWS above maxTokenSize, JWE configured", true,
+                            tokenOf(JWS_LIMIT + 1, 3), JWS_LIMIT),
+                    Arguments.of("5-part JWE above maxEncryptedTokenSize", true,
+                            tokenOf(JWE_LIMIT + 1, 5), JWE_LIMIT),
+                    Arguments.of("5-part token above maxTokenSize, JWE not configured", false,
+                            tokenOf(JWS_LIMIT + 1, 5), JWS_LIMIT),
+                    Arguments.of("6-part token above maxTokenSize, JWE configured", true,
+                            tokenOf(JWS_LIMIT + 1, 6), JWS_LIMIT));
+        }
+
+        static Stream<Arguments> modeMatrix() {
+            return ParserDecodeMode.crossProduct(oversizedTokens());
+        }
+
+        @ParameterizedTest(name = "{0}: {1}")
+        @MethodSource("modeMatrix")
+        @DisplayName("A token above its effective limit is a typed TOKEN_SIZE_EXCEEDED rejection")
+        void shouldRejectTokenAboveEffectiveLimit(ParserDecodeMode mode, String site, boolean jweEnabled,
+                String token, int expectedLimit) {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            NonValidatingJwtParser sizeParser = parser(counter, jweEnabled);
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> mode.decode(sizeParser, token),
+                    "An oversized token must be a declared rejection, not an IllegalArgumentException: " + site);
+
+            mode.assertAccounted(ex, counter, EventType.TOKEN_SIZE_EXCEEDED,
+                    JWTValidationLogMessages.WARN.TOKEN_SIZE_EXCEEDED, site);
+            assertEquals("Token size %d exceeds maximum %d".formatted(token.length(), expectedLimit),
+                    ex.getMessage(), site);
+        }
+
+        @Test
+        @DisplayName("A 5-part token at maxEncryptedTokenSize passes the size check when JWE is configured")
+        void shouldPassFivePartTokenAtJweLimit() {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            NonValidatingJwtParser sizeParser = parser(counter, true);
+            String token = tokenOf(JWE_LIMIT, 5);
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> sizeParser.decode(token),
+                    "The undecodable segments must still be rejected after the size check");
+
+            assertNotEquals(EventType.TOKEN_SIZE_EXCEEDED, ex.getEventType(),
+                    "A JWE of exactly maxEncryptedTokenSize bytes is within the limit");
+            assertEquals(0, counter.getCount(EventType.TOKEN_SIZE_EXCEEDED));
+        }
+
+        @Test
+        @DisplayName("A valid JWE larger than maxTokenSize and within maxEncryptedTokenSize decodes")
+        void shouldDecodeValidJweAboveJwsLimit() {
+            StringBuilder payload = new StringBuilder("{\"sub\":\"1234567890\",\"iss\":\"https://example.com\"");
+            for (int i = 0; i < 5; i++) {
+                payload.append(",\"pad").append(i).append("\":\"").append("p".repeat(1000)).append('"');
+            }
+            payload.append('}');
+            String innerJws = ENCODED_HEADER + "." + Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(payload.toString().getBytes(StandardCharsets.UTF_8)) + "." + ENCODED_SIGNATURE;
+            var keyPair = JweTestTokenFactory.generateRsaKeyPair();
+            String jwe = JweTestTokenFactory.encryptAsJwe(innerJws, keyPair.getPublic(), "RSA-OAEP", "A256GCM", null);
+            assertTrue(innerJws.length() <= JWS_LIMIT,
+                    "Non-vacuity: the inner JWS must stay within maxTokenSize, was " + innerJws.length());
+            assertTrue(jwe.length() > JWS_LIMIT && jwe.length() <= JWE_LIMIT,
+                    "Non-vacuity: the JWE must lie between the two limits, was " + jwe.length());
+            SecurityEventCounter counter = new SecurityEventCounter();
+            NonValidatingJwtParser jweParser = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .jweDecryptionConfig(JweDecryptionConfig.builder()
+                            .defaultDecryptionKey(keyPair.getPrivate())
+                            .build())
+                    .build();
+
+            DecodedJwt decoded = jweParser.decode(jwe);
+
+            assertEquals("1234567890", decoded.body().getString("sub").orElse(""));
+            assertEquals(jwe, decoded.rawToken(), "The raw token is the presented JWE");
+            assertEquals(0, counter.getCount(EventType.TOKEN_SIZE_EXCEEDED));
+        }
+
+        @Test
+        @DisplayName("A 3-part token of exactly maxTokenSize passes, and a limit one byte smaller rejects it")
+        void shouldBoundThreePartTokenByMaxTokenSize() {
+            SecurityEventCounter counter = new SecurityEventCounter();
+            NonValidatingJwtParser atLimit = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .config(ParserConfig.builder().maxTokenSize(VALID_TOKEN.length()).build())
+                    .build();
+            NonValidatingJwtParser belowLimit = NonValidatingJwtParser.builder()
+                    .securityEventCounter(counter)
+                    .config(ParserConfig.builder().maxTokenSize(VALID_TOKEN.length() - 1).build())
+                    .build();
+
+            assertEquals(VALID_TOKEN, atLimit.decode(VALID_TOKEN).rawToken());
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> belowLimit.decode(VALID_TOKEN));
+
+            assertEquals(EventType.TOKEN_SIZE_EXCEEDED, ex.getEventType());
+            assertEquals(1, counter.getCount(EventType.TOKEN_SIZE_EXCEEDED));
+        }
+    }
+
+    /**
      * The three decode modes of {@link NonValidatingJwtParser} and the accounting each one owes a
      * rejection: {@code NORMAL} logs one WARN and counts once, {@code QUIET} counts once without a
      * WARN, {@code OPAQUE} neither logs nor counts.
@@ -725,7 +866,7 @@ class NonValidatingJwtParserTest {
                     "Should count FAILED_TO_DECODE_JWT event");
         }
 
-        // Note: TOKEN_SIZE_EXCEEDED is now handled by TokenStringValidator (precondition)
+        // TOKEN_SIZE_EXCEEDED raised by the parser is pinned per decode mode in EffectiveSizeLimitTests
     }
 
     @Nested

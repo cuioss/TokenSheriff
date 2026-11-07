@@ -251,7 +251,10 @@ public class TokenValidator implements Closeable {
             this.performanceMonitor = TokenValidatorMonitorConfig.disabled().createMonitor();
         }
 
-        // Construction-time dependencies - used only to build pipelines, not stored as fields
+        // Construction-time dependencies - used only to build pipelines, not stored as fields.
+        // The JWE config hands the parser the effective JWE size limit, the same one TokenStringValidator
+        // applies below, so the access, ID and refresh pipelines (which share this parser) accept a JWE up
+        // to maxEncryptedTokenSize while a JWS and the inner JWS stay bound by ParserConfig.maxTokenSize.
         NonValidatingJwtParser jwtParser = NonValidatingJwtParser.builder()
                 .config(parserConfig)
                 .securityEventCounter(this.securityEventCounter)

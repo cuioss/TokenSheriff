@@ -104,9 +104,12 @@ import java.util.Objects;
  * DecodedJwt result = customParser.decode(tokenString);
  * }
  * <p>
- * Example handling invalid tokens (passing a {@code null}, empty or oversized token to the parser
- * throws an {@link IllegalArgumentException}; {@code TokenStringValidator} checks the token size before
- * ID-token parsing, but its limit can differ from the parser limit when JWE is configured):
+ * Example handling invalid tokens (passing a {@code null} or empty token to the parser throws an
+ * {@link IllegalArgumentException}, which {@code TokenStringValidator} rules out on every production path;
+ * an oversized token is rejected with event type {@code TOKEN_SIZE_EXCEEDED}. The size limit is
+ * {@link ParserConfig#getMaxTokenSize()}, except for a 5-part JWE when JWE decryption is configured, which
+ * is bound by {@link JweDecryptionConfig#getMaxEncryptedTokenSize()} — the same limit
+ * {@code TokenStringValidator} applies):
  * {@snippet :
  * // An invalid token format is rejected, never returned
  * try {
@@ -288,11 +291,22 @@ public class NonValidatingJwtParser {
      */
     @SuppressWarnings("java:S3776") // owolff: Justified - complexity due to logging and security event tracking
     private DecodedJwt decodeInternal(String token, DecodeMode mode) {
-        // Precondition: TokenStringValidator has already validated null, blank, and size limits
+        // Precondition: TokenStringValidator has already rejected a null or blank token
         Preconditions.checkArgument(token != null && !token.isEmpty(),
                 "TokenStringValidator precondition: token must not be null/empty");
-        Preconditions.checkArgument(token.getBytes(StandardCharsets.UTF_8).length <= config.getMaxTokenSize(),
-                "TokenStringValidator precondition: token size within limits (max: %s)", config.getMaxTokenSize());
+
+        // Size limit: a 5-part compact JWE is bound by the JWE limit when JWE is configured, every other
+        // token by the parser's own limit. TokenStringValidator applies the JWE limit to every token
+        // when JWE is configured, so a JWS between the two limits reaches this check and is rejected
+        // here as a typed, accounted rejection rather than escaping as an unchecked exception.
+        int tokenSize = token.getBytes(StandardCharsets.UTF_8).length;
+        int sizeLimit = sizeLimitFor(token);
+        if (tokenSize > sizeLimit) {
+            throw rejectAccounted(SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED,
+                    "Token size %d exceeds maximum %d".formatted(tokenSize, sizeLimit),
+                    mode.logWarnings, mode.trackSecurityEvents,
+                    JWTValidationLogMessages.WARN.TOKEN_SIZE_EXCEEDED, sizeLimit);
+        }
 
         // Split token and validate format. The negative limit keeps trailing empty segments, so a
         // trailing dot ("h.p.s.") adds a part instead of being silently dropped.
@@ -327,6 +341,36 @@ public class NonValidatingJwtParser {
                     e
             );
         }
+    }
+
+    /**
+     * Returns the size limit in bytes that applies to {@code token}: the configured
+     * {@link JweDecryptionConfig#getMaxEncryptedTokenSize() JWE limit} for a 5-part compact token when
+     * JWE decryption is configured, {@link ParserConfig#getMaxTokenSize()} otherwise. The inner JWS of a
+     * JWE is checked against {@link ParserConfig#getMaxTokenSize()} after decryption.
+     *
+     * @param token the raw token
+     * @return the applicable size limit in bytes
+     */
+    private int sizeLimitFor(String token) {
+        if (jweDecryptionConfig != null && isFivePartCompact(token)) {
+            return jweDecryptionConfig.getMaxEncryptedTokenSize();
+        }
+        return config.getMaxTokenSize();
+    }
+
+    /**
+     * @param token the raw token
+     * @return whether the token has exactly the four separators of a 5-part compact serialisation
+     */
+    private static boolean isFivePartCompact(String token) {
+        int separators = 0;
+        for (int i = 0; i < token.length(); i++) {
+            if (token.charAt(i) == '.' && ++separators > 4) {
+                return false;
+            }
+        }
+        return separators == 4;
     }
 
     /**

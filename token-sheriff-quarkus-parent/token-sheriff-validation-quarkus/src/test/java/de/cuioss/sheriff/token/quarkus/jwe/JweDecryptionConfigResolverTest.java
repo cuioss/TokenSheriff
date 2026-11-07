@@ -128,7 +128,7 @@ class JweDecryptionConfigResolverTest {
 
         Map<String, String> props = new HashMap<>();
         props.put(JwtPropertyKeys.JWE.DECRYPTION_KEY_PATH, pemFile.toString());
-        props.put(JwtPropertyKeys.JWE.MAX_ENCRYPTED_TOKEN_SIZE, "65536");
+        props.put(JwtPropertyKeys.JWE.MAX_ENCRYPTED_TOKEN_SIZE, "16384");
 
         TestConfig config = new TestConfig(props);
         JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(config);
@@ -136,7 +136,25 @@ class JweDecryptionConfigResolverTest {
         JweDecryptionConfig result = resolver.resolveJweDecryptionConfig();
 
         assertNotNull(result);
-        assertEquals(65536, result.getMaxEncryptedTokenSize());
+        assertEquals(16384, result.getMaxEncryptedTokenSize());
+    }
+
+    @Test
+    @DisplayName("Should fail startup for a max encrypted token size above 32 KiB")
+    void shouldFailForMaxTokenSizeAboveUpperBound() throws Exception {
+        Path pemFile = createRsaPemFile("oversize-test.pem");
+
+        Map<String, String> props = new HashMap<>();
+        props.put(JwtPropertyKeys.JWE.DECRYPTION_KEY_PATH, pemFile.toString());
+        props.put(JwtPropertyKeys.JWE.MAX_ENCRYPTED_TOKEN_SIZE, "65536");
+
+        TestConfig config = new TestConfig(props);
+        JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(config);
+
+        var exception = assertThrows(IllegalStateException.class, resolver::resolveJweDecryptionConfig);
+        assertInstanceOf(IllegalArgumentException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("65536"),
+                "The startup failure must name the rejected value: " + exception.getMessage());
     }
 
     @Test
