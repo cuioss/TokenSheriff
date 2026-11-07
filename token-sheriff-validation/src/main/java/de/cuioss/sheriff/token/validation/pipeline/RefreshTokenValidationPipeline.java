@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.context.RefreshTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.UnvalidatedRefreshToken;
@@ -59,6 +60,9 @@ public class RefreshTokenValidationPipeline {
 
     private static final CuiLogger LOGGER = new CuiLogger(RefreshTokenValidationPipeline.class);
 
+    /** Upper bound for the length of a parser message rendered into a log line. */
+    private static final int MAX_LOGGED_MESSAGE_LENGTH = 128;
+
     private final NonValidatingJwtParser jwtParser;
 
     /**
@@ -99,7 +103,9 @@ public class RefreshTokenValidationPipeline {
             }
         } catch (TokenValidationException e) {
             // Ignore validation exceptions for refresh tokens - they may be opaque
-            LOGGER.debug("Ignoring validation exception for refresh token: %s", e.getMessage());
+            // The parser's message can quote the presented token, so it is escaped and bounded (CWE-117)
+            LOGGER.debug("Ignoring validation exception for refresh token: %s",
+                    ErrorTextSanitizer.sanitize(String.valueOf(e.getMessage()), '?', MAX_LOGGED_MESSAGE_LENGTH, "..."));
         }
 
         var refreshToken = new UnvalidatedRefreshToken(tokenString, claims);

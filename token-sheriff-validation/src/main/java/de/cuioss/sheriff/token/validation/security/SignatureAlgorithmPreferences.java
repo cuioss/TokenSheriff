@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.security;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.Getter;
@@ -39,6 +40,9 @@ import java.util.List;
 public class SignatureAlgorithmPreferences {
 
     private static final CuiLogger LOGGER = new CuiLogger(SignatureAlgorithmPreferences.class);
+
+    /** Upper bound for the length of an algorithm name rendered into a log line. */
+    private static final int MAX_LOGGED_ALGORITHM_LENGTH = 64;
 
     /**
      * List of supported signature algorithms in order of preference (most preferred first).
@@ -96,7 +100,10 @@ public class SignatureAlgorithmPreferences {
 
         // Check if the algorithm is explicitly rejected
         if (RejectedAlgorithms.VALUES.contains(algorithm)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.ALGORITHM_REJECTED, algorithm);
+            // The value equals a rejected-list constant here, yet it arrived from a token header, so it
+            // reaches the log line only through the sanitiser (CWE-117, ADR-0022)
+            LOGGER.warn(JWTValidationLogMessages.WARN.ALGORITHM_REJECTED,
+                    ErrorTextSanitizer.sanitize(algorithm, '?', MAX_LOGGED_ALGORITHM_LENGTH, "..."));
             return false;
         }
 

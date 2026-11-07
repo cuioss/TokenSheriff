@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.jwks.key;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.JwkKey;
 import de.cuioss.sheriff.token.commons.transport.Jwks;
@@ -72,6 +73,9 @@ import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
 public class JWKSKeyLoader implements JwksLoader {
 
     private static final CuiLogger LOGGER = new CuiLogger(JWKSKeyLoader.class);
+
+    /** Upper bound for the length of a remote key id rendered into a log line. */
+    private static final int MAX_LOGGED_KID_LENGTH = 64;
 
     private final ParserConfig parserConfig;
     private SecurityEventCounter securityEventCounter;
@@ -420,7 +424,10 @@ public class JWKSKeyLoader implements JwksLoader {
                     // A duplicate kid means a later key silently shadowed an earlier one; warn so the
                     // ambiguous JWKS is visible rather than resolving to whichever key parsed last, and
                     // count it so the ambiguity surfaces in the security-event metrics like other warnings.
-                    LOGGER.warn(WARN.DUPLICATE_JWKS_KID, keyInfo.keyId());
+                    // The kid comes from the remote JWKS, so it is escaped and bounded before it is
+                    // rendered (CWE-117, ADR-0022).
+                    LOGGER.warn(WARN.DUPLICATE_JWKS_KID, ErrorTextSanitizer.sanitize(keyInfo.keyId(), '?',
+                            MAX_LOGGED_KID_LENGTH, "..."));
                     if (securityEventCounter != null) {
                         securityEventCounter.increment(SecurityEventCounter.EventType.DUPLICATE_JWKS_KID);
                     }

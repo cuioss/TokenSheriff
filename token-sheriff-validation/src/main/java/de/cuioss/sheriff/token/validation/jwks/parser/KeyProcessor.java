@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.jwks.parser;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.commons.transport.JwkKey;
@@ -23,6 +24,7 @@ import de.cuioss.sheriff.token.validation.jwks.key.JwkKeyHandler;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.sheriff.token.validation.security.JwkAlgorithmPreferences;
 import de.cuioss.tools.logging.CuiLogger;
+import org.jspecify.annotations.Nullable;
 
 import java.math.BigInteger;
 import java.security.spec.InvalidKeySpecException;
@@ -45,6 +47,9 @@ public class KeyProcessor {
     private static final String RSA_KEY_TYPE = "RSA";
     private static final String EC_KEY_TYPE = "EC";
     private static final String OKP_KEY_TYPE = "OKP";
+
+    /** Upper bound for the length of a remote JWK value rendered into a log line. */
+    private static final int MAX_LOGGED_VALUE_LENGTH = 64;
 
 
     private final SecurityEventCounter securityEventCounter;
@@ -83,12 +88,28 @@ public class KeyProcessor {
             case EC_KEY_TYPE -> processEcKey(jwk, kid);
             case OKP_KEY_TYPE -> processOkpKey(jwk, kid);
             default -> {
-                LOGGER.debug("Unsupported key type: %s for key ID: %s", kty, kid);
+                LOGGER.debug("Unsupported key type: %s for key ID: %s", sanitize(kty), sanitize(kid));
                 yield null;
             }
         };
 
         return Optional.ofNullable(keyInfo);
+    }
+
+    /**
+     * Neutralises a remote JWK value, or a parser message quoting one, before it is rendered into a
+     * log line (CWE-117, ADR-0022): every control character and Unicode line separator becomes
+     * {@code '?'} and the value is cut to {@value #MAX_LOGGED_VALUE_LENGTH} characters, the same form
+     * {@code JwkKey} and {@code JweDecryptor} use.
+     *
+     * @param value the remote value, may be {@code null}
+     * @return the sanitised value, or {@code "<none>"} for {@code null}
+     */
+    private static String sanitize(@Nullable String value) {
+        if (value == null) {
+            return "<none>";
+        }
+        return ErrorTextSanitizer.sanitize(value, '?', MAX_LOGGED_VALUE_LENGTH, "...");
     }
 
     /**
@@ -109,7 +130,7 @@ public class KeyProcessor {
 
         // Validate key type is supported
         if (!"RSA".equals(keyType) && !"EC".equals(keyType) && !"OKP".equals(keyType)) {
-            LOGGER.warn(WARN.JWK_UNSUPPORTED_KEY_TYPE, keyType);
+            LOGGER.warn(WARN.JWK_UNSUPPORTED_KEY_TYPE, sanitize(keyType));
             securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
             return false;
         }
@@ -128,7 +149,7 @@ public class KeyProcessor {
         if (jwkKey.alg() != null) {
             String algorithm = jwkKey.alg();
             if (!jwkAlgorithmPreferences.isSupported(algorithm)) {
-                LOGGER.warn(WARN.JWK_INVALID_ALGORITHM, algorithm);
+                LOGGER.warn(WARN.JWK_INVALID_ALGORITHM, sanitize(algorithm));
                 securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
                 return false;
             }
@@ -148,7 +169,7 @@ public class KeyProcessor {
         // Reject sub-2048-bit RSA keys before parsing (M1), with a clear, typed rejection event.
         Optional<BigInteger> modulus = jwk.getModulusAsBigInteger();
         if (modulus.isPresent() && modulus.get().bitLength() < JwkKeyHandler.MIN_RSA_KEY_SIZE_BITS) {
-            LOGGER.warn(WARN.RSA_KEY_PARSE_FAILED, kid,
+            LOGGER.warn(WARN.RSA_KEY_PARSE_FAILED, sanitize(kid),
                     "RSA key modulus is %d bits; minimum accepted is %d bits".formatted(
                             modulus.get().bitLength(), JwkKeyHandler.MIN_RSA_KEY_SIZE_BITS));
             securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
@@ -160,12 +181,14 @@ public class KeyProcessor {
             String alg = jwk.alg();
             if (alg == null) {
                 alg = "RS256";
-                LOGGER.warn(WARN.JWK_RSA_DEFAULTING_TO_RS256, kid);
+                LOGGER.warn(WARN.JWK_RSA_DEFAULTING_TO_RS256, sanitize(kid));
             }
-            LOGGER.debug("Parsed RSA key with ID: %s and algorithm: %s", kid, alg);
+            LOGGER.debug("Parsed RSA key with ID: %s and algorithm: %s", sanitize(kid), sanitize(alg));
             return new KeyInfo(publicKey, alg, kid);
         } catch (InvalidKeySpecException | IllegalStateException e) {
-            LOGGER.warn(e, WARN.RSA_KEY_PARSE_FAILED, kid, e.getMessage());
+            // The parser's message can quote the rejected key material, so it is sanitised and the
+            // exception object, whose stack trace would print it raw, is not attached (CWE-117)
+            LOGGER.warn(WARN.RSA_KEY_PARSE_FAILED, sanitize(kid), sanitize(e.getMessage()));
             securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
             return null;
         }
@@ -190,15 +213,17 @@ public class KeyProcessor {
             String curveAlgorithm = JwkKeyHandler.determineEcAlgorithm(jwk.crv());
             String alg = jwk.getAlg().orElse(curveAlgorithm);
             if (!curveAlgorithm.equals(alg)) {
-                LOGGER.warn(WARN.EC_KEY_PARSE_FAILED, kid,
-                        "alg '%s' does not match curve '%s', which requires '%s'".formatted(alg, jwk.crv(), curveAlgorithm));
+                LOGGER.warn(WARN.EC_KEY_PARSE_FAILED, sanitize(kid),
+                        "alg '%s' does not match curve '%s', which requires '%s'".formatted(
+                                sanitize(alg), sanitize(jwk.crv()), curveAlgorithm));
                 securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
                 return null;
             }
-            LOGGER.debug("Parsed EC key with ID: %s and algorithm: %s", kid, alg);
+            LOGGER.debug("Parsed EC key with ID: %s and algorithm: %s", sanitize(kid), sanitize(alg));
             return new KeyInfo(publicKey, alg, kid);
         } catch (InvalidKeySpecException | IllegalStateException e) {
-            LOGGER.warn(e, WARN.EC_KEY_PARSE_FAILED, kid, e.getMessage());
+            // Sanitised message, no exception object: see processRsaKey
+            LOGGER.warn(WARN.EC_KEY_PARSE_FAILED, sanitize(kid), sanitize(e.getMessage()));
             securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
             return null;
         }
@@ -217,10 +242,11 @@ public class KeyProcessor {
             var publicKey = JwkKeyHandler.parseOkpKey(jwk);
             // EdDSA always uses the single algorithm identifier "EdDSA"
             String alg = jwk.alg() != null ? jwk.alg() : JwkKeyHandler.determineOkpAlgorithm();
-            LOGGER.debug("Parsed OKP key with ID: %s and algorithm: %s", kid, alg);
+            LOGGER.debug("Parsed OKP key with ID: %s and algorithm: %s", sanitize(kid), sanitize(alg));
             return new KeyInfo(publicKey, alg, kid);
         } catch (InvalidKeySpecException | IllegalStateException e) {
-            LOGGER.warn(e, WARN.OKP_KEY_PARSE_FAILED, kid, e.getMessage());
+            // Sanitised message, no exception object: see processRsaKey
+            LOGGER.warn(WARN.OKP_KEY_PARSE_FAILED, sanitize(kid), sanitize(e.getMessage()));
             securityEventCounter.increment(EventType.JWKS_JSON_PARSE_FAILED);
             return null;
         }

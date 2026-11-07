@@ -152,6 +152,24 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      */
     static final int REDISCOVERY_FAILURE_THRESHOLD = 3;
 
+    /** Upper bound for the length of a failure description rendered into a log line. */
+    private static final int MAX_LOGGED_FAILURE_LENGTH = 256;
+
+    /**
+     * Renders a failure for a log line without the raw exception object: the exception type and its
+     * message, with every control character and Unicode line separator replaced by {@code '?'} and the
+     * text cut to {@value #MAX_LOGGED_FAILURE_LENGTH} characters (CWE-117, ADR-0022). The message of a
+     * transport or parsing failure can quote remote content, which an attached exception would print raw
+     * with its stack trace; the type keeps the diagnostic the stack trace's first line would have given.
+     *
+     * @param failure the failure to render
+     * @return the sanitised {@code type: message} rendering
+     */
+    private static String sanitizeFailure(Throwable failure) {
+        return ErrorTextSanitizer.sanitize(failure.getClass().getName() + ": " + failure.getMessage(), '?',
+                MAX_LOGGED_FAILURE_LENGTH, "...");
+    }
+
     private final HttpJwksLoaderConfig config;
 
     /**
@@ -457,7 +475,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         Throwable cause = failure instanceof CompletionException && failure.getCause() != null
                 ? failure.getCause()
                 : failure;
-        LOGGER.error(cause, ERROR.JWKS_INITIALIZATION_FAILED, cause.getMessage(), loggableIssuerIdentifier());
+        LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, sanitizeFailure(cause), loggableIssuerIdentifier());
 
         lifecycleLock.lock();
         try {
@@ -496,7 +514,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             try {
                 startBackgroundRefresh(claimedEpoch);
             } catch (RejectedExecutionException e) {
-                LOGGER.error(e, ERROR.JWKS_INITIALIZATION_FAILED, e.getMessage(), loggableIssuerIdentifier());
+                LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, sanitizeFailure(e), loggableIssuerIdentifier());
                 return false;
             }
         }
@@ -645,7 +663,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                 // The rejection message embeds the advertised jwks_uri: neither it nor the exception is logged
                 LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, ADVERTISED_URI_EGRESS_BLOCKED, loggableIssuer);
             } else {
-                LOGGER.error(e, ERROR.JWKS_INITIALIZATION_FAILED, e.getMessage(), loggableIssuer);
+                LOGGER.error(ERROR.JWKS_INITIALIZATION_FAILED, sanitizeFailure(e), loggableIssuer);
             }
             return new AdapterResolution(null, issuer, false, false);
         }
@@ -987,7 +1005,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             if (isFetchUriAdvertised()) {
                 LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, ADVERTISED_URI_EGRESS_BLOCKED);
             } else {
-                LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+                LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, sanitizeFailure(e));
             }
             return false;
         }
@@ -1105,7 +1123,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         // Without this, a single unexpected failure permanently kills JWKS background refresh,
         // causing keys to never rotate — a silent availability degradation.
         catch (Exception e) {
-            LOGGER.warn(e, WARN.BACKGROUND_REFRESH_FAILED, e.getMessage());
+            LOGGER.warn(WARN.BACKGROUND_REFRESH_FAILED, sanitizeFailure(e));
         } finally {
             if (!installed) {
                 recordFailedCycle(cycleEpoch);

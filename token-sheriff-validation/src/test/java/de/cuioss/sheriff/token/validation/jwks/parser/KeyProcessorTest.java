@@ -25,20 +25,30 @@ import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler.Algorithm;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import de.cuioss.tools.logging.LogRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigInteger;
 import java.security.interfaces.ECPublicKey;
+import java.security.interfaces.RSAPublicKey;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -110,6 +120,94 @@ class KeyProcessorTest {
             assertTrue(result.isPresent(), "An EC key without alg must be installed");
             assertEquals("ES384", result.get().algorithm());
             assertEquals(0, counter.getCount(EventType.JWKS_JSON_PARSE_FAILED));
+        }
+    }
+
+    /**
+     * Key ids, key types, algorithm and curve names come from a remote JWKS document, and a key
+     * parser's exception message can quote them. Every log record renders them sanitised: no line
+     * break, no raw exception object, the forged text still visible in escaped form.
+     */
+    @Nested
+    @DisplayName("Remote text in log records (CWE-117)")
+    class RemoteTextInLogRecords {
+
+        private static final String FORGED = "evil\r\nWARN forged line";
+
+        static Stream<Arguments> forgedKeys() {
+            RSAPublicKey rsa = (RSAPublicKey) InMemoryKeyMaterialHandler.getDefaultPublicKey(Algorithm.RS256);
+            String n = unsigned(rsa.getModulus());
+            String e = unsigned(rsa.getPublicExponent());
+            return Stream.of(
+                    Arguments.of("forged kty", new JwkKey(FORGED, KID, null, n, e, null, null, null),
+                            JWTValidationLogMessages.WARN.JWK_UNSUPPORTED_KEY_TYPE, true),
+                    Arguments.of("forged alg", new JwkKey("RSA", KID, FORGED, n, e, null, null, null),
+                            JWTValidationLogMessages.WARN.JWK_INVALID_ALGORITHM, true),
+                    Arguments.of("forged kid on an undersized RSA key", new JwkKey("RSA", FORGED, "RS256", "AQ", e, null, null, null),
+                            JWTValidationLogMessages.WARN.RSA_KEY_PARSE_FAILED, true),
+                    Arguments.of("forged kid on an RSA key that fails to parse",
+                            new JwkKey("RSA", FORGED, "RS256", "!!", e, null, null, null),
+                            JWTValidationLogMessages.WARN.RSA_KEY_PARSE_FAILED, true),
+                    Arguments.of("forged kid on an RSA key without alg", new JwkKey("RSA", FORGED, null, n, e, null, null, null),
+                            JWTValidationLogMessages.WARN.JWK_RSA_DEFAULTING_TO_RS256, true),
+                    Arguments.of("forged kid on an EC key with a mismatching alg",
+                            withKid(ecJwk(Algorithm.ES256, "P-256", "ES384"), FORGED),
+                            JWTValidationLogMessages.WARN.EC_KEY_PARSE_FAILED, true),
+                    Arguments.of("forged crv on an EC key", withCurve(ecJwk(Algorithm.ES256, "P-256", null), FORGED),
+                            JWTValidationLogMessages.WARN.EC_KEY_PARSE_FAILED, false),
+                    Arguments.of("forged kid on an OKP key that fails to parse",
+                            new JwkKey("OKP", FORGED, null, null, null, "Ed25519", "!!", null),
+                            JWTValidationLogMessages.WARN.OKP_KEY_PARSE_FAILED, true));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("forgedKeys")
+        @DisplayName("Should log remote key text escaped and bounded, without the raw exception object")
+        void shouldLogRemoteTextSanitised(String site, JwkKey jwk, LogRecord expectedRecord, boolean forgedTextLogged) {
+            processor.processKey(jwk);
+
+            List<java.util.logging.LogRecord> records = TestLoggerFactory.getTestHandler()
+                    .resolveLogMessagesContaining(TestLogLevel.WARN, expectedRecord.resolveIdentifierString());
+            assertEquals(1, records.size(), site + ": exactly one " + expectedRecord.resolveIdentifierString());
+            String message = records.getFirst().getMessage();
+            assertTrue(message.chars().noneMatch(c -> c == '\r' || c == '\n' || c == ' '),
+                    site + ": the record must carry no line break: " + message);
+            assertNull(records.getFirst().getThrown(),
+                    site + ": no exception object whose message may quote the remote input");
+            if (forgedTextLogged) {
+                assertTrue(message.contains("evil??WARN forged?line"),
+                        site + ": the diagnostic must stay, escaped: " + message);
+            }
+            assertFalse(message.contains("WARN forged\r"), message);
+        }
+
+        @Test
+        @DisplayName("Should bound a long remote kid to the sanitiser's limit")
+        void shouldBoundLongRemoteKid() {
+            String longKid = "evil\r\n" + "k".repeat(90);
+
+            processor.processKey(withKid(ecJwk(Algorithm.ES256, "P-256", "ES384"), longKid));
+
+            String message = TestLoggerFactory.getTestHandler()
+                    .resolveLogMessagesContaining(TestLogLevel.WARN,
+                            JWTValidationLogMessages.WARN.EC_KEY_PARSE_FAILED.resolveIdentifierString())
+                    .getFirst().getMessage();
+            assertTrue(message.contains("evil??" + "k".repeat(58) + "..."), message);
+            assertFalse(message.contains("k".repeat(59)), "the kid must be cut at the bound: " + message);
+        }
+
+        private static JwkKey withKid(JwkKey jwk, String kid) {
+            return new JwkKey(jwk.kty(), kid, jwk.alg(), jwk.n(), jwk.e(), jwk.crv(), jwk.x(), jwk.y());
+        }
+
+        private static JwkKey withCurve(JwkKey jwk, String crv) {
+            return new JwkKey(jwk.kty(), jwk.kid(), jwk.alg(), jwk.n(), jwk.e(), crv, jwk.x(), jwk.y());
+        }
+
+        private static String unsigned(BigInteger value) {
+            byte[] bytes = value.toByteArray();
+            int start = bytes[0] == 0 && bytes.length > 1 ? 1 : 0;
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(Arrays.copyOfRange(bytes, start, bytes.length));
         }
     }
 

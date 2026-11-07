@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline.validator;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
@@ -24,6 +25,7 @@ import de.cuioss.sheriff.token.validation.pipeline.SignatureTemplateManager;
 import de.cuioss.sheriff.token.validation.pipeline.SignatureVerificationUtil;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.Getter;
+import org.jspecify.annotations.Nullable;
 
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
@@ -63,6 +65,9 @@ import java.util.Set;
 public class TokenSignatureValidator {
 
     private static final CuiLogger LOGGER = new CuiLogger(TokenSignatureValidator.class);
+
+    /** Upper bound for the length of a token value, or a message quoting one, rendered into a log line. */
+    private static final int MAX_LOGGED_VALUE_LENGTH = 64;
 
     @Getter
     private final JwksLoader jwksLoader;
@@ -131,7 +136,7 @@ public class TokenSignatureValidator {
         // Get the key from the JwksLoader
         var keyInfo = jwksLoader.getKeyInfo(kid);
         if (keyInfo.isEmpty()) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.KEY_NOT_FOUND, kid);
+            LOGGER.warn(JWTValidationLogMessages.WARN.KEY_NOT_FOUND, sanitize(kid));
             securityEventCounter.increment(SecurityEventCounter.EventType.KEY_NOT_FOUND);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.KEY_NOT_FOUND,
@@ -141,7 +146,7 @@ public class TokenSignatureValidator {
 
         // Verify that the key's algorithm matches the validation's algorithm
         if (!isAlgorithmCompatible(algorithm, keyInfo.get().algorithm())) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.UNSUPPORTED_ALGORITHM, algorithm);
+            LOGGER.warn(JWTValidationLogMessages.WARN.UNSUPPORTED_ALGORITHM, sanitize(algorithm));
             securityEventCounter.increment(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM,
@@ -167,7 +172,8 @@ public class TokenSignatureValidator {
      * @throws TokenValidationException if the signature is invalid
      */
     private void verifySignature(DecodedJwt decodedJwt, PublicKey publicKey, String algorithm) {
-        LOGGER.trace("Verifying signature:\nDecodedJwt: %s\nPublicKey: %s\nAlgorithm: %s", decodedJwt, publicKey, algorithm);
+        LOGGER.trace("Verifying signature:\nDecodedJwt: %s\nPublicKey: %s\nAlgorithm: %s", decodedJwt, publicKey,
+                sanitize(algorithm));
 
         // Get the data to verify and signature bytes from DecodedJwt
         String dataToVerify;
@@ -179,7 +185,9 @@ public class TokenSignatureValidator {
             // DecodedJwt carries no SecurityEventCounter, so the counter increment for an
             // undecodable signature stays here, at the pipeline boundary that owns the counter.
             // The exception itself already names SIGNATURE_VALIDATION_FAILED and is rethrown as-is.
-            LOGGER.warn(e, JWTValidationLogMessages.ERROR.SIGNATURE_VALIDATION_FAILED, e.getMessage());
+            // Its message can quote the token input, so it is sanitised and the exception object, whose
+            // stack trace would print it raw, is not attached to the log record (CWE-117).
+            LOGGER.warn(JWTValidationLogMessages.ERROR.SIGNATURE_VALIDATION_FAILED, sanitize(e.getMessage()));
             securityEventCounter.increment(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED);
             throw e;
         }
@@ -202,7 +210,9 @@ public class TokenSignatureValidator {
                 );
             }
         } catch (InvalidKeyException | SignatureException e) {
-            LOGGER.warn(e, JWTValidationLogMessages.ERROR.SIGNATURE_VALIDATION_FAILED, e.getMessage());
+            // Sanitised message, no exception object: see the decode failure above. The exception stays
+            // the cause of the thrown TokenValidationException.
+            LOGGER.warn(JWTValidationLogMessages.ERROR.SIGNATURE_VALIDATION_FAILED, sanitize(e.getMessage()));
             securityEventCounter.increment(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED,
@@ -210,7 +220,8 @@ public class TokenSignatureValidator {
                     e
             );
         } catch (SignatureTemplateManager.UnsupportedAlgorithmException e) {
-            LOGGER.warn(e, JWTValidationLogMessages.ERROR.SIGNATURE_VALIDATION_FAILED, e.getMessage());
+            // The message names the token's alg: sanitised, no exception object (CWE-117)
+            LOGGER.warn(JWTValidationLogMessages.ERROR.SIGNATURE_VALIDATION_FAILED, sanitize(e.getMessage()));
             securityEventCounter.increment(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM,
@@ -218,6 +229,21 @@ public class TokenSignatureValidator {
                     e
             );
         }
+    }
+
+    /**
+     * Neutralises a token-header value, or an exception message quoting one, before it is rendered
+     * into a log line (CWE-117, ADR-0022): every control character and Unicode line separator becomes
+     * {@code '?'} and the value is cut to {@value #MAX_LOGGED_VALUE_LENGTH} characters.
+     *
+     * @param value the untrusted value, may be {@code null}
+     * @return the sanitised value, or {@code "<none>"} for {@code null}
+     */
+    private static String sanitize(@Nullable String value) {
+        if (value == null) {
+            return "<none>";
+        }
+        return ErrorTextSanitizer.sanitize(value, '?', MAX_LOGGED_VALUE_LENGTH, "...");
     }
 
     /**

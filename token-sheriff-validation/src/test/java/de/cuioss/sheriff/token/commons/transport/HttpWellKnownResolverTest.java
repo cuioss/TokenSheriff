@@ -20,6 +20,7 @@ import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.test.dispatcher.WellKnownDispatcher;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
@@ -114,6 +115,27 @@ class HttpWellKnownResolverTest {
 
         // Verify health status is OK
         assertEquals(LoaderStatus.OK, resolver.getLoaderStatus());
+    }
+
+    @Test
+    @DisplayName("Should log an egress-blocked discovery without the raw exception object (CWE-117)")
+    void shouldLogEgressBlockWithoutExceptionObject() {
+        // Loopback egress is not allowed, so the guard rejects the discovery URI before any fetch
+        WellKnownConfig config = WellKnownConfig.builder().allowInsecureHttp(true)
+                .wellKnownUrl("http://127.0.0.1:1/.well-known/openid-configuration")
+                .retryConfig(RetryConfig.builder().maxAttempts(1).build())
+                .build();
+        resolver = config.createResolver(new SecurityEventCounter());
+
+        assertTrue(resolver.getJwksUri().isEmpty(), "a blocked discovery yields no jwks_uri");
+
+        var records = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN,
+                TransportLogMessages.WARN.SSRF_EGRESS_BLOCKED_DISCOVERY.resolveIdentifierString());
+        assertFalse(records.isEmpty(), "the egress block must be logged");
+        assertNull(records.getFirst().getThrown(),
+                "no exception object whose message embeds the URI: " + records.getFirst().getMessage());
+        String message = records.getFirst().getMessage();
+        assertFalse(message.contains("\r") || message.contains("\n"), "no line break: " + message);
     }
 
     @Test

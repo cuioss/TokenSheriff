@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.security.JwsAlgorithm;
@@ -55,6 +56,9 @@ import java.util.Map;
 public final class SignatureTemplateManager {
 
     private static final CuiLogger LOGGER = new CuiLogger(SignatureTemplateManager.class);
+
+    /** Upper bound for the length of an algorithm name rendered into a log line. */
+    private static final int MAX_LOGGED_ALGORITHM_LENGTH = 64;
 
     /**
      * Cache for Signature template instances to improve performance.
@@ -144,7 +148,10 @@ public final class SignatureTemplateManager {
         String jdkAlgorithm = jcaSignatureAlgorithmOf(catalogEntry);
         PSSParameterSpec pssParams = catalogEntry.getPssParameters().orElse(null);
 
-        LOGGER.debug("Created signature template for algorithm: %s -> %s", algorithm, jdkAlgorithm);
+        // The name already resolved to a catalog entry, so it is a known JWA name; it is still passed
+        // through the sanitiser so no algorithm name reaches a log line unsanitised (CWE-117, ADR-0022)
+        LOGGER.debug("Created signature template for algorithm: %s -> %s",
+                ErrorTextSanitizer.sanitize(algorithm, '?', MAX_LOGGED_ALGORITHM_LENGTH, "..."), jdkAlgorithm);
         return new SignatureTemplate(jdkAlgorithm, pssParams);
     }
 

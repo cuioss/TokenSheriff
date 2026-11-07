@@ -162,6 +162,29 @@ class HttpJwksLoaderFailureTest {
     }
 
     @Test
+    @DisplayName("An egress-blocked configured jwks_url is logged without the raw exception object (CWE-117)")
+    void egressBlockOfConfiguredUrlLogsNoExceptionObject() {
+        // Loopback egress is not allowed, so the guard rejects the configured URL before any fetch
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowInsecureHttp(true)
+                .jwksUrl("http://127.0.0.1:1/jwks")
+                .issuerIdentifier("test-issuer")
+                .build();
+
+        try (HttpJwksLoader blockedLoader = new HttpJwksLoader(config)) {
+            blockedLoader.initJWKSLoader(securityEventCounter).join();
+
+            List<LogRecord> records = loaderRecordsContaining(
+                    JWTValidationLogMessages.ERROR.JWKS_INITIALIZATION_FAILED.resolveIdentifierString());
+            assertFalse(records.isEmpty(), "the egress block must be logged");
+            LogRecord blocked = records.getFirst();
+            assertNull(blocked.getThrown(), "no exception object whose message embeds the URI");
+            assertTrue(blocked.getMessage().contains("TransportException"),
+                    "the failure type stays as diagnostic: " + blocked.getMessage());
+            assertFalse(blocked.getMessage().contains("\n"), "no line break: " + blocked.getMessage());
+        }
+    }
+
+    @Test
     @DisplayName("JWKS_LOAD_FAILED renders an advertised issuer carrying CR and LF in escaped form")
     void jwksLoadFailedEscapesLineBreaksInAdvertisedIssuer() throws Exception {
         String jwksPath = "/jwks-forged-issuer.json";
