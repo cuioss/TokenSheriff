@@ -195,6 +195,32 @@ sheriff.token.issuers.my-issuer.jwks.http.read-timeout-seconds=10
 sheriff.token.issuers.my-issuer.algorithm-preferences=RS256,RS384,RS512
 ----
 
+=== Maximum Key Staleness (opt-in)
+
+`sheriff.token.issuers.<name>.jwks.http.max-staleness-seconds` bounds, in seconds, how long an issuer's
+installed keys may go without a successful refresh. It is off by default: unset, installed keys are served
+while background refreshes keep failing, and the issuer stays usable.
+
+When set, the issuer's JWKS loader leaves `OK` once the installed keys have gone longer than the bound
+without a successful refresh. The issuer then stops resolving and its tokens are rejected until a refresh
+succeeds again; no key is dropped, so recovery is immediate. Choose a bound of at least several refresh
+intervals, so a single failed refresh does not take the issuer out.
+
+[source, properties]
+----
+# Leave OK after 1 hour without a successful refresh (refresh every 10 minutes)
+sheriff.token.issuers.my-issuer.jwks.http.refresh-interval-seconds=600
+sheriff.token.issuers.my-issuer.jwks.http.max-staleness-seconds=3600
+----
+
+The key applies only to issuers that load their JWKS over HTTP (`jwks.http.url` or
+`jwks.http.well-known-url`). Application startup fails for an unparseable or non-positive value, for a value
+combined with `jwks.http.refresh-interval-seconds=0`, and for a value on an issuer configured with
+`jwks.file-path` or `jwks.content`. See
+xref:../../doc/adr/0017-A_JWKS_loader_reports_OK_only_with_usable_keys_and_retries_only_transient_discovery_failures.adoc[ADR-0017]
+and
+xref:../../doc/adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_startup_instead_of_being_ignored.adoc[ADR-0026].
+
 == Best Practices
 
 === Configuration Management

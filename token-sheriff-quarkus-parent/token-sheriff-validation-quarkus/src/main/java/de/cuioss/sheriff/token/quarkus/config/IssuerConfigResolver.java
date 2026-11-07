@@ -505,14 +505,69 @@ public class IssuerConfigResolver {
                 LOGGER.debug("Configured well-known discovery for %s: %s", issuerName, wellKnownUrl.get());
             }
 
-        } else if (filePath.isPresent()) {
-            builder.jwksFilePath(filePath.get());
-            LOGGER.debug("Configured JWKS file path for %s: %s", issuerName, filePath.get());
-
-        } else if (content.isPresent()) {
-            builder.jwksContent(content.get());
-            LOGGER.debug("Configured inline JWKS content for %s", issuerName);
+        } else {
+            validateNoOrphanedMaxStaleness(issuerName);
+            if (filePath.isPresent()) {
+                builder.jwksFilePath(filePath.get());
+                LOGGER.debug("Configured JWKS file path for %s: %s", issuerName, filePath.get());
+            } else if (content.isPresent()) {
+                builder.jwksContent(content.get());
+                LOGGER.debug("Configured inline JWKS content for %s", issuerName);
+            }
         }
+    }
+
+    /**
+     * Fails fast when the maximum key staleness is configured for an issuer without HTTP JWKS loading.
+     * Only an HTTP-based loader refreshes its keys, so the value would otherwise be silently ignored
+     * (ADR-0026).
+     *
+     * @param issuerName the issuer name
+     * @throws IllegalStateException naming the offending property when it is present
+     */
+    private void validateNoOrphanedMaxStaleness(String issuerName) {
+        String property = JwtPropertyKeys.ISSUERS.MAX_STALENESS_SECONDS.formatted(issuerName);
+        if (config.getOptionalValue(property, String.class).isPresent()) {
+            throw new IllegalStateException(
+                    ("Property '%s' is configured but issuer '%s' does not load its JWKS over HTTP. "
+                            + "Configure '%s' or '%s', or remove the property.")
+                            .formatted(property, issuerName,
+                                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(issuerName),
+                                    JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted(issuerName)));
+        }
+    }
+
+    /**
+     * Maps the opt-in maximum key staleness onto the loader configuration.
+     * <p>
+     * The builder is only called when the property is present, so the default stays off: installed keys
+     * are served while refreshes fail. A value that is not a whole number or not positive fails startup
+     * with the property named.
+     * </p>
+     *
+     * @throws IllegalStateException if the configured value is unparseable or not positive
+     */
+    private void configureMaxStaleness(HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder builder, String issuerName) {
+        String property = JwtPropertyKeys.ISSUERS.MAX_STALENESS_SECONDS.formatted(issuerName);
+        Optional<String> rawValue = config.getOptionalValue(property, String.class);
+        if (rawValue.isEmpty()) {
+            return;
+        }
+        long seconds;
+        try {
+            seconds = Long.parseLong(rawValue.get().trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException(
+                    "Property '%s' must be a positive whole number of seconds, but was '%s'"
+                            .formatted(property, rawValue.get()), e);
+        }
+        if (seconds <= 0) {
+            throw new IllegalStateException(
+                    "Property '%s' must be a positive whole number of seconds, but was %s"
+                            .formatted(property, seconds));
+        }
+        builder.maxStaleness(Duration.ofSeconds(seconds));
+        LOGGER.debug("Set max key staleness for %s: %s seconds", issuerName, seconds);
     }
 
     /**
@@ -625,6 +680,9 @@ public class IssuerConfigResolver {
             builder.maxRetiredKeySets(maxRetiredSets.get());
             LOGGER.debug("Set max retired key sets for %s: %s", issuerName, maxRetiredSets.get());
         }
+
+        // Opt-in maximum key staleness (ADR-0017) - off unless the property is set
+        configureMaxStaleness(builder, issuerName);
 
         // Set the retry configuration
         builder.retryConfig(retryConfig);

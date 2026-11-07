@@ -104,6 +104,26 @@ class JwtPropertyKeysTest {
 
             assertEquals(expected, actual);
         }
+
+        @Test
+        @DisplayName("should format max staleness property correctly")
+        void shouldFormatMaxStalenessPropertyCorrectly() {
+            var issuerName = "keycloak";
+            var expected = "sheriff.token.issuers.keycloak.jwks.http.max-staleness-seconds";
+            var actual = JwtPropertyKeys.ISSUERS.MAX_STALENESS_SECONDS.formatted(issuerName);
+
+            assertEquals(expected, actual);
+        }
+
+        @Test
+        @DisplayName("should place max staleness in the same key group as the refresh interval")
+        void shouldPlaceMaxStalenessBesideRefreshInterval() {
+            var refreshInterval = JwtPropertyKeys.ISSUERS.REFRESH_INTERVAL_SECONDS;
+            var httpGroup = refreshInterval.substring(0, refreshInterval.lastIndexOf('.') + 1);
+
+            assertTrue(JwtPropertyKeys.ISSUERS.MAX_STALENESS_SECONDS.startsWith(httpGroup),
+                    "max-staleness-seconds must share the jwks.http key group with refresh-interval-seconds");
+        }
     }
 
     @Nested

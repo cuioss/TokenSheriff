@@ -63,6 +63,7 @@ as `dpop.enabled` of the issuer `my` — configure such an issuer in dotted form
 |===
 |Property |Type |Default |Description
 |`jwks.http.refresh-interval-seconds` |int |`600` |JWKS cache refresh interval
+|`jwks.http.max-staleness-seconds` |long (seconds) |— (off) |Opt-in upper bound on how long installed keys may go without a successful refresh. Unset, installed keys are served while refreshes fail. Set, the issuer's loader leaves `OK` once the bound is exceeded and its tokens are rejected until a refresh succeeds (see NOTE below)
 |`jwks.http.connect-timeout-seconds` |int |`10` |HTTP connect timeout
 |`jwks.http.read-timeout-seconds` |int |`10` |HTTP read timeout
 |`jwks.http.key-rotation-grace-period-seconds` |int |`300` |Grace period for retired keys during rotation
@@ -85,6 +86,16 @@ guarantee that the presented certificate belongs to the host contacted, which re
 man-in-the-middle vector chain validation alone does not close. See
 xref:../../../../../../doc/adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008]
 for the rationale.
+
+NOTE: `jwks.http.max-staleness-seconds` is off by default: without it, installed keys are served while
+background refreshes keep failing and the issuer stays `OK`. Setting it trades availability for
+freshness — once the installed keys have gone longer than the bound without a successful refresh, the
+issuer stops resolving and its tokens are rejected until a refresh succeeds again; no key is dropped, so
+recovery is immediate. Choose a bound of at least several refresh intervals. The value is a positive whole
+number of seconds; an unparseable or non-positive value, a value combined with
+`jwks.http.refresh-interval-seconds=0`, or a value on an issuer configured with `jwks.file-path` or
+`jwks.content` fails at application startup. See
+xref:../../../../../../doc/adr/0017-A_JWKS_loader_reports_OK_only_with_usable_keys_and_retries_only_transient_discovery_failures.adoc[ADR-0017].
 
 === DPoP (RFC 9449)
 
