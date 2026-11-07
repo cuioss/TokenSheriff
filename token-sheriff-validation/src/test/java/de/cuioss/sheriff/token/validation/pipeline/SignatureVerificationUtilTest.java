@@ -24,11 +24,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.Serial;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
+import java.security.spec.ECParameterSpec;
+import java.security.spec.ECPoint;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -237,16 +240,16 @@ class SignatureVerificationUtilTest {
      */
     private record ParameterlessEcPublicKey(ECPublicKey delegate) implements ECPublicKey {
 
-        @java.io.Serial
+        @Serial
         private static final long serialVersionUID = 1L;
 
         @Override
-        public java.security.spec.ECPoint getW() {
+        public ECPoint getW() {
             return delegate.getW();
         }
 
         @Override
-        public java.security.spec.ECParameterSpec getParams() {
+        public ECParameterSpec getParams() {
             return null;
         }
 

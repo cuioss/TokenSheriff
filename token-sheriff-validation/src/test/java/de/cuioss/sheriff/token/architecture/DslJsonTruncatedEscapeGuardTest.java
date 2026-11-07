@@ -20,7 +20,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -137,7 +136,7 @@ class DslJsonTruncatedEscapeGuardTest {
         for (Path file : files) {
             String relative = repositoryRoot.relativize(file).toString().replace('\\', '/');
             scannedFiles.add(relative);
-            sites.addAll(analyze(relative, Files.readString(file, StandardCharsets.UTF_8)));
+            sites.addAll(analyze(relative, Files.readString(file)));
         }
     }
 
@@ -153,13 +152,13 @@ class DslJsonTruncatedEscapeGuardTest {
                 + " files. The modules are known to hold several, so zero sites means the detector stopped"
                 + " matching, not that the tree is clean.");
         assertTrue(sitesOf("de.cuioss.sheriff.token.validation.jwks.parser.JwksParser#parse").stream()
-                        .allMatch(Site::covered) && !sitesOf(
-                        "de.cuioss.sheriff.token.validation.jwks.parser.JwksParser#parse").isEmpty(),
+                .allMatch(Site::covered) && !sitesOf(
+                "de.cuioss.sheriff.token.validation.jwks.parser.JwksParser#parse").isEmpty(),
                 "positive control: JwksParser.parse reads with DSL-JSON inside"
                         + " catch (IOException | ArrayIndexOutOfBoundsException) and must be found covered");
         assertTrue(sitesOf("de.cuioss.sheriff.token.client.flow.TokenEndpointClient#deserialize").stream()
-                        .noneMatch(Site::covered) && !sitesOf(
-                        "de.cuioss.sheriff.token.client.flow.TokenEndpointClient#deserialize").isEmpty(),
+                .noneMatch(Site::covered) && !sitesOf(
+                "de.cuioss.sheriff.token.client.flow.TokenEndpointClient#deserialize").isEmpty(),
                 "negative control: TokenEndpointClient.deserialize is guarded only by a broad"
                         + " catch (RuntimeException), which must not count as coverage");
     }
@@ -384,7 +383,7 @@ class DslJsonTruncatedEscapeGuardTest {
         return new Site(typeName + "#" + method, fileName + ":" + lineOf(code, offset), covered);
     }
 
-    private enum Kind { TRY, LAMBDA, METHOD, TYPE, OTHER }
+    private enum Kind {TRY, LAMBDA, METHOD, TYPE, OTHER}
 
     private record BlockKind(Kind type, String name) {
     }

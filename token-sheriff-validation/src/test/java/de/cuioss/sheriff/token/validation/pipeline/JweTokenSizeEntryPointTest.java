@@ -62,7 +62,7 @@ class JweTokenSizeEntryPointTest {
     /** The entry points that accept a JWE, each with the token type it validates. */
     enum EntryPoint {
         ACCESS(TestTokenGenerators::accessTokens,
-                (validator, token) -> validator.createAccessToken(AccessTokenRequest.of(token)).getClaims()),
+            (validator, token) -> validator.createAccessToken(AccessTokenRequest.of(token)).getClaims()),
         ID(TestTokenGenerators::idTokens,
                 (validator, token) -> validator.createIdToken(IdTokenRequest.of(token)).getClaims()),
         REFRESH(TestTokenGenerators::refreshTokens,

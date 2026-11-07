@@ -20,7 +20,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -28,7 +27,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Keeps remote text out of this module's log lines unless it passed the commons-layer sanitiser
@@ -90,7 +90,7 @@ class LogRecordSanitizationGuardTest {
         try (Stream<Path> files = Files.walk(MAIN_SOURCES)) {
             for (Path file : files.filter(f -> f.toString().endsWith(".java")).sorted().toList()) {
                 calls.addAll(loggerCalls(file.getFileName().toString(),
-                        Files.readString(file, StandardCharsets.UTF_8)));
+                        Files.readString(file)));
             }
         }
     }
@@ -100,7 +100,7 @@ class LogRecordSanitizationGuardTest {
     void shouldScanANonEmptyUniverse() {
         assertTrue(calls.size() > 50, "only " + calls.size() + " logger calls found under "
                 + MAIN_SOURCES.toAbsolutePath() + " — the detector stopped matching");
-        assertTrue(calls.stream().anyMatch(call -> call.fileName().equals("KeyProcessor.java")),
+        assertTrue(calls.stream().anyMatch(call -> "KeyProcessor.java".equals(call.fileName())),
                 "positive control: KeyProcessor logs remote key data and must be among the scanned calls");
         assertTrue(calls.stream().flatMap(call -> call.arguments().stream()).anyMatch(this::isRemoteText),
                 "the scan found no remote-text argument at all, so its silence proves nothing");
@@ -152,7 +152,7 @@ class LogRecordSanitizationGuardTest {
         List<LoggerCall> synthetic = loggerCalls("Sample.java", source);
 
         assertEquals(5, synthetic.size(), "the commented call must not be scanned: " + synthetic);
-        assertEquals(List.of("kid"), violations(synthetic.get(0)));
+        assertEquals(List.of("kid"), violations(synthetic.getFirst()));
         assertEquals(List.of(), violations(synthetic.get(1)));
         assertEquals(List.of("e (exception rendered with its message)"), violations(synthetic.get(2)));
         assertEquals(List.of("jwk.alg()"), violations(synthetic.get(3)));
