@@ -33,11 +33,11 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | V-17a | info | **FIXED** — #861 (7145aebb), PLAN-13; `EgressPolicy` now blocks `100.64.0.0/10`, `0.0.0.0/8` and `255.255.255.255` (read in the merged diff; the DNS-rebinding wording not re-read) | PLAN-13 |
 | V-17b | info | **FIXED** — #851 (49ba673d), PLAN-09; all three production splits use limit `-1` (closed per PR; the three sites read in merged source) | PLAN-09 |
 | V-17c | info | **FIXED** — #851 (49ba673d), PLAN-09; `now >= exp + skew` is expired, via one shared predicate (closed per PR; predicate read in merged source) | PLAN-09 |
-| V-17d | info | VALID — duplicate JSON keys last-wins (doc only) | PLAN-18 |
+| V-17d | info | **FIXED** — #877 (af19b9c2), PLAN-18; stated at `doc/validation/security-reference.adoc:61`; the header half ("a numeric `alg` ahead of a string `alg` can fail deserialization") is not shown by reading and is verified at PLAN-25 item 7(j)(4) | PLAN-18 |
 | V-17e | info | **FIXED** — #851 (49ba673d), PLAN-09; an EC JWK whose `alg` does not match its curve is dropped, never re-labelled (closed per PR; check read in merged source) | PLAN-09 |
 | V-17f | info | **FIXED** — #853 (a9ce05df), PLAN-11; `AudienceValidator` treats only an absent `aud` as missing, an empty array is `AUDIENCE_MISMATCH` and never reaches the `azp` fallback (code read in the merged source) | PLAN-11 |
 | V-17g | info | **FIXED** — #835 (e010c5cf), PLAN-05; random CEK on unwrap failure, CBC tag mismatch normalised to the same typed rejection (closed per PR; code not re-read) | PLAN-05 |
-| V-17h | info | **FIXED** (PLAN-13 part) — #861 (7145aebb); `JWKS_KEYS_UPDATED` logs issuer and key ids (read in the merged diff); J-1 part still owned by PLAN-17 | PLAN-13 |
+| V-17h | info | **FIXED** (PLAN-13 part) — #861 (7145aebb); `JWKS_KEYS_UPDATED` logs issuer and key ids (read in the merged diff); J-1 part FIXED by PLAN-17 (#878, d0fa0c7f) | PLAN-13 |
 
 ## Client code (C)
 
@@ -70,7 +70,7 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | Q-9 | info | **FIXED** — #850 (ed172e43), PLAN-08; env-var-only issuers are discovered (anchor `SHERIFF_TOKEN_ISSUERS_<NAME>_ENABLED`; fix arm) (closed per PR; code not re-read) | PLAN-08 |
 | Q-10 | major | **FIXED** — #846 (17a3ef62), PLAN-12; five concurrency benchmarks now `@State(Scope.Benchmark)` (closed per PR; code not re-read) | PLAN-12 |
 | Q-11 | minor | **FIXED** — #846 (17a3ef62), PLAN-12; metrics exported once per trial under a per-method key (closed per PR; code not re-read) | PLAN-12 |
-| Q-12 | minor | PARTIAL — pins/hardlink fixed (#678, #679); AGENTS.md residue remains (= D-5) | PLAN-19 |
+| Q-12 | minor | **FIXED** — pins/hardlink #678, #679; AGENTS.md residue #879 (d1af3ebb), PLAN-19 (no machine path, `token-sheriff-client/` listed, `README.md` named, skills list equals `.claude/skills/`; read in the three-layer reading) | PLAN-19 |
 | Q-13 | info | **FIXED** — #846 (17a3ef62), PLAN-12 (closed per PR; code not re-read) | PLAN-12 |
 
 ## Tests (TV / TC)
@@ -110,39 +110,43 @@ plan), **FIXED** (no work left), **CHANGED** (code restructured; residual noted)
 | ID | Sev | Verdict at HEAD | Owner |
 |---|---|---|---|
 | D-1 | major | **FIXED** — root README #817; validation-quarkus README, health-checks and integration docs by #834 (ef720fd0), PLAN-04 (closed per PR; code not re-read) | PLAN-04 |
-| D-2 | major | VALID — "no HTTP of its own" in 5 places | PLAN-18 |
+| D-2 | major | **FIXED** — #877 (af19b9c2), PLAN-18; the five locations and nine more files now say the client owns its back channel (`BackChannelHttp`) and commons owns validation-side discovery and JWKS (the diff and the claims read against the source; the lane's own tests: none, docs only); residual wording that still overstates the shared primitives, SSRF allow-list scope and client test reuse → PLAN-25 item 7(j) | PLAN-18 |
 | D-3 | major | **FIXED** — #861 (7145aebb), PLAN-13; `LogMessages.adoc` now lists `TokenSheriff_Q-025` and `TokenSheriff_Q-104` (read in the merged diff) | PLAN-13 |
 | D-4 | major | **FIXED** — #861 (7145aebb), PLAN-13; the doc lists the duplicate-kid record as `TokenSheriff-171` and the new `TokenSheriff-172` (read in the merged diff) | PLAN-13 |
-| D-5 | major | PARTIAL — = Q-12 residue in AGENTS.md | PLAN-19 |
-| D-6 | major | VALID — stale "128 KB buffer" | PLAN-18 |
-| D-7 | minor | VALID, broader — hub lists 1 of 15 ADRs; ADR-0002 "Proposed" | PLAN-19 |
+| D-5 | major | **FIXED** — = Q-12, #879 (d1af3ebb), PLAN-19 | PLAN-19 |
+| D-6 | major | **FIXED** — #877 (af19b9c2), PLAN-18; the real `ParserConfig` limits, labelled defaults (limit values read in the merged diff, not re-read in `ParserConfig`) | PLAN-18 |
+| D-7 | minor | **FIXED** — #879 (d1af3ebb), PLAN-19; `doc/README.adoc` links all 26 ADRs (targets and titles read), ADR-0002 and 21 more set to Accepted (25 Accepted, ADR-0005 Superseded by ADR-0010); residual: ADR-0010 line 187 contradicts its rewritten text, PLAN-25 item 7(l)(3) | PLAN-19 |
 | D-8 | minor | **FIXED** — #850 (ed172e43), PLAN-08; nonce-cache TTL default documented as 360 with the `proofMaxAge + 60` floor (closed per PR; code not re-read) | PLAN-08 |
-| D-9 | minor | PARTIAL — range fixed (#805); CLIENT-23/24 unmapped | PLAN-18 |
-| D-10 | minor | VALID — hub omissions, orphan benchmarking LogMessages | PLAN-19 |
-| D-11 | minor | VALID, worse — 66 `<<…>>` refs in 12 files | PLAN-19 |
-| D-12 | minor | VALID — "TokenSheriff" prose spelling | PLAN-19 |
-| D-13 | minor | VALID — Quarkus version uncaveated | PLAN-18 |
-| D-14 | info | VALID — introspection described, not implemented | PLAN-18 |
-| D-15 | info | VALID — client-quarkus README; "cui-http-client" naming | PLAN-19 |
+| D-9 | minor | **FIXED** — #805 (range), #877 (af19b9c2), PLAN-18; CLIENT-21, 23 and 24 are mapped in the client README (rows and anchors read) | PLAN-18 |
+| D-10 | minor | **FIXED** — #879 (d1af3ebb), PLAN-19; `cve-lessons-register` entry at `doc/README.adoc` line 71, benchmarking-common `LogMessages.adoc` retitled | PLAN-19 |
+| D-11 | minor | **FIXED** — #879 (d1af3ebb), PLAN-19; no `<<` cross-reference left in docs (`git grep` re-run); the blank-line half did not exist at base; no link check was run, PLAN-25 item 7(l)(6) | PLAN-19 |
+| D-12 | minor | **FIXED** — #879 (d1af3ebb), PLAN-19; no prose "TokenSheriff" remains, identifiers untouched (read in the three-layer reading) | PLAN-19 |
+| D-13 | minor | **FIXED** — #877 (af19b9c2), PLAN-18; the caveat is at `token-sheriff-quarkus-parent/doc/performance/jwt-validation-performance.adoc:18` (read), the file the source report named. NOT fixed by `4f8f3eb6`: that commit only caveated the benchmarking JFR doc, the contrast file | PLAN-18 |
+| D-14 | info | **FIXED** — #877 (af19b9c2), PLAN-18; introspection is "endpoint parsed, no flow implemented" in three client docs and five Javadoc files (no introspection flow in client main, read) | PLAN-18 |
+| D-15 | info | **FIXED** — #879 (d1af3ebb), PLAN-19; new client-quarkus README (names checked), no "cui-http-client" left; residual: the Quarkus parent README line 14 credits the wrong class, PLAN-25 item 7(l)(4) | PLAN-19 |
 
 ## Javadoc (J)
 
 | ID | Sev | Verdict at HEAD | Owner |
 |---|---|---|---|
-| J-1 | major | VALID (example edited by #818, still broken) | PLAN-17 |
-| J-2 | major | VALID | PLAN-17 |
-| J-3 | major | VALID | PLAN-17 |
-| J-4 | major | VALID | PLAN-17 |
-| J-5 | major | VALID | PLAN-17 |
-| J-6 | major | VALID | PLAN-17 |
-| J-7 | major | VALID | PLAN-17 |
+| J-1 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading | PLAN-17 |
+| J-2 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading; residual: `JwksLoaderFactory` lines 30-31, PLAN-25 item 7(k) | PLAN-17 |
+| J-3 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading; residual: `NonValidatingJwtParser` lines 107, 208-212, 230-234 and the JWE size mismatch, PLAN-25 item 7(k) | PLAN-17 |
+| J-4 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading | PLAN-17 |
+| J-5 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading; residual: `DiscoverableTokenValidationRule` line 54 test claim, PLAN-25 item 7(k) | PLAN-17 |
+| J-6 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading | PLAN-17 |
+| J-7 | major | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading | PLAN-17 |
 | J-8 | minor | **FIXED** — #850 (ed172e43), PLAN-08; `JwtPropertyKeys` Javadoc/config doc state the same (with D-8) (closed per PR; code not re-read) | PLAN-08 |
-| J-9 | minor | VALID | PLAN-17 |
-| J-10 | minor | VALID | PLAN-17 |
-| J-11 | minor | VALID | PLAN-17 |
-| J-12 | info | VALID | PLAN-17 |
+| J-9 | minor | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading; residual: `JwtPropertyKeys` line 176, `IssuerConfig` lines 749-756, `threat-model.adoc:66` 'blacklisting', PLAN-25 item 7(k) | PLAN-17 |
+| J-10 | minor | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading; residual: `BearerTokenProducer` line 376, `BearerTokenStatus` lines 41/50/91, PLAN-25 item 7(k) | PLAN-17 |
+| J-11 | minor | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading | PLAN-17 |
+| J-12 | info | **FIXED** — #878 (d0fa0c7f), PLAN-17; example/prose rewritten and read against the signatures in the three-layer reading | PLAN-17 |
 
 ## Tally
 
-82 report findings: **6 FIXED/CHANGED-closed** (V-6, TV-1, TV-3, TV-5, TC-2, plus TC-1 reduced to a
+82 report findings at staging (2026-10-28): **6 FIXED/CHANGED-closed** (V-6, TV-1, TV-3, TV-5, TC-2, plus TC-1 reduced to a
 residual), **1 NO-ACTION** (TV-8), **0 REFUTED**, remainder VALID or PARTIAL and owned by PLAN-01…PLAN-19.
+
+At 2026-11-07, after PLAN-19 (#879): every finding in the tables above is FIXED except **TV-4** (PARTIAL, not fixed by operator
+decision, #867), **TV-8** (NO-ACTION) and the IT trust-all half of **TC-9** (PARTIAL, a deliberate non-goal). The residuals of
+fixed findings, and every other open item of the epic, are owned by PLAN-25; see its Residual Register.

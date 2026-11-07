@@ -458,3 +458,126 @@ Read from `plan-15-validation-test-gaps-001` to `-009` and the merged PR #867; N
   context to the resolve seam; the script's argparse surface does not declare the flag (accepted: apply, caller, default, field, phase,
   plan-id, role, workflow, workflow-gated). One rejected call, retry without the flag succeeded. Doc and script disagree.
 - **`effort` unstamped** (eleventh producer, same cause: `refresh-runtime-stamp` returned `model_unknown`).
+
+## Addendum 2026-11-06 (fourth): PLAN-24 (3 plan-marshall messages and 3 landing residues)
+
+Read from `plan-24-client-id-strict-typing-001` to `-005` and the merged PR #876 (`90f8474a`); NOT sent. Added after the PLAN-15 addendum above.
+
+- **`architecture search` has no `--module` flag** (PLAN-24-001). The refine agent carried `--module` over from the sibling verbs
+  `commands`, `derived-module` and `files`; `search` declares only `--pattern`, `--content`, `--category`, `--ignore-case`, `--literal`,
+  `--pre`, `--pre-ref`, `--plan-id`, `--project-dir`, so argparse rejected the call (exit 2). Suggested: either accept `--module` on
+  `search` (a content sweep scoped to one module is a natural request) or have `client-api.md` § search say how to narrow by module.
+  Same argparse-rejection family as the PLAN-13/14 verb-paraphrase report.
+- **`manage-findings qgate` has no `query` verb** (PLAN-24-002). The outline entry called `qgate query`; the noun registers only `add`,
+  `clear`, `list`, `resolve`, `resolve-by-rule`, `resolve-evidenced`. The read verb is `list`. A third verb-paraphrase rejection in this
+  epic (`query` here, `get`/`read` earlier): the Canonical invocations block is not being quoted verbatim by the issuing step.
+- **Sonar `java:S5778` slips past `verify -Ppre-commit` in new `assertThrows` tests** (PLAN-24-003). The whole-tree verify (3870 tests)
+  was green and the smell surfaced only in the post-PR Sonar analysis (`AuthorizedPartyValidatorTest.java:266`), costing a fix commit and a
+  second pre-push/CI/review loop. Suggested for `pm-dev-java:junit-core` (test-code review rules): put exactly one call inside the
+  `assertThrows` lambda and build every argument in the Arrange block. This repository's own PLAN-23 already fixed S5778 sites, so it recurs.
+- **Post-merge `checks wait --adaptive` hung for 10 minutes with no output** (landing residue). The lane stopped it by hand. Suggested: a
+  hard wall-clock bound with a progress line, so a silent hang is distinguishable from a long wait.
+- **The e2e job was cancelled by its 30-minute job timeout after all 30 tests passed** (landing residue; a teardown hang that the lane says
+  recurs on `main`). Cleared with a rerun. Not a plan-marshall defect as such; recorded as a project Watch, and noted here because the
+  finalize arms treat a cancelled check and a failed check alike.
+- **The pre-push gate recorded "test-compile not run"** (landing residue): the stand-alone test-compile and module-tests arms were
+  degraded, the whole-tree verify was green. The gate does not say why the arms degraded.
+- **`effort` and `model` self-reported** (twelfth producer with a failed runtime read: `refresh-runtime-stamp` returned `model_unknown`).
+  Unlike the earlier landings this one carried `effort=medium`, so `landing-check` reported it complete.
+
+## Addendum 2026-11-06 (fifth): PLAN-18 (7 plan-marshall messages and 3 landing residues)
+
+Read from `plan-18-doc-accuracy-001` to `-008` and the merged PR #877 (`af19b9c2`); NOT sent. Added after the PLAN-24 addendum above.
+
+- **Outline scopes a wording-defect plan to the files the finding names** (PLAN-18-001 and -002). The 4-plan scope-criterion validator
+  found the same defect phrase in `commons/transport/package-info.java`, which no deliverable covered, and the plan looped back
+  4-plan to 3-outline to 4-plan; the docs-only plan then took three functional-review and two code-review rounds, each finding one more
+  sibling of the same claim. Suggested for `phase-3-outline`: for a doc-accuracy or wording-defect plan, run `architecture search --content`
+  for the defect phrases and their paraphrases across the whole tree (docs, Javadoc, README, POM descriptions) before fixing the
+  affected-files set, and include every hit or record an exclusion; and have the review grep the phrase tree-wide once. The project-owned
+  half (the residual sibling claims) is in PLAN-25 item 7(j).
+- **A success criterion that names the PR body cannot be evidenced by the pre-push functional review** (PLAN-18-003 and -004). "D-13 is
+  recorded against this PR in the PR body" was graded `unevidenced_criterion`, then again as a residual, two blocking findings that each
+  needed an operator acceptance for a deliverable that was fine. Suggested: outline should not phrase criteria against artifacts that exist
+  only after `create-pr` (put the finding id on `pr_title` or the commit message), or the functional review should classify them as
+  deferred to `create-pr`; per-deliverable commit messages should carry the finding ids they fix.
+- **A new doc claim ignored a conditional branch in the code it described** (PLAN-18-005, part 1). The rewritten client docs said the
+  advertised `introspection_endpoint` scheme is https-checked; `DiscoveryResolver.validateEndpointSchemes` returns early when the issuer is
+  not https. sourcery caught it after the PR was opened; four places were reworded. Suggested for `pm-documents:ref-documentation`: when a doc
+  states a security check, read every early return and guard in the checking method and state the condition under which it applies.
+- **A review-bot quota refusal stalled required-bot participation** (PLAN-18-005, part 2). CodeRabbit's free-tier quota refusal read as
+  neither "participated" nor "pending", and progressed only after `review_rate_window_await` was enabled and the bot re-triggered. Seen
+  before on PLAN-13, PLAN-14 and PLAN-23 (see the earlier addenda); `automatic-review` should recognise the refusal as its own state.
+- **`manage-findings qgate query` again** (PLAN-18-006). Two more `argparse_rejection` calls in one run (exit 2; the registered verbs are
+  `add`, `clear`, `list`, `resolve`, `resolve-by-rule`, `resolve-evidenced`). This is the same invented verb as PLAN-24-002 above, so it is
+  a live recurrence across two plans: look for prose on the Q-Gate loop-back path ("query the Q-Gate findings") that invites it, or accept
+  `query` as a read alias.
+- **The remote-merge gate asks about a rebase the merge queue skips** (PLAN-18-007). With `auto_rebase_threshold=no_overlap_only` and
+  `use_merge_queue=true` the gate blocked and asked the operator about a clean one-file overlap, although under the merge queue the rebase is
+  skipped anyway. Suggested for `phase-6-finalize`: evaluate the threshold only on the path that rebases, or downgrade it to a log line
+  under `use_merge_queue=true`.
+- **The squash commit on `main` carries the CodeRabbit "Summary by CodeRabbit" block and a second `Co-authored-by` trailer** (landing
+  residue). The merge-queue path offers no per-enqueue message override and `ci repo` has no verb for the default merge-message setting.
+- **Two phase-6 usage figures were entered as estimates** (about 1,000 and 13,000 tokens) before the real subagent usage arrived, so the
+  finalize token total is a slight overstatement (landing residue).
+- **`effort` was never stamped** (the twelfth known producer with an unstamped `effort`; `landing-check` `complete: false`); the `emit-landing` and `archive-plan`
+  steps had not recorded when the landing was assembled, so they are absent from `steps`.
+
+## Addendum 2026-11-06 (sixth): PLAN-17 (5 plan-marshall messages and 3 landing residues)
+
+Source: `plan-17-javadoc-examples-001` to `-007` (#878). Written locally, NOT sent.
+
+- **Javadoc prose that states behaviour was written from names and intent, and only a code review caught it** (PLAN-17-001). The
+  examples were checked against signatures; ten of eleven review comments were about the prose around them (precedence, fallback,
+  empty and null inputs). Suggested for `pm-dev-java:javadoc`: when Javadoc states how something behaves, read the implementing branch
+  and cover the empty, null and exceptional inputs before writing the sentence; a compile check proves the example, not its prose. The
+  project-owned half is in PLAN-25 item 7(k).
+- **Phase subagents self-transition the plan status and skip the orchestrator's gates and metrics boundary** (PLAN-17-002). 3-outline to
+  4-plan, 4-plan to 5-execute and 5-execute to 6-finalize were moved by the dispatched bodies, so Q-gates, the handshake and the
+  `phase-boundary` stamp were skipped each time and repaired late (`boundary-status`). Execute-phase tokens were also counted twice
+  (about 186k). Suggested for `phase-5-execute` and the dispatch contract: a dispatched body returns its result and leaves the
+  transition to the orchestrator, or runs the gates and the stamp the transition owns.
+- **An inline finalize commit leaves no change-ledger row, and a commit with nothing staged reports FETCH_FAILURE** (PLAN-17-003).
+  `git-workflow commit` with an empty index fails as `FETCH_FAILURE` (wrong layer); a review fix committed inline wrote no
+  `manage-change-ledger` row, so `5-execute` to `6-finalize` refused with `execute_commits_unrecorded`. Suggested for
+  `workflow-integration-git`: report an empty index as such, and have a loop-back commit through the sanctioned verb append its own
+  ledger row (or let the guard recognise it).
+- **A whole-tree `test-compile` gate is not performable while a sibling test-jar is built at `package`** (PLAN-17-004). In
+  TokenSheriff `token-sheriff-validation` publishes its test-jar at `package`, so `test-compile` over the tree fails downstream (20
+  errors, none in touched files) while `verify` is green (3852 tests). Suggested for `build-maven`: mark the arm not performable in the
+  module profile and carry that in the canonical command set instead of each plan re-deriving it.
+- **With `review_rate_window_await=false` a required bot's quota refusal has no recovery path inside the step** (PLAN-17-005). The
+  orchestrator waited about 540 s and re-triggered by hand with `github_re_review re-review`. Recurrence of the PLAN-13, PLAN-14, PLAN-18
+  and PLAN-23 residuals. Suggested for `automatic-review`: say plainly that it is escalating; never demote a required bot to optional.
+- **Landing residue.** `effort` was never stamped (the thirteenth known producer; `landing-check` `complete: false`); `emit-landing` and
+  `archive-plan` were not yet recorded when the landing was assembled; the PR body carries the attribution footer although the template
+  says none; the per-module quality-gate sweep was replaced by one whole-tree `verify -Ppre-commit` and delta review rounds by full rounds
+  (lane-reported deviations).
+
+## Addendum 2026-11-07 (seventh): PLAN-19, the Sonar read and the CI read verbs (3 plan-marshall messages, 1 tool finding, 1 gap)
+
+Source: `plan-19-doc-structure-hygiene-009` to `-011` (#879), the 2026-11-07 Sonar read and the GitHub-issue read. Written locally, NOT sent.
+
+- **A finalize loop-back inline commit left no change-ledger row, so the next phase transition was refused** (PLAN-19-009). Same cause as
+  PLAN-17-003: `5-execute` to `6-finalize` refused with `execute_commits_unrecorded` after an inline CodeRabbit fix on the branch, and the
+  dispatcher appended the row by hand. Suggested for the loop-back workflow: the inline-fix path records its own ledger entry in the same
+  step as the commit. Second plan in a row with this failure.
+- **The Sonar gate cannot tell "skipped on purpose" from "never analysed"** (PLAN-19-010). This repository's change check skips the Sonar
+  build for a documentation-only PR, so the finalize gate reads an undecidable count and asks the operator on every docs-only PR.
+  Suggested for `workflow-integration-sonar`: read a known, intended skip as "not applicable" and report the last analysis of the base
+  branch instead, with its revision.
+- **A review-bot participation check is not bound to the head** (PLAN-19-011). After the loop-back pushed two fix commits CodeRabbit
+  posted a quota notice; the check returned "participated" from the first-pass review of an earlier head, and the final head merged with
+  no bot review and no report of it. Suggested for `automatic-review`: bind participation to the current head SHA and report a quota
+  or rate-limit notice at that head as "not reviewed at this head".
+- **TOOL FINDING: `sonar_rest search` neither takes a branch nor sends `resolved=false`.** Its default read (`/api/issues/search` with
+  `projects` only) returns resolved and closed issues together with the open ones: on 2026-11-07 it listed 47 rows for
+  `cuioss_TokenSheriff` while `branch=main&resolved=false` returns 0 and the project measures read 0 smells, 0 bugs, 0 vulnerabilities and
+  0 hotspots. Anyone reading the verb's `total_issues_fetched` takes closed issues for an open backlog. Suggested: add `--branch` and
+  default to `resolved=false` (with an explicit `--include-resolved`), and say in the result which filter was applied.
+- **GAP: the `ci` abstraction has no `issue list`** (and `pr list` takes a head branch, not a state-wide listing for issues). Gathering the
+  open issues of a repository for an epic cleanup needed `gh issue list` directly, which the orchestrator's small-ops rule forbids in
+  principle. Suggested: add `ci issue list --state open [--label]` to the read side.
+- **Landing residue.** `effort` was never stamped (the fourteenth known producer; `landing-check` `complete: false`); `emit-landing` and
+  `archive-plan` were `pending` when the landing was assembled; the merge queue gave no per-enqueue squash-message override and the squash
+  message may carry CodeRabbit's summary (the PLAN-18 residue).

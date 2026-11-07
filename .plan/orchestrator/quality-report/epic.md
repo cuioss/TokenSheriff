@@ -154,10 +154,11 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   The plan's ADR draft was parked and is FOLDED into PLAN-25 deliverable 7(h).
 - PLAN-17 — Javadoc-only but touches many code-plan files; run after all code plans in WS-01/WS-03.
 - PLAN-18 → PLAN-19 — multi-file doc overlap (D-11 xref sweep); strictly sequential.
-- PLAN-25 (staged 2026-11-05, WS-05): the terminal leftover sweep, seven deliverables (native-image `@BearerAuth`
-  coverage, client DSL-JSON sites, dead code, residual tests, two project questions, a log-record sanitisation sweep,
-  the PLAN-13 and PLAN-14 advisory residuals). Runs last, after PLAN-15 to PLAN-24; the orchestrator folds those plans'
-  unowned residuals into it and takes the split decision again before emitting.
+- PLAN-25 (staged 2026-11-05, WS-05; final cleanup 2026-11-07): the epic's single closing plan, ten deliverables (native-image
+  `@BearerAuth` coverage, a DSL-JSON guard test, dead code, residual tests, project questions incl. the test budget, a log-record
+  sanitisation sweep, the advisory residuals 7(a)-(l), GitHub #763, the e2e teardown hang, the old per-plan residuals), a Residual
+  Register of every open epic item and a Done-when with the Sonar zero target. Folded and re-grounded at `d1af3ebb`; PLAN-01 to
+  PLAN-24 have all merged, nothing else is staged or running, so it is emitted alone. The plan lifecycle may cut it at outline.
 
 ## Decisions
 
@@ -425,256 +426,143 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   FOLDED into PLAN-25 deliverable 6; 008 (client tests need the validation test-jar) was run as an `architecture enrich` hint and
   goes through its own small PR. All on the standing "leftovers go into the one final plan" instruction, confidence above 90%, so I did
   not ask. PLAN-25 stays at seven deliverables. Slots: 0 of 3 occupied; PLAN-24 is the next candidate, not emitted.
+- 2026-11-06 — `next` emitted PLAN-17, PLAN-18 and PLAN-24 as one block (N=3, R=0, `auto_emit` false; the gate admitted all
+  three, no overlap prompt: PLAN-18 and PLAN-24 share only `security-reference.adoc`, one file). PLAN-19 held back (depends on
+  PLAN-18, 8 shared doc files), PLAN-25 last by design. The operator then reported all three started; recorded as `launched`,
+  not `running`.
+- 2026-11-06 — PLAN-24 (#876, `90f8474a`) analysed from its inbox landing (complete, `effort=medium`, `model` self-reported),
+  `landings/PLAN-24.md` written. Corroborated against the merge diff (6 files), PR state (merged 16:42:18Z, 24 checks, none
+  failing), and Sonar read directly (PR gate OK, its one `java:S5778` issue `CLOSED`/`FIXED`, `main` 0 open). One read-only
+  leaf did the three-layer reading and I re-read every `checked` point. No blocker or major defect: the production change is one
+  line (`ClaimName.java:179`) and fail-closed. Minor findings: the spec had no Done-when and its "an azp-present token is
+  unchanged" contradicts its own mechanism (the PR states the narrowing); the `sub` sentence at `security-reference.adoc:35`
+  is overstated (`IdentityMapper` stringifies, `TokenLifecycleManager` compares the two subjects as strings); an explicit JSON
+  `null` is dropped by `MapRepresentation.fromJson` and reads as absent (verified, pre-existing from #511), so "must be a JSON
+  string" is slightly broad; the eight-row client_id matrix tests one behaviour; fixture names drifted. Row stamped (pr 876).
+  PLAN-24's Expected Surface now names `AudienceValidatorTest.java` (the gate under-declared it; mechanical call-site edit).
+  The doc and test residuals are folded into PLAN-25 as new item 7(i) (the `sub` sentence, null-is-absent wording and test
+  with one operator question on rejecting null, test hygiene), surface +7 entries, `corpus surfaces` reads it declarative with
+  38 paths; confidence above 90% (standing "leftovers go into the one final plan" instruction; a question, not a behaviour
+  change), so I did not ask. Four candidate-lessons: 001 (`architecture search` has no `--module`), 002 (`qgate query` is not a
+  verb) and 003 (`java:S5778` slips past the pre-commit profile, suggested for `pm-dev-java:junit-core`) are plan-marshall-owned
+  and went into a fourth 2026-11-06 addendum of `upstream-plan-marshall-report.md` as DISCARDED locally, NOT sent; 004 (null
+  claim dropped before any mapper) FOLDED into PLAN-25 item 7(i). Slots: PLAN-17 and PLAN-18 launched (PRs #878, #877 open),
+  PLAN-24 shipped, so 1 of 3 free. PLAN-19 waits for PLAN-18.
+- 2026-11-06 — PLAN-18 (#877, `af19b9c2`) analysed from its inbox landing (`landing-check` `complete: false`, `effort` missing,
+  see Open Defects), `landings/PLAN-18.md` written. Corroborated against the merge diff (20 files, +134/-79), PR state (merged
+  18:30:25Z, 24 checks, none failing) and Sonar read directly (PR gate OK, `main` 0 open). One read-only leaf did the three-layer
+  reading and I re-read the `checked` points I rely on, including all four major ones. The six findings are FIXED in
+  `findings-disposition.md` (D-2, D-6, D-9, D-13, D-14, V-17d). Layer 1: the spec's D-13 drop was mis-grounded (the cleanup
+  re-grounding checked the contrast file `benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc`, not the defect site
+  `jwt-validation-performance.adoc:18` the source report named), so D-13 is recorded as fixed by #877, not by `4f8f3eb6`; the
+  Expected Surface under-declared 9 of 20 files. Layer 3, REPORTED TO THE OPERATOR: four major documentation contradictions of
+  the code remain in docs #877 did not edit or half-edited (the COMMONS-3 SSRF allow-list scope across three docs, the
+  `DiscoveryResolver` class Javadoc, and two client test-strategy claims), plus six minor wording points; none is a code defect.
+  FOLDED into PLAN-25 as new item 7(j) on the standing "leftovers go into the one final plan" instruction (confidence above
+  90%), surface +15 entries, one new corroborated claim, with ONE operator question recorded inside it (apply a host-address
+  egress policy to the client back channel, or make the docs follow the code; default: docs follow the code). The seven
+  candidate-lessons are plan-marshall-owned process notes: DISCARDED locally and written to a fifth 2026-11-06 addendum of
+  `upstream-plan-marshall-report.md`, NOT sent; 006 (`qgate query`) is a recurrence of PLAN-24-002. PLAN-19 was re-grounded at
+  `af19b9c2` (six stale verdicts re-stamped; the `<<` count is 69 not 68, `doc/client/requirements.adoc` gained one from #877, plus
+  one `<<` outside the 12 files; `security-reference.adoc` and `threat-model.adoc` `cui-http-client` lines moved or newly listed),
+  its text and surface updated, and it is now emittable: 2 of 3 slots free, no shared path with the launched PLAN-17.
+  PLAN-25 runs last.
+
+- 2026-11-06 — PLAN-17 SHIPPED (#878, merge `d0fa0c7f`, 19 files +198/-162, `landings/PLAN-17.md`); inbox drained (seven
+  messages `plan-17-javadoc-examples-001` to `-007`, archived). Closes J-1 to J-7 and J-9 to J-12 (`findings-disposition.md`
+  updated). Three-layer reading by one read-only leaf, every `checked` point re-read: ONE layer-3 DEFECT (major, pre-existing,
+  fail-closed): with JWE configured `TokenStringValidator` admits up to 32 KiB while `NonValidatingJwtParser.decodeInternal`
+  rejects above 8 KiB with `IllegalArgumentException`, which the refresh pipeline and `BearerTokenProducer` do not catch; reported to
+  the operator at once and folded into PLAN-25 item 7(k) with a required fail-before test, NOT fixed inline (the lane's `finding`
+  message 006 had it unverified; the reading confirmed it). Eight minor Javadoc residuals (the lane's four follow-ups plus
+  `BearerTokenStatus`, `IssuerConfig` "order of preference", `NonValidatingJwtParser` `@throws`, two test-coverage overclaims)
+  folded into 7(k); the empty `Bearer ` statement is not settled by reading. The Expected Surface under-declared by three files
+  (19 touched, 16 declared) for the third time in this epic. Candidate-lessons 001 to 005 are plan-marshall-owned: DISCARDED locally
+  and written to a sixth 2026-11-06 addendum of `upstream-plan-marshall-report.md`, NOT sent; 001's project-owned half (read the branch
+  before writing behaviour prose) is carried by 7(k). The landing is `complete: false` (missing `effort`). PLAN-19 is still running.
+- 2026-11-07 — PLAN-19 SHIPPED (#879, merge `d1af3ebb`, 50 files +242/-157, documentation only, `landings/PLAN-19.md`); inbox drained
+  (twelve messages `plan-19-doc-structure-hygiene-001` to `-012`, archived). Closes D-5, Q-12, D-7, D-10, D-11, D-12, D-15
+  (`findings-disposition.md` updated). Three-layer reading by one read-only leaf, every `checked` point re-read where it is recorded:
+  no blocker and no code defect. The documentation the landing left or newly contradicted is folded into PLAN-25 7(l) and 7(j)(3):
+  COMMONS-2, `transport.adoc` and the commons threat model still say plain HTTP is always rejected beside the new cleartext opt-in
+  text; the Quarkus parent README credits the wrong class; the `RefreshFailureClassification` / `RefreshFlow` Javadoc and ADR-0010
+  line 187 still carry the "untouched and still valid" wording ADR-0010 retracted; no AsciiDoc link check was evidenced. The spec's
+  blank-line premise was already stale at base; the Expected Surface under-declared by 33 files (50 touched) for the fourth time; the
+  22 ADR status flips were a sixth deliverable no spec section authorised. Candidate-lessons 001 to 008 (documentation accuracy):
+  DISCARDED, shipped in the PR, the rule is a Standing Constraint of PLAN-25 (006 and 008 are the causes of 7(j)(3) and 7(l)(4));
+  009 to 011 are plan-marshall-owned: DISCARDED locally, written to a seventh addendum (2026-11-07) of
+  `upstream-plan-marshall-report.md`, NOT sent. The landing is `complete: false` (missing `effort`).
+- 2026-11-07 — FINAL CLEANUP (operator: "make a full cleanup, gather all open issues, check Sonar at main (0 issues), wrap the result
+  into the final cleanup plan, land, emit"). Sonar `main` read directly: 0 unresolved issues, gate OK, 0 hotspots (the `search` verb's
+  unfiltered 47 rows are closed issues; seventh addendum). PLAN-25 re-grounded at `d1af3ebb` (28 claims re-checked, five claims added),
+  rebuilt as the epic's single closing plan: new items 7(l) (PLAN-19), 8 (GitHub #763, operator: "only #763, not the others"; #358 and
+  #182 are deliberate non-goals), 9 (e2e teardown hang), 10 (old per-plan residuals), a Residual Register mapping every open item to a
+  disposition, and a Done-when with the Sonar target. PLAN-25 holds ten deliverables; scope-guard rationale retaken (the operator
+  asked twice for ONE plan; the plan lifecycle may cut it at outline).
 
 ## Open Defects
 
-- 2026-10-29 — Incomplete landing `plan-01-jwks-loader-lifecycle-009.md` (PLAN-01): `landing-check`
-  reports `complete: false`, missing key `effort` (written as `unknown` by the producer). Drained and
-  reconciled as far as it goes.
-- 2026-10-30 — Incomplete landing `plan-05-jwe-ecdh-es-001.md` (PLAN-05): missing key `effort` (never
-  stamped, written as `unknown`). Drained and reconciled as far as it goes. Fourth producer with an
-  unstamped `effort` (PLAN-01, 02, 04, 05); only PLAN-03 carried it.
-- 2026-10-29 — Incomplete landing `plan-04-quarkus-startup-health-009.md` (PLAN-04): missing key `effort`
-  (never stamped, written as `unknown`). Drained and reconciled as far as it goes. Third producer in a
-  row with an unstamped `effort`; PLAN-03 was the exception.
-- 2026-10-29 — Incomplete landing `implement-plan-02-refresh-family-rotation-006.md` (PLAN-02): missing
-  key `effort`; the plan's `refresh-runtime-stamp` could not refresh (`model_unknown`). The message also
-  ends before `emit-landing` and `archive-plan` recorded an outcome.
+> ↪ Relocated to `settled.md` § "Incomplete landings with an unstamped effort (PLAN-01 to PLAN-19)" — upstream-owned (plan-marshall stamps `effort`); one consolidated live entry remains; nothing further from this epic
+
+- 2026-11-07 — Unstamped `effort` on fourteen landings (PLAN-01, 02, 04, 05, 09, 10, 12, 14, 15, 16, 17, 18, 19, 22; PLAN-03, 06, 07, 13,
+  20, 21, 24 carried it; PLAN-08 and PLAN-11 were not checked): `landing-check` reports `complete: false`, missing key `effort`, on
+  each. Plan-marshall owns the stamp; the per-landing entries are in `settled.md`. Retire when upstream stamps `effort` at plan init.
+  PLAN-25 will be the fifteenth if it is not fixed upstream.
 - 2026-10-31 — Open: the lesson-routing gap. The candidate-lesson inbox is now empty (all 36 dispositioned),
   but the 24 plan-marshall-owned lessons could only be filed here through the foreign-store override.
   `upstream-plan-marshall-report.md` holds the evidence for the plan-marshall maintainers. FILED 2026-11-05 at the
   operator's instruction as `quality-report-001.md` in the plan-marshall repo's `live-blockers` inbox (kind `finding`,
   the whole report to the PLAN-23 addendum; the target inbox's own validation was not run, since the `inbox validate`
   verb works on this repo's epic). Addenda written after it are not sent.
-- 2026-11-01 — Incomplete landing `plan-12-benchmark-build-006.md` (PLAN-12): missing key `effort` (never
-  stamped, written as `unknown`). Drained and reconciled as far as it goes. Fifth of the nine landings so far
-  without it (PLAN-01, 02, 04, 05, 12); PLAN-03, 06, 07 and 20 carried it.
-- 2026-11-04 — Incomplete landing `plan-09-dpop-parser-hardening-007.md` (PLAN-09): `landing-check` reports
-  `complete: false`, missing key `effort` (written as `unknown`; the landing says the stamp was absent). Drained and
-  reconciled as far as it goes. Sixth known producer with an unstamped `effort` (PLAN-01, 02, 04, 05, 12, 09). The
-  PLAN-08 and PLAN-21 landings were not re-checked for it.
-- 2026-11-05 — Incomplete landing `plan-10-dpop-binding-stepup-010.md` (PLAN-10): `landing-check` reports
-  `complete: false`, missing key `effort` (the runtime stamp could not be read; written as `unknown`). Drained and
-  reconciled as far as it goes. Seventh known producer with an unstamped `effort` (PLAN-01, 02, 04, 05, 12, 09, 10).
-- 2026-11-05 — Incomplete landing `plan-14-client-adversarial-tests-005.md` (PLAN-14): `landing-check` reports
-  `complete: false`, missing key `effort` (never stamped, written as `unknown`). Drained and reconciled as far as it
-  goes. Eighth known producer with an unstamped `effort` (PLAN-01, 02, 04, 05, 12, 09, 10, 14). PLAN-13 carried it.
-- 2026-11-06 — Incomplete landing `plan-22-residual-docs-tests-adrs-001.md` (PLAN-22): `landing-check` reports
-  `complete: false`, missing key `effort`; `refresh-runtime-stamp` at landing returned `refreshed: false, reason:
-  model_unknown`. Drained and reconciled as far as it goes. Ninth known producer with an unstamped `effort` (PLAN-01,
-  02, 04, 05, 12, 09, 10, 14, 22). The landing's functional-review and code-review `operator_override` acceptances name
-  no finding and the plan workspace is gone, so what was accepted cannot be read back.
-- 2026-11-06 — Incomplete landing `plan-16-keycloak-it-assertions-005.md` (PLAN-16): `landing-check` reports
-  `complete: false`, missing key `effort` (`refresh-runtime-stamp`: `model_unknown`). Drained and reconciled as far as it
-  goes. Tenth known producer with an unstamped `effort` (PLAN-01, 02, 04, 05, 12, 09, 10, 14, 22, 16).
-- 2026-11-06 — Incomplete landing `plan-15-validation-test-gaps-009.md` (PLAN-15): `landing-check` reports `complete: false`, missing
-  key `effort`. Drained and reconciled as far as it goes. Eleventh known producer with an unstamped `effort` (PLAN-01, 02, 04, 05, 12, 09,
-  10, 14, 22, 16, 15). PLAN-13 carried it.
+- 2026-11-07 — Documentation drift left by PLAN-19 (three-layer reading, owned by PLAN-25 7(l) and 7(j)(3), none a behaviour defect): the
+  commons requirement COMMONS-2, `transport.adoc` and the commons threat model state plain HTTP is always rejected while the validation
+  docs now document the `allowInsecureHttp` opt-in; the `RefreshFailureClassification` and `RefreshFlow` Javadoc and ADR-0010 line 187
+  contradict ADR-0010's own rewritten text; the Quarkus parent README credits `ClientRuntimeConfig` with the configuration mapping. Retire
+  when the PLAN-25 PR merges.
+- 2026-11-06 — Open defect in merged code (PLAN-17 three-layer reading, not yet owned by a running plan): JWE tokens of 8193 to 32768
+  bytes fail with an unhandled `IllegalArgumentException` instead of a `TokenValidationException` (`NonValidatingJwtParser.java:294-295`
+  against `TokenStringValidator.java:65-67,96`); fail-closed but unusable above 8 KiB; PLAN-25 item 7(k)(1), operator decision on the
+  fix direction recorded there. Retire when a fix plan lands with its test.
 
 ## Watches
 
-- PLAN-13 and PLAN-14 residuals (2026-11-05; verified in the merged source or the PR unless marked): (1) PLAN-14
-  merged under a `barrier-ask-override` (CodeRabbit rate-limited, head `15eb888a`); PLAN-13 recreated its PR (#859 to
-  #861) to get a review after a quota refusal and had a merge-queue ejection on a hung `e2e-tests` job (landing
-  message). (2) PLAN-14's discovery change now refuses a response without an `application/json` `Content-Type` and a
-  non-https endpoint in an https document: a provider that served discovery differently would now fail with
-  `DISCOVERY_FAILED`; not tested against a real provider here. (3) PLAN-13: `maxHttpResponseSize` is undocumented in
-  two architecture docs, the `ParserConfig` Javadoc on `maxPayloadSize` is unclear, an oversized-content test also
-  passes on a missing `jwks_uri`, two fixed reason strings omit a cause (landing message; docs and strings not re-read);
-  all FOLDED into PLAN-25 deliverable 7, with the log-record sanitisation sweep as deliverable 6. (4) PLAN-14: a blank
-  optional endpoint is refused, a quoted numeric `expires_in` is accepted (pinned as observed), no ADR for the
-  non-https refusal, and only discovery checks the response `Content-Type`: FOLDED into PLAN-25 deliverable 7. (5)
-  Post-merge JMH benchmark runs were still pending when each plan's wait ended; not re-read. (6) The metrics total of
-  PLAN-13 is a mixed population and `model` is self-reported (landing message). (7) PLAN-13's functional review closed
-  with one deliverable "met with residuals" and nine advisory code-review notes (landing message; only the ones it
-  names are known).
-- PLAN-23 residuals (2026-11-05; verified in the merged source, the PR or Sonar unless marked): (1) one Sonar issue
-  remains on `main` (`S8786`, see the Sonar item above); folded into PLAN-15. (2) `StepUpHandler` gained a new
-  fail-closed guard (a null or blank configured redirect URI throws `IllegalArgumentException`); it narrows
-  behaviour, and PLAN-22 edits the same file next. (3) Merged under a `barrier-ask-override` (`review-barrier-gap`,
-  head `8986a132`; CodeRabbit quota); both its earlier comments were fixed (landing message). (4) Unfixed advisories
-  (landing message): the `TokenBuilder` counter-field comment, its constructor Javadoc and the message of commit
-  `627f2b5b` still describe only `MISSING_CLAIM` counting although `mapClaim` now also counts a mapper-thrown
-  exception under its own event type (the Javadoc half is a one-line fix in `TokenBuilder.java`, which no staged spec
-  declares; candidate: PLAN-22 deliverable 1 wording); `UncheckedThrowBoundaryTest` EXEMPT comments name
-  `extractClaims` where the sanctioned broad catch is `mapClaim`. FOLDED into PLAN-22 deliverable 1 on 2026-11-05
-  (both read at `TokenBuilder.java` lines 60 and 67-68 and `UncheckedThrowBoundaryTest` lines 199-204; expected surface
-  +2 entries). (5) `NativeTokenValidatorProducerIT` was not run
-  locally and whether the native IT ran in CI is unconfirmed (its CI `integration-tests / test` job is green). (6)
-  The module-tests arm of the pre-push gate degraded again (seventh plan); the whole-tree `verify` ran 3680 tests per
-  the landing (not re-run). (7) DONE 2026-11-05 on the operator's instruction (run on `main`, module `token-sheriff-validation`, which exists; the
-  hint text was unchanged; it left `.plan/project-architecture/_project.json` and `.../token-sheriff-validation/enriched.json`
-  modified and uncommitted in the main checkout): the preference emitter owed one `architecture enrich` call on `main`,
-  target module `token-sheriff-validation`, verb `best-practice`, hint (verbatim): "Prefer to suppress Sonar java:S1612
-  (replace lambda with method reference) in token-sheriff-validation tests when the suggested method reference is
-  ambiguous between assertDoesNotThrow(Executable) and assertDoesNotThrow(ThrowingSupplier) because the target method
-  is overloaded (for example CountDownLatch.await): the suggestion does not compile, so the lambda stays and the rule
-  is suppressed with a stated reason rather than the code being rewritten." The module attribution was a Sonar project
-  key, so confirm the target at pickup; not run by the orchestrator (it writes architecture data outside the epic
-  tree).
-- PLAN-10 residuals (2026-11-05; verified in the merged source or the PR unless marked): (1) the three client-side
-  DSL-JSON sites that catch only `IOException` — `DiscoveryResolver` (line 191), `ParClient` (line 147),
-  `UserInfoClient` (line 261) — are NOT covered by the PLAN-15 fold, which is validation-only; whether each leaks the
-  unchecked exception on a truncated escape is untested. CARRIED by PLAN-25 deliverable 2 (operator, 2026-11-05;
-  not PLAN-14). (2) PLAN-23 (running) declares `RefreshFailureClassificationTest.java`, which PLAN-10 changed (+57) without
-  declaring it: an overlap the gate did not predict; PLAN-23 rebases over it. PLAN-10's spec is a record and is not
-  edited. (3) The PR merged past an unreviewed head under a `barrier-ask-override` (`review-barrier-gap`): CodeRabbit
-  was quota-limited on `310669e`, which holds only its own two suggested fixes (landing message; not independently
-  re-read); gate commit `25e892e` (a comment-only suppression marker) post-dated the reviews. (4) One ADR candidate
-  was proposed and never created (landing message; PLAN-22's ADR item is the natural home, not acted on). (5) Pre-push
-  gate and token figures: `total_tokens` is a mixed population and a phase figure is over-counted by about 125
-  thousand (landing message). (6) A PLAN-10 documentation edit (`client-auth-code-pkce.svg`) was read only as a
-  diff stat, not rendered.
-
-- PLAN-11 residuals (read in the merged source 2026-11-04 unless marked): (1) `client_id` is still mapped by
-  `IdentityMapper`, which stringifies any non-string value, and `AuthorizedPartyValidator` (line 100) falls back to it
-  when `azp` is absent and the RFC 9068 fallback is on, so a numeric or list-typed `client_id` on an `azp`-less token
-  can still satisfy the configured-id comparison PLAN-11 closed for `azp`. Operator decision at PLAN-11. STAGED as
-  PLAN-24 on 2026-11-04 (strict mapping, an `iss`/`sub`/`jti` sweep, tightened `azp` assertions); retire this item
-  when PLAN-24 ships. (2)
-  `ClaimValue.isNotPresentForClaimValueType()` now has no production caller, only `ClaimValueTest`: dead code, a
-  cleanup candidate (CARRIED by PLAN-25 deliverable 3). (3) The three code-review advisories (landing message, not independently verified): the
-  non-string `azp` tests assert only the exception supertype; a `StrictStringMapper` rejection is not counted or
-  logged beyond the `MISSING_CLAIM` exception it throws (RESOLVED 2026-11-05: PLAN-23 #855 made `TokenBuilder.mapClaim`
-  count a mapper-thrown `TokenValidationException` under its own event type; read in the merged source; it is still
-  not logged); `client_id`
-  as in (1); items (1) and the first advisory are carried by PLAN-24. (4) `.plan/marshal.json` line 133 sets
-  `final_merge_without_asking: true`, which conflicted with the `CLAUDE.md` rule against auto-merge. The operator
-  decided on 2026-11-04 to change `CLAUDE.md` to allow the merge. RESOLVED: PR #857 merged as `e8d28f8a` on
-  2026-11-04, through the merge queue, with `license/cla` still pending (the operator said that check is optional
-  and told me to merge; the CLA bot read the `Co-Authored-By` trailer as an unsigned contributor, unverified).
-  Sourcery's "needs a human reviewer" remark was answered on the PR as an accepted trade-off. Plans launched from
-  now on read the new rule; the item can be deleted at the next compaction. (5) The native-image metadata for `StrictStringMapper` (`reflect-config.json`) was not exercised in a
-  native build here. (6) Pre-push `test-compile` and `module-tests` arms degraded again (sixth plan); 120 auto-filed
-  `build-error` findings blocked the first merge dispatch until rejected. Whole-tree `verify -Ppre-commit` (3621
-  tests per the landing) not re-run.
-- PLAN-09 residuals and review (landing message + PR #851 body; the items marked "read" were corroborated
-  2026-11-04): merged after a hand-accepted scope-creep warning (six files outside the declared scope, threshold
-  five). Surface delta `expansion_detected` (11 added, 1 missing). The one unfixed advisory, as the landing words it
-  (the non-EC-key and null-domain-parameters guards in `SignatureVerificationUtil.checkEcdsaComponentRange` are
-  shadowed by `initVerify`), is REFUTED in part: read in the merged source, the check runs BEFORE `initVerify`, and
-  `SignatureVerificationUtilTest` has `shouldRejectNonEcKey` and `shouldRejectNullSignature`. Still open and
-  unverified: no test names the `params == null` branch (a defensive guard, hard to reach), and the claim that
-  `PsychicSignatureAttackTest` cannot fail without the explicit range check (the JDK rejecting all-zero signatures
-  itself) was not tested (both CARRIED by PLAN-25 deliverable 4). Pre-push `module-tests` and a valid whole-tree `test-compile` arms degraded (same cause
-  as PLAN-21 and PLAN-08; covered by the whole-tree verify, 3592 tests per the landing and 3568 per the PR body, not
-  re-run). The post-merge `Run JMH Benchmarks` workflow had not finished when the run's wait hit its deadline; not
-  re-read. Two metrics rows carry placeholder figures later corrected (landing message). Sonar read directly: gate
-  OK and 0 open on #851 (a PR-scoped snapshot, not a re-run).
+- 2026-11-07 — PLAN-19 landing residue (#879; landing message, partly verified): (1) docs-only PRs skip the Sonar build in this repository's
+  change check, so the open-issue count at the head was undecidable and the operator had to accept the gap (read directly afterwards:
+  `main` 0 unresolved). (2) CodeRabbit's one-review-per-hour allowance was spent on the first head, so the loop-back head `56710e6a` was
+  merged with no fresh bot review and the participation check still read "participated" (upstream-owned, seventh addendum). (3) A
+  finalize loop-back inline commit wrote no change-ledger row (candidate-lesson 009, upstream-owned). (4) The squash message may carry
+  the PR body with CodeRabbit's summary (same cause as the PLAN-18 Watch). (5) No AsciiDoc link check was evidenced for 16 converted
+  files (PLAN-25 7(l)(6)). Retire (1) to (4) once the operator accepts them; they need nothing further from this epic.
+- 2026-11-06 — PLAN-17 landing residue (#878; landing message, partly verified): (1) `boundary_monotonicity` flagged `6-finalize` and
+  the execute-phase tokens were counted twice (about 186k), so the 22,258,542 total is an overstatement; the lane noted it in its
+  decision log and did not fix it. (2) Phase subagents self-transitioned the plan and skipped the orchestrator's Q-gates and the
+  `phase-boundary` stamp, an inline review-fix commit wrote no change-ledger row, and CodeRabbit's quota refusal needed a manual
+  re-review (all upstream-owned; sixth addendum). (3) The CodeRabbit check ended `NEUTRAL`; ten of its eleven comments needed a fix
+  commit, which is the cost of prose written from names and intent (see 7(k)). (4) The 400-line test budget Watch and the e2e teardown
+  hang are unchanged. Retire (1) to (3) once the operator accepts them; they need nothing further from this epic.
+- 2026-11-06 — PLAN-18 landing residue (#877; landing message, partly verified): (1) the squash commit on `main` carries the
+  CodeRabbit "Summary by CodeRabbit" block and a second `Co-authored-by` trailer; the merge-queue path offers no per-enqueue
+  message override and `ci repo` has no verb for the default merge-message setting (commit body read on `af19b9c2`, the cause not
+  checked). (2) Two phase-6 usage figures were entered as estimates, so the finalize token total (19,870,958 overall) is a slight
+  overstatement. (3) Functional-review round 1 was closed by operator override over an unevidenceable PR-body criterion; later
+  rounds evidenced it. Retire (1) when a merge-message mechanism exists or the operator accepts the residue; (2) and (3) need
+  nothing further. The CodeRabbit quota stall recurs (see the PLAN-13 and PLAN-14 residuals in `settled.md`).
+- 2026-11-06 — e2e teardown hang (PLAN-24 landing, #876): the `e2e-tests` job was cancelled by its 30-minute job timeout
+  after all 30 tests passed, and the landing says it recurs on `main`; a rerun cleared it (`SUCCESS` at this analysis). Unverified
+  beyond the landing message and the PR's final check state; OWNED since 2026-11-07 by PLAN-25 deliverable 9. Retire it
+  when a clean e2e run on `main` is observed twice or a cause is found. Seen once before as the PLAN-13 merge-queue ejection on a
+  hung `e2e-tests` job (see the PLAN-13 and PLAN-14 residuals in `settled.md`).
+> ↪ Relocated to `settled.md` § "Per-plan landing residuals (PLAN-01 to PLAN-23, dispositioned 2026-11-07)" — every item is carried by a PLAN-25 deliverable, dropped, or recorded as informational in its Residual Register
 
 - > ↪ Relocated to `settled.md` § "Sonar read 2026-10-30 (PLAN-01 to PLAN-05 PRs)" — point-in-time read of closed PRs, superseded by the 2026-11-06 direct reads
 - > ↪ Relocated to `settled.md` § "Sonar read 2026-10-30 (PLAN-06 and PLAN-07)" — point-in-time read of two merged PRs, superseded by the 2026-11-06 direct reads
-- PLAN-06 residuals and review (landing message + PR #840 body, not independently verified): merged under a
-  `barrier-ask-override` (`review-barrier-gap`, head `aa72e8cb`) — CodeRabbit had not reviewed the last,
-  test-only commit; `adr-propose` skipped, so single-use `FlowContext` (a rejected first `handle()` spends
-  the context) and the shared `ErrorTextSanitizer` in the validation module have no ADR; the landing
-  carries no code-review counts; `AuthorizationRequestBuilder.build` still appends its query after a
-  fragment (PLAN-10); one merge-queue ejection on the unrelated benchmark flake.
-- PLAN-07 residuals and review (landing message + PR #844 body, not independently verified): merged under a
-  `barrier-ask-override` (`review-barrier-gap`, head `75dc96e0`, final commit test-and-doc-only);
-  duplicate WARN identifier 168 left for PLAN-13 (V-14); no Quarkus config key for `maxStaleness` (CARRIED by PLAN-25 deliverable 5b); staleness
-  is measured on the wall clock; unplanned cache-hit health check in `AccessTokenValidationPipeline` (a
-  behaviour change beyond the spec); the Performance Benchmark job had not finished when the post-merge
-  wait timed out.
 - > ↪ Relocated to `settled.md` § "Sonar read 2026-11-01 (PLAN-12 and PLAN-20)" — point-in-time read of two merged PRs, superseded by the 2026-11-06 direct reads
-- PLAN-12 residuals and review (landing message + PR #846 body, not independently verified): merged under the
-  operator's "Accept the coverage gap" ruling at head `145f838c` (CodeRabbit quota-limited for the last two fix
-  commits); three advisory code-review notes, one named: the token pool's rotation counter can wrap around
-  (now in PLAN-22); the pre-push gate was satisfied from the whole-tree verify (3443 tests) instead of the
-  separate arms; the first TASK-5 commit lacks the Claude trailer; a roughly 21-hour pause from a weekly usage
-  limit sits in the wall-clock total.
-- PLAN-20 residuals (landing message + PR #847 body, not independently verified): two `AGENTS.md` advisories
-  (now in PLAN-22); whether an existing test pins a throwing `TokenStore.retrieve` was not shown at file level;
-  CodeRabbit refused twice and `review_rate_window_await` was switched on; the functional review skipped the
-  delta round for the second head.
-- PLAN-21 residuals (landing message + PR #849 body, not independently verified): the pre-push gate's
-  `test-compile` and `module-tests` arms were UN-GATED (the generators test-jar cannot resolve in a reactor
-  `test-compile`; whole-tree `verify -Ppre-commit` 3476 tests green at the merged head; same degradation as
-  PLAN-05); `applyRefresh` is a breaking public signature change (release notes); no ADR for the compare-and-set
-  decision (operator declined in the run); the post-merge `Run JMH Benchmarks` workflow had not finished; the
-  spec's PLAN-20 ordering was not checked by the run but holds on `main`. Advisories routed: see Decisions
-  2026-11-02. `doc/developer/test-impl-mapping.adoc` does not exist, and the plan-time `module_mapping_validator`
-  flag on cross-module test routing was accepted; whether the project wants that mapping doc is an open
-  operator-level question, not blocking (CARRIED by PLAN-25 deliverable 5a).
-- PLAN-08 residuals (landing message + PR #850 body, not independently verified): OPEN, security-relevant: Q-1
-  (class-level `@BearerAuth`) was verified in a real native container only with the two fixtures that carry
-  `@RegisterForReflection`; CodeRabbit asked for a fixture without it, plus two notes marked unverified (native
-  reflection metadata for the class-level lookup; a fail-open when ArC reports an unannotated generated
-  override). Whether the unregistered case can fail open is untested and needs a native build (CARRIED by PLAN-25 deliverable 1). Also: env-only
-  multi-key JWE configuration is skipped without a startup signal (documented and pinned by a test); the
-  whole-tree `test-compile` and `module-tests` are red on unmodified `main` (test-jar not visible before
-  packaging; `verify:quality-gate` accepted in place, same cause as PLAN-21); a post-merge `Run JMH Benchmarks`
-  run had not finished.
 - > ↪ Relocated to `settled.md` § "Lesson store 2026-11-02" — the missing lessons were DROPPED on the operator say-so 2026-11-05
 - > ↪ Relocated to `settled.md` § "Sonar read 2026-11-02 (PLAN-21, 44 open on main)" — the 44 open issues were closed by PLAN-23 and PLAN-15; main reads 0 open on 2026-11-06
 - > ↪ Relocated to `settled.md` § "Executor drift (resolved)" — resolved as of PLAN-21 (2026-11-02), the executor and plugin versions match
 - The CodeRabbit one-review-per-hour quota is shared by concurrent plans: PLAN-06 waited roughly three hours
   behind PLAN-07's window and both merged under an override. Pairs raise the chance of this; recorded for
   the pairing decision on PLAN-08 onward.
-- PLAN-02 residuals (landing message + PR #832 body, not independently verified): public `applyRefresh`
-  overloads take no base-token argument, so a late external result can replace a newer re-login grant
-  (needs a public signature change; pre-existing); stale comment on
-  `RefreshAdversarialTest.shouldFailClosedWhenRevocationThrowsUnchecked`; an OpenRewrite `TODO` marker
-  in `holdsNewerGrant`; ADR-0005 and ADR-0010 still call the post-redemption clear unconditional.
-- PLAN-03 residuals (landing message, not independently verified): swapped `@DisplayName` V-9/V-2
-  labels on two new `AccessTokenValidationPipelineTest` tests; `AccessTokenCache.put()` does not require
-  `iat` when a max age is set (unreachable from the pipeline, but a direct public-API `put` could make
-  eviction throw `MISSING_CLAIM`); no test combines non-zero clock skew with a max age; two draft ADRs
-  (per-entry issuer policy at store time; rejection inside the cache before DPoP) were not created.
-- PLAN-03 review/Sonar: merged under a recorded `barrier-ask-override` (`review-barrier-gap`, head
-  `467a857b`) because CodeRabbit's one-review-per-hour quota left the fix-up head unreviewed by the
-  required bot. Sonar: 0 open issues on #833 per the 2026-10-30 direct read; the landing's `java:S5778` fix and
-  `java:S2093` code suppression both cleared. The review quota will recur
-  on every plan — a process cost to weigh when pairing plans.
-- PLAN-05 residuals (landing message + PR #835 body, not independently verified): `token-decryption.adoc`
-  line 200 over-generalises the `kty` rejection; the CWE-117 sanitiser is duplicated in `JweDecryptor` and
-  `JwkKey`; a top-level JSON `null` header is rejected but neither logged nor counted (pre-existing; CARRIED by PLAN-25 deliverable 4c);
-  test gaps (null/blank `epk` coordinate, `apu`/`apv` decryption, inner-JWS payload decode failure,
-  unsupported-compression row); two test lines hold raw U+2028/U+2029; eight advisory code-review notes;
-  pre-push test-compile and module-tests arms DEGRADED, coverage adequacy not audited; Sonar: 0 open on
-  #835 per the 2026-10-30 direct read. Four plan-marshall-side lessons could not be filed because this repo's lesson store
-  rejects plan-marshall components — they exist only in the landing record.
-- PLAN-04 residuals (landing message + PR #834 body, not independently verified): merged under a
-  `barrier-ask-override` (`review-barrier-gap`, head `0053b11c`) with functional and code review closed by
-  operator override at that head; accepted functional-review coverage gap D5.C3; four advisory notes
-  (HealthCheck catch-suppression placement, README wording for apps with their own `TokenValidator`,
-  `CLIENT-21` vs `CLIENT-20` Javadoc, initializer test does not pin the proxy dereference); Sonar:
-  0 open on #834 per the 2026-10-30 direct read; the "mappers inactive at runtime" hypothesis was refuted as a cause but
-  never observed failing without the registration.
-- PLAN-01 residuals (landing message, not independently verified): three test classes over the
-  400-line budget; a retained suppressed catch-all in `TokenValidatorProducer.destroy()`; an
-  `initialize()` unexpected-exception path that leaves `LOADING`; a shared `HttpJwksLoaderConfig`
-  owned-executor caveat for V-5. ADRs 0016–0018 carry provisional numbers.
-
-- PLAN-22 residuals (2026-11-06; verified on `38aefc0a` unless marked): (1) the 400-line test budget: PLAN-22 split only
-  `NonValidatingJwtParserJweTest` (1018 to 369, plus two classes of 245 and 256 lines); `JweDecryptorTest` (1020) and
-  `AccessTokenCacheTest` (1000) are still over and grew, with no "why not" recorded; the 400 figure is not in
-  `AGENTS.md` or any versioned doc (grep), and 52 test classes exceed 400 lines, 17 exceed 600 and three exceed 1000 (`DpopProofValidatorTest` 1375; count corrected 2026-11-06 by the cleanup re-grounding, this entry first said about a dozen).
-  The PLAN-01 "three test classes over the budget" residual above is the same item. Not folded into a plan: an
-  operator ruling on whether the budget is real comes first; PLAN-25's emit-time re-read looks at it again. (2) The
-  `TokenLifecycleManager` quarantine widening landed under a docs plan (see `landings/PLAN-22.md`): fine, tested, but a
-  client threat-model review should list it. (3) The two accepted functional-review and code-review findings are
-  unnamed and unreadable. (4) CLOSED by PLAN-22: the `DpopConfig` 300 versus 360 Javadoc, the raw U+2028/U+2029 test
-  lines, the PLAN-08 empty-candidate guard test, the `TokenValidator.close` first-failure drop, the CWE-117 duplication,
-  the seven missing ADRs; DROPPED as already correct: the rotation-counter wrap and the iat-less cache Javadoc. ADRs
-  0016 to 0018: no "provisional" marker anywhere under `doc/adr/`.
-
-- PLAN-16 residuals (2026-11-06; verified on `306e6053` unless marked): (1) the parked ADR draft, FOLDED into PLAN-25
-  deliverable 7(h) (draft preserved under `drafts/`; the plan's number 0020 is taken, allocate at finalize). (2) No file
-  under `doc/client` mentions `invalid_client` or `unauthorized_client`, so the new public exception is undocumented:
-  in the same PLAN-25 item. (3) `RefreshFailureClassificationTest` +18 pins that the new type stays pre-redemption (not
-  read line by line). (4) The code review's one advisory finding is unnamed in the message. (5) The pre-push gate reported
-  module tests DEGRADED and some builds `required_coverage_unknown`; the PR gate (24 checks, Sonar OK, coverage 100.0)
-  is the stronger evidence. (6) Specs naming an external wire value now label it HYPOTHESIS (my own rule, see Decisions).
-
-- PLAN-15 residuals (2026-11-06; verified on `262369d6` unless marked): (1) TV-4 stays open by operator decision, see Decisions.
-  (2) No class-level guard exists for the DSL-JSON pattern: FOLDED into PLAN-25 deliverable 2. (3) The `JWKSKeyLoader` and `KeyProcessor`
-  log sites remain unsanitised: in PLAN-25 deliverable 6. (4) The JWE-header catch in `NonValidatingJwtParser` has no dedicated test (the
-  landing's own note): PLAN-25 deliverable 4(d). (5) The pre-push gate degraded its test-compile and module-tests arms because client
-  tests need the validation test-jar; the owed hint is recorded through its own PR. (6) Both review closes were operator overrides at a
-  head, for criteria observable only after the push; both are met after the push. (7) The CodeRabbit quota waits and a repeated build-queue
-  `max_slots` configuration warning were not reported as lessons; the first is the known shared-quota Watch above.
-
 - TC-9 (IT part) — integration tests use `useRelaxedHTTPSValidation()` and per-IT trust-all managers;
   a real truststore for the Keycloak container is IT-cost and not staged. Re-check if IT TLS
   infrastructure changes or a TLS-related IT regression appears.

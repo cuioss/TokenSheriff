@@ -2,10 +2,10 @@
   "id": "PLAN-24",
   "slug": "client-id-strict-typing",
   "workstream": "WS-01",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-24-client-id-strict-typing",
+  "pr": "876",
+  "landing": "landings/PLAN-24.md",
   "seq": 24
 }

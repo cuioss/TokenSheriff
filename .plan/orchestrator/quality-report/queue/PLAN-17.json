@@ -2,10 +2,10 @@
   "id": "PLAN-17",
   "slug": "javadoc-examples",
   "workstream": "WS-05",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-17-javadoc-examples",
+  "pr": "878",
+  "landing": "landings/PLAN-17.md",
   "seq": 17
 }
