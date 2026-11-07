@@ -36,9 +36,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -255,6 +257,41 @@ class ParClientTest {
                         "the truncated-escape parse failure must be carried as the cause"));
     }
 
+    @ParameterizedTest(name = "HTTP 201 Content-Type [{0}] -> TransportException")
+    @CsvSource(delimiter = '|', value = {
+            "''",
+            "text/plain",
+            "application/jrd+json",
+            "application/json,text/html"})
+    @DisplayName("Should refuse a 201 whose Content-Type is not application/json before parsing its body")
+    void shouldRefuseResponseWithoutJsonContentType(String contentTypes, URIBuilder uriBuilder) {
+        moduleDispatcher.returnSuccessWithContentTypes(
+                contentTypes.isEmpty() ? new String[0] : contentTypes.split(","));
+        var auth = new ClientSecretBasicAuth(Generators.nonBlankStrings().next(), Generators.nonBlankStrings().next());
+        var endpoint = parEndpoint(uriBuilder);
+        var client = parClient();
+        var params = authorizationParameters();
+
+        TransportException thrown = assertThrows(TransportException.class,
+                () -> client.pushAuthorizationRequest(endpoint, params, auth),
+                "a PAR response not declared as JSON must not be parsed");
+
+        assertTrue(thrown.getMessage().contains("Content-Type is not application/json"),
+                "the refusal must name the media type, but was: " + thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("Should accept a 201 whose application/json Content-Type carries a charset")
+    void shouldAcceptJsonContentTypeWithCharset(URIBuilder uriBuilder) {
+        moduleDispatcher.returnSuccessWithContentTypes("Application/JSON; charset=UTF-8");
+        var auth = new ClientSecretBasicAuth(Generators.nonBlankStrings().next(), Generators.nonBlankStrings().next());
+
+        ParResponse response = parClient().pushAuthorizationRequest(parEndpoint(uriBuilder),
+                authorizationParameters(), auth);
+
+        assertTrue(response.getRequestUri().isPresent(), "parameters on application/json are allowed");
+    }
+
     /**
      * Wraps the shared {@link ParDispatcher} strategies and adds a malformed-JSON strategy so the M8
      * parse-error sanitization path can be exercised with an AS-controlled CR/LF payload.
@@ -263,13 +300,28 @@ class ParClientTest {
 
         private static final String APPLICATION_JSON = "application/json";
 
+        private static final String SUCCESS_BODY =
+                "{\"request_uri\":\"urn:ietf:params:oauth:request_uri:mock-par-reference\",\"expires_in\":90}";
+
         private final ParDispatcher delegate = new ParDispatcher();
         private boolean malformed;
         private String malformedBody = "";
+        private List<String> successContentTypes;
 
         ParTestDispatcher returnDefault() {
             malformed = false;
+            successContentTypes = null;
             delegate.returnDefault();
+            return this;
+        }
+
+        /**
+         * Serve a 201 success body with exactly these {@code Content-Type} lines; no value serves no
+         * {@code Content-Type} at all.
+         */
+        ParTestDispatcher returnSuccessWithContentTypes(String... values) {
+            malformed = false;
+            successContentTypes = List.of(values);
             return this;
         }
 
@@ -315,6 +367,12 @@ class ParClientTest {
         public Optional<MockResponse> handlePost(RecordedRequest request) {
             if (malformed) {
                 return Optional.of(new MockResponse(200, Headers.of("Content-Type", APPLICATION_JSON), malformedBody));
+            }
+            List<String> contentTypes = successContentTypes;
+            if (contentTypes != null) {
+                Headers.Builder headers = new Headers.Builder();
+                contentTypes.forEach(value -> headers.add("Content-Type", value));
+                return Optional.of(new MockResponse(201, headers.build(), SUCCESS_BODY));
             }
             return delegate.handlePost(request);
         }

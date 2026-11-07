@@ -21,6 +21,7 @@ import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
+import de.cuioss.sheriff.token.client.internal.JsonResponseMediaType;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
@@ -34,7 +35,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -67,7 +67,8 @@ import java.util.Objects;
  * {@link ClientConfiguration#allowInsecureHttp} does not relax; the discovery response must
  * carry the {@code application/json} media type on every {@code Content-Type} line (parameters such
  * as {@code charset} allowed), so an absent, other or conflicting {@code Content-Type} —
- * {@code application/jrd+json} included — is refused; and the
+ * {@code application/jrd+json} included — or one carrying {@code CR}, {@code LF} or {@code NUL} is
+ * refused (the predicate shared with the token, PAR and userinfo clients); and the
  * availability of PKCE {@code S256} is recorded so the interactive
  * {@code authorization_code} flow can refuse a downgrade ({@code CLIENT-2}).
  *
@@ -82,8 +83,6 @@ public class DiscoveryResolver {
     private static final String WELL_KNOWN_SUFFIX = "/.well-known/openid-configuration";
     private static final String SCHEME_HTTPS = "https";
     private static final String HTTPS_PREFIX = SCHEME_HTTPS + "://";
-    private static final String CONTENT_TYPE = "Content-Type";
-    private static final String JSON_MEDIA_TYPE = "application/json";
 
     /**
      * Human-readable provenance of the discovery-document byte ceiling, reported with every
@@ -172,7 +171,7 @@ public class DiscoveryResolver {
         HttpClient client = backChannel.sharedClient(handler);
         HttpRequest request = handler.requestBuilder()
                 .GET()
-                .setHeader("Accept", JSON_MEDIA_TYPE)
+                .setHeader("Accept", JsonResponseMediaType.APPLICATION_JSON)
                 .build();
         try {
             HttpResponse<String> response = client.send(request, backChannel.bodyHandler());
@@ -181,7 +180,7 @@ public class DiscoveryResolver {
                 throw new TransportException(ClientLogMessages.ERROR.DISCOVERY_FAILED.format(
                         issuer, "unexpected HTTP status " + response.statusCode()));
             }
-            if (!isJsonContentType(response)) {
+            if (!JsonResponseMediaType.isJson(response.headers())) {
                 throw new TransportException(ClientLogMessages.ERROR.DISCOVERY_FAILED.format(
                         issuer, "discovery response Content-Type is not application/json"));
             }
@@ -290,19 +289,6 @@ public class DiscoveryResolver {
 
     private static boolean hasHttpsScheme(String url) {
         return url.regionMatches(true, 0, HTTPS_PREFIX, 0, HTTPS_PREFIX.length());
-    }
-
-    /**
-     * Whether the response declares the JSON media type: at least one {@code Content-Type} field line
-     * is present and <em>every</em> one of them carries a media type that, ignoring parameters such as
-     * {@code charset}, is {@code application/json} (case-insensitive). A response with a second,
-     * conflicting {@code Content-Type} line is refused rather than judged by whichever line comes first.
-     */
-    private static boolean isJsonContentType(HttpResponse<String> response) {
-        List<String> values = response.headers().allValues(CONTENT_TYPE);
-        return !values.isEmpty() && values.stream()
-                .map(value -> value.split(";", 2)[0].trim())
-                .allMatch(JSON_MEDIA_TYPE::equalsIgnoreCase);
     }
 
     private void validateTokenEndpoint(ProviderMetadata metadata, String issuer) {

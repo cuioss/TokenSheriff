@@ -25,6 +25,7 @@ import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.internal.AccessTokenConfirmation;
 import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
+import de.cuioss.sheriff.token.client.internal.JsonResponseMediaType;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.client.token.TokenErrorResponse;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
@@ -192,7 +193,11 @@ public class TokenEndpointClient {
      *         body it is an unknown error code, so the failure is a plain {@link TransportException}
      *         and never a {@link CredentialRejectedException}, {@link ClientAuthenticationFailedException}
      *         or {@link InvalidScopeException}. A non-success error body whose top-level JSON object
-     *         repeats a member name is likewise an unknown error code, never any of those subtypes
+     *         repeats a member name is likewise an unknown error code, never any of those subtypes.
+     *         A response whose {@code Content-Type} lines do not all carry {@code application/json}
+     *         (parameters such as {@code charset} allowed) is never parsed as JSON: after a success
+     *         status it is a {@link RedeemedResponseException}, and as a non-success error body it is
+     *         an unknown error code, so the failure is a plain {@link TransportException}
      */
     public TokenResponse requestToken(String tokenEndpoint,
             Map<String, String> formParameters,
@@ -242,6 +247,11 @@ public class TokenEndpointClient {
             }
             throw new TransportException(
                     "Token endpoint returned unexpected HTTP status " + response.statusCode());
+        }
+        if (!JsonResponseMediaType.isJson(response.headers())) {
+            // After a success status the grant is already redeemed: post-redemption failure.
+            throw new RedeemedResponseException(
+                    "Token endpoint response Content-Type is not application/json");
         }
         TokenResponse tokenResponse = parse(response.body());
         verifySenderConstraint(tokenResponse, senderConstraint);
@@ -384,7 +394,7 @@ public class TokenEndpointClient {
         if (!HttpStatusFamily.isClientError(response.statusCode())) {
             return false;
         }
-        return ERROR_INVALID_GRANT.equals(errorCode(response.body()));
+        return ERROR_INVALID_GRANT.equals(errorCode(response));
     }
 
     /**
@@ -404,7 +414,7 @@ public class TokenEndpointClient {
         if (!HttpStatusFamily.isClientError(status)) {
             return false;
         }
-        String code = errorCode(response.body());
+        String code = errorCode(response);
         return ERROR_INVALID_CLIENT.equals(code)
                 || (status == HTTP_UNAUTHORIZED && ERROR_UNAUTHORIZED_CLIENT.equals(code));
     }
@@ -422,7 +432,7 @@ public class TokenEndpointClient {
         if (!HttpStatusFamily.isClientError(response.statusCode())) {
             return false;
         }
-        return InvalidScopeException.ERROR_CODE.equals(errorCode(response.body()));
+        return InvalidScopeException.ERROR_CODE.equals(errorCode(response));
     }
 
     /**
@@ -464,16 +474,23 @@ public class TokenEndpointClient {
     }
 
     /**
-     * @return the RFC 6749 §5.2 {@code error} code of an error response body, or {@code null} when the
-     *         body is absent, blank, larger than the configured payload bound, unparseable, repeats a
-     *         top-level member name, or carries no {@code error} member. Every one of those is an
-     *         "unknown", never a match — the allow-list above only ever fires on a positively
-     *         recognized code. A repeated member (for example two {@code error} members) leaves the
-     *         effective value to the parser's first-wins or last-wins choice, so the body is ambiguous
-     *         and is not read as any code
+     * @return the RFC 6749 §5.2 {@code error} code of an error response, or {@code null} when the
+     *         response does not carry the {@code application/json} media type (see
+     *         {@link JsonResponseMediaType}), or its body is absent, blank, larger than the configured
+     *         payload bound, unparseable, repeats a top-level member name, or carries no {@code error}
+     *         member. Every one of those is an "unknown", never a match — the allow-list above only
+     *         ever fires on a positively recognized code. A repeated member (for example two
+     *         {@code error} members) leaves the effective value to the parser's first-wins or last-wins
+     *         choice, so the body is ambiguous and is not read as any code
      */
     @Nullable
-    private String errorCode(@Nullable String body) {
+    private String errorCode(HttpResponse<String> response) {
+        if (!JsonResponseMediaType.isJson(response.headers())) {
+            LOGGER.debug("Token endpoint error response does not carry the application/json media type; "
+                    + "treating its error code as unknown");
+            return null;
+        }
+        String body = response.body();
         if (body == null || body.isBlank()) {
             return null;
         }

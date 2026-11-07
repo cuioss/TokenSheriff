@@ -35,8 +35,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -46,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -246,6 +249,70 @@ class UserInfoClientTest {
                 () -> client.fetchUserInfo(endpoint, token, null, body -> new UserInfoResponse()));
     }
 
+    @Test
+    @DisplayName("Should parse a JSON userinfo response whose application/json Content-Type carries a charset")
+    void shouldAcceptJsonContentTypeWithCharset(URIBuilder uriBuilder) {
+        String subject = Generators.letterStrings(8, 16).next();
+        moduleDispatcher.returnWithContentTypes("{\"sub\":\"" + subject + "\"}", "Application/JSON; charset=UTF-8");
+
+        UserInfoResponse userInfo = userInfoClient().fetchUserInfo(
+                userInfoEndpoint(uriBuilder), Generators.nonBlankStrings().next());
+
+        assertEquals(subject, userInfo.getSub().orElseThrow(), "parameters on application/json are allowed");
+    }
+
+    @Test
+    @DisplayName("Should validate a signed userinfo response whose application/jwt Content-Type carries a parameter")
+    void shouldAcceptJwtContentTypeWithParameter(URIBuilder uriBuilder) {
+        String signedJwt = "eyJhbGciOiJSUzI1NiJ9." + Generators.letterStrings(20, 40).next() + ".signature";
+        moduleDispatcher.returnWithContentTypes(signedJwt, "application/jwt; charset=utf-8");
+        AtomicReference<String> received = new AtomicReference<>();
+
+        userInfoClient().fetchUserInfo(userInfoEndpoint(uriBuilder), Generators.nonBlankStrings().next(), null,
+                body -> {
+                    received.set(body);
+                    UserInfoResponse validated = new UserInfoResponse();
+                    validated.sub = Generators.letterStrings(8, 16).next();
+                    return validated;
+                });
+
+        assertEquals(signedJwt, received.get(), "the signed body must reach the validator");
+    }
+
+    @ParameterizedTest(name = "Content-Type [{0}] -> TransportException")
+    @CsvSource(delimiter = '|', value = {
+            "''",
+            "text/plain",
+            "application/jrd+json",
+            "text/plain; x=application/jwt",
+            "application/json,application/jwt",
+            "application/jwt,application/json",
+            "application/jwt,text/html"})
+    @DisplayName("Should refuse a userinfo response that is neither application/json nor application/jwt")
+    void shouldRefuseOtherOrMixedContentType(String contentTypes, URIBuilder uriBuilder) {
+        moduleDispatcher.returnWithContentTypes("{\"sub\":\"" + Generators.letterStrings(8, 16).next() + "\"}",
+                contentTypes.isEmpty() ? new String[0] : contentTypes.split(","));
+        var client = userInfoClient();
+        var endpoint = userInfoEndpoint(uriBuilder);
+        var token = Generators.nonBlankStrings().next();
+        AtomicReference<String> received = new AtomicReference<>();
+        UserInfoClient.SignedUserInfoValidator validator = body -> {
+            received.set(body);
+            UserInfoResponse validated = new UserInfoResponse();
+            validated.sub = "validated";
+            return validated;
+        };
+
+        TransportException thrown = assertThrows(TransportException.class,
+                () -> client.fetchUserInfo(endpoint, token, null, validator),
+                "a response in neither accepted form must be refused, not parsed or validated");
+
+        assertAll("refused userinfo response",
+                () -> assertTrue(thrown.getMessage().contains("neither application/json nor application/jwt"),
+                        "the refusal must name the accepted media types, but was: " + thrown.getMessage()),
+                () -> assertNull(received.get(), "the body must never reach the signed-response validator"));
+    }
+
     /**
      * Userinfo dispatcher that serves the {@link UserInfoDispatcher} JSON strategies by default and,
      * on demand, a signed JWT response (an {@code application/jwt} {@code Content-Type} with a JWT body)
@@ -257,7 +324,7 @@ class UserInfoClientTest {
 
         private final UserInfoDispatcher json = new UserInfoDispatcher();
         private boolean signed;
-        private String signedContentType = APPLICATION_JWT;
+        private List<String> signedContentTypes = List.of(APPLICATION_JWT);
         private String signedBody = "";
         private boolean malformed;
         private String malformedBody = "";
@@ -289,8 +356,17 @@ class UserInfoClientTest {
         }
 
         UserInfoTestDispatcher returnSigned(String contentType, String body) {
+            return returnWithContentTypes(body, contentType);
+        }
+
+        /**
+         * Serve {@code body} as a 200 with exactly these {@code Content-Type} lines; no value serves no
+         * {@code Content-Type} at all.
+         */
+        UserInfoTestDispatcher returnWithContentTypes(String body, String... contentTypes) {
             signed = true;
-            signedContentType = contentType;
+            malformed = false;
+            signedContentTypes = List.of(contentTypes);
             signedBody = body;
             return this;
         }
@@ -315,7 +391,9 @@ class UserInfoClientTest {
                 return Optional.of(new MockResponse(200, Headers.of("Content-Type", APPLICATION_JSON), malformedBody));
             }
             if (signed) {
-                return Optional.of(new MockResponse(200, Headers.of("Content-Type", signedContentType), signedBody));
+                Headers.Builder headers = new Headers.Builder();
+                signedContentTypes.forEach(value -> headers.add("Content-Type", value));
+                return Optional.of(new MockResponse(200, headers.build(), signedBody));
             }
             return json.handleGet(request);
         }

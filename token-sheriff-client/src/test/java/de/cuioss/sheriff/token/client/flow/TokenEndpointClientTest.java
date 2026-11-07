@@ -43,6 +43,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -74,6 +75,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <strong>Scope refusal:</strong> a {@code 4xx} naming exactly {@code invalid_scope} is the typed
  * {@link InvalidScopeException} for every grant, carrying the code and the {@code error_description};
  * a {@code 5xx}, another code or an unknown body stays a plain {@link TransportException}.
+ * <p>
+ * <strong>Content-Type:</strong> a body is read as JSON only when every {@code Content-Type} line
+ * carries {@code application/json}. An absent, other or conflicting {@code Content-Type} on a
+ * {@code 200} is a {@link RedeemedResponseException}; on an error body it is an unknown error code.
  * <p>
  * <strong>Nonce retry:</strong> a {@code use_dpop_nonce} challenge is retried exactly <em>once</em>, and
  * only when the challenge is genuine. The three cases below pin the boundaries the happy-path retry
@@ -333,6 +338,80 @@ class TokenEndpointClientTest {
                         "only a 4xx naming exactly invalid_scope may be reported as a scope refusal"),
                 () -> assertTrue(thrown.getMessage().contains("unexpected HTTP status " + status),
                         "the failure must be the ordinary non-success outcome, but was: " + thrown.getMessage()));
+    }
+
+    /**
+     * Splits a {@code ,}-separated table cell into {@code Content-Type} lines; an empty cell is a
+     * response with no {@code Content-Type} at all.
+     */
+    private static String[] contentTypeLines(String cell) {
+        return cell == null || cell.isEmpty() ? new String[0] : cell.split(",");
+    }
+
+    @ParameterizedTest(name = "HTTP 200 Content-Type [{0}] -> RedeemedResponseException")
+    @CsvSource(delimiter = '|', value = {
+            "''",
+            "text/plain",
+            "application/jrd+json",
+            "application/json,text/html"})
+    @DisplayName("a 200 whose Content-Type is not application/json is refused before its body is parsed")
+    void shouldRefuseSuccessResponseWithoutJsonContentType(String contentTypes, URIBuilder uriBuilder) {
+        moduleDispatcher.withContentTypes(contentTypeLines(contentTypes));
+        moduleDispatcher.respondWith(tokenResponse(Generators.letterStrings(30, 60).next(), "Bearer"));
+
+        TransportException thrown = redeemExpectingFailure(uriBuilder, null);
+
+        assertAll("refused success response",
+                () -> assertInstanceOf(RedeemedResponseException.class, thrown,
+                        "after a success status the grant is redeemed, but was: " + thrown),
+                () -> assertTrue(thrown.getMessage().contains("Content-Type is not application/json"),
+                        "the refusal must name the media type, but was: " + thrown.getMessage()),
+                () -> assertEquals(1, moduleDispatcher.getCallCounter(), "a refused success is not retried"));
+    }
+
+    @Test
+    @DisplayName("a 200 whose Content-Type carries a charset parameter is accepted")
+    void shouldAcceptSuccessResponseWithJsonCharset(URIBuilder uriBuilder) {
+        String accessToken = Generators.letterStrings(30, 60).next();
+        moduleDispatcher.withContentTypes("application/json; charset=UTF-8");
+        moduleDispatcher.respondWith(tokenResponse(accessToken, "Bearer"));
+
+        TokenResponse response = redeem(uriBuilder, null);
+
+        assertEquals(accessToken, response.accessToken, "parameters on application/json are allowed");
+    }
+
+    @ParameterizedTest(name = "HTTP 400 invalid_scope Content-Type [{0}] -> plain TransportException")
+    @CsvSource(delimiter = '|', value = {
+            "''",
+            "text/plain",
+            "application/jrd+json",
+            "application/json,text/html"})
+    @DisplayName("an invalid_scope body whose Content-Type is not application/json is an unknown error code")
+    void shouldNotClassifyErrorBodyWithoutJsonContentType(String contentTypes, URIBuilder uriBuilder) {
+        moduleDispatcher.withContentTypes(contentTypeLines(contentTypes));
+        moduleDispatcher.failWith(400, "{\"error\":\"invalid_scope\"}");
+
+        TransportException thrown = redeemExpectingFailure(uriBuilder, null);
+
+        assertAll("unknown error code",
+                () -> assertFalse(thrown instanceof InvalidScopeException,
+                        "a body not declared as JSON must never be read as a scope refusal"),
+                () -> assertFalse(thrown instanceof RedeemedResponseException,
+                        "a non-success response never redeemed the grant"),
+                () -> assertTrue(thrown.getMessage().contains("unexpected HTTP status 400"),
+                        "the failure must be the ordinary non-success outcome, but was: " + thrown.getMessage()));
+    }
+
+    @Test
+    @DisplayName("an invalid_scope body served as application/json with a charset is still the typed refusal")
+    void shouldClassifyErrorBodyWithJsonCharset(URIBuilder uriBuilder) {
+        moduleDispatcher.withContentTypes("application/json;charset=utf-8");
+        moduleDispatcher.failWith(400, "{\"error\":\"invalid_scope\"}");
+
+        TransportException thrown = redeemExpectingFailure(uriBuilder, null);
+
+        assertInstanceOf(InvalidScopeException.class, thrown);
     }
 
     @Test
@@ -684,6 +763,11 @@ class TokenEndpointClientTest {
         /** The status the {@link #errorBody} is served with. */
         private volatile int errorStatus = HTTP_BAD_REQUEST;
 
+        private static final List<String> DEFAULT_CONTENT_TYPES = List.of("application/json");
+
+        /** The {@code Content-Type} lines the success and error bodies are served with. */
+        private volatile List<String> contentTypes = DEFAULT_CONTENT_TYPES;
+
         /** Serve {@code body} as a 400 error response without a {@code DPoP-Nonce} on every call. */
         void failWith(String body) {
             failWith(HTTP_BAD_REQUEST, body);
@@ -710,11 +794,26 @@ class TokenEndpointClientTest {
             return callCounter.get();
         }
 
+        /**
+         * Serve the success and error bodies with exactly these {@code Content-Type} lines; no value
+         * serves no {@code Content-Type} at all.
+         */
+        void withContentTypes(String... values) {
+            this.contentTypes = List.of(values);
+        }
+
+        private Headers contentTypeHeaders() {
+            Headers.Builder builder = new Headers.Builder();
+            contentTypes.forEach(value -> builder.add("Content-Type", value));
+            return builder.build();
+        }
+
         void reset() {
             this.challengeNonce = null;
             this.successBody = null;
             this.errorBody = null;
             this.errorStatus = HTTP_BAD_REQUEST;
+            this.contentTypes = DEFAULT_CONTENT_TYPES;
             this.callCounter.set(0);
         }
 
@@ -733,14 +832,13 @@ class TokenEndpointClientTest {
             callCounter.incrementAndGet();
             String error = this.errorBody;
             if (error != null) {
-                return Optional.of(new MockResponse(errorStatus,
-                        Headers.of("Content-Type", "application/json"), error));
+                return Optional.of(new MockResponse(errorStatus, contentTypeHeaders(), error));
             }
             String nonce = this.challengeNonce;
             if (nonce == null) {
                 String body = this.successBody;
-                return Optional.of(new MockResponse(200,
-                        Headers.of("Content-Type", "application/json"), body == null ? MALFORMED_BODY : body));
+                return Optional.of(new MockResponse(200, contentTypeHeaders(),
+                        body == null ? MALFORMED_BODY : body));
             }
             return Optional.of(new MockResponse(400,
                     Headers.of("Content-Type", "application/json", "DPoP-Nonce", nonce),
