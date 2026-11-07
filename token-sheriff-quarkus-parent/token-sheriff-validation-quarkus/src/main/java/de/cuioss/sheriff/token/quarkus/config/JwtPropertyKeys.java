@@ -173,9 +173,11 @@ public final class JwtPropertyKeys {
          * Signature algorithm preferences (comma-separated).
          * Template: "sheriff.token.issuers.%s.algorithm-preferences"
          * <p>
-         * This configuration controls which signature algorithms are preferred and allowed
-         * during token validation. It can be used to enforce security policies, such as
-         * restricting validation to an explicit set of algorithms.
+         * This is one list: the signature algorithms accepted during token validation, in order of
+         * preference. Absent, it defaults to every supported JWS algorithm. A token whose algorithm is
+         * not in the list is rejected. Independently of the list, the fixed rejected set
+         * ({@code HS256}, {@code HS384}, {@code HS512} and {@code none}) is always refused,
+         * and naming one of those algorithms here fails at startup.
          * </p>
          *
          * @see de.cuioss.sheriff.token.validation.IssuerConfig
@@ -932,10 +934,13 @@ public final class JwtPropertyKeys {
         public static final String CONTENT_ENCRYPTION_ALGORITHMS = BASE + ".content-encryption-algorithms";
 
         /**
-         * Maximum size of encrypted JWE tokens in bytes.
+         * Maximum size in bytes of a 5-part compact JWE.
          * Property: "sheriff.token.jwe.max-encrypted-token-size"
          * <p>
-         * Default: 32768 (32 KB)
+         * Default and upper bound: 32768 (32 KiB); a larger value fails at startup. This is the
+         * effective limit for a JWE: both the token string check and the parser apply it, so a JWE
+         * up to this size is accepted. A 3-part JWS, and the inner JWS after decryption, stay bound
+         * by the parser's {@code maxTokenSize} (8 KiB by default).
          */
         public static final String MAX_ENCRYPTED_TOKEN_SIZE = BASE + ".max-encrypted-token-size";
     }

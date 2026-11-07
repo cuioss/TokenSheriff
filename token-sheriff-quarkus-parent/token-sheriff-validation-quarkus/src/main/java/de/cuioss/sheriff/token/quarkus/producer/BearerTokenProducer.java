@@ -53,13 +53,18 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WAR
  * <ul>
  *   <li>{@code Authorization} (default) - the token is read from the HTTP {@code Authorization}
  *       header with the {@code Bearer} prefix</li>
- *   <li>{@code Cookie} - the {@code Authorization} header is still tried first; the token is read
- *       from the HTTP cookie named by {@link JwtPropertyKeys.TOKEN#COOKIE_NAME}
- *       ({@code sheriff.token.token.cookie-name}, default {@code Bearer}) only when the
- *       {@code Authorization} header carries no {@code Bearer}-prefixed token; an {@code Authorization}
- *       value of {@code "Bearer "} with an empty (or blank) token counts as present, does not fall back to
- *       the cookie and yields {@link BearerTokenStatus#INVALID_REQUEST}</li>
+ *   <li>{@code Cookie} - the {@code Authorization} header stays the primary source and is tried first;
+ *       the HTTP cookie named by {@link JwtPropertyKeys.TOKEN#COOKIE_NAME}
+ *       ({@code sheriff.token.token.cookie-name}, default {@code Bearer}) is the fallback, read only
+ *       when the {@code Authorization} header carries no {@code "Bearer "}-prefixed value</li>
  * </ul>
+ * <p>
+ * An {@code Authorization} value that starts with {@code "Bearer "} (including the space) counts as a
+ * presented token. When the token after the prefix is empty or blank, the result is
+ * {@link BearerTokenStatus#INVALID_REQUEST} and the cookie is not consulted. A server or proxy may strip
+ * the trailing space of a bare {@code "Bearer "}; the remaining {@code "Bearer"} carries no prefixed
+ * token, so it is treated as no token at all (with {@code Cookie} configured, the cookie fallback
+ * applies).
  * <p>
  * The producer provides both service methods that return {@link BearerTokenResult} with comprehensive
  * validation information and a CDI producer method that returns {@link BearerTokenResult} directly for injection.
@@ -373,8 +378,9 @@ public class BearerTokenProducer {
      * <p>
      * This producer method provides comprehensive bearer token validation information
      * including detailed status, error information, and the validated token content.
-     * This method extracts the bearer token from the HTTP Authorization header
-     * and validates it using the configured TokenValidator.
+     * This method extracts the bearer token from the configured token source (the HTTP
+     * {@code Authorization} header, with the cookie as fallback when {@code sheriff.token.token.header}
+     * is {@code Cookie}) and validates it using the configured TokenValidator.
      * <p>
      * The producer method is @Dependent scoped, which means it will be created fresh
      * for each injection point. Unlike the AccessTokenContent producer, this method

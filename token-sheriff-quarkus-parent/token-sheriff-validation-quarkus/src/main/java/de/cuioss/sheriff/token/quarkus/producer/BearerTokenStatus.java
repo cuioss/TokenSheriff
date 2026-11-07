@@ -38,7 +38,8 @@ public enum BearerTokenStatus {
      * <p>
      * This indicates that:
      * <ul>
-     *   <li>The token was extracted from the Authorization header</li>
+     *   <li>The token was extracted from the Authorization header, or from the configured cookie
+     *       as fallback</li>
      *   <li>The token was successfully parsed and validated</li>
      *   <li>All required scopes, roles, and groups were present</li>
      *   <li>An AccessTokenContent instance was created</li>
@@ -47,13 +48,15 @@ public enum BearerTokenStatus {
     FULLY_VERIFIED,
 
     /**
-     * No bearer token was provided in the Authorization header.
+     * No bearer token was provided in the Authorization header, nor (when the cookie fallback is
+     * configured) in the token cookie.
      * <p>
      * This indicates that either:
      * <ul>
      *   <li>The Authorization header is missing</li>
      *   <li>The Authorization header is empty</li>
-     *   <li>The Authorization header does not start with "Bearer "</li>
+     *   <li>The Authorization header does not start with "Bearer " (a bare "Bearer" whose trailing
+     *       space was stripped on the way in falls under this case)</li>
      * </ul>
      */
     NO_TOKEN_GIVEN,
@@ -88,11 +91,9 @@ public enum BearerTokenStatus {
     /**
      * The bearer token request is malformed according to RFC 6750.
      * <p>
-     * This occurs when the Authorization header contains "Bearer " but:
-     * <ul>
-     *   <li>The token is empty (just "Bearer " with nothing after)</li>
-     *   <li>The token contains invalid characters for a bearer token</li>
-     * </ul>
+     * This occurs when the Authorization header starts with "Bearer " but the token after the prefix
+     * is empty or blank. The cookie fallback is not consulted in this case. A server or proxy may
+     * strip the trailing space of a bare "Bearer ", which then reads as {@link #NO_TOKEN_GIVEN}.
      * According to RFC 6750, this should result in a 400 Bad Request response
      * with error code "invalid_request".
      */
