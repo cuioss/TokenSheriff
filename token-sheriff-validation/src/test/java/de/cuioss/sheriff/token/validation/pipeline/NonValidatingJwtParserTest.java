@@ -20,6 +20,8 @@ import de.cuioss.sheriff.token.commons.events.SecurityEventCounter.EventType;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
+import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
@@ -82,6 +84,76 @@ class NonValidatingJwtParserTest {
                 "A truncated escape in the header must be a declared rejection, not an unchecked exception");
 
         assertEquals(EventType.FAILED_TO_DECODE_JWT, exception.getEventType());
+    }
+
+    /**
+     * The JWE path decodes its protected header in {@code handleJweToken}, under its own
+     * {@code IOException | ArrayIndexOutOfBoundsException} catch, separate from the JWS
+     * token-parts catch the row above exercises. This row reaches that catch: the header fails
+     * before any decryption, so the configured key never has to match.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"alg\":\"RSA-OAEP\",\"enc\":\"A256GCM\",\"kid\":\"abc\\",
+            "{\"alg\":\"RSA-OAEP\",\"enc\":\"A256GCM\",\"kid\":\"\\u12"
+    })
+    @DisplayName("Should reject a JWE header with a truncated escape as FAILED_TO_DECODE_JWT")
+    void shouldRejectJweHeaderWithTruncatedEscape(String truncatedHeader) {
+        SecurityEventCounter counter = new SecurityEventCounter();
+        NonValidatingJwtParser jweParser = NonValidatingJwtParser.builder()
+                .securityEventCounter(counter)
+                .jweDecryptionConfig(JweDecryptionConfig.builder()
+                        .defaultDecryptionKey(InMemoryKeyMaterialHandler.getDefaultPrivateKey(
+                                InMemoryKeyMaterialHandler.Algorithm.RS256))
+                        .build())
+                .build();
+        String encodedHeader = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(truncatedHeader.getBytes(StandardCharsets.UTF_8));
+        String token = encodedHeader + ".a2V5.aXY.Y2lwaGVy.dGFn";
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> jweParser.decode(token),
+                "A truncated escape in the JWE header must be a declared rejection, not an unchecked exception");
+
+        assertEquals(EventType.FAILED_TO_DECODE_JWT, exception.getEventType());
+        assertEquals("Failed to decode JWE header: malformed or structurally invalid header JSON",
+                exception.getMessage(), "Non-vacuity: the JWE-header catch, not the JWS token-parts catch, must answer");
+        assertEquals(1, counter.getCount(EventType.FAILED_TO_DECODE_JWT));
+    }
+
+    /**
+     * Pins the duplicate-member behaviour {@code doc/validation/security-reference.adoc} (Safe
+     * Parsing) describes for the typed header: an earlier {@code alg} of the wrong JSON type is not
+     * overridden by a later string {@code alg}.
+     */
+    @Nested
+    @DisplayName("Duplicate Header Member Tests")
+    class DuplicateHeaderMemberTests {
+
+        private String jwsWithHeader(String headerJson) {
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(headerJson.getBytes(StandardCharsets.UTF_8))
+                    + "." + ENCODED_PAYLOAD + "." + ENCODED_SIGNATURE;
+        }
+
+        @Test
+        @DisplayName("A numeric alg ahead of a string alg fails deserialization instead of the last occurrence winning")
+        void numericAlgAheadOfStringAlgShouldBeRejected() {
+            String token = jwsWithHeader("{\"alg\":1,\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"test-key-id\"}");
+
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> parser.decode(token));
+
+            assertEquals(EventType.FAILED_TO_DECODE_JWT, exception.getEventType());
+        }
+
+        @Test
+        @DisplayName("Two string alg members: the last occurrence wins")
+        void lastStringAlgShouldWin() {
+            DecodedJwt jwt = parser.decode(
+                    jwsWithHeader("{\"alg\":\"none\",\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"test-key-id\"}"));
+
+            assertEquals("RS256", jwt.header().alg());
+        }
     }
 
     @Nested
