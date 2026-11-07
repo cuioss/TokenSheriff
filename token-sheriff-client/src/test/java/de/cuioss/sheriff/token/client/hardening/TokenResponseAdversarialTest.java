@@ -32,13 +32,18 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
 import lombok.Getter;
+import mockwebserver3.MockResponse;
+import mockwebserver3.RecordedRequest;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,6 +74,8 @@ class TokenResponseAdversarialTest {
 
     private static final String VALID_PREFIX = "{\"access_token\":\"token\",\"token_type\":\"Bearer\"";
     private static final String DUPLICATE_MEMBER_REFUSAL = "Token endpoint response repeats the top-level member ";
+    private static final String CONTENT_TYPE = "Content-Type";
+    private static final String APPLICATION_JSON = "application/json";
 
     /**
      * The shared token-endpoint dispatcher; {@link TokenDispatcher#respondWith(String)} serves each case's
@@ -76,11 +83,55 @@ class TokenResponseAdversarialTest {
      * media type — is what must be refused.
      */
     @Getter
-    private final TokenDispatcher moduleDispatcher = new TokenDispatcher();
+    private final ScriptedTokenDispatcher moduleDispatcher = new ScriptedTokenDispatcher();
 
     @BeforeEach
     void resetDispatcher() {
         moduleDispatcher.reset();
+        moduleDispatcher.clearScript();
+    }
+
+    /**
+     * The line-break attack class against the token-endpoint {@code Content-Type}: a valid token body
+     * served with HTTP 200 and an {@code application/json} value carrying a separator followed by a
+     * smuggled {@code text/html} field line, put on the wire verbatim through the lenient header path.
+     * Whichever layer refuses it — the client's HTTP stack as a malformed response, or
+     * {@code JsonResponseMediaType} as a conflicting or control-character-carrying line — the body must
+     * never be read as a token response. The predicate's own verdict on every variant is pinned in
+     * {@code JsonResponseMediaTypeTest}.
+     */
+    @ParameterizedTest(name = "Content-Type with {0}")
+    @ArgumentsSource(HeaderLineBreakAttackDatabase.ArgumentsProvider.class)
+    @DisplayName("Should refuse a token response whose Content-Type carries a line break")
+    void shouldRefuseLineBreakInContentType(HeaderLineBreakAttackDatabase.HeaderLineBreakAttack attack,
+            URIBuilder uriBuilder) {
+        moduleDispatcher.script(new MockResponse.Builder().code(200)
+                .addHeaderLenient(CONTENT_TYPE, attack.inject(APPLICATION_JSON, CONTENT_TYPE + ": text/html"))
+                .body(VALID_PREFIX + ",\"expires_in\":300}")
+                .build());
+        var client = new TokenEndpointClient(config());
+        String tokenEndpoint = tokenEndpoint(uriBuilder);
+        Map<String, String> formParameters = Map.of("grant_type", "client_credentials");
+        Map<String, String> requestHeaders = Map.of();
+
+        assertThrows(TransportException.class,
+                () -> client.requestToken(tokenEndpoint, formParameters, requestHeaders),
+                () -> "a Content-Type carrying " + attack.description() + " must be refused");
+    }
+
+    @Test
+    @DisplayName("Should read a token response scripted with a plain application/json Content-Type")
+    void shouldReadScriptedPlainContentType(URIBuilder uriBuilder) {
+        // Positive control for the scripted path above: the same body and header path, without a separator.
+        moduleDispatcher.script(new MockResponse.Builder().code(200)
+                .addHeaderLenient(CONTENT_TYPE, APPLICATION_JSON)
+                .body(VALID_PREFIX + ",\"expires_in\":300}")
+                .build());
+
+        TokenResponse response = new TokenEndpointClient(config())
+                .requestToken(tokenEndpoint(uriBuilder), Map.of("grant_type", "client_credentials"), Map.of());
+
+        assertEquals("token", response.getAccessToken().orElseThrow());
     }
 
     @Test
@@ -307,5 +358,32 @@ class TokenResponseAdversarialTest {
                 .allowInsecureHttp(true)
                 .allowLoopbackEgress(true)
                 .build();
+    }
+
+    /**
+     * The shared token-endpoint dispatcher, extended by a scripted response that, when set, answers
+     * every token request with exactly the headers it carries — the shared dispatcher always sends a
+     * well-formed {@code application/json}.
+     */
+    static final class ScriptedTokenDispatcher extends TokenDispatcher {
+
+        private volatile @Nullable MockResponse scripted;
+
+        void script(MockResponse response) {
+            this.scripted = response;
+        }
+
+        void clearScript() {
+            this.scripted = null;
+        }
+
+        @Override
+        public Optional<MockResponse> handlePost(RecordedRequest request) {
+            MockResponse response = scripted;
+            if (response == null) {
+                return super.handlePost(request);
+            }
+            return Optional.of(response);
+        }
     }
 }

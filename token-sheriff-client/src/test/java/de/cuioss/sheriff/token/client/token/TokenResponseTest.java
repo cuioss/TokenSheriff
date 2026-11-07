@@ -233,7 +233,7 @@ class TokenResponseTest {
 
         @Test
         @DisplayName("Should read a JSON number expires_in")
-        void shouldReadNumericExpiresIn() throws IOException {
+        void shouldReadNumericExpiresIn() throws Exception {
             TokenResponse response = deserialize("{\"access_token\":\"a\",\"token_type\":\"Bearer\",\"expires_in\":3600}");
 
             assertEquals(3600L, response.getExpiresIn());

@@ -15,10 +15,13 @@
  */
 package de.cuioss.sheriff.token.client.internal;
 
+import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase;
+import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase.HeaderLineBreakAttack;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.net.http.HttpHeaders;
@@ -77,6 +80,30 @@ class JsonResponseMediaTypeTest {
         HttpHeaders headers = contentType(values.toArray(String[]::new));
 
         assertEquals(expected, JsonResponseMediaType.isJson(headers), label);
+    }
+
+    /**
+     * The predicate's own verdict on the line-break attack class, for both media types the client
+     * expects ({@code application/json} and the userinfo {@code application/jwt}) and at each position a
+     * separator can sit: after the media type, inside a parameter, and in front of a smuggled second
+     * field line. The over-the-wire tests of each endpoint cannot reach this layer on the JDK client,
+     * whose HTTP stack already refuses such a header block.
+     */
+    @ParameterizedTest(name = "{0}")
+    @ArgumentsSource(HeaderLineBreakAttackDatabase.ArgumentsProvider.class)
+    @DisplayName("Should refuse every line-break variant for every expected media type")
+    void shouldRefuseEveryLineBreakVariant(HeaderLineBreakAttack attack) {
+        assertAll(attack.description(),
+                () -> assertFalse(JsonResponseMediaType.isJson(contentType(
+                        attack.inject("application/json", "; charset=utf-8"))), "json, before a parameter"),
+                () -> assertFalse(JsonResponseMediaType.isJson(contentType(
+                        attack.inject("application/json; charset=", "utf-8"))), "json, inside a parameter"),
+                () -> assertFalse(JsonResponseMediaType.isJson(contentType(
+                                attack.inject("application/json;", "Content-Type: application/json"))),
+                        "json, in front of a smuggled line"),
+                () -> assertFalse(JsonResponseMediaType.carriesOnly(contentType(
+                                attack.inject(APPLICATION_JWT, "; charset=utf-8")), APPLICATION_JWT),
+                        "jwt, before a parameter"));
     }
 
     @Test

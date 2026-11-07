@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
+import de.cuioss.sheriff.token.client.internal.HeaderValues;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
@@ -52,11 +53,19 @@ public class StepUpChallengeParser {
      * Parses the {@code WWW-Authenticate} header value into a step-up challenge.
      *
      * @param wwwAuthenticate the raw header value, or {@code null}
-     * @return the parsed challenge, or {@link Optional#empty()} if the header is absent or is not an
-     *         {@code insufficient_user_authentication} Bearer challenge
+     * @return the parsed challenge, or {@link Optional#empty()} if the header is absent, carries a
+     *         {@code CR}, {@code LF} or {@code NUL} anywhere (a split, folded or truncated field value
+     *         is refused, never repaired), or is not an {@code insufficient_user_authentication}
+     *         Bearer challenge
      */
     public Optional<StepUpChallenge> parse(@Nullable String wwwAuthenticate) {
         if (wwwAuthenticate == null || wwwAuthenticate.isBlank()) {
+            return Optional.empty();
+        }
+        if (HeaderValues.containsLineBreakOrNul(wwwAuthenticate)) {
+            // Checked before any strip(): stripping would remove the separator from between two
+            // auth-params and turn a split or folded header into an actionable challenge (fail closed).
+            LOGGER.debug("Ignoring step-up challenge carrying CR, LF or NUL");
             return Optional.empty();
         }
         String trimmed = wwwAuthenticate.strip();

@@ -17,6 +17,8 @@ package de.cuioss.sheriff.token.client.token;
 
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase;
+import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase.HeaderLineBreakAttack;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.validation.test.dispatcher.UserInfoDispatcher;
 import de.cuioss.test.generator.Generators;
@@ -31,10 +33,12 @@ import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
 import okhttp3.Headers;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -314,6 +318,57 @@ class UserInfoClientTest {
     }
 
     /**
+     * The line-break attack class against the userinfo {@code Content-Type}, on both accepted branches:
+     * an {@code application/json} value smuggling a {@code text/html} field line, and an
+     * {@code application/jwt} value smuggling an {@code application/json} one. Each value is put on the
+     * wire verbatim. Whichever layer refuses it — the client's HTTP stack as a malformed response, or
+     * {@code JsonResponseMediaType} — the body must neither be parsed nor reach the signed-response
+     * validator. The predicate's own verdict on every variant is pinned in
+     * {@code JsonResponseMediaTypeTest}.
+     */
+    @ParameterizedTest(name = "Content-Type with {0}")
+    @ArgumentsSource(HeaderLineBreakAttackDatabase.ArgumentsProvider.class)
+    @DisplayName("Should refuse a userinfo response whose Content-Type carries a line break, on both branches")
+    void shouldRefuseLineBreakInContentType(HeaderLineBreakAttack attack, URIBuilder uriBuilder) {
+        var client = userInfoClient();
+        var endpoint = userInfoEndpoint(uriBuilder);
+        var token = Generators.nonBlankStrings().next();
+        AtomicReference<String> received = new AtomicReference<>();
+        UserInfoClient.SignedUserInfoValidator validator = body -> {
+            received.set(body);
+            UserInfoResponse validated = new UserInfoResponse();
+            validated.sub = "validated";
+            return validated;
+        };
+
+        moduleDispatcher.returnWithRawContentType("{\"sub\":\"" + Generators.letterStrings(8, 16).next() + "\"}",
+                attack.inject("application/json", "Content-Type: text/html"));
+        assertThrows(TransportException.class, () -> client.fetchUserInfo(endpoint, token, null, validator),
+                () -> "a JSON Content-Type carrying " + attack.description() + " must be refused");
+
+        moduleDispatcher.returnWithRawContentType(
+                "eyJhbGciOiJSUzI1NiJ9." + Generators.letterStrings(20, 40).next() + ".signature",
+                attack.inject(APPLICATION_JWT, "Content-Type: application/json"));
+        assertThrows(TransportException.class, () -> client.fetchUserInfo(endpoint, token, null, validator),
+                () -> "a JWT Content-Type carrying " + attack.description() + " must be refused");
+
+        assertNull(received.get(), "a refused body must never reach the signed-response validator");
+    }
+
+    @Test
+    @DisplayName("Should accept a plain application/json userinfo Content-Type written on the raw path")
+    void shouldAcceptRawPathPlainContentType(URIBuilder uriBuilder) {
+        // Positive control for the raw header path above: the same response without a separator.
+        String subject = Generators.letterStrings(8, 16).next();
+        moduleDispatcher.returnWithRawContentType("{\"sub\":\"" + subject + "\"}", "application/json");
+
+        UserInfoResponse userInfo = userInfoClient().fetchUserInfo(
+                userInfoEndpoint(uriBuilder), Generators.nonBlankStrings().next());
+
+        assertEquals(subject, userInfo.getSub().orElseThrow(), "a plain application/json on the raw path is accepted");
+    }
+
+    /**
      * Userinfo dispatcher that serves the {@link UserInfoDispatcher} JSON strategies by default and,
      * on demand, a signed JWT response (an {@code application/jwt} {@code Content-Type} with a JWT body)
      * so the signed-userinfo path (OIDC Core §5.3.2, M3) can be exercised end-to-end.
@@ -328,11 +383,23 @@ class UserInfoClientTest {
         private String signedBody = "";
         private boolean malformed;
         private String malformedBody = "";
+        private @Nullable String rawContentType;
 
         UserInfoTestDispatcher returnDefault() {
             signed = false;
             malformed = false;
+            rawContentType = null;
             json.returnDefault();
+            return this;
+        }
+
+        /**
+         * Serve {@code body} as a 200 with one {@code Content-Type} value written to the wire verbatim,
+         * through the lenient header path, so it may carry control characters the strict path refuses.
+         */
+        UserInfoTestDispatcher returnWithRawContentType(String body, String contentType) {
+            rawContentType = contentType;
+            signedBody = body;
             return this;
         }
 
@@ -387,6 +454,13 @@ class UserInfoClientTest {
 
         @Override
         public Optional<MockResponse> handleGet(RecordedRequest request) {
+            String raw = rawContentType;
+            if (raw != null) {
+                return Optional.of(new MockResponse.Builder().code(200)
+                        .addHeaderLenient("Content-Type", raw)
+                        .body(signedBody)
+                        .build());
+            }
             if (malformed) {
                 return Optional.of(new MockResponse(200, Headers.of("Content-Type", APPLICATION_JSON), malformedBody));
             }

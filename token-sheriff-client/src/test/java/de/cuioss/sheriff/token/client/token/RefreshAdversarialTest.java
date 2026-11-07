@@ -181,11 +181,14 @@ class RefreshAdversarialTest extends RefreshTestSupport {
                 Generators.letterStrings(20, 40).next(), null, 300));
         var clientAuth = clientAuth(config);
 
-        // The narrowed catch covers TransportException only, so this unchecked failure is deliberately
-        // NOT caught and reaches the caller. What must not change is the fail-closed clear.
+        // The revocation loop swallows a TransportException only, so this unchecked failure leaves the
+        // loop at the first target and propagates in place of the reuse refusal — but only after the
+        // clear, which runs in a finally. refresh() names IllegalStateException in its own catch solely
+        // to complete the single-flight future, and rethrows it unchanged. What must not change is the
+        // fail-closed clear.
         assertThrows(IllegalStateException.class,
                 () -> manager.refresh(session, metadata, flow, revocationClient, idBridge, clientAuth),
-                "an unchecked revocation-client failure is outside the narrowed catch and propagates");
+                "an unchecked revocation-client failure is not swallowed like a transport failure and propagates");
 
         assertAll("fail-closed despite an unchecked revocation failure",
                 () -> assertTrue(revocationClient.attempted(rt1),

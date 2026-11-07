@@ -17,6 +17,8 @@ package de.cuioss.sheriff.token.client.discovery;
 
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase;
+import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase.HeaderLineBreakAttack;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.validation.test.dispatcher.WellKnownDispatcher;
@@ -36,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.net.ssl.SSLContext;
@@ -68,6 +71,7 @@ class DiscoveryAdversarialTest {
     private static final String CONTENT_TYPE = "Content-Type";
     private static final String JSON = "application/json";
     private static final String CONTENT_TYPE_REFUSAL = "discovery response Content-Type is not application/json";
+    private static final String MALFORMED_RESPONSE = "malformed response";
 
     /** A cleartext origin advertised inside an otherwise all-https document; it is never contacted. */
     private static final String CLEARTEXT_ORIGIN = "http://idp.invalid";
@@ -182,6 +186,39 @@ class DiscoveryAdversarialTest {
                 "a conflicting Content-Type line must be refused whatever its position");
         assertEquals(discoveryFailure(issuer, CONTENT_TYPE_REFUSAL), thrown.getMessage(),
                 "the refusal must name the Content-Type");
+    }
+
+    /**
+     * The line-break attack class against the discovery {@code Content-Type}: an {@code application/json}
+     * value carrying a separator followed by a smuggled {@code text/html} field line. The value is put on
+     * the wire verbatim through the lenient header path, so the client's own HTTP stack sees exactly what
+     * a hostile server sends.
+     * <p>
+     * Observed on the JDK client: every variant is refused by the HTTP stack itself as a malformed
+     * response ({@code Bad header value}) before {@code JsonResponseMediaType} runs. The test accepts
+     * that refusal or the {@code Content-Type} refusal, so it keeps holding if a transport ever hands a
+     * control character through; the predicate's own verdict on every variant is pinned in
+     * {@code JsonResponseMediaTypeTest}.
+     */
+    @ParameterizedTest(name = "Content-Type with {0}")
+    @ArgumentsSource(HeaderLineBreakAttackDatabase.ArgumentsProvider.class)
+    @DisplayName("Should refuse a discovery response whose Content-Type carries a line break")
+    void shouldRefuseLineBreakInContentType(HeaderLineBreakAttack attack, URIBuilder uriBuilder,
+            SSLContext sslContext) {
+        String issuer = issuer(uriBuilder);
+        moduleDispatcher.script(new MockResponse.Builder().code(200)
+                .addHeaderLenient(CONTENT_TYPE, attack.inject(JSON, CONTENT_TYPE + ": text/html"))
+                .body(discoveryDocument(issuer, null))
+                .build());
+        var resolver = new DiscoveryResolver(tlsConfig(uriBuilder, sslContext, false));
+
+        var thrown = assertThrows(TransportException.class, resolver::resolve,
+                () -> "a Content-Type carrying " + attack.description() + " must be refused");
+        String message = thrown.getMessage();
+        assertTrue(discoveryFailure(issuer, CONTENT_TYPE_REFUSAL).equals(message)
+                || message.startsWith(discoveryFailure(issuer, MALFORMED_RESPONSE)),
+                () -> "the refusal must be the Content-Type check or the transport's malformed-response refusal: "
+                        + message);
     }
 
     @Test

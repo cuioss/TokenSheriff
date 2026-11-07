@@ -25,6 +25,7 @@ import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.internal.AccessTokenConfirmation;
 import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
+import de.cuioss.sheriff.token.client.internal.HeaderValues;
 import de.cuioss.sheriff.token.client.internal.JsonResponseMediaType;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.client.token.TokenErrorResponse;
@@ -535,7 +536,9 @@ public class TokenEndpointClient {
 
     /**
      * @return the {@code DPoP-Nonce} value when the failed response is a recoverable
-     *         {@code use_dpop_nonce} challenge against a DPoP constraint, otherwise empty
+     *         {@code use_dpop_nonce} challenge against a DPoP constraint, otherwise empty. A nonce
+     *         carrying {@code CR}, {@code LF} or {@code NUL} is no challenge: it is never echoed, no
+     *         retry is made, and the refusal stays the original non-success status
      */
     private static Optional<String> dpopNonceChallenge(HttpResponse<String> response,
             @Nullable SenderConstraint senderConstraint) {
@@ -543,7 +546,8 @@ public class TokenEndpointClient {
             return Optional.empty();
         }
         return response.headers().firstValue(DPOP_NONCE_HEADER)
-                .filter(nonce -> !nonce.isBlank());
+                .filter(nonce -> !nonce.isBlank())
+                .filter(nonce -> !HeaderValues.containsLineBreakOrNul(nonce));
     }
 
     private HttpResponse<String> send(HttpHandler handler, HttpClient client, String body,
