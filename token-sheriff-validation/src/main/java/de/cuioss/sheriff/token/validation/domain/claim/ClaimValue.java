@@ -104,21 +104,6 @@ public class ClaimValue implements Serializable {
     }
 
     /**
-     * Checks if the claim value is NOT present for the current {@link ClaimValueType}.
-     * For STRING_LIST, it checks if the list is empty.
-     * For DATETIME, it checks if the dateTime is null.
-     *
-     * @return true if the claim value is NOT present for the claim value type, false otherwise
-     */
-    public boolean isNotPresentForClaimValueType() {
-        return switch (getType()) {
-            case STRING_LIST -> asList.isEmpty();
-            case DATETIME -> dateTime == null;
-            default -> false;
-        };
-    }
-
-    /**
      * Creates a ClaimValue for a plain string. With {@link ClaimValueType#STRING}
      *
      * @param originalString the original string representation of the claim value
