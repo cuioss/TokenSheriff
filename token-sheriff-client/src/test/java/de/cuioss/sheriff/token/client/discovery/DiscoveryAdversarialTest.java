@@ -238,7 +238,8 @@ class DiscoveryAdversarialTest {
 
     /**
      * A client configuration for the mock server's {@code https} issuer that trusts the mock's
-     * certificate through the injected {@link SSLContext}.
+     * certificate through the injected {@link SSLContext} and permits loopback egress, since the mock
+     * listens on loopback.
      *
      * @param allowInsecureHttp whether cleartext is permitted; only the scheme-downgrade case sets it, to
      *                          prove the flag does not relax that refusal
@@ -252,6 +253,7 @@ class DiscoveryAdversarialTest {
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .sslContext(sslContext)
                 .allowInsecureHttp(allowInsecureHttp)
+                .allowLoopbackEgress(true)
                 .build();
     }
 

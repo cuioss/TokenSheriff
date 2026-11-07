@@ -199,6 +199,8 @@ class WiredFlowHttpsTest {
                 .scope("openid")
                 .redirectUri(REDIRECT_URI)
                 // Deliberately NOT allowInsecureHttp(true): this exercises the real TLS branch.
+                // Loopback is admitted so the TLS handshake, not the egress policy, decides the outcome.
+                .allowLoopbackEgress(true)
                 .build();
     }
 

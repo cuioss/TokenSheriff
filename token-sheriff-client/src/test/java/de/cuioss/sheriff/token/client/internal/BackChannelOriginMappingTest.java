@@ -26,6 +26,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.net.ssl.SSLContext;
+import java.net.InetAddress;
 import java.net.URI;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -53,6 +54,8 @@ class BackChannelOriginMappingTest {
     private static final String CLEARTEXT_ORIGIN = "http://keycloak:8080";
     private static final String TLS_ORIGIN = "https://keycloak.internal:8443";
     private static final String FAILURE_CONTEXT = "token endpoint request failed";
+    /** A TEST-NET-3 (RFC 5737) address: public, so the egress policy admits it, and never routed. */
+    private static final String PUBLIC_ADDRESS = "203.0.113.10";
 
     @Nested
     @DisplayName("Mapping rule")
@@ -220,11 +223,17 @@ class BackChannelOriginMappingTest {
         return new BackChannelHttp(builder.build(), MAX_CONTENT_SIZE, BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);
     }
 
+    /**
+     * No socket is opened, so the host-address egress check must not depend on DNS either: every host
+     * resolves to a fixed public documentation address the policy admits, leaving the mapping rule and
+     * the TLS policy as the only variables under test.
+     */
     private static ClientConfiguration.ClientConfigurationBuilder builder() {
         return ClientConfiguration.builder()
                 .issuer(ISSUER)
                 .clientId("test-client")
-                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC);
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                .egressHostResolver(host -> new InetAddress[]{InetAddress.getByName(PUBLIC_ADDRESS)});
     }
 
     private static SSLContext freshSslContext() {

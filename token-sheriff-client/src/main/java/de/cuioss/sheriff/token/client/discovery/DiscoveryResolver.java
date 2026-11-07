@@ -42,10 +42,12 @@ import java.util.Objects;
  * Resolves an authorization server's endpoints and capabilities from its OpenID Connect
  * {@code .well-known/openid-configuration} discovery document.
  * <p>
- * The resolver composes the commons-blessed cui-http {@link HttpHandler} — the same
- * TLS/SSRF-hardened transport primitive the {@code commons} layer uses — to fetch the discovery
- * document, then maps it into an immutable {@link ProviderMetadata} via DSL-JSON. It adds no new
- * transport control of its own; the security posture is inherited from {@code HttpHandler}.
+ * The resolver fetches the discovery document through the client's shared {@code BackChannelHttp}
+ * transport, so it gets the same controls as every other back-channel call: URL path validation, the
+ * TLS scheme check, the host-address egress policy
+ * ({@link ClientConfiguration#getEgressPolicy()}) on the URL actually contacted, the back-channel
+ * origin rewrite, and a bounded read. It then maps the document into an immutable
+ * {@link ProviderMetadata} via DSL-JSON.
  * <p>
  * The commons {@code HttpWellKnownResolver} only surfaces {@code issuer} and {@code jwks_uri},
  * whereas the client flows need the full endpoint set and capability flags; this resolver

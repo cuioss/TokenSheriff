@@ -97,6 +97,7 @@ class RefreshFlowTest {
                 .clientSecret(Generators.letterStrings(8, 20).next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
                 .build();
     }
 
@@ -106,7 +107,8 @@ class RefreshFlowTest {
                 .clientId(Generators.letterStrings(5, 12).next())
                 .clientSecret(Generators.letterStrings(8, 20).next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
-                .allowInsecureHttp(true);
+                .allowInsecureHttp(true)
+                .allowLoopbackEgress(true);
         for (String scope : scopes) {
             builder.scope(scope);
         }
@@ -454,6 +456,7 @@ class RefreshFlowTest {
                 .clientSecret(Generators.letterStrings(8, 20).next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
                 .scopes(REQUESTED_SCOPES)
                 .strictScopeReconciliation(strictScopeReconciliation)
                 .build();

@@ -22,6 +22,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import javax.net.ssl.SSLContext;
+import java.net.InetAddress;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -51,6 +52,8 @@ class BackChannelHttpTlsTrustTest {
     private static final String TOKEN_ENDPOINT = ISSUER + "/token";
     private static final String USERINFO_ENDPOINT = ISSUER + "/userinfo";
     private static final String FAILURE_CONTEXT = "token endpoint request failed";
+    /** A TEST-NET-3 (RFC 5737) address: public, so the egress policy admits it, and never routed. */
+    private static final String PUBLIC_ADDRESS = "203.0.113.10";
 
     @Test
     @DisplayName("Should forward the configured SSL context to the handler it builds")
@@ -217,11 +220,16 @@ class BackChannelHttpTlsTrustTest {
                 BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);
     }
 
+    /**
+     * No handler built here opens a socket, so the host-address egress check must not depend on DNS
+     * either: every host resolves to a fixed public documentation address the policy admits.
+     */
     private static ClientConfiguration.ClientConfigurationBuilder configurationBuilder() {
         return ClientConfiguration.builder()
                 .issuer(ISSUER)
                 .clientId("test-client")
-                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC);
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                .egressHostResolver(host -> new InetAddress[]{InetAddress.getByName(PUBLIC_ADDRESS)});
     }
 
     private static SSLContext freshSslContext() {

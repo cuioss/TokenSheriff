@@ -566,6 +566,7 @@ class RefreshFailureClassificationTest {
                 .scope("openid")
                 .redirectUri("https://rp.example.com/callback")
                 .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
                 .build();
     }
 

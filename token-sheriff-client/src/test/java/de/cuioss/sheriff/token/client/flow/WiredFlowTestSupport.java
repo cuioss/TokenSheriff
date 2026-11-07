@@ -122,7 +122,7 @@ abstract class WiredFlowTestSupport {
 
     /**
      * @return a shared-secret ({@code client_secret_basic}) client configuration bound to the test
-     *         issuer, cleartext-permitted for the mock server
+     *         issuer, cleartext-permitted and loopback-egress-permitted for the mock server
      */
     protected static ClientConfiguration config() {
         return ClientConfiguration.builder()
@@ -133,6 +133,7 @@ abstract class WiredFlowTestSupport {
                 .scope("openid")
                 .redirectUri(REDIRECT_URI)
                 .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
                 .build();
     }
 

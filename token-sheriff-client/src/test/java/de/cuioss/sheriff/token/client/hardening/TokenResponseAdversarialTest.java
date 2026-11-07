@@ -295,6 +295,7 @@ class TokenResponseAdversarialTest {
                 .clientId(Generators.nonBlankStrings().next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
                 .build();
     }
 }

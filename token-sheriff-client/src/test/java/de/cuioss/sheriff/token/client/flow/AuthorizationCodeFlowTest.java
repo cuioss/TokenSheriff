@@ -104,6 +104,7 @@ class AuthorizationCodeFlowTest {
                 .scope("openid")
                 .redirectUri(REDIRECT_URI)
                 .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
                 .build();
     }
 
@@ -156,6 +157,7 @@ class AuthorizationCodeFlowTest {
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .scope("openid")
                 .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
                 .build();
         var metadata = new ProviderMetadata();
         metadata.authorizationEndpoint = AUTH_ENDPOINT;
