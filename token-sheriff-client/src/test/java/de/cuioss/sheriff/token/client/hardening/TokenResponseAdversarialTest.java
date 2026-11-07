@@ -96,15 +96,25 @@ class TokenResponseAdversarialTest {
         assertRedeemedFailure(VALID_PREFIX + ",\"expires_in\":" + expiresIn + "}", uriBuilder);
     }
 
-    @Test
-    @DisplayName("Should accept a quoted numeric expires_in as the observed lenient behaviour")
-    void shouldAcceptQuotedNumericExpiresIn(URIBuilder uriBuilder) {
-        // Pinned as observed: the JSON library reads a quoted integer into the long field. This
-        // lenient acceptance is a risk named in the pull request for this hardening pass, not an
-        // endorsed contract.
-        TokenResponse response = request(VALID_PREFIX + ",\"expires_in\":\"300\"}", uriBuilder);
+    @ParameterizedTest(name = "expires_in = {0}")
+    @ValueSource(strings = {"\"300\"", "\"0\"", "\"-1\""})
+    @DisplayName("Should refuse a quoted numeric expires_in through the malformed-response path")
+    void shouldRefuseQuotedNumericExpiresIn(String expiresIn, URIBuilder uriBuilder) {
+        // Inverts the earlier pin that accepted a quoted integer as observed lenient behaviour:
+        // RFC 6749 §5.1 types expires_in as a number, so a JSON string is a malformed response.
+        RedeemedResponseException thrown =
+                assertRedeemedFailure(VALID_PREFIX + ",\"expires_in\":" + expiresIn + "}", uriBuilder);
 
-        assertEquals(300L, response.getExpiresIn(), "a quoted integer is read as its numeric value");
+        assertTrue(thrown.getMessage().startsWith("Failed to parse token endpoint response"),
+                "the refusal must take the existing parse-failure path, but was: " + thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("Should read an unquoted numeric expires_in")
+    void shouldReadNumericExpiresIn(URIBuilder uriBuilder) {
+        TokenResponse response = request(VALID_PREFIX + ",\"expires_in\":300}", uriBuilder);
+
+        assertEquals(300L, response.getExpiresIn(), "a JSON number is read as its value");
     }
 
     @Test

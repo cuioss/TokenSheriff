@@ -257,6 +257,25 @@ class ParClientTest {
                         "the truncated-escape parse failure must be carried as the cause"));
     }
 
+    @ParameterizedTest(name = "expires_in = {0}")
+    @ValueSource(strings = {"\"90\"", "\"0\""})
+    @DisplayName("Should refuse a quoted numeric expires_in as a malformed PAR response (RFC 9126 §2.2)")
+    void shouldRefuseQuotedNumericExpiresIn(String expiresIn, URIBuilder uriBuilder) {
+        moduleDispatcher.returnMalformedJson(
+                "{\"request_uri\":\"urn:ietf:params:oauth:request_uri:x\",\"expires_in\":" + expiresIn + "}");
+        var auth = new ClientSecretBasicAuth(Generators.nonBlankStrings().next(), Generators.nonBlankStrings().next());
+        var endpoint = parEndpoint(uriBuilder);
+        var client = parClient();
+        var params = authorizationParameters();
+
+        TransportException thrown = assertThrows(TransportException.class,
+                () -> client.pushAuthorizationRequest(endpoint, params, auth),
+                "a quoted expires_in must not be read as a number");
+
+        assertTrue(thrown.getMessage().startsWith("Failed to parse PAR endpoint response"),
+                "the refusal must take the existing parse-failure path, but was: " + thrown.getMessage());
+    }
+
     @ParameterizedTest(name = "HTTP 201 Content-Type [{0}] -> TransportException")
     @CsvSource(delimiter = '|', value = {
             "''",
