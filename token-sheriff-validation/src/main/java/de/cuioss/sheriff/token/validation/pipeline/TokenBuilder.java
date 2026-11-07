@@ -20,6 +20,7 @@ import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.claim.mapper.ClaimMapper;
+import de.cuioss.sheriff.token.validation.domain.claim.mapper.StrictStringMapper;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
@@ -53,6 +54,9 @@ import java.util.Optional;
  * @author Oliver Wolff
  */
 public class TokenBuilder {
+
+    // Raises the typed non-string rejection for an identifier claim carrying an explicit JSON null
+    private static final ClaimMapper EXPLICIT_NULL_GUARD = new StrictStringMapper();
 
     // Combined mapper lookup to avoid runtime checks
     private final Map<String, ClaimMapper> allMappers;
@@ -135,6 +139,15 @@ public class TokenBuilder {
      * @return a map of claim names to claim values
      */
     private Map<String, ClaimValue> extractClaims(MapRepresentation mapRepresentation) {
+        // An explicit JSON null for an identifier claim is refused, not read as absent. It is routed
+        // through the strict mapper's non-string rejection, whatever mapper the claim is configured
+        // with, so it is typed and counted like any other malformed identifier claim.
+        for (String key : mapRepresentation.explicitNullKeys()) {
+            if (ClaimName.fromString(key).filter(ClaimName::isExplicitNullRefused).isPresent()) {
+                mapClaim(EXPLICIT_NULL_GUARD, mapRepresentation, key);
+            }
+        }
+
         Map<String, ClaimValue> claims = HashMap.newHashMap(mapRepresentation.size());
 
         for (String key : mapRepresentation.keySet()) {

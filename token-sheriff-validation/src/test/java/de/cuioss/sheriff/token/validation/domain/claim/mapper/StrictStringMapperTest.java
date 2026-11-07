@@ -86,9 +86,22 @@ class StrictStringMapperTest {
     }
 
     @Test
-    @DisplayName("Should return null for a JSON null claim, which the parser drops")
-    void shouldReturnNullForJsonNullClaim() {
-        assertNull(underTest.map(bodyWithClaimJson("null"), CLAIM_NAME));
+    @DisplayName("Should reject an explicit JSON null claim instead of reading it as absent")
+    void shouldRejectJsonNullClaim() {
+        MapRepresentation body = bodyWithClaimJson("null");
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> underTest.map(body, CLAIM_NAME));
+
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
+        assertEquals("Malformed claim '" + CLAIM_NAME + "': expected a JSON string but got null",
+                exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("Should still return null for an absent claim beside another explicit null")
+    void shouldReturnNullForAbsentClaimBesideExplicitNull() {
+        assertNull(underTest.map(parse("{\"other\":null}"), CLAIM_NAME));
     }
 
     static Stream<Arguments> nonStringValues() {
