@@ -553,3 +553,31 @@ Source: `plan-17-javadoc-examples-001` to `-007` (#878). Written locally, NOT se
   `archive-plan` were not yet recorded when the landing was assembled; the PR body carries the attribution footer although the template
   says none; the per-module quality-gate sweep was replaced by one whole-tree `verify -Ppre-commit` and delta review rounds by full rounds
   (lane-reported deviations).
+
+## Addendum 2026-11-07 (seventh): PLAN-19, the Sonar read and the CI read verbs (3 plan-marshall messages, 1 tool finding, 1 gap)
+
+Source: `plan-19-doc-structure-hygiene-009` to `-011` (#879), the 2026-11-07 Sonar read and the GitHub-issue read. Written locally, NOT sent.
+
+- **A finalize loop-back inline commit left no change-ledger row, so the next phase transition was refused** (PLAN-19-009). Same cause as
+  PLAN-17-003: `5-execute` to `6-finalize` refused with `execute_commits_unrecorded` after an inline CodeRabbit fix on the branch, and the
+  dispatcher appended the row by hand. Suggested for the loop-back workflow: the inline-fix path records its own ledger entry in the same
+  step as the commit. Second plan in a row with this failure.
+- **The Sonar gate cannot tell "skipped on purpose" from "never analysed"** (PLAN-19-010). This repository's change check skips the Sonar
+  build for a documentation-only PR, so the finalize gate reads an undecidable count and asks the operator on every docs-only PR.
+  Suggested for `workflow-integration-sonar`: read a known, intended skip as "not applicable" and report the last analysis of the base
+  branch instead, with its revision.
+- **A review-bot participation check is not bound to the head** (PLAN-19-011). After the loop-back pushed two fix commits CodeRabbit
+  posted a quota notice; the check returned "participated" from the first-pass review of an earlier head, and the final head merged with
+  no bot review and no report of it. Suggested for `automatic-review`: bind participation to the current head SHA and report a quota
+  or rate-limit notice at that head as "not reviewed at this head".
+- **TOOL FINDING: `sonar_rest search` neither takes a branch nor sends `resolved=false`.** Its default read (`/api/issues/search` with
+  `projects` only) returns resolved and closed issues together with the open ones: on 2026-11-07 it listed 47 rows for
+  `cuioss_TokenSheriff` while `branch=main&resolved=false` returns 0 and the project measures read 0 smells, 0 bugs, 0 vulnerabilities and
+  0 hotspots. Anyone reading the verb's `total_issues_fetched` takes closed issues for an open backlog. Suggested: add `--branch` and
+  default to `resolved=false` (with an explicit `--include-resolved`), and say in the result which filter was applied.
+- **GAP: the `ci` abstraction has no `issue list`** (and `pr list` takes a head branch, not a state-wide listing for issues). Gathering the
+  open issues of a repository for an epic cleanup needed `gh issue list` directly, which the orchestrator's small-ops rule forbids in
+  principle. Suggested: add `ci issue list --state open [--label]` to the read side.
+- **Landing residue.** `effort` was never stamped (the fourteenth known producer; `landing-check` `complete: false`); `emit-landing` and
+  `archive-plan` were `pending` when the landing was assembled; the merge queue gave no per-enqueue squash-message override and the squash
+  message may carry CodeRabbit's summary (the PLAN-18 residue).

@@ -2,10 +2,10 @@
   "id": "PLAN-19",
   "slug": "doc-structure-hygiene",
   "workstream": "WS-05",
-  "status": "running",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-19-doc-structure-hygiene",
+  "pr": "879",
+  "landing": "landings/PLAN-19.md",
   "seq": 19
 }
