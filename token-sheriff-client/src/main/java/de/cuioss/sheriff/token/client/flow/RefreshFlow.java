@@ -84,8 +84,11 @@ import java.util.Set;
  * A failure raised before that point carries no redemption, and {@code classify} splits that region in
  * two rather than collapsing it. Most of it is
  * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION} — a connection failure, a DNS failure, an
- * SSRF-blocked target, a {@code 5xx} — where the presented token is untouched, which is what keeps a
- * transient network fault from being mistaken for a burned credential. The exception is a {@code 4xx}
+ * SSRF-blocked target, a {@code 5xx} — where the client has no evidence the server judged the grant and
+ * keeps the presented token locally, which is what keeps a transient network fault from being mistaken
+ * for a burned credential. Keeping it is not server-side validity: a token request is a non-idempotent
+ * {@code POST}, so after a connection failure or a {@code 5xx} the server may already have rotated the
+ * token while the client never saw the response. The exception is a {@code 4xx}
  * the authorization server attributed to the credential itself (RFC 6749 §5.2 {@code invalid_grant}),
  * raised as {@link CredentialRejectedException} and classified
  * {@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED}: nothing was redeemed and there is no
@@ -280,10 +283,12 @@ public class RefreshFlow {
      * {@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED}: nothing to revoke, but the session
      * must be cleared.
      * <p>
-     * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION} means the request never reached the
-     * point where the server processed the grant, so the presented refresh token is untouched and still
-     * valid. Treating that as a redemption would destroy a working session over a transient network
-     * fault; treating it as a rejected credential would do the same.
+     * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION} means the client has no evidence that the
+     * server processed the grant, so it keeps the presented refresh token locally. That is what the
+     * client knows, not what the server holds: after a connection failure or a {@code 5xx} the server
+     * may already have rotated the token, and the next refresh is then refused. Treating the state as a
+     * redemption would destroy a working session over a transient network fault in the common case;
+     * treating it as a rejected credential would do the same.
      * <p>
      * {@link RedeemedRefreshFailure} is tested first because it is an interface: a future refusal type
      * that both implements it and extends one of the named classes must be classified by the state it

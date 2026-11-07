@@ -29,8 +29,12 @@ import java.util.Objects;
  *   <li>{@link Kind#PRE_REDEMPTION} — the request never reached the point where the authorization
  *       server processed the grant (a connection failure, a DNS failure, an SSRF-blocked target, a
  *       {@code 5xx}, or a {@code 4xx} the server attributed neither to the credential nor to the
- *       requested scope). The presented token is untouched and still valid: the session must be left
- *       alone. Quarantining here would destroy a working session over a transient network fault.</li>
+ *       requested scope). The client has no evidence that the server judged the grant, so it keeps the
+ *       presented token locally and the session must be left alone. Keeping it locally is not
+ *       server-side validity: a token request is a non-idempotent {@code POST}, so after a connection
+ *       failure or a {@code 5xx} the server may already have rotated the token while the client never
+ *       saw the response, and the next refresh can then be refused. Quarantining here would still
+ *       destroy a working session over a transient network fault in the common case.</li>
  *   <li>{@link Kind#SCOPE_REFUSED} — the authorization server judged the requested scope and refused it
  *       (RFC 6749 §5.2 {@code invalid_scope} on a client-error status) before applying any grant. The
  *       presented token is untouched and still valid, so the session is kept — but the answer depends
@@ -78,8 +82,10 @@ public record RefreshFailureClassification(Kind kind, @Nullable RefreshRedemptio
     public enum Kind {
 
         /**
-         * The authorization server never processed the grant, so the presented refresh token is
-         * untouched and still usable. The session is left intact.
+         * The client has no evidence that the authorization server processed the grant, so it keeps
+         * the presented refresh token locally and leaves the session intact. After a connection
+         * failure or a {@code 5xx} the server may nevertheless already have rotated the token, in
+         * which case the next refresh is refused.
          */
         PRE_REDEMPTION,
 
@@ -132,8 +138,9 @@ public record RefreshFailureClassification(Kind kind, @Nullable RefreshRedemptio
     }
 
     /**
-     * @return the classification for a failure raised before the authorization server processed the
-     *         grant, leaving the presented refresh token valid
+     * @return the classification for a failure with no evidence that the authorization server
+     *         processed the grant, keeping the presented refresh token locally (the server may still
+     *         have rotated it after a connection failure or a {@code 5xx})
      */
     public static RefreshFailureClassification preRedemption() {
         return new RefreshFailureClassification(Kind.PRE_REDEMPTION, null);

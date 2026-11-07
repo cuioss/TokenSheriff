@@ -78,8 +78,9 @@ import java.util.concurrent.locks.ReentrantLock;
  * {@link #clearRefusedSession}). Restoring the presented
  * token instead would leave the client holding a
  * credential the AS has already invalidated, turning a local refusal into a remote failure on the very
- * next refresh. A refusal on a <em>non-rotated</em> redemption needs none of this: the presented token
- * is still valid at the AS and the family was never advanced, so the untouched store entry stays usable.
+ * next refresh. A refusal on a <em>non-rotated</em> redemption needs none of this: the AS answered
+ * without naming a successor and the family was never advanced, so the client keeps the store entry it
+ * already holds.
  * <p>
  * <strong>The same fail-closed rule covers refusals raised inside the exchange itself.</strong>
  * {@link RefreshFlow#refresh} can refuse after the authorization server has already answered — the
@@ -102,10 +103,12 @@ import java.util.concurrent.locks.ReentrantLock;
  *       presented refresh token invalid (RFC 6749 §5.2 {@code invalid_grant}) without redeeming it.
  *       A clear is attempted, but no revocation is attempted: there is no successor, and the
  *       presented token is exactly what the server just refused.</li>
- *   <li>{@link RefreshFailureClassification.Kind#PRE_REDEMPTION} — the request never reached
- *       redemption (a connection failure, a DNS failure, a {@code 5xx}), so the presented token is
- *       still valid and the session is deliberately left intact rather than destroyed over a transient
- *       fault.</li>
+ *   <li>{@link RefreshFailureClassification.Kind#PRE_REDEMPTION} — the client has no evidence the
+ *       server processed the grant (a connection failure, a DNS failure, a {@code 5xx}), so it keeps the
+ *       presented token locally and the session is deliberately left intact rather than destroyed over
+ *       a transient fault. Keeping it is not server-side validity: after a connection failure or a
+ *       {@code 5xx} the server may already have rotated the token, and the next refresh is then
+ *       refused.</li>
  *   <li>{@link RefreshFailureClassification.Kind#SCOPE_REFUSED} — the server refused the requested
  *       scope (RFC 6749 §5.2 {@code invalid_scope}) before applying any grant. The presented token is
  *       still valid, so the session is kept; nothing is revoked or cleared, no retry is scheduled and no
