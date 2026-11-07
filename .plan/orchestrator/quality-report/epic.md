@@ -499,6 +499,13 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   #182 are deliberate non-goals), 9 (e2e teardown hang), 10 (old per-plan residuals), a Residual Register mapping every open item to a
   disposition, and a Done-when with the Sonar target. PLAN-25 holds ten deliverables; scope-guard rationale retaken (the operator
   asked twice for ONE plan; the plan lifecycle may cut it at outline).
+- 2026-11-07 — PLAN-25 RUNNING (operator: "plan is running"), plan id `plan-25-epic-leftover-sweep`. OPERATOR DECISIONS on the four open
+  questions, delivered to the plan's mailbox as `orchestrator-quality-report-001.md` (the spec is not edited under a running row):
+  7(k)(1) JWE size mismatch: keep the 8 KiB parser limit and map the failure to a `TokenValidationException` (agreed default); 7(i)(2)
+  explicit JSON null identifier claims: pin as observed (agreed default); 7(j)(1) back-channel egress policy: the docs follow the code
+  (agreed default); 5(c) the 400-line test budget: NOT a hard rule but a guideline, and more than 500 lines should be avoided, so
+  `AGENTS.md` states a 500-line guideline, no existing class is split for it, and classes this plan creates or edits stay at or under
+  500 lines. The layer-3 JWE Open Defect keeps its owner (7(k)(1)) with the direction settled.
 
 ## Open Defects
 
