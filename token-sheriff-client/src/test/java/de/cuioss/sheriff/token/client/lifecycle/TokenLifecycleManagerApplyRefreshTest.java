@@ -15,17 +15,36 @@
  */
 package de.cuioss.sheriff.token.client.lifecycle;
 
+import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
+import de.cuioss.sheriff.token.client.auth.ClientSecretBasicAuth;
+import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
+import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.dpop.ConstraintBinding;
+import de.cuioss.sheriff.token.client.flow.InvalidScopeException;
+import de.cuioss.sheriff.token.client.flow.RefreshFailureClassification;
+import de.cuioss.sheriff.token.client.flow.RefreshFlow;
+import de.cuioss.sheriff.token.client.flow.TokenEndpointClient;
+import de.cuioss.sheriff.token.client.token.IdTokenValidationBridge;
 import de.cuioss.sheriff.token.client.token.RefreshTokenFamilyRevokedException;
+import de.cuioss.sheriff.token.client.token.RotationResult;
+import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
+import de.cuioss.sheriff.token.validation.TokenValidator;
+import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
+import de.cuioss.test.juli.LogAsserts;
+import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,6 +60,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>
  * Whether a family was advanced is observed through the public API: rotating from a token the family
  * superseded is refused as reuse, rotating from its current token is not.
+ * <p>
+ * The scope-refusal group pins the {@code SCOPE_REFUSED} disposition of a refused exchange: the held
+ * bundle is kept, the family is not advanced, nothing is revoked, no retry is made and no {@code WARN} is
+ * logged.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -205,6 +228,93 @@ class TokenLifecycleManagerApplyRefreshTest {
             assertThrows(IllegalStateException.class,
                     () -> manager.applyRefresh(session, grantA, accessToken, successor, null, null, "mallory"));
             assertEquals(Optional.of(bound), manager.get(session), "the refused apply writes nothing");
+        }
+    }
+
+    @Nested
+    @DisplayName("A refresh the authorization server refused over the requested scope")
+    class ScopeRefusal {
+
+        @Test
+        @DisplayName("Should keep the session, revoke nothing, log no WARN and make no further exchange")
+        void shouldKeepSessionOnScopeRefusal() {
+            String grantA = token();
+            StoredToken held = bundle(grantA, token());
+            manager.store(session, held);
+            ClientConfiguration config = config();
+            var flow = new ScopeRefusingRefreshFlow(config);
+            var revocations = new RecordingRevocationClient(config);
+            var metadata = new ProviderMetadata();
+            metadata.tokenEndpoint = "https://as.example.com/token";
+            metadata.revocationEndpoint = "https://as.example.com/revoke";
+            var idBridge = new IdTokenValidationBridge(validator());
+            var clientAuth = new ClientSecretBasicAuth(config.getClientId(), config.getClientSecret());
+
+            InvalidScopeException thrown = assertThrows(InvalidScopeException.class,
+                    () -> manager.refresh(session, metadata, flow, revocations, idBridge, clientAuth),
+                    "the scope refusal must reach the caller unchanged");
+
+            String successor = token();
+            assertAll("the presented token is still valid, so nothing is torn down and nothing is retried",
+                    () -> assertEquals(RefreshFailureClassification.Kind.SCOPE_REFUSED,
+                            RefreshFlow.classify(thrown).kind()),
+                    () -> assertEquals(Optional.of(held), manager.get(session), "the session is kept unchanged"),
+                    () -> assertTrue(revocations.revokedTokens.isEmpty(), "nothing is revoked"),
+                    () -> assertEquals(1, flow.attempts.get(), "no retry of the refused request is made"),
+                    () -> LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, TokenLifecycleManager.class),
+                    () -> assertEquals(Optional.of(successor),
+                            manager.applyRefresh(session, grantA, token(), successor, null, null, null)
+                                    .map(StoredToken::refreshToken),
+                            "the family was not advanced, so a later rotation from the held token is not reuse"));
+        }
+
+        private static ClientConfiguration config() {
+            return ClientConfiguration.builder()
+                    .issuer("https://as.example.com")
+                    .clientId(Generators.letterStrings(5, 12).next())
+                    .clientSecret(Generators.letterStrings(8, 20).next())
+                    .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                    .allowInsecureHttp(true)
+                    .build();
+        }
+    }
+
+    private static TokenValidator validator() {
+        return TokenValidator.builder()
+                .issuerConfig(TestTokenGenerators.accessTokens().next().getIssuerConfig()).build();
+    }
+
+    /** A refresh flow whose exchange is always refused with {@code invalid_scope}, counting attempts. */
+    private static final class ScopeRefusingRefreshFlow extends RefreshFlow {
+
+        private final AtomicInteger attempts = new AtomicInteger();
+
+        ScopeRefusingRefreshFlow(ClientConfiguration config) {
+            super(config, new TokenEndpointClient(config), new TokenValidationBridge(validator()),
+                    new ClientSecretBasicAuth(config.getClientId(), config.getClientSecret()));
+        }
+
+        @Override
+        public RotationResult refresh(ProviderMetadata metadata, String refreshToken) {
+            attempts.incrementAndGet();
+            throw new InvalidScopeException("Token endpoint refused the requested scope with HTTP 400",
+                    InvalidScopeException.ERROR_CODE, null);
+        }
+    }
+
+    /** Records every revocation without issuing HTTP. */
+    private static final class RecordingRevocationClient extends RevocationClient {
+
+        private final List<String> revokedTokens = new CopyOnWriteArrayList<>();
+
+        RecordingRevocationClient(ClientConfiguration config) {
+            super(config);
+        }
+
+        @Override
+        public void revoke(String revocationEndpoint, String token, String tokenTypeHint,
+                ClientAuthentication clientAuthentication) {
+            revokedTokens.add(token);
         }
     }
 

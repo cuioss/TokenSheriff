@@ -52,6 +52,7 @@ import java.net.ServerSocket;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -68,8 +69,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The classification in two tiers.
  * <p>
- * The nested groups pin it as a <em>type contract</em>: which kind carries a redemption, which two do
- * not, and that neither disagreeing pairing is constructible through any entry point. The rejected
+ * The nested groups pin it as a <em>type contract</em>: the exact set of four kinds, which kind carries a
+ * redemption, which three do not, and that neither disagreeing pairing is constructible through any entry point. The rejected
  * pairings are the load-bearing part. A {@link Kind#REDEEMED} instance with no redemption would read
  * downstream as "nothing is known about the presented token", which is the session-preserving
  * disposition — so a value that lost its state would silently become the exact inversion the
@@ -150,6 +151,25 @@ class RefreshFailureClassificationTest {
         }
 
         @Test
+        @DisplayName("Should build a scope-refused classification carrying no redemption")
+        void shouldBuildScopeRefused() {
+            var classification = RefreshFailureClassification.scopeRefused();
+
+            assertAll("the server refused the scope before applying any grant",
+                    () -> assertEquals(Kind.SCOPE_REFUSED, classification.kind()),
+                    () -> assertNull(classification.redemption(),
+                            "nothing was redeemed, so no state is carried"));
+        }
+
+        @Test
+        @DisplayName("Should expose exactly the four kinds, in order of what the server did")
+        void shouldExposeExactlyFourKinds() {
+            assertEquals(List.of(Kind.PRE_REDEMPTION, Kind.SCOPE_REFUSED, Kind.CREDENTIAL_REJECTED, Kind.REDEEMED),
+                    List.of(Kind.values()),
+                    "a kind added or removed must be a deliberate change to every switch over the kind");
+        }
+
+        @Test
         @DisplayName("Should build a redeemed classification carrying the redemption it was raised under")
         void shouldBuildRedeemed() {
             RefreshRedemption redemption =
@@ -191,7 +211,7 @@ class RefreshFailureClassificationTest {
         }
 
         @ParameterizedTest(name = "kind={0}")
-        @EnumSource(value = Kind.class, names = {"PRE_REDEMPTION", "CREDENTIAL_REJECTED"})
+        @EnumSource(value = Kind.class, names = "REDEEMED", mode = EnumSource.Mode.EXCLUDE)
         @DisplayName("Should reject a redemption on a kind that redeemed nothing")
         void shouldRejectRedemptionOnUnredeemedKind(Kind kind) {
             RefreshRedemption redemption = RefreshRedemption.notRotated();
@@ -327,6 +347,11 @@ class RefreshFailureClassificationTest {
             // The single shape the allow-list recognizes: a client error the AS attributed to the
             // presented credential itself.
             "400 | {\"error\":\"invalid_grant\"}          | CREDENTIAL_REJECTED",
+            // The scope refusal: a client error the AS attributed to the requested scope.
+            "400 | {\"error\":\"invalid_scope\"}          | SCOPE_REFUSED",
+            "403 | {\"error\":\"invalid_scope\"}          | SCOPE_REFUSED",
+            // The same code on a server error is the AS's own failure, never a scope refusal.
+            "503 | {\"error\":\"invalid_scope\"}          | PRE_REDEMPTION",
             // The same body on a server error. A 5xx is the AS reporting its OWN failure, so the error
             // code it happens to carry is not evidence about the credential — this row is what proves
             // the 4xx gate is there at all.
@@ -371,6 +396,19 @@ class RefreshFailureClassificationTest {
         assertAll("a misconfigured client credential leaves the presented refresh token untouched",
                 () -> assertEquals(Kind.PRE_REDEMPTION, classification.kind(),
                         "a refused client must never end the session as a dead refresh credential"),
+                () -> assertNull(classification.redemption()));
+    }
+
+    @Test
+    @DisplayName("Should classify an invalid_scope refusal as SCOPE_REFUSED, not as a transient pre-redemption fault")
+    void shouldClassifyInvalidScopeAsScopeRefused() {
+        var failure = new InvalidScopeException("Token endpoint refused the requested scope with HTTP 400",
+                InvalidScopeException.ERROR_CODE, Generators.letterStrings(8, 16).next());
+
+        RefreshFailureClassification classification = RefreshFlow.classify(failure);
+
+        assertAll("the subtype is read ahead of the TransportException fallback",
+                () -> assertEquals(Kind.SCOPE_REFUSED, classification.kind()),
                 () -> assertNull(classification.redemption()));
     }
 

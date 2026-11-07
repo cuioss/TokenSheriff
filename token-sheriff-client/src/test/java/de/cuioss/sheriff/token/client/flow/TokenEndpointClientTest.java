@@ -71,6 +71,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code unauthorized_client}, a {@code 5xx}, an unknown body — stays a plain {@link TransportException},
  * and {@code invalid_grant} stays a {@link CredentialRejectedException}.
  * <p>
+ * <strong>Scope refusal:</strong> a {@code 4xx} naming exactly {@code invalid_scope} is the typed
+ * {@link InvalidScopeException} for every grant, carrying the code and the {@code error_description};
+ * a {@code 5xx}, another code or an unknown body stays a plain {@link TransportException}.
+ * <p>
  * <strong>Nonce retry:</strong> a {@code use_dpop_nonce} challenge is retried exactly <em>once</em>, and
  * only when the challenge is genuine. The three cases below pin the boundaries the happy-path retry
  * coverage does not reach: a repeated challenge must not loop, a blank {@code DPoP-Nonce} must not be
@@ -264,6 +268,70 @@ class TokenEndpointClientTest {
                 () -> assertInstanceOf(CredentialRejectedException.class, thrown),
                 () -> assertFalse(thrown instanceof ClientAuthenticationFailedException,
                         "a dead grant is not a failed client authentication"));
+    }
+
+    @ParameterizedTest(name = "grant {0}: HTTP 400 invalid_scope -> InvalidScopeException")
+    @CsvSource({"refresh_token", "client_credentials"})
+    @DisplayName("invalid_scope on a 4xx is the typed scope refusal, carrying the code and the description")
+    void shouldRaiseInvalidScopeForEveryGrant(String grantType, URIBuilder uriBuilder) {
+        String description = Generators.letterStrings(16, 32).next();
+        moduleDispatcher.failWith(400,
+                "{\"error\":\"invalid_scope\",\"error_description\":\"" + description + "\"}");
+        var client = new TokenEndpointClient(config());
+        String endpoint = uriBuilder.addPathSegment("token").buildAsString();
+        Map<String, String> requestParams = Map.of("grant_type", grantType);
+        Map<String, String> requestHeaders = Map.of();
+
+        InvalidScopeException thrown = assertThrows(InvalidScopeException.class,
+                () -> client.requestToken(endpoint, requestParams, requestHeaders),
+                "an invalid_scope refusal must surface as the typed scope refusal");
+
+        assertAll("typed scope refusal",
+                () -> assertEquals("invalid_scope", thrown.getErrorCode()),
+                () -> assertEquals(Optional.of(description), thrown.getErrorDescription(),
+                        "the error_description must be carried on the exception"),
+                () -> assertTrue(thrown.getMessage().contains("HTTP 400"),
+                        "the message must name the observed status, but was: " + thrown.getMessage()),
+                () -> assertFalse(thrown.getMessage().contains(description),
+                        "no part of the AS-controlled body may reach the message (CWE-117)"),
+                () -> assertEquals(1, moduleDispatcher.getCallCounter(), "no retry without a nonce challenge"));
+    }
+
+    @Test
+    @DisplayName("invalid_scope without an error_description carries an empty description")
+    void shouldRaiseInvalidScopeWithoutDescription(URIBuilder uriBuilder) {
+        moduleDispatcher.failWith(400, "{\"error_uri\":\"https://as.example/e\",\"error\":\"invalid_scope\"}");
+
+        TransportException thrown = redeemExpectingFailure(uriBuilder, null);
+
+        InvalidScopeException scopeRefusal = assertInstanceOf(InvalidScopeException.class, thrown);
+        assertEquals(Optional.empty(), scopeRefusal.getErrorDescription(),
+                "an absent error_description must not be fabricated");
+    }
+
+    @ParameterizedTest(name = "HTTP {0} body={1} -> not InvalidScopeException")
+    @CsvSource(delimiter = '|', value = {
+            // A 5xx is the server reporting its own failure, whatever error body it carries.
+            "500 | {\"error\":\"invalid_scope\"}",
+            "503 | {\"error\":\"invalid_scope\"}",
+            // Another code on a 4xx is not a scope refusal.
+            "400 | {\"error\":\"invalid_request\"}",
+            "400 | {\"error\":\"INVALID_SCOPE\"}",
+            // No usable error code: each is an unknown, and an unknown is never a match.
+            "400 | { not json",
+            "400 | ",
+            "400 | {\"error\":\"invalid_scope\",\"error\":\"invalid_scope\"}"})
+    @DisplayName("a refusal outside the invalid_scope allow-list keeps today's plain transport failure")
+    void shouldNotRaiseInvalidScopeOutsideAllowList(int status, String body, URIBuilder uriBuilder) {
+        moduleDispatcher.failWith(status, body == null ? "" : body);
+
+        TransportException thrown = redeemExpectingFailure(uriBuilder, null);
+
+        assertAll("plain non-success outcome",
+                () -> assertFalse(thrown instanceof InvalidScopeException,
+                        "only a 4xx naming exactly invalid_scope may be reported as a scope refusal"),
+                () -> assertTrue(thrown.getMessage().contains("unexpected HTTP status " + status),
+                        "the failure must be the ordinary non-success outcome, but was: " + thrown.getMessage()));
     }
 
     @Test

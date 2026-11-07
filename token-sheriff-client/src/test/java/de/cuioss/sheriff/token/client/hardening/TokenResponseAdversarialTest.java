@@ -18,9 +18,11 @@ package de.cuioss.sheriff.token.client.hardening;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.flow.CredentialRejectedException;
+import de.cuioss.sheriff.token.client.flow.InvalidScopeException;
 import de.cuioss.sheriff.token.client.flow.RedeemedResponseException;
 import de.cuioss.sheriff.token.client.flow.TokenEndpointClient;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.validation.test.dispatcher.TokenDispatcher;
@@ -38,8 +40,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Valid-JSON adversarial token-endpoint responses (TC-7). Every body below is well-formed JSON served
@@ -51,7 +57,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * The error-path cases serve HTTP 400 instead: an RFC 6749 §5.2 error body that repeats its top-level
  * {@code error} member is ambiguous, so it must stay a plain {@link TransportException} and never be
  * read as a {@link CredentialRejectedException}, with an unambiguous {@code invalid_grant} body as the
- * positive control.
+ * positive control. The same rule holds for {@code invalid_scope}: a repeated member or an oversize body
+ * is an unknown and never an {@code InvalidScopeException}, and the {@code error_description} a
+ * recognized scope refusal carries is sanitized and truncated, never raw.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -177,6 +185,85 @@ class TokenResponseAdversarialTest {
 
         assertEquals("Token endpoint rejected the presented credential with HTTP 400 (RFC 6749 §5.2 'invalid_grant')",
                 thrown.getMessage());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {
+            "{\"error\":\"invalid_scope\",\"error\":\"invalid_scope\"}",
+            "{\"error\":\"temporarily_unavailable\",\"error\":\"invalid_scope\"}",
+            "{\"error\":\"invalid_scope\",\"error_description\":\"a\",\"error_description\":\"b\"}"})
+    @DisplayName("Should not read a 4xx invalid_scope body repeating a top-level member as a scope refusal")
+    void shouldNotRefuseScopeOnDuplicateMember(String body, URIBuilder uriBuilder) {
+        TransportException thrown = requestFailing(400, body, uriBuilder);
+
+        assertEquals(TransportException.class, thrown.getClass(),
+                "an ambiguous error body must stay a plain transport failure, never an InvalidScopeException");
+        assertEquals("Token endpoint returned unexpected HTTP status 400", thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("Should not read an oversize 4xx invalid_scope body as a scope refusal")
+    void shouldNotRefuseScopeOnOversizeBody(URIBuilder uriBuilder) {
+        String padding = "p".repeat(ParserConfig.DEFAULT_MAX_PAYLOAD_SIZE);
+
+        TransportException thrown = requestFailing(400,
+                "{\"error\":\"invalid_scope\",\"padding\":\"" + padding + "\"}", uriBuilder);
+
+        assertFalse(thrown instanceof InvalidScopeException,
+                "a body past the payload bound is an unknown, never a scope refusal");
+    }
+
+    @Test
+    @DisplayName("Should carry an invalid_scope error_description with control characters only in escaped form")
+    void shouldSanitizeControlCharactersInScopeDescription(URIBuilder uriBuilder) {
+        // JSON escapes: the decoded description holds a real CR, LF, NUL and U+2028.
+        TransportException thrown = requestFailing(400,
+                "{\"error\":\"invalid_scope\",\"error_description\":\"bad\\r\\nINFO forged\\u0000\\u2028x\"}",
+                uriBuilder);
+
+        InvalidScopeException scopeRefusal = assertInstanceOf(InvalidScopeException.class, thrown);
+        String description = scopeRefusal.getErrorDescription().orElseThrow();
+        assertAll("sanitized error_description",
+                () -> assertFalse(description.chars().anyMatch(c -> c < 0x20 || c == 0x2028),
+                        "no raw control character or line separator may survive, but was: " + description),
+                () -> assertEquals("bad\\r\\nINFO forged\\u0000\\u2028x", description,
+                        "each unsafe character must survive in escaped form"));
+    }
+
+    @Test
+    @DisplayName("Should truncate an over-long invalid_scope error_description")
+    void shouldTruncateLongScopeDescription(URIBuilder uriBuilder) {
+        String longDescription = "d".repeat(ErrorTextSanitizer.MAX_LENGTH + 50);
+
+        TransportException thrown = requestFailing(400,
+                "{\"error\":\"invalid_scope\",\"error_description\":\"" + longDescription + "\"}", uriBuilder);
+
+        InvalidScopeException scopeRefusal = assertInstanceOf(InvalidScopeException.class, thrown);
+        assertEquals("d".repeat(ErrorTextSanitizer.MAX_LENGTH) + ErrorTextSanitizer.TRUNCATION_MARKER,
+                scopeRefusal.getErrorDescription().orElseThrow());
+    }
+
+    @ParameterizedTest(name = "error_description = {0}")
+    @ValueSource(strings = {"null", "42", "{\"text\":\"x\"}", "[\"x\"]"})
+    @DisplayName("Should keep the scope refusal but carry no description when error_description is not a string")
+    void shouldDropNonStringScopeDescription(String descriptionValue, URIBuilder uriBuilder) {
+        TransportException thrown = requestFailing(400,
+                "{\"error_description\":" + descriptionValue + ",\"error\":\"invalid_scope\"}", uriBuilder);
+
+        InvalidScopeException scopeRefusal = assertInstanceOf(InvalidScopeException.class, thrown);
+        assertTrue(scopeRefusal.getErrorDescription().isEmpty(),
+                "a non-string error_description must not be carried");
+    }
+
+    private TransportException requestFailing(int status, String body, URIBuilder uriBuilder) {
+        moduleDispatcher.respondWith(status, body);
+        var client = new TokenEndpointClient(config());
+        String tokenEndpoint = tokenEndpoint(uriBuilder);
+        Map<String, String> formParameters = Map.of("grant_type", "refresh_token");
+        Map<String, String> requestHeaders = Map.of();
+
+        return assertThrows(TransportException.class,
+                () -> client.requestToken(tokenEndpoint, formParameters, requestHeaders));
     }
 
     private RedeemedResponseException assertRedeemedFailure(String body, URIBuilder uriBuilder) {

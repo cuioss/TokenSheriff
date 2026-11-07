@@ -87,7 +87,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * requested under the opt-in strict posture, or the successful response cannot be parsed at all — and
  * every one of those reaches {@link #refresh} before any {@link RotationResult} exists, so rotation
  * cannot be read off a result. The discriminator is instead
- * {@link RefreshFlow#classify(Throwable)}, which sorts every refusal into one of three dispositions
+ * {@link RefreshFlow#classify(Throwable)}, which sorts every refusal into one of four dispositions
  * this class dispatches on in a switch that ends in a failing default arm:
  * <ul>
  *   <li>{@link RefreshFailureClassification.Kind#REDEEMED} — the server consumed the grant. The
@@ -106,6 +106,10 @@ import java.util.concurrent.locks.ReentrantLock;
  *       redemption (a connection failure, a DNS failure, a {@code 5xx}), so the presented token is
  *       still valid and the session is deliberately left intact rather than destroyed over a transient
  *       fault.</li>
+ *   <li>{@link RefreshFailureClassification.Kind#SCOPE_REFUSED} — the server refused the requested
+ *       scope (RFC 6749 §5.2 {@code invalid_scope}) before applying any grant. The presented token is
+ *       still valid, so the session is kept; nothing is revoked or cleared, no retry is scheduled and no
+ *       {@code WARN} is logged, because repeating the request would get the same answer.</li>
  * </ul>
  * <p>
  * <strong>Logout is fail-closed with no stale-read window.</strong> {@link #revokeAndClear} performs a
@@ -584,7 +588,8 @@ public class TokenLifecycleManager {
      *       session is left untouched.</li>
      *   <li>A detected reuse revokes the replayed token and then the successor, and a clear is
      *       attempted.</li>
-     *   <li>A refusal before the server processed the request leaves the session untouched.</li>
+     *   <li>A refusal before the server processed the request, or a refusal of the requested scope
+     *       ({@code invalid_scope}) before any grant was applied, leaves the session untouched.</li>
      * </ul>
      * Every revocation is best-effort and is attempted only when the provider advertises a revocation
      * endpoint. A redemption whose response could not be parsed names no successor and so revokes nothing.
@@ -642,9 +647,10 @@ public class TokenLifecycleManager {
      *                               of the store entry and rotation family is attempted without a
      *                               revocation, there being no successor to name; when it redeemed
      *                               without rotating, nothing is revoked or cleared; and when the
-     *                               request never reached redemption ({@code PRE_REDEMPTION}) the
-     *                               stored bundle is likewise left untouched, because that token is
-     *                               still usable
+     *                               request never reached redemption ({@code PRE_REDEMPTION}) or the
+     *                               server refused the requested scope before applying the grant
+     *                               ({@code SCOPE_REFUSED}) the stored bundle is likewise left
+     *                               untouched, because that token is still usable
      * @throws TokenValidationException if the refreshed ID token fails the token-validation pipeline
      *                               (signature, {@code iss}, {@code aud}, {@code exp} / {@code iat}).
      *                               When the authorization server had already rotated the refresh token,
@@ -947,7 +953,7 @@ public class TokenLifecycleManager {
      * <p>
      * A refusal raised INSIDE the exchange reaches the caller before any {@code RotationResult} exists,
      * so rotation cannot be read off a result here. {@link RefreshFlow#classify} is the single place the
-     * three situations are told apart, and the {@code default} arm below is a real runtime guard rather
+     * four situations are told apart, and the {@code default} arm below is a real runtime guard rather
      * than dead defensive code. An earlier revision of this comment claimed the compiler enforced
      * exhaustiveness because the arms use arrow labels; that is wrong. Under JLS SE21 §14.11.1 an enum
      * is a <em>legacy</em> selector type, and a switch STATEMENT is enhanced — and so exhaustiveness-checked
@@ -1005,8 +1011,14 @@ public class TokenLifecycleManager {
             case PRE_REDEMPTION -> LOGGER.debug(
                     "Refresh refused before the authorization server processed the grant; "
                             + "leaving the session intact");
-            // Unreachable while Kind has exactly the three constants above, and deliberately kept:
-            // this switch is NOT compiler-exhaustive (see the Javadoc), so a fourth Kind would
+            // The server refused the requested scope (invalid_scope) before applying any grant, so the
+            // presented refresh token is still valid and the session is kept. The refusal is not
+            // transient, so no retry back-off is scheduled; it is an expected answer, not a WARN.
+            case SCOPE_REFUSED -> LOGGER.debug(
+                    "Refresh refused over the requested scope before the grant was applied; "
+                            + "leaving the session intact and scheduling no retry");
+            // Unreachable while Kind has exactly the four constants above, and deliberately kept:
+            // this switch is NOT compiler-exhaustive (see the Javadoc), so a further Kind would
             // otherwise take no disposition at all. Failing loud beats silently preserving a session
             // whose credential state nothing decided.
             default -> throw new IllegalStateException(

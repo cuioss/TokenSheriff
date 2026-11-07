@@ -24,13 +24,17 @@ import java.util.Objects;
  * {@link RefreshFlow#classify(Throwable)} decides it.
  * <p>
  * The disposition a caller owes a refusal is not derivable from the exception type it caught, because
- * three structurally different situations all surface as "the refresh failed":
+ * four structurally different situations all surface as "the refresh failed":
  * <ul>
  *   <li>{@link Kind#PRE_REDEMPTION} — the request never reached the point where the authorization
  *       server processed the grant (a connection failure, a DNS failure, an SSRF-blocked target, a
- *       {@code 5xx}, or a {@code 4xx} the server did not attribute to the credential). The presented
- *       token is untouched and still valid: the session must be left alone. Quarantining here would
- *       destroy a working session over a transient network fault.</li>
+ *       {@code 5xx}, or a {@code 4xx} the server attributed neither to the credential nor to the
+ *       requested scope). The presented token is untouched and still valid: the session must be left
+ *       alone. Quarantining here would destroy a working session over a transient network fault.</li>
+ *   <li>{@link Kind#SCOPE_REFUSED} — the authorization server judged the requested scope and refused it
+ *       (RFC 6749 §5.2 {@code invalid_scope} on a client-error status) before applying any grant. The
+ *       presented token is untouched and still valid, so the session is kept — but the answer depends
+ *       on the request, not on network conditions, so no retry of the same request will change it.</li>
  *   <li>{@link Kind#CREDENTIAL_REJECTED} — the authorization server looked at the presented refresh
  *       token and declared it invalid (RFC 6749 §5.2 {@code invalid_grant} on a client-error status).
  *       Nothing was redeemed and nothing was rotated, so there is no successor and nothing to revoke —
@@ -47,16 +51,16 @@ import java.util.Objects;
  * already done: {@link Kind#REDEEMED} when the family refused a rotation the server had already
  * performed, with the successor it issued as the revocation target, and {@link Kind#CREDENTIAL_REJECTED}
  * when the family refused outside any exchange, where nothing was redeemed. It never maps to
- * {@link Kind#PRE_REDEMPTION}.
+ * {@link Kind#PRE_REDEMPTION} or {@link Kind#SCOPE_REFUSED}.
  * <p>
- * The three are mutually exclusive and exhaustive. A caller dispatching on {@link #kind()} in a switch
+ * The four are mutually exclusive and exhaustive. A caller dispatching on {@link #kind()} in a switch
  * statement should end it in a default arm that fails: the compiler does not check a switch statement
- * over an enum for exhaustiveness, so without that arm a fourth state added later would fall through
+ * over an enum for exhaustiveness, so without that arm a further state added later would fall through
  * silently to the session-preserving default.
  *
- * @param kind       which of the three situations produced the refusal; never {@code null}
+ * @param kind       which of the four situations produced the refusal; never {@code null}
  * @param redemption what the authorization server did to the presented refresh token, carried
- *                   <em>only</em> on {@link Kind#REDEEMED}. It is {@code null} on the other two kinds
+ *                   <em>only</em> on {@link Kind#REDEEMED}. It is {@code null} on the other three kinds
  *                   because nothing was redeemed there — an absence that means "no redemption
  *                   happened", never "a redemption happened whose state was lost". The canonical
  *                   constructor rejects both disagreeing pairings, so no instance that contradicts its
@@ -68,7 +72,7 @@ import java.util.Objects;
 public record RefreshFailureClassification(Kind kind, @Nullable RefreshRedemption redemption) {
 
     /**
-     * The three mutually exclusive situations a refused refresh can be in, ordered from the least to
+     * The four mutually exclusive situations a refused refresh can be in, ordered from the least to
      * the most that the authorization server did with the presented credential.
      */
     public enum Kind {
@@ -78,6 +82,14 @@ public record RefreshFailureClassification(Kind kind, @Nullable RefreshRedemptio
          * untouched and still usable. The session is left intact.
          */
         PRE_REDEMPTION,
+
+        /**
+         * The authorization server refused the requested scope ({@code invalid_scope}) before applying
+         * any grant, so the presented refresh token is untouched and still usable and the session is
+         * kept. Unlike {@link #PRE_REDEMPTION} the refusal is not transient: repeating the same request
+         * will not change the answer, so no retry is owed.
+         */
+        SCOPE_REFUSED,
 
         /**
          * The authorization server refused the presented refresh token as invalid without processing
@@ -125,6 +137,14 @@ public record RefreshFailureClassification(Kind kind, @Nullable RefreshRedemptio
      */
     public static RefreshFailureClassification preRedemption() {
         return new RefreshFailureClassification(Kind.PRE_REDEMPTION, null);
+    }
+
+    /**
+     * @return the classification for a refresh the authorization server refused over the requested
+     *         scope before applying the grant, leaving the presented refresh token valid
+     */
+    public static RefreshFailureClassification scopeRefused() {
+        return new RefreshFailureClassification(Kind.SCOPE_REFUSED, null);
     }
 
     /**

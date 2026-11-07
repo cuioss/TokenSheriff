@@ -89,7 +89,10 @@ import java.util.Set;
  * the authorization server attributed to the credential itself (RFC 6749 §5.2 {@code invalid_grant}),
  * raised as {@link CredentialRejectedException} and classified
  * {@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED}: nothing was redeemed and there is no
- * successor, but the credential is dead and no retry will revive it.
+ * successor, but the credential is dead and no retry will revive it. A {@code 4xx} refusing the
+ * requested scope (RFC 6749 §5.2 {@code invalid_scope}) is raised as {@link InvalidScopeException} and
+ * classified {@link RefreshFailureClassification.Kind#SCOPE_REFUSED}: the presented token is untouched,
+ * but repeating the request will not change the answer.
  * <p>
  * The signal rides on the exception rather than on a separate observer argument deliberately:
  * {@link #refresh(ProviderMetadata, String)} stays the one overridable entry point on this
@@ -178,7 +181,8 @@ public class RefreshFlow {
      * @throws de.cuioss.sheriff.token.commons.error.TransportException if the token request fails —
      *         thrown as the {@link CredentialRejectedException} subtype when the authorization server
      *         declared the presented refresh token invalid (RFC 6749 §5.2 {@code invalid_grant} on a
-     *         {@code 4xx})
+     *         {@code 4xx}), and as the {@link InvalidScopeException} subtype when it refused the requested
+     *         scope ({@code invalid_scope} on a {@code 4xx})
      * @throws de.cuioss.sheriff.token.validation.exception.TokenValidationException if the returned
      *         token fails validation
      * @throws ClientProtocolException if the granted scope is broader than the requested scope and
@@ -240,7 +244,7 @@ public class RefreshFlow {
     }
 
     /**
-     * Classifies a refresh failure into the three situations a caller owes a different disposition —
+     * Classifies a refresh failure into the four situations a caller owes a different disposition —
      * see {@link RefreshFailureClassification}.
      * <p>
      * <strong>What it covers, and nothing else:</strong> a failure raised by
@@ -252,13 +256,16 @@ public class RefreshFlow {
      * token exchange and says nothing about that other failure.
      * <p>
      * This is the single place the distinction is decided, and callers must use it rather than
-     * enumerate exception types. It folds in the three cases that carry no redemption of their own:
+     * enumerate exception types. It folds in the four cases that carry no redemption of their own:
      * {@link RedeemedResponseException}, a success status whose body could not be parsed, where no
      * {@link de.cuioss.sheriff.token.client.token.TokenResponse} is ever constructed and rotation is
      * therefore not computable even in principle — mapped to {@link RefreshRedemption#rotationUnknown()}
      * so the presented token is presumed burned with no successor to revoke; and
      * {@link CredentialRejectedException}, a {@code 4xx} the authorization server attributed to the
-     * presented credential itself, which redeemed nothing but leaves the credential dead; and
+     * presented credential itself, which redeemed nothing but leaves the credential dead;
+     * {@link InvalidScopeException}, a {@code 4xx} refusal of the requested scope raised before any grant
+     * was applied, mapped to {@link RefreshFailureClassification.Kind#SCOPE_REFUSED} ahead of the
+     * {@code TransportException} fallback so it is never read as a transient pre-redemption fault; and
      * {@link RefreshTokenFamilyRevokedException}, the family's reuse or already-revoked refusal.
      * <p>
      * The family refusal never classifies as pre-redemption, and which session-ending kind it gets
@@ -296,6 +303,9 @@ public class RefreshFlow {
         }
         if (failure instanceof CredentialRejectedException) {
             return RefreshFailureClassification.credentialRejected();
+        }
+        if (failure instanceof InvalidScopeException) {
+            return RefreshFailureClassification.scopeRefused();
         }
         if (failure instanceof RefreshTokenFamilyRevokedException revokedFamily) {
             return classifyRevokedFamily(revokedFamily);
