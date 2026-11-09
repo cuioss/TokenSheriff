@@ -257,17 +257,6 @@ URL query or fragment components; the code is exchanged at the token endpoint an
 authorization response uses `form_post`. All token-endpoint traffic relies on the transport
 TLS enforcement owned by commons (`COMMONS-2`).
 
-The engine MUST refuse a back-channel response whose media type it does not expect. The
-discovery, token and PAR responses MUST carry `application/json`, and the userinfo response
-`application/json` or `application/jwt`: every `Content-Type` line must carry the expected media
-type (parameters such as `charset` allowed), so an absent, other, structured-suffix (for example
-`application/jrd+json`) or conflicting value, or one carrying `CR`, `LF` or `NUL`, is refused. The
-`expires_in` member of a token or PAR response MUST be a JSON number; a quoted value such as
-`"3600"` is refused as a malformed response. An `https` issuer's discovery document MUST advertise
-only `https` values for the endpoints the engine models and uses; a non-`https` or blank value is
-refused, and `allowInsecureHttp` does not relax this
-(xref:../adr/0028-Discovery_refuses_a_non-https_endpoint_advertised_by_an_https_issuer_regardless_of_allowInsecureHttp.adoc[ADR-0028]).
-
 * Source: https://www.rfc-editor.org/rfc/rfc9700#section-4.3[RFC 9700 §4.3] (credentials in URLs), https://www.rfc-editor.org/rfc/rfc9207[RFC 9207], https://www.rfc-editor.org/rfc/rfc6749#section-5.1[RFC 6749 §5.1] (token response).
 
 [#CLIENT-23]
@@ -345,8 +334,7 @@ userinfo included
 evidence and this open risk).
 
 *Transport policy follows the contacted host.* The egress path validation runs on the advertised URL;
-the scheme policy (`allowInsecureHttp`), the host-address egress policy (an internal back-channel
-host must be listed in `allowedEgressHosts`), the per-client trust (xref:#CLIENT-23[]) and hostname
+the scheme policy (`allowInsecureHttp`), the per-client trust (xref:#CLIENT-23[]) and hostname
 verification MUST be applied to the back-channel origin — the host actually contacted — so the
 back-channel host's certificate is validated against its own name. The issuer-scheme check at
 discovery is separate and MUST still apply to the configured issuer: an `http` issuer requires
@@ -386,9 +374,7 @@ The ID token MUST be validated per OpenID Connect (signature via the validation 
 userinfo endpoint is used, the response MUST be validated (signature if signed) and its
 `sub` MUST be bound to the `sub` of the validated ID token — a userinfo response whose `sub`
 does not match MUST be rejected. Identity MUST NOT be taken from an unvalidated userinfo
-response. A `sub` that is not a JSON string is refused when an access or ID token is validated
-and in a plain-JSON userinfo response, so every `sub` binding the engine checks compares JSON
-strings only.
+response.
 
 * Source: https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation[OIDC Core §3.1.3.7], https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse[OIDC Core §5.3.2] (userinfo `sub` binding).
 
@@ -529,10 +515,8 @@ dependency.
 
 The engine MUST be thread-safe (shared per-issuer configuration, concurrent flows). Each
 `CLIENT-N` flow / token requirement MUST be exercised by unit tests driving the commons
-`generators` dispatchers in both default and *adversarial* modes where the engine reaches a
-commons dispatcher (the token / userinfo / PAR dispatchers, `COMMONS-7`; the revocation tests use
-a dispatcher of their own, and the engine makes no end-session or introspection HTTP call), plus
-real-IdP integration tests. The two-layer verification model, the
+`generators` dispatchers in both default and *adversarial* modes (the token / userinfo /
+revocation / PAR dispatchers, `COMMONS-7`), plus real-IdP integration tests. The two-layer verification model, the
 adversarial coverage, and the full `CLIENT-N` → threat → test traceability are specified in
 xref:specification/test-strategy.adoc[Test strategy].
 

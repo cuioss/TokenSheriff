@@ -98,9 +98,6 @@ Key features:
 * **ETag caching** - `If-None-Match` headers minimize bandwidth
 * **Background refresh** - Configurable automatic JWKS refresh
 * **Thread-safe** - Lock-free `AtomicReference` for status and content
-* **Opt-in maximum staleness** - Off by default. With `HttpJwksLoaderConfig.maxStaleness` set (under Quarkus `sheriff.token.issuers.<name>.jwks.http.max-staleness-seconds`), a refresh cycle that installs no keys while the last successful load is older than the bound moves the loader from `OK` to `UNDEFINED` until a refresh succeeds again (xref:../adr/0017-A_JWKS_loader_reports_OK_only_with_usable_keys_and_retries_only_transient_discovery_failures.adoc[ADR-0017]). The age is measured on the wall clock (`Instant`), so a system-clock jump moves it too.
-
-The issuer cache admits an issuer for validation only while its loader reports `OK`. The access-token pipeline applies this on a cache hit as well: after the cache has enforced the issuer's time policy, `AccessTokenValidationPipeline` resolves the issuer again, so a token cached before its issuer's loader left `OK` — for example past the maximum staleness — is rejected like any other token of that issuer, before the DPoP proof and the custom rules run (xref:../adr/0021-A_cached_token_is_rejected_for_expiry_or_age_inside_the_cache_before_the_DPoP_proof_is_checked.adoc[ADR-0021]).
 
 === OIDC Discovery
 
@@ -128,14 +125,11 @@ High-performance, lock-free monitoring of validation pipeline metrics with micro
 [cols="1,1,2", options="header"]
 |===
 |Parameter |Default |Purpose
-|`maxTokenSize` (`ParserConfig`) |8 KB |Entire token string of a JWS, and the inner JWS after decryption
-|`maxEncryptedTokenSize` (`JweDecryptionConfig`) |32 KB (at most) |Entire string of a 5-part compact JWE, when `JweDecryptionConfig` is configured
-|`maxPayloadSize` (`ParserConfig`) |8 KB |Each Base64-decoded header or payload part
-|`maxStringLength` (`ParserConfig`) |4 KB |Individual JSON string values (DSL-JSON enforced)
-|`maxHttpResponseSize` (`ParserConfig`) |256 KB |Response body of a JWKS or well-known discovery fetch, enforced while the body streams
+|`maxTokenSize` |8 KB |Entire JWT string before processing (JWS)
+|`maxEncryptedTokenSize` |32 KB |Entire JWE string before processing (when `JweDecryptionConfig` is configured)
+|`maxPayloadSize` |8 KB |Each Base64-decoded part
+|`maxStringLength` |4 KB |Individual JSON string values (DSL-JSON enforced)
 |===
-
-With JWE decryption configured, the size check that `TokenStringValidator` and `NonValidatingJwtParser` apply follows the effective limit of the token's shape: a 5-part compact token is checked against `maxEncryptedTokenSize`, so a JWE of up to that limit passes the parser, while a 3-part JWS and the inner JWS after decryption keep `maxTokenSize`. The check runs in all three pipelines (access, ID and refresh token). A token above its limit is refused as a counted `TOKEN_SIZE_EXCEEDED` `TokenValidationException`. `maxPayloadSize` bounds token parts only; the JWKS and discovery fetches are bounded by `maxHttpResponseSize` alone.
 
 == References
 

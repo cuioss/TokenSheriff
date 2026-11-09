@@ -42,8 +42,8 @@ import java.io.Serial;
  * {@link CredentialRejectedException}.
  * <p>
  * It is <strong>not</strong> a redemption and it says nothing about the presented grant: the server
- * refused the client before it processed the grant, so the client keeps a refresh token presented with
- * the request. {@link RefreshFlow#classify(Throwable)} therefore classifies this type as
+ * refused the client before it processed the grant, so a refresh token presented with the request is
+ * untouched. {@link RefreshFlow#classify(Throwable)} therefore classifies this type as
  * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION} — a misconfigured client credential is not a
  * dead refresh credential, and ending the session over it would destroy a session that becomes usable
  * again once the client configuration is corrected.

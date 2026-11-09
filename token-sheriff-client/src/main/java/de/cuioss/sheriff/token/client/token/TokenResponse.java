@@ -17,7 +17,6 @@ package de.cuioss.sheriff.token.client.token;
 
 import com.dslplatform.json.CompiledJson;
 import com.dslplatform.json.JsonAttribute;
-import de.cuioss.sheriff.token.client.internal.JsonNumberLongConverter;
 
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -68,10 +67,9 @@ public class TokenResponse {
      * The access token lifetime in seconds. {@code 0} (the primitive default) is indistinguishable
      * from a literal {@code expires_in: 0} and means the AS omitted the field; use
      * {@link #getExpiresInSeconds()} for the normalized, nullable view that rejects absent,
-     * non-positive, and absurd values. The member must be a JSON number: a JSON string, even a
-     * numeric one such as {@code "3600"}, fails the parse (see {@link JsonNumberLongConverter}).
+     * non-positive, and absurd values.
      */
-    @JsonAttribute(name = "expires_in", converter = JsonNumberLongConverter.class)
+    @JsonAttribute(name = "expires_in")
     public long expiresIn;
 
     /** The optional refresh token. */

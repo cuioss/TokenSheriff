@@ -83,7 +83,6 @@ class ClientCredentialsFlowTest {
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .scope("api")
                 .allowInsecureHttp(true)
-                .allowLoopbackEgress(true)
                 .build();
     }
 

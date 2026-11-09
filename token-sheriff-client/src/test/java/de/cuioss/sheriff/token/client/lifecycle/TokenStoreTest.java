@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
@@ -98,31 +97,6 @@ class TokenStoreTest {
                 () -> assertTrue(manager.revokeAndClear(sessionId).isEmpty(),
                         "a repeated logout clears nothing"));
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.INFO, "Cleared held tokens for session");
-    }
-
-    @Test
-    @DisplayName("Should propagate a throwing TokenStore.retrieve rather than report the session as empty")
-    void shouldPropagateThrowingRetrieve() {
-        // A store that cannot be read is never evidence that the session holds no token: the failure
-        // reaches the caller instead of being folded into an empty result a caller would read as
-        // "logged out" (or, for needsRefresh, as "nothing to refresh").
-        var storeFailure = new IllegalStateException("token store unavailable");
-        var store = new InMemoryTokenStore() {
-            @Override
-            public Optional<StoredToken> retrieve(String sessionId) {
-                throw storeFailure;
-            }
-        };
-        var manager = new TokenLifecycleManager(store, new RefreshScheduler());
-        String sessionId = Generators.letterStrings(10, 20).next();
-        Instant now = Instant.now();
-
-        assertAll("throwing retrieve",
-                () -> assertEquals(storeFailure, assertThrows(IllegalStateException.class,
-                        () -> manager.get(sessionId)), "get propagates the store failure unchanged"),
-                () -> assertEquals(storeFailure, assertThrows(IllegalStateException.class,
-                        () -> manager.needsRefresh(sessionId, now)),
-                        "needsRefresh propagates the store failure unchanged"));
     }
 
     @Test

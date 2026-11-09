@@ -35,25 +35,7 @@ sheriff.client.client-secret=${MY_SERVICE_CLIENT_SECRET}
 |`sheriff.client.strict-scope-reconciliation` |boolean |`false` |Refuse a refresh whose granted scope is *broader* than the requested scope (see NOTE below)
 |`sheriff.client.verify-hostname` |boolean |`true` |Enforce TLS hostname verification on this client's outbound calls. Set to `false` only for SAN-mismatched development certificates (see NOTE below)
 |`sheriff.client.back-channel-origin` |String |— (absent) |Origin (`scheme://host[:port]`) under which the client reaches the authorization server on the back channel, for split-horizon deployments. Must be a bare `http`/`https` origin — no path, query, fragment or user-info; an invalid value fails the mapping (see NOTE below)
-|`sheriff.client.allow-loopback-egress` |boolean |`false` |Let the host-address egress policy permit an endpoint whose host resolves to a loopback address (local development only). Every other refused range stays refused (see NOTE below)
-|`sheriff.client.allowed-egress-hosts` |String (csv) |— (none) |Host names the host-address egress policy lets through without any address-range check, matched case-insensitively. A blank entry fails the mapping (see NOTE below)
 |===
-
-NOTE: Every discovery and back-channel call — discovery, token, PAR, userinfo, revocation — passes a
-host-address egress policy on the URL *actually contacted*, that is after the
-`sheriff.client.back-channel-origin` rewrite. The policy is secure by default: an endpoint whose host
-resolves to a loopback, link-local (including the `169.254.0.0/16` cloud-metadata range), site-local,
-IPv6 unique-local, carrier-grade NAT (`100.64.0.0/10`), wildcard, broadcast or multicast address is
-refused with a `TransportException`. *This default can refuse an endpoint the deployment configured or
-the issuer advertised on an internal address, including a back-channel origin such as
-`http://keycloak:8080`.* There are exactly two relaxations, both explicit:
-`sheriff.client.allow-loopback-egress=true` lifts the loopback refusal only, and
-`sheriff.client.allowed-egress-hosts` lists hosts that bypass the range check entirely — list the
-back-channel origin's host there for a split-horizon deployment. A listed host is trusted wherever it
-appears, including in an advertised endpoint, so keep the list narrow. The check resolves the host
-immediately before the fetch; the HTTP client resolves it again when it connects, so a DNS answer that
-changes in between is not seen (the DNS-rebinding limit). The policy is the client's own and is
-independent of the validation side's JWKS egress settings.
 
 NOTE: `sheriff.client.back-channel-origin` serves deployments where the issuer is a public URL (for
 example `https://idp.example.com/realms/demo`) that the application can only reach under an internal
@@ -67,9 +49,8 @@ origin. A DPoP proof's `htu` names the back-channel URL actually contacted — t
 with the advertised path — because `htu` is the target URI of the request the proof travels with
 (RFC 9449 §4.2); see
 xref:../../../../../../doc/adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015].
-Transport policy follows the host actually contacted: the host-address egress policy, `verify-hostname`
-and the configured trust apply to the back-channel host — so an internal back-channel origin must be
-listed in `sheriff.client.allowed-egress-hosts` — and an `http://` back-channel origin requires
+Transport policy follows the host actually contacted: `verify-hostname` and the
+configured trust apply to the back-channel host, and an `http://` back-channel origin requires
 `sheriff.client.allow-insecure-http=true`. The issuer-scheme check at discovery is the one exception:
 it still applies to the configured issuer, so an `http://` issuer requires
 `sheriff.client.allow-insecure-http=true` even when the back-channel origin is `https://`. The validation-side JWKS URL

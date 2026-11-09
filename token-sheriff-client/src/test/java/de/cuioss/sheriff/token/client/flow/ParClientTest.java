@@ -18,8 +18,6 @@ package de.cuioss.sheriff.token.client.flow;
 import de.cuioss.sheriff.token.client.auth.ClientSecretBasicAuth;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
-import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase;
-import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase.HeaderLineBreakAttack;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.validation.test.dispatcher.ParDispatcher;
 import de.cuioss.test.generator.Generators;
@@ -34,17 +32,13 @@ import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
 import okhttp3.Headers;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ArgumentsSource;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -78,7 +72,6 @@ class ParClientTest {
                 .clientSecret(Generators.nonBlankStrings().next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(true)
-                .allowLoopbackEgress(true)
                 .build();
     }
 
@@ -261,97 +254,6 @@ class ParClientTest {
                         "the truncated-escape parse failure must be carried as the cause"));
     }
 
-    @ParameterizedTest(name = "expires_in = {0}")
-    @ValueSource(strings = {"\"90\"", "\"0\""})
-    @DisplayName("Should refuse a quoted numeric expires_in as a malformed PAR response (RFC 9126 §2.2)")
-    void shouldRefuseQuotedNumericExpiresIn(String expiresIn, URIBuilder uriBuilder) {
-        moduleDispatcher.returnMalformedJson(
-                "{\"request_uri\":\"urn:ietf:params:oauth:request_uri:x\",\"expires_in\":" + expiresIn + "}");
-        var auth = new ClientSecretBasicAuth(Generators.nonBlankStrings().next(), Generators.nonBlankStrings().next());
-        var endpoint = parEndpoint(uriBuilder);
-        var client = parClient();
-        var params = authorizationParameters();
-
-        TransportException thrown = assertThrows(TransportException.class,
-                () -> client.pushAuthorizationRequest(endpoint, params, auth),
-                "a quoted expires_in must not be read as a number");
-
-        assertTrue(thrown.getMessage().startsWith("Failed to parse PAR endpoint response"),
-                "the refusal must take the existing parse-failure path, but was: " + thrown.getMessage());
-    }
-
-    @ParameterizedTest(name = "HTTP 201 Content-Type [{0}] -> TransportException")
-    @CsvSource(delimiter = '|', value = {
-            "''",
-            "text/plain",
-            "application/jrd+json",
-            "application/json,text/html"})
-    @DisplayName("Should refuse a 201 whose Content-Type is not application/json before parsing its body")
-    void shouldRefuseResponseWithoutJsonContentType(String contentTypes, URIBuilder uriBuilder) {
-        moduleDispatcher.returnSuccessWithContentTypes(
-                contentTypes.isEmpty() ? new String[0] : contentTypes.split(","));
-        var auth = new ClientSecretBasicAuth(Generators.nonBlankStrings().next(), Generators.nonBlankStrings().next());
-        var endpoint = parEndpoint(uriBuilder);
-        var client = parClient();
-        var params = authorizationParameters();
-
-        TransportException thrown = assertThrows(TransportException.class,
-                () -> client.pushAuthorizationRequest(endpoint, params, auth),
-                "a PAR response not declared as JSON must not be parsed");
-
-        assertTrue(thrown.getMessage().contains("Content-Type is not application/json"),
-                "the refusal must name the media type, but was: " + thrown.getMessage());
-    }
-
-    @Test
-    @DisplayName("Should accept a 201 whose application/json Content-Type carries a charset")
-    void shouldAcceptJsonContentTypeWithCharset(URIBuilder uriBuilder) {
-        moduleDispatcher.returnSuccessWithContentTypes("Application/JSON; charset=UTF-8");
-        var auth = new ClientSecretBasicAuth(Generators.nonBlankStrings().next(), Generators.nonBlankStrings().next());
-
-        ParResponse response = parClient().pushAuthorizationRequest(parEndpoint(uriBuilder),
-                authorizationParameters(), auth);
-
-        assertTrue(response.getRequestUri().isPresent(), "parameters on application/json are allowed");
-    }
-
-    /**
-     * The line-break attack class against the PAR {@code Content-Type}: a 201 success body whose
-     * {@code application/json} value carries a separator followed by a smuggled {@code text/html} field
-     * line, put on the wire verbatim. Whichever layer refuses it — the client's HTTP stack as a malformed
-     * response, or {@code JsonResponseMediaType} — the body must never be parsed into a
-     * {@code request_uri}. The predicate's own verdict on every variant is pinned in
-     * {@code JsonResponseMediaTypeTest}.
-     */
-    @ParameterizedTest(name = "Content-Type with {0}")
-    @ArgumentsSource(HeaderLineBreakAttackDatabase.ArgumentsProvider.class)
-    @DisplayName("Should refuse a 201 whose Content-Type carries a line break")
-    void shouldRefuseLineBreakInContentType(HeaderLineBreakAttack attack, URIBuilder uriBuilder) {
-        moduleDispatcher.returnSuccessWithRawContentType(
-                attack.inject("application/json", "Content-Type: text/html"));
-        var auth = new ClientSecretBasicAuth(Generators.nonBlankStrings().next(), Generators.nonBlankStrings().next());
-        var endpoint = parEndpoint(uriBuilder);
-        var client = parClient();
-        var params = authorizationParameters();
-
-        assertThrows(TransportException.class,
-                () -> client.pushAuthorizationRequest(endpoint, params, auth),
-                () -> "a Content-Type carrying " + attack.description() + " must be refused");
-    }
-
-    @Test
-    @DisplayName("Should accept a 201 whose plain application/json Content-Type is written on the raw path")
-    void shouldAcceptRawPathPlainContentType(URIBuilder uriBuilder) {
-        // Positive control for the raw header path above: the same response without a separator.
-        moduleDispatcher.returnSuccessWithRawContentType("application/json");
-        var auth = new ClientSecretBasicAuth(Generators.nonBlankStrings().next(), Generators.nonBlankStrings().next());
-
-        ParResponse response = parClient().pushAuthorizationRequest(parEndpoint(uriBuilder),
-                authorizationParameters(), auth);
-
-        assertTrue(response.getRequestUri().isPresent(), "a plain application/json on the raw path is accepted");
-    }
-
     /**
      * Wraps the shared {@link ParDispatcher} strategies and adds a malformed-JSON strategy so the M8
      * parse-error sanitization path can be exercised with an AS-controlled CR/LF payload.
@@ -360,40 +262,13 @@ class ParClientTest {
 
         private static final String APPLICATION_JSON = "application/json";
 
-        private static final String SUCCESS_BODY =
-                "{\"request_uri\":\"urn:ietf:params:oauth:request_uri:mock-par-reference\",\"expires_in\":90}";
-
         private final ParDispatcher delegate = new ParDispatcher();
         private boolean malformed;
         private String malformedBody = "";
-        private List<String> successContentTypes;
-        private @Nullable String rawContentType;
 
         ParTestDispatcher returnDefault() {
             malformed = false;
-            successContentTypes = null;
-            rawContentType = null;
             delegate.returnDefault();
-            return this;
-        }
-
-        /**
-         * Serve a 201 success body with one {@code Content-Type} value written to the wire verbatim,
-         * through the lenient header path, so it may carry control characters the strict path refuses.
-         */
-        ParTestDispatcher returnSuccessWithRawContentType(String value) {
-            malformed = false;
-            rawContentType = value;
-            return this;
-        }
-
-        /**
-         * Serve a 201 success body with exactly these {@code Content-Type} lines; no value serves no
-         * {@code Content-Type} at all.
-         */
-        ParTestDispatcher returnSuccessWithContentTypes(String... values) {
-            malformed = false;
-            successContentTypes = List.of(values);
             return this;
         }
 
@@ -439,19 +314,6 @@ class ParClientTest {
         public Optional<MockResponse> handlePost(RecordedRequest request) {
             if (malformed) {
                 return Optional.of(new MockResponse(200, Headers.of("Content-Type", APPLICATION_JSON), malformedBody));
-            }
-            String raw = rawContentType;
-            if (raw != null) {
-                return Optional.of(new MockResponse.Builder().code(201)
-                        .addHeaderLenient("Content-Type", raw)
-                        .body(SUCCESS_BODY)
-                        .build());
-            }
-            List<String> contentTypes = successContentTypes;
-            if (contentTypes != null) {
-                Headers.Builder headers = new Headers.Builder();
-                contentTypes.forEach(value -> headers.add("Content-Type", value));
-                return Optional.of(new MockResponse(201, headers.build(), SUCCESS_BODY));
             }
             return delegate.handlePost(request);
         }

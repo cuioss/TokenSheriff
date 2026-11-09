@@ -15,8 +15,6 @@
  */
 package de.cuioss.sheriff.token.client.config;
 
-import de.cuioss.sheriff.token.commons.error.TransportException;
-import de.cuioss.sheriff.token.commons.transport.EgressPolicy;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import org.junit.jupiter.api.DisplayName;
@@ -26,8 +24,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.net.ssl.SSLContext;
-import java.net.InetAddress;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -702,110 +698,6 @@ class ClientConfigurationTest {
 
             assertNotEquals(withOrigin, withoutOrigin,
                     "a configuration that reaches the AS elsewhere is a different configuration");
-        }
-    }
-
-    @Nested
-    @DisplayName("Host-address egress policy (allowLoopbackEgress, allowedEgressHosts, egressHostResolver)")
-    class EgressPolicyConfiguration {
-
-        private static final URI LOOPBACK = URI.create("http://127.0.0.1:8080/token");
-        private static final URI SITE_LOCAL = URI.create("http://10.0.0.1:8080/token");
-        private static final URI METADATA = URI.create("http://169.254.169.254/latest");
-
-        private ClientConfiguration.ClientConfigurationBuilder minimalBuilder() {
-            return ClientConfiguration.builder()
-                    .issuer(issuer())
-                    .clientId(Generators.nonBlankStrings().next())
-                    .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC);
-        }
-
-        @Test
-        @DisplayName("Should default to the secure policy: no loopback, no allow-list, no custom resolver")
-        void shouldDefaultToSecurePolicy() {
-            var config = minimalBuilder().build();
-            var policy = config.getEgressPolicy();
-
-            assertAll("every relaxation is off by default",
-                    () -> assertFalse(config.isAllowLoopbackEgress()),
-                    () -> assertTrue(config.getAllowedEgressHosts().isEmpty()),
-                    () -> assertNull(config.getEgressHostResolver()),
-                    () -> assertThrows(TransportException.class, () -> policy.check(LOOPBACK)),
-                    () -> assertThrows(TransportException.class, () -> policy.check(SITE_LOCAL)),
-                    () -> assertThrows(TransportException.class, () -> policy.check(METADATA)));
-        }
-
-        @Test
-        @DisplayName("Should lift only the loopback refusal when allowLoopbackEgress is set")
-        void shouldRelaxOnlyLoopback() {
-            var config = minimalBuilder().allowLoopbackEgress(true).build();
-            var policy = config.getEgressPolicy();
-
-            assertAll("the loopback opt-in admits loopback and nothing else",
-                    () -> assertTrue(config.isAllowLoopbackEgress()),
-                    () -> assertDoesNotThrow(() -> policy.check(LOOPBACK)),
-                    () -> assertThrows(TransportException.class, () -> policy.check(SITE_LOCAL)),
-                    () -> assertThrows(TransportException.class, () -> policy.check(METADATA)));
-        }
-
-        @Test
-        @DisplayName("Should admit exactly the allow-listed hosts, case-insensitively, and keep the list immutable")
-        void shouldAdmitOnlyAllowListedHosts() {
-            var config = minimalBuilder().allowedEgressHost("10.0.0.1").build();
-            var policy = config.getEgressPolicy();
-            var hosts = config.getAllowedEgressHosts();
-
-            assertAll("the allow-list names what it admits",
-                    () -> assertEquals(List.of("10.0.0.1"), hosts),
-                    () -> assertDoesNotThrow(() -> policy.check(SITE_LOCAL)),
-                    () -> assertThrows(TransportException.class, () -> policy.check(METADATA)),
-                    () -> assertThrows(TransportException.class, () -> policy.check(LOOPBACK)),
-                    () -> assertThrows(UnsupportedOperationException.class, () -> hosts.add("extra")));
-        }
-
-        @ParameterizedTest(name = "rejects \"{0}\"")
-        @ValueSource(strings = {"", "   "})
-        @DisplayName("Should reject a blank allow-listed host at construction")
-        void shouldRejectBlankAllowedHost(String host) {
-            var builder = minimalBuilder().allowedEgressHost(host);
-
-            assertThrows(IllegalArgumentException.class, builder::build,
-                    "a blank allow-list entry matches nothing and only hides a misconfiguration");
-        }
-
-        @Test
-        @DisplayName("Should consult an injected host resolver for the egress check")
-        void shouldUseInjectedResolver() {
-            EgressPolicy.HostResolver toMetadata = host -> new InetAddress[]{InetAddress.getByName("169.254.169.254")};
-            var config = minimalBuilder().allowLoopbackEgress(true).egressHostResolver(toMetadata).build();
-            var policy = config.getEgressPolicy();
-
-            assertThrows(TransportException.class, () -> policy.check(LOOPBACK),
-                    "the injected resolver maps the loopback host onto the metadata address, which stays refused");
-        }
-
-        @Test
-        @DisplayName("Should take the egress relaxations into value equality but exclude the resolver")
-        void shouldIncludeRelaxationsInEquality() {
-            var issuer = issuer();
-            var clientId = Generators.nonBlankStrings().next();
-            var secure = ClientConfiguration.builder()
-                    .issuer(issuer).clientId(clientId).authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC).build();
-            var loopback = ClientConfiguration.builder()
-                    .issuer(issuer).clientId(clientId).authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
-                    .allowLoopbackEgress(true).build();
-            var allowListed = ClientConfiguration.builder()
-                    .issuer(issuer).clientId(clientId).authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
-                    .allowedEgressHost("keycloak").build();
-            var withResolver = ClientConfiguration.builder()
-                    .issuer(issuer).clientId(clientId).authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
-                    .egressHostResolver(InetAddress::getAllByName).build();
-
-            assertAll("each relaxation is part of the configuration's value",
-                    () -> assertNotEquals(secure, loopback),
-                    () -> assertNotEquals(secure, allowListed),
-                    () -> assertEquals(secure, withResolver,
-                            "a resolver has identity semantics and is excluded like the sslContext"));
         }
     }
 }

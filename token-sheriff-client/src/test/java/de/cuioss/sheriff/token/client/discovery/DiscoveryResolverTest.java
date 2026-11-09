@@ -72,11 +72,9 @@ class DiscoveryResolverTest {
                 .clientSecret(Generators.nonBlankStrings().next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(true)
-                .allowLoopbackEgress(true)
                 .build();
     }
 
-    /** Refused at the issuer-scheme check before any egress, so it needs no loopback opt-in. */
     private static ClientConfiguration secureConfigFor(String issuer) {
         return ClientConfiguration.builder()
                 .issuer(issuer)
@@ -237,8 +235,7 @@ class DiscoveryResolverSizeCapTest {
                 .clientId(Generators.nonBlankStrings().next())
                 .clientSecret(Generators.nonBlankStrings().next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
-                .allowInsecureHttp(true)
-                .allowLoopbackEgress(true);
+                .allowInsecureHttp(true);
     }
 
     @Test

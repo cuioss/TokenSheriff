@@ -340,8 +340,6 @@ class BackChannelHostnameVerificationTest {
                 // Trust arrives via the default trust store, never via sslContext(...), which the
                 // configuration guard rejects in combination with verifyHostname(false).
                 .verifyHostname(verifyHostname)
-                // The mock server binds to loopback; admitting it leaves the TLS decision under test.
-                .allowLoopbackEgress(true)
                 .build();
     }
 

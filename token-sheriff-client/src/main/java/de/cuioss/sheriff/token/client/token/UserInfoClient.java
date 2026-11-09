@@ -21,7 +21,6 @@ import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
-import de.cuioss.sheriff.token.client.internal.JsonResponseMediaType;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
@@ -34,6 +33,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -57,8 +57,10 @@ public class UserInfoClient {
 
     private static final String AUTHORIZATION = "Authorization";
     private static final String ACCEPT = "Accept";
+    private static final String CONTENT_TYPE = "Content-Type";
+    private static final String APPLICATION_JSON = "application/json";
     private static final String APPLICATION_JWT = "application/jwt";
-    private static final String ACCEPT_JSON_OR_JWT = JsonResponseMediaType.APPLICATION_JSON + ", " + APPLICATION_JWT;
+    private static final String ACCEPT_JSON_OR_JWT = APPLICATION_JSON + ", " + APPLICATION_JWT;
     private static final String HTTP_GET = "GET";
     private static final String BEARER_SCHEME = "Bearer";
     private static final String FAILURE_CONTEXT = "userinfo request failed";
@@ -106,10 +108,8 @@ public class UserInfoClient {
      * @param accessToken      the validated access token to present as a Bearer credential; must not
      *                         be {@code null}
      * @return the normalized userinfo response
-     * @throws TransportException if the request fails, the response is not successful, its
-     *         {@code Content-Type} is not accepted (see
-     *         {@link #fetchUserInfo(String, String, SenderConstraint, SignedUserInfoValidator)}), the
-     *         body cannot be parsed, or the response omits the {@code sub}
+     * @throws TransportException if the request fails, the response is not successful, the body cannot
+     *         be parsed, or the response omits the {@code sub}
      */
     public UserInfoResponse fetchUserInfo(String userInfoEndpoint, String accessToken) {
         return fetchUserInfo(userInfoEndpoint, accessToken, null);
@@ -133,10 +133,8 @@ public class UserInfoClient {
      * @param senderConstraint the DPoP/mTLS sender-constraint the token was bound under, or
      *                         {@code null} for a plain bearer token
      * @return the normalized userinfo response
-     * @throws TransportException if the request fails, the response is not successful, its
-     *         {@code Content-Type} is not accepted (see
-     *         {@link #fetchUserInfo(String, String, SenderConstraint, SignedUserInfoValidator)}), the
-     *         body cannot be parsed, or the response omits the {@code sub}
+     * @throws TransportException if the request fails, the response is not successful, the body cannot
+     *         be parsed, or the response omits the {@code sub}
      */
     public UserInfoResponse fetchUserInfo(String userInfoEndpoint, String accessToken,
             @Nullable SenderConstraint senderConstraint) {
@@ -147,15 +145,11 @@ public class UserInfoClient {
      * Fetches the userinfo document, supporting both a plain JSON response and a signed JWT response
      * (OIDC Core §5.3.2, {@code userinfo_signed_response_alg}, M3).
      * <p>
-     * The request advertises {@code Accept: application/json, application/jwt}, and the response is
-     * accepted in exactly those two forms. When every {@code Content-Type} line carries
-     * {@code application/json} the body is parsed as JSON. When every line carries
-     * {@code application/jwt} the response is a signed JWT, and the body is validated through the
-     * supplied {@code signedResponseValidator} — which runs it through the existing token-validation
-     * pipeline — rather than parsed as JSON; a signed response with no validator supplied fails closed
-     * rather than being mis-parsed. Parameters such as {@code charset} are allowed in either form.
-     * Anything else — an absent {@code Content-Type}, another media type, a mix of the two, or a value
-     * carrying {@code CR}, {@code LF} or {@code NUL} — is refused.
+     * The request advertises {@code Accept: application/json, application/jwt}. When the response is a
+     * signed JWT (its {@code Content-Type} is {@code application/jwt}), the body is validated through
+     * the supplied {@code signedResponseValidator} — which runs it through the existing token-validation
+     * pipeline — rather than parsed as JSON. A signed response with no validator supplied fails closed
+     * rather than being mis-parsed. A plain JSON response is parsed exactly as before.
      *
      * @param userInfoEndpoint         the absolute userinfo endpoint URL (from discovery); must be TLS
      *                                 unless {@link ClientConfiguration#allowInsecureHttp} is set
@@ -165,10 +159,9 @@ public class UserInfoClient {
      * @param signedResponseValidator  the validator for a signed JWT userinfo response, or {@code null}
      *                                 when only a plain JSON response is expected
      * @return the normalized userinfo response
-     * @throws TransportException if the request fails, the response is not successful, its
-     *         {@code Content-Type} is neither form described above, the body cannot be parsed or
-     *         validated, the response is a signed JWT but no validator was supplied, or the response
-     *         omits the {@code sub}
+     * @throws TransportException if the request fails, the response is not successful, the body cannot
+     *         be parsed or validated, the response is a signed JWT but no validator was supplied, or the
+     *         response omits the {@code sub}
      */
     public UserInfoResponse fetchUserInfo(String userInfoEndpoint, String accessToken,
             @Nullable SenderConstraint senderConstraint,
@@ -203,12 +196,11 @@ public class UserInfoClient {
 
     private UserInfoResponse handleResponse(HttpResponse<String> response,
             @Nullable SignedUserInfoValidator signedResponseValidator) {
-        if (JsonResponseMediaType.isJson(response.headers())) {
+        boolean signed = response.headers().firstValue(CONTENT_TYPE)
+                .map(contentType -> contentType.toLowerCase(Locale.ROOT).contains(APPLICATION_JWT))
+                .orElse(false);
+        if (!signed) {
             return parse(response.body());
-        }
-        if (!JsonResponseMediaType.carriesOnly(response.headers(), APPLICATION_JWT)) {
-            throw new TransportException(
-                    "userinfo endpoint response Content-Type is neither application/json nor application/jwt");
         }
         if (signedResponseValidator == null) {
             throw new TransportException("userinfo endpoint returned a signed JWT "

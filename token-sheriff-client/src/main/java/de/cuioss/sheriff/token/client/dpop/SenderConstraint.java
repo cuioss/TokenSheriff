@@ -15,7 +15,6 @@
  */
 package de.cuioss.sheriff.token.client.dpop;
 
-import de.cuioss.sheriff.token.client.internal.HeaderValues;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Map;
@@ -99,15 +98,11 @@ public final class SenderConstraint {
      * @param htm            the request HTTP method; must not be {@code null} or blank
      * @param htu            the URI actually contacted, after any back-channel mapping; must not be
      *                       {@code null} or blank
-     * @param nonce          the server-provided DPoP nonce to echo, or {@code null} when none was challenged;
-     *                       must not carry {@code CR}, {@code LF} or {@code NUL}
+     * @param nonce          the server-provided DPoP nonce to echo, or {@code null} when none was challenged
      * @param requestHeaders the mutable request headers to decorate; must not be {@code null}
-     * @throws IllegalArgumentException if {@code nonce} carries {@code CR}, {@code LF} or {@code NUL};
-     *         no proof is emitted then
      */
     public void apply(String htm, String htu, @Nullable String nonce, Map<String, String> requestHeaders) {
         Objects.requireNonNull(requestHeaders, "requestHeaders must not be null");
-        requireEchoableNonce(nonce);
         if (dpopGenerator != null) {
             requestHeaders.put(DPOP_HEADER, dpopGenerator.generateProof(htm, htu, nonce, null));
         }
@@ -123,11 +118,8 @@ public final class SenderConstraint {
      *                       {@code null} or blank
      * @param accessToken    the access token whose {@code ath} hash the proof carries; must not be
      *                       {@code null} or blank
-     * @param nonce          the server-provided DPoP nonce to echo, or {@code null} when none was challenged;
-     *                       must not carry {@code CR}, {@code LF} or {@code NUL}
+     * @param nonce          the server-provided DPoP nonce to echo, or {@code null} when none was challenged
      * @param requestHeaders the mutable request headers to decorate; must not be {@code null}
-     * @throws IllegalArgumentException if {@code accessToken} is blank or {@code nonce} carries
-     *         {@code CR}, {@code LF} or {@code NUL}; no proof is emitted then
      */
     public void applyProtectedResource(String htm, String htu, String accessToken, @Nullable String nonce,
             Map<String, String> requestHeaders) {
@@ -136,21 +128,8 @@ public final class SenderConstraint {
         if (accessToken.isBlank()) {
             throw new IllegalArgumentException("accessToken must not be blank");
         }
-        requireEchoableNonce(nonce);
         if (dpopGenerator != null) {
             requestHeaders.put(DPOP_HEADER, dpopGenerator.generateProof(htm, htu, nonce, accessToken));
-        }
-    }
-
-    /**
-     * Refuses a server-supplied {@code DPoP-Nonce} that carries {@code CR}, {@code LF} or {@code NUL}.
-     * Such a value is not an RFC 9449 §8 {@code NQCHAR} sequence: it was split, folded or truncated on
-     * its way in, so it is never signed into a proof. The check applies to mTLS constraints too, so the
-     * contract does not depend on the binding method.
-     */
-    private static void requireEchoableNonce(@Nullable String nonce) {
-        if (nonce != null && HeaderValues.containsLineBreakOrNul(nonce)) {
-            throw new IllegalArgumentException("DPoP nonce must not carry CR, LF or NUL");
         }
     }
 

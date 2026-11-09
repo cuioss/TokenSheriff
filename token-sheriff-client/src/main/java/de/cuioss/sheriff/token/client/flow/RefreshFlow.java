@@ -84,19 +84,12 @@ import java.util.Set;
  * A failure raised before that point carries no redemption, and {@code classify} splits that region in
  * two rather than collapsing it. Most of it is
  * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION} — a connection failure, a DNS failure, an
- * SSRF-blocked target, a {@code 5xx} — where the client has no evidence the server judged the grant and
- * keeps the presented token locally, which is what keeps a transient network fault from being mistaken
- * for a burned credential. Keeping it is not server-side validity: a token request is a non-idempotent
- * {@code POST}, so after a connection failure or a {@code 5xx} the server may already have rotated the
- * token while the client never saw the response. The exception is a {@code 4xx}
+ * SSRF-blocked target, a {@code 5xx} — where the presented token is untouched, which is what keeps a
+ * transient network fault from being mistaken for a burned credential. The exception is a {@code 4xx}
  * the authorization server attributed to the credential itself (RFC 6749 §5.2 {@code invalid_grant}),
  * raised as {@link CredentialRejectedException} and classified
  * {@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED}: nothing was redeemed and there is no
- * successor, but the credential is dead and no retry will revive it. A {@code 4xx} refusing the
- * requested scope (RFC 6749 §5.2 {@code invalid_scope}) is raised as {@link InvalidScopeException} and
- * classified {@link RefreshFailureClassification.Kind#SCOPE_REFUSED}: no new token was issued and the
- * client has no evidence that the presented token was rotated, but repeating the request will not change
- * the answer.
+ * successor, but the credential is dead and no retry will revive it.
  * <p>
  * The signal rides on the exception rather than on a separate observer argument deliberately:
  * {@link #refresh(ProviderMetadata, String)} stays the one overridable entry point on this
@@ -185,8 +178,7 @@ public class RefreshFlow {
      * @throws de.cuioss.sheriff.token.commons.error.TransportException if the token request fails —
      *         thrown as the {@link CredentialRejectedException} subtype when the authorization server
      *         declared the presented refresh token invalid (RFC 6749 §5.2 {@code invalid_grant} on a
-     *         {@code 4xx}), and as the {@link InvalidScopeException} subtype when it refused the requested
-     *         scope ({@code invalid_scope} on a {@code 4xx})
+     *         {@code 4xx})
      * @throws de.cuioss.sheriff.token.validation.exception.TokenValidationException if the returned
      *         token fails validation
      * @throws ClientProtocolException if the granted scope is broader than the requested scope and
@@ -248,7 +240,7 @@ public class RefreshFlow {
     }
 
     /**
-     * Classifies a refresh failure into the four situations a caller owes a different disposition —
+     * Classifies a refresh failure into the three situations a caller owes a different disposition —
      * see {@link RefreshFailureClassification}.
      * <p>
      * <strong>What it covers, and nothing else:</strong> a failure raised by
@@ -260,16 +252,13 @@ public class RefreshFlow {
      * token exchange and says nothing about that other failure.
      * <p>
      * This is the single place the distinction is decided, and callers must use it rather than
-     * enumerate exception types. It folds in the four cases that carry no redemption of their own:
+     * enumerate exception types. It folds in the three cases that carry no redemption of their own:
      * {@link RedeemedResponseException}, a success status whose body could not be parsed, where no
      * {@link de.cuioss.sheriff.token.client.token.TokenResponse} is ever constructed and rotation is
      * therefore not computable even in principle — mapped to {@link RefreshRedemption#rotationUnknown()}
      * so the presented token is presumed burned with no successor to revoke; and
      * {@link CredentialRejectedException}, a {@code 4xx} the authorization server attributed to the
-     * presented credential itself, which redeemed nothing but leaves the credential dead;
-     * {@link InvalidScopeException}, a {@code 4xx} refusal of the requested scope raised before any grant
-     * was applied, mapped to {@link RefreshFailureClassification.Kind#SCOPE_REFUSED} ahead of the
-     * {@code TransportException} fallback so it is never read as a transient pre-redemption fault; and
+     * presented credential itself, which redeemed nothing but leaves the credential dead; and
      * {@link RefreshTokenFamilyRevokedException}, the family's reuse or already-revoked refusal.
      * <p>
      * The family refusal never classifies as pre-redemption, and which session-ending kind it gets
@@ -284,12 +273,10 @@ public class RefreshFlow {
      * {@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED}: nothing to revoke, but the session
      * must be cleared.
      * <p>
-     * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION} means the client has no evidence that the
-     * server processed the grant, so it keeps the presented refresh token locally. That is what the
-     * client knows, not what the server holds: after a connection failure or a {@code 5xx} the server
-     * may already have rotated the token, and the next refresh is then refused. Treating the state as a
-     * redemption would destroy a working session over a transient network fault in the common case;
-     * treating it as a rejected credential would do the same.
+     * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION} means the request never reached the
+     * point where the server processed the grant, so the presented refresh token is untouched and still
+     * valid. Treating that as a redemption would destroy a working session over a transient network
+     * fault; treating it as a rejected credential would do the same.
      * <p>
      * {@link RedeemedRefreshFailure} is tested first because it is an interface: a future refusal type
      * that both implements it and extends one of the named classes must be classified by the state it
@@ -309,9 +296,6 @@ public class RefreshFlow {
         }
         if (failure instanceof CredentialRejectedException) {
             return RefreshFailureClassification.credentialRejected();
-        }
-        if (failure instanceof InvalidScopeException) {
-            return RefreshFailureClassification.scopeRefused();
         }
         if (failure instanceof RefreshTokenFamilyRevokedException revokedFamily) {
             return classifyRevokedFamily(revokedFamily);

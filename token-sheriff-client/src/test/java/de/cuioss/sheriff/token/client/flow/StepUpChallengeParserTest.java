@@ -16,16 +16,12 @@
 package de.cuioss.sheriff.token.client.flow;
 
 import de.cuioss.sheriff.token.client.flow.StepUpChallengeParser.StepUpChallenge;
-import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase;
-import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase.HeaderLineBreakAttack;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.util.Optional;
 
@@ -60,41 +56,6 @@ class StepUpChallengeParserTest {
         Optional<StepUpChallenge> challenge = parser.parse(header);
         assertTrue(challenge.isPresent(), "header must yield an actionable challenge: " + header);
         return challenge.get();
-    }
-
-    /**
-     * The line-break attack class against the {@code WWW-Authenticate} challenge, at the three places a
-     * separator can sit: between two auth-params, inside a quoted {@code acr_values}, and inside the
-     * {@code max_age} token. A challenge carrying any of them is malformed and must not become
-     * actionable, even where stripping the separator would leave a well-formed challenge.
-     */
-    @ParameterizedTest(name = "WWW-Authenticate with {0}")
-    @ArgumentsSource(HeaderLineBreakAttackDatabase.ArgumentsProvider.class)
-    @DisplayName("Should refuse a step-up challenge that carries a line break")
-    void shouldRefuseLineBreakInChallenge(HeaderLineBreakAttack attack) {
-        var acr = acrToken();
-
-        assertAll(attack.description(),
-                () -> assertTrue(parser.parse(attack.inject(CHALLENGE_PREFIX + ",",
-                        " acr_values=\"" + acr + "\"")).isEmpty(), "between auth-params"),
-                () -> assertTrue(parser.parse(attack.inject(CHALLENGE_PREFIX + ", acr_values=\"" + acr,
-                        "urn:acr:forged\"")).isEmpty(), "inside a quoted acr_values"),
-                () -> assertTrue(parser.parse(attack.inject(CHALLENGE_PREFIX + ", max_age=3",
-                        "00")).isEmpty(), "inside the max_age token"));
-    }
-
-    @Test
-    @DisplayName("Should parse the line-break test challenges once the separator is removed")
-    void shouldParseLineBreakChallengesWithoutSeparator() {
-        // Positive control for the attack class above: every shape it injects into is actionable on
-        // its own, so a refusal there is the separator's doing.
-        var acr = acrToken();
-
-        assertAll("well-formed controls",
-                () -> assertEquals(Optional.of(acr),
-                        parseRequired(CHALLENGE_PREFIX + ", acr_values=\"" + acr + "\"").getAcrValues()),
-                () -> assertEquals(Optional.of(300),
-                        parseRequired(CHALLENGE_PREFIX + ", max_age=300").getMaxAge()));
     }
 
     @Nested

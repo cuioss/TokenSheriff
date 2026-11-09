@@ -22,7 +22,6 @@ import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
-import de.cuioss.sheriff.token.client.internal.JsonResponseMediaType;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
@@ -88,10 +87,8 @@ public class ParClient {
      * @param clientAuthentication    the client authentication strategy to present; must not be
      *                                {@code null}
      * @return the normalized PAR response carrying the {@code request_uri}
-     * @throws TransportException if the request fails, the response is not successful, its
-     *         {@code Content-Type} lines do not all carry {@code application/json} (parameters such as
-     *         {@code charset} allowed), the body cannot be parsed, or the response omits the
-     *         {@code request_uri}
+     * @throws TransportException if the request fails, the response is not successful, the body cannot
+     *         be parsed, or the response omits the {@code request_uri}
      */
     public ParResponse pushAuthorizationRequest(String parEndpoint,
             Map<String, String> authorizationParameters,
@@ -117,9 +114,6 @@ public class ParClient {
             if (!HttpStatusFamily.isSuccess(response.statusCode())) {
                 throw new TransportException(
                         "PAR endpoint returned unexpected HTTP status " + response.statusCode());
-            }
-            if (!JsonResponseMediaType.isJson(response.headers())) {
-                throw new TransportException("PAR endpoint response Content-Type is not application/json");
             }
             return parse(response.body());
         } catch (IOException e) {

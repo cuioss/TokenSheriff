@@ -11,14 +11,14 @@ _Realizes xref:../requirements.adoc#COMMONS-1[COMMONS-1]–xref:../requirements.
 See xref:../threat-model.adoc[Threat Model] and xref:../architecture.adoc[Architecture]._
 
 `commons.transport` owns the validation-side outbound HTTP to an OpenID Provider —
-discovery and JWKS — with its TLS enforcement, SSRF egress policy, timeouts, response-size
-limits, retry/backoff and discovery / JWKS caching, built on the `cui-http` client. It *moves
-bytes* — it never decides whether a token is trustworthy. The client engine builds its *own*
-back-channel HTTP (discovery, token, userinfo, revocation, PAR)
-(xref:../../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]). It
-reuses the commons host-address egress policy type (`EgressPolicy`) as an instance of its own,
-configured on `ClientConfiguration`, and adds its path-structure and scheme checks; it has no
-retry/backoff and no discovery cache.
+discovery and JWKS — and the shared transport primitives (TLS enforcement, SSRF egress
+policy, timeouts, response-size limits, retry/backoff, the `cui-http` client, and
+discovery / JWKS caching). It *moves bytes* — it never decides whether a token is
+trustworthy. The client engine builds its *own* back-channel HTTP (token, userinfo,
+revocation, PAR) on these primitives
+(xref:../../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]); the
+host-address SSRF egress policy (`EgressPolicy`) belongs to the validation-side transport, and
+the client applies its own path-structure and scheme control instead.
 
 == Endpoints
 
@@ -42,24 +42,17 @@ userinfo, revocation and PAR over its own back channel, builds the end-session r
 front channel, and implements no introspection flow. All eight have dispatchers in the
 `generators` test artifact. The dispatchers for the six transport contracts are smoke-tested
 directly through a plain `HttpClient` (`EndpointDispatchersTest`), not through the client engine;
-only the token, userinfo and PAR dispatchers are additionally driven by the client engine's own
-tests. The client's revocation tests use a dispatcher of their own, and the introspection and
-end-session dispatchers are never reached by the engine, which issues no introspection request and
-no end-session HTTP call.
+the token, userinfo, revocation and PAR dispatchers are additionally driven by the client
+engine's own tests, whereas the introspection and end-session dispatchers are never reached by
+the engine, which issues no introspection request and no end-session HTTP call.
 
 == Security controls
 
 === TLS enforcement (COMMONS-2)
 
 Every outbound request uses TLS 1.2+ with certificate validation, configured centrally via
-`cui-http`'s `SecureSSLContextProvider`. Plain-HTTP endpoints are rejected by default; each side
-admits them only behind its explicit, default-off cleartext opt-in (per issuer on the validation
-side, `sheriff.token.issuers.<name>.jwks.http.allow-insecure-http`; client-wide on the client,
-`sheriff.client.allow-insecure-http`), intended for local development and tests, never production.
-An `https` issuer's discovery document may still advertise only `https` endpoints to the client,
-whatever the client opt-in says
-(xref:../../adr/0028-Discovery_refuses_a_non-https_endpoint_advertised_by_an_https_issuer_regardless_of_allowInsecureHttp.adoc[ADR-0028]).
-Mitigates xref:../threat-model.adoc#T-TLS[T-TLS].
+`cui-http`'s `SecureSSLContextProvider`. Plain-HTTP endpoints are rejected. Mitigates
+xref:../threat-model.adoc#T-TLS[T-TLS].
 
 Certificate validation is unconditional in its chain-trust, expiry and algorithm-constraint
 components. Hostname matching is the one qualified part: it is ON by default and a deployment may
@@ -101,10 +94,9 @@ address. It changes *where* back-channel calls are sent, never *who* the issuer 
   steer a call to a third origin.
 * *Order of controls.* The client's egress path validation
   (xref:../../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]) runs on
-  the advertised URL before the rewrite; the scheme policy (`allowInsecureHttp`), the host-address
-  egress policy, the per-client trust (`sslContext`) and hostname verification are then evaluated
-  against the rewritten target, i.e. the host actually contacted — so an internal back-channel
-  origin must be listed in `allowedEgressHosts`. With `https://`, the back-channel host's certificate is therefore
+  the advertised URL before the rewrite; the scheme policy (`allowInsecureHttp`), the per-client trust
+  (`sslContext`) and hostname verification are then evaluated against the rewritten target, i.e. the
+  host actually contacted. With `https://`, the back-channel host's certificate is therefore
   validated against the back-channel host name. The issuer-scheme check at discovery is separate
   and still applies to the configured issuer: an `http` issuer requires `allowInsecureHttp`
   whatever the scheme of the back-channel origin.
@@ -135,23 +127,9 @@ userinfo clients sign it as `htu`
 Any URL from an IdP-controlled source (`jwks_uri`, discovery, `userinfo`, or any advertised
 endpoint) is constrained before it is fetched:
 
-* scheme restricted to HTTPS, unless the cleartext opt-in of COMMONS-2 is set;
-* host subject to a host-address egress policy (`EgressPolicy`) that refuses loopback,
-  link-local (including the `169.254.0.0/16` cloud-metadata range), site-local, IPv6 unique-local,
-  carrier-grade NAT, wildcard, broadcast and multicast addresses by default.
-
-Two independent policy instances apply it. The validation side applies one to the well-known
-discovery and JWKS fetches (`HttpWellKnownResolver`, `HttpJwksLoader`), configured per issuer. The
-client engine applies its own, configured on `ClientConfiguration`, to every discovery and
-back-channel call (discovery, token, PAR, userinfo, revocation), on the URL actually contacted —
-after the back-channel origin rewrite — and keeps its path-structure and scheme checks besides.
-The secure default can refuse an endpoint a deployment configured or an issuer advertised on an
-internal address. On the client the relaxations are explicit and named:
-`allowLoopbackEgress` (`sheriff.client.allow-loopback-egress`) lifts the loopback refusal only, and
-`allowedEgressHosts` (`sheriff.client.allowed-egress-hosts`) lists hosts that bypass the
-address-range check entirely, which a split-horizon deployment uses for its back-channel origin. The
-policy resolves the host immediately before the fetch; a DNS answer that changes before the HTTP
-client connects is not seen.
+* scheme restricted to HTTPS;
+* host subject to an allow-list / egress policy;
+* internal / link-local / loopback ranges blocked.
 
 The advertised `issuer` is validated against the configured issuer before advertised URLs
 are trusted. Mitigates xref:../threat-model.adoc#T-SSRF[T-SSRF] and
@@ -197,9 +175,8 @@ dispatcher per new endpoint, each following the existing pattern
 | `JwksResolveDispatcher` (existing) | Valid JWKS | Internal-range redirect, oversized JWKS
 |===
 
-The token, userinfo and PAR doubles are driven by the client engine's tests; the revocation,
+The token, userinfo, revocation and PAR doubles are driven by the client engine; the
 introspection and end-session doubles are exercised only by the direct dispatcher smoke tests
-(`EndpointDispatchersTest`). The client's revocation tests declare a dispatcher of their own, and
-the engine reaches neither the introspection nor the end-session endpoint.
+(`EndpointDispatchersTest`), because the engine reaches neither endpoint.
 `WellKnownDispatcher` and `JwksResolveDispatcher` back the validation-side Discovery/JWKS
 coverage. All are unit-test doubles for MockWebServer adversarial coverage.

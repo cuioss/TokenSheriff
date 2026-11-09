@@ -309,7 +309,6 @@ class RefreshPostRedemptionQuarantineTest extends RefreshTestSupport {
                 .clientSecret(Generators.letterStrings(8, 20).next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(true)
-                .allowLoopbackEgress(true)
                 .scopes(REQUESTED_SCOPES)
                 .strictScopeReconciliation(true)
                 .build();

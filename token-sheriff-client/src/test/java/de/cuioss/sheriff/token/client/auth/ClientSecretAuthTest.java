@@ -75,7 +75,6 @@ class ClientSecretAuthTest {
                 .clientSecret(Generators.letterStrings(8, 20).next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(true)
-                .allowLoopbackEgress(true)
                 .build();
     }
 

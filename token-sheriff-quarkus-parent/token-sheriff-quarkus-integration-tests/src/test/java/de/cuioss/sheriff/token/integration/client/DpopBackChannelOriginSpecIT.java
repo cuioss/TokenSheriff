@@ -116,9 +116,6 @@ class DpopBackChannelOriginSpecIT extends BaseIntegrationTest {
                 .redirectUri(REDIRECT_URI)
                 .backChannelOrigin(BACK_CHANNEL_ORIGIN)
                 .sslContext(RefreshEngineSupport.chainValidatingSslContext())
-                // The back-channel origin is a loopback address; the egress policy checks the host
-                // actually contacted, so the loopback opt-in is what admits it.
-                .allowLoopbackEgress(true)
                 .build();
         KeyPair proofKey = RefreshEngineSupport.generateRsaKeyPair();
         proofGenerator = RefreshEngineSupport.dpopProofGenerator(proofKey);

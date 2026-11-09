@@ -20,14 +20,14 @@ Standing architectural decisions, recorded as durable ADRs under `doc/adr/`.
 * xref:adr/0007-The_refresh_path_binds_identity_against_a_retained_session_subject_not_a_re-parsed_stored_ID_token.adoc[ADR-0007: The refresh path binds identity against a retained session subject, not a re-parsed stored ID token] - The refreshed principal is compared against a subject retained on the stored session record, inside the atomic store transform
 * xref:adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008: Adopt the upstream cui-http verifyHostname knob rather than a local trust manager] - Outbound TLS hostname verification is a default-on setting delegated to the upstream cui-http `HttpHandlerBuilder`, not a local trust manager
 * xref:adr/0009-Single_JWS_algorithm_catalog_with_per-consumer_EC_format_composition.adoc[ADR-0009: Single JWS algorithm catalog with per-consumer EC format composition] - Signing-algorithm facts are defined once in the `JwsAlgorithm` catalog; the EC JCA name stays per-consumer because JOSE and `java.security.Signature` differ on ECDSA wire format
-* xref:adr/0010-A_refresh_token_the_authorization_server_declares_invalid_is_a_third_classification_state.adoc[ADR-0010: A refresh token the authorization server declares invalid is a third classification state] - A refused refresh is classified as pre-redemption, credential-rejected or redeemed; an amendment adds scope-refused (`invalid_scope`), which keeps the session and owes no retry
+* xref:adr/0010-A_refresh_token_the_authorization_server_declares_invalid_is_a_third_classification_state.adoc[ADR-0010: A refresh token the authorization server declares invalid is a third classification state] - A refused refresh is classified as pre-redemption, credential-rejected or redeemed
 * xref:adr/0011-Integration-test_skip_state_binds_through_POM_properties_not_plugin_configuration.adoc[ADR-0011: Integration-test skip state binds through POM properties, not plugin configuration] - The Failsafe skip flag is wired to `skipTests` via POM properties so a command-line override keeps precedence
 * xref:adr/0012-mTLS_client_authentication_is_an_alpha_capability_DPoP_is_the_sender-constraining_and_client-authentication_direction.adoc[ADR-0012: mTLS client authentication is an alpha capability, DPoP is the sender-constraining and client-authentication direction] - `MtlsClientAuth` is a declared but never-selected alpha surface; DPoP is the direction for first production
 * xref:adr/0013-Reject_a_compatibility_shim_that_would_resurrect_a_removed_silent-drop_defect_class.adoc[ADR-0013: Reject a compatibility shim that would resurrect a removed silent-drop defect class] - No two-argument `AuthenticationResult` constructor; callers migrate to the full-arity constructor
 * xref:adr/0014-Optional_record_components_are_typed_nullable_while_accessor_APIs_expose_Optional.adoc[ADR-0014: Optional record components are typed nullable while accessor APIs expose Optional] - Optional record components are `@Nullable` under the `@NullMarked` posture, while hand-written getters keep returning `Optional`
 * xref:adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015: DPoP htu names the back-channel URL actually contacted] - A DPoP proof's `htu` names the URL the client actually dials, including a rewritten back-channel origin
 * xref:adr/0016-TokenValidator_owns_and_closes_the_JWKS_loaders_of_its_issuer_configs.adoc[ADR-0016: TokenValidator owns and closes the JWKS loaders of its issuer configs] - `TokenValidator` closes every `AutoCloseable` JWKS loader of its enabled issuer configs in `close()`
-* xref:adr/0017-A_JWKS_loader_reports_OK_only_with_usable_keys_and_retries_only_transient_discovery_failures.adoc[ADR-0017: A JWKS loader reports OK only with usable keys and retries only transient discovery failures] - OK only while a usable key set is installed; failed first loads recover in the background; security rejections, including an unusable advertised `jwks_uri`, stay terminal
+* xref:adr/0017-A_JWKS_loader_reports_OK_only_with_usable_keys_and_retries_only_transient_discovery_failures.adoc[ADR-0017: A JWKS loader reports OK only with usable keys and retries only transient discovery failures] - OK only while a usable key set is installed; failed first loads recover in the background; security rejections stay terminal
 * xref:adr/0018-A_JWKS_loader_fences_stale_work_with_one_lifecycle_lock_and_a_generation_epoch.adoc[ADR-0018: A JWKS loader fences stale work with one lifecycle lock and a generation epoch] - `HttpJwksLoader` guards its lifecycle with one lock and a generation epoch, so work of a closed generation publishes nothing
 * xref:adr/0019-Eager_TokenValidator_startup_is_gated_at_runtime_on_enabled-issuer_presence.adoc[ADR-0019: Eager TokenValidator startup is gated at runtime on enabled-issuer presence] - A `StartupEvent` observer builds the validator when an enabled issuer is configured; an invalid enabled configuration fails boot
 * xref:adr/0020-The_access-token_cache_stores_the_issuer_time_policy_with_each_entry.adoc[ADR-0020: The access-token cache stores the issuer time policy with each entry] - Each cache entry carries its issuer's clock skew and maximum token age, re-applied on every hit and eviction
@@ -37,8 +37,6 @@ Standing architectural decisions, recorded as durable ADRs under `doc/adr/`.
 * xref:adr/0024-The_bearer-token_interceptor_reads_its_class-level_binding_from_the_bean_class_not_the_ArC_subclass.adoc[ADR-0024: The bearer-token interceptor reads its class-level binding from the bean class, not the ArC subclass] - `BearerTokenInterceptor` merges the bean class's `@BearerAuth` with the method-level annotation and fails closed when neither carries it
 * xref:adr/0025-The_client_extension_produces_its_token_store_and_refresh_scheduler_as_replaceable_default_beans.adoc[ADR-0025: The client extension produces its token store and refresh scheduler as replaceable default beans] - `TokenStore` and `RefreshScheduler` are `@DefaultBean` producers an application bean can replace
 * xref:adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_startup_instead_of_being_ignored.adoc[ADR-0026: Orphaned or unresolvable extension configuration fails startup instead of being ignored] - The configuration resolvers throw an `IllegalStateException` naming the offending property, failing the validator build at startup
-* xref:adr/0027-A_client_authentication_failure_at_the_token_endpoint_is_a_typed_pre-redemption_refusal.adoc[ADR-0027: A client authentication failure at the token endpoint is a typed pre-redemption refusal] - `ClientAuthenticationFailedException` is raised for a 4xx `invalid_client` or exactly 401 `unauthorized_client`, keeps the session, and leaves every other shape a plain `TransportException`
-* xref:adr/0028-Discovery_refuses_a_non-https_endpoint_advertised_by_an_https_issuer_regardless_of_allowInsecureHttp.adoc[ADR-0028: Discovery refuses a non-https endpoint advertised by an https issuer regardless of allowInsecureHttp] - An `https` issuer's discovery document may advertise only `https` values for the endpoints the client uses; `allowInsecureHttp` does not relax it
 
 == Commons (base layer)
 
@@ -54,7 +52,7 @@ metrics), enforced by ArchUnit rather than shipped as a separate module.
 
 === Specifications
 
-* xref:commons/specification/transport.adoc[Transport] - Validation-side discovery and JWKS with their TLS, SSRF egress, resilience and caching controls; the client's own back channel, its egress policy and its back-channel origin
+* xref:commons/specification/transport.adoc[Transport] - Validation-side discovery and JWKS; shared TLS / SSRF / resilience primitives; the client back-channel origin
 * xref:commons/specification/error-model.adoc[Error Model] - Typed exceptions → RFC 9457 at every HTTP edge
 * xref:commons/specification/observability.adoc[Observability] - SecurityEventCounter events + metric identifiers
 
@@ -110,7 +108,6 @@ implemented; this document set remains the normative specification.
 == Reference
 
 * xref:LogMessages.adoc[Log Messages] - Global registry of all log messages
-* xref:developer/test-impl-mapping.adoc[Test-to-Implementation Mapping] - Which test classes exercise each production package, the cross-cutting guards, and the integration-test specifications per feature area
 
 == Module Documentation
 

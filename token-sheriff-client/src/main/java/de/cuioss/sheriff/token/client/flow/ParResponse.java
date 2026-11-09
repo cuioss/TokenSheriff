@@ -17,7 +17,6 @@ package de.cuioss.sheriff.token.client.flow;
 
 import com.dslplatform.json.CompiledJson;
 import com.dslplatform.json.JsonAttribute;
-import de.cuioss.sheriff.token.client.internal.JsonNumberLongConverter;
 
 import java.util.Optional;
 
@@ -45,12 +44,8 @@ public class ParResponse {
     @JsonAttribute(name = "request_uri")
     public String requestUri;
 
-    /**
-     * The request-URI lifetime in seconds, or {@code 0} when the AS omits it. RFC 9126 §2.2 types the
-     * member as a JSON number: a JSON string, even a numeric one such as {@code "90"}, fails the parse
-     * (see {@link JsonNumberLongConverter}).
-     */
-    @JsonAttribute(name = "expires_in", converter = JsonNumberLongConverter.class)
+    /** The request-URI lifetime in seconds, or {@code 0} when the AS omits it. */
+    @JsonAttribute(name = "expires_in")
     public long expiresIn;
 
     /**

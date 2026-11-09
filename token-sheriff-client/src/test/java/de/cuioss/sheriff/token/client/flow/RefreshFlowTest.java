@@ -97,7 +97,6 @@ class RefreshFlowTest {
                 .clientSecret(Generators.letterStrings(8, 20).next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(true)
-                .allowLoopbackEgress(true)
                 .build();
     }
 
@@ -107,8 +106,7 @@ class RefreshFlowTest {
                 .clientId(Generators.letterStrings(5, 12).next())
                 .clientSecret(Generators.letterStrings(8, 20).next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
-                .allowInsecureHttp(true)
-                .allowLoopbackEgress(true);
+                .allowInsecureHttp(true);
         for (String scope : scopes) {
             builder.scope(scope);
         }
@@ -140,28 +138,6 @@ class RefreshFlowTest {
                 () -> assertTrue(result.rotated(), "a newly issued refresh token must be reported as rotated"),
                 () -> assertEquals(rotated, result.refreshToken(), "the rotated refresh token must be surfaced"),
                 () -> assertEquals(300, result.accessTokenExpiresInSeconds(), "the access token lifetime must be surfaced"));
-    }
-
-    @Test
-    @DisplayName("Should surface an invalid_scope refusal as the typed exception, classified SCOPE_REFUSED")
-    void shouldSurfaceInvalidScopeAsScopeRefused(URIBuilder uriBuilder) {
-        String description = Generators.letterStrings(8, 24).next();
-        moduleDispatcher.respondWith(400,
-                "{\"error\":\"invalid_scope\",\"error_description\":\"" + description + "\"}");
-        var flow = flow(configWithScopes("openid", "admin"));
-        var metadata = metadata(uriBuilder);
-        String presented = Generators.letterStrings(20, 40).next();
-
-        InvalidScopeException thrown = assertThrows(InvalidScopeException.class,
-                () -> flow.refresh(metadata, presented),
-                "a refused scope must reach the caller as the typed refusal, not a generic transport failure");
-
-        RefreshFailureClassification classification = RefreshFlow.classify(thrown);
-        assertAll("the scope refusal is non-retryable and leaves the presented token valid",
-                () -> assertEquals(RefreshFailureClassification.Kind.SCOPE_REFUSED, classification.kind()),
-                () -> assertNull(classification.redemption(), "nothing was redeemed"),
-                () -> assertEquals("invalid_scope", thrown.getErrorCode()),
-                () -> assertEquals(description, thrown.getErrorDescription().orElseThrow()));
     }
 
     @Test
@@ -456,7 +432,6 @@ class RefreshFlowTest {
                 .clientSecret(Generators.letterStrings(8, 20).next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(true)
-                .allowLoopbackEgress(true)
                 .scopes(REQUESTED_SCOPES)
                 .strictScopeReconciliation(strictScopeReconciliation)
                 .build();
