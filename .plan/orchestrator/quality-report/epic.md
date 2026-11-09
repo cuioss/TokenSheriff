@@ -159,6 +159,7 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   sanitisation sweep, the advisory residuals 7(a)-(l), GitHub #763, the e2e teardown hang, the old per-plan residuals), a Residual
   Register of every open epic item and a Done-when with the Sonar zero target. Folded and re-grounded at `d1af3ebb`; PLAN-01 to
   PLAN-24 have all merged, nothing else is staged or running, so it is emitted alone. The plan lifecycle may cut it at outline.
+  SHIPPED 2026-11-09 as #883 + #884 (see Decisions and `landings/PLAN-25.md`).
 
 ## Decisions
 
@@ -499,6 +500,46 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   #182 are deliberate non-goals), 9 (e2e teardown hang), 10 (old per-plan residuals), a Residual Register mapping every open item to a
   disposition, and a Done-when with the Sonar target. PLAN-25 holds ten deliverables; scope-guard rationale retaken (the operator
   asked twice for ONE plan; the plan lifecycle may cut it at outline).
+- 2026-11-07 — PLAN-25 RUNNING (operator: "plan is running"), plan id `plan-25-epic-leftover-sweep`. OPERATOR DECISIONS on the four open
+  questions, delivered to the plan's mailbox as `orchestrator-quality-report-001.md` (the spec is not edited under a running row):
+  7(k)(1) JWE size mismatch: keep the 8 KiB parser limit and map the failure to a `TokenValidationException` (agreed default); 7(i)(2)
+  explicit JSON null identifier claims: pin as observed (agreed default); 7(j)(1) back-channel egress policy: the docs follow the code
+  (agreed default); 5(c) the 400-line test budget: NOT a hard rule but a guideline, and more than 500 lines should be avoided, so
+  `AGENTS.md` states a 500-line guideline, no existing class is split for it, and classes this plan creates or edits stay at or under
+  500 lines. The layer-3 JWE Open Defect keeps its owner (7(k)(1)) with the direction settled.
+- 2026-11-09 — API SHERIFF REQUEST DISPOSITIONED (operator): A ignored; B "spec a test": PLAN-26 (`plans/PLAN-26-jwks-key-ids-contract-pin.md`,
+  WS-01, staged, one deliverable, test-only: a contract test that runs the `getKeyIds()` points (never null and empty before init, active set
+  only, every id resolves, blank omitted, duplicate once, immutable, snapshot stable, retired excluded in the grace period, status OK only with
+  a usable set) through the HTTP, file and in-memory loaders the factory returns, with a mutation check per point; no file shared with the
+  running PLAN-25, gate determinate with 0 overlap; admitted, not emitted); C: the operator wants the parser in TokenSheriff, proposal given;
+  D and the reply: later, if released.
+- 2026-11-09 — PLAN-26 WIDENED (operator: "make it one plan for both"): the `insufficient_scope` parser (API Sheriff part C) is folded into
+  PLAN-26 as deliverable 2, so no PLAN-27 exists. Deliverable 2: `InsufficientScopeChallengeParser` in `token-sheriff-client` `flow`
+  (sibling of `StepUpChallengeParser`; RFC 6750 scope-token grammar, duplicate and injected parameters rejected, the CR/LF/obs-fold/NUL
+  header attack class, bounded header length and token count, no leak from a second challenge, parses and acts on nothing), one shared
+  package-private `auth-param` splitter instead of a copy, `CLIENT-25` and its README, specification and threat-model rows, with a
+  mutation check per guarding line. Two deliverables, so under the six-deliverable threshold. The queue slug and file name
+  (`jwks-key-ids-contract-pin`) stay those of deliverable 1 (a row's slug cannot be edited). Gate: determinate, but it now shares FOUR
+  files with the running PLAN-25 (`doc/client/README.adoc`, `requirements.adoc`, `specification/step-up-and-logout.adoc`,
+  `threat-model.adoc`), so an overlap prompt is required at emit; recommended order: after PLAN-25 merges. Timing tradeoff recorded in
+  the spec: deliverable 1 is wanted before the next release cut, deliverable 2 is new public API and not urgent.
+- 2026-11-09 — PLAN-25 SHIPPED as two PRs (`landings/PLAN-25.md`): #883 (validation half, `47045031`) and #884 (client, client-Quarkus, ITs, all
+  of `doc/`, quarkus-parent README, `aeb3fa49`); the plan grew to 163 files and the required review bot's 100-file cap forced a split late in
+  finalize. Analysis by one read-only leaf, ten orchestrator re-reads. Measured by the orchestrator: Sonar `main` at `aeb3fa49` reads 0 unresolved
+  issues (branch + resolved=false), 0 hotspots, coverage 93.2; the Maven, Integration, End-to-End and Scorecard workflows are green at both
+  merge commits. The mailbox decisions of 2026-11-07 were NOT followed: on main the JWE limit is widened to 32 KiB, an explicit JSON null
+  identifier is refused, the client back-channel has a default-on host-address egress policy, and `AGENTS.md` states "should stay within 400
+  lines" plus "more than 1000 lines must be split" (four classes were split; the plan's own edit then took `NonValidatingJwtParserTest` to 1023
+  lines). The landing says the operator answered the same questions with the opposite choices inside the run; the orchestrator cannot see that
+  answer, so the divergence is an Open Defect awaiting the operator's word, not a settled decision. Slots: PLAN-26 is the only remaining plan.
+- 2026-11-09 — INBOX DRAIN (60 messages from `plan-25-epic-leftover-sweep`: 1 landing, 59 candidate lessons): the landing reconciled as above
+  (landing-check complete: true). 59 lessons dispositioned, all archived: 15 PROMOTED into the corpus (2026-11-09-16-001 to -015: test-class-split and
+  attribution false positives, accepted-verdict carry-over, finalize-gate circular criteria, outline profile checks, review-bot file cap, merge-queue
+  re-enqueue, post-merge wait on the benchmark workflow, `pr edit` body slot, loop-back close), the recurrences of two existing lessons
+  (2026-11-05-23-002 split-aware test integrity, -003 head-dependent re-fire) appended to them, 37 more DISCARDED as re-filings of a promoted or
+  existing lesson, and 7 script-failure signal-scan clusters DISCARDED (no cause extracted; the pickup text says file a lesson only on recurrence).
+  Each has its own decision-log line. Project-owned residue from them: the Playwright screenshot flake that ejected #883 from the merge queue
+  (Watch).
 
 ## Open Defects
 
@@ -507,25 +548,75 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
 - 2026-11-07 — Unstamped `effort` on fourteen landings (PLAN-01, 02, 04, 05, 09, 10, 12, 14, 15, 16, 17, 18, 19, 22; PLAN-03, 06, 07, 13,
   20, 21, 24 carried it; PLAN-08 and PLAN-11 were not checked): `landing-check` reports `complete: false`, missing key `effort`, on
   each. Plan-marshall owns the stamp; the per-landing entries are in `settled.md`. Retire when upstream stamps `effort` at plan init.
-  PLAN-25 will be the fifteenth if it is not fixed upstream.
+  PLAN-25 carried `effort` (`landing-check` complete: true), so it is not the fifteenth.
 - 2026-10-31 — Open: the lesson-routing gap. The candidate-lesson inbox is now empty (all 36 dispositioned),
   but the 24 plan-marshall-owned lessons could only be filed here through the foreign-store override.
   `upstream-plan-marshall-report.md` holds the evidence for the plan-marshall maintainers. FILED 2026-11-05 at the
   operator's instruction as `quality-report-001.md` in the plan-marshall repo's `live-blockers` inbox (kind `finding`,
   the whole report to the PLAN-23 addendum; the target inbox's own validation was not run, since the `inbox validate`
   verb works on this repo's epic). Addenda written after it are not sent.
-- 2026-11-07 — Documentation drift left by PLAN-19 (three-layer reading, owned by PLAN-25 7(l) and 7(j)(3), none a behaviour defect): the
-  commons requirement COMMONS-2, `transport.adoc` and the commons threat model state plain HTTP is always rejected while the validation
-  docs now document the `allowInsecureHttp` opt-in; the `RefreshFailureClassification` and `RefreshFlow` Javadoc and ADR-0010 line 187
-  contradict ADR-0010's own rewritten text; the Quarkus parent README credits `ClientRuntimeConfig` with the configuration mapping. Retire
-  when the PLAN-25 PR merges.
-- 2026-11-06 — Open defect in merged code (PLAN-17 three-layer reading, not yet owned by a running plan): JWE tokens of 8193 to 32768
-  bytes fail with an unhandled `IllegalArgumentException` instead of a `TokenValidationException` (`NonValidatingJwtParser.java:294-295`
-  against `TokenStringValidator.java:65-67,96`); fail-closed but unusable above 8 KiB; PLAN-25 item 7(k)(1), operator decision on the
-  fix direction recorded there. Retire when a fix plan lands with its test.
+- 2026-11-09 — OPERATOR DECISION NEEDED, PLAN-25 inverted all four mailbox decisions (`landings/PLAN-25.md`, layer 2, re-read on `aeb3fa49`):
+  (1) JWE: the 8 KiB parser limit was widened to 32 KiB for a 5-part token (`NonValidatingJwtParser.java:365-370`, `JweDecryptionConfig.java:51`),
+  newly accepting 8 to 32 KiB under a JWE-enabled issuer, against the fail-closed constraint; (2) explicit JSON null identifier claims are
+  refused (`StrictStringMapper.java:52`), `MapRepresentation` was changed, `SUBJECT` was made strict (a numeric `sub` is refused) and a
+  non-string userinfo `sub` too; (3) a default-on host-address egress policy was added to the client back-channel (`BackChannelHttp.java:148,
+  178,239`, two Quarkus keys, COMMONS-3), refusing private-range IdPs unless listed; (4) `AGENTS.md:125-131` is "should" at 400 and "must
+  split" above 1000, not a 500 guideline, and `NonValidatingJwtParserTest` (1023 lines after the plan's own edit) breaks that rule.
+  The docs were rewritten to match the code, so code and docs agree with each other and not with the mailbox. The landing says the operator
+  chose these in the run; the orchestrator cannot see that, so it is asked, not assumed. The 2026-11-06 JWE Open Defect (an unhandled
+  `IllegalArgumentException` above 8 KiB) is gone in either reading: the 8 to 32 KiB case is now typed, accepted when it is a JWE.
+  Retire when the operator says the in-run answers stand, or a correction plan is staged and landed.
+- 2026-11-09 — Defects in merged code, reported to the operator in the analysis turn (PLAN-25 layer 3; not fixed inline; a fix plan only on the
+  operator's word): (1) the DPoP replay cache never evicts an in-window jti, so it grows past `maxSize` without bound under a flood of fresh
+  jtis (`DpopReplayProtection.java:99-101,122-144`, a documented choice; pre-existing since #565; the flood needs a valid DPoP-bound token);
+  (2) the same flood makes every insert beyond `maxSize` stream and sort the whole map while nothing is evictable, a CPU amplification (same
+  lines, not named by the landing); (3) `DpopProofValidator.java:351,441,457` log the proof's `jti`, `htm` and `htu` unsanitised (CWE-117), and
+  `LogRecordSanitizationGuardTest.java:58-59` does not name those fields, so the guard cannot see them. Retire when a fix plan lands with tests.
+- 2026-11-09 — PLAN-19 doc drift RETIRED by the PLAN-25 landing: COMMONS-2 now documents the `allowInsecureHttp` opt-in
+  (`doc/commons/requirements.adoc:57-64`) and the Quarkus parent README attributes the mapping to `ClientConfigMapper`
+  (`token-sheriff-quarkus-parent/README.adoc:14`), both re-read; the Javadoc and ADR-0010:187 corrections are leaf-reported and not re-read.
 
 ## Watches
 
+- 2026-11-09 — API Sheriff downstream request (cross-repo message `api-sheriff-kidicap-gateway-requirements-001.md` from the orchestrator of
+  `cuioss/API-Sheriff`, epic `kidicap-gateway-requirements`; a lead, read at `f85c5ab3`, not a change request against PLAN-25, nothing
+  urgent except A). OPERATOR-OWNED, nothing staged: (A) before the 0.9.9 cut API Sheriff wants the version number, the date, whether
+  PLAN-25 is in, and a release note of downstream-visible changes since 0.9.8: loader status contract (#830, `OK` only with a usable key
+  set), opt-in max staleness and re-discovery (#844), a JWKS with no usable key never replaces an installed set, log records now carry
+  sanitised text and no exception object (a downstream test asserting a stack trace can break), and, only if PLAN-25 ships, a non-string
+  `sub` refused and a token above the 8 KiB parser limit failing with `TokenValidationException`; plus the Quarkus and `cui-quarkus-parent`
+  versions the release is built on. (B) they depend on the `JwksLoader.getKeyIds()` contract (active set only, empty before init and never
+  `null`, blank ids omitted, duplicates collapse) and ask for confirmation that it stays stable and that each point is pinned by a test;
+  they found the rotation and duplicate cases pinned but did not confirm "retired excluded while `getKeyInfo` still resolves", "empty
+  before init" and "blank omitted". (C) a question: should `token-sheriff-client` own a parser for the RFC 6750 `insufficient_scope`
+  challenge (today `StepUpChallengeParser` handles only `insufficient_user_authentication`), or should API Sheriff parse it; they will
+  parse it themselves unless told otherwise and need the answer before their PLAN-20 outline. (D) information: they will call
+  `RevocationClient.revoke` on logout and ask to hear of signature or best-effort changes before 1.0. VERIFIED at `f85c5ab3`: the project
+  version is `0.9.9-SNAPSHOT` with `0.9.8` the latest tag; `StepUpChallengeParser` has only the `insufficient_user_authentication` case;
+  `RevocationClient.revoke(String, String, @Nullable String, ...)` exists; the empty-before-init case is asserted in
+  `IssuerConfigDiscoveryIssuerTest` and the retired-key lookup through `getKeyInfo` in `HttpJwksLoaderGracePeriodTest`; no test found
+  for blank ids omitted AT THE HTTP LOADER. CORRECTED 2026-11-09 (full read of the tests): `JWKSKeyLoaderTest` pins blank omitted (method at 268), duplicate once, unmodifiable and empty before init, and `HttpJwksLoaderKeyRotationTest` lines 176-190 pins retired excluded with `getKeyInfo` still resolving and an unchanged earlier snapshot, so the contract is pinned piecemeal; what is missing is one place that asserts it through the three factory entry points (no `getKeyIds` assertion in the file, in-memory or factory tests, none for blank or duplicate ids at `HttpJwksLoader`): staged as PLAN-26. NOT verified: the
+  PLAN-25 branch state the message quotes (`816bf66e`), the 0.9.8 comparison, and the Quarkus versions. The reply channel is a write
+  into another repository's epic inbox, so no reply is sent without the operator's word. OPERATOR ANSWERS 2026-11-09: (A) ignore; (B) spec a test: STAGED as PLAN-26 (`jwks-key-ids-contract-pin`); (C) the operator
+  would see the `insufficient_scope` parser in TokenSheriff and asked for the orchestrator's proposal (proposal made, awaiting the
+  operator's word before any spec is staged); (D) information only, no action; reply to API Sheriff: later, if released. UPDATE 2026-11-09
+  (PLAN-25 shipped): the downstream-visible changes of the unreleased cut now also include a default-on client egress policy (private-range
+  IdPs refused unless `allowed-egress-hosts` lists them), explicit JSON null identifier claims and non-string `sub` refused, a JWE of 8 to 32 KiB
+  accepted (not an error), and a token-endpoint success with a non-JSON Content-Type treated as a redeemed-response failure; the first three
+  are subject to the open operator decision on the inverted PLAN-25 mailbox answers, so any release note waits on it. PLAN-26's own claims
+  were stamped at `f85c5ab3` and PLAN-25 touched `StepUpChallengeParser`, `HeaderValues` and the client docs since, so PLAN-26 is to be
+  re-grounded at `aeb3fa49` before it is emitted. Retire when PLAN-26 has landed and the C decision and the reply are done or declined.
+- 2026-11-09 — PLAN-25 items with NO evidence in either PR (leaf reading, `landings/PLAN-25.md`; held, not carried by PLAN-26): 1(a) and 1(b)
+  (the unannotated-override fail-open verdict; `BearerTokenInterceptor` untouched; no native run), the CI-runner container question, 4(b)'s
+  scratch-run result, 7(l)(5) ADR-0026 soften-or-verify, 7(l)(6) the AsciiDoc link check over the 16 PLAN-19 files, 10(c) the health-check catch
+  placement and `TokenValidatorStartupInitializerTest`, 10(d) the `JweDecryptorTest` gap rows (rows only moved), 10(h) the SVG render, and the
+  e2e root cause. Also not shown: the `verify -Ppre-commit` whole-tree run and the native IT run. Beyond the spec and so not in the mailbox: the
+  non-JSON Content-Type refusal at token, PAR and userinfo (a success with another type becomes `RedeemedResponseException`), `expires_in` must be
+  a JSON number, and about 20 created or edited test classes over 500 lines. PR bodies were not read, so whether each narrowing was stated
+  there is unknown. Retire an item when the operator accepts it or it is verified.
+- 2026-11-09 — Informational from the PLAN-25 landing: the lane's Done-when assumed one PR and the split left no owner for "report both
+  numbers in the PR body" of part two (spec premise, informational). The 2026-11-09 PLAN-25 landing message's `archive-plan:pending` step
+  is the lane's own. Nothing further from this epic.
 - 2026-11-07 — PLAN-19 landing residue (#879; landing message, partly verified): (1) docs-only PRs skip the Sonar build in this repository's
   change check, so the open-issue count at the head was undecidable and the operator had to accept the gap (read directly afterwards:
   `main` 0 unresolved). (2) CodeRabbit's one-review-per-hour allowance was spent on the first head, so the loop-back head `56710e6a` was
@@ -549,7 +640,11 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   nothing further. The CodeRabbit quota stall recurs (see the PLAN-13 and PLAN-14 residuals in `settled.md`).
 - 2026-11-06 — e2e teardown hang (PLAN-24 landing, #876): the `e2e-tests` job was cancelled by its 30-minute job timeout
   after all 30 tests passed, and the landing says it recurs on `main`; a rerun cleared it (`SUCCESS` at this analysis). Unverified
-  beyond the landing message and the PR's final check state; OWNED since 2026-11-07 by PLAN-25 deliverable 9. Retire it
+  beyond the landing message and the PR's final check state; OWNED since 2026-11-07 by PLAN-25 deliverable 9. UPDATE 2026-11-09: PLAN-25
+  shipped a hardened stop script (`stop-dev-environment.sh`: validated PID, whole tree TERM, 20 s grace, KILL, bounded `docker compose
+  down`); the cause was never named and the criterion was waived to CI. The End-to-End workflow is green on both main pushes (`47045031`,
+  `aeb3fa49`), which meets the "two clean runs" condition, but a green pair does not show the hang is gone. The #883 merge-queue run was also
+  ejected once by a Playwright screenshot comparison flake (an accessibility spec; project-owned, no flake policy). Retire it
   when a clean e2e run on `main` is observed twice or a cause is found. Seen once before as the PLAN-13 merge-queue ejection on a
   hung `e2e-tests` job (see the PLAN-13 and PLAN-14 residuals in `settled.md`).
 > ↪ Relocated to `settled.md` § "Per-plan landing residuals (PLAN-01 to PLAN-23, dispositioned 2026-11-07)" — every item is carried by a PLAN-25 deliverable, dropped, or recorded as informational in its Residual Register
