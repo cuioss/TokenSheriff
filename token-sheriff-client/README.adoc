@@ -26,9 +26,9 @@ itself a BFF.
 Organized by package under `de.cuioss.sheriff.token.client`:
 
 * *Discovery* (`discovery`) — OIDC provider-metadata resolution (`DiscoveryResolver`,
-  `ProviderMetadata`) with TLS enforcement and issuer verification, over an optional
-  per-client TLS trust seam (`ClientConfiguration.sslContext`) shared by every discovery and
-  back-channel call.
+  `ProviderMetadata`) with TLS enforcement (cleartext only behind the explicit
+  `allowInsecureHttp` opt-in) and issuer verification, over an optional per-client TLS trust seam
+  (`ClientConfiguration.sslContext`) shared by every HTTPS discovery and back-channel call.
 * *Flows* (`flow`) — authorization-code flow with mandatory PKCE `S256`
   (`AuthorizationCodeFlow`, `PkceChallenge`), client-credentials (`ClientCredentialsFlow`)
   and refresh (`RefreshFlow`) grants, pushed authorization requests (`ParClient`, RFC 9126 — a
@@ -56,9 +56,10 @@ Organized by package under `de.cuioss.sheriff.token.client`:
   exact-match `post_logout_redirect_uri` validation (`PostLogoutRedirectValidator`).
 
 The engine drives its own OIDC/OAuth back channel — discovery, token, PAR, userinfo and
-revocation through `BackChannelHttp` — on the `cui-http` primitives. The `commons` base layer,
-which ships inside `token-sheriff-validation`, supplies the error model, events, metrics and the
-validation-side discovery / JWKS retrieval. Because it validates the tokens it retrieves, it depends on `token-sheriff-validation` and gets the
+revocation through `BackChannelHttp` — on the upstream `cui-http` library, guarded by its own
+host-address egress policy. The `commons` base layer, which ships inside
+`token-sheriff-validation`, supplies the error model, events, metrics, the `EgressPolicy` type and
+untrusted-text sanitisation; the client runs its own discovery rather than the validation-side one. Because it validates the tokens it retrieves, it depends on `token-sheriff-validation` and gets the
 `commons` base layer transitively.
 
 == Quick Start
@@ -162,6 +163,7 @@ ClientConfiguration config = ClientConfiguration.builder()
     .scope("openid")
     .backChannelOrigin("http://keycloak:8080") // <2>
     .allowInsecureHttp(true) // <3>
+    .allowedEgressHost("keycloak") // <4>
     .build();
 ----
 <1> The issuer stays the public identity. The discovery-document `issuer` check, the token `iss`
@@ -177,6 +179,13 @@ evaluated against the host actually contacted. An `https://` back-channel origin
 the flag on its own account, but the flag is still required whenever the issuer itself is an
 `http://` URL, because discovery checks the scheme of the configured issuer before any request is
 sent.
+<4> Needed because the host-address egress policy runs on the host actually contacted and, by
+default, refuses a host that resolves to a loopback, link-local, site-local, unique-local,
+carrier-grade NAT, wildcard, broadcast or multicast address — which a container-network name
+usually does. A listed host bypasses the address-range check wherever it appears, including in an
+advertised endpoint, so keep the list to the back-channel host. `allowLoopbackEgress(true)` lifts
+the loopback refusal alone, for local development. Under Quarkus the knobs are
+`sheriff.client.allowed-egress-hosts` and `sheriff.client.allow-loopback-egress`.
 
 *Mapping rule.* Every back-channel call — discovery, token, PAR, userinfo and revocation — whose
 advertised endpoint URL has the *same origin* as the issuer is sent to the back-channel origin, with
@@ -203,7 +212,8 @@ xref:../doc/adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc
 evidence and this open risk.
 
 *Transport policy follows the contacted host.* The per-request controls — the `allowInsecureHttp`
-scheme check, `verifyHostname` and `sslContext` — are applied to the back-channel origin. With
+scheme check, the host-address egress policy, `verifyHostname` and `sslContext` — are applied to
+the back-channel origin. With
 `https://`, the certificate the internal host presents must be trusted and must match the internal
 host name — supply matching certificates or trust material rather than relaxing hostname
 verification. The issuer-scheme check at discovery is separate and still applies to the configured
@@ -225,13 +235,21 @@ NOTE: `DiscoveryResolver.resolve()` refuses two discovery responses with a `Tran
 An `https` issuer whose discovery document advertises a non-`https` value for any endpoint the
 client models and uses (`authorization_endpoint`, `token_endpoint`, `userinfo_endpoint`, `jwks_uri`,
 `end_session_endpoint`, `revocation_endpoint`, `introspection_endpoint`,
-`pushed_authorization_request_endpoint`) is refused, and
+`pushed_authorization_request_endpoint`) — a blank value included — is refused, and
 `allowInsecureHttp` does not relax this: the flag exists for local setups (an `http` issuer, or an
 `https` issuer reached through an `http` `backChannelOrigin`), not for a scheme downgrade inside an
-HTTPS document. An advertised field outside that set is not read and is not checked. A discovery
+HTTPS document
+(xref:../doc/adr/0028-Discovery_refuses_a_non-https_endpoint_advertised_by_an_https_issuer_regardless_of_allowInsecureHttp.adoc[ADR-0028]).
+An advertised field outside that set is not read and is not checked. A discovery
 response whose `Content-Type` is not `application/json` (parameters such as `charset` are allowed),
 that carries no `Content-Type`, or that carries a second, conflicting `Content-Type` line, is refused
 too — an authorization server that serves discovery as `application/jrd+json` is therefore rejected.
+
+NOTE: The same media-type rule applies to the other back-channel responses: the token and PAR
+responses must carry `application/json`, and the userinfo response `application/json` or
+`application/jwt`; a value carrying `CR`, `LF` or `NUL` is refused. The `expires_in` member of a
+token or PAR response must be a JSON number — a quoted `"3600"` makes the response malformed.
+Revocation responses are not checked for a media type.
 
 == Documentation
 

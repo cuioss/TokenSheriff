@@ -54,7 +54,7 @@ metrics), enforced by ArchUnit rather than shipped as a separate module.
 
 === Specifications
 
-* xref:commons/specification/transport.adoc[Transport] - Validation-side discovery and JWKS; shared TLS / SSRF / resilience primitives; the client back-channel origin
+* xref:commons/specification/transport.adoc[Transport] - Validation-side discovery and JWKS with their TLS, SSRF egress, resilience and caching controls; the client's own back channel, its egress policy and its back-channel origin
 * xref:commons/specification/error-model.adoc[Error Model] - Typed exceptions → RFC 9457 at every HTTP edge
 * xref:commons/specification/observability.adoc[Observability] - SecurityEventCounter events + metric identifiers
 

@@ -22,10 +22,10 @@ Each entry cites a source, a mitigation, and the covering `COMMONS-N` requiremen
 
 The commons layer:
 
-* Issues the validation-side outbound HTTP to OpenID Providers (discovery, JWKS) and
-  provides the hardened transport primitives the client engine builds its *own*
-  back-channel HTTP on
-  (xref:../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]).
+* Issues the validation-side outbound HTTP to OpenID Providers (discovery, JWKS). The
+  client engine issues its *own* back-channel HTTP
+  (xref:../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]) and
+  reuses the commons host-address egress policy type as an instance of its own.
 * Follows URLs that are partly *IdP-controlled* (advertised via discovery).
 * Normalizes inbound IdP error responses and raises typed exceptions.
 * Is rendered to end-callers by the HTTP edges as `application/problem+json`.
@@ -43,9 +43,15 @@ were audited to the requirements below during the move into commons.
 | *SSRF via `jwks_uri` / discovery / userinfo / any IdP-advertised URL.* An attacker who
   controls or spoofs IdP metadata points a URL at an internal service (cloud metadata,
   link-local, loopback) to make the server fetch it.
-| HTTPS-only scheme restriction, host allow-list / egress policy (`EgressPolicy`), and
-  blocking of internal / link-local / loopback ranges before any advertised URL is
-  fetched. The relocated `wellknown` / `jwks` fetch code was audited to this control.
+| HTTPS-only scheme restriction (unless the cleartext opt-in of COMMONS-2 is set) and a
+  host-address egress policy (`EgressPolicy`) that refuses loopback, link-local (cloud
+  metadata), site-local, unique-local, carrier-grade NAT, wildcard, broadcast and multicast
+  addresses by default. Two independent instances apply it: the validation side's, on the
+  well-known discovery and JWKS fetches (per issuer), and the client engine's own, on every
+  discovery and back-channel call (discovery, token, PAR, userinfo, revocation), checked on the
+  URL actually contacted after the back-channel origin rewrite. The client back channel also
+  keeps its path-structure and scheme checks. Relaxations are explicit only (see the residual
+  risks below).
 | https://owasp.org/www-community/attacks/Server_Side_Request_Forgery[OWASP SSRF], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180]
 | xref:requirements.adoc#COMMONS-3[COMMONS-3]
 
@@ -61,9 +67,12 @@ were audited to the requirements below during the move into commons.
 | *TLS downgrade / MITM on any IdP fetch.* Downgrade to plaintext or a forged certificate
   lets an attacker substitute metadata, keys, or token-endpoint responses.
 | Enforce TLS 1.2+ with certificate validation on every outbound request; reject plain
-  HTTP endpoints. TLS is configured centrally, not per-caller. Chain trust, expiry and
-  algorithm constraints are unconditional; *hostname matching is default-ON but relaxable
-  by explicit per-configuration opt-in* (see the residual risk below).
+  HTTP endpoints by default — cleartext is admitted only behind an explicit, default-off
+  opt-in (`allow-insecure-http`, per issuer on the validation side, client-wide on the
+  client), and an `https` issuer's discovery document may advertise only `https` endpoints to
+  the client whatever that opt-in says. TLS is configured centrally, not per-caller. Chain
+  trust, expiry and algorithm constraints are unconditional; *hostname matching is default-ON
+  but relaxable by explicit per-configuration opt-in* (see the residual risks below).
 | https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §2.6], https://www.rfc-editor.org/rfc/rfc8414[RFC 8414 §2]
 | xref:requirements.adoc#COMMONS-2[COMMONS-2]
 
@@ -88,7 +97,19 @@ were audited to the requirements below during the move into commons.
 [#_residual_risks]
 === Residual risks
 
-The transport controls above leave one residual exposure, recorded here rather than implied away:
+The transport controls above leave these residual exposures, recorded here rather than implied away:
+
+* *A deployment that opts in to cleartext gives up T-TLS for its `http://` endpoints.* With
+  `allow-insecure-http` set (per issuer on the validation side, client-wide on the client), an
+  `http://` endpoint is fetched without TLS, so its discovery document, keys or token responses
+  are open to interception and tampering. The opt-in is for local development and tests, never
+  production.
+* *An egress relaxation narrows T-SSRF.* On the client, `sheriff.client.allow-loopback-egress`
+  lifts the loopback refusal, and a host listed in `sheriff.client.allowed-egress-hosts` bypasses
+  the address-range check wherever it appears, including in an advertised endpoint; the validation
+  side has its own per-issuer settings. The policy also resolves the host immediately before the
+  fetch, and the HTTP client resolves it again when it connects, so a DNS answer that changes in
+  between (DNS rebinding) is not seen.
 
 * *A deployment that opts out of hostname verification accepts a narrowed T-TLS mitigation.*
   Hostname matching is the one qualified part of certificate validation under
@@ -122,9 +143,9 @@ spec]):
 |===
 | Threat | Adversarial dispatcher behaviour
 
-| T-SSRF | Discovery / JWKS / userinfo dispatchers advertise redirect or internal-range URLs.
+| T-SSRF | Discovery / JWKS dispatchers advertise redirect or internal-range URLs on the validation side; on the client, `BackChannelEgressPolicyTest` maps the mock server onto a disallowed address for each endpoint kind (discovery, token, PAR, userinfo, revocation) and proves it is never contacted.
 | T-DISCOVERY | Discovery dispatcher advertises a mismatched `issuer` / attacker `jwks_uri`.
-| T-TLS | Endpoint offered over plain HTTP / with a downgrade is rejected by the client. Coverage is for the default posture (hostname verification ON); the relaxed posture is not exercised adversarially.
+| T-TLS | Endpoint offered over plain HTTP / with a downgrade is rejected by default, and the client refuses a non-`https` endpoint advertised by an `https` issuer. Coverage is for the default posture (cleartext not allowed, hostname verification ON); the relaxed postures are not exercised adversarially.
 | T-DOS | Dispatchers emit oversized / slow-drip bodies.
 | T-LEAK | Edge tests assert problem+json carries no stack trace / internal identifier.
 |===

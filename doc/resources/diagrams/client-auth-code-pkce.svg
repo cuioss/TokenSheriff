@@ -89,6 +89,8 @@
   <text x="512" y="480" class="arrow-lbl">exchange code (+ verifier, client auth)</text>
   <line class="arrow" x1="635" y1="511" x2="853" y2="511" marker-end="url(#arrow)"/>
   <text x="744" y="503" class="arrow-lbl">POST /token</text>
+  <line class="arrow-return" x1="855" y1="530" x2="637" y2="530" marker-end="url(#arrow)"/>
+  <text x="744" y="546" class="arrow-lbl">200 application/json</text>
   <line class="arrow-return" x1="625" y1="532" x2="397" y2="532" marker-end="url(#arrow)"/>
   <text x="512" y="524" class="arrow-lbl">tokens + id_token</text>
 

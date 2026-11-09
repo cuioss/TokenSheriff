@@ -125,11 +125,13 @@ utilities as a *test-jar with classifier `generators`* (its `maven-jar-plugin` `
 goal). The `token-sheriff-client` pom
 declares that test-jar dependency (`classifier` `generators`, `scope` `test`) and reuses:
 
-* the OP-endpoint dispatchers — `TokenDispatcher`, `UserInfoDispatcher`,
-  `RevocationDispatcher`, `IntrospectionDispatcher`, `EndSessionDispatcher`, `ParDispatcher`,
-  and the relocated `WellKnownDispatcher` / `JwksResolveDispatcher`
+* the OP-endpoint dispatchers the engine actually calls — `TokenDispatcher`,
+  `UserInfoDispatcher` and `ParDispatcher`
   (xref:../../commons/specification/transport.adoc#adversarial_dispatchers[commons transport
-  spec], `COMMONS-7`);
+  spec], `COMMONS-7`). The artifact's `RevocationDispatcher`, `IntrospectionDispatcher` and
+  `EndSessionDispatcher` are not used by the client tests: the revocation tests declare a
+  dispatcher of their own, the engine implements no introspection flow, and it builds the
+  end-session redirect without making an HTTP call;
 * the shared adversarial payloads (`AdversarialResponses`, e.g. oversized-body DoS payloads)
   and the token-tampering utility (`JwtTokenTamperingUtil`);
 * the key material / token helpers (`InMemoryKeyMaterialHandler`, `TestTokenHolder`) and the
@@ -160,9 +162,9 @@ standards (`cui-test-mockwebserver-junit5`):
 | Category | What the tests do
 
 | *Mechanics (happy path)*
-| Each protocol's request/response construction and interpretation against the dispatcher's
+| Each protocol's request/response construction and interpretation against a dispatcher's
   *default* mode — discovery, `client_credentials`, code exchange, refresh, userinfo,
-  revocation, end-session, PAR.
+  revocation, PAR — and the end-session redirect the engine builds without an HTTP call.
 
 | *Request verification*
 | Inspect the `RecordedRequest` and assert the engine *sent* the secure form: `S256`
@@ -231,8 +233,9 @@ test asserts rejection:
   successor* the exchange issued (a reuse detected by `applyRefresh` revokes nothing).
 
 | xref:../threat-model.adoc#T-LOGOUT[T-LOGOUT]
-| `EndSessionDispatcher` returns an open-redirect / mismatched `post_logout_redirect_uri` →
-  rejected; revocation of held tokens is asserted.
+| No dispatcher: the engine makes no end-session HTTP call. The tests assert the end-session
+  redirect it builds (`id_token_hint`, the exact registered `post_logout_redirect_uri`,
+  `state`); the revocation of held tokens is covered by the revocation and lifecycle tests.
 
 | xref:../threat-model.adoc#T-CONSTRAINT-LOSS[T-CONSTRAINT-LOSS]
 | A DPoP / mTLS-bound token is asserted to keep its binding across storage and refresh.
