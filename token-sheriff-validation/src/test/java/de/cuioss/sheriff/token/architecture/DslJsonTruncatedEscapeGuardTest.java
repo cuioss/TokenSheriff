@@ -458,8 +458,8 @@ class DslJsonTruncatedEscapeGuardTest {
             if (code.charAt(openParen) != '(' || closeParen < 0) {
                 return caught;
             }
-            String parameter = code.substring(openParen + 1, closeParen).trim()
-                    .replaceAll("\\s++[\\w$]++$", "").replaceAll("\\bfinal\\b", "");
+            String parameter = withoutTrailingName(code.substring(openParen + 1, closeParen).trim())
+                    .replaceAll("\\bfinal\\b", "");
             for (String alternative : parameter.split("\\|")) {
                 String type = alternative.trim();
                 caught.add(type.substring(type.lastIndexOf('.') + 1));
@@ -516,6 +516,22 @@ class DslJsonTruncatedEscapeGuardTest {
             i--;
         }
         return i;
+    }
+
+    /**
+     * Drops the trailing parameter name of a catch parameter ({@code IOException | RuntimeException e}
+     * becomes {@code IOException | RuntimeException}). A single backward scan: a regular expression
+     * for the same job rescans from every start position.
+     */
+    private static String withoutTrailingName(String parameter) {
+        int nameStart = parameter.length();
+        while (nameStart > 0 && Character.isJavaIdentifierPart(parameter.charAt(nameStart - 1))) {
+            nameStart--;
+        }
+        if (nameStart == parameter.length() || nameStart == 0 || !Character.isWhitespace(parameter.charAt(nameStart - 1))) {
+            return parameter;
+        }
+        return parameter.substring(0, nameStart).trim();
     }
 
     private static int skipWhitespaceForward(String code, int index) {
