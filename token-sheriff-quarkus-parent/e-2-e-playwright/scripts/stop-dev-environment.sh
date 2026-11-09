@@ -52,7 +52,12 @@ PID_FILE="$TARGET_DIR/quarkus-dev.pid"
 if [ -f "$PID_FILE" ]; then
     QUARKUS_PID=$(cat "$PID_FILE")
     echo "[1/2] Stopping Quarkus dev mode (PID: $QUARKUS_PID) ($(timestamp))..."
-    if kill -0 "$QUARKUS_PID" 2>/dev/null; then
+    # The whole tree below this PID is signalled, so the file content must be a plain positive PID.
+    # A value such as 0 or -1 would address a process group or every process the user may signal
+    # (kill(2)), so anything else is refused rather than passed on.
+    if [[ ! "$QUARKUS_PID" =~ ^[1-9][0-9]*$ ]]; then
+        echo "[1/2] PID file does not hold a valid PID, refusing to signal anything"
+    elif kill -0 "$QUARKUS_PID" 2>/dev/null; then
         # Collect the tree before signalling: once the parent exits, its children are re-parented
         # and can no longer be found through it.
         TREE="$(descendants "$QUARKUS_PID") $QUARKUS_PID"

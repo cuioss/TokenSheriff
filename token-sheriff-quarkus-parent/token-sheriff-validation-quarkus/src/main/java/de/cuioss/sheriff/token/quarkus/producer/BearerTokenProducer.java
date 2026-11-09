@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.quarkus.producer;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.metrics.MetricIdentifier;
 import de.cuioss.sheriff.token.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.token.quarkus.annotation.ServletObjectsResolver;
@@ -128,14 +129,6 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WAR
  * @author Oliver Wolff
  */
 @ApplicationScoped
-// cui-rewrite:disable CuiLogRecordPatternRecipe
-// Demonstrated false positive: the recipe mis-fires on the CuiLogger
-// warn(Throwable, LogRecord, Object...) overload, mistaking the leading Throwable for the format
-// argument. The flagged call — LOGGER.warn(e, BEARER_TOKEN_VALIDATION_FAILED, e.getMessage(),
-// e.getEventType()) — already uses a valid LogRecord whose template
-// ("Bearer token validation failed: %s (eventType=%s)") carries exactly two %s placeholders, matched
-// by the two supplied arguments. The call is correct and is deliberately not contorted to satisfy
-// the recipe.
 public class BearerTokenProducer {
 
     private static final CuiLogger LOGGER = new CuiLogger(BearerTokenProducer.class);
@@ -255,7 +248,11 @@ public class BearerTokenProducer {
                         .build();
             }
         } catch (TokenValidationException e) {
-            LOGGER.warn(e, BEARER_TOKEN_VALIDATION_FAILED, e.getMessage(), e.getEventType());
+            // The message of a validation failure can quote token-header text (a kid, an alg) that the
+            // pipeline interpolates into it verbatim, so it is escaped and bounded before it is logged and
+            // the exception object, whose stack trace would print the same message raw, is not attached
+            // (CWE-117, ADR-0022). The exception stays in the returned result for callers.
+            LOGGER.warn(BEARER_TOKEN_VALIDATION_FAILED, ErrorTextSanitizer.sanitize(e.getMessage()), e.getEventType());
             return BearerTokenResult.parsingError(e, requiredScopes, requiredRoles, requiredGroups);
         }
     }
