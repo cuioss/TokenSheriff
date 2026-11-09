@@ -33,12 +33,9 @@ import java.util.Optional;
  * <ul>
  *   <li>JSON string: mapped to {@link ClaimValue#forPlainString(String)}</li>
  *   <li>Claim absent: {@code null}</li>
- *   <li>Explicit JSON {@code null} or any other JSON type: {@link TokenValidationException} with
+ *   <li>Any other JSON type: {@link TokenValidationException} with
  *       {@link SecurityEventCounter.EventType#MISSING_CLAIM}</li>
  * </ul>
- * The explicit-null refusal is also applied by the token builder to every identifier claim whose
- * {@link de.cuioss.sheriff.token.validation.domain.claim.ClaimName#isExplicitNullRefused()} holds,
- * including those mapped by {@link IdentityMapper}.
  *
  * @since 1.0
  */
@@ -49,21 +46,15 @@ public class StrictStringMapper implements ClaimMapper {
     public ClaimValue map(MapRepresentation mapRepresentation, String claimName) {
         Optional<Object> optionalValue = mapRepresentation.getValue(claimName);
         if (optionalValue.isEmpty()) {
-            if (mapRepresentation.isExplicitNull(claimName)) {
-                throw malformed(claimName, "null");
-            }
             return null;
         }
         if (optionalValue.get() instanceof String stringValue) {
             return ClaimValue.forPlainString(stringValue);
         }
-        throw malformed(claimName, optionalValue.get().getClass().getSimpleName());
-    }
-
-    private static TokenValidationException malformed(String claimName, String actualType) {
-        return new TokenValidationException(
+        throw new TokenValidationException(
                 SecurityEventCounter.EventType.MISSING_CLAIM,
-                "Malformed claim '" + claimName + "': expected a JSON string but got " + actualType
+                "Malformed claim '" + claimName + "': expected a JSON string but got "
+                        + optionalValue.get().getClass().getSimpleName()
         );
     }
 }

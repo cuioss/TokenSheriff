@@ -34,8 +34,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static de.cuioss.sheriff.token.validation.pipeline.IdentifierClaimNullRejectionTest.signedToken;
-import static de.cuioss.sheriff.token.validation.pipeline.IdentifierClaimNullRejectionTest.validClaims;
+import static de.cuioss.sheriff.token.validation.pipeline.IdentifierClaimNullEquivalenceTest.signedToken;
+import static de.cuioss.sheriff.token.validation.pipeline.IdentifierClaimNullEquivalenceTest.validClaims;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**

@@ -15,7 +15,6 @@
  */
 package de.cuioss.sheriff.token.validation.domain.claim;
 
-import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.domain.claim.mapper.*;
 import lombok.Getter;
 
@@ -51,8 +50,7 @@ public enum ClaimName {
      * Mapped by {@link StrictStringMapper}: a present value must be a JSON string (RFC 7519 §4.1.2
      * defines it as a case-sensitive string), so a number, boolean, array or object is rejected
      * instead of being stringified. Otherwise the number {@code 123} and the string {@code "123"}
-     * would name the same subject wherever two {@code sub} values are compared. An explicit JSON
-     * {@code null} is refused as well (see {@link #isExplicitNullRefused()}). The check on the raw
+     * would name the same subject wherever two {@code sub} values are compared. The check on the raw
      * JSON type also holds when an issuer configures a custom mapper for {@code sub}: the token
      * builder applies it before the custom mapper runs, so a stringifying mapper cannot turn a
      * numeric {@code sub} into a valid subject.
@@ -169,8 +167,7 @@ public enum ClaimName {
      * <p>
      * Mapped by {@link StrictStringMapper}: a present value must be a JSON string, so a number,
      * boolean, array or object is rejected instead of being stringified into a value that
-     * could match a configured client id or audience. An explicit JSON {@code null} is refused
-     * as well (see {@link #isExplicitNullRefused()}).
+     * could match a configured client id or audience.
      *
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#IDToken">OpenID Connect Core 1.0 - ID Token</a>
      */
@@ -183,8 +180,7 @@ public enum ClaimName {
      * <p>
      * Mapped by {@link StrictStringMapper}: a present value must be a JSON string, so a number,
      * boolean, array or object is rejected instead of being stringified into a value that
-     * could match a configured client id. An explicit JSON {@code null} is refused as well
-     * (see {@link #isExplicitNullRefused()}).
+     * could match a configured client id.
      *
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc9068#section-2.2">RFC 9068 - JWT Access Tokens</a>
      */
@@ -212,23 +208,6 @@ public enum ClaimName {
         this.valueType = valueType;
         this.spec = spec;
         this.claimMapper = claimMapper;
-    }
-
-    /**
-     * Whether an explicit JSON {@code null} for this claim is refused rather than read as an absent
-     * claim. This holds for the identifier claims {@link #ISSUER iss}, {@link #SUBJECT sub},
-     * {@link #TOKEN_ID jti}, {@link #CLIENT_ID client_id} and {@link #AUTHORIZED_PARTY azp}: the
-     * refusal is the typed {@link SecurityEventCounter.EventType#MISSING_CLAIM MISSING_CLAIM}
-     * rejection {@link StrictStringMapper} raises for a non-string value, and it applies whatever
-     * mapper an issuer configures for the claim. An absent claim is unaffected.
-     *
-     * @return true if an explicit JSON {@code null} for this claim is refused
-     */
-    public boolean isExplicitNullRefused() {
-        return switch (this) {
-            case ISSUER, SUBJECT, TOKEN_ID, CLIENT_ID, AUTHORIZED_PARTY -> true;
-            default -> false;
-        };
     }
 
     // Pre-built immutable lookup map from claim name string to ClaimName enum constant.

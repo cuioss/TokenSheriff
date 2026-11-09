@@ -47,40 +47,22 @@ import java.util.stream.Collectors;
  *   <li>Null-safe operations with Optional returns</li>
  *   <li>Direct compatibility with ClaimMapper implementations</li>
  * </ul>
- * <p>
- * A member whose JSON value is {@code null} is not part of {@link #data()}: every accessor
- * ({@link #containsKey}, {@link #getValue}, {@link #getString}, {@link #keySet()}, {@link #size()},
- * {@link #isEmpty()} and the others) answers for it exactly as for an absent member. Its name is kept
- * in {@link #explicitNullKeys()}, so {@link #isExplicitNull(String)} tells an explicit JSON
- * {@code null} apart from an absent member.
  *
- * @param data             the members with a non-null value
- * @param explicitNullKeys the names of the members whose JSON value is {@code null}
  * @since 1.0
  * @author Oliver Wolff
  */
-public record MapRepresentation(Map<String, Object> data, Set<String> explicitNullKeys) implements Serializable {
+public record MapRepresentation(Map<String, Object> data) implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
     /**
-     * Compact constructor that rejects null data and copies the explicit-null key set.
+     * Compact constructor that rejects null data.
      * <p>
      * Callers that want an empty representation should pass {@link Map#of()}.
      */
     public MapRepresentation {
         Objects.requireNonNull(data, "data must not be null");
-        explicitNullKeys = Set.copyOf(Objects.requireNonNull(explicitNullKeys, "explicitNullKeys must not be null"));
-    }
-
-    /**
-     * Creates a representation without explicit-null members.
-     *
-     * @param data the members with a non-null value
-     */
-    public MapRepresentation(Map<String, Object> data) {
-        this(data, Set.of());
     }
 
     /**
@@ -123,52 +105,25 @@ public record MapRepresentation(Map<String, Object> data, Set<String> explicitNu
             return new MapRepresentation(Map.of());
         }
 
-        return ofParsed(parsedData);
-    }
-
-    /**
-     * Wraps a parsed JSON object whose members may carry a {@code null} value.
-     * <p>
-     * Map.copyOf() doesn't allow null values, so null-valued members are split off: their names are
-     * kept as explicit nulls, their values are left out of the data map.
-     *
-     * @param parsed the parsed members, possibly with {@code null} values
-     * @return the representation with the null-valued members in {@link #explicitNullKeys()}
-     */
-    private static MapRepresentation ofParsed(Map<String, Object> parsed) {
-        Map<String, Object> filteredData = parsed.entrySet().stream()
+        // Create immutable copy to ensure immutability, filtering out null values
+        // Map.copyOf() doesn't allow null values, so we need to filter them out
+        Map<String, Object> filteredData = parsedData.entrySet().stream()
                 .filter(entry -> entry.getValue() != null)
                 .collect(Collectors.toUnmodifiableMap(
                         Map.Entry::getKey,
                         Map.Entry::getValue
                 ));
-        Set<String> explicitNullKeys = parsed.entrySet().stream()
-                .filter(entry -> entry.getValue() == null)
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toUnmodifiableSet());
-        return new MapRepresentation(filteredData, explicitNullKeys);
+        return new MapRepresentation(filteredData);
     }
 
     /**
-     * Checks if the map contains a key with a non-null value.
+     * Checks if the map contains a key.
      *
      * @param key the key to check
-     * @return true if the key exists with a non-null value, false otherwise (also for an explicit
-     *         JSON {@code null}, see {@link #isExplicitNull(String)})
+     * @return true if the key exists, false otherwise
      */
     public boolean containsKey(String key) {
         return data.containsKey(key);
-    }
-
-    /**
-     * Checks whether the member is present with an explicit JSON {@code null} value, as opposed to
-     * being absent.
-     *
-     * @param key the key to check
-     * @return true if the parsed JSON carried the member with the value {@code null}
-     */
-    public boolean isExplicitNull(String key) {
-        return explicitNullKeys.contains(key);
     }
 
     /**
@@ -241,16 +196,12 @@ public record MapRepresentation(Map<String, Object> data, Set<String> explicitNu
 
     /**
      * Gets a nested MapRepresentation for accessing nested objects.
-     * <p>
-     * The nested object is normalised like the top level: a member whose JSON value is {@code null}
-     * is not part of its data and is named in its {@link #explicitNullKeys()}, so a nested explicit
-     * {@code null} is told apart from an absent member.
      *
      * @param key the key to look up
      * @return Optional containing the nested MapRepresentation, or empty if not found or not a map
      */
     public Optional<MapRepresentation> getNestedMap(String key) {
-        return getMap(key).map(MapRepresentation::ofParsed);
+        return getMap(key).map(MapRepresentation::new);
     }
 
     /**
@@ -293,8 +244,7 @@ public record MapRepresentation(Map<String, Object> data, Set<String> explicitNu
     /**
      * Returns the key set of the underlying map.
      *
-     * @return the set of keys with a non-null value; explicit-null members are in
-     *         {@link #explicitNullKeys()} instead
+     * @return the set of keys in the map
      */
     public Set<String> keySet() {
         return data.keySet();
