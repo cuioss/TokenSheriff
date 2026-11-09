@@ -155,9 +155,10 @@ Some operations (`ISSUER_EXTRACTION`, `CACHE_LOOKUP` with cached keys) execute i
 
 Configure limits in `ParserConfig` to prevent attacks:
 
-* `maxTokenSize` - Limits entire JWT token (default 8KB)
-* `maxPayloadSize` - Limits decoded JWT parts (default 8KB)
+* `maxTokenSize` - Limits an entire JWS token string and the inner JWS after decryption (default 8KB). With JWE decryption configured, a 5-part JWE is checked against `JweDecryptionConfig.maxEncryptedTokenSize` instead (at most 32KB)
+* `maxPayloadSize` - Limits each decoded JWT header or payload part (default 8KB); it does not bound HTTP response bodies
 * `maxStringLength` - Limits JSON string buffer size (default 4KB)
+* `maxHttpResponseSize` - Limits the response body of a JWKS or well-known discovery fetch, enforced while the body streams (default 256KB)
 
 == Related Documentation
 
