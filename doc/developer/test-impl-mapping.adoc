@@ -113,11 +113,12 @@ Package prefix: `de.cuioss.sheriff.token`.
 
 |`validation.pipeline`
 |`AccessTokenValidationPipelineTest`, `DecodedJwtTest`, `IdTokenValidationPipelineTest`,
-`IdentifierClaimNullRejectionTest`, `JweTokenSizeEntryPointTest`,
+`IdentifierClaimNullEquivalenceTest`, `JweTokenSizeEntryPointTest`,
 `NonValidatingJwtParserJweDecodeModeTest`, `NonValidatingJwtParserJweRejectionAccountingTest`,
 `NonValidatingJwtParserJweTest`, `NonValidatingJwtParserTest`,
 `RefreshTokenValidationPipelineTest`, `SignatureTemplateManagerTest`,
-`SignatureVerificationUtilTest`, `SubjectClaimTypeRejectionTest`, `TokenBuilderTest`
+`SignatureVerificationUtilTest`, `SubjectClaimTypeRejectionTest`,
+`TokenBuilderExplicitNullTest`, `TokenBuilderTest`
 
 |`validation.pipeline.validator`
 |`AudienceValidatorTest`, `AuthorizedPartyValidatorTest`, `ExpirationValidatorTest`,
