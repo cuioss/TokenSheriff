@@ -20,7 +20,7 @@ import java.util.List;
 
 /**
  * The single {@code Content-Type} predicate every back-channel response the client parses must pass
- * before its body is read: discovery, token endpoint, PAR and userinfo.
+ * before its body is parsed: discovery, token endpoint, PAR and userinfo.
  * <p>
  * A response carries a media type only when at least one {@code Content-Type} field line is present
  * and <em>every</em> one of them names that media type. The {@code type/subtype} part — everything

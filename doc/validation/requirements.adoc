@@ -98,7 +98,7 @@ For security reasons, only the following signature algorithms shall be supported
 * RS384 (RSASSA-PKCS1-v1_5 with SHA-384)
 * RS256 (RSASSA-PKCS1-v1_5 with SHA-256)
 
-NOTE: ECDSA, EdDSA, and RSASSA-PSS algorithms are preferred over RSASSA-PKCS1-v1_5 (RS*). While RS* algorithms remain supported for broad interoperability, RSASSA-PSS (PS*) is recommended by https://www.rfc-editor.org/rfc/rfc8017.html#section-8[RFC 8017] (2016) as the successor scheme. EdDSA (Ed25519) is listed as a supported algorithm in the https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0 Security Profile] and is defined in https://datatracker.ietf.org/doc/html/rfc8037[RFC 8037 - CFRG Elliptic Curve Signatures in JOSE]. The default algorithm catalog lists them in that order (ECDSA, EdDSA, RSA-PSS, RSA PKCS#1 v1.5), but the order is informational only: acceptance is by membership in the supported set, and the token's own header names the algorithm.
+NOTE: ECDSA, EdDSA, and RSASSA-PSS algorithms are preferred over RSASSA-PKCS1-v1_5 (RS*). While RS* algorithms remain supported for broad interoperability, RSASSA-PSS (PS*) is recommended by https://www.rfc-editor.org/rfc/rfc8017.html#section-8[RFC 8017] (2016) as the successor scheme. EdDSA (Ed25519) is listed as a supported algorithm in the https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0 Security Profile] and is defined in https://datatracker.ietf.org/doc/html/rfc8037[RFC 8037 - CFRG Elliptic Curve Signatures in JOSE]. The default algorithm catalog is `JwsAlgorithm`; its declaration order is informational only: acceptance is by membership in the supported set, and the token's own header names the algorithm.
 
 The following algorithms shall NOT be supported due to security concerns:
 
