@@ -17,6 +17,8 @@ package de.cuioss.sheriff.token.client.token;
 
 import com.dslplatform.json.CompiledJson;
 import com.dslplatform.json.JsonAttribute;
+import com.dslplatform.json.JsonReader;
+import com.dslplatform.json.JsonWriter;
 
 import java.util.Optional;
 
@@ -40,7 +42,13 @@ import java.util.Optional;
 @SuppressWarnings("java:S1104") // Public fields required by DSL-JSON @CompiledJson for class-based deserialization
 public class UserInfoResponse {
 
-    /** The subject identifier — the identity-critical claim bound back to the ID token {@code sub}. */
+    /**
+     * The subject identifier — the identity-critical claim bound back to the ID token {@code sub}.
+     * <p>
+     * Read by {@link StrictSubjectConverter}: a {@code sub} that is not a JSON string (a number,
+     * boolean, object or array) refuses the whole response instead of being read as a subject.
+     */
+    @JsonAttribute(converter = StrictSubjectConverter.class)
     public String sub;
 
     /** The end-user's display name, if released. */
@@ -79,5 +87,43 @@ public class UserInfoResponse {
      */
     public boolean isEmailVerified() {
         return emailVerified;
+    }
+
+    /**
+     * DSL-JSON converter for {@link #sub} that accepts only a JSON string or an explicit JSON
+     * {@code null} (read as an absent {@code sub}, which the caller refuses separately). Any other
+     * JSON type fails the parse with {@value #NON_STRING_SUB_MESSAGE}, so the userinfo binding only
+     * ever compares a subject the provider sent as a string (RFC 7519 §4.1.2, OIDC Core §5.1).
+     * <p>
+     * It is {@code public} only because the DSL-JSON annotation processor requires a converter and
+     * its {@code JSON_READER} / {@code JSON_WRITER} fields to be; it is not meant for direct use.
+     */
+    public static final class StrictSubjectConverter {
+
+        /** The refusal reported when the userinfo {@code sub} is not a JSON string. */
+        public static final String NON_STRING_SUB_MESSAGE = "userinfo 'sub' is not a JSON string";
+
+        /** Reads a JSON string or {@code null}; refuses every other JSON type. */
+        public static final JsonReader.ReadObject<String> JSON_READER = reader -> {
+            if (reader.wasNull()) {
+                return null;
+            }
+            if (reader.last() != '"') {
+                throw reader.newParseError(NON_STRING_SUB_MESSAGE);
+            }
+            return reader.readString();
+        };
+
+        /** Writes the subject as a JSON string, or {@code null} when absent. */
+        public static final JsonWriter.WriteObject<String> JSON_WRITER = (writer, value) -> {
+            if (value == null) {
+                writer.writeNull();
+            } else {
+                writer.writeString(value);
+            }
+        };
+
+        private StrictSubjectConverter() {
+        }
     }
 }

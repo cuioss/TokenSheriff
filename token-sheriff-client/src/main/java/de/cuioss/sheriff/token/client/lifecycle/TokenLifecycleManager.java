@@ -649,11 +649,13 @@ public class TokenLifecycleManager {
      *                               invalid without redeeming it ({@code CREDENTIAL_REJECTED}) a clear
      *                               of the store entry and rotation family is attempted without a
      *                               revocation, there being no successor to name; when it redeemed
-     *                               without rotating, nothing is revoked or cleared; and when the
-     *                               request never reached redemption ({@code PRE_REDEMPTION}) or the
-     *                               server refused the requested scope before applying the grant
-     *                               ({@code SCOPE_REFUSED}) the stored bundle is likewise left
-     *                               untouched, because that token is still usable
+     *                               without rotating, nothing is revoked or cleared; when the request
+     *                               is classified as never having reached redemption
+     *                               ({@code PRE_REDEMPTION}) the stored bundle is likewise left
+     *                               untouched and the token is kept locally, although the server may
+     *                               already have rotated it; and when the server refused the requested
+     *                               scope before applying the grant ({@code SCOPE_REFUSED}) the stored
+     *                               bundle is left untouched, because that token is still usable
      * @throws TokenValidationException if the refreshed ID token fails the token-validation pipeline
      *                               (signature, {@code iss}, {@code aud}, {@code exp} / {@code iat}).
      *                               When the authorization server had already rotated the refresh token,
@@ -1008,9 +1010,10 @@ public class TokenLifecycleManager {
             // credential no retry revives.
             case CREDENTIAL_REJECTED -> quarantineRejectedCredential(sessionId, presentedRefreshToken, metadata,
                     revocationClient, clientAuthentication);
-            // The request never reached the point where the server processed it (connection
-            // failure, DNS failure, 5xx), so the presented refresh token is still valid. Clearing
-            // the session here would destroy a working one over a transient fault.
+            // The failure carries no sign that the server processed the grant (connection failure,
+            // DNS failure, 5xx), so the presented refresh token is kept locally. The server may
+            // still have rotated it before the answer was lost; the client cannot tell. Clearing
+            // the session here would destroy a possibly working one over a transient fault.
             case PRE_REDEMPTION -> LOGGER.debug(
                     "Refresh refused before the authorization server processed the grant; "
                             + "leaving the session intact");

@@ -240,6 +240,27 @@ class UserInfoClientTest {
                         "the truncated-escape parse failure must be carried as the cause"));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"sub\":123,\"email\":\"test@example.com\"}",
+            "{\"sub\":true}",
+            "{\"sub\":{\"id\":\"user\"}}",
+            "{\"sub\":[\"user\"]}"
+    })
+    @DisplayName("Should refuse a JSON userinfo response whose sub is not a JSON string")
+    void shouldRejectNonStringSub(String body, URIBuilder uriBuilder) {
+        moduleDispatcher.returnMalformedJson(body);
+        var client = userInfoClient();
+        var endpoint = userInfoEndpoint(uriBuilder);
+        var token = Generators.nonBlankStrings().next();
+
+        TransportException thrown = assertThrows(TransportException.class,
+                () -> client.fetchUserInfo(endpoint, token),
+                "a non-string sub must never be stringified into a subject the binding step could match");
+
+        assertTrue(thrown.getMessage().contains("userinfo 'sub' is not a JSON string"), thrown.getMessage());
+    }
+
     @Test
     @DisplayName("Should reject a signed userinfo response whose validated claims omit the sub (M3)")
     void shouldRejectSignedUserInfoMissingSub(URIBuilder uriBuilder) {

@@ -47,10 +47,16 @@ public enum ClaimName {
     /**
      * The "sub" (subject) claim identifies the principal that is the subject of the JWT.
      * Required by RFC 7519 for ACCESS_TOKEN and ID_TOKEN types.
+     * <p>
+     * Mapped by {@link StrictStringMapper}: a present value must be a JSON string (RFC 7519 §4.1.2
+     * defines it as a case-sensitive string), so a number, boolean, array or object is rejected
+     * instead of being stringified. Otherwise the number {@code 123} and the string {@code "123"}
+     * would name the same subject wherever two {@code sub} values are compared. An explicit JSON
+     * {@code null} is refused as well (see {@link #isExplicitNullRefused()}).
      *
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.2">RFC 7519 - 4.1.2. "sub" (Subject) Claim</a>
      */
-    SUBJECT("sub", ClaimValueType.STRING, "The \"sub\" (subject) claim identifies the principal that is the subject of the JWT. Required by RFC 7519 for ACCESS_TOKEN and ID_TOKEN types.", new IdentityMapper()),
+    SUBJECT("sub", ClaimValueType.STRING, "The \"sub\" (subject) claim identifies the principal that is the subject of the JWT. Required by RFC 7519 for ACCESS_TOKEN and ID_TOKEN types.", new StrictStringMapper()),
 
     /**
      * The "aud" (audience) claim identifies the recipients that the JWT is intended for.

@@ -69,8 +69,13 @@ class IdentifierClaimNullRejectionTest {
         validator.close();
     }
 
-    /** @return the claims of a valid access token for the default test issuer, as JSON literals */
-    private static Map<String, String> validClaims() {
+    /**
+     * Shared with {@link SubjectClaimTypeRejectionTest}, which builds its non-string {@code sub}
+     * tokens the same way.
+     *
+     * @return the claims of a valid access token for the default test issuer, as JSON literals
+     */
+    static Map<String, String> validClaims() {
         long now = Instant.now().getEpochSecond();
         Map<String, String> claims = new LinkedHashMap<>();
         claims.put("iss", quoted(TestTokenHolder.TEST_ISSUER));
@@ -85,11 +90,15 @@ class IdentifierClaimNullRejectionTest {
         return claims;
     }
 
-    private static String quoted(String value) {
+    static String quoted(String value) {
         return "\"" + value + "\"";
     }
 
-    private static String signedToken(Map<String, String> claims) {
+    /**
+     * @param claims the claim names mapped to their JSON literals, written verbatim into the payload
+     * @return a compact JWS over the payload, signed with the default RS256 test key
+     */
+    static String signedToken(Map<String, String> claims) {
         String header = "{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"" + InMemoryKeyMaterialHandler.DEFAULT_KEY_ID + "\"}";
         String payload = claims.entrySet().stream()
                 .map(entry -> quoted(entry.getKey()) + ":" + entry.getValue())

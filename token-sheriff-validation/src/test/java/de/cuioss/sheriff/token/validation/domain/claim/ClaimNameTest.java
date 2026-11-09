@@ -250,7 +250,7 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"azp", "client_id"})
+    @ValueSource(strings = {"sub", "azp", "client_id"})
     @DisplayName("Should reject an explicit null through the strict mapper's non-string path")
     void shouldRejectExplicitNullForStrictlyMappedClaim(String claimName) {
         MapRepresentation body = parseJson("{\"" + claimName + "\":null}");
@@ -367,6 +367,13 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
     void shouldMapClientIdWithStrictStringMapper() {
         assertInstanceOf(StrictStringMapper.class, ClaimName.CLIENT_ID.getClaimMapper(),
                 "client_id must be mapped strictly, never stringified");
+    }
+
+    @Test
+    @DisplayName("Should map sub with the strict string mapper")
+    void shouldMapSubjectWithStrictStringMapper() {
+        assertInstanceOf(StrictStringMapper.class, ClaimName.SUBJECT.getClaimMapper(),
+                "sub must be mapped strictly, never stringified");
     }
 
     static Stream<Arguments> nonStringClientIdValues() {
