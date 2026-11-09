@@ -22,6 +22,8 @@ import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.flow.StepUpChallengeParser.StepUpChallenge;
+import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase;
+import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase.HeaderLineBreakAttack;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -100,6 +102,27 @@ class StepUpChallengeAttackDatabaseTest {
                 "the attack payload must be encoded into exactly one acr_values parameter, never injecting a second");
         assertTrue(url.startsWith(AUTH_ENDPOINT + "?"),
                 "the payload must not break the authorization endpoint prefix");
+    }
+
+    /**
+     * Response splitting against the step-up surface: a harmless {@code Bearer} challenge followed by a
+     * line break and a smuggled second {@code WWW-Authenticate} line carrying an actionable step-up. The
+     * smuggled challenge must never be derived from the header value, whichever separator carries it.
+     */
+    @ParameterizedTest(name = "smuggled challenge after {0}")
+    @ArgumentsSource(HeaderLineBreakAttackDatabase.ArgumentsProvider.class)
+    @DisplayName("Should never derive a step-up challenge smuggled behind a line break")
+    void lineBreakSmuggledChallengeNeverYieldsChallenge(HeaderLineBreakAttack attack) {
+        assertForgedHeaderRejected(attack.inject("Bearer realm=\"api\"",
+                "WWW-Authenticate: Bearer error=\"insufficient_user_authentication\", acr_values=\"gold\""));
+    }
+
+    @ParameterizedTest(name = "acr_values with {0}")
+    @ArgumentsSource(HeaderLineBreakAttackDatabase.ArgumentsProvider.class)
+    @DisplayName("Should never derive a step-up challenge whose acr_values carries a line break")
+    void lineBreakInAcrValuesNeverYieldsChallenge(HeaderLineBreakAttack attack) {
+        assertForgedHeaderRejected(attack.inject(
+                "Bearer error=\"insufficient_user_authentication\", acr_values=\"gold", "silver\""));
     }
 
     @Test

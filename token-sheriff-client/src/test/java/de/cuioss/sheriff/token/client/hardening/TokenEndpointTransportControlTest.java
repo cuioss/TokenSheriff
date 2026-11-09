@@ -63,6 +63,9 @@ class TokenEndpointTransportControlTest {
                 .clientId(Generators.nonBlankStrings().next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(false)
+                // Loopback is admitted so the cleartext refusal, not the host-address egress policy,
+                // is what rejects the mock endpoint.
+                .allowLoopbackEgress(true)
                 .build();
         var client = new TokenEndpointClient(config);
         String httpEndpoint = uriBuilder.addPathSegment("token").buildAsString();
@@ -82,6 +85,7 @@ class TokenEndpointTransportControlTest {
                 .clientId(Generators.nonBlankStrings().next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
                 .build();
         var client = new TokenEndpointClient(config);
         String tokenEndpoint = uriBuilder.addPathSegment("token").buildAsString();

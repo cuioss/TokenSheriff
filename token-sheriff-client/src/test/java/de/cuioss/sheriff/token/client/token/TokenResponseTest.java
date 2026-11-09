@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.token;
 
+import com.dslplatform.json.DslJson;
 import de.cuioss.sheriff.token.client.lifecycle.StoredToken;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
@@ -24,10 +25,16 @@ import de.cuioss.test.generator.junit.EnableGeneratorController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @EnableGeneratorController
@@ -210,6 +217,41 @@ class TokenResponseTest {
             response.accessToken = "access-token";
             response.tokenType = tokenType;
             return response;
+        }
+    }
+
+    /**
+     * {@code expires_in} must be a JSON number (RFC 6749 §5.1). The compiled mapping reads it through
+     * {@code JsonNumberLongConverter}, so a JSON string — even a numeric one — fails the parse instead
+     * of being read as its numeric value.
+     */
+    @Nested
+    @DisplayName("expires_in JSON type")
+    class ExpiresInJsonType {
+
+        private final DslJson<Object> dslJson = new DslJson<>();
+
+        @Test
+        @DisplayName("Should read a JSON number expires_in")
+        void shouldReadNumericExpiresIn() throws Exception {
+            TokenResponse response = deserialize("{\"access_token\":\"a\",\"token_type\":\"Bearer\",\"expires_in\":3600}");
+
+            assertEquals(3600L, response.getExpiresIn());
+        }
+
+        @ParameterizedTest(name = "expires_in = {0}")
+        @ValueSource(strings = {"\"3600\"", "\"0\"", "\"-1\"", "\"\"", "\"soon\""})
+        @DisplayName("Should refuse a JSON string expires_in, numeric or not")
+        void shouldRefuseStringExpiresIn(String expiresIn) {
+            String body = "{\"access_token\":\"a\",\"token_type\":\"Bearer\",\"expires_in\":" + expiresIn + "}";
+
+            assertThrows(IOException.class, () -> deserialize(body),
+                    "a quoted expires_in must fail the parse, not be read as a number");
+        }
+
+        private TokenResponse deserialize(String body) throws IOException {
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            return dslJson.deserialize(TokenResponse.class, bytes, bytes.length);
         }
     }
 

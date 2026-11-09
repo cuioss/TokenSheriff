@@ -23,6 +23,7 @@ import de.cuioss.http.security.monitoring.SecurityEventCounter;
 import de.cuioss.http.security.pipeline.PipelineFactory;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.commons.error.TransportException;
+import de.cuioss.sheriff.token.commons.transport.EgressPolicy;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
 
@@ -46,11 +47,22 @@ import java.util.concurrent.ConcurrentMap;
  * clients apply before each fetch, so the same defence is enforced uniformly rather than copied,
  * inconsistently, five times:
  * <ul>
- *   <li><strong>Egress / SSRF control (H9):</strong> the advertised endpoint URL is run through the
+ *   <li><strong>Egress / SSRF path control (H9):</strong> the advertised endpoint URL is run through the
  *       existing {@code de.cuioss.http.security} URL-path validation pipeline before use, so a
  *       traversal / injection / encoding-evasion / malformed advertised path is rejected rather than
- *       fetched. The precise scope of this control — path-structure and scheme, not host-address
- *       reachability — is documented in the client transport specification.</li>
+ *       fetched.</li>
+ *   <li><strong>Host-address egress policy:</strong> before every fetch the client's own
+ *       {@link EgressPolicy} ({@link ClientConfiguration#getEgressPolicy()}, a separate instance from the
+ *       validation transport's) resolves the host of the URL <em>actually contacted</em> — after the
+ *       back-channel origin rewrite below — and refuses it when any resolved address is loopback,
+ *       link-local (including the cloud-metadata range), site-local, unique-local, carrier-grade NAT,
+ *       wildcard, broadcast or multicast. The policy is secure by default; its only relaxations are the
+ *       two named configuration inputs {@link ClientConfiguration#allowLoopbackEgress} and
+ *       {@link ClientConfiguration#getAllowedEgressHosts()}, which apply to configured endpoints and to a
+ *       back-channel origin exactly as to advertised ones. A refusal is the policy's typed
+ *       {@link TransportException} SSRF-blocked branch. The resolution happens at the check, and the
+ *       HTTP client resolves the host again when it connects, so a DNS answer that changes in between
+ *       is not seen — the DNS-rebinding limit {@link EgressPolicy} states.</li>
  *   <li><strong>Scheme / TLS control:</strong> a non-TLS ({@code http://}) endpoint is refused unless
  *       {@link ClientConfiguration#allowInsecureHttp} is set, via the {@link HttpHandler} builder's
  *       own TLS enforcement.</li>
@@ -71,8 +83,8 @@ import java.util.concurrent.ConcurrentMap;
  *       verbatim; an endpoint on any other origin is contacted unchanged. Both origins are read from
  *       configuration only, so neither the request nor the advertised data can steer a call to a third
  *       origin — the rewrite adds no SSRF primitive. The egress path validation runs on the advertised
- *       URL before the rewrite, and the scheme, TLS-trust and hostname controls above are applied to
- *       the rewritten target, i.e. to the host actually contacted. The returned handler's URI is the
+ *       URL before the rewrite, and the host-address policy, scheme, TLS-trust and hostname controls
+ *       above are applied to the rewritten target, i.e. to the host actually contacted. The returned handler's URI is the
  *       URL actually contacted, and it is what a DPoP proof names as {@code htu} (RFC 9449 §4.2).</li>
  *   <li><strong>Consistent transport typing (M9):</strong> a malformed or non-TLS endpoint surfaces as
  *       the declared {@link TransportException}, never a raw {@link IllegalArgumentException} leaking
@@ -94,6 +106,10 @@ public final class BackChannelHttp {
 
     private static final CuiLogger LOGGER = new CuiLogger(BackChannelHttp.class);
 
+    /** Fixed refusal reason of the host-address egress policy; carries no part of the refused URL. */
+    private static final String HOST_EGRESS_REFUSAL =
+            "SSRF egress blocked: the host of the contacted URL is not permitted by the host-address egress policy";
+
     /**
      * Bound origin for the back-channel clients (token, PAR, userinfo, revocation) that build their
      * own {@code ParserConfig} internally: their payload ceiling is deliberately fixed on that path
@@ -109,6 +125,7 @@ public final class BackChannelHttp {
 
     private final ClientConfiguration configuration;
     private final HttpSecurityValidator egressValidator;
+    private final EgressPolicy hostEgressPolicy;
     private final int maxContentSize;
     private final String boundOrigin;
     private final ConcurrentMap<String, HttpClient> sharedClients = new ConcurrentHashMap<>();
@@ -128,6 +145,7 @@ public final class BackChannelHttp {
         this.boundOrigin = Objects.requireNonNull(boundOrigin, "boundOrigin must not be null");
         this.egressValidator = PipelineFactory.createUrlPathPipeline(
                 SecurityConfiguration.defaults(), new SecurityEventCounter());
+        this.hostEgressPolicy = configuration.getEgressPolicy();
         this.issuerOriginKey = originKey(URI.create(configuration.getIssuer()));
         String configuredOrigin = configuration.getBackChannelOrigin();
         this.backChannelOrigin = configuredOrigin == null ? null : URI.create(configuredOrigin);
@@ -148,13 +166,16 @@ public final class BackChannelHttp {
      *                       (for example {@code "token endpoint request failed"})
      * @return a configured {@link HttpHandler} for the target URL — {@code endpointUrl} itself, or its
      *         back-channel-origin rewrite
-     * @throws TransportException if the URL is malformed, fails the egress security validation, or the
-     *                            target is a non-TLS endpoint while cleartext is not permitted
+     * @throws TransportException if the URL is malformed, fails the egress security validation, the
+     *                            contacted host resolves to an address the host-address egress policy
+     *                            refuses, or the target is a non-TLS endpoint while cleartext is not
+     *                            permitted
      */
     public HttpHandler validatedHandler(String endpointUrl, String failureContext) {
         Objects.requireNonNull(endpointUrl, "endpointUrl must not be null");
         URI endpointUri = applyEgressControl(endpointUrl, failureContext);
         String targetUrl = targetUrl(endpointUri, endpointUrl);
+        applyHostEgressPolicy(targetUrl, failureContext);
         try {
             HttpHandler.HttpHandlerBuilder builder = HttpHandler.builder()
                     .url(targetUrl)
@@ -203,6 +224,26 @@ public final class BackChannelHttp {
                     + ": endpoint URL failed egress security validation (" + e.getFailureType() + ")", e);
         }
         return uri;
+    }
+
+    /**
+     * Applies the client's host-address {@link EgressPolicy} to the URL actually contacted — after the
+     * back-channel origin rewrite, so the check sees the host the request really goes to. A refusal is
+     * reported as a {@link TransportException} with a fixed message: the failure context and the refusal
+     * reason only. The policy's own exception is not chained and its message is not reused, because it
+     * names the whole contacted URL, which can carry userinfo or query secrets and would reach every
+     * log line that prints the exception or its cause.
+     *
+     * @throws TransportException if the contacted URL has no host or resolves to a disallowed address
+     */
+    private void applyHostEgressPolicy(String targetUrl, String failureContext) {
+        try {
+            hostEgressPolicy.check(URI.create(targetUrl));
+        } catch (TransportException ignored) {
+            // Deliberately neither chained nor reused: the policy's message names the whole URL (CWE-532).
+            LOGGER.debug("Host-address egress policy refused the contacted endpoint");
+            throw new TransportException(failureContext + ": " + HOST_EGRESS_REFUSAL);
+        }
     }
 
     /**

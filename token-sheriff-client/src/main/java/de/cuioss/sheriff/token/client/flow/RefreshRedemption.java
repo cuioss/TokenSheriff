@@ -29,19 +29,24 @@ import java.util.Objects;
  * separate signal: {@link RefreshFlow} resolves it as soon as the token endpoint has answered and
  * carries it on every refusal raised thereafter ({@link RedeemedRefreshFailure}), which
  * {@link RefreshFlow#classify(Throwable)} reads back as
- * {@link RefreshFailureClassification.Kind#REDEEMED}. Its absence means the request failed
- * <em>before</em> the authorization server processed it, which {@code classify} splits into two: a
+ * {@link RefreshFailureClassification.Kind#REDEEMED}. Its absence means the client has no evidence that
+ * the authorization server processed the request, which {@code classify} splits into two: a
  * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION} failure (connection failure, DNS failure,
- * {@code 5xx}), where the presented refresh token is still valid and the session must not be
- * quarantined; and {@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED}, where the server
+ * {@code 5xx}), where the client keeps the presented refresh token locally and the session must not be
+ * quarantined — although the server may already have rotated the token after a connection failure or
+ * a {@code 5xx}, since a token request is a non-idempotent {@code POST};
+ * {@link RefreshFailureClassification.Kind#SCOPE_REFUSED}, where the server refused the requested
+ * scope ({@code invalid_scope}) without issuing a grant — the session is kept and the same request must
+ * not be retried, since the answer depends on the request and a retry cannot change it; and
+ * {@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED}, where the server
  * declared the presented token invalid without redeeming it — no redemption state exists because
- * nothing was redeemed, yet the session must still be cleared.
+ * nothing was redeemed, yet the session must still be cleared. These three carry no redemption state.
  * <p>
  * Three states are distinguished, and the third is not a variant of the first two:
  * <ul>
  *   <li>{@link #rotated(String)} — the server issued a successor; the presented token is burned.</li>
  *   <li>{@link #notRotated()} — the server reused the presented token (RFC 6749 §6 permits omitting
- *       a new one); it is still valid.</li>
+ *       a new one); the response names no successor, so the client keeps using it.</li>
  *   <li>{@link #rotationUnknown()} — the server answered {@code 2xx} but the response could not be
  *       parsed, so no successor is known <em>and rotation is not computable even in principle</em>.
  *       This is the fail-closed state: the presented token is treated as burned, but there is no

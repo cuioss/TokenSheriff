@@ -25,6 +25,8 @@ import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
 import de.cuioss.sheriff.token.client.internal.AccessTokenConfirmation;
 import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
+import de.cuioss.sheriff.token.client.internal.HeaderValues;
+import de.cuioss.sheriff.token.client.internal.JsonResponseMediaType;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.sheriff.token.client.token.TokenErrorResponse;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
@@ -56,13 +58,20 @@ import java.util.concurrent.atomic.AtomicInteger;
  * posture is inherited from {@code HttpHandler}. Client authentication is decorated onto the request
  * by the caller (headers and/or form parameters); this class is auth-agnostic transport only.
  * <p>
- * <strong>The pre-redemption guarantee holds by construction, not by a guard.</strong> A connection
- * failure, a DNS failure, an SSRF-blocked target or an interrupt throws out of
- * {@code BackChannelHttp.validatedHandler} or {@code send} before any {@link HttpResponse} exists, so
- * such a failure can never reach the status check below and can never be classified as a rejected
- * credential. Only a response the server actually produced is ever classified. Preserve that ordering:
- * a transient network fault reported as a dead credential is exactly the inversion the classification
- * exists to prevent.
+ * <strong>A transport failure is never classified as a rejected credential, by construction rather
+ * than by a guard.</strong> A connection failure, a DNS failure, an SSRF-blocked target or an interrupt
+ * throws out of {@code BackChannelHttp.validatedHandler} or {@code send} before any {@link HttpResponse}
+ * exists, so such a failure can never reach the status check below and can never be classified as a
+ * rejected credential. Only a response the server actually produced is ever classified. Preserve that
+ * ordering: a transient network fault reported as a dead credential is exactly the inversion the
+ * classification exists to prevent.
+ * <p>
+ * That is not a guarantee that the server did nothing. A plain {@link TransportException} — a lost
+ * response, a {@code 5xx} the server returned after processing the request, an unrecognized error — can
+ * follow a refresh-token rotation, because a token request is a non-idempotent {@code POST}: the
+ * server-side outcome is unknown. Only the typed pre-redemption refusals ({@link InvalidScopeException},
+ * {@link ClientAuthenticationFailedException}, {@link CredentialRejectedException}) carry the server's
+ * answer that it did not redeem the grant.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -97,6 +106,9 @@ public class TokenEndpointClient {
 
     private static final int HTTP_UNAUTHORIZED = 401;
 
+    /** The RFC 6749 §5.2 member carrying the server's human-readable refusal text. */
+    private static final String MEMBER_ERROR_DESCRIPTION = "error_description";
+
     private final DslJson<Object> dslJson;
     private final int maxContentSize;
     private final BackChannelHttp backChannel;
@@ -125,7 +137,8 @@ public class TokenEndpointClient {
      * @throws TransportException if the request fails or the response is not successful; the
      *         {@link CredentialRejectedException} subtype when the authorization server declared the
      *         presented credential invalid, the {@link ClientAuthenticationFailedException} subtype when
-     *         it refused the client's own authentication, and the {@link RedeemedResponseException} subtype when the
+     *         it refused the client's own authentication, the {@link InvalidScopeException} subtype when
+     *         it refused the requested scope, and the {@link RedeemedResponseException} subtype when the
      *         response was successful but its body could not be parsed — see
      *         {@link #requestToken(String, Map, Map, SenderConstraint)}
      */
@@ -146,7 +159,8 @@ public class TokenEndpointClient {
      * authorization server rejects the first attempt with a {@code use_dpop_nonce} challenge — a
      * non-success status carrying a {@code DPoP-Nonce} response header (RFC 9449 §8) — the nonce is
      * echoed into a fresh proof and the request is retried once, rather than surfacing the recoverable
-     * challenge as an opaque transport failure. mTLS constraints add no header (the binding is
+     * challenge as an opaque transport failure. An {@code invalid_scope} answer is terminal and is never
+     * retried with a nonce, whatever headers it carries. mTLS constraints add no header (the binding is
      * transport-level) and never trigger a nonce retry.
      *
      * @param tokenEndpoint    the absolute token endpoint URL (from discovery); must be TLS unless
@@ -157,10 +171,18 @@ public class TokenEndpointClient {
      *                         bearer-token request
      * @return the normalized token response
      * @throws TransportException if the request fails or the response is not successful (after a
-     *         nonce retry where applicable) — in both cases, except for the
-     *         {@link RedeemedResponseException} subtype described below, the authorization server
-     *         never consumed the presented grant. Three narrower subtypes carry the distinctions a caller may need to
-     *         fail closed on: {@link ClientAuthenticationFailedException} when the non-success status is
+     *         nonce retry where applicable). The {@link RedeemedResponseException} subtype described
+     *         below means the grant was redeemed. A plain {@link TransportException} makes no claim
+     *         about the server-side outcome: a lost response or a {@code 5xx} can follow a
+     *         refresh-token rotation, so the grant may or may not have been consumed. Only the three
+     *         typed refusals {@link InvalidScopeException}, {@link ClientAuthenticationFailedException}
+     *         and {@link CredentialRejectedException} guarantee that the server did not redeem the
+     *         grant. Four narrower subtypes carry the distinctions a caller may need to
+     *         act on: {@link InvalidScopeException} when the non-success status is a {@code 4xx} whose
+     *         RFC 6749 §5.2 body names exactly {@code invalid_scope}, so the server refused the requested
+     *         scope before applying any grant and repeating the request will not change the answer — any
+     *         {@code 5xx} carrying that code stays a plain {@link TransportException};
+     *         {@link ClientAuthenticationFailedException} when the non-success status is
      *         a {@code 4xx} whose RFC 6749 §5.2 body names {@code invalid_client}, or exactly
      *         {@code 401} with {@code unauthorized_client} (Keycloak's wrong-secret answer), so the
      *         server refused the client before processing the grant — {@code unauthorized_client} on
@@ -182,9 +204,13 @@ public class TokenEndpointClient {
      *         truncated inside a string escape — never escapes as an unchecked exception: after a
      *         success status it is a {@link RedeemedResponseException}, and as a non-success error
      *         body it is an unknown error code, so the failure is a plain {@link TransportException}
-     *         and never a {@link CredentialRejectedException} or {@link ClientAuthenticationFailedException}.
-     *         A non-success error body whose top-level JSON object repeats a member name is likewise an
-     *         unknown error code, never either subtype
+     *         and never a {@link CredentialRejectedException}, {@link ClientAuthenticationFailedException}
+     *         or {@link InvalidScopeException}. A non-success error body whose top-level JSON object
+     *         repeats a member name is likewise an unknown error code, never any of those subtypes.
+     *         A response whose {@code Content-Type} lines do not all carry {@code application/json}
+     *         (parameters such as {@code charset} allowed) is never parsed as JSON: after a success
+     *         status it is a {@link RedeemedResponseException}, and as a non-success error body it is
+     *         an unknown error code, so the failure is a plain {@link TransportException}
      */
     public TokenResponse requestToken(String tokenEndpoint,
             Map<String, String> formParameters,
@@ -202,6 +228,12 @@ public class TokenEndpointClient {
         HttpResponse<String> response = send(handler, client, body,
                 proofHeaders(targetUri, requestHeaders, senderConstraint, null));
         if (!HttpStatusFamily.isSuccess(response.statusCode())) {
+            // An invalid_scope answer is terminal and is classified before any nonce retry: the nonce
+            // retry exists for use_dpop_nonce only, and retrying a scope refusal could turn it into a
+            // transport failure of the retry, which would be reported as PRE_REDEMPTION.
+            if (scopeRefused(response)) {
+                throw scopeRefusal(response);
+            }
             Optional<String> nonce = dpopNonceChallenge(response, senderConstraint);
             if (nonce.isPresent()) {
                 response = send(handler, client, body,
@@ -224,12 +256,32 @@ public class TokenEndpointClient {
                         "Token endpoint rejected the presented credential with HTTP "
                                 + response.statusCode() + " (RFC 6749 §5.2 'invalid_grant')");
             }
+            if (scopeRefused(response)) {
+                throw scopeRefusal(response);
+            }
             throw new TransportException(
                     "Token endpoint returned unexpected HTTP status " + response.statusCode());
+        }
+        if (!JsonResponseMediaType.isJson(response.headers())) {
+            // After a success status the grant is already redeemed: post-redemption failure.
+            throw new RedeemedResponseException(
+                    "Token endpoint response Content-Type is not application/json");
         }
         TokenResponse tokenResponse = parse(response.body());
         verifySenderConstraint(tokenResponse, senderConstraint);
         return tokenResponse;
+    }
+
+    /**
+     * Builds the typed refusal for an {@code invalid_scope} answer. Status and fixed text only in the
+     * message (CWE-117); the error_description travels on the exception, sanitized by its constructor
+     * (ADR-0022), never the raw body.
+     */
+    private InvalidScopeException scopeRefusal(HttpResponse<String> response) {
+        return new InvalidScopeException(
+                "Token endpoint refused the requested scope with HTTP "
+                        + response.statusCode() + " (RFC 6749 §5.2 'invalid_scope')",
+                InvalidScopeException.ERROR_CODE, errorDescription(response.body()));
     }
 
     /**
@@ -361,13 +413,14 @@ public class TokenEndpointClient {
      * <p>
      * It is evaluated after {@link #clientAuthenticationFailed}: a failed client authentication is
      * reported as {@link ClientAuthenticationFailedException}, which says nothing about the presented
-     * grant, and the two allow-lists share no error code, so neither ever shadows the other.
+     * grant, and the allow-lists of the two — and of {@link #scopeRefused}, evaluated after both — share
+     * no error code, so none ever shadows another.
      */
     private boolean credentialRejected(HttpResponse<String> response) {
         if (!HttpStatusFamily.isClientError(response.statusCode())) {
             return false;
         }
-        return ERROR_INVALID_GRANT.equals(errorCode(response.body()));
+        return ERROR_INVALID_GRANT.equals(errorCode(response));
     }
 
     /**
@@ -387,22 +440,83 @@ public class TokenEndpointClient {
         if (!HttpStatusFamily.isClientError(status)) {
             return false;
         }
-        String code = errorCode(response.body());
+        String code = errorCode(response);
         return ERROR_INVALID_CLIENT.equals(code)
                 || (status == HTTP_UNAUTHORIZED && ERROR_UNAUTHORIZED_CLIENT.equals(code));
     }
 
     /**
-     * @return the RFC 6749 §5.2 {@code error} code of an error response body, or {@code null} when the
-     *         body is absent, blank, larger than the configured payload bound, unparseable, repeats a
-     *         top-level member name, or carries no {@code error} member. Every one of those is an
-     *         "unknown", never a match — the allow-list above only ever fires on a positively
-     *         recognized code. A repeated member (for example two {@code error} members) leaves the
-     *         effective value to the parser's first-wins or last-wins choice, so the body is ambiguous
-     *         and is not read as any code
+     * Whether the authorization server refused the requested scope rather than the client or the grant.
+     * <p>
+     * The predicate is an <strong>allow-list of exactly one error code</strong>: the status is a client
+     * error ({@code 4xx}) and the RFC 6749 §5.2 {@code error} member is exactly
+     * {@value InvalidScopeException#ERROR_CODE}. Any {@code 5xx} whatever its body, any other code, and
+     * every body {@link #errorCode} reports as unknown answer {@code false} and stay a plain
+     * {@link TransportException}. The three allow-lists share no error code, so none shadows another.
+     */
+    private boolean scopeRefused(HttpResponse<String> response) {
+        if (!HttpStatusFamily.isClientError(response.statusCode())) {
+            return false;
+        }
+        return InvalidScopeException.ERROR_CODE.equals(errorCode(response));
+    }
+
+    /**
+     * Reads the {@code error_description} member of an error body {@link #errorCode} has already
+     * recognized — so the body is present, within the payload bound, parseable and free of repeated
+     * top-level members. Only the top level is walked, and every other value is skipped without being
+     * materialized.
+     *
+     * @return the raw description, or {@code null} when the member is absent, JSON {@code null}, not a
+     *         string, or the body cannot be walked; the caller hands it to
+     *         {@link InvalidScopeException}, which sanitizes it
      */
     @Nullable
-    private String errorCode(@Nullable String body) {
+    private String errorDescription(String body) {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        try {
+            JsonReader<Object> reader = dslJson.newReader(bytes, bytes.length);
+            if (reader.getNextToken() != '{' || reader.getNextToken() == '}') {
+                return null;
+            }
+            while (true) {
+                String name = reader.readKey();
+                if (MEMBER_ERROR_DESCRIPTION.equals(name)) {
+                    return reader.last() == '"' ? reader.readString() : null;
+                }
+                if (reader.skip() != ',') {
+                    return null;
+                }
+                reader.getNextToken();
+            }
+        } catch (IOException | ArrayIndexOutOfBoundsException e) {
+            // DSL-JSON signals a body truncated inside a string escape with ArrayIndexOutOfBoundsException
+            // rather than IOException. The description is optional, so an unreadable one is dropped; the
+            // message can echo an AS-controlled fragment, so it is sanitized (CWE-117).
+            LOGGER.debug("Failed to read the token endpoint error_description: %s",
+                    LogSanitizer.sanitize(e.getMessage()));
+            return null;
+        }
+    }
+
+    /**
+     * @return the RFC 6749 §5.2 {@code error} code of an error response, or {@code null} when the
+     *         response does not carry the {@code application/json} media type (see
+     *         {@link JsonResponseMediaType}), or its body is absent, blank, larger than the configured
+     *         payload bound, unparseable, repeats a top-level member name, or carries no {@code error}
+     *         member. Every one of those is an "unknown", never a match — the allow-list above only
+     *         ever fires on a positively recognized code. A repeated member (for example two
+     *         {@code error} members) leaves the effective value to the parser's first-wins or last-wins
+     *         choice, so the body is ambiguous and is not read as any code
+     */
+    @Nullable
+    private String errorCode(HttpResponse<String> response) {
+        if (!JsonResponseMediaType.isJson(response.headers())) {
+            LOGGER.debug("Token endpoint error response does not carry the application/json media type; "
+                    + "treating its error code as unknown");
+            return null;
+        }
+        String body = response.body();
         if (body == null || body.isBlank()) {
             return null;
         }
@@ -447,7 +561,9 @@ public class TokenEndpointClient {
 
     /**
      * @return the {@code DPoP-Nonce} value when the failed response is a recoverable
-     *         {@code use_dpop_nonce} challenge against a DPoP constraint, otherwise empty
+     *         {@code use_dpop_nonce} challenge against a DPoP constraint, otherwise empty. A nonce
+     *         carrying {@code CR}, {@code LF} or {@code NUL} is no challenge: it is never echoed, no
+     *         retry is made, and the refusal stays the original non-success status
      */
     private static Optional<String> dpopNonceChallenge(HttpResponse<String> response,
             @Nullable SenderConstraint senderConstraint) {
@@ -455,7 +571,8 @@ public class TokenEndpointClient {
             return Optional.empty();
         }
         return response.headers().firstValue(DPOP_NONCE_HEADER)
-                .filter(nonce -> !nonce.isBlank());
+                .filter(nonce -> !nonce.isBlank())
+                .filter(nonce -> !HeaderValues.containsLineBreakOrNul(nonce));
     }
 
     private HttpResponse<String> send(HttpHandler handler, HttpClient client, String body,

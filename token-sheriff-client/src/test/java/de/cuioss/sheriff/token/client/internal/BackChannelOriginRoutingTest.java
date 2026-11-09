@@ -123,6 +123,7 @@ class BackChannelOriginRoutingTest {
                 .redirectUri(REDIRECT_URI)
                 .backChannelOrigin(backChannelOrigin)
                 .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
                 .build();
     }
 
@@ -367,6 +368,8 @@ class BackChannelOriginRoutingTest {
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .backChannelOrigin(UNREACHABLE_HTTPS_ORIGIN)
                 .allowInsecureHttp(allowInsecureHttp)
+                // Admitted so the connection attempt, not the egress policy, is what fails.
+                .allowLoopbackEgress(true)
                 .build();
     }
 

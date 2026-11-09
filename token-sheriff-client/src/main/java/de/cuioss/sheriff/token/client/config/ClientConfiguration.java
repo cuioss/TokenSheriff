@@ -15,6 +15,8 @@
  */
 package de.cuioss.sheriff.token.client.config;
 
+import de.cuioss.sheriff.token.commons.transport.EgressPolicy;
+import de.cuioss.sheriff.token.commons.transport.EgressPolicy.HostResolver;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.NonNull;
@@ -278,8 +280,12 @@ public class ClientConfiguration {
      * target URI of the request it is attached to (RFC 9449 §4.2), so on a mapped call it carries this
      * back-channel origin with the advertised path, not the advertised public URL.
      * <p>
-     * <strong>Transport policy follows the contacted host:</strong> {@link #allowInsecureHttp},
-     * {@link #verifyHostname} and {@link #sslContext} are evaluated against the back-channel origin, so
+     * <strong>Transport policy follows the contacted host:</strong> the host-address
+     * {@link #getEgressPolicy() egress policy}, {@link #allowInsecureHttp},
+     * {@link #verifyHostname} and {@link #sslContext} are evaluated against the back-channel origin. A
+     * back-channel origin on an internal address (a container service name resolving to a private
+     * network, for example) is therefore refused unless its host is listed in
+     * {@link #allowedEgressHosts} — or, for a loopback origin, {@link #allowLoopbackEgress} is set. Likewise
      * an {@code http://} back-channel origin requires {@link #allowInsecureHttp}, and the certificate the
      * back-channel host presents must match that host and be trusted. The issuer-scheme check at
      * discovery is the one exception: it still applies to the configured {@link #issuer}, so an
@@ -297,14 +303,57 @@ public class ClientConfiguration {
     String backChannelOrigin;
 
     /**
+     * Whether the host-address egress policy permits a back-channel endpoint whose host resolves to a
+     * loopback address. Defaults to {@code false}.
+     * <p>
+     * Every discovery and back-channel call passes the client's own {@link #getEgressPolicy() egress
+     * policy} on the URL actually contacted, which by default refuses loopback, link-local (including the
+     * cloud-metadata range), site-local, unique-local, carrier-grade NAT, wildcard, broadcast and
+     * multicast addresses. Setting this to {@code true} lifts the loopback refusal only — every other
+     * range stays refused. It exists for local development and tests against an authorization server on
+     * {@code localhost}; it is a named input, never an implicit test mode, and it mirrors the
+     * {@code allowLoopbackEgress} input on the validation side.
+     */
+    boolean allowLoopbackEgress;
+
+    /**
+     * Host names the host-address egress policy lets through without any address-range check, matched
+     * case-insensitively. Empty by default. The stored list is immutable.
+     * <p>
+     * An entry bypasses the range check entirely, so it is how a deployment reaches an authorization
+     * server it deliberately runs on an internal address — for example a container service name used as
+     * {@link #backChannelOrigin}. Scope it narrowly: an entry is trusted wherever it appears, including
+     * in an endpoint the authorization server advertised. It mirrors the {@code allowedEgressHost} input
+     * on the validation side.
+     */
+    @Singular
+    List<String> allowedEgressHosts;
+
+    /**
+     * The host resolver the host-address egress policy uses to resolve a contacted host, or
+     * {@code null} for the default {@link java.net.InetAddress#getAllByName(String)}.
+     * <p>
+     * It decides only what the egress check <em>sees</em>; the HTTP client still resolves the host on its
+     * own when it connects. It exists so the policy can be exercised deterministically (a test maps a
+     * reachable host onto a disallowed address) and for deployments that route resolution through a
+     * custom resolver. Excluded from {@code toString()} and from the generated
+     * {@code equals}/{@code hashCode}, like {@link #sslContext}: a resolver has identity semantics.
+     */
+    @Nullable
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    HostResolver egressHostResolver;
+
+    /**
      * All-args constructor invoked by the Lombok-generated builder. It validates the configuration at
      * construction so a malformed client can never be built and later fail obscurely on the wire:
      * {@code issuer} and {@code clientId} must be non-blank, {@code issuer} must be a well-formed
      * absolute {@code http}/{@code https} URL with a host, every {@code scope} must be non-blank
      * (a {@code null}/blank scope would otherwise serialise as the literal {@code "null"} in the
-     * {@code scope} request parameter), and a provided {@code backChannelOrigin} must be a bare
-     * absolute {@code http}/{@code https} origin. This mirrors {@code PostLogoutRedirectValidator},
-     * which validates every entry it accepts (L14).
+     * {@code scope} request parameter), a provided {@code backChannelOrigin} must be a bare
+     * absolute {@code http}/{@code https} origin, and every {@code allowedEgressHosts} entry must be a
+     * non-blank host name. This mirrors {@code PostLogoutRedirectValidator}, which validates every entry
+     * it accepts (L14).
      *
      * @throws IllegalArgumentException if any field is blank, malformed, or otherwise invalid
      */
@@ -317,7 +366,8 @@ public class ClientConfiguration {
             @NonNull ClientAuthMethod authMethod, List<String> scopes, @Nullable String redirectUri,
             boolean allowInsecureHttp, boolean verifyHostname, int connectTimeoutSeconds, int readTimeoutSeconds,
             int discoveryDocumentMaxSize, @Nullable SSLContext sslContext,
-            boolean strictScopeReconciliation, @Nullable String backChannelOrigin) {
+            boolean strictScopeReconciliation, @Nullable String backChannelOrigin, boolean allowLoopbackEgress,
+            List<String> allowedEgressHosts, @Nullable HostResolver egressHostResolver) {
         this.issuer = requireNonBlank(issuer, "issuer");
         validateIssuerUrl(this.issuer);
         this.clientId = requireNonBlank(clientId, "clientId");
@@ -347,6 +397,42 @@ public class ClientConfiguration {
         // No validation: a boolean has no invalid value.
         this.strictScopeReconciliation = strictScopeReconciliation;
         this.backChannelOrigin = validateBackChannelOrigin(backChannelOrigin);
+        // No validation: a boolean has no invalid value.
+        this.allowLoopbackEgress = allowLoopbackEgress;
+        this.allowedEgressHosts = validateAllowedEgressHosts(allowedEgressHosts);
+        // No validation: null selects the default resolver.
+        this.egressHostResolver = egressHostResolver;
+    }
+
+    /**
+     * Builds the host-address egress policy every discovery and back-channel call of this client passes
+     * on the URL actually contacted: the commons {@link EgressPolicy}, secure by default, relaxed only by
+     * {@link #allowLoopbackEgress} and {@link #getAllowedEgressHosts()}. Each call returns a fresh
+     * instance owned by this client, never the validation transport's.
+     *
+     * @return the egress policy derived from this configuration; never {@code null}
+     */
+    public EgressPolicy getEgressPolicy() {
+        EgressPolicy.EgressPolicyBuilder builder = EgressPolicy.builder().allowLoopback(allowLoopbackEgress);
+        allowedEgressHosts.forEach(builder::allowedHost);
+        if (egressHostResolver != null) {
+            builder.resolver(egressHostResolver);
+        }
+        return builder.build();
+    }
+
+    /**
+     * Every allow-listed host must be a non-blank host name: a blank entry would match nothing and only
+     * hide a misconfiguration.
+     */
+    private static List<String> validateAllowedEgressHosts(List<String> allowedEgressHosts) {
+        Objects.requireNonNull(allowedEgressHosts, "allowedEgressHosts must not be null");
+        for (String host : allowedEgressHosts) {
+            if (host == null || host.isBlank()) {
+                throw new IllegalArgumentException("allowedEgressHosts must not contain null or blank entries");
+            }
+        }
+        return List.copyOf(allowedEgressHosts);
     }
 
     /**

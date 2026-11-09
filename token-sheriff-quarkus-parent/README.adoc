@@ -11,7 +11,7 @@ The Quarkus extensions for Token-Sheriff, consisting of:
 
 * xref:token-sheriff-validation-quarkus/README.adoc[token-sheriff-validation-quarkus] - Runtime module with CDI producers and JWT validation
 * xref:token-sheriff-validation-quarkus-deployment/README.adoc[token-sheriff-validation-quarkus-deployment] - Build-time deployment processor
-* xref:token-sheriff-client-quarkus/README.adoc[token-sheriff-client-quarkus] (+ `-deployment`) - Client-engine extension: CDI producer (`TokenSheriffClientProducer`), configuration mapping (`ClientRuntimeConfig`), and exception mapping (`ClientExceptionMapper`), building on the validation extension
+* xref:token-sheriff-client-quarkus/README.adoc[token-sheriff-client-quarkus] (+ `-deployment`) - Client-engine extension: CDI producer (`TokenSheriffClientProducer`), the `sheriff.client.*` key constants (`ClientRuntimeConfig`) and the configuration mapping onto `ClientConfiguration` (`ClientConfigMapper`), and exception mapping (`ClientExceptionMapper`), building on the validation extension
 * xref:token-sheriff-quarkus-integration-tests/README.adoc[token-sheriff-quarkus-integration-tests] - Integration test suite
 
 == Building and Running

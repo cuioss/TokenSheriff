@@ -193,7 +193,8 @@ final class RefreshEngineSupport {
      * @param clientId     the realm client to authenticate as
      * @param clientSecret the client's shared secret, or {@code null} for the key-based methods
      * @param authMethod   the client-authentication method the configuration declares
-     * @return the configuration, carrying the chain-validating trust material
+     * @return the configuration, carrying the chain-validating trust material and the loopback egress
+     *         opt-in, since the test JVM reaches the host-mapped Keycloak on {@code localhost}
      */
     private static ClientConfiguration clientConfiguration(String issuer, String clientId,
             @Nullable String clientSecret, ClientAuthMethod authMethod) {
@@ -206,6 +207,7 @@ final class RefreshEngineSupport {
                 .scope("profile")
                 .scope("email")
                 .sslContext(chainValidatingSslContext())
+                .allowLoopbackEgress(true)
                 .build();
     }
 

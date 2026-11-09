@@ -49,8 +49,19 @@ does not route those fetches through a commons transport service.
 === COMMONS-2: TLS enforcement
 
 All outbound IdP requests MUST use TLS 1.2 or higher with certificate validation. Plain
-HTTP endpoints MUST be rejected. TLS configuration is centralized (via `cui-http`'s
+HTTP endpoints MUST be rejected by default. TLS configuration is centralized (via `cui-http`'s
 `SecureSSLContextProvider`), not per-caller.
+
+*Carve-out — cleartext opt-in.* Each side has one explicit, default-off switch that admits
+cleartext `http://` endpoints, intended for local development and integration tests, never
+production: per issuer on the validation side (`allowInsecureHttp(true)` on `HttpJwksLoaderConfig` /
+`WellKnownConfig`, `sheriff.token.issuers.<name>.jwks.http.allow-insecure-http`), and client-wide on
+the client side (`ClientConfiguration.allowInsecureHttp`, `sheriff.client.allow-insecure-http`). With
+the switch set, an `http://` endpoint is fetched without TLS, so what it returns is open to
+interception and tampering; the TLS requirements still apply to every `https://` endpoint. The client
+switch does not relax the refusal of a non-`https` endpoint advertised by an `https` issuer's
+discovery document
+(xref:../adr/0028-Discovery_refuses_a_non-https_endpoint_advertised_by_an_https_issuer_regardless_of_allowInsecureHttp.adoc[ADR-0028]).
 
 *Carve-out — hostname matching.* Certificate validation decomposes into chain trust, expiry,
 algorithm constraints, and hostname matching. The first three are unconditional and admit no
@@ -80,9 +91,27 @@ rewritten. See xref:specification/transport.adoc#client_back_channel_origin[Tran
 
 Any URL taken from an IdP-controlled source (`jwks_uri`, discovery endpoints, `userinfo`,
 or any endpoint advertised via discovery) MUST be constrained before it is fetched:
-scheme restricted to HTTPS, host subject to an allow-list / egress policy (`EgressPolicy`),
-and internal / link-local / loopback address ranges blocked. The `wellknown` and `jwks`
-fetch paths were audited to this requirement during their relocation into commons.
+scheme restricted to HTTPS unless the cleartext opt-in of
+xref:#COMMONS-2[COMMONS-2] is set, and the host subject to a host-address egress policy
+(`EgressPolicy`) that blocks loopback, link-local (including cloud metadata), site-local,
+unique-local, carrier-grade NAT, wildcard, broadcast and multicast addresses by default.
+
+Two independent `EgressPolicy` instances enforce this:
+
+* *Validation side* — the well-known discovery and JWKS fetches (`HttpWellKnownResolver`,
+  `HttpJwksLoader`), configured per issuer.
+* *Client side* — every discovery and back-channel call of the client engine (discovery, token,
+  PAR, userinfo, revocation), configured on `ClientConfiguration`. It checks the URL *actually
+  contacted*, after the back-channel origin rewrite, and the client back channel keeps its own path
+  structure and scheme checks besides.
+
+The secure default can refuse an endpoint a deployment configured or an issuer advertised on an
+internal address. The relaxations are explicit: on the client, `allowLoopbackEgress`
+(`sheriff.client.allow-loopback-egress`) lifts the loopback refusal only, and `allowedEgressHosts`
+(`sheriff.client.allowed-egress-hosts`) names hosts that bypass the address-range check entirely; the
+validation side has its own per-issuer settings. The policy resolves the host immediately before the
+fetch, so a DNS answer that changes before the HTTP client connects is not seen (the DNS-rebinding
+limit).
 
 * Source: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery[OWASP SSRF], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180], https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4.10].
 

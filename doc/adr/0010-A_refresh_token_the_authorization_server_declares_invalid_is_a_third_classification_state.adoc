@@ -4,7 +4,7 @@
 :sectnums:
 
 // adr-metadata
-// summary: A refused refresh is classified into three states, not two — pre-redemption, credential-rejected, and redeemed — because a credential the authorization server declared invalid is neither a transient fault nor a redemption
+// summary: A refused refresh is classified into three states, not two — pre-redemption, credential-rejected, and redeemed — because a credential the authorization server declared invalid is neither a transient fault nor a redemption; an amendment adds a fourth, scope-refused (invalid_scope), which keeps the session and owes no retry
 // tags: oauth, refresh-token, fail-closed, session-lifecycle, client
 // affects: token-sheriff-client
 // supersedes: 5
@@ -184,10 +184,12 @@ revocations (each attempted only when the provider advertises a revocation endpo
 
 *Clear the session on every non-success status.* The simplest way to stop preserving dead
 credentials, and the one that needs no body parsing at all. Rejected for the same reason ADR-0005
-rejected it: a server-error status and a connection failure mean the server never judged the
-credential, so clearing there destroys healthy sessions on transient and environmental faults. It
-trades a narrow gap for a much broader one, and it does so in the direction that costs users their
-sessions.
+rejected it: after a server-error status or a connection failure the client has no evidence that the
+server judged the credential, and in the common case it did not, so clearing there destroys healthy
+sessions on transient and environmental faults. The server may have redeemed the token behind such a
+failure (see Context and Risks), but clearing does not repair that case either; the next refresh
+reveals it. It trades a narrow gap for a much broader one, and it does so in the direction that costs
+users their sessions.
 
 *Keep two states and treat the credential-rejected case as a redemption.* This reuses the existing
 quarantine path with no new state, since both end in a cleared session. Rejected because the two
@@ -289,13 +291,89 @@ existing kinds already express.
   lets that exception propagate in place of the refusal and leaves both the stored bundle and the
   family in place.
 
+== Amendment: a refused scope is a fourth classification state
+
+=== Context
+
+RFC 6749 §5.2 gives the authorization server the code `invalid_scope` for a request whose scope is
+invalid, unknown, malformed or exceeds what the resource owner granted. Under the three states a
+client-error status carrying that code is not `invalid_grant`, so it classifies as pre-redemption, the
+state for which the client has no evidence that the server judged anything. That is wrong in one
+respect that matters to a caller: the server did judge the request — its scope — and its answer does
+not depend on network conditions. A caller that reads pre-redemption as "transient, retry later"
+repeats a request that will be refused the same way every time, and cannot tell "the server refused
+the scope I asked for" from an outage. A relying party that drives refresh by scope needs exactly that
+difference: keep the session, answer the user, and neither back off nor warn.
+
+The first amendment above refused a fourth kind for the refresh-token family refusal, because the
+existing kinds already expressed that refusal's dispositions. A refused scope is different: its
+disposition — keep the session, owe no retry — is expressed by none of the three.
+
+=== Decision
+
+The classification gets a fourth kind, **scope-refused** (`SCOPE_REFUSED`), and a typed carrier for
+it, `InvalidScopeException`, a subtype of the transport exception raised by the token-endpoint client.
+
+* **Recognition** is an allow-list of one exact shape, built like the credential-rejected one: a
+  client-error status (4xx) whose RFC 6749 §5.2 body names exactly `invalid_scope`. Any 5xx, even with
+  that code, any other code, and an absent, blank, oversize, unparseable or duplicate-member body keep
+  the plain transport exception and so stay pre-redemption. The token-endpoint client applies the rule
+  to every grant, because every grant shares its request path; the classification entry point maps the
+  carrier to scope-refused ahead of the transport-exception fallback to pre-redemption.
+* **Disposition**: the server judged the requested scope before it applied any grant, so this request
+  consumed nothing and rotated nothing. The session and its stored bundle are kept, nothing is revoked
+  or cleared, no retry back-off is scheduled and no `WARN` is logged, because repeating the request
+  would get the same answer. What the client knows about the presented token is what this refusal
+  says: the server did not redeem it in this request.
+* **Carried state**: the carrier holds the parsed error code and the server's `error_description`
+  after the commons-layer sanitiser neutralised it (ADR-0022), never the raw body. Its message is
+  composed from the observed status and fixed text only.
+* The name follows the RFC code. The redeemed-state carrier for a broader *granted* scope under the
+  opt-in strict reconciliation is a different situation — a client-side refusal after redemption — and
+  keeps its own name and kind.
+
+The three states of the Decision are therefore four, still mutually exclusive and exhaustive, ordered
+from the least to the most the server did with the presented credential: pre-redemption,
+scope-refused, credential-rejected, redeemed. The library's own dispatch of a refused exchange handles
+the fourth kind explicitly and still ends in a failing default arm. The refresh-token family refusal of
+the first amendment never maps to scope-refused.
+
+=== Alternatives considered
+
+*Keep the refusal pre-redemption and expose only the type.* A caller that catches the carrier could
+act on it, and the classification would stay at three kinds. Rejected because callers are directed to
+classify through the single entry point rather than enumerate exception types; a refusal that
+classifies as pre-redemption is retried and handled as transient by every such caller, which is the
+behaviour the distinction exists to stop.
+
+*Classify it as credential-rejected.* It is a judgement by the server, not a fault. Rejected because
+the server judged the scope, not the credential; clearing the session would force re-authentication
+over a request the caller can simply stop making.
+
+*Widen the credential-rejected allow-list to `invalid_scope`.* Rejected for the reason the Decision
+already gives for every code but `invalid_grant`: only that code attributes the refusal to the
+presented credential.
+
+=== Consequences
+
+* A caller can tell a scope refusal from an outage by type and by classification; the session survives
+  and the request is not retried on a back-off.
+* A consumer switch over the kind that lacks a failing default arm silently treats the fourth kind as
+  whatever its fallthrough does. This is the risk the Decision's failing default arm names, and the
+  reason the library's own switch keeps it.
+* The set of responses that change a session's disposition did not grow: scope-refused keeps the
+  session exactly as pre-redemption does and differs only in owing no retry.
+
 == References
 
 * ADR-0005 — the two-state redemption discriminator this decision supersedes; its redeemed-branch
   disposition is carried forward unchanged
 * ADR-0003 — the class-granularity refresh-path coverage gate, which the classification value and the
   credential-rejected carrier are added to, and which the amendment's family-refusal type joins
-* ADR-0006 — the subtype-exception rule the amendment's family-refusal type follows
+* ADR-0006 — the subtype-exception rule the amendments' family-refusal and scope-refusal types follow
+* ADR-0022 — the commons-layer sanitiser the scope-refusal carrier applies to `error_description`
+* ADR-0027 — the typed client-authentication refusal, which stays pre-redemption and whose allow-list
+  shares no code with the scope-refused one
 * `token-sheriff-client` refresh path — the token-endpoint client that performs the classification,
   the refresh flow that exposes it, the lifecycle manager that dispatches on it, and the
   `Redeemed*` refusal-exception hierarchy that carries the redeemed state

@@ -66,7 +66,8 @@ The engine owns three responsibilities and *delegates the rest*:
 | *validation* module (inherited; `CLIENT-15` calls it, never re-implements it).
 
 | *Outbound OIDC/OAuth back-channel HTTP* — discovery, token, userinfo, revocation, PAR;
-  TLS-scheme enforcement, in-module egress/path validation, bounded reads, timeouts.
+  TLS-scheme enforcement, in-module egress path validation and host-address egress policy,
+  bounded reads, timeouts.
 | *This engine* (`client`) — it performs its *own* hardened HTTP, building `cui-http`
   `HttpHandler`s directly and applying an in-module egress control uniformly through the
   shared `BackChannelHttp` helper; it does *not* route these fetches through a commons
@@ -154,6 +155,17 @@ target. The engine therefore *owns* an in-module egress control, applied uniform
   `de.cuioss.http.security` URL-path validation pipeline, so a traversal / injection /
   encoding-evasion / malformed advertised path is *rejected before it is fetched*, surfacing as
   a `TransportException`.
+| *Host-address egress policy* | Before every fetch the client's own `EgressPolicy`
+  (`ClientConfiguration.getEgressPolicy()`, a separate instance from the validation
+  transport's) resolves the host of the URL *actually contacted* — after the back-channel origin
+  rewrite below — and refuses it when any resolved address is loopback, link-local (including
+  the cloud-metadata range), site-local, unique-local, carrier-grade NAT, wildcard, broadcast or
+  multicast. The policy is on by default; its only relaxations are the two configuration inputs
+  `allowLoopbackEgress` and `allowedEgressHosts`, which apply to configured endpoints and to a
+  back-channel origin exactly as to advertised ones. A refusal surfaces as a
+  `TransportException`. The host is resolved at the check and again by the HTTP client when it
+  connects, so a DNS answer that changes in between is not seen (the DNS-rebinding limit
+  `EgressPolicy` states).
 | *Back-channel origin rewrite* | When a back-channel origin is configured
   (`backChannelOrigin`, xref:requirements.adoc#CLIENT-24[CLIENT-24]), an advertised endpoint
   whose origin equals the issuer origin is rewritten to the back-channel origin, keeping its raw
@@ -180,10 +192,12 @@ target. The engine therefore *owns* an in-module egress control, applied uniform
 
 [IMPORTANT]
 ====
-*Scope of the egress control.* It validates the advertised URL's *path structure and scheme* —
-it is *not* a host-address SSRF allow-list and does not block internal / link-local addresses by
-IP. Host-address reachability filtering, if required by a deployment, remains a network- or
-commons-level concern. This document states the control the client actually applies, and no more.
+*Scope of the egress control.* It validates the advertised URL's *path structure and scheme*,
+and it refuses a contacted host whose resolved address falls in the internal ranges listed
+above, unless `allowLoopbackEgress` or `allowedEgressHosts` admits it. It does not re-check the
+address the HTTP client connects to, so it does not defend against DNS rebinding between the
+check and the connection; a deployment that needs that guarantee still needs network-level
+egress filtering. This document states the control the client actually applies, and no more.
 ====
 
 == Reference & replacement target: portal-authentication-oauth
@@ -208,8 +222,8 @@ declared, never selected), PAR, DPoP sender-constraining — requesting a certif
 is not a capability the engine has, while preserving a certificate binding a token already
 carries is, and that preservation is a capability distinct from mTLS client authentication and
 unaffected by its alpha status — stronger `nonce`, in-module hardened
-back-channel HTTP with an egress/path
-control) are each captured as sourced `CLIENT-N` requirements above.
+back-channel HTTP with egress path and host-address
+controls) are each captured as sourced `CLIENT-N` requirements above.
 ====
 
 == See also
