@@ -435,7 +435,10 @@ public final class JwtPropertyKeys {
          * <p>
          * A set value is an upper bound on how long installed keys may go without a successful refresh.
          * Once it is exceeded, the loader leaves {@code OK} until a refresh succeeds again, so the issuer
-         * stops resolving and its tokens are rejected (ADR-0017). Choose a bound of at least several
+         * stops resolving and its tokens are rejected (ADR-0017). The bound is checked only when a
+         * background refresh cycle fails, so it is not an immediate rejection deadline: tokens can still
+         * resolve after the configured duration until the next failed cycle (or while a slow refresh is
+         * still running). Choose a bound of at least several
          * {@link #REFRESH_INTERVAL_SECONDS refresh intervals}, so a single failed cycle does not degrade
          * the issuer.
          * </p>

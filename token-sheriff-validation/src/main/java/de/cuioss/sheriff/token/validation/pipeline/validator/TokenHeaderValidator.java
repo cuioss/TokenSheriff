@@ -219,7 +219,9 @@ public class TokenHeaderValidator {
         var actualType = decodedJwt.header().getTyp();
         if (actualType.isEmpty() || !expectedType.equalsIgnoreCase(actualType.get())) {
             String actual = actualType.orElse("(missing)");
-            LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_TYPE_MISMATCH, actual, expectedType);
+            // The typ comes from the untrusted token header: escaped and bounded before it is logged (CWE-117)
+            LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_TYPE_MISMATCH,
+                    ErrorTextSanitizer.sanitize(actual, '?', MAX_LOGGED_VALUE_LENGTH, "..."), expectedType);
             securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_TYPE_MISMATCH);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.TOKEN_TYPE_MISMATCH,

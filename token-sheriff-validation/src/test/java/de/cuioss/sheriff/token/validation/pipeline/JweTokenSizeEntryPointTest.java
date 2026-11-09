@@ -32,6 +32,7 @@ import de.cuioss.test.generator.TypedGenerator;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.security.KeyPair;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
@@ -88,18 +91,29 @@ class JweTokenSizeEntryPointTest {
 
     private KeyPair encryptionKeyPair;
 
+    /** Validators created by the test, closed after it so their cache eviction tasks stop. */
+    private final List<TokenValidator> validators = new ArrayList<>();
+
     @BeforeEach
     void setUp() {
         encryptionKeyPair = JweTestTokenFactory.generateRsaKeyPair();
     }
 
+    @AfterEach
+    void closeValidators() {
+        validators.forEach(TokenValidator::close);
+        validators.clear();
+    }
+
     private TokenValidator jweValidator(TestTokenHolder holder) {
-        return TokenValidator.builder()
+        TokenValidator validator = TokenValidator.builder()
                 .issuerConfig(holder.getIssuerConfig())
                 .jweDecryptionConfig(JweDecryptionConfig.builder()
                         .defaultDecryptionKey(encryptionKeyPair.getPrivate())
                         .build())
                 .build();
+        validators.add(validator);
+        return validator;
     }
 
     /**

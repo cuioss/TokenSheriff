@@ -203,8 +203,10 @@ while background refreshes keep failing, and the issuer stays usable.
 
 When set, the issuer's JWKS loader leaves `OK` once the installed keys have gone longer than the bound
 without a successful refresh. The issuer then stops resolving and its tokens are rejected until a refresh
-succeeds again; no key is dropped, so recovery is immediate. Choose a bound of at least several refresh
-intervals, so a single failed refresh does not take the issuer out.
+succeeds again; no key is dropped, so recovery is immediate. The bound is checked only when a background
+refresh cycle fails, so it is not an immediate rejection deadline: tokens can still resolve after the
+configured duration until the next failed cycle (or while a slow refresh is still running). Choose a bound
+of at least several refresh intervals, so a single failed refresh does not take the issuer out.
 
 [source, properties]
 ----

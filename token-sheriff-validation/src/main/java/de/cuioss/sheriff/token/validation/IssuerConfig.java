@@ -750,7 +750,10 @@ public class IssuerConfig implements LoadingStatusProvider {
          * validation. Acceptance is by membership only: the order of the list does not influence
          * which algorithm a token may use. It can be used to enforce security policies, such as
          * restricting validation to an explicit set of algorithms. An algorithm is supported only if
-         * it is in the preferred list and not rejected.
+         * it is in the preferred list and not rejected. Every listed algorithm must also be a member of
+         * the {@link de.cuioss.sheriff.token.validation.security.JwsAlgorithm} catalog: a list naming an
+         * algorithm outside it is accepted by {@code SignatureAlgorithmPreferences}, but constructing the
+         * {@code TokenValidator} then fails with an {@link IllegalArgumentException}.
          * </p>
          * <p>
          * If not explicitly set, the default preferences ({@code new SignatureAlgorithmPreferences()})

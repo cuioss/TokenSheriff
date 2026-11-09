@@ -172,8 +172,9 @@ public class TokenSignatureValidator {
      * @throws TokenValidationException if the signature is invalid
      */
     private void verifySignature(DecodedJwt decodedJwt, PublicKey publicKey, String algorithm) {
-        LOGGER.trace("Verifying signature:\nDecodedJwt: %s\nPublicKey: %s\nAlgorithm: %s", decodedJwt, publicKey,
-                sanitize(algorithm));
+        // The decoded token is not rendered: its header and payload are unverified remote text at this
+        // point and could carry line breaks that forge trace-log lines (CWE-117)
+        LOGGER.trace("Verifying signature, algorithm: %s", sanitize(algorithm));
 
         // Get the data to verify and signature bytes from DecodedJwt
         String dataToVerify;
