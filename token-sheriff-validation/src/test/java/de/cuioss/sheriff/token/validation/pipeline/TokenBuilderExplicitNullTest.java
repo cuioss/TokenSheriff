@@ -36,7 +36,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * The explicit-null and subject-type refusals of {@link TokenBuilder}, exercised on the builder
  * itself: the {@code TokenValidator} entry points refuse a body without {@code iss} first, so a body
- * of only {@code {"jti":null}} and a custom mapper configured for {@code sub} are reachable here only.
+ * of only {@code {"jti":null}} is reachable here only; the builder is also the one place that sees
+ * every mapper configuration, including a custom mapper for {@code sub}, without building a validator.
  * Every refusal is a typed {@code MISSING_CLAIM} rejection and is counted once.
  */
 @DisplayName("TokenBuilder refusals of explicit nulls and non-string subjects")

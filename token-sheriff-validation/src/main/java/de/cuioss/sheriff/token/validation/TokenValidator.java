@@ -321,7 +321,8 @@ public class TokenValidator implements Closeable {
         }
 
         // Construct TokenStringValidator for pre-pipeline validation
-        // When JWE is configured, use the larger maxEncryptedTokenSize
+        // When JWE is configured, a 5-part compact JWE is bound by maxEncryptedTokenSize and every other
+        // token by the larger of the two limits (the parser applies the exact bound)
         this.tokenStringValidator = new TokenStringValidator(
                 parserConfig, this.securityEventCounter, jweDecryptionConfig);
         LOGGER.debug("TokenStringValidator initialized");

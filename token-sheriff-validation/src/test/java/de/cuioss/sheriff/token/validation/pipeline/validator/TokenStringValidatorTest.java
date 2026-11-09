@@ -119,9 +119,11 @@ class TokenStringValidatorTest {
     }
 
     /**
-     * With JWE configured the token string check applies {@code maxEncryptedTokenSize} to every token;
-     * the parser then narrows a token that is not a 5-part JWE to {@code maxTokenSize}. The two limits
-     * are the same for a JWE, so a JWE the string check admits is never refused by the parser for size.
+     * With JWE configured the token string check selects the limit by token shape: a 5-part compact
+     * JWE is bound by {@code maxEncryptedTokenSize}, every other token by the larger of the two limits.
+     * The check is a coarse pre-check for a non-JWE token: the parser narrows it to {@code maxTokenSize}.
+     * The two limits are the same for a JWE, so a JWE the string check admits is never refused by the
+     * parser for size.
      */
     @Nested
     @DisplayName("JWE limit")
@@ -172,6 +174,24 @@ class TokenStringValidatorTest {
                     "A token above maxTokenSize but within the JWE limit is left to the parser");
             String oversized = "a".repeat(configuredLimit + 1);
             assertThrows(TokenValidationException.class, () -> jweValidator.validate(oversized));
+            assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED));
+        }
+
+        @Test
+        @DisplayName("Should select the limit by token shape when maxEncryptedTokenSize is below maxTokenSize")
+        void shouldSelectLimitByTokenShape() {
+            int smallJweLimit = 4096;
+            int size = smallJweLimit + 904;
+            TokenStringValidator jweValidator = jweValidator(smallJweLimit);
+            String jws = "a".repeat(size - 2) + "..";
+            String jwe = "a".repeat(size - 4) + "....";
+
+            assertDoesNotThrow(() -> jweValidator.validate(jws),
+                    "A 3-part token within maxTokenSize must not be refused by the smaller JWE limit");
+            TokenValidationException exception = assertThrows(TokenValidationException.class,
+                    () -> jweValidator.validate(jwe));
+
+            assertEquals("Token size %d exceeds maximum %d".formatted(size, smallJweLimit), exception.getMessage());
             assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED));
         }
     }
