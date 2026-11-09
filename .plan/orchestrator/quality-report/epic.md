@@ -160,6 +160,11 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   Register of every open epic item and a Done-when with the Sonar zero target. Folded and re-grounded at `d1af3ebb`; PLAN-01 to
   PLAN-24 have all merged, nothing else is staged or running, so it is emitted alone. The plan lifecycle may cut it at outline.
   SHIPPED 2026-11-09 as #883 + #884 (see Decisions and `landings/PLAN-25.md`).
+- PLAN-27 (staged 2026-11-09, WS-05; slug `test-size-guideline-restore` is historical): corrects two PLAN-25 outcomes. (1) An explicit JSON null in
+  `iss`, `sub`, `jti`, `client_id` and `azp` is read as absent again (code in `StrictStringMapper`, `ClaimName`, `MapRepresentation`, `TokenBuilder`, their
+  tests and `security-reference.adoc`; the strict type check and the numeric-`sub` refusal stay). (2) `AGENTS.md` § Test Class Size back to the 500-line
+  guideline, plus three client test Javadocs that cite a "400-line budget". Three deliverables, thirteen files, disjoint from PLAN-26. Staged on the
+  operator's decision on the PLAN-25 landing (see Decisions). Emit only on the operator's word; it may run beside PLAN-26.
 
 ## Decisions
 
@@ -540,6 +545,21 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   existing lesson, and 7 script-failure signal-scan clusters DISCARDED (no cause extracted; the pickup text says file a lesson only on recurrence).
   Each has its own decision-log line. Project-owned residue from them: the Playwright screenshot flake that ejected #883 from the merge queue
   (Watch).
+- 2026-11-09 — OPERATOR DECISION on the four inverted PLAN-25 decisions (walked through as mailbox A versus shipped B): (1) JWE: B stands, a
+  5-part token is accepted up to the configured `maxEncryptedTokenSize`, at most 32 KiB; the operator asked what the 8 KiB limit would add when
+  32 KiB is the usual configuration, and the answer (read in `JweDecryptor.java:95,239-249,589`, `JweDecryptionConfig.java:51`) was: little, since
+  the 32 KiB cap was already what `TokenStringValidator` admitted, the inner JWS stays at 8 KiB, decompression is capped at 256 KB and `zip`
+  must be `DEF` with compression enabled. The operator then confirmed "the JWE should be raised" (read as: the raised limit stays; the orchestrator
+  took it as B, 32 KiB). (2) explicit JSON null in iss/sub/jti/client_id/azp: CORRECTED by the operator ("I said it only for the null values"):
+  A applies to the NULL ONLY, so an explicit null goes back to "treated as absent" (reverting the `MISSING_CLAIM` refusal, the `MapRepresentation`
+  explicit-null API and the `ClaimName.isExplicitNullRefused` hook); the strict string TYPE check STAYS: a numeric `sub`, any present non-string
+  identifier and the strict userinfo `sub` remain refused ("keep it"). An earlier recording of this entry as "B stands" was wrong and is superseded.
+  (3) client back-channel egress: B stands, the default-on host-address policy with `sheriff.client.allowed-egress-hosts` and
+  `sheriff.client.allow-loopback-egress`. (4) test-size rule: A, the operator's 500-line guideline, so `AGENTS.md:124-131` is wrong. Decisions 2
+  (the null half) and 4 are corrected by PLAN-27 (staged: `plans/PLAN-27-test-size-guideline-restore.md`, WS-05, three deliverables, thirteen files,
+  none shared with PLAN-26); no class is split and the four splits already made stay. Consequence: decisions 1, 3 and the numeric-`sub` half of 2 are
+  downstream-visible (a JWE up to 32 KiB accepted, a non-string identifier refused, private-range IdPs refused unless listed) and belong in any API
+  Sheriff release note, held until a release and the operator's word; the null-refusal never shipped in a release (last tag `0.9.8`), so it needs none.
 
 ## Open Defects
 
@@ -555,17 +575,11 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   operator's instruction as `quality-report-001.md` in the plan-marshall repo's `live-blockers` inbox (kind `finding`,
   the whole report to the PLAN-23 addendum; the target inbox's own validation was not run, since the `inbox validate`
   verb works on this repo's epic). Addenda written after it are not sent.
-- 2026-11-09 — OPERATOR DECISION NEEDED, PLAN-25 inverted all four mailbox decisions (`landings/PLAN-25.md`, layer 2, re-read on `aeb3fa49`):
-  (1) JWE: the 8 KiB parser limit was widened to 32 KiB for a 5-part token (`NonValidatingJwtParser.java:365-370`, `JweDecryptionConfig.java:51`),
-  newly accepting 8 to 32 KiB under a JWE-enabled issuer, against the fail-closed constraint; (2) explicit JSON null identifier claims are
-  refused (`StrictStringMapper.java:52`), `MapRepresentation` was changed, `SUBJECT` was made strict (a numeric `sub` is refused) and a
-  non-string userinfo `sub` too; (3) a default-on host-address egress policy was added to the client back-channel (`BackChannelHttp.java:148,
-  178,239`, two Quarkus keys, COMMONS-3), refusing private-range IdPs unless listed; (4) `AGENTS.md:125-131` is "should" at 400 and "must
-  split" above 1000, not a 500 guideline, and `NonValidatingJwtParserTest` (1023 lines after the plan's own edit) breaks that rule.
-  The docs were rewritten to match the code, so code and docs agree with each other and not with the mailbox. The landing says the operator
-  chose these in the run; the orchestrator cannot see that, so it is asked, not assumed. The 2026-11-06 JWE Open Defect (an unhandled
-  `IllegalArgumentException` above 8 KiB) is gone in either reading: the 8 to 32 KiB case is now typed, accepted when it is a JWE.
-  Retire when the operator says the in-run answers stand, or a correction plan is staged and landed.
+- 2026-11-09 — PLAN-25 inverted four mailbox decisions (`landings/PLAN-25.md`, layer 2, re-read on `aeb3fa49`); DECIDED by the operator the
+  same day (see Decisions): (1) the raised JWE limit (32 KiB), the strict numeric `sub` and (3) the default-on client egress policy STAND as shipped;
+  the explicit-null refusal in (2) and the test-size rule (4) are reverted by staged PLAN-27 (null read as absent again; `AGENTS.md:124-131` back to a
+  500-line guideline). Retire when PLAN-27 lands. The 2026-11-06 JWE Open Defect (an unhandled `IllegalArgumentException` above 8 KiB) is gone: the 8 to 32 KiB case is typed and
+  accepted when it is a JWE.
 - 2026-11-09 — Defects in merged code, reported to the operator in the analysis turn (PLAN-25 layer 3; not fixed inline; a fix plan only on the
   operator's word): (1) the DPoP replay cache never evicts an in-window jti, so it grows past `maxSize` without bound under a flood of fresh
   jtis (`DpopReplayProtection.java:99-101,122-144`, a documented choice; pre-existing since #565; the flood needs a valid DPoP-bound token);
@@ -603,7 +617,8 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   (PLAN-25 shipped): the downstream-visible changes of the unreleased cut now also include a default-on client egress policy (private-range
   IdPs refused unless `allowed-egress-hosts` lists them), explicit JSON null identifier claims and non-string `sub` refused, a JWE of 8 to 32 KiB
   accepted (not an error), and a token-endpoint success with a non-JSON Content-Type treated as a redeemed-response failure; the first three
-  are subject to the open operator decision on the inverted PLAN-25 mailbox answers, so any release note waits on it. PLAN-26's own claims
+  were decided 2026-11-09 (the raised JWE limit, the strict non-string and numeric-`sub` refusals and the default-on egress policy stand; the
+  explicit-null refusal is being reverted by PLAN-27), so any release note describes them as shipped and still waits on a release and the operator's word. PLAN-26's own claims
   were stamped at `f85c5ab3` and PLAN-25 touched `StepUpChallengeParser`, `HeaderValues` and the client docs since, so PLAN-26 is to be
   re-grounded at `aeb3fa49` before it is emitted. Retire when PLAN-26 has landed and the C decision and the reply are done or declined.
 - 2026-11-09 — PLAN-25 items with NO evidence in either PR (leaf reading, `landings/PLAN-25.md`; held, not carried by PLAN-26): 1(a) and 1(b)
@@ -662,3 +677,12 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   a real truststore for the Keycloak container is IT-cost and not staged. Re-check if IT TLS
   infrastructure changes or a TLS-related IT regression appears.
 - `source-report/` line numbers are stale; plan specs carry the current locations.
+- 2026-11-09 — Operator answers given INSIDE a running plan never reach the orchestrator: PLAN-25's landing says the operator answered the four mailbox
+  questions the opposite way in the run, but nothing in the inbox, the landing's record or the ledger carried those answers, so the orchestrator
+  recorded an Open Defect and asked again, and the operator's second set of answers differed from the first on one point (null versus type). A plan
+  that overrides a mailbox decision should say so in its landing message with the question and the answer verbatim. Upstream observation for the
+  plan-marshall maintainers (addendum nine, operator-owned, NOT sent); no change here. Retire when sent or declined.
+- 2026-11-09 — PLAN-26 was re-grounded at `aeb3fa49` before its emit (see Decisions): eleven claims re-stamped corroborated, two spec statements corrected
+  (`StepUpChallengeParser` already refuses CR, LF and NUL since PLAN-25, so deliverable 2(f) reuses `HeaderValues.containsLineBreakOrNul` and the
+  sibling test is 13 tests, 266 lines), three hypotheses stay `unverifiable` for the plan's own outline. The re-grounding was done by the orchestrator
+  with direct reads and greps, not by a leaf, and the spec text was edited with a Python replace instead of the Edit tool (process deviation).
