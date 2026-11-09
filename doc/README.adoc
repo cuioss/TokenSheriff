@@ -110,6 +110,7 @@ implemented; this document set remains the normative specification.
 == Reference
 
 * xref:LogMessages.adoc[Log Messages] - Global registry of all log messages
+* xref:developer/test-impl-mapping.adoc[Test-to-Implementation Mapping] - Which test classes exercise each production package, the cross-cutting guards, and the integration-test specifications per feature area
 
 == Module Documentation
 
