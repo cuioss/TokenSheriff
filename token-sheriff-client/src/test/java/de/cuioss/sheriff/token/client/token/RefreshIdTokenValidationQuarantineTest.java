@@ -62,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>
  * Held in its own class rather than folded into {@link RefreshAdversarialTest}, per the
  * {@link RefreshTestSupport} precedent of splitting the wired refresh contract by behaviour cluster
- * instead of growing one class past the module's 400-line budget.
+ * instead of growing one class past the project's 500-line test-class guideline.
  */
 @EnableTestLogger
 @EnableGeneratorController

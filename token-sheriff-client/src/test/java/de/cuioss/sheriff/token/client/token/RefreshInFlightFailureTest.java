@@ -68,8 +68,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the session is deliberately cleared — so using one here would assert preservation against the one
  * status that must not preserve. That path is pinned in {@code RefreshPostRedemptionQuarantineTest}.
  * <p>
- * The cases live here rather than in {@code RefreshAdversarialTest} so neither class exceeds the
- * module's 400-line budget; both consume the shared {@link RefreshTestSupport} fixture.
+ * The cases live here rather than in {@code RefreshAdversarialTest} so neither class grows past the
+ * project's 500-line test-class guideline; both consume the shared {@link RefreshTestSupport} fixture.
  * <p>
  * <strong>Coverage note.</strong> {@code awaitInFlight} carries two rethrow branches — the
  * {@code RuntimeException} cause rethrown directly, and a {@code CompletionException} rethrown when
