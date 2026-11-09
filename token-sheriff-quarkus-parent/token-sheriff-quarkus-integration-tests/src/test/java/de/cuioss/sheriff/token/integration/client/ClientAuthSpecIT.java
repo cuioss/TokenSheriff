@@ -175,6 +175,8 @@ class ClientAuthSpecIT extends BaseIntegrationTest {
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .scope("openid")
                 .sslContext(RefreshEngineSupport.chainValidatingSslContext())
+                // The host-mapped Keycloak is reached on localhost.
+                .allowLoopbackEgress(true)
                 .build();
     }
 

@@ -63,7 +63,8 @@ Endpoint resolution, for a loader configured with well-known discovery:
   the discovery on each cycle. When it succeeds, the same cycle goes on to fetch the keys.
 * A security rejection is terminal and ends in `ERROR` without scheduling a retry: an issuer that is
   advertised but does not match the configured issuer, a document that carries a `jwks_uri` but advertises
-  no issuer, and a JWKS fetch URI rejected by the egress guard. If such a rejection first appears on a
+  no issuer, a JWKS fetch URI rejected by the egress guard, and an advertised `jwks_uri` no HTTP
+  handler can be built for (see the amendment below). If such a rejection first appears on a
   later refresh cycle of a loader that has no endpoint yet, the status becomes `ERROR` and the refresh task
   is cancelled.
 * With background refresh disabled, every resolution failure is a terminal `ERROR`.
@@ -200,6 +201,50 @@ status to a terminal `ERROR`.
   that has no refresh left to make progress.
 * A loader whose refresh executor rejects the task reports a terminal failure instead of hanging in a
   pending state, so an executor problem is visible in the status.
+
+== Amendment: an unusable advertised jwks_uri is a fourth terminal rejection
+
+=== Context
+
+The decision above names three terminal rejections of the endpoint resolution: an advertised issuer
+that does not match, a document that carries a `jwks_uri` but advertises no issuer, and a JWKS fetch
+URI the egress guard blocks. The re-discovery rule already names a fourth shape — an advertised
+`jwks_uri` for which no HTTP handler can be built — but only for the case where an endpoint is
+installed. The same shape can appear on the first resolution, or on a refresh cycle of a loader that
+has no endpoint yet, and it is neither a transient discovery failure nor any of the three named
+rejections.
+
+=== Decision
+
+An advertised `jwks_uri` for which no HTTP handler can be built is a terminal rejection, the fourth
+beside the issuer mismatch, the absent advertised issuer and the egress block. No handler can be built
+when the URI is malformed, when it uses a scheme other than `http` or `https`, or when it uses
+cleartext `http` while insecure HTTP is not allowed.
+
+* While no endpoint is installed, the rejection ends in `ERROR` and schedules no retry, exactly as the
+  three other rejections do. A refresh cycle that meets it cancels the refresh task. The rejection is
+  logged once as `JWKS_URI_UNUSABLE` with a fixed reason that names every cause; the advertised URI is
+  remote document content that can carry userinfo or query secrets, so neither it nor the handler
+  configuration's refusal message, which echoes it, is written.
+* While an endpoint is installed, the re-discovery rule above applies unchanged: the rejection adopts
+  nothing, keeps the endpoint, keys, status and refresh task, and suppresses further re-discovery for
+  the stated bound.
+
+The document that advertises such a URI is not unavailable. It was read and it names an endpoint the
+loader refuses to contact. Retrying it adds no information, which is the same reason the other three
+rejections are terminal.
+
+=== Consequences
+
+* The retryable class keeps its meaning: a discovery that could not be read. A document that was read
+  and names an endpoint the loader cannot use is not retried forever while the readiness check reports
+  `IN_PROGRESS`.
+* All four terminal rejections behave alike while no endpoint is installed, and all four are
+  non-terminal under an installed endpoint, so the classification has one rule per state rather than
+  one per cause.
+* An identity provider that corrects a malformed `jwks_uri` is followed only after a restart when the
+  loader had no endpoint yet; with an installed endpoint the bounded re-discovery picks the correction
+  up.
 
 == References
 

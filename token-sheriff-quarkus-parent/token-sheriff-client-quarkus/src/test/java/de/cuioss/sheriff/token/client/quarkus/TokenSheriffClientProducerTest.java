@@ -219,6 +219,48 @@ class TokenSheriffClientProducerTest {
                             "the issuer identity is unchanged when a back-channel origin is set"));
         }
 
+        // The two egress-policy keys are matched pairs as well: omitting them must leave the
+        // host-address egress policy at its secure default, and setting them must reach the engine.
+
+        @Test
+        @DisplayName("Should keep the egress policy secure when the egress properties are absent")
+        void shouldDefaultEgressPolicyToSecure() {
+            ClientConfiguration configuration =
+                    new TokenSheriffClientProducer(configOf(minimalClientProperties())).clientConfiguration();
+
+            assertAll("secure egress defaults",
+                    () -> assertFalse(configuration.isAllowLoopbackEgress(),
+                            "omitting allow-loopback-egress must keep loopback refused"),
+                    () -> assertTrue(configuration.getAllowedEgressHosts().isEmpty(),
+                            "omitting allowed-egress-hosts must leave the allow-list empty"));
+        }
+
+        @Test
+        @DisplayName("Should map allow-loopback-egress onto the engine configuration when enabled")
+        void shouldMapAllowLoopbackEgress() {
+            Map<String, String> properties = minimalClientProperties();
+            properties.put(ClientRuntimeConfig.ALLOW_LOOPBACK_EGRESS, "true");
+
+            ClientConfiguration configuration =
+                    new TokenSheriffClientProducer(configOf(properties)).clientConfiguration();
+
+            assertTrue(configuration.isAllowLoopbackEgress(),
+                    "sheriff.client.allow-loopback-egress=true must reach the engine configuration");
+        }
+
+        @Test
+        @DisplayName("Should map allowed-egress-hosts onto the engine configuration as an ordered list")
+        void shouldMapAllowedEgressHosts() {
+            Map<String, String> properties = minimalClientProperties();
+            properties.put(ClientRuntimeConfig.ALLOWED_EGRESS_HOSTS, "keycloak,idp.internal");
+
+            ClientConfiguration configuration =
+                    new TokenSheriffClientProducer(configOf(properties)).clientConfiguration();
+
+            assertEquals(List.of("keycloak", "idp.internal"), configuration.getAllowedEgressHosts(),
+                    "sheriff.client.allowed-egress-hosts must reach the engine configuration");
+        }
+
         @Test
         @DisplayName("Should fail loud when the client extension is present but not configured")
         void shouldFailWhenUnconfigured() {

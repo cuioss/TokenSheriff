@@ -61,10 +61,12 @@ JWE decryption configuration (`JweDecryptionConfigResolver`):
 
 The errors are raised while the `TokenValidator` is built. With an enabled issuer that build runs at
 startup (ADR-0019), so the application does not start with a configuration that would silently ignore a
-setting. The exception is an application that supplies its own `@Alternative` `TokenValidator`: it
-replaces the default bean, so the validator in use is not built by this producer and the checks above, which run
-while the producer builds it, do not apply to that validator; an orphaned property is then not detected. A configuration with no JWE property at all is not an error; JWE
-then stays unconfigured.
+setting. An application that supplies its own `@Alternative` `TokenValidator` is not covered by this
+guarantee: the validator in use is not built by the extension's producer, so the startup build that runs
+these checks does not happen for it. The resolvers may still run when another bean resolves the issuer or
+parser configuration (the observability resolver, for example, resolves them through their own
+producers), but whether and when an orphaned property is reported for such an application is not decided
+here. A configuration with no JWE property at all is not an error; JWE then stays unconfigured.
 
 == Consequences
 
@@ -73,7 +75,7 @@ then stays unconfigured.
 * For the validator the default producer builds, a security setting either applies or stops the
   application. No such configuration can appear to enforce DPoP or restrict JWE while doing neither.
   The guarantee covers the checks above and does not extend to an application-supplied `@Alternative`
-  `TokenValidator`, which can ignore an orphaned property without a startup failure.
+  `TokenValidator`; for such an application an orphaned property is not guaranteed to fail startup.
 * The error names the property and the remedy, so the fix does not require reading the resolver.
 * A typo in a key id is found at startup rather than by the first token encrypted for the intended key.
 

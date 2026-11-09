@@ -12,8 +12,9 @@
     <packaging>jar</packaging>
     <name>Token-Sheriff Client</name>
     <description>Framework-agnostic OIDC/OAuth client engine for Token-Sheriff. Drives its own OIDC/OAuth
-        back channel — discovery, token, PAR, userinfo and revocation — on the shared transport
-        primitives from commons (shipped in token-sheriff-validation), and builds the end-session redirect.
+        back channel — discovery, token, PAR, userinfo and revocation — over cui-http, using the transport
+        error types and egress policy from commons (shipped in token-sheriff-validation), and builds the
+        end-session redirect.
         Pure Java, no framework dependency.
     </description>
 

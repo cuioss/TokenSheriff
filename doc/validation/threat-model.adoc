@@ -63,7 +63,7 @@ _See Requirements xref:requirements.adoc#VALIDATION-8.1[VALIDATION-8.1] and xref
 
 ==== Open Recommendations
 
-* Token blacklisting for revoked tokens
+* Revocation checks for tokens revoked before they expire (a deny list of revoked token identifiers); the library has none built in, and a custom `TokenValidationRule` is the extension point for one
 * Rate limiting for token validation attempts
 * JWK thumbprint validation for JWKS endpoints
 

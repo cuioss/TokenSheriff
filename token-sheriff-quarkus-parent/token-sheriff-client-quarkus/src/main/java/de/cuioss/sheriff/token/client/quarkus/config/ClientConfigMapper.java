@@ -66,8 +66,10 @@ public final class ClientConfigMapper {
      *                                  unrecognised authentication method, or when
      *                                  {@link ClientRuntimeConfig#DISCOVERY_DOCUMENT_MAX_SIZE} is not
      *                                  positive, or when {@link ClientRuntimeConfig#BACK_CHANNEL_ORIGIN}
-     *                                  is not a bare absolute {@code http}/{@code https} origin (the
-     *                                  engine {@link ClientConfiguration} rejects it at build time)
+     *                                  is not a bare absolute {@code http}/{@code https} origin, or when
+     *                                  {@link ClientRuntimeConfig#ALLOWED_EGRESS_HOSTS} holds a blank
+     *                                  entry (the engine {@link ClientConfiguration} rejects both at build
+     *                                  time)
      */
     public static ClientConfiguration map(Config config) {
         String issuer = requiredValue(config, ClientRuntimeConfig.ISSUER);
@@ -86,7 +88,10 @@ public final class ClientConfigMapper {
                         .orElse(Boolean.TRUE))
                 .strictScopeReconciliation(
                         config.getOptionalValue(ClientRuntimeConfig.STRICT_SCOPE_RECONCILIATION, Boolean.class)
-                                .orElse(Boolean.FALSE));
+                                .orElse(Boolean.FALSE))
+                // Secure-by-default: absent means the host-address egress policy keeps refusing loopback.
+                .allowLoopbackEgress(config.getOptionalValue(ClientRuntimeConfig.ALLOW_LOOPBACK_EGRESS, Boolean.class)
+                        .orElse(Boolean.FALSE));
 
         config.getOptionalValue(ClientRuntimeConfig.DISCOVERY_DOCUMENT_MAX_SIZE, Integer.class)
                 .ifPresent(builder::discoveryDocumentMaxSize);
@@ -95,6 +100,9 @@ public final class ClientConfigMapper {
         config.getOptionalValue(ClientRuntimeConfig.BACK_CHANNEL_ORIGIN, String.class)
                 .ifPresent(builder::backChannelOrigin);
         resolveScopes(config).forEach(builder::scope);
+        config.getOptionalValues(ClientRuntimeConfig.ALLOWED_EGRESS_HOSTS, String.class)
+                .orElse(List.of())
+                .forEach(builder::allowedEgressHost);
 
         return builder.build();
     }

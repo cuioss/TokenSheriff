@@ -27,9 +27,11 @@ import java.io.Serial;
  * This is a <em>terminal</em> failure for the presented credential and it is <strong>not</strong> a
  * redemption: the authorization server never processed the grant, so nothing was rotated and there is
  * no successor. It is nonetheless categorically different from every other pre-redemption failure,
- * which is why it has a type of its own. A connection failure, a DNS failure, an SSRF-blocked target
- * or a {@code 5xx} all leave the presented refresh token in exactly the state it was in — retrying
- * later may well succeed. An {@code invalid_grant} refusal says the opposite: the server has looked at
+ * which is why it has a type of its own. After a connection failure, a DNS failure, an SSRF-blocked
+ * target or a {@code 5xx} the client has no evidence that the server judged the credential, so it keeps
+ * the presented refresh token locally and retrying later may well succeed — although after a connection
+ * failure or a {@code 5xx} the server may already have rotated it, since a token request is a
+ * non-idempotent {@code POST}. An {@code invalid_grant} refusal says the opposite: the server has looked at
  * this credential and declared it dead (expired, revoked, or already single-use redeemed), so a caller
  * that keeps the session alive is holding something no retry will revive.
  * <p>

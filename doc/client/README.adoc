@@ -18,17 +18,19 @@ functional code are delivered protocol-by-protocol.
 
 The engine *owns* two aspects and *delegates the rest*. It also owns its OIDC/OAuth back
 channel — discovery, token, PAR, userinfo and revocation calls through the shared
-`BackChannelHttp` helper, built on the `cui-http` primitives — and adds no signature policy
-(the seam is detailed in xref:architecture.adoc[Architecture]):
+`BackChannelHttp` helper, built on the upstream `cui-http` library and guarded by the client's
+own host-address egress policy — and adds no signature policy (the seam is detailed in
+xref:architecture.adoc[Architecture]):
 
 * *Retrieval & flow* (net-new) — auth-code + PKCE, the token-endpoint grants, client
   authentication, flow integrity (`state` / `nonce` / exact `redirect_uri`), mix-up defence,
   PAR, step-up, RP-initiated logout, and sender-constraint requests.
 * *Token* (lifecycle delta) — validate every retrieved token, then hold / refresh / revoke it
   server-side and preserve its sender-constraint.
-* *Delegated* — the low-level transport primitives (the `cui-http` handler, TLS, the
-  `de.cuioss.http.security` pipeline) and the validation-side discovery / JWKS retrieval to
-  xref:../commons/requirements.adoc[commons];
+* *Delegated* — the HTTP handler, TLS and the `de.cuioss.http.security` pipeline to the
+  upstream `cui-http` library; the error model, security events, the `EgressPolicy` type and
+  untrusted-text sanitisation to xref:../commons/requirements.adoc[commons] (the client runs its
+  own discovery, not the commons one);
   token trust (signatures, claims, algorithm policy) to xref:../validation/requirements.adoc[validation];
   RFC 9457 problem+json rendering to the HTTP edge.
 

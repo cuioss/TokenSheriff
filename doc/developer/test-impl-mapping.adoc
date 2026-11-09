@@ -1,0 +1,415 @@
+= Test-to-Implementation Mapping
+:toc: left
+:toclevels: 2
+:toc-title: Table of Contents
+:sectnums:
+
+This document maps each production package of the four production modules to the test
+classes that exercise it. It also lists the cross-cutting guards that check the code base
+as a whole, and the integration-test specifications per feature area.
+
+Use it to find where a behaviour is tested before you change it, and to see which test
+class a new test belongs in. The mapping names test classes only; it makes no statement
+about coverage figures.
+
+Most test classes live in the same package as the production code they test, under
+`src/test/java`. Where a test class sits in a different test package, its row names that
+package. Where a production package has no test class of its own, the row says so.
+
+[#validation]
+== token-sheriff-validation
+
+The core library. It also carries the `commons` base layer.
+
+Package prefix: `de.cuioss.sheriff.token`.
+
+[cols="1,3",options="header"]
+|===
+|Production package |Test classes
+
+|`commons.error`
+|`ErrorTextSanitizerTest`, `InboundErrorNormalizerTest`
+
+|`commons.events`
+|`EventCategoryTest`, `SecurityEventCounterTest` (both in the test package `validation.security`)
+
+|`commons.metrics`
+|No test class of its own.
+
+|`commons.transport`
+|`CleartextEndpointsTest`, `DirectDeserializationTest`, `EgressPolicyTest`,
+`HttpHandlerVerifyHostnameContractTest`, `HttpJwksLoaderConfigTest`,
+`HttpJwksLoaderConfigWellKnownTest`, `HttpWellKnownResolverIssuerTest`,
+`HttpWellKnownResolverTest`, `JwksHostnameVerificationTest`, `JwksHttpContentConverterTest`,
+`LoadingStatusProviderTest`, `ParserConfigTest`, `WellKnownConfigTest`,
+`WellKnownConfigurationConverterTest`, `WellKnownResultConverterTest`,
+`WellKnownResultMappingTest`
+
+|`validation`
+|`ClientConfusionAttackTest`, `CustomClaimMapperTest`, `DSLJsonSecurityTest`,
+`IdTokenValidationPipelineNullCheckTest`, `IssuerConfigCacheConcurrencyTest`,
+`IssuerConfigCachePerformanceTest`, `IssuerConfigCacheRecoveryTest`,
+`IssuerConfigCacheSynchronizationTest`, `IssuerConfigCacheTest`,
+`IssuerConfigClaimSubOptionalTest`, `IssuerConfigDiscoveryIssuerTest`, `IssuerConfigTest`,
+`OAuth2JWTBestPracticesComplianceTest`, `OpenIDConnectComplianceTest`,
+`RFC7519JWTComplianceTest`, `TokenTypeTest`, `TokenValidatorConcurrencyTest`,
+`TokenValidatorJweTest`, `TokenValidatorMetricsTest`, `TokenValidatorMetricsVerificationTest`,
+`TokenValidatorPerformanceIntegrationTest`, `TokenValidatorSecurityEventTest`,
+`TokenValidatorTest`
+
+|`validation.cache`
+|`AccessTokenCacheConfigTest`, `AccessTokenCacheTest`
+
+|`validation.domain.claim`
+|`ClaimNameTest`, `ClaimValueTest`, `ClaimValueTypeTest`, `CollectionClaimHandlerTest`
+
+|`validation.domain.claim.mapper`
+|`IdentityMapperTest`, `JsonCollectionMapperTest`, `KeycloakDefaultGroupsMapperTest`,
+`KeycloakDefaultRolesMapperTest`, `OffsetDateTimeMapperTest`, `ScopeMapperTest`,
+`StrictStringMapperTest`, `StringSplitterMapperTest`
+
+|`validation.domain.context`
+|`AccessTokenRequestTest`, `IdTokenRequestTest`, `RefreshTokenRequestTest`,
+`ValidationContextTest`
+
+|`validation.domain.token`
+|`AccessTokenContentTest`, `BaseTokenContentTest`, `IdTokenContentTest`,
+`MinimalTokenContentTest`, `TokenContentTest`, `UnvalidatedRefreshTokenTest`
+
+|`validation.dpop`
+|`DpopConfigTest`, `DpopPipelineIntegrationTest`, `DpopProofValidatorAlgorithmAndClaimTest`,
+`DpopProofValidatorTest`, `DpopReplayProtectionTest`
+
+|`validation.exception`
+|No test class of its own.
+
+|`validation.json`
+|`JwtHeaderJweTest`, `MapRepresentationTest`
+
+|`validation.jwe`
+|`ConcatKdfTest`, `JweAlgorithmPreferencesTest`, `JweDecryptionConfigTest`,
+`JweDecryptorEcdhEsAndCompressionTest`, `JweDecryptorTest`
+
+|`validation.jwks`
+|`FileJwksLoaderTest`, `InMemoryJwksLoaderTest`, `JwksLoaderFactoryTest`, `LoaderStatusTest`
+
+|`validation.jwks.http`
+|`HttpJwksLoaderAsyncInitializationTest`, `HttpJwksLoaderEgressRefreshTest`,
+`HttpJwksLoaderFailureAdvertisedJwksUriTest`, `HttpJwksLoaderFailureTest`,
+`HttpJwksLoaderGracePeriodTest`, `HttpJwksLoaderIssuerTest`, `HttpJwksLoaderKeyRotationTest`,
+`HttpJwksLoaderLockFreeStatusTest`, `HttpJwksLoaderRediscoveryTest`,
+`HttpJwksLoaderSchedulerTest`, `HttpJwksLoaderTest`, `HttpJwksLoaderValidatorCloseTest`,
+`HttpJwksLoaderWellKnownAsyncTest`, `SimpleHttpJwksLoaderTest`
+
+|`validation.jwks.key`
+|`JWKSKeyLoaderExtendedTest`, `JWKSKeyLoaderTest`, `JwkKeyHandlerTest`, `KeyInfoTest`
+
+|`validation.jwks.parser`
+|`JwksParserLargeArrayTest`, `JwksParserTest`, `KeyProcessorRsaDefaultAlgorithmTest`,
+`KeyProcessorTest`
+
+|`validation.metrics`
+|`MeasurementTypeTest`, `MetricsTickerFactoryTest`, `TokenValidatorMonitorTest`
+
+|`validation.pipeline`
+|`AccessTokenValidationPipelineTest`, `DecodedJwtTest`, `IdTokenValidationPipelineTest`,
+`IdentifierClaimNullRejectionTest`, `JweTokenSizeEntryPointTest`,
+`NonValidatingJwtParserJweDecodeModeTest`, `NonValidatingJwtParserJweRejectionAccountingTest`,
+`NonValidatingJwtParserJweTest`, `NonValidatingJwtParserTest`,
+`RefreshTokenValidationPipelineTest`, `SignatureTemplateManagerTest`,
+`SignatureVerificationUtilTest`, `SubjectClaimTypeRejectionTest`, `TokenBuilderTest`
+
+|`validation.pipeline.validator`
+|`AudienceValidatorTest`, `AuthorizedPartyValidatorTest`, `ExpirationValidatorTest`,
+`MandatoryClaimsValidatorTest`, `TokenClaimValidatorEdgeCaseTest`, `TokenClaimValidatorTest`,
+`TokenHeaderValidatorTest`, `TokenSignatureValidatorAlgorithmTest`,
+`TokenSignatureValidatorES256FormatTest`, `TokenSignatureValidatorEdgeCasesTest`,
+`TokenSignatureValidatorTest`, `TokenStringValidatorTest`, `TokenValidationRuleTest`
+
+|`validation.security`
+|`JwkAlgorithmPreferencesTest`, `JwsAlgorithmTest`, `SignatureAlgorithmPreferencesTest`;
+the attack tests `EmbeddedJwkAttackTest`, `JkuX5uAttackTest`,
+`KeyDisclosureVulnerabilityTest`, `KeyInjectionAttackTest`, `PsychicSignatureAttackTest`,
+`TokenValidationSecurityTest`, `WiredNegativePathAttackTest`
+
+|`validation.util`
+|`EcdsaSignatureFormatConverterTest`, `JwkThumbprintUtilTest`, `Sha256UtilTest`
+|===
+
+=== Test infrastructure
+
+The test package `validation.test` and its sub-packages hold the shared test infrastructure:
+token generators, key material, tamper utilities and the MockWebServer dispatchers. Its own
+tests check that infrastructure, not production code: `InMemoryKeyHandlingTest`,
+`JwtTokenTamperingUtilReproductionTest`, `JwtTokenTamperingUtilTest`, `TestTokenHolderTest`,
+`EndpointDispatchersTest` (`test.dispatcher`), `ClaimValueGeneratorTest`,
+`TestTokenGeneratorsTest`, `TokenSecurityPropertiesTest` (`test.generator`) and
+`TestTokenSourceProviderTest` (`test.junit`).
+
+Fixtures that are not test classes: `BoundedBodyHandlerTestSupport` (`commons.transport`),
+`DiscoveryGenerationDispatcher` (`validation.jwks.http`), `DpopProofValidatorSupport`
+(`validation.dpop`) and `JsonTypedIdentifierClaimFixture` (`validation.pipeline.validator`).
+
+[#client]
+== token-sheriff-client
+
+The framework-agnostic OIDC/OAuth client engine.
+
+Package prefix: `de.cuioss.sheriff.token.client`.
+
+[cols="1,3",options="header"]
+|===
+|Production package |Test classes
+
+|`auth`
+|`ClientAuthenticationSelectorTest`, `ClientSecretAuthTest`, `MtlsClientAuthTest`,
+`PrivateKeyJwtAuthTest`, `WeakAuthRefusedTest`
+
+|`config`
+|`ClientConfigurationTest`
+
+|`discovery`
+|`DiscoveryAdversarialTest`, `DiscoveryResolverTest`, `ProviderMetadataTest`
+
+|`dpop`
+|`DpopProofGeneratorTest`, `SenderConstraintTest`
+
+|`flow`
+|`AuthorizationCodeFlowTest`, `AuthorizationRequestBuilderTest`, `CallbackHandlerTest`,
+`CallbackParametersAttackDatabaseTest`, `CallbackParametersTest`, `ClientCredentialsFlowTest`,
+`CodeInjectionTest`, `IssValidatorTest`, `ParClientTest`, `PkceChallengeTest`,
+`PkceDowngradeTest`, `RedeemedRefreshFailureTest`, `RefreshFailureClassificationTest`,
+`RefreshFlowTest`, `RefreshRedemptionTest`, `StepUpChallengeAttackDatabaseTest`,
+`StepUpChallengeParserTest`, `StepUpHandlerTest`, `StepUpResultVerifierTest`,
+`TokenEndpointClientTest`, `WiredFlowHttpsTest`, `WiredFlowNegativePathIT`
+
+|`internal`
+|`BackChannelEgressPolicyTest`, `BackChannelHostnameVerificationTest`,
+`BackChannelHttpTlsTrustTest`, `BackChannelOriginMappingTest`, `BackChannelOriginRoutingTest`,
+`EndpointQueryTest`, `EndpointSchemePolicyTest`, `FormEncoderTest`, `JsonEscaperTest`,
+`JsonResponseMediaTypeTest`, `LogSanitizerTest`
+
+|`lifecycle`
+|`ConstraintPreservationTest`, `RevocationClientTest`, `StorageIsolationTest`,
+`StoredTokenTest`, `TokenLifecycleManagerApplyRefreshTest`,
+`TokenLifecycleManagerFamilyEvictionTest`, `TokenStoreTest`
+
+|`logout`
+|`EndSessionFlowTest`, `LogoutOpenRedirectTest`, `PostLogoutRedirectAttackDatabaseTest`
+
+|`token`
+|`IdTokenValidationBridgeTest`, `RefreshAdversarialTest`, `RefreshConcurrencyTest`,
+`RefreshFamilyReseedTest`, `RefreshIdTokenValidationQuarantineTest`,
+`RefreshInFlightFailureTest`, `RefreshPostRedemptionQuarantineTest`, `RotationResultTest`,
+`RotationReuseDetectionTest`, `SubBindingValidatorTest`, `TokenResponseTest`,
+`UserInfoClientTest`
+
+|`hardening` (test package only; no production package of that name)
+|`FetchPathAttackDatabaseTest`, `RetrievalParsingAttackDatabaseTest`,
+`TokenEndpointTransportControlTest`, `TokenResponseAdversarialTest`. These adversarial tests
+drive the retrieval path across several production packages.
+|===
+
+Fixtures that are not test classes: `DpopBoundAccessTokens` and `WiredFlowTestSupport`
+(`flow`), `HeaderLineBreakAttackDatabase` (`hardening`) and `RefreshTestSupport` (`token`).
+
+[#validation-quarkus]
+== token-sheriff-validation-quarkus
+
+The Quarkus extension for token validation.
+
+Package prefix: `de.cuioss.sheriff.token.quarkus`.
+
+[cols="1,3",options="header"]
+|===
+|Production package |Test classes
+
+|`quarkus` (log messages)
+|No test class of its own.
+
+|`annotation`
+|No test class of its own; the binding is exercised through the `interceptor` tests and
+`BearerAuthSpecIT`.
+
+|`config`
+|`AccessLogFilterConfigResolverTest`, `AccessLogFilterConfigTest`,
+`AccessTokenCacheConfigResolverTest`, `ConfigValueParserTest`,
+`IssuerConfigResolverDpopTransportAndLoggingTest`, `IssuerConfigResolverMaxStalenessTest`,
+`IssuerConfigResolverTest`, `JwtPropertyKeysTest`, `ParserConfigResolverTest`,
+`RetryStrategyConfigResolverTest`
+
+|`error`
+|`ProblemDetailExceptionMapperTest`
+
+|`health`
+|`JwksEndpointHealthCheckTest`, `TokenValidatorHealthCheckTest`
+
+|`interceptor`
+|`BearerTokenInterceptorTest`
+
+|`jwe`
+|`DecryptionKeyLoaderTest`, `JweDecryptionConfigResolverTest`
+
+|`logging`
+|`ClientIpExtractorTest`, `CustomAccessLogFilterTest`
+
+|`mapper`
+|`ClaimMapperRegistryTest`
+
+|`mapper.keycloak`
+|`KeycloakGroupsMapperBeanTest`, `KeycloakRolesMapperBeanTest`
+
+|`metrics`
+|`JwtMetricsCollectorRebaselineTest`, `JwtMetricsCollectorTest`, `MetricsIntegrationTest`
+
+|`observability`
+|`ForeignValidatorObservabilityTest`, `ObservedValidatorResolverTest`
+
+|`producer`
+|`BearerTokenProducerTest`, `BearerTokenResponseFactoryTest`, `BearerTokenResultTest`,
+`EmptyJsonWebTokenTest`, `JsonWebTokenAdapterTest`, `NativeTokenValidatorProducerIT`,
+`QuarkusTokenValidatorProducerTest`, `TokenValidatorProducerUnitTest`,
+`TokenValidatorStartupInitializerTest`
+
+|`runtime`
+|`TokenSheriffDevUIRuntimeServiceTest`, `TokenSheriffDevUIRuntimeServiceUnitTest`
+
+|`servlet`
+|`HttpRequestResolverMockTest`, `VertxServletObjectsResolverErrorPathsTest`,
+`VertxServletObjectsResolverQuarkusTest`, `VertxServletObjectsResolverScopingTest`
+
+|`validation`
+|`TokenValidationRuleRegistryTest`
+|===
+
+Fixtures that are not test classes: `JwtTestProfile` (`config`), `MockInjectionPoint`
+(`producer`), `HttpRequestResolverMock` (`servlet`), and `TestConfig` and
+`TestConfigurations` (`test`).
+
+[#client-quarkus]
+== token-sheriff-client-quarkus
+
+The Quarkus extension for the client engine.
+
+Package prefix: `de.cuioss.sheriff.token.client.quarkus`.
+
+[cols="1,3",options="header"]
+|===
+|Production package |Test classes
+
+|`quarkus`
+|`ClientExceptionMapperTest`, `TokenSheriffClientProducerTest`
+
+|`config`
+|No test class of its own.
+|===
+
+[#cross-cutting-guards]
+== Cross-cutting guards
+
+These tests check the code base as a whole rather than one package.
+
+[cols="1,1,3",options="header"]
+|===
+|Concern |Module |Test classes
+
+|Architecture and source-scan rules
+|token-sheriff-validation
+|`CommonsLayeringTest`, `DocumentedPackagePatternTest`, `DslJsonTruncatedEscapeGuardTest`,
+`UncheckedThrowBoundaryTest` (test package `architecture`)
+
+|Architecture boundaries of the client
+|token-sheriff-client
+|`ClientArchitectureTest`, `CommonsTransportReuseTest`, `RefreshPathCoverageGuardTest`
+(test package `client.boundary`)
+
+|Log sanitisation and log message identifiers
+|token-sheriff-validation
+|`LogRecordSanitizationGuardTest`, `LogMessageIdentifierUniquenessTest`
+
+|Native-image metadata
+|token-sheriff-validation
+|`NativeImageMetadataTest`
+
+|Surefire fork groups
+|token-sheriff-validation-quarkus
+|`SurefireForkGroupGuardTest` (test package `quarkus.architecture`)
+|===
+
+[#integration-tests]
+== Integration-test specifications
+
+The specifications run in `token-sheriff-quarkus-integration-tests` against a running
+application and identity provider. Package prefix: `de.cuioss.sheriff.token.integration`.
+
+[cols="1,3",options="header"]
+|===
+|Feature area |Specifications
+
+|Validation API
+|`ApiValidationSpecIT`, `TokenRequestSpecIT` (`api`)
+
+|Bearer-token binding
+|`BearerAuthSpecIT` (`bearer`)
+
+|Token validation and discovery retry
+|`TokenValidationSpecIT`, `WellKnownRetryConfigSpecIT` (`token`)
+
+|DPoP and JWE on the validation side
+|`DpopSpecIT`, `JweDecryptionSpecIT` (`security`)
+
+|Error mapping
+|`ProblemDetailMappingIT` (`error`)
+
+|Health checks
+|`HealthCheckIntegrationIT`, `HealthCheckResponsivenessIT` (`health`)
+
+|Client: authorization code with PKCE
+|`AuthCodePkceSpecIT`, `FullFlowE2EIT` (`client`)
+
+|Client: client authentication
+|`ClientAuthSpecIT`, `RefreshClientAuthSpecIT` (`client`)
+
+|Client: discovery
+|`DiscoverySpecIT` (`client`)
+
+|Client: DPoP
+|`DpopBoundSpecIT`, `DpopBackChannelOriginSpecIT` (`client`)
+
+|Client: PAR
+|`ParSpecIT` (`client`)
+
+|Client: mix-up defence
+|`MixUpSpecIT` (`client`)
+
+|Client: step-up
+|`StepUpSpecIT` (`client`)
+
+|Client: logout
+|`LogoutSpecIT` (`client`)
+
+|Client: UserInfo
+|`UserInfoSpecIT` (`client`)
+
+|Client: refresh
+|`RefreshConcurrentRedemptionSpecIT`, `RefreshConstraintLifecycleSpecIT`,
+`RefreshErrorPathSpecIT`, `RefreshIdentityScopeSpecIT`, `RefreshLifecycleSpecIT`,
+`RefreshProductionPathSpecIT`, `RefreshSingleFlightSpecIT`, `RefreshSingleUseSpecIT`
+(`client`)
+|===
+
+Support classes that are not specifications: `BaseIntegrationTest`, `TestConstants`,
+`TestProviders` and `TestRealm` (root package), `FormPostSupport`, `KeycloakAdminSupport`,
+`KeycloakUrlSupport` and `RefreshEngineSupport` (`client`), and `DpopProofHelper`
+(`security`).
+
+Two further integration tests run inside the modules themselves: `WiredFlowNegativePathIT`
+in token-sheriff-client and `NativeTokenValidatorProducerIT` in
+token-sheriff-validation-quarkus. Both appear in their module tables above.
+
+[#keeping-current]
+== How to keep this current
+
+Update this mapping in the same pull request that adds, moves, renames or splits a test
+class. A test class that is not listed here, or a listed class that no longer exists, is a
+defect in this document.

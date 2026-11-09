@@ -1,0 +1,141 @@
+= ADR-0027: A client authentication failure at the token endpoint is a typed pre-redemption refusal
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: A token-endpoint refusal of the client's own authentication is surfaced as a typed ClientAuthenticationFailedException recognised by an exact-shape allow-list (4xx invalid_client, or 401 unauthorized_client), stays pre-redemption, and leaves every other shape a plain TransportException
+// tags: oauth, client-authentication, exception-design, fail-closed, refresh-token, client
+// affects: token-sheriff-client
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Accepted
+
+== Context
+
+A token request can be refused for two unrelated reasons. The authorization server may reject the
+*grant* (an expired, revoked or replayed code or refresh token), or it may reject the *client* itself
+(a wrong or absent client secret). RFC 6749 section 5.2 gives the second case its own error code,
+`invalid_client`, precisely because it says nothing about the grant: the server refused the caller
+before it looked at what the caller presented.
+
+The client library already distinguishes the grant-rejected region by a typed exception. Without a
+type of its own, a failed client authentication reaches the caller as an undifferentiated transport
+failure, so a caller that must tell "my credentials are misconfigured" from "the network or the
+server failed" has to parse a message string or give up. Two further facts make a plain recognition
+rule unsafe:
+
+* Real authorization servers do not follow the RFC vocabulary uniformly. One widely deployed server
+  answers a wrong client secret with HTTP 401 and the code `unauthorized_client`, not
+  `invalid_client`. In the RFC, `unauthorized_client` means something different: an authenticated
+  client that is not permitted to use the requested grant type. The same code therefore carries two
+  meanings depending on the status that accompanies it.
+* The response body is authorization-server-controlled. Any recognition rule that is wider than the
+  shapes it has been shown to need turns attacker- or fault-influenced text into a classification
+  decision, and any interpolation of that text into a message turns it into a log-forging vector.
+
+The structural choice point is how a client-authentication refusal is carried to the caller, how
+widely it is recognised, and what it means for the session-lifecycle classification of a refused
+refresh.
+
+== Decision
+
+A refusal of the client's own authentication is carried by a dedicated subtype of the transport
+exception, `ClientAuthenticationFailedException`, raised by the token-endpoint client. It is a sibling
+of the credential-rejected subtype, and it is recognised by an allow-list of exact shapes, never by a
+pattern:
+
+* a client-error status (4xx) whose RFC 6749 section 5.2 body names `invalid_client`; or
+* exactly HTTP 401 whose body names `unauthorized_client`.
+
+Every other shape stays a plain transport exception: `unauthorized_client` on any status other than
+401 (a 403 is an authenticated client refused a grant type), any 5xx even when its body carries one of
+these codes, and any absent, blank, oversize, unparseable or duplicate-member body. An unknown is
+never a match. The allow-lists of the typed refusals (client authentication, credential rejection and
+scope refusal) share no error code, so none can shadow another.
+
+The refusal is *pre-redemption*. The server refused the client before it processed the grant, so the
+client keeps a refresh token presented with the request, and the refresh classification keeps the
+session. A misconfigured client credential is not a dead refresh credential; ending the session over
+it would destroy a session that becomes usable again as soon as the client configuration is
+corrected.
+
+The exception carries no authorization-server-controlled state. Its message is composed from the
+observed HTTP status and fixed text only; neither the parsed error code nor any part of the body is
+interpolated into it. It extends the transport exception, so every existing handler and documented
+throws contract keeps holding, and only a caller that needs the distinction catches the narrower type.
+
+== Consequences
+
+=== Positive
+
+* A caller can distinguish a client-credential misconfiguration from a network, server or grant
+  failure by type, without parsing messages.
+* The recognition surface is bounded by construction: a new or ambiguous server answer degrades to a
+  plain transport failure, which is the fail-safe direction.
+* A misconfigured client secret cannot destroy a healthy session, because the refusal classifies as
+  pre-redemption.
+* The authorization-server-controlled body cannot reach a log line through the exception message.
+
+=== Negative
+
+* The allow-list must be extended deliberately when another server is found to answer a failed client
+  authentication with a different status and code pair; until then that server's refusal reads as a
+  plain transport failure.
+* The public exception taxonomy grows by one subtype.
+
+=== Risks
+
+* The `401` plus `unauthorized_client` rule encodes one server's observed behaviour. A server that
+  answers 401 with `unauthorized_client` for a *grant-type* refusal would be misread as a
+  client-authentication failure. The consequence is bounded: the classification stays pre-redemption,
+  so no session is destroyed, and only the diagnostic type is wrong.
+
+== Alternatives Considered
+
+=== Accept the server's code in the test and leave the library unchanged
+
+Keep the plain transport exception and let callers and tests accept either `invalid_client` or
+`unauthorized_client`. This preserves the library surface but leaves the distinction unavailable to
+callers, and an assertion that accepts two codes pins neither server verdict. Rejected because it
+moves a protocol-normalisation concern out of the one component that owns the wire contract and into
+every consumer.
+
+=== Recognise any 4xx carrying either code
+
+Treat `invalid_client` and `unauthorized_client` as equivalent on every client-error status. Simpler,
+but it conflates an authenticated client refused a grant type with an unauthenticated client, and it
+widens the recognised surface to shapes never observed. Rejected because the status is what
+disambiguates the second code, and a wider allow-list is a wider trust in server-controlled text.
+
+=== Classify the refusal as credential-rejected
+
+Reuse the credential-rejected subtype so the session is cleared. Rejected because the server never
+judged the refresh token; clearing the session would punish a recoverable configuration fault with a
+forced re-authentication.
+
+=== Carry the signal through an overload or a result flag
+
+Add an overload or a result field that reports client-authentication failure. Rejected for the reason
+recorded in the ADR on subtype-carried signals: a preferred overload silently bypasses subclass
+overrides of the original entry point, whereas a thrown-type hierarchy keeps the single overridable
+method.
+
+The alternatives fail for one shared reason: each either hides the distinction from callers or
+recognises more than the contract has shown to be unambiguous.
+
+== References
+
+* link:0006-A_cross-cutting_signal_on_a_public_subclassable_method_rides_subtype_exceptions_never_a_preferred_overload.adoc[ADR-0006: subtype exceptions carry cross-cutting signals]
+* link:0010-A_refresh_token_the_authorization_server_declares_invalid_is_a_third_classification_state.adoc[ADR-0010: the refresh classification states, including the scope refusal added by its amendment]
+* link:0022-A_flow_context_is_single-use_and_untrusted_text_is_sanitised_by_one_commons-layer_utility.adoc[ADR-0022: untrusted text is sanitised by one commons-layer utility]
+* `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/ClientAuthenticationFailedException.java`
+  — the typed refusal and its recognition rule
+* `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/TokenEndpointClient.java`
+  — the token-endpoint client that applies the allow-list
+* https://www.rfc-editor.org/rfc/rfc6749#section-5.2[RFC 6749 section 5.2, Error Response]

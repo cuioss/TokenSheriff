@@ -136,4 +136,31 @@ public final class ClientRuntimeConfig {
      * @see de.cuioss.sheriff.token.client.config.ClientConfiguration#getBackChannelOrigin()
      */
     public static final String BACK_CHANNEL_ORIGIN = PREFIX + ".back-channel-origin";
+
+    /**
+     * Whether the host-address egress policy permits a discovery or back-channel endpoint whose host
+     * resolves to a loopback address. Property: {@code sheriff.client.allow-loopback-egress}. Defaults to
+     * {@code false}.
+     * <p>
+     * Every call this client makes is checked on the URL actually contacted, and by default an endpoint
+     * resolving to a loopback, link-local (cloud-metadata), site-local, unique-local, carrier-grade NAT,
+     * wildcard, broadcast or multicast address is refused. Setting this to {@code true} lifts the
+     * loopback refusal only; it is meant for local development, never production.
+     *
+     * @see de.cuioss.sheriff.token.client.config.ClientConfiguration#isAllowLoopbackEgress()
+     */
+    public static final String ALLOW_LOOPBACK_EGRESS = PREFIX + ".allow-loopback-egress";
+
+    /**
+     * Host names the host-address egress policy lets through without any address-range check, as a
+     * comma-separated list. Property: {@code sheriff.client.allowed-egress-hosts}. Empty by default.
+     * <p>
+     * List the host of an authorization server the deployment deliberately reaches on an internal
+     * address — typically the host of {@link #BACK_CHANNEL_ORIGIN}, which the egress policy otherwise
+     * refuses when it resolves to a private network. Scope it narrowly: a listed host is trusted wherever
+     * it appears, including in an endpoint the authorization server advertised.
+     *
+     * @see de.cuioss.sheriff.token.client.config.ClientConfiguration#getAllowedEgressHosts()
+     */
+    public static final String ALLOWED_EGRESS_HOSTS = PREFIX + ".allowed-egress-hosts";
 }

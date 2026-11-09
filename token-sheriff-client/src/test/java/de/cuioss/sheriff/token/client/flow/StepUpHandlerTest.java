@@ -19,6 +19,8 @@ import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.flow.StepUpChallengeParser.StepUpChallenge;
+import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase;
+import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase.HeaderLineBreakAttack;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
@@ -30,6 +32,8 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -75,6 +79,42 @@ class StepUpHandlerTest {
         metadata.authorizationEndpoint = AUTH_ENDPOINT;
         metadata.codeChallengeMethodsSupported = List.of("S256");
         return metadata;
+    }
+
+    /**
+     * The line-break attack class on the parse-then-initiate path: a {@code WWW-Authenticate} step-up
+     * challenge carrying a separator before its {@code acr_values} never becomes a challenge, so no
+     * elevated authorization request is ever minted from it.
+     */
+    @ParameterizedTest(name = "WWW-Authenticate with {0}")
+    @ArgumentsSource(HeaderLineBreakAttackDatabase.ArgumentsProvider.class)
+    @DisplayName("Should never initiate a step-up from a challenge header carrying a line break")
+    void shouldNotInitiateFromLineBreakChallenge(HeaderLineBreakAttack attack) {
+        String header = attack.inject("Bearer error=\"insufficient_user_authentication\",",
+                " acr_values=\"" + ACR + "\"");
+
+        assertTrue(parser.parse(header).isEmpty(),
+                () -> "a challenge carrying " + attack.description() + " must not reach initiate");
+    }
+
+    /**
+     * Defence in depth behind the parser: a challenge built directly with a separator inside its
+     * {@code acr_values} is still carried into the authorization URL only in percent-encoded form, so
+     * the control character never reaches the front-channel redirect raw.
+     */
+    @ParameterizedTest(name = "acr_values with {0}")
+    @ArgumentsSource(HeaderLineBreakAttackDatabase.ArgumentsProvider.class)
+    @DisplayName("Should carry a line break inside acr_values only percent-encoded")
+    void shouldPercentEncodeLineBreakInAcrValues(HeaderLineBreakAttack attack) {
+        var challenge = new StepUpChallenge(attack.inject(ACR, "urn:acr:forged"), null);
+
+        String url = stepUpHandler.initiate(config(REDIRECT_URI), metadata(), challenge).authorizationUrl();
+
+        assertAll(attack.description(),
+                () -> assertTrue(url.chars().noneMatch(c -> c == '\r' || c == '\n' || c == 0),
+                        "no raw CR, LF or NUL may reach the authorization URL: " + url),
+                () -> assertTrue(url.contains("%0D") || url.contains("%0A") || url.contains("%00"),
+                        "the separator must survive percent-encoded: " + url));
     }
 
     @Nested

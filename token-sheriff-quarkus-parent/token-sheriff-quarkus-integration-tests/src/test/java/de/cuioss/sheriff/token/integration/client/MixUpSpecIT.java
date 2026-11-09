@@ -145,6 +145,8 @@ class MixUpSpecIT extends BaseIntegrationTest {
                 .scope("openid")
                 .redirectUri(REDIRECT_URI)
                 .sslContext(RefreshEngineSupport.chainValidatingSslContext())
+                // The host-mapped Keycloak is reached on localhost.
+                .allowLoopbackEgress(true)
                 .build();
         ProviderMetadata metadata = new DiscoveryResolver(configuration).resolve();
         assertTrue(metadata.supportsAuthorizationResponseIssParameter(),

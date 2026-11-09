@@ -37,9 +37,8 @@
  * JWKS/discovery caching). The SSRF defence is the
  * {@link de.cuioss.sheriff.token.commons.transport.EgressPolicy} host-address guard; the instance
  * and host allow-list configured for validation guard only the validation-side discovery and
- * {@code jwks_uri} fetches. They are not applied to the client: the client back channel validates
- * advertised endpoint paths and enforces its TLS settings, but does not apply the
- * {@code EgressPolicy} host-address guard. Transport <strong>never interprets a token's trust</strong> — turning a
+ * {@code jwks_uri} fetches. They are not applied to the client: the client back channel applies
+ * its own {@code EgressPolicy} instance. Transport <strong>never interprets a token's trust</strong> — turning a
  * fetched {@link de.cuioss.sheriff.token.commons.transport.Jwks} document into verification key
  * material is the crypto concern owned by {@code de.cuioss.sheriff.token.validation.jwks}.
  * <p>

@@ -15,12 +15,16 @@
  */
 package de.cuioss.sheriff.token.client.dpop;
 
+import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase;
+import de.cuioss.sheriff.token.client.hardening.HeaderLineBreakAttackDatabase.HeaderLineBreakAttack;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -66,6 +70,44 @@ class SenderConstraintTest {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
         keyPair = generator.generateKeyPair();
+    }
+
+    /**
+     * The line-break attack class against the echoed {@code DPoP-Nonce}: a server-supplied nonce
+     * carrying a separator is not an RFC 9449 §8 {@code NQCHAR} sequence, so it is refused rather than
+     * signed into a proof — on both the token-endpoint and the protected-resource path — and no proof
+     * header is added.
+     */
+    @ParameterizedTest(name = "DPoP-Nonce with {0}")
+    @ArgumentsSource(HeaderLineBreakAttackDatabase.ArgumentsProvider.class)
+    @DisplayName("Should refuse to echo a DPoP-Nonce that carries a line break")
+    void shouldRefuseLineBreakInNonce(HeaderLineBreakAttack attack) {
+        var constraint = SenderConstraint.dpop(new DpopProofGenerator(keyPair, "RS256"));
+        String nonce = attack.inject("nonce-" + Generators.letterStrings(8, 16).next(), "forged");
+        String accessToken = Generators.letterStrings(20, 40).next();
+        Map<String, String> tokenHeaders = new HashMap<>();
+        Map<String, String> resourceHeaders = new HashMap<>();
+
+        assertAll(attack.description(),
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> constraint.apply(HTM, HTU, nonce, tokenHeaders), "token-endpoint proof"),
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> constraint.applyProtectedResource("GET", HTU, accessToken, nonce, resourceHeaders),
+                        "protected-resource proof"),
+                () -> assertTrue(tokenHeaders.isEmpty() && resourceHeaders.isEmpty(),
+                        "no proof may be emitted for a refused nonce"));
+    }
+
+    @Test
+    @DisplayName("Should echo a DPoP-Nonce of visible characters and add the proof header")
+    void shouldEchoVisibleCharacterNonce() {
+        // Positive control for the line-break class above: the same nonce shape without a separator.
+        var constraint = SenderConstraint.dpop(new DpopProofGenerator(keyPair, "RS256"));
+        Map<String, String> headers = new HashMap<>();
+
+        constraint.apply(HTM, HTU, "nonce-" + Generators.letterStrings(8, 16).next() + "forged", headers);
+
+        assertTrue(headers.containsKey(DPOP_HEADER), "a nonce of visible characters is echoed into a proof");
     }
 
     @Test

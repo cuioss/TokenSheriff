@@ -84,7 +84,10 @@ abstract class RefreshTestSupport {
         moduleDispatcher.reset();
     }
 
-    /** A confidential client configuration bound to a generated issuer, permitting cleartext http. */
+    /**
+     * A confidential client configuration bound to a generated issuer, permitting cleartext http and
+     * loopback egress for the mock server.
+     */
     protected static ClientConfiguration config() {
         return ClientConfiguration.builder()
                 .issuer("https://" + Generators.letterStrings(3, 10).next() + ".example.com")
@@ -92,6 +95,7 @@ abstract class RefreshTestSupport {
                 .clientSecret(Generators.letterStrings(8, 20).next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
                 .build();
     }
 
