@@ -1019,10 +1019,10 @@ public class TokenLifecycleManager {
             case PRE_REDEMPTION -> LOGGER.debug(
                     "Refresh refused before the authorization server processed the grant; "
                             + "leaving the session intact");
-            // The server refused the requested scope (invalid_scope) before applying any grant, so the
-            // no new token was issued and nothing shows that the presented refresh token was rotated, so
-            // the session is kept. The refusal is not
-            // transient, so no retry back-off is scheduled; it is an expected answer, not a WARN.
+            // The server refused the requested scope (invalid_scope) before applying any grant: no new
+            // token was issued and nothing shows that the presented refresh token was rotated, so the
+            // session is kept. The refusal is not transient, so no retry back-off is scheduled; it is an
+            // expected answer, not a WARN.
             case SCOPE_REFUSED -> LOGGER.debug(
                     "Refresh refused over the requested scope before the grant was applied; "
                             + "leaving the session intact and scheduling no retry");

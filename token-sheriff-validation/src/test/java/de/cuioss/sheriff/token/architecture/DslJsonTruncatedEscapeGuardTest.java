@@ -103,7 +103,7 @@ class DslJsonTruncatedEscapeGuardTest {
     private static final Pattern PACKAGE = Pattern.compile("\\bpackage\\s+([\\w.]+)\\s*;");
     private static final Pattern TYPE_DECLARATION =
             Pattern.compile("\\b(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)");
-    private static final Pattern THROWS_CLAUSE = Pattern.compile("\\)\\s*throws\\s+[\\w.$\\s,<>?]+$");
+    private static final Pattern THROWS_CLAUSE = Pattern.compile("\\)\\s*+throws\\s++[\\w.$\\s,<>?]++$");
     private static final Set<String> NON_METHOD_NAMES = Set.of(
             "if", "for", "while", "switch", "catch", "synchronized", "try", "return", "new", "throw");
     private static final Set<String> SKIPPED_DIRECTORIES = Set.of("target", "node_modules");
@@ -322,7 +322,7 @@ class DslJsonTruncatedEscapeGuardTest {
         if (callOffsets.isEmpty()) {
             return List.of();
         }
-        Collections.sort(callOffsets);
+        callOffsets.sort(Comparator.naturalOrder());
 
         Matcher packageMatcher = PACKAGE.matcher(code);
         String packagePrefix = packageMatcher.find() ? packageMatcher.group(1) + "." : "";
@@ -459,7 +459,7 @@ class DslJsonTruncatedEscapeGuardTest {
                 return caught;
             }
             String parameter = code.substring(openParen + 1, closeParen).trim()
-                    .replaceAll("\\s+[\\w$]+$", "").replaceAll("\\bfinal\\b", "");
+                    .replaceAll("\\s++[\\w$]++$", "").replaceAll("\\bfinal\\b", "");
             for (String alternative : parameter.split("\\|")) {
                 String type = alternative.trim();
                 caught.add(type.substring(type.lastIndexOf('.') + 1));
@@ -638,7 +638,7 @@ class DslJsonTruncatedEscapeGuardTest {
                 return FileVisitResult.CONTINUE;
             }
         });
-        Collections.sort(files);
+        files.sort(Comparator.naturalOrder());
         return files;
     }
 }

@@ -294,12 +294,14 @@ correct, and only when the suppression is accompanied by a comment recording the
 The demonstration is required: this sanction is for proven false positives, never for silencing an
 inconvenient finding.
 
-**Worked instance.** `BearerTokenProducer` calls
+**Worked instance (historical).** `BearerTokenProducer` once called
 `LOGGER.warn(e, BEARER_TOKEN_VALIDATION_FAILED, e.getMessage(), e.getEventType())`. The recipe
-mis-fires on the `warn(Throwable, LogRecord, Object...)` overload, mistaking the leading
+mis-fired on the `warn(Throwable, LogRecord, Object...)` overload, mistaking the leading
 `Throwable` for the format argument; the `LogRecord` template carries exactly two matching `%s`
-placeholders and the call is correct. The remedy was a class-level
-`// cui-rewrite:disable CuiLogRecordPatternRecipe` plus that explanation.
+placeholders and the call was correct. The remedy was a class-level
+`// cui-rewrite:disable CuiLogRecordPatternRecipe` plus that explanation. The call has since been
+replaced by one that logs the sanitised message without the exception object, and the suppression was
+removed with it; the instance stays here as the model for a demonstrated mis-fire.
 
 **Corollary: never contort a correct logging call to satisfy a buggy recipe.**
 

@@ -229,8 +229,9 @@ class TokenHeaderValidatorTest {
         void shouldLogForgedAlgSanitised() {
             DecodedJwt decodedJwt = headerOnly(FORGED, "key-1");
             var request = AccessTokenRequest.of("test");
+            var validator = defaultValidator();
 
-            assertThrows(TokenValidationException.class, () -> defaultValidator().validate(decodedJwt, request));
+            assertThrows(TokenValidationException.class, () -> validator.validate(decodedJwt, request));
 
             var records = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN,
                     JWTValidationLogMessages.WARN.UNSUPPORTED_ALGORITHM.resolveIdentifierString());

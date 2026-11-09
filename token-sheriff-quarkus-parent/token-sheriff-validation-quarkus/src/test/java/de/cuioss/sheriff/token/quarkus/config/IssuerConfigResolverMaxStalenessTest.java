@@ -135,24 +135,9 @@ class IssuerConfigResolverMaxStalenessTest {
     class StartupFailure {
 
         @ParameterizedTest(name = "value ''{0}''")
-        @ValueSource(strings = {"abc", "1.5", "PT1H"})
-        @DisplayName("should fail startup for an unparseable value")
-        void shouldFailForUnparseableValue(String value) {
-            Map<String, String> properties = issuerWithJwksUrl();
-            properties.put(MAX_STALENESS_PROPERTY, value);
-            IssuerConfigResolver resolver = resolverFor(properties);
-
-            IllegalStateException exception = assertThrows(IllegalStateException.class,
-                    resolver::resolveIssuerConfigs);
-
-            assertTrue(exception.getMessage().contains(MAX_STALENESS_PROPERTY),
-                    "The failure must name the offending property: " + exception.getMessage());
-        }
-
-        @ParameterizedTest(name = "value {0}")
-        @ValueSource(strings = {"0", "-1", "-3600"})
-        @DisplayName("should fail startup for a non-positive value")
-        void shouldFailForNonPositiveValue(String value) {
+        @ValueSource(strings = {"abc", "1.5", "PT1H", "0", "-1", "-3600"})
+        @DisplayName("should fail startup for an unparseable or non-positive value")
+        void shouldFailForUnparseableOrNonPositiveValue(String value) {
             Map<String, String> properties = issuerWithJwksUrl();
             properties.put(MAX_STALENESS_PROPERTY, value);
             IssuerConfigResolver resolver = resolverFor(properties);

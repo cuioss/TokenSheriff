@@ -189,9 +189,13 @@ class BackChannelEgressPolicyTest {
     @DisplayName("The loopback opt-in does not admit a link-local address")
     void shouldNotLetLoopbackOptInAdmitLinkLocal() {
         // mappedConfiguration sets the loopback opt-in; the metadata address is link-local, not loopback.
-        var client = new TokenEndpointClient(mappedConfiguration(METADATA_ADDRESS));
+        // The PAR client is used here so the opt-in is shown to hold on a second back-channel endpoint kind.
+        var configuration = mappedConfiguration(METADATA_ADDRESS);
+        var client = new ParClient(configuration);
+        var authentication = authentication(configuration);
 
-        assertRefusedWithoutContact(() -> client.requestToken(serverUrl(TOKEN_PATH), CLIENT_CREDENTIALS, Map.of()));
+        assertRefusedWithoutContact(() -> client.pushAuthorizationRequest(serverUrl(PAR_PATH),
+                Map.of("response_type", "code"), authentication));
     }
 
     @Test
