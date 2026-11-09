@@ -131,8 +131,7 @@ class IdentifierClaimNullEquivalenceTest {
      */
     private Outcome validate(TokenKind kind, Map<String, String> claims) {
         String token = signedToken(claims);
-        TokenValidator validator = TokenValidator.builder().issuerConfig(issuerConfig).build();
-        try {
+        try (TokenValidator validator = TokenValidator.builder().issuerConfig(issuerConfig).build()) {
             long before = validator.getSecurityEventCounter().getCount(EventType.MISSING_CLAIM);
             try {
                 Set<String> claimNames = switch (kind) {
@@ -145,8 +144,6 @@ class IdentifierClaimNullEquivalenceTest {
                 long delta = validator.getSecurityEventCounter().getCount(EventType.MISSING_CLAIM) - before;
                 return new Outcome(e.getEventType(), e.getMessage(), Set.of(), delta);
             }
-        } finally {
-            validator.close();
         }
     }
 
