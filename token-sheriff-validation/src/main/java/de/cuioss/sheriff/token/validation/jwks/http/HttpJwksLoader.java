@@ -132,19 +132,21 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     /**
      * Fixed reason of the {@code JWKS_URI_UNUSABLE} warning. The refusal of the HTTP handler
      * configuration echoes the advertised {@code jwks_uri}, which is remote document content and can
-     * carry userinfo or query secrets, so the refusal message is never written; this text names both
-     * causes the configuration refuses an advertised URI for.
+     * carry userinfo or query secrets, so the refusal message is never written; this text names every
+     * cause the configuration refuses an advertised URI for.
      */
     static final String UNUSABLE_URI_REASON =
-            "the advertised jwks_uri is malformed, or uses cleartext http while insecure HTTP is not allowed";
+            "the advertised jwks_uri is malformed, uses a scheme other than http or https, "
+                    + "or uses cleartext http while insecure HTTP is not allowed";
 
     /**
      * Fixed detail logged when the egress guard blocks the {@code jwks_uri} advertised by the discovery
      * document. The rejection message of the guard embeds the full URI, which is remote document content,
-     * so neither the message nor the exception (whose stack trace would print it) is logged.
+     * so neither the message nor the exception (whose stack trace would print it) is logged; this text
+     * names both causes the guard blocks a URI for.
      */
     static final String ADVERTISED_URI_EGRESS_BLOCKED =
-            "SSRF egress blocked: the advertised jwks_uri resolves to a disallowed address";
+            "SSRF egress blocked: the advertised jwks_uri has no host or resolves to a disallowed address";
 
     /**
      * Number of consecutive refresh cycles without installed keys after which a well-known loader
@@ -582,8 +584,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * {@link HttpWellKnownResolver.FailureReason#ISSUER_ABSENT}; it goes through the issuer gate of
      * {@link #resolveIssuer(String, String, SecurityEventCounter)} with an absent advertised issuer
      * and is a terminal rejection. An advertised {@code jwks_uri} for which the configuration cannot
-     * build an HTTP handler (a malformed URI, or a cleartext {@code http} URI while insecure HTTP is not
-     * allowed) is a terminal rejection as well: the resolution carries the resolved issuer and is marked
+     * build an HTTP handler (a malformed URI, a scheme other than {@code http} or {@code https}, or a
+     * cleartext {@code http} URI while insecure HTTP is not allowed) is a terminal rejection as well: the resolution carries the resolved issuer and is marked
      * as such ({@link AdapterResolution#unusableUri()}), and nothing is fetched. The refusal itself is not
      * kept, since its message echoes the advertised URI.
      * <p>
@@ -634,8 +636,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             issuer = resolvedIssuer.get();
 
             // Use overloaded method to create handler for discovered JWKS URL. The configuration refuses
-            // an advertised jwks_uri it cannot use (malformed, or cleartext http while insecure HTTP is
-            // not allowed); that refusal does not go away by retrying, so it is a terminal rejection.
+            // an advertised jwks_uri it cannot use (malformed, a scheme other than http or https, or
+            // cleartext http while insecure HTTP is not allowed); that refusal does not go away by retrying, so it is a terminal rejection.
             // The refusal is dropped on purpose: its message echoes the advertised URI.
             try {
                 handler = config.getHttpHandler(jwksUri.get());

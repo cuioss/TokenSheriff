@@ -75,11 +75,12 @@ class HttpJwksLoaderFailureTest {
 
     /** The fixed reason of JWKS_URI_UNUSABLE, pinned verbatim. */
     private static final String UNUSABLE_URI_REASON =
-            "the advertised jwks_uri is malformed, or uses cleartext http while insecure HTTP is not allowed";
+            "the advertised jwks_uri is malformed, uses a scheme other than http or https, "
+                    + "or uses cleartext http while insecure HTTP is not allowed";
 
     /** The fixed detail logged when the egress guard blocks the advertised jwks_uri, pinned verbatim. */
     private static final String ADVERTISED_URI_EGRESS_BLOCKED =
-            "SSRF egress blocked: the advertised jwks_uri resolves to a disallowed address";
+            "SSRF egress blocked: the advertised jwks_uri has no host or resolves to a disallowed address";
 
     @Getter
     private final JwksResolveDispatcher moduleDispatcher = new JwksResolveDispatcher();

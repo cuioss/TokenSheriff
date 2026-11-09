@@ -51,7 +51,7 @@ import java.util.Objects;
  *   <li>JSON string size limits to prevent memory exhaustion</li>
  * </ul>
  * <p>
- * The examples below are exercised by {@code NonValidatingJwtParserTest}.
+ * The examples below illustrate the API; they are not compiled or run as tests themselves.
  * <p>
  * Basic usage example:
  * {@snippet :
@@ -108,8 +108,10 @@ import java.util.Objects;
  * {@link IllegalArgumentException}, which {@code TokenStringValidator} rules out on every production path;
  * an oversized token is rejected with event type {@code TOKEN_SIZE_EXCEEDED}. The size limit is
  * {@link ParserConfig#getMaxTokenSize()}, except for a 5-part JWE when JWE decryption is configured, which
- * is bound by {@link JweDecryptionConfig#getMaxEncryptedTokenSize()} — the same limit
- * {@code TokenStringValidator} applies):
+ * is bound by the effective JWE limit {@link JweDecryptionConfig#getMaxEncryptedTokenSize()}. A size
+ * pre-check also runs in {@code TokenStringValidator} at the start of all three pipelines (access, ID and
+ * refresh token), before this parser is reached; when JWE decryption is configured it applies the JWE
+ * limit to every token, so a JWS between the two limits is rejected by this parser):
  * {@snippet :
  * // An invalid token format is rejected, never returned
  * try {
@@ -210,7 +212,10 @@ public class NonValidatingJwtParser {
      *
      * @param token the JWT token string to parse
      * @return the DecodedJwt if parsing is successful
-     * @throws TokenValidationException if the token is invalid or cannot be parsed
+     * @throws IllegalArgumentException if the token is {@code null} or empty (ruled out by
+     *         {@code TokenStringValidator} on every production path)
+     * @throws TokenValidationException if the token is invalid or cannot be parsed; the rejection is
+     *         logged and counted
      */
     public DecodedJwt decode(String token) {
         return decodeInternal(token, DecodeMode.NORMAL);
@@ -232,7 +237,10 @@ public class NonValidatingJwtParser {
      *
      * @param token the JWT token string to parse (may be opaque)
      * @return the DecodedJwt if parsing is successful
-     * @throws TokenValidationException if the token is invalid or cannot be parsed
+     * @throws IllegalArgumentException if the token is {@code null} or empty (ruled out by
+     *         {@code TokenStringValidator} on every production path)
+     * @throws TokenValidationException if the token is invalid or cannot be parsed; the rejection is
+     *         neither logged nor counted
      */
     public DecodedJwt decodeOpaqueToken(String token) {
         return decodeInternal(token, DecodeMode.OPAQUE);

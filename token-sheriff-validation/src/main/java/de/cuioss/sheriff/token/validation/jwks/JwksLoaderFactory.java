@@ -27,8 +27,9 @@ import lombok.experimental.UtilityClass;
  * <p>
  * Key features:
  * <ul>
- *   <li>Creates appropriate loader based on the JWKS URL</li>
- *   <li>Supports HTTP and file-based JWKS sources</li>
+ *   <li>One factory method per JWKS source, chosen by the caller: {@link #createHttpLoader} (an HTTP
+ *       endpoint, configured directly or through well-known discovery), {@link #createFileLoader} (a
+ *       file) and {@link #createInMemoryLoader} (in-memory JWKS content)</li>
  *   <li>Creates loaders without a SecurityEventCounter: the counter is supplied afterwards through
  *       {@link JwksLoader#initJWKSLoader(de.cuioss.sheriff.token.commons.events.SecurityEventCounter)},
  *       which also starts loading the keys</li>
