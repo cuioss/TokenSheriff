@@ -213,12 +213,15 @@ class JwksParserTest {
         @Test
         @DisplayName("Should reject oversized content")
         void shouldRejectOversizedContent() {
-            // Given a parser with small size limit
+            // Given a valid JWKS the default parser accepts, so the size is the only cause of rejection
+            String largeContent = InMemoryJWKSFactory.createDefaultJwks();
+            assertFalse(parser.parse(largeContent).isEmpty(),
+                    "Precondition: the content parses when the size limit is not exceeded");
+
+            // Given a parser whose size limit the content exceeds
             ParserConfig config = ParserConfig.builder().maxPayloadSize(100).build();
             JwksParser smallParser = new JwksParser(config, securityEventCounter);
-
-            // Given oversized content
-            String largeContent = "{ \"keys\": [" + "x".repeat(200) + "] }";
+            assertTrue(largeContent.length() > 100, "Precondition: the content exceeds the size limit");
 
             // When parsing
             List<JwkKey> result = smallParser.parse(largeContent);

@@ -41,8 +41,11 @@ import java.io.IOException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -225,12 +228,40 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
                         null
                 ),
 
+                // An explicit null for a claim outside the identifier rule still reads as absent;
+                // the identifier claims are covered by shouldRefuseExplicitNullOnlyForIdentifierClaims
                 Arguments.of(
-                        ClaimName.SUBJECT,
-                        createJsonObjectWithNullClaim("sub"),
+                        ClaimName.NAME,
+                        createJsonObjectWithNullClaim("name"),
                         null
                 )
         );
+    }
+
+    @Test
+    @DisplayName("Should refuse an explicit null exactly for iss, sub, jti, client_id and azp")
+    void shouldRefuseExplicitNullOnlyForIdentifierClaims() {
+        Set<ClaimName> refused = Arrays.stream(ClaimName.values())
+                .filter(ClaimName::isExplicitNullRefused)
+                .collect(Collectors.toSet());
+
+        assertEquals(Set.of(ClaimName.ISSUER, ClaimName.SUBJECT, ClaimName.TOKEN_ID,
+                ClaimName.CLIENT_ID, ClaimName.AUTHORIZED_PARTY), refused);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"sub", "azp", "client_id"})
+    @DisplayName("Should reject an explicit null through the strict mapper's non-string path")
+    void shouldRejectExplicitNullForStrictlyMappedClaim(String claimName) {
+        MapRepresentation body = parseJson("{\"" + claimName + "\":null}");
+        ClaimMapper mapper = ClaimName.fromString(claimName).orElseThrow().getClaimMapper();
+
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
+                () -> mapper.map(body, claimName));
+
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType());
+        assertEquals("Malformed claim '" + claimName + "': expected a JSON string but got null",
+                exception.getMessage());
     }
 
     private static JsonObject createJsonObjectWithStringClaim(String claimName, String value) {
@@ -336,6 +367,13 @@ class ClaimNameTest implements ShouldHandleObjectContracts<ClaimName> {
     void shouldMapClientIdWithStrictStringMapper() {
         assertInstanceOf(StrictStringMapper.class, ClaimName.CLIENT_ID.getClaimMapper(),
                 "client_id must be mapped strictly, never stringified");
+    }
+
+    @Test
+    @DisplayName("Should map sub with the strict string mapper")
+    void shouldMapSubjectWithStrictStringMapper() {
+        assertInstanceOf(StrictStringMapper.class, ClaimName.SUBJECT.getClaimMapper(),
+                "sub must be mapped strictly, never stringified");
     }
 
     static Stream<Arguments> nonStringClientIdValues() {

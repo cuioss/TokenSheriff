@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.quarkus.producer;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.quarkus.servlet.HttpRequestResolver;
 import de.cuioss.sheriff.token.quarkus.servlet.HttpRequestResolverMock;
 import de.cuioss.sheriff.token.validation.TokenValidator;
@@ -24,15 +25,21 @@ import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
+import de.cuioss.sheriff.token.validation.test.JweTestTokenFactory;
+import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
+import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.easymock.Capture;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.security.KeyPair;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -65,6 +72,91 @@ class BearerTokenProducerTest {
         HttpRequestResolver servletResolver = servletResolverMock;
         producer = new BearerTokenProducer(tokenValidator, servletResolver,
                 () -> EmptyJsonWebToken.INSTANCE, "Authorization", "Bearer");
+    }
+
+    /**
+     * Pins the JWE size behaviour with a real, JWE-enabled {@link TokenValidator}: a valid JWE above
+     * the 8 KiB JWS limit and within the 32 KiB JWE limit yields a verified result, and a 5-part token
+     * above the JWE limit yields a counted {@code TOKEN_SIZE_EXCEEDED} parsing error. Before the JWE
+     * size alignment the first case escaped the producer as an {@link IllegalArgumentException}.
+     */
+    @Nested
+    @DisplayName("JWE size with a real validator")
+    class JweSizeWithRealValidator {
+
+        private static final int JWE_LIMIT = JweDecryptionConfig.DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE;
+
+        private KeyPair encryptionKeyPair;
+        private TestTokenHolder holder;
+        private TokenValidator realValidator;
+        private BearerTokenProducer realProducer;
+
+        @BeforeEach
+        void setUpRealValidator() {
+            encryptionKeyPair = JweTestTokenFactory.generateRsaKeyPair();
+            holder = TestTokenGenerators.accessTokens().next();
+            realValidator = TokenValidator.builder()
+                    .issuerConfig(holder.getIssuerConfig())
+                    .jweDecryptionConfig(JweDecryptionConfig.builder()
+                            .defaultDecryptionKey(encryptionKeyPair.getPrivate())
+                            .build())
+                    .build();
+            realProducer = new BearerTokenProducer(realValidator, servletResolverMock,
+                    () -> EmptyJsonWebToken.INSTANCE, "Authorization", "Bearer");
+        }
+
+        @AfterEach
+        void closeRealValidator() {
+            realValidator.close();
+        }
+
+        @Test
+        @DisplayName("A valid JWE of about 10 KiB yields a verified bearer token result")
+        void shouldVerifyJweAboveJwsLimit() {
+            for (int i = 0; i < 4; i++) {
+                holder.withClaim("pad" + i, ClaimValue.forPlainString("p".repeat(1000)));
+            }
+            String jwe = JweTestTokenFactory.encryptAsJwe(holder.getRawToken(),
+                    encryptionKeyPair.getPublic(), "RSA-OAEP", "A256GCM", null);
+            assertTrue(jwe.length() > ParserConfig.DEFAULT_MAX_TOKEN_SIZE && jwe.length() <= JWE_LIMIT,
+                    "Non-vacuity: the JWE must lie between the two limits, was " + jwe.length());
+            servletResolverMock.setBearerToken(jwe);
+
+            BearerTokenResult result = realProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+            assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus());
+            assertEquals("p".repeat(1000),
+                    result.getAccessTokenContent().orElseThrow().getClaims().get("pad0").getOriginalString());
+        }
+
+        @Test
+        @DisplayName("A 5-part token above the JWE limit yields a counted TOKEN_SIZE_EXCEEDED parsing error")
+        void shouldRejectJweAboveJweLimit() {
+            String tail = ".b.c.d.e";
+            servletResolverMock.setBearerToken("a".repeat(JWE_LIMIT + 1 - tail.length()) + tail);
+
+            BearerTokenResult result = realProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+            assertEquals(BearerTokenStatus.PARSING_ERROR, result.getStatus());
+            assertEquals(SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED, result.getErrorEventType().orElseThrow());
+            assertEquals(1, realValidator.getSecurityEventCounter()
+                    .getCount(SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED));
+        }
+    }
+
+    @Test
+    @DisplayName("Authorization 'Bearer ' with an empty token yields INVALID_REQUEST without the cookie fallback")
+    void emptyBearerTokenDoesNotFallBackToCookie() {
+        BearerTokenProducer cookieProducer = new BearerTokenProducer(tokenValidator, servletResolverMock,
+                () -> EmptyJsonWebToken.INSTANCE, "Cookie", "Bearer");
+        servletResolverMock.setHeader("Authorization", "Bearer ");
+        servletResolverMock.setHeader("Cookie", "Bearer=eyJhbGciOiJSUzI1NiJ9.e30.c2ln");
+        replay(tokenValidator);
+
+        BearerTokenResult result = cookieProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
+
+        assertEquals(BearerTokenStatus.INVALID_REQUEST, result.getStatus());
+        verify(tokenValidator);
     }
 
     @Test

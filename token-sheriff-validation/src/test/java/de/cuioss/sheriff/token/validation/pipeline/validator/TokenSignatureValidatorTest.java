@@ -21,6 +21,8 @@ import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.sheriff.token.validation.TokenType;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
+import de.cuioss.sheriff.token.validation.json.JwtHeader;
+import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoaderFactory;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
@@ -35,6 +37,7 @@ import de.cuioss.sheriff.token.validation.test.generator.ClaimControlParameter;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.jsonwebtoken.Jwts;
 import lombok.NonNull;
@@ -46,10 +49,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.Date;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -170,6 +170,53 @@ class TokenSignatureValidatorTest {
 
         // Verify security event was recorded
         assertEquals(initialCount + 1, securityEventCounter.getCount(SecurityEventCounter.EventType.KEY_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("Should log a forged unknown kid escaped and bounded (CWE-117)")
+    void shouldLogForgedKidSanitised() {
+        var header = new JwtHeader("RS256", null, "evil\r\nWARN forged" + "k".repeat(70), null, null, null, null,
+                null, null, null);
+        DecodedJwt decodedJwt = new DecodedJwt(header, new MapRepresentation(Map.of()), null,
+                new String[]{"", "", ""}, "");
+        JwksLoader jwksLoader = JwksLoaderFactory.createInMemoryLoader(InMemoryJWKSFactory.createDefaultJwks());
+        jwksLoader.initJWKSLoader(securityEventCounter);
+        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter,
+                new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
+
+        assertThrows(TokenValidationException.class, () -> validator.validateSignature(decodedJwt));
+
+        var records = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN,
+                JWTValidationLogMessages.WARN.KEY_NOT_FOUND.resolveIdentifierString());
+        assertEquals(1, records.size());
+        String message = records.getFirst().getMessage();
+        assertFalse(message.contains("\r") || message.contains("\n"), "no line break: " + message);
+        assertTrue(message.contains("evil??WARN forged"), "the diagnostic must stay, escaped: " + message);
+        assertFalse(message.contains("k".repeat(70)), "the kid must be cut at the bound: " + message);
+    }
+
+    @Test
+    @DisplayName("Should log an undecodable signature without the raw exception object (CWE-117)")
+    void shouldLogSignatureDecodeFailureWithoutExceptionObject() {
+        var header = new JwtHeader("RS256", null, InMemoryJWKSFactory.DEFAULT_KEY_ID, null, null, null, null,
+                null, null, null);
+        DecodedJwt decodedJwt = new DecodedJwt(header, new MapRepresentation(Map.of()), "!!",
+                new String[]{"e30", "e30", "!!"}, "");
+        JwksLoader jwksLoader = JwksLoaderFactory.createInMemoryLoader(InMemoryJWKSFactory.createDefaultJwks());
+        jwksLoader.initJWKSLoader(securityEventCounter);
+        TokenSignatureValidator validator = new TokenSignatureValidator(jwksLoader, securityEventCounter,
+                new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
+
+        var exception = assertThrows(TokenValidationException.class, () -> validator.validateSignature(decodedJwt));
+        assertEquals(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED, exception.getEventType());
+
+        var records = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN,
+                JWTValidationLogMessages.ERROR.SIGNATURE_VALIDATION_FAILED.resolveIdentifierString());
+        assertEquals(1, records.size());
+        assertNull(records.getFirst().getThrown(),
+                "no exception object whose message may quote the token input");
+        assertTrue(records.getFirst().getMessage().contains("Failed to decode signature"),
+                "the diagnostic must stay: " + records.getFirst().getMessage());
     }
 
     @Test

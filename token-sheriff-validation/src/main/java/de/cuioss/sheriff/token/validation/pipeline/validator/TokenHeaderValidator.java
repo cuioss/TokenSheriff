@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.pipeline.validator;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
@@ -47,6 +48,9 @@ import de.cuioss.tools.logging.CuiLogger;
 public class TokenHeaderValidator {
 
     private static final CuiLogger LOGGER = new CuiLogger(TokenHeaderValidator.class);
+
+    /** Upper bound for the length of a token-header value rendered into a log line. */
+    private static final int MAX_LOGGED_VALUE_LENGTH = 64;
 
     private final IssuerConfig issuerConfig;
     /**
@@ -139,7 +143,9 @@ public class TokenHeaderValidator {
         }
 
         if (!issuerConfig.getAlgorithmPreferences().isSupported(algorithm.get())) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.UNSUPPORTED_ALGORITHM, algorithm.get());
+            // The alg comes from the untrusted token header: escaped and bounded before it is logged (CWE-117)
+            LOGGER.warn(JWTValidationLogMessages.WARN.UNSUPPORTED_ALGORITHM,
+                    ErrorTextSanitizer.sanitize(algorithm.get(), '?', MAX_LOGGED_VALUE_LENGTH, "..."));
             securityEventCounter.increment(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM,
@@ -147,7 +153,8 @@ public class TokenHeaderValidator {
             );
         }
 
-        LOGGER.debug("Algorithm is valid: %s", algorithm.get());
+        LOGGER.debug("Algorithm is valid: %s",
+                ErrorTextSanitizer.sanitize(algorithm.get(), '?', MAX_LOGGED_VALUE_LENGTH, "..."));
     }
 
     /**
@@ -186,7 +193,7 @@ public class TokenHeaderValidator {
                     "Missing required key ID (kid) claim in token header. " + headerInfo
             );
         }
-        LOGGER.debug("Key ID is valid: %s", kid.get());
+        LOGGER.debug("Key ID is valid: %s", ErrorTextSanitizer.sanitize(kid.get(), '?', MAX_LOGGED_VALUE_LENGTH, "..."));
     }
 
     /**
@@ -212,7 +219,9 @@ public class TokenHeaderValidator {
         var actualType = decodedJwt.header().getTyp();
         if (actualType.isEmpty() || !expectedType.equalsIgnoreCase(actualType.get())) {
             String actual = actualType.orElse("(missing)");
-            LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_TYPE_MISMATCH, actual, expectedType);
+            // The typ comes from the untrusted token header: escaped and bounded before it is logged (CWE-117)
+            LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_TYPE_MISMATCH,
+                    ErrorTextSanitizer.sanitize(actual, '?', MAX_LOGGED_VALUE_LENGTH, "..."), expectedType);
             securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_TYPE_MISMATCH);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.TOKEN_TYPE_MISMATCH,

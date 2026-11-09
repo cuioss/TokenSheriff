@@ -173,9 +173,12 @@ public final class JwtPropertyKeys {
          * Signature algorithm preferences (comma-separated).
          * Template: "sheriff.token.issuers.%s.algorithm-preferences"
          * <p>
-         * This configuration controls which signature algorithms are preferred and allowed
-         * during token validation. It can be used to enforce security policies, such as
-         * restricting validation to an explicit set of algorithms.
+         * This is one list: the signature algorithms accepted during token validation. Acceptance is by
+         * membership only; the order of the list does not influence which algorithm a token may use.
+         * Absent, it defaults to every supported JWS algorithm. A token whose algorithm is not in the
+         * list is rejected. Independently of the list, the fixed rejected set
+         * ({@code HS256}, {@code HS384}, {@code HS512} and {@code none}) is always refused,
+         * and naming one of those algorithms here fails at startup.
          * </p>
          *
          * @see de.cuioss.sheriff.token.validation.IssuerConfig
@@ -421,6 +424,36 @@ public final class JwtPropertyKeys {
          * @see de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig
          */
         public static final String REFRESH_INTERVAL_SECONDS = HTTP_BASE + "refresh-interval-seconds";
+
+        /**
+         * The opt-in maximum key staleness in seconds for HTTP-based JWKS loading.
+         * Template: "sheriff.token.issuers.%s.jwks.http.max-staleness-seconds"
+         * <p>
+         * Default: unset, which means off. Installed keys are then served while background refreshes
+         * keep failing, and the loader stays {@code OK}, as without this key.
+         * </p>
+         * <p>
+         * A set value is an upper bound on how long installed keys may go without a successful refresh.
+         * Once it is exceeded, the loader leaves {@code OK} until a refresh succeeds again, so the issuer
+         * stops resolving and its tokens are rejected (ADR-0017). The bound is checked only when a
+         * background refresh cycle fails, so it is not an immediate rejection deadline: tokens can still
+         * resolve after the configured duration until the next failed cycle (or while a slow refresh is
+         * still running). Choose a bound of at least several
+         * {@link #REFRESH_INTERVAL_SECONDS refresh intervals}, so a single failed cycle does not degrade
+         * the issuer.
+         * </p>
+         * <p>
+         * The value must be a positive whole number of seconds. An unparseable or non-positive value fails
+         * startup, and so does a value combined with a refresh interval of {@code 0}.
+         * </p>
+         * <p>
+         * <strong>Only applicable</strong> for {@link #JWKS_URL} and {@link #WELL_KNOWN_URL}: a value on an
+         * issuer without HTTP JWKS loading fails startup instead of being ignored (ADR-0026).
+         * </p>
+         *
+         * @see HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder#maxStaleness(java.time.Duration)
+         */
+        public static final String MAX_STALENESS_SECONDS = HTTP_BASE + "max-staleness-seconds";
 
         /**
          * The connection timeout in seconds for HTTP requests.
@@ -932,10 +965,13 @@ public final class JwtPropertyKeys {
         public static final String CONTENT_ENCRYPTION_ALGORITHMS = BASE + ".content-encryption-algorithms";
 
         /**
-         * Maximum size of encrypted JWE tokens in bytes.
+         * Maximum size in bytes of a 5-part compact JWE.
          * Property: "sheriff.token.jwe.max-encrypted-token-size"
          * <p>
-         * Default: 32768 (32 KB)
+         * Default and upper bound: 32768 (32 KiB); a larger value fails at startup. This is the
+         * effective limit for a JWE: both the token string check and the parser apply it, so a JWE
+         * up to this size is accepted. A 3-part JWS, and the inner JWS after decryption, stay bound
+         * by the parser's {@code maxTokenSize} (8 KiB by default).
          */
         public static final String MAX_ENCRYPTED_TOKEN_SIZE = BASE + ".max-encrypted-token-size";
     }

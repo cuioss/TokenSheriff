@@ -20,6 +20,7 @@ import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
 import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.claim.mapper.ClaimMapper;
+import de.cuioss.sheriff.token.validation.domain.claim.mapper.StrictStringMapper;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
@@ -53,6 +54,10 @@ import java.util.Optional;
  * @author Oliver Wolff
  */
 public class TokenBuilder {
+
+    // Raises the typed non-string rejection for an identifier claim carrying an explicit JSON null, and
+    // for a subject whose raw JSON type is not a string, whatever mapper the issuer configures for it
+    private static final ClaimMapper STRICT_STRING_GUARD = new StrictStringMapper();
 
     // Combined mapper lookup to avoid runtime checks
     private final Map<String, ClaimMapper> allMappers;
@@ -98,6 +103,8 @@ public class TokenBuilder {
      */
     public Optional<AccessTokenContent> createAccessToken(DecodedJwt decodedJwt) {
         MapRepresentation body = decodedJwt.body();
+        // A body of only explicit nulls is empty, so the refusal runs before the empty-body return
+        refuseExplicitNulls(body);
         // Design Decision: Optional.empty() is the correct return for empty body.
         // Caller (AccessTokenValidationPipeline) handles this case explicitly.
         if (body.isEmpty()) {
@@ -118,6 +125,7 @@ public class TokenBuilder {
      */
     public Optional<IdTokenContent> createIdToken(DecodedJwt decodedJwt) {
         MapRepresentation body = decodedJwt.body();
+        refuseExplicitNulls(body);
         if (body.isEmpty()) {
             return Optional.empty();
         }
@@ -127,6 +135,32 @@ public class TokenBuilder {
         return Optional.of(new IdTokenContent(claims, decodedJwt.rawToken()));
     }
 
+
+    /**
+     * Refuses the explicit JSON nulls a token body carries, instead of reading them as absent claims.
+     * <p>
+     * An explicit null for an identifier claim ({@link ClaimName#isExplicitNullRefused()}) is routed
+     * through the strict string mapper whatever mapper the claim is configured with. An explicit null
+     * for any other claim is routed through the mapper configured for it, so a strict mapper can refuse
+     * it; the mapper's result is discarded, because an explicit null stays an absent claim for every
+     * mapper that does not refuse it. Either way a refusal is typed and counted like any other
+     * malformed claim.
+     *
+     * @param mapRepresentation the claims of the token body
+     * @throws TokenValidationException if a mapper refuses an explicit null
+     */
+    private void refuseExplicitNulls(MapRepresentation mapRepresentation) {
+        for (String key : mapRepresentation.explicitNullKeys()) {
+            if (ClaimName.fromString(key).filter(ClaimName::isExplicitNullRefused).isPresent()) {
+                mapClaim(STRICT_STRING_GUARD, mapRepresentation, key);
+                continue;
+            }
+            ClaimMapper mapper = allMappers.get(key);
+            if (mapper != null) {
+                mapClaim(mapper, mapRepresentation, key);
+            }
+        }
+    }
 
     /**
      * Extracts claims from a MapRepresentation using proper claim mappers.
@@ -142,6 +176,11 @@ public class TokenBuilder {
             ClaimMapper mapper = allMappers.get(key);
 
             if (mapper != null) {
+                if (ClaimName.SUBJECT.getName().equals(key)) {
+                    // The raw JSON type of sub is checked before a custom mapper replaces the strict one:
+                    // IdentityMapper would otherwise stringify a numeric sub into a valid subject
+                    mapClaim(STRICT_STRING_GUARD, mapRepresentation, key);
+                }
                 ClaimValue claimValue = mapClaim(mapper, mapRepresentation, key);
                 if (claimValue != null) {
                     claims.put(key, claimValue);

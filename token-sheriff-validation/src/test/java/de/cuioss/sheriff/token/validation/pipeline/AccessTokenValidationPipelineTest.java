@@ -64,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class AccessTokenValidationPipelineTest {
 
     /**
-     * Upper bound for waiting on a time-policy boundary to pass; the boundaries are a few seconds out.
+     * Upper bound for waiting on a time-policy boundary to pass; the boundaries are at most eight seconds out.
      */
     private static final Duration BOUNDARY_WAIT = Duration.ofSeconds(10);
 
@@ -158,6 +158,62 @@ class AccessTokenValidationPipelineTest {
                     "The cache-hit rejection must match the uncached rejection");
             assertEquals(1, uncachedValidator.getSecurityEventCounter()
                     .getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED));
+        }
+    }
+
+    @Test
+    @SuppressWarnings("java:S5778")
+    // AccessTokenRequest.of(rawToken) is a pure factory call that never throws
+    @DisplayName("Should extend the maximum token age by the issuer's non-zero clock skew on a cache hit (V-2, V-9)")
+    void shouldApplyNonZeroSkewToMaxTokenAgeOnCacheHit() {
+        int maxTokenAgeSeconds = 3;
+        int clockSkewSeconds = 3;
+        TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
+        // exp far in the future: only the age check can reject the token
+        OffsetDateTime issuedAt = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(1);
+        withTimeClaim(tokenHolder, ClaimName.ISSUED_AT, issuedAt);
+        withTimeClaim(tokenHolder, ClaimName.EXPIRATION, issuedAt.plusHours(1));
+        String rawToken = tokenHolder.getRawToken();
+        String issuer = tokenHolder.getIssuer();
+
+        try (TokenValidator cachingValidator = TokenValidator.builder()
+                     .issuerConfig(issuerConfig(tokenHolder, issuer, clockSkewSeconds, maxTokenAgeSeconds))
+                     .cacheConfig(AccessTokenCacheConfig.defaultConfig())
+                     .build()) {
+
+            // First validation: cache miss — the token is within its age limit and gets cached.
+            assertNotNull(cachingValidator.createAccessToken(AccessTokenRequest.of(rawToken)),
+                    "First validation should succeed and prime the cache");
+
+            // Past maxTokenAge, but within maxTokenAge + skew: the skew must still admit the token.
+            awaitPast(issuedAt.plusSeconds(maxTokenAgeSeconds + 1L));
+            assertNotNull(cachingValidator.createAccessToken(AccessTokenRequest.of(rawToken)),
+                    "A cached token older than maxTokenAge but within maxTokenAge + clock skew must be served");
+            SecurityEventCounter cachingCounter = cachingValidator.getSecurityEventCounter();
+            assertEquals(1, cachingCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_CACHE_HIT),
+                    "The skew-admitted second validation must be a cache hit");
+            assertEquals(0, cachingCounter.getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED),
+                    "The skew must keep the cache hit from being rejected as too old");
+
+            // Past maxTokenAge + skew: the issuer policy rejects the cached token.
+            awaitPast(issuedAt.plusSeconds(maxTokenAgeSeconds + clockSkewSeconds + 1L));
+            var cachedRejection = assertThrows(TokenValidationException.class,
+                    () -> cachingValidator.createAccessToken(AccessTokenRequest.of(rawToken)),
+                    "A cached token past maxTokenAge + clock skew must be rejected");
+            assertEquals(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED, cachedRejection.getEventType());
+            assertEquals(1, cachingCounter.getCount(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED),
+                    "The cache-hit rejection must be counted exactly once");
+        }
+
+        // The uncached pipeline rejects the same token at this point under the same event type.
+        try (TokenValidator uncachedValidator = TokenValidator.builder()
+                     .issuerConfig(issuerConfig(tokenHolder, issuer, clockSkewSeconds, maxTokenAgeSeconds))
+                     .cacheConfig(AccessTokenCacheConfig.disabled())
+                     .build()) {
+            var uncachedRejection = assertThrows(TokenValidationException.class,
+                    () -> uncachedValidator.createAccessToken(AccessTokenRequest.of(rawToken)));
+            assertEquals(SecurityEventCounter.EventType.TOKEN_AGE_EXCEEDED, uncachedRejection.getEventType(),
+                    "The cache-hit rejection must match the uncached rejection");
         }
     }
 

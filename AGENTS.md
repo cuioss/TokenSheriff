@@ -121,6 +121,15 @@ This project uses CUI logging standards with Java Util Logging:
 - **Coverage check**: the SonarCloud new-code quality gate in CI is the coverage authority; `./mvnw clean verify -Pcoverage` is an opt-in local diagnostic for the module-wide bundle rule, not a merge gate; the refresh-path per-class gate needs no profile flag and already runs under `./mvnw clean verify`.
 - **Signal integrity**: the rules for proving a check discriminates before trusting its verdict — coverage-gate negative controls, measuring from `clean`, no-verdict versus failing-verdict, and asserting identity rather than a proxy property — are stated once in `doc/client/specification/test-strategy.adoc` § Signal integrity, and that section applies to every module in this repository.
 
+### Test Class Size
+- **Budget**: a test class should stay within 400 lines.
+- **Split rule**: a test class of **more than 1000 lines** must be split by topic into sibling classes in the same
+  package (`{Original}{Topic}Test`, plus at most one package-private `{Original}Support` fixture for shared setup).
+  The split is a pure move: test methods move verbatim, no assertion, input or expected value changes, and no test is
+  added, removed or renamed, so the executed test count is identical before and after. Each resulting class stays
+  under 1000 lines and aims at the 400-line budget where the topic grouping allows.
+- The threshold is strictly *more than* 1000 lines: a class of exactly 1000 lines is within the rule and is not split.
+
 ### CUI Test Generator
 This project has CUI Test Generator dependencies available for test data generation:
 - Provides type-safe, consistent test data generation
@@ -285,12 +294,14 @@ correct, and only when the suppression is accompanied by a comment recording the
 The demonstration is required: this sanction is for proven false positives, never for silencing an
 inconvenient finding.
 
-**Worked instance.** `BearerTokenProducer` calls
+**Worked instance (historical).** `BearerTokenProducer` once called
 `LOGGER.warn(e, BEARER_TOKEN_VALIDATION_FAILED, e.getMessage(), e.getEventType())`. The recipe
-mis-fires on the `warn(Throwable, LogRecord, Object...)` overload, mistaking the leading
+mis-fired on the `warn(Throwable, LogRecord, Object...)` overload, mistaking the leading
 `Throwable` for the format argument; the `LogRecord` template carries exactly two matching `%s`
-placeholders and the call is correct. The remedy was a class-level
-`// cui-rewrite:disable CuiLogRecordPatternRecipe` plus that explanation.
+placeholders and the call was correct. The remedy was a class-level
+`// cui-rewrite:disable CuiLogRecordPatternRecipe` plus that explanation. The call has since been
+replaced by one that logs the sanitised message without the exception object, and the suppression was
+removed with it; the instance stays here as the model for a demonstrated mis-fire.
 
 **Corollary: never contort a correct logging call to satisfy a buggy recipe.**
 

@@ -23,6 +23,7 @@ import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -261,6 +262,27 @@ class JWKSKeyLoaderTest {
                             "The duplicate should be counted exactly once"));
             LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                     WARN.DUPLICATE_JWKS_KID.resolveIdentifierString());
+        }
+
+        @Test
+        @DisplayName("Should log a duplicate remote key id escaped and bounded (CWE-117)")
+        void shouldLogDuplicateKeyIdSanitised() {
+            // JSON escapes: the parsed kid carries a real CR/LF, followed by enough text to exceed the bound
+            String forgedKid = "evil\\r\\nWARN forged" + "k".repeat(70);
+            JWKSKeyLoader loader = initializedLoader(combineJwks(
+                    InMemoryJWKSFactory.createValidJwksWithKeyId(InMemoryKeyMaterialHandler.Algorithm.RS256, forgedKid),
+                    InMemoryJWKSFactory.createValidJwksWithKeyId(InMemoryKeyMaterialHandler.Algorithm.RS384, forgedKid)));
+
+            assertEquals(1, loader.getKeyIds().size(), "Non-vacuity: both keys must load under the one forged kid");
+            var records = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN,
+                    WARN.DUPLICATE_JWKS_KID.resolveIdentifierString());
+            assertEquals(1, records.size(), "Exactly one duplicate warning");
+            String message = records.getFirst().getMessage();
+            assertFalse(message.contains("\r") || message.contains("\n"),
+                    "The remote kid must not break the log line: " + message);
+            assertTrue(message.contains("evil??WARN forged"), "The diagnostic must stay, escaped: " + message);
+            assertTrue(message.contains("..."), "The kid must be bounded: " + message);
+            assertFalse(message.contains("k".repeat(70)), "The kid must be cut at the bound: " + message);
         }
 
         @Test

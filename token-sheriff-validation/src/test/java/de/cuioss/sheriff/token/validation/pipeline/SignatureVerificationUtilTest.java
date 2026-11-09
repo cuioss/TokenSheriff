@@ -24,11 +24,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.Serial;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
+import java.security.spec.ECParameterSpec;
+import java.security.spec.ECPoint;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -145,6 +148,18 @@ class SignatureVerificationUtilTest {
             assertThrows(InvalidKeyException.class, () -> verify(rsaKey, Algorithm.ES256, signature));
         }
 
+        @Test
+        @DisplayName("Should reject an EC key without domain parameters with SignatureException")
+        void shouldRejectEcKeyWithoutDomainParameters() {
+            ECPublicKey real = (ECPublicKey) InMemoryKeyMaterialHandler.getDefaultPublicKey(Algorithm.ES256);
+            ECPublicKey withoutParams = new ParameterlessEcPublicKey(real);
+            byte[] signature = concat(Algorithm.ES256, BigInteger.ONE, BigInteger.ONE);
+
+            var ex = assertThrows(SignatureException.class, () -> verify(withoutParams, Algorithm.ES256, signature));
+            assertEquals("Invalid EC public key: missing domain parameters", ex.getMessage(),
+                    "The range check must refuse a key whose getParams() is null before reading the curve order");
+        }
+
         @ParameterizedTest(name = "{0}: genuine signature verifies")
         @EnumSource(value = Algorithm.class, names = {"ES256", "ES384", "ES512"})
         @DisplayName("Should verify a genuine ECDSA signature as valid")
@@ -216,6 +231,42 @@ class SignatureVerificationUtilTest {
         copyUnsigned(r, result, 0, length);
         copyUnsigned(s, result, length, length);
         return result;
+    }
+
+    /**
+     * An {@link ECPublicKey} whose {@link #getParams()} answers {@code null}, as a provider-specific or
+     * hand-built key may. Every other accessor delegates to a real key so only the missing domain
+     * parameters differ.
+     */
+    private record ParameterlessEcPublicKey(ECPublicKey delegate) implements ECPublicKey {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public ECPoint getW() {
+            return delegate.getW();
+        }
+
+        @Override
+        public ECParameterSpec getParams() {
+            return null;
+        }
+
+        @Override
+        public String getAlgorithm() {
+            return delegate.getAlgorithm();
+        }
+
+        @Override
+        public String getFormat() {
+            return delegate.getFormat();
+        }
+
+        @Override
+        public byte[] getEncoded() {
+            return delegate.getEncoded();
+        }
     }
 
     private static void copyUnsigned(BigInteger value, byte[] target, int offset, int length) {

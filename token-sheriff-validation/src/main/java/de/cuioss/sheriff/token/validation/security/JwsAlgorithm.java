@@ -22,9 +22,9 @@ import java.util.Optional;
 /**
  * The JWS signing algorithms this library accepts, defined once.
  * <p>
- * <strong>Declaration order is the security preference order</strong> — most preferred first — and
- * {@link SignatureAlgorithmPreferences} reads it directly as its default preferred list. Reordering
- * the constants reorders that list; adding a constant adds the algorithm to it.
+ * {@link SignatureAlgorithmPreferences} reads the constants in declaration order as its default list
+ * of supported algorithms. The order is informational only, since acceptance is by membership;
+ * adding a constant adds the algorithm to that list.
  * <p>
  * Each constant carries what a consumer needs to act on the algorithm without re-deriving it: the
  * JWA {@code alg} name, the JWK key type ({@code kty}) the algorithm requires, the message digest

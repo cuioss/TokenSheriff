@@ -48,11 +48,16 @@ import static org.junit.jupiter.api.Assertions.*;
  * The rejection is therefore asserted as {@code SIGNATURE_VALIDATION_FAILED} — the verifier rejecting
  * the degenerate signature — rather than {@code UNSUPPORTED_ALGORITHM}, which would mean the attack was
  * short-circuited against a mismatched (RSA) key before ever exercising the psychic-signature defense.
+ * Each row also asserts the range check's own message: a patched JDK rejects {@code (0, 0)} as well, so
+ * the event type alone stays green with the library's defense removed.
  */
 @EnableTestLogger
 @EnableGeneratorController
 @DisplayName("Tests for ECDSA Psychic Signature Attack Protection")
 class PsychicSignatureAttackTest {
+
+    /** The message the library's own range check (H3) raises; a provider-side rejection never carries it. */
+    private static final String RANGE_CHECK_SIGNAL = "ECDSA signature component out of range";
 
     @Test
     @DisplayName("Should reject an ES256 all-zero signature at the verifier with SIGNATURE_VALIDATION_FAILED")
@@ -102,14 +107,21 @@ class PsychicSignatureAttackTest {
             String tamperedToken = parts[0] + "." + parts[1] + "." + zeroSignatureBase64;
             AccessTokenRequest request = AccessTokenRequest.of(tamperedToken);
 
-            assertThrows(TokenValidationException.class, () -> tokenValidator.createAccessToken(request));
+            var rejection = assertThrows(TokenValidationException.class,
+                    () -> tokenValidator.createAccessToken(request));
 
             SecurityEventCounter counter = tokenValidator.getSecurityEventCounter();
             assertAll("Psychic signature must be rejected by the signature verifier",
                     () -> assertEquals(1, counter.getCount(SecurityEventCounter.EventType.SIGNATURE_VALIDATION_FAILED),
                             "All-zero ECDSA signature must be rejected with SIGNATURE_VALIDATION_FAILED"),
                     () -> assertEquals(0, counter.getCount(SecurityEventCounter.EventType.UNSUPPORTED_ALGORITHM),
-                            "Attack must reach the verifier, not be short-circuited as UNSUPPORTED_ALGORITHM"));
+                            "Attack must reach the verifier, not be short-circuited as UNSUPPORTED_ALGORITHM"),
+                    // A patched JDK also rejects (0, 0), so the event type alone would stay green with the
+                    // library's own defense removed (observed in a scratch build). The message pins the
+                    // explicit range check as the component that rejected the signature.
+                    () -> assertTrue(rejection.getMessage().contains(RANGE_CHECK_SIGNAL),
+                            "The rejection must come from the explicit ECDSA range check (H3), not only from"
+                                    + " the JCA provider: " + rejection.getMessage()));
         }
     }
 }

@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation.security;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
 import de.cuioss.tools.logging.CuiLogger;
 import lombok.Getter;
@@ -40,8 +41,12 @@ public class SignatureAlgorithmPreferences {
 
     private static final CuiLogger LOGGER = new CuiLogger(SignatureAlgorithmPreferences.class);
 
+    /** Upper bound for the length of an algorithm name rendered into a log line. */
+    private static final int MAX_LOGGED_ALGORITHM_LENGTH = 64;
+
     /**
-     * List of supported signature algorithms in order of preference (most preferred first).
+     * List of supported signature algorithms. Acceptance is by membership only; the order does not
+     * influence which algorithm a token may use.
      */
     @Getter
     private final List<String> preferredAlgorithms;
@@ -56,7 +61,7 @@ public class SignatureAlgorithmPreferences {
     /**
      * Constructor that allows specifying custom preferred algorithms.
      *
-     * @param preferredAlgorithms the list of preferred algorithms in order of preference
+     * @param preferredAlgorithms the list of accepted algorithms; acceptance is by membership only
      */
     public SignatureAlgorithmPreferences(List<String> preferredAlgorithms) {
         for (String alg : preferredAlgorithms) {
@@ -69,11 +74,11 @@ public class SignatureAlgorithmPreferences {
     }
 
     /**
-     * Gets the default list of preferred signature algorithms in order of preference.
+     * Gets the default list of supported signature algorithms.
      * <p>
-     * The list is the {@link JwsAlgorithm} catalog in its declared order, which is the security
-     * preference order (most preferred first). Restating the names here would be a second copy of
-     * that order, free to drift from the catalog every consumer resolves against.
+     * The list is the {@link JwsAlgorithm} catalog in its declared order. The order is informational
+     * only, since acceptance is by membership. Restating the names here would be a second copy of
+     * the catalog, free to drift from what every consumer resolves against.
      *
      * @return the default list of preferred signature algorithms
      */
@@ -96,7 +101,10 @@ public class SignatureAlgorithmPreferences {
 
         // Check if the algorithm is explicitly rejected
         if (RejectedAlgorithms.VALUES.contains(algorithm)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.ALGORITHM_REJECTED, algorithm);
+            // The value equals a rejected-list constant here, yet it arrived from a token header, so it
+            // reaches the log line only through the sanitiser (CWE-117, ADR-0022)
+            LOGGER.warn(JWTValidationLogMessages.WARN.ALGORITHM_REJECTED,
+                    ErrorTextSanitizer.sanitize(algorithm, '?', MAX_LOGGED_ALGORITHM_LENGTH, "..."));
             return false;
         }
 

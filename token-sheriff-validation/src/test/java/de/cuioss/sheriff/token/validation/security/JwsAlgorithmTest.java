@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests for {@link JwsAlgorithm}, the single definition of the accepted JWS signing algorithms.
  * <p>
  * Every expectation here is written out literally. The catalog is what other classes derive from —
- * {@code SignatureAlgorithmPreferences} takes its default preferred list from the declared order and
+ * {@code SignatureAlgorithmPreferences} takes its default list of supported algorithms from the declared order and
  * {@code SignatureTemplateManager} builds its signature templates from the per-constant metadata —
  * so an expectation read back out of the catalog would agree with any change to it and pin nothing.
  *
@@ -49,7 +49,7 @@ class JwsAlgorithmTest {
     }
 
     /**
-     * The catalog as it must be declared, in the security preference order it must declare it in.
+     * The catalog as it must be declared, in the order it must declare it in.
      */
     private static final List<ExpectedAlgorithm> EXPECTED_ALGORITHMS = List.of(
             new ExpectedAlgorithm("ES512", "EC", "SHA-512", null, null, 0),
@@ -84,10 +84,10 @@ class JwsAlgorithmTest {
     }
 
     @Test
-    @DisplayName("Declare the algorithms in security preference order")
-    void shouldDeclareTheAlgorithmsInSecurityPreferenceOrder() {
+    @DisplayName("Declare the algorithms in the documented order")
+    void shouldDeclareTheAlgorithmsInTheDocumentedOrder() {
         assertEquals(expectedJwaNames(), declaredJwaNames(),
-                "Declaration order is the preference order SignatureAlgorithmPreferences publishes");
+                "Declaration order is the order SignatureAlgorithmPreferences publishes as its default list");
     }
 
     @ParameterizedTest

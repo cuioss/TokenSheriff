@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.integration.bearer;
 
 import de.cuioss.sheriff.token.integration.BaseIntegrationTest;
 import de.cuioss.sheriff.token.integration.TestRealm;
+import de.cuioss.sheriff.token.integration.endpoint.JwtValidationEndpoint;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -404,5 +405,57 @@ class BearerAuthSpecIT extends BaseIntegrationTest {
                 .get("/jwt/class-level/class-only")
                 .then()
                 .statusCode(401);
+    }
+
+    // === Class-Level @BearerAuth without @RegisterForReflection ===
+    // ClassLevelUnregisteredAuthEndpoint carries no @RegisterForReflection, so in the native run these
+    // cases show whether the class-level requirement is resolved without reflection metadata.
+
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("de.cuioss.sheriff.token.integration.TestProviders#bearerAuthProviders")
+    @Order(60)
+    @DisplayName("Class-level unregistered — satisfied class requirement passes and exposes the mapped azp")
+    void classLevelUnregisteredSatisfied(TestRealm realm) {
+        var tokenResponse = realm.obtainValidToken();
+        String authorizedParty = given()
+                .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
+                .when()
+                .get("/jwt/class-level-unregistered/satisfied")
+                .then()
+                .statusCode(200)
+                .body("valid", equalTo(true))
+                .body("message", equalTo("Class-level validation successful (unregistered)"))
+                .extract()
+                .path("data.azp");
+
+        assertNotNull(authorizedParty, "The response must carry the azp claim");
+        assertFalse(authorizedParty.isBlank(), "The azp claim must not be blank");
+        assertNotEquals(JwtValidationEndpoint.NOT_PRESENT, authorizedParty,
+                "The strictly mapped azp claim must be readable from the validated token");
+    }
+
+    @Test
+    @Order(61)
+    @DisplayName("Class-level unregistered — request without a token is refused, never allowed")
+    void classLevelUnregisteredRejectsMissingToken() {
+        given()
+                .when()
+                .get("/jwt/class-level-unregistered/satisfied")
+                .then()
+                .statusCode(401);
+    }
+
+    @ParameterizedTest(name = "[{0}]")
+    @MethodSource("de.cuioss.sheriff.token.integration.TestProviders#bearerAuthProviders")
+    @Order(62)
+    @DisplayName("Class-level unregistered — unsatisfied requirement is refused, never allowed")
+    void classLevelUnregisteredUnsatisfied(TestRealm realm) {
+        var tokenResponse = realm.obtainValidToken();
+        given()
+                .header(AUTHORIZATION, BEARER_PREFIX + tokenResponse.accessToken())
+                .when()
+                .get("/jwt/class-level-unregistered/unsatisfied")
+                .then()
+                .statusCode(403);
     }
 }

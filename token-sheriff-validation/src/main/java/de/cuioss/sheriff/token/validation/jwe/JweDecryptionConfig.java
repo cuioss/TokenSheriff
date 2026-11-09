@@ -45,8 +45,8 @@ import java.util.*;
 public class JweDecryptionConfig {
 
     /**
-     * Default maximum encrypted token size (32KB).
-     * JWE tokens are larger than JWS due to encryption overhead.
+     * Default and upper bound of the maximum encrypted token size (32 KiB).
+     * JWE tokens are larger than JWS due to encryption overhead. The builder refuses a larger value.
      */
     public static final int DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE = 32 * 1024;
 
@@ -58,6 +58,12 @@ public class JweDecryptionConfig {
     private final PrivateKey defaultDecryptionKey;
 
     private final JweAlgorithmPreferences algorithmPreferences;
+
+    /**
+     * Maximum size in bytes of a 5-part compact JWE. This is the limit both the pre-pipeline token
+     * string check and the parser apply to a JWE; a 3-part JWS, and the inner JWS after decryption,
+     * stay bound by {@code ParserConfig.maxTokenSize}. At most {@value #DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE}.
+     */
     private final int maxEncryptedTokenSize;
     private final boolean compressionEnabled;
 
@@ -150,6 +156,15 @@ public class JweDecryptionConfig {
             return this;
         }
 
+        /**
+         * Sets the maximum size in bytes of a 5-part compact JWE, applied by the token string check and
+         * by the parser alike.
+         *
+         * @param maxEncryptedTokenSize the limit; positive and at most
+         *                              {@value JweDecryptionConfig#DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE}
+         *                              (checked by {@link #build()})
+         * @return this builder
+         */
         public JweDecryptionConfigBuilder maxEncryptedTokenSize(int maxEncryptedTokenSize) {
             this.maxEncryptedTokenSize = maxEncryptedTokenSize;
             return this;
@@ -164,7 +179,9 @@ public class JweDecryptionConfig {
          * Builds the JweDecryptionConfig.
          *
          * @return a new JweDecryptionConfig instance
-         * @throws IllegalArgumentException if no decryption keys are configured
+         * @throws IllegalArgumentException if no decryption keys are configured, or
+         *                                  {@code maxEncryptedTokenSize} is not positive or exceeds
+         *                                  {@value JweDecryptionConfig#DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE}
          */
         public JweDecryptionConfig build() {
             if (decryptionKeys.isEmpty() && defaultDecryptionKey == null) {
@@ -172,6 +189,10 @@ public class JweDecryptionConfig {
             }
             if (maxEncryptedTokenSize <= 0) {
                 throw new IllegalArgumentException("maxEncryptedTokenSize must be positive, got: " + maxEncryptedTokenSize);
+            }
+            if (maxEncryptedTokenSize > DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE) {
+                throw new IllegalArgumentException("maxEncryptedTokenSize must not exceed %d bytes, got: %d"
+                        .formatted(DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE, maxEncryptedTokenSize));
             }
             return new JweDecryptionConfig(decryptionKeys, defaultDecryptionKey, algorithmPreferences,
                     maxEncryptedTokenSize, compressionEnabled);

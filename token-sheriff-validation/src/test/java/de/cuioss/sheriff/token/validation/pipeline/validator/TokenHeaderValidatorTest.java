@@ -32,6 +32,7 @@ import de.cuioss.sheriff.token.validation.test.generator.ClaimControlParameter;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
+import de.cuioss.test.juli.TestLoggerFactory;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -198,6 +199,63 @@ class TokenHeaderValidatorTest {
 
             // Verify security event was recorded
             assertEquals(initialCount + 1, SECURITY_EVENT_COUNTER.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+        }
+    }
+
+    /**
+     * The alg and kid come from the untrusted token header; a forged value must not break the log line.
+     */
+    @Nested
+    @DisplayName("Remote header text in log records (CWE-117)")
+    class RemoteHeaderTextInLogRecords {
+
+        private static final String FORGED = "evil\r\nWARN forged";
+
+        private DecodedJwt headerOnly(String alg, String kid) {
+            var header = new JwtHeader(alg, null, kid, null, null, null, null, null, null, null);
+            return new DecodedJwt(header, new MapRepresentation(Map.of()), null, new String[]{"", "", ""}, "");
+        }
+
+        private TokenHeaderValidator defaultValidator() {
+            return createValidator(IssuerConfig.builder()
+                    .issuerIdentifier("test-issuer")
+                    .jwksContent(InMemoryJWKSFactory.createDefaultJwks())
+                    .audienceValidationDisabled(true)
+                    .build());
+        }
+
+        @Test
+        @DisplayName("Should log a forged unsupported alg escaped")
+        void shouldLogForgedAlgSanitised() {
+            DecodedJwt decodedJwt = headerOnly(FORGED, "key-1");
+            var request = AccessTokenRequest.of("test");
+            var validator = defaultValidator();
+
+            assertThrows(TokenValidationException.class, () -> validator.validate(decodedJwt, request));
+
+            var records = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.UNSUPPORTED_ALGORITHM.resolveIdentifierString());
+            assertEquals(1, records.size());
+            String message = records.getFirst().getMessage();
+            assertFalse(message.contains("\r") || message.contains("\n"), "no line break: " + message);
+            assertTrue(message.contains("evil??WARN forged"), "the diagnostic must stay, escaped: " + message);
+        }
+
+        @Test
+        @DisplayName("Should log a forged kid escaped and bounded")
+        void shouldLogForgedKidSanitised() {
+            TestLogLevel.DEBUG.addLogger(TokenHeaderValidator.class);
+            DecodedJwt decodedJwt = headerOnly("RS256", FORGED + "k".repeat(70));
+
+            assertDoesNotThrow(() -> defaultValidator().validate(decodedJwt, AccessTokenRequest.of("test")));
+
+            var records = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.DEBUG,
+                    "Key ID is valid");
+            assertEquals(1, records.size());
+            String message = records.getFirst().getMessage();
+            assertFalse(message.contains("\r") || message.contains("\n"), "no line break: " + message);
+            assertTrue(message.contains("evil??WARN forged"), "the diagnostic must stay, escaped: " + message);
+            assertFalse(message.contains("k".repeat(70)), "the kid must be cut at the bound: " + message);
         }
     }
 

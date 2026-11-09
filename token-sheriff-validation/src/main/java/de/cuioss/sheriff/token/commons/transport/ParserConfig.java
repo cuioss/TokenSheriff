@@ -32,10 +32,12 @@ import lombok.ToString;
  * The configuration provides multiple layers of protection against various attack vectors:
  * <ul>
  *   <li><strong>maxTokenSize</strong>: Limits the entire JWT token string before any processing.
- *       This prevents oversized tokens from consuming memory or processing time.</li>
+ *       This prevents oversized tokens from consuming memory or processing time. A 5-part JWE on an
+ *       issuer with JWE decryption configured is bound by the effective JWE limit instead.</li>
  *   <li><strong>maxPayloadSize</strong>: Limits each decoded JWT part (header, payload) after Base64 decoding.
  *       Since Base64 encoding increases size by ~33%, decoded parts are smaller than the original token.
- *       It also bounds JWKS content parsed by {@code JwksParser}, but not HTTP response bodies.</li>
+ *       It also bounds JWKS content parsed by {@code JwksParser}. It does not bound the JWKS and
+ *       discovery HTTP fetches; {@code maxHttpResponseSize} does.</li>
  *   <li><strong>maxHttpResponseSize</strong>: Limits the HTTP response body of the JWKS and well-known
  *       discovery fetches, enforced while the body streams and again after it is read. It applies to these
  *       HTTP responses only and is independent of {@code maxPayloadSize}.</li>
@@ -117,6 +119,10 @@ public final class ParserConfig {
      * Maximum size of a JWT token in bytes to prevent overflow attacks.
      * This limit is applied to the entire token string before any processing begins.
      * Protects against denial-of-service attacks via extremely large token strings.
+     * <p>
+     * A JWE uses the effective JWE limit instead: when JWE decryption is configured, a 5-part token is
+     * bound by {@code JweDecryptionConfig#getMaxEncryptedTokenSize()}, while the inner JWS it carries is
+     * still checked against this limit after decryption.
      */
     int maxTokenSize = DEFAULT_MAX_TOKEN_SIZE;
 
@@ -124,8 +130,8 @@ public final class ParserConfig {
      * Maximum size of decoded JSON payload in bytes.
      * This limit is applied to each Base64-decoded JWT part (header, payload).
      * Since Base64 encoding increases size by ~33%, decoded parts are smaller than the original token.
-     * It also bounds JWKS content parsed by {@code JwksParser}; HTTP response bodies are bounded by
-     * {@link #maxHttpResponseSize} instead.
+     * It also bounds JWKS content parsed by {@code JwksParser}. It is not the limit of the JWKS and
+     * discovery HTTP response bodies; those are bounded by {@link #maxHttpResponseSize}.
      */
     int maxPayloadSize = DEFAULT_MAX_PAYLOAD_SIZE;
 

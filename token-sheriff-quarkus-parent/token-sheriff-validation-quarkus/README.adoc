@@ -73,7 +73,8 @@ CDI producer for JWT token validators:
 * link:src/main/java/de/cuioss/sheriff/token/quarkus/producer/TokenValidatorProducer.java[TokenValidatorProducer]
 * Produces one application-scoped `TokenValidator` covering every enabled issuer
 * When the `sheriff.token.issuers.*` namespace yields at least one enabled issuer, the `TokenValidator` is built at startup, so an invalid issuer configuration fails application startup instead of the first request
-* An application with no enabled issuer under `sheriff.token.issuers.*` starts without building it; an application that supplies its own `TokenValidator` gets this only when it also configures no enabled issuer there, because the startup check looks at the enabled issuers alone
+* An application with no enabled issuer under `sheriff.token.issuers.*` starts without building it
+* Applications that bring their own `TokenValidator`: the startup check looks at the enabled issuers under `sheriff.token.issuers.*` alone. With none configured there, no `TokenValidator` is touched at startup. With at least one, the startup step resolves whichever bean answers the default-qualified `TokenValidator` injection and forces its creation; when the application's bean replaces the extension's producer, that is the application's bean, and it is created at startup rather than on first use
 
 ==== BearerTokenProducer
 CDI producer for bearer token validation:
@@ -193,6 +194,34 @@ sheriff.token.issuers.my-issuer.jwks.http.read-timeout-seconds=10
 # Algorithm preferences
 sheriff.token.issuers.my-issuer.algorithm-preferences=RS256,RS384,RS512
 ----
+
+=== Maximum Key Staleness (opt-in)
+
+`sheriff.token.issuers.<name>.jwks.http.max-staleness-seconds` bounds, in seconds, how long an issuer's
+installed keys may go without a successful refresh. It is off by default: unset, installed keys are served
+while background refreshes keep failing, and the issuer stays usable.
+
+When set, the issuer's JWKS loader leaves `OK` once the installed keys have gone longer than the bound
+without a successful refresh. The issuer then stops resolving and its tokens are rejected until a refresh
+succeeds again; no key is dropped, so recovery is immediate. The bound is checked only when a background
+refresh cycle fails, so it is not an immediate rejection deadline: tokens can still resolve after the
+configured duration until the next failed cycle (or while a slow refresh is still running). Choose a bound
+of at least several refresh intervals, so a single failed refresh does not take the issuer out.
+
+[source, properties]
+----
+# Leave OK after 1 hour without a successful refresh (refresh every 10 minutes)
+sheriff.token.issuers.my-issuer.jwks.http.refresh-interval-seconds=600
+sheriff.token.issuers.my-issuer.jwks.http.max-staleness-seconds=3600
+----
+
+The key applies only to issuers that load their JWKS over HTTP (`jwks.http.url` or
+`jwks.http.well-known-url`). Application startup fails for an unparseable or non-positive value, for a value
+combined with `jwks.http.refresh-interval-seconds=0`, and for a value on an issuer configured with
+`jwks.file-path` or `jwks.content`. See
+xref:../../doc/adr/0017-A_JWKS_loader_reports_OK_only_with_usable_keys_and_retries_only_transient_discovery_failures.adoc[ADR-0017]
+and
+xref:../../doc/adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_startup_instead_of_being_ignored.adoc[ADR-0026].
 
 == Best Practices
 

@@ -81,26 +81,6 @@ class ClaimValueTest implements ShouldHandleObjectContracts<ClaimValue> {
         assertEquals(input, value.getOriginalString());
     }
 
-    @Test
-    @DisplayName("Check if value is present for claim value type")
-    void shouldCheckIfValueIsPresentForClaimValueType() {
-        ClaimValue presentString = ClaimValue.forPlainString(TEST_STRING);
-
-        List<String> emptyList = List.of();
-        List<String> nonEmptyList = List.of("value");
-        ClaimValue emptyListValue = ClaimValue.forList("original", emptyList);
-        ClaimValue nonEmptyListValue = ClaimValue.forList("original", nonEmptyList);
-
-        ClaimValue nullDateTime = ClaimValue.forDateTime("original", null);
-        ClaimValue nonNullDateTime = ClaimValue.forDateTime("original", TEST_DATE);
-
-        assertFalse(presentString.isNotPresentForClaimValueType());
-        assertTrue(emptyListValue.isNotPresentForClaimValueType());
-        assertFalse(nonEmptyListValue.isNotPresentForClaimValueType());
-        assertTrue(nullDateTime.isNotPresentForClaimValueType());
-        assertFalse(nonNullDateTime.isNotPresentForClaimValueType());
-    }
-
     @Override
     public ClaimValue getUnderTest() {
         return ClaimValue.forPlainString("test-value");

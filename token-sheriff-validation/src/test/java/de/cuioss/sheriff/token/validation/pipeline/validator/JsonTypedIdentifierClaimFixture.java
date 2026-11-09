@@ -36,23 +36,23 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * Builds tokens whose {@code azp} or {@code client_id} claim carries a real JSON type, including the
- * non-string types (array, number, boolean, object), by parsing a JSON body with the production
- * DSL-JSON configuration and running it through {@link TokenBuilder}.
+ * Builds tokens whose {@code azp} or {@code client_id} identifier claim carries a real JSON type,
+ * including the non-string types (array, number, boolean, object), by parsing a JSON body with the
+ * production DSL-JSON configuration and running it through {@link TokenBuilder}.
  * <p>
  * Validator tests that construct {@link ClaimValue} instances directly cannot express the JSON type
  * of a claim; this fixture exercises the real mapping path.
  */
-final class JsonTypedAzpFixture {
+final class JsonTypedIdentifierClaimFixture {
 
     /** The client id the array and object cases carry inside their structure. */
     static final String EMBEDDED_CLIENT_ID = "client1";
 
-    private static final String RAW_TOKEN = "json-typed-azp-token";
+    private static final String RAW_TOKEN = "json-typed-identifier-claim-token";
 
     private static final String BODY_PREFIX = "{\"iss\":\"test-issuer\",\"sub\":\"test-subject\"";
 
-    private JsonTypedAzpFixture() {
+    private JsonTypedIdentifierClaimFixture() {
     }
 
     /**
@@ -61,7 +61,7 @@ final class JsonTypedAzpFixture {
      *
      * @return the array, number, boolean and object cases
      */
-    static Stream<Arguments> nonStringAzpValues() {
+    static Stream<Arguments> nonStringIdentifierValues() {
         return Stream.of(
                 Arguments.of("array", "[\"" + EMBEDDED_CLIENT_ID + "\"]"),
                 Arguments.of("number", String.valueOf(Generators.integers(1, 1_000_000).next())),

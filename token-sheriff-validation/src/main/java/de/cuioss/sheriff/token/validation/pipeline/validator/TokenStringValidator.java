@@ -33,7 +33,9 @@ import java.nio.charset.StandardCharsets;
  * <ul>
  *   <li>Null check</li>
  *   <li>Empty/blank check</li>
- *   <li>Maximum token size enforcement (from ParserConfig)</li>
+ *   <li>Maximum token size enforcement, selected by the token's shape: a 5-part compact JWE is
+ *       bound by the JWE decryption config's {@code maxEncryptedTokenSize}, every other token by
+ *       the parser's {@code maxTokenSize}</li>
  * </ul>
  * <p>
  * This validator ensures that token-type-specific pipelines can safely assume
@@ -49,22 +51,38 @@ public class TokenStringValidator {
 
     private static final CuiLogger LOGGER = new CuiLogger(TokenStringValidator.class);
 
-    private final int maxTokenSize;
+    /** A compact JWE has five parts, so four separators. */
+    private static final int JWE_SEPARATOR_COUNT = 4;
+
+    // Limit for a 5-part compact JWE: the JWE config's maxEncryptedTokenSize when JWE is configured
+    private final int maxJweTokenSize;
+    // Limit for every other token. With JWE configured it is the larger of the two limits: this
+    // pre-check is a coarse bound, and the exact bound of a JWS is the parser's maxTokenSize, which
+    // refuses an oversized JWS itself. A maxEncryptedTokenSize below maxTokenSize therefore never
+    // refuses a JWS that fits the JWS limit.
+    private final int maxOtherTokenSize;
     private final SecurityEventCounter securityEventCounter;
 
     /**
-     * Creates a new TokenStringValidator that uses the JWE max token size when JWE is configured.
+     * Creates a new TokenStringValidator that selects the size limit by token shape when JWE is
+     * configured.
      *
      * @param parserConfig the parser configuration
      * @param securityEventCounter the security event counter
-     * @param jweDecryptionConfig optional JWE config — uses its maxEncryptedTokenSize if present
+     * @param jweDecryptionConfig optional JWE config — its maxEncryptedTokenSize bounds a 5-part
+     *                            compact JWE if present
      */
     public TokenStringValidator(ParserConfig parserConfig,
             SecurityEventCounter securityEventCounter,
             @Nullable JweDecryptionConfig jweDecryptionConfig) {
-        this.maxTokenSize = jweDecryptionConfig != null
-                ? jweDecryptionConfig.getMaxEncryptedTokenSize()
-                : parserConfig.getMaxTokenSize();
+        int maxTokenSize = parserConfig.getMaxTokenSize();
+        if (jweDecryptionConfig != null) {
+            this.maxJweTokenSize = jweDecryptionConfig.getMaxEncryptedTokenSize();
+            this.maxOtherTokenSize = Math.max(maxTokenSize, this.maxJweTokenSize);
+        } else {
+            this.maxJweTokenSize = maxTokenSize;
+            this.maxOtherTokenSize = maxTokenSize;
+        }
         this.securityEventCounter = securityEventCounter;
     }
 
@@ -93,13 +111,24 @@ public class TokenStringValidator {
 
         // Check size limit (use byte length for accurate size measurement)
         int tokenByteLength = tokenString.getBytes(StandardCharsets.UTF_8).length;
-        if (tokenByteLength > maxTokenSize) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_SIZE_EXCEEDED, maxTokenSize);
+        int limit = isCompactJwe(tokenString) ? maxJweTokenSize : maxOtherTokenSize;
+        if (tokenByteLength > limit) {
+            LOGGER.warn(JWTValidationLogMessages.WARN.TOKEN_SIZE_EXCEEDED, limit);
             securityEventCounter.increment(SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED);
             throw new TokenValidationException(
                     SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED,
-                    "Token size %d exceeds maximum %d".formatted(tokenByteLength, maxTokenSize)
+                    "Token size %d exceeds maximum %d".formatted(tokenByteLength, limit)
             );
         }
+    }
+
+    private static boolean isCompactJwe(String tokenString) {
+        int separators = 0;
+        for (int i = 0; i < tokenString.length(); i++) {
+            if (tokenString.charAt(i) == '.') {
+                separators++;
+            }
+        }
+        return separators == JWE_SEPARATOR_COUNT;
     }
 }

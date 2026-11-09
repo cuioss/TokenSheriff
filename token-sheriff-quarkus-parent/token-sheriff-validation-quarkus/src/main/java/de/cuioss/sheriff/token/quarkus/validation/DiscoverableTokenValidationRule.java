@@ -51,8 +51,7 @@ import de.cuioss.sheriff.token.validation.pipeline.validator.TokenValidationRule
  * claim of the token by name and {@code null} for an absent one.
  * {@link de.cuioss.sheriff.token.validation.domain.claim.ClaimName#fromString(String)} resolves only
  * registered claims (its {@code Optional} is empty for {@code tenant_id}), so
- * {@code token.getClaimOption(ClaimName)} serves registered claims only. The rule shape is exercised
- * by {@code TokenValidationRuleTest}.
+ * {@code token.getClaimOption(ClaimName)} serves registered claims only.
  * </p>
  * <p>
  * Rules are immutable after startup. Runtime registration is not supported.

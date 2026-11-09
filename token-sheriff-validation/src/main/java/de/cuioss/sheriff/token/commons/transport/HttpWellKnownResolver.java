@@ -19,6 +19,7 @@ import de.cuioss.http.client.adapter.ETagAwareHttpAdapter;
 import de.cuioss.http.client.adapter.HttpAdapter;
 import de.cuioss.http.client.adapter.ResilientHttpAdapter;
 import de.cuioss.http.client.result.HttpResult;
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.tools.logging.CuiLogger;
@@ -64,6 +65,9 @@ import java.util.concurrent.atomic.AtomicReference;
 public class HttpWellKnownResolver implements LoadingStatusProvider {
 
     private static final CuiLogger LOGGER = new CuiLogger(HttpWellKnownResolver.class);
+
+    /** Upper bound for the length of a rejection message rendered into a log line. */
+    private static final int MAX_LOGGED_MESSAGE_LENGTH = 256;
 
     /**
      * Bounded time-to-live for a cached <em>successful</em> discovery result before it is
@@ -226,7 +230,11 @@ public class HttpWellKnownResolver implements LoadingStatusProvider {
         try {
             egressPolicy.check(discoveryUri);
         } catch (TransportException e) {
-            LOGGER.warn(e, TransportLogMessages.WARN.SSRF_EGRESS_BLOCKED_DISCOVERY, e.getMessage());
+            // The rejection message embeds the discovery URI and its resolved host: it is escaped and
+            // bounded, and the exception object, whose stack trace would print it raw, is not attached
+            // (CWE-117, ADR-0022)
+            LOGGER.warn(TransportLogMessages.WARN.SSRF_EGRESS_BLOCKED_DISCOVERY,
+                    ErrorTextSanitizer.sanitize(String.valueOf(e.getMessage()), '?', MAX_LOGGED_MESSAGE_LENGTH, "..."));
             // Do not cache failures (M2): clear any expired entry so the next call retries discovery.
             return failLoad(FailureReason.UNAVAILABLE);
         }

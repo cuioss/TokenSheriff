@@ -33,10 +33,11 @@ import java.lang.annotation.Target;
  * additionally allows the cookie named by
  * {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#COOKIE_NAME}
  * ({@code sheriff.token.token.cookie-name}, default {@code Bearer}) as a fallback: the Authorization
- * header is still tried first and the cookie is used only when the Authorization header carries no
- * {@code Bearer}-prefixed token. An Authorization header whose value is {@code "Bearer "} with an empty
- * (or blank) token counts as present: it does not fall back to the cookie and yields an
- * {@code INVALID_REQUEST} result.
+ * header is the primary source and is tried first, and the cookie is used only when the Authorization
+ * header carries no {@code "Bearer "}-prefixed value. An Authorization value that starts with
+ * {@code "Bearer "} but carries an empty or blank token counts as present: it does not fall back to the
+ * cookie and yields an {@code INVALID_REQUEST} result. A server or proxy may strip the trailing space of a
+ * bare {@code "Bearer "}; the remaining {@code "Bearer"} counts as no token.
  * <p>
  * This annotation allows specifying required scopes, roles, and groups that the bearer token
  * must contain for successful validation. The producer always returns a {@link de.cuioss.sheriff.token.quarkus.producer.BearerTokenResult}
@@ -106,8 +107,9 @@ import java.lang.annotation.Target;
  *       {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#HEADER} is {@code Cookie} and the
  *       Authorization header carries no {@code Bearer}-prefixed token, from the
  *       cookie named by {@link de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys.TOKEN#COOKIE_NAME};
- *       an Authorization value of {@code "Bearer "} with an empty token is treated as present and
- *       yields {@code INVALID_REQUEST} instead of falling back to the cookie</li>
+ *       an Authorization value starting with {@code "Bearer "} with an empty or blank token is treated
+ *       as present and yields {@code INVALID_REQUEST} instead of falling back to the cookie (a bare
+ *       {@code "Bearer"} whose trailing space was stripped counts as no token)</li>
  *   <li>Validates the JWT signature and claims using the configured TokenValidator</li>
  *   <li>Checks that all required scopes, roles, and groups are present</li>
  *   <li>Returns a BearerTokenResult with detailed status information</li>

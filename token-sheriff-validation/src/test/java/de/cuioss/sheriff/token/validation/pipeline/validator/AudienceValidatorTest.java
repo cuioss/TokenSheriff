@@ -287,7 +287,7 @@ class AudienceValidatorTest {
 
     static Stream<Arguments> nonStringAzpCases() {
         return Stream.of(TokenType.ACCESS_TOKEN, TokenType.ID_TOKEN)
-                .flatMap(tokenType -> JsonTypedAzpFixture.nonStringAzpValues()
+                .flatMap(tokenType -> JsonTypedIdentifierClaimFixture.nonStringIdentifierValues()
                         .map(azpCase -> Arguments.of(tokenType, azpCase.get()[0], azpCase.get()[1])));
     }
 
@@ -295,19 +295,27 @@ class AudienceValidatorTest {
     @MethodSource("nonStringAzpCases")
     @DisplayName("Should never satisfy the audience fallback with a non-string azp, even when its string form is expected")
     void shouldNeverSatisfyAudienceFallbackWithNonStringAzp(TokenType tokenType, String jsonType, String azpJson) {
-        MapRepresentation body = JsonTypedAzpFixture.bodyWithAzp(azpJson);
+        MapRepresentation body = JsonTypedIdentifierClaimFixture.bodyWithAzp(azpJson);
         AudienceValidator fallbackValidator = new AudienceValidator(
-                JsonTypedAzpFixture.idsMatchingStringifiedValue(body, ClaimName.AUTHORIZED_PARTY),
+                JsonTypedIdentifierClaimFixture.idsMatchingStringifiedValue(body, ClaimName.AUTHORIZED_PARTY),
                 securityEventCounter, false, true);
 
-        assertThrows(TokenValidationException.class,
+        TokenValidationException exception = assertThrows(TokenValidationException.class,
                 () -> buildAndValidate(fallbackValidator, tokenType, body),
                 tokenType + " with azp as " + jsonType + " must be rejected");
+
+        // The mapper rejects the claim at build, so the audience validator is never reached
+        assertEquals(SecurityEventCounter.EventType.MISSING_CLAIM, exception.getEventType(),
+                tokenType + " with azp as " + jsonType + ": " + exception.getMessage());
+        assertEquals(1, securityEventCounter.getCount(SecurityEventCounter.EventType.MISSING_CLAIM));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.AUDIENCE_MISMATCH));
+        assertEquals(0, securityEventCounter.getCount(SecurityEventCounter.EventType.ACCESS_TOKEN_AUDIENCE_MISSING));
     }
 
     private void buildAndValidate(AudienceValidator audienceValidator, TokenType tokenType,
             MapRepresentation body) {
-        audienceValidator.validateAudience(JsonTypedAzpFixture.buildToken(tokenType, body, securityEventCounter));
+        audienceValidator.validateAudience(
+                JsonTypedIdentifierClaimFixture.buildToken(tokenType, body, securityEventCounter));
     }
 
     private static TokenContent tokenWithEmptyAudience(TokenType tokenType, boolean azpPresent) {
