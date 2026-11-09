@@ -385,7 +385,8 @@ abstract class DpopProofValidatorSupport {
      * Builds a DPoP proof JWT using jjwt for proper signature format handling (EC/EdDSA).
      */
     @SuppressWarnings("unchecked")
-    <A extends SignatureAlgorithm> String buildDpopProofWithJjwt(
+    <A extends SignatureAlgorithm>
+    String buildDpopProofWithJjwt(
             PrivateKey privateKey, Map<String, Object> jwkMap,
             A sigAlgorithm, String accessToken, String htm, String htu) {
         return Jwts.builder()
