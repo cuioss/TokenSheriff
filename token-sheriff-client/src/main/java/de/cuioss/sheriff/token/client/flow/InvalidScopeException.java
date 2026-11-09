@@ -35,8 +35,10 @@ import java.util.Optional;
  * unparseable, absent, oversize or duplicate-member body, which is an unknown and never a match.
  * <p>
  * It is <strong>not</strong> a redemption and it says nothing about the presented grant: the server
- * judged the requested scope before it applied any grant, so a refresh token presented with the request
- * is untouched. Because the answer depends on the request rather than on network conditions, repeating
+ * judged the requested scope before it applied any grant, so no new token was issued and the client has
+ * no evidence that a refresh token presented with the request was rotated. The refusal does not show that
+ * the presented token is still valid server-side. Because the answer depends on the request rather than
+ * on network conditions, repeating
  * the same request will not change it. {@link RefreshFlow#classify(Throwable)} therefore classifies this
  * type as {@link RefreshFailureClassification.Kind#SCOPE_REFUSED}: the session is kept, and no retry is
  * owed.

@@ -110,8 +110,9 @@ import java.util.concurrent.locks.ReentrantLock;
  *       {@code 5xx} the server may already have rotated the token, and the next refresh is then
  *       refused.</li>
  *   <li>{@link RefreshFailureClassification.Kind#SCOPE_REFUSED} — the server refused the requested
- *       scope (RFC 6749 §5.2 {@code invalid_scope}) before applying any grant. The presented token is
- *       still valid, so the session is kept; nothing is revoked or cleared, no retry is scheduled and no
+ *       scope (RFC 6749 §5.2 {@code invalid_scope}) before applying any grant. No new token was issued
+ *       and the client has no evidence that the presented token was rotated, so the session is kept;
+ *       nothing is revoked or cleared, no retry is scheduled and no
  *       {@code WARN} is logged, because repeating the request would get the same answer.</li>
  * </ul>
  * <p>
@@ -655,7 +656,8 @@ public class TokenLifecycleManager {
      *                               untouched and the token is kept locally, although the server may
      *                               already have rotated it; and when the server refused the requested
      *                               scope before applying the grant ({@code SCOPE_REFUSED}) the stored
-     *                               bundle is left untouched, because that token is still usable
+     *                               bundle is left untouched, because no new token was issued and nothing
+     *                               shows that this one was rotated
      * @throws TokenValidationException if the refreshed ID token fails the token-validation pipeline
      *                               (signature, {@code iss}, {@code aud}, {@code exp} / {@code iat}).
      *                               When the authorization server had already rotated the refresh token,
@@ -1018,7 +1020,8 @@ public class TokenLifecycleManager {
                     "Refresh refused before the authorization server processed the grant; "
                             + "leaving the session intact");
             // The server refused the requested scope (invalid_scope) before applying any grant, so the
-            // presented refresh token is still valid and the session is kept. The refusal is not
+            // no new token was issued and nothing shows that the presented refresh token was rotated, so
+            // the session is kept. The refusal is not
             // transient, so no retry back-off is scheduled; it is an expected answer, not a WARN.
             case SCOPE_REFUSED -> LOGGER.debug(
                     "Refresh refused over the requested scope before the grant was applied; "

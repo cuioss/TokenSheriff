@@ -94,8 +94,9 @@ import java.util.Set;
  * {@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED}: nothing was redeemed and there is no
  * successor, but the credential is dead and no retry will revive it. A {@code 4xx} refusing the
  * requested scope (RFC 6749 §5.2 {@code invalid_scope}) is raised as {@link InvalidScopeException} and
- * classified {@link RefreshFailureClassification.Kind#SCOPE_REFUSED}: the presented token is untouched,
- * but repeating the request will not change the answer.
+ * classified {@link RefreshFailureClassification.Kind#SCOPE_REFUSED}: no new token was issued and the
+ * client has no evidence that the presented token was rotated, but repeating the request will not change
+ * the answer.
  * <p>
  * The signal rides on the exception rather than on a separate observer argument deliberately:
  * {@link #refresh(ProviderMetadata, String)} stays the one overridable entry point on this

@@ -173,9 +173,10 @@ public final class JwtPropertyKeys {
          * Signature algorithm preferences (comma-separated).
          * Template: "sheriff.token.issuers.%s.algorithm-preferences"
          * <p>
-         * This is one list: the signature algorithms accepted during token validation, in order of
-         * preference. Absent, it defaults to every supported JWS algorithm. A token whose algorithm is
-         * not in the list is rejected. Independently of the list, the fixed rejected set
+         * This is one list: the signature algorithms accepted during token validation. Acceptance is by
+         * membership only; the order of the list does not influence which algorithm a token may use.
+         * Absent, it defaults to every supported JWS algorithm. A token whose algorithm is not in the
+         * list is rejected. Independently of the list, the fixed rejected set
          * ({@code HS256}, {@code HS384}, {@code HS512} and {@code none}) is always refused,
          * and naming one of those algorithms here fails at startup.
          * </p>
