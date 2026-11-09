@@ -123,15 +123,26 @@ public record MapRepresentation(Map<String, Object> data, Set<String> explicitNu
             return new MapRepresentation(Map.of());
         }
 
-        // Map.copyOf() doesn't allow null values, so null-valued members are split off: their names
-        // are kept as explicit nulls, their values are left out of the data map
-        Map<String, Object> filteredData = parsedData.entrySet().stream()
+        return ofParsed(parsedData);
+    }
+
+    /**
+     * Wraps a parsed JSON object whose members may carry a {@code null} value.
+     * <p>
+     * Map.copyOf() doesn't allow null values, so null-valued members are split off: their names are
+     * kept as explicit nulls, their values are left out of the data map.
+     *
+     * @param parsed the parsed members, possibly with {@code null} values
+     * @return the representation with the null-valued members in {@link #explicitNullKeys()}
+     */
+    private static MapRepresentation ofParsed(Map<String, Object> parsed) {
+        Map<String, Object> filteredData = parsed.entrySet().stream()
                 .filter(entry -> entry.getValue() != null)
                 .collect(Collectors.toUnmodifiableMap(
                         Map.Entry::getKey,
                         Map.Entry::getValue
                 ));
-        Set<String> explicitNullKeys = parsedData.entrySet().stream()
+        Set<String> explicitNullKeys = parsed.entrySet().stream()
                 .filter(entry -> entry.getValue() == null)
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toUnmodifiableSet());
@@ -230,12 +241,16 @@ public record MapRepresentation(Map<String, Object> data, Set<String> explicitNu
 
     /**
      * Gets a nested MapRepresentation for accessing nested objects.
+     * <p>
+     * The nested object is normalised like the top level: a member whose JSON value is {@code null}
+     * is not part of its data and is named in its {@link #explicitNullKeys()}, so a nested explicit
+     * {@code null} is told apart from an absent member.
      *
      * @param key the key to look up
      * @return Optional containing the nested MapRepresentation, or empty if not found or not a map
      */
     public Optional<MapRepresentation> getNestedMap(String key) {
-        return getMap(key).map(MapRepresentation::new);
+        return getMap(key).map(MapRepresentation::ofParsed);
     }
 
     /**

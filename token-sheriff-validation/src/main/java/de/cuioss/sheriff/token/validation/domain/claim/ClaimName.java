@@ -52,7 +52,10 @@ public enum ClaimName {
      * defines it as a case-sensitive string), so a number, boolean, array or object is rejected
      * instead of being stringified. Otherwise the number {@code 123} and the string {@code "123"}
      * would name the same subject wherever two {@code sub} values are compared. An explicit JSON
-     * {@code null} is refused as well (see {@link #isExplicitNullRefused()}).
+     * {@code null} is refused as well (see {@link #isExplicitNullRefused()}). The check on the raw
+     * JSON type also holds when an issuer configures a custom mapper for {@code sub}: the token
+     * builder applies it before the custom mapper runs, so a stringifying mapper cannot turn a
+     * numeric {@code sub} into a valid subject.
      *
      * @see <a href="https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.2">RFC 7519 - 4.1.2. "sub" (Subject) Claim</a>
      */

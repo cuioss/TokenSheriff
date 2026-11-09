@@ -368,6 +368,19 @@ class MapRepresentationTest {
     }
 
     @Test
+    @DisplayName("A nested object keeps its explicit nulls apart from absent members")
+    void shouldKeepNestedExplicitNulls() throws Exception {
+        MapRepresentation nested = MapRepresentation.fromJson(DSL_JSON, "{\"inner\":{\"sub\":null,\"iss\":\"x\"}}")
+                .getNestedMap("inner").orElseThrow();
+
+        assertTrue(nested.isExplicitNull("sub"));
+        assertFalse(nested.isExplicitNull("iss"));
+        assertEquals(Optional.empty(), nested.getValue("sub"));
+        assertEquals(Optional.of("x"), nested.getString("iss"));
+        assertEquals(Set.of("iss"), nested.keySet());
+    }
+
+    @Test
     @DisplayName("Direct construction carries no explicit nulls unless given")
     void shouldHaveNoExplicitNullsWhenConstructedDirectly() {
         assertTrue(new MapRepresentation(Map.of("sub", "user")).explicitNullKeys().isEmpty());
