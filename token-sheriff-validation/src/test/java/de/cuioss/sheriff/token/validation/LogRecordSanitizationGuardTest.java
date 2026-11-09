@@ -56,7 +56,7 @@ class LogRecordSanitizationGuardTest {
      * error. Matched as whole identifier tokens.
      */
     private static final Set<String> REMOTE_TEXT_NAMES = Set.of(
-            "kid", "kty", "keyId", "keyType", "alg", "algorithm", "crv", "getMessage");
+            "kid", "kty", "keyId", "keyType", "alg", "algorithm", "crv", "actual", "getMessage");
 
     /**
      * Remote-by-name arguments that are safe for a recorded reason. Keyed by
@@ -146,17 +146,21 @@ class LogRecordSanitizationGuardTest {
                         LOGGER.debug("Parsed %s with %s", jwk.alg(), keys.size());
                         LOGGER.warn(WARN.D, "kid in a literal is not an argument", keyIds.length, kid.length());
                         // LOGGER.warn(WARN.E, kid); in a comment is not a call
+                        LOGGER.warn(WARN.F, expected, actual);
+                        LOGGER.warn(WARN.G, expected, sanitizeRemote(actual));
                     }
                 }
                 """;
         List<LoggerCall> synthetic = loggerCalls("Sample.java", source);
 
-        assertEquals(5, synthetic.size(), "the commented call must not be scanned: " + synthetic);
+        assertEquals(7, synthetic.size(), "the commented call must not be scanned: " + synthetic);
         assertEquals(List.of("kid"), violations(synthetic.getFirst()));
         assertEquals(List.of(), violations(synthetic.get(1)));
         assertEquals(List.of("e (exception rendered with its message)"), violations(synthetic.get(2)));
         assertEquals(List.of("jwk.alg()"), violations(synthetic.get(3)));
         assertEquals(List.of(), violations(synthetic.get(4)));
+        assertEquals(List.of("actual"), violations(synthetic.get(5)), "an unsanitised actual argument is a violation");
+        assertEquals(List.of(), violations(synthetic.get(6)), "a sanitised actual argument is not");
     }
 
     private boolean isRemoteText(String argument) {

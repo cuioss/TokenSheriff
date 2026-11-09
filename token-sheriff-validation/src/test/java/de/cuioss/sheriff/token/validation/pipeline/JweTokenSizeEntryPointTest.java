@@ -197,6 +197,30 @@ class JweTokenSizeEntryPointTest {
         assertEquals(1, sizeExceededWarnings(), "Exactly one TOKEN_SIZE_EXCEEDED WARN on " + entryPoint);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = EntryPoint.class, names = {"ACCESS", "ID"})
+    @DisplayName("A 3-part JWS within maxTokenSize is accepted although maxEncryptedTokenSize is smaller")
+    void shouldAcceptJwsWithinJwsLimitWhenJweLimitIsSmaller(EntryPoint entryPoint) {
+        int smallJweLimit = 4096;
+        TestTokenHolder holder = padded(entryPoint.nextToken(), 3);
+        String jws = holder.getRawToken();
+        assertTrue(jws.length() > smallJweLimit && jws.length() <= JWS_LIMIT,
+                "Non-vacuity: the JWS must lie between the two limits, was " + jws.length());
+        TokenValidator validator = TokenValidator.builder()
+                .issuerConfig(holder.getIssuerConfig())
+                .jweDecryptionConfig(JweDecryptionConfig.builder()
+                        .defaultDecryptionKey(encryptionKeyPair.getPrivate())
+                        .maxEncryptedTokenSize(smallJweLimit)
+                        .build())
+                .build();
+        validators.add(validator);
+
+        Map<String, ClaimValue> claims = entryPoint.create(validator, jws);
+
+        assertEquals("p".repeat(1000), claims.get("pad0").getOriginalString());
+        assertEquals(0, validator.getSecurityEventCounter().getCount(EventType.TOKEN_SIZE_EXCEEDED));
+    }
+
     /**
      * The refresh path decodes opaquely: a JWS the parser refuses for size is kept as an opaque
      * refresh token without claims, neither logged nor counted, instead of escaping as an
