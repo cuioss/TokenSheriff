@@ -36,9 +36,13 @@ import java.util.Objects;
  *       saw the response, and the next refresh can then be refused. Quarantining here would still
  *       destroy a working session over a transient network fault in the common case.</li>
  *   <li>{@link Kind#SCOPE_REFUSED} — the authorization server judged the requested scope and refused it
- *       (RFC 6749 §5.2 {@code invalid_scope} on a client-error status) before applying any grant. The
- *       presented token is untouched and still valid, so the session is kept — but the answer depends
- *       on the request, not on network conditions, so no retry of the same request will change it.</li>
+ *       (RFC 6749 §5.2 {@code invalid_scope} on a client-error status). The server answered with an
+ *       error, not a grant, so it issued no new token and the client has no evidence that the presented
+ *       token was rotated; the client keeps it and the session is kept. The refusal says nothing about
+ *       whether the presented token itself is still valid — the server judged the scope, not
+ *       necessarily the credential — so a later refresh can still be refused as
+ *       {@link Kind#CREDENTIAL_REJECTED}. The answer depends on the request, not on network
+ *       conditions, so no retry of the same request will change it.</li>
  *   <li>{@link Kind#CREDENTIAL_REJECTED} — the authorization server looked at the presented refresh
  *       token and declared it invalid (RFC 6749 §5.2 {@code invalid_grant} on a client-error status).
  *       Nothing was redeemed and nothing was rotated, so there is no successor and nothing to revoke —
@@ -90,10 +94,12 @@ public record RefreshFailureClassification(Kind kind, @Nullable RefreshRedemptio
         PRE_REDEMPTION,
 
         /**
-         * The authorization server refused the requested scope ({@code invalid_scope}) before applying
-         * any grant, so the presented refresh token is untouched and still usable and the session is
-         * kept. Unlike {@link #PRE_REDEMPTION} the refusal is not transient: repeating the same request
-         * will not change the answer, so no retry is owed.
+         * The authorization server refused the requested scope ({@code invalid_scope}) with an error
+         * rather than a grant, so it issued no new token and the client has no evidence that the
+         * presented refresh token was rotated. The client keeps the token locally and the session is
+         * kept; the refusal does not establish that the token is still valid server-side. Unlike
+         * {@link #PRE_REDEMPTION} the refusal is not transient: repeating the same request will not
+         * change the answer, so no retry is owed.
          */
         SCOPE_REFUSED,
 
@@ -148,7 +154,8 @@ public record RefreshFailureClassification(Kind kind, @Nullable RefreshRedemptio
 
     /**
      * @return the classification for a refresh the authorization server refused over the requested
-     *         scope before applying the grant, leaving the presented refresh token valid
+     *         scope with an error rather than a grant, keeping the presented refresh token locally (the
+     *         refusal does not establish that the token is still valid server-side)
      */
     public static RefreshFailureClassification scopeRefused() {
         return new RefreshFailureClassification(Kind.SCOPE_REFUSED, null);
