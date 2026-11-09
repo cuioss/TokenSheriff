@@ -36,8 +36,8 @@ closed to an empty result.
 1. **`JwksLoader` key-id contract test** — one new test class (name by role, `JwksLoaderKeyIdsContractTest`, in
    `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/`) with one test per contract point,
    each run against the loader types the factory creates (HTTP, file, in-memory) wherever the point applies. The points
-   are the interface Javadoc's own words (`JwksLoader.java` lines 66-78, `HttpJwksLoader.java` lines 728-745,
-   `JWKSKeyLoader.java` lines 300-319), one verification criterion each:
+   are the interface Javadoc's own words (`JwksLoader.java` lines 66-78, `HttpJwksLoader.java` lines 759-764,
+   `JWKSKeyLoader.java` lines 316-325; re-read at `aeb3fa49`, PLAN-25 moved them), one verification criterion each:
    (a) never `null`, and empty before initialisation (HTTP: also empty after a first load that yielded no usable key);
    (b) the set holds exactly the ids of the active key set, and every reported id resolves through `getKeyInfo`;
    (c) a blank or whitespace-only id is omitted (HTTP loader: through a JWKS served by the mock dispatcher; file and
@@ -50,9 +50,10 @@ closed to an empty result.
    the period, and neither after it (HTTP only);
    (h) `getLoaderStatus() == OK` only while a usable key set is installed, and a JWKS with no usable key never replaces an
    installed set (HTTP only; the contract's status half that API Sheriff reads).
-   Where an existing test already asserts a point at the same level (`JWKSKeyLoaderTest` lines 172-282 for (a) to (e) on
-   `JWKSKeyLoader`; `HttpJwksLoaderKeyRotationTest` lines 176-190 for (f) and (g); `HttpJwksLoaderFailureTest` "Status
-   reflects usable keys" for (h)), the new test does NOT copy the setup: it asserts the point through the factory entry
+   Where an existing test already asserts a point at the same level (`JWKSKeyLoaderTest` lines 175-330 for (a) to (e) on
+   `JWKSKeyLoader`, now also covering the duplicate-id WARN sanitised; `HttpJwksLoaderKeyRotationTest` lines 176-190 for (f) and (g);
+   `HttpJwksLoaderFailureTest` "Status reflects usable keys" at line 322 for (h), the advertised-JWKS-URI half having moved to
+   `HttpJwksLoaderFailureAdvertisedJwksUriTest` in PLAN-25), the new test does NOT copy the setup: it asserts the point through the factory entry
    point and names the existing test in a comment, so the class is the index of the contract and not a second copy of the
    suites. A point found unpinned at the factory level is the plan's finding; a point found false is stopped and reported,
    never "fixed" by editing the Javadoc to match.
@@ -81,7 +82,9 @@ closed to an empty result.
    `error` cannot win; a quoted value that contains `", error="` or a comma stays inside its value;
    (f) the header-level attack class, enumerated once as a parameterised test in the `cui-http-testing` attack-database
    pattern PLAN-25 7(g) names: CR, LF, CRLF, obs-fold continuation (a line break followed by SP or HT), an embedded NUL and any
-   other control character anywhere in the value yield empty; an unterminated quote and a trailing backslash yield empty or the
+   other control character anywhere in the value yield empty. CR, LF and NUL are ALREADY refused by the sibling since PLAN-25
+   (`StepUpChallengeParser.java:65`, through `HeaderValues.containsLineBreakOrNul`, checked before any `strip()`); the new
+   parser reuses that helper and does not copy it, and the new work is the other control characters, the obs-fold case and the size bound; an unterminated quote and a trailing backslash yield empty or the
    sibling's documented verbatim behaviour, never an exception;
    (g) bounds so a hostile header cannot make the parser do unbounded work: a stated maximum header length (default 8 KiB) and a
    maximum token count (default 64) yield empty beyond them; the figures are an outline decision, recorded;
@@ -93,8 +96,8 @@ closed to an empty result.
    stateless.
    **One splitter, not two:** do not copy the quoted-string aware `auth-param` splitting and `unquote` of `StepUpChallengeParser`
    (lines 100-180) a second time. Extract them into one package-private helper used by both parsers, behaviour-preserving for
-   the sibling and guarded by the unchanged `StepUpChallengeParserTest` (227 lines, twelve tests). A tightening of the sibling
-   that the shared header checks bring (control characters, size) is a fail-closed change, stated in the PR body and given its
+   the sibling and guarded by the unchanged `StepUpChallengeParserTest` (266 lines at `aeb3fa49`, 13 tests; PLAN-25 added the CR/LF/NUL cases). A tightening of the sibling
+   that the shared header checks bring (the control characters other than CR, LF and NUL, and size) is a fail-closed change, stated in the PR body and given its
    own test; nothing may start to accept what the sibling rejects today.
    **Documentation (same change):** a new requirement `CLIENT-25` in `doc/client/requirements.adoc` (the next free id; the file
    ends at CLIENT-24) with its README mapping row (`doc/client/README.adoc`) and traceability row, the parser described next to
@@ -126,8 +129,8 @@ closed to an empty result.
   `plan-marshall:workflow-integration-sonar:sonar_rest transition --issue-key {key} --transition {falsepositive|wontfix}`.
   The merge gate reads the open-issue count at the head: `0` confirmed or every remaining issue dismissed; an `undecidable`
   read blocks. Read the count with a branch- or PR-scoped `resolved=false` filter, never an unfiltered issue search.
-- Every claim below was grounded at `f85c5ab3` (the ledger landing on `main`; the validation sources are those of
-  `d1af3ebb`). Re-verify each against the implementing source at outline before scoping on it.
+- Every claim below was first grounded at `f85c5ab3` and re-grounded at `aeb3fa49` (main after PLAN-25) on 2026-11-09; the sibling-parser and
+  test-count claims were corrected, the rest only moved lines. Re-verify each against the implementing source at outline before scoping on it.
 - Fail-closed for deliverable 2: an unparseable, ambiguous or oversized header is `Optional.empty()`, never a partial result,
   and a new public type is listed in the PR body as the plan's only API addition.
 - The plan creates and edits no file under `.plan/orchestrator/` other than its own inbox message (Write-Boundary).
@@ -135,33 +138,33 @@ closed to an empty result.
 ## Claim Labels
 
 - OBSERVED: `JwksLoader.getKeyIds()` is documented as an immutable snapshot of the active key set, empty before loading, never `null`, with retired grace-period sets excluded while `getKeyInfo` may still resolve their ids — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/JwksLoader.java` lines 66-78
-  - verdict: corroborated | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: JwksLoader.java:66-78 documents immutable active-set snapshot, empty before load, never null, retired sets excluded
+  - verdict: corroborated | checked_at: aeb3fa49 | by: quality-report/next | rescoped: n/a | evidence: JwksLoader.java unchanged between f85c5ab3 and aeb3fa49 (absent from the diff); getKeyIds declared at line 78
 - OBSERVED: `JWKSKeyLoader.getKeyIds()` returns `Set.of()` until initialised and otherwise an unmodifiable set of the key map's non-blank ids; `HttpJwksLoader.getKeyIds()` reads `currentKeys` once and delegates, `Set.of()` before the first successful load — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/key/JWKSKeyLoader.java` lines 311-319 and `.../jwks/http/HttpJwksLoader.java` lines 739-745
-  - verdict: corroborated | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: JWKSKeyLoader.java:311-319 Set.of() until initialised then non-blank ids; HttpJwksLoader.java:739-745 reads currentKeys once and delegates
+  - verdict: corroborated | checked_at: aeb3fa49 | by: quality-report/next | rescoped: n/a | evidence: re-read at aeb3fa49: JWKSKeyLoader.getKeyIds at 316, HttpJwksLoader.getKeyIds at 759-764 delegating to current; lines moved, behaviour read unchanged
 - OBSERVED: `JWKSKeyLoaderTest` pins every point on `JWKSKeyLoader` — all keys reported (method at 174), unmodifiable (186), empty before init (196), duplicate once with the WARN (208), blank omitted with every reported id resolvable (268) — read at `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/key/JWKSKeyLoaderTest.java` lines 172-282
-  - verdict: corroborated | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: JWKSKeyLoaderTest methods at 174, 186, 196, 208, 268 read
+  - verdict: corroborated | checked_at: aeb3fa49 | by: quality-report/next | rescoped: n/a | evidence: JWKSKeyLoaderTest at aeb3fa49: shouldReportKeyIdsOfAllLoadedKeys 175, UnmodifiableSet 187, EmptyBeforeInit 197, DuplicateKeyIdOnce 209, OmitBlankKeyId 290; +22 lines from PLAN-25
 - OBSERVED: `HttpJwksLoaderKeyRotationTest` pins, at the HTTP loader, that after a rotation `getKeyIds()` is exactly the rotated id, the retired id still resolves through `getKeyInfo` in the grace period, and a snapshot taken before the rotation is unchanged — read at `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderKeyRotationTest.java` lines 176-190
-  - verdict: corroborated | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: HttpJwksLoaderKeyRotationTest:176-190 read: rotated id only, retired id resolves via getKeyInfo, earlier snapshot unchanged
+  - verdict: corroborated | checked_at: aeb3fa49 | by: quality-report/next | rescoped: n/a | evidence: HttpJwksLoaderKeyRotationTest getKeyIds assertions at 176 and 183 re-read: rotated id only; file not in the f85c5ab3..aeb3fa49 diff
 - OBSERVED: `HttpJwksLoaderFailureTest` pins the status contract ("Status reflects usable keys": a first load with no usable key is neither `OK` nor a key installation, with and without background refresh) and the `HttpJwksLoaderAsyncInitializationTest` asserts empty ids before the keys are installed — read at `.../jwks/http/HttpJwksLoaderFailureTest.java` lines 316-400 and `.../HttpJwksLoaderAsyncInitializationTest.java` lines 224-291
-  - verdict: corroborated | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: HttpJwksLoaderFailureTest 'Status reflects usable keys' (316-398) and Async test asserts at 230, 291 found by grep; bodies not read line by line
+  - verdict: corroborated | checked_at: aeb3fa49 | by: quality-report/next | rescoped: n/a | evidence: Status reflects usable keys now at HttpJwksLoaderFailureTest:322; the advertised-JWKS-URI cases moved to HttpJwksLoaderFailureAdvertisedJwksUriTest in PLAN-25; bodies not re-read line by line
 - OBSERVED: no test in `FileJwksLoaderTest`, `InMemoryJwksLoaderTest` or `JwksLoaderFactoryTest` asserts `getKeyIds()` (the factory test asserts `LoaderStatus.OK` for a valid file and valid content only), and no test asserts blank-id omission or duplicate-id collapse through `HttpJwksLoader` (the only HTTP-level `getKeyIds` size assertion is the CR/LF key id case at `HttpJwksLoaderTest.java` lines 283-285) — read by `git grep getKeyIds` over `token-sheriff-validation/src/test/java/.../jwks`
-  - verdict: corroborated | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: git grep getKeyIds over jwks tests: none in FileJwksLoaderTest, InMemoryJwksLoaderTest, JwksLoaderFactoryTest; factory test asserts LoaderStatus.OK only (115, 142); HttpJwksLoaderTest:283-285 is the only HTTP-level assertion
+  - verdict: corroborated | checked_at: aeb3fa49 | by: quality-report/next | rescoped: n/a | evidence: git grep -l getKeyIds over the jwks tests at aeb3fa49: none in FileJwksLoaderTest, InMemoryJwksLoaderTest or JwksLoaderFactoryTest
 - OBSERVED: the file and in-memory loaders the factory returns are `JWKSKeyLoader` instances (`createFileLoader` and `createInMemoryLoader` both `return JWKSKeyLoader.builder()`), so a contract test through the factory adds entry-point coverage and not new logic — read at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/JwksLoaderFactory.java` lines 87-110
-  - verdict: corroborated | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: JwksLoaderFactory createFileLoader and createInMemoryLoader both return JWKSKeyLoader.builder()
+  - verdict: corroborated | checked_at: aeb3fa49 | by: quality-report/next | rescoped: n/a | evidence: JwksLoaderFactory at aeb3fa49: createFileLoader (87) and createInMemoryLoader (103) both return JWKSKeyLoader.builder()
 - HYPOTHESIS: a JWKS with no usable key never replaces an installed key set on the HTTP loader, and a test already pins it — confirm/refute at `HttpJwksLoader.java` § `updateKeys` and `HttpJwksLoaderFailureTest.java` lines 359-400 (verify-at-outline; if unpinned, point (h) adds it)
   - verdict: unverifiable | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: updateKeys behaviour for a no-usable-key JWKS not read here; verify-at-outline
 - Verify-first clause: before writing a test for a point, read the implementing line and the neighbouring test it names; a point the code does not satisfy is stopped and reported, never papered over.
   - verdict: unverifiable | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: procedural verify-first clause for the consuming phase
 - OBSERVED: `StepUpChallengeParser.parse` accepts only a header that starts with the `Bearer` scheme (case-insensitive) and returns `Optional.empty()` when the `error` parameter is not exactly `insufficient_user_authentication`; the client main code has no `insufficient_scope` or RFC 6750 `scope`-attribute parser — read at `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/StepUpChallengeParser.java` lines 63-80 and `git grep insufficient_scope` over `token-sheriff-client/src/main` (empty)
-  - verdict: corroborated | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: StepUpChallengeParser.java:63-80 starts-with Bearer, error equals insufficient_user_authentication else empty; git grep insufficient_scope over client main is empty
-- OBSERVED: the sibling's `auth-param` handling splits on top-level commas outside quoted-strings, unescapes `\"` and `\\`, and rejects a duplicate parameter name; it does not look for control characters, bound the header length or handle a second challenge in the same value — read at `StepUpChallengeParser.java` lines 100-180
-  - verdict: corroborated | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: StepUpChallengeParser.java parseParams/splitTopLevel/unquote read: top-level comma split, escape handling, duplicate param rejected; no control-character, length or second-challenge handling in the code read
+  - verdict: corroborated | checked_at: aeb3fa49 | by: quality-report/next | rescoped: n/a | evidence: diff f85c5ab3..aeb3fa49 of StepUpChallengeParser adds only the HeaderValues CR/LF/NUL guard at line 65; the Bearer-start and insufficient_user_authentication-only rule unchanged; git grep insufficient_scope over client main empty
+- OBSERVED: the sibling's `auth-param` handling splits on top-level commas outside quoted-strings, unescapes `\"` and `\\`, and rejects a duplicate parameter name; since PLAN-25 it refuses a header carrying CR, LF or NUL before any `strip()` (`StepUpChallengeParser.java:65`, `HeaderValues.containsLineBreakOrNul`), but it does not look for other control characters, bound the header length or handle a second challenge in the same value — read at `StepUpChallengeParser.java` lines 60-190 at `aeb3fa49`
+  - verdict: corroborated | checked_at: aeb3fa49 | by: quality-report/next | rescoped: n/a | evidence: StepUpChallengeParser at aeb3fa49 refuses CR, LF, NUL via HeaderValues.containsLineBreakOrNul (65) before strip(); no other control-character, length or second-challenge handling read; claim text corrected
 - HYPOTHESIS: a value such as `Bearer error="insufficient_scope", Basic realm="x"` puts the second challenge's tokens into the Bearer parameter map in the sibling's splitter — confirm/refute at `StepUpChallengeParser.java` § `parseParams` and by a scratch test (verify-at-outline)
   - verdict: unverifiable | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: splitter reads Basic realm after a comma as a segment with key 'basic realm'; whether it leaks into the Bearer map needs a scratch test
-- OBSERVED: `StepUpChallengeParserTest` has twelve tests (quoted comma, escaped quote and backslash, unterminated quote, unquoted tokens, skipped segments, blank `max_age` and `acr_values`) and none for control characters, header length or a second challenge — read at `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/StepUpChallengeParserTest.java` lines 60-227
-  - verdict: corroborated | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: StepUpChallengeParserTest 227 lines, twelve test methods listed by name, none for control characters, length or a second challenge
+- OBSERVED: `StepUpChallengeParserTest` has 13 tests at `aeb3fa49` (quoted comma, escaped quote and backslash, unterminated quote, unquoted tokens, skipped segments, blank `max_age` and `acr_values`, and the PLAN-25 CR/LF/NUL cases) and none for other control characters, header length or a second challenge — read at `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/StepUpChallengeParserTest.java` (266 lines)
+  - verdict: corroborated | checked_at: aeb3fa49 | by: quality-report/next | rescoped: n/a | evidence: StepUpChallengeParserTest at aeb3fa49: 266 lines, 13 @Test; PLAN-25 added the CR/LF/NUL cases; none for other control characters, length or a second challenge by name; claim text corrected
 - OBSERVED: `doc/client/requirements.adoc` defines requirements up to `CLIENT-24`, and `CLIENT-12` (RFC 9470 step-up) is realised by `doc/client/specification/step-up-and-logout.adoc` — read at `doc/client/requirements.adoc` line 228 and `step-up-and-logout.adoc` line 10
-  - verdict: corroborated | checked_at: f85c5ab3 | by: quality-report/analyze | rescoped: n/a | evidence: grep: highest requirement CLIENT-24; CLIENT-12 at requirements.adoc:228; step-up-and-logout.adoc:10 realises CLIENT-12
+  - verdict: corroborated | checked_at: aeb3fa49 | by: quality-report/next | rescoped: n/a | evidence: grep at aeb3fa49: highest requirement heading CLIENT-24 (line 314), no CLIENT-25; CLIENT-12 at requirements.adoc:228; step-up-and-logout.adoc:10 realises CLIENT-12
 
 ## Expected Surface
 
