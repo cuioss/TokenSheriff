@@ -506,6 +506,12 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   (agreed default); 5(c) the 400-line test budget: NOT a hard rule but a guideline, and more than 500 lines should be avoided, so
   `AGENTS.md` states a 500-line guideline, no existing class is split for it, and classes this plan creates or edits stay at or under
   500 lines. The layer-3 JWE Open Defect keeps its owner (7(k)(1)) with the direction settled.
+- 2026-11-09 — API SHERIFF REQUEST DISPOSITIONED (operator): A ignored; B "spec a test": PLAN-26 (`plans/PLAN-26-jwks-key-ids-contract-pin.md`,
+  WS-01, staged, one deliverable, test-only: a contract test that runs the `getKeyIds()` points (never null and empty before init, active set
+  only, every id resolves, blank omitted, duplicate once, immutable, snapshot stable, retired excluded in the grace period, status OK only with
+  a usable set) through the HTTP, file and in-memory loaders the factory returns, with a mutation check per point; no file shared with the
+  running PLAN-25, gate determinate with 0 overlap; admitted, not emitted); C: the operator wants the parser in TokenSheriff, proposal given;
+  D and the reply: later, if released.
 
 ## Open Defects
 
@@ -550,11 +556,12 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   version is `0.9.9-SNAPSHOT` with `0.9.8` the latest tag; `StepUpChallengeParser` has only the `insufficient_user_authentication` case;
   `RevocationClient.revoke(String, String, @Nullable String, ...)` exists; the empty-before-init case is asserted in
   `IssuerConfigDiscoveryIssuerTest` and the retired-key lookup through `getKeyInfo` in `HttpJwksLoaderGracePeriodTest`; no test found
-  for blank ids omitted, and whether a test pins `getKeyIds()` excluding a retired set was not settled by reading. NOT verified: the
+  for blank ids omitted AT THE HTTP LOADER. CORRECTED 2026-11-09 (full read of the tests): `JWKSKeyLoaderTest` pins blank omitted (method at 268), duplicate once, unmodifiable and empty before init, and `HttpJwksLoaderKeyRotationTest` lines 176-190 pins retired excluded with `getKeyInfo` still resolving and an unchanged earlier snapshot, so the contract is pinned piecemeal; what is missing is one place that asserts it through the three factory entry points (no `getKeyIds` assertion in the file, in-memory or factory tests, none for blank or duplicate ids at `HttpJwksLoader`): staged as PLAN-26. NOT verified: the
   PLAN-25 branch state the message quotes (`816bf66e`), the 0.9.8 comparison, and the Quarkus versions. The reply channel is a write
-  into another repository's epic inbox, so no reply is sent without the operator's word. Candidate operator decisions: a small
-  pin-tests plan for the `getKeyIds()` contract before the cut (PLAN-25 is running and its spec is not edited, so it would be a new
-  plan or a mailbox note), the release note and version, and the C answer. Retire when the operator has answered or declined.
+  into another repository's epic inbox, so no reply is sent without the operator's word. OPERATOR ANSWERS 2026-11-09: (A) ignore; (B) spec a test: STAGED as PLAN-26 (`jwks-key-ids-contract-pin`); (C) the operator
+  would see the `insufficient_scope` parser in TokenSheriff and asked for the orchestrator's proposal (proposal made, awaiting the
+  operator's word before any spec is staged); (D) information only, no action; reply to API Sheriff: later, if released. Retire when
+  PLAN-26 has landed and the C decision and the reply are done or declined.
 - 2026-11-07 — PLAN-19 landing residue (#879; landing message, partly verified): (1) docs-only PRs skip the Sonar build in this repository's
   change check, so the open-issue count at the head was undecidable and the operator had to accept the gap (read directly afterwards:
   `main` 0 unresolved). (2) CodeRabbit's one-review-per-hour allowance was spent on the first head, so the loop-back head `56710e6a` was
