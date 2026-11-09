@@ -533,6 +533,28 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
 
 ## Watches
 
+- 2026-11-09 — API Sheriff downstream request (cross-repo message `api-sheriff-kidicap-gateway-requirements-001.md` from the orchestrator of
+  `cuioss/API-Sheriff`, epic `kidicap-gateway-requirements`; a lead, read at `f85c5ab3`, not a change request against PLAN-25, nothing
+  urgent except A). OPERATOR-OWNED, nothing staged: (A) before the 0.9.9 cut API Sheriff wants the version number, the date, whether
+  PLAN-25 is in, and a release note of downstream-visible changes since 0.9.8: loader status contract (#830, `OK` only with a usable key
+  set), opt-in max staleness and re-discovery (#844), a JWKS with no usable key never replaces an installed set, log records now carry
+  sanitised text and no exception object (a downstream test asserting a stack trace can break), and, only if PLAN-25 ships, a non-string
+  `sub` refused and a token above the 8 KiB parser limit failing with `TokenValidationException`; plus the Quarkus and `cui-quarkus-parent`
+  versions the release is built on. (B) they depend on the `JwksLoader.getKeyIds()` contract (active set only, empty before init and never
+  `null`, blank ids omitted, duplicates collapse) and ask for confirmation that it stays stable and that each point is pinned by a test;
+  they found the rotation and duplicate cases pinned but did not confirm "retired excluded while `getKeyInfo` still resolves", "empty
+  before init" and "blank omitted". (C) a question: should `token-sheriff-client` own a parser for the RFC 6750 `insufficient_scope`
+  challenge (today `StepUpChallengeParser` handles only `insufficient_user_authentication`), or should API Sheriff parse it; they will
+  parse it themselves unless told otherwise and need the answer before their PLAN-20 outline. (D) information: they will call
+  `RevocationClient.revoke` on logout and ask to hear of signature or best-effort changes before 1.0. VERIFIED at `f85c5ab3`: the project
+  version is `0.9.9-SNAPSHOT` with `0.9.8` the latest tag; `StepUpChallengeParser` has only the `insufficient_user_authentication` case;
+  `RevocationClient.revoke(String, String, @Nullable String, ...)` exists; the empty-before-init case is asserted in
+  `IssuerConfigDiscoveryIssuerTest` and the retired-key lookup through `getKeyInfo` in `HttpJwksLoaderGracePeriodTest`; no test found
+  for blank ids omitted, and whether a test pins `getKeyIds()` excluding a retired set was not settled by reading. NOT verified: the
+  PLAN-25 branch state the message quotes (`816bf66e`), the 0.9.8 comparison, and the Quarkus versions. The reply channel is a write
+  into another repository's epic inbox, so no reply is sent without the operator's word. Candidate operator decisions: a small
+  pin-tests plan for the `getKeyIds()` contract before the cut (PLAN-25 is running and its spec is not edited, so it would be a new
+  plan or a mailbox note), the release note and version, and the C answer. Retire when the operator has answered or declined.
 - 2026-11-07 — PLAN-19 landing residue (#879; landing message, partly verified): (1) docs-only PRs skip the Sonar build in this repository's
   change check, so the open-issue count at the head was undecidable and the operator had to accept the gap (read directly afterwards:
   `main` 0 unresolved). (2) CodeRabbit's one-review-per-hour allowance was spent on the first head, so the loop-back head `56710e6a` was
