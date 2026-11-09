@@ -512,6 +512,16 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   a usable set) through the HTTP, file and in-memory loaders the factory returns, with a mutation check per point; no file shared with the
   running PLAN-25, gate determinate with 0 overlap; admitted, not emitted); C: the operator wants the parser in TokenSheriff, proposal given;
   D and the reply: later, if released.
+- 2026-11-09 — PLAN-26 WIDENED (operator: "make it one plan for both"): the `insufficient_scope` parser (API Sheriff part C) is folded into
+  PLAN-26 as deliverable 2, so no PLAN-27 exists. Deliverable 2: `InsufficientScopeChallengeParser` in `token-sheriff-client` `flow`
+  (sibling of `StepUpChallengeParser`; RFC 6750 scope-token grammar, duplicate and injected parameters rejected, the CR/LF/obs-fold/NUL
+  header attack class, bounded header length and token count, no leak from a second challenge, parses and acts on nothing), one shared
+  package-private `auth-param` splitter instead of a copy, `CLIENT-25` and its README, specification and threat-model rows, with a
+  mutation check per guarding line. Two deliverables, so under the six-deliverable threshold. The queue slug and file name
+  (`jwks-key-ids-contract-pin`) stay those of deliverable 1 (a row's slug cannot be edited). Gate: determinate, but it now shares FOUR
+  files with the running PLAN-25 (`doc/client/README.adoc`, `requirements.adoc`, `specification/step-up-and-logout.adoc`,
+  `threat-model.adoc`), so an overlap prompt is required at emit; recommended order: after PLAN-25 merges. Timing tradeoff recorded in
+  the spec: deliverable 1 is wanted before the next release cut, deliverable 2 is new public API and not urgent.
 
 ## Open Defects
 
