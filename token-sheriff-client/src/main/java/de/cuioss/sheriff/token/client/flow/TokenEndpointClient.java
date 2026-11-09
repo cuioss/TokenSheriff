@@ -58,13 +58,20 @@ import java.util.concurrent.atomic.AtomicInteger;
  * posture is inherited from {@code HttpHandler}. Client authentication is decorated onto the request
  * by the caller (headers and/or form parameters); this class is auth-agnostic transport only.
  * <p>
- * <strong>The pre-redemption guarantee holds by construction, not by a guard.</strong> A connection
- * failure, a DNS failure, an SSRF-blocked target or an interrupt throws out of
- * {@code BackChannelHttp.validatedHandler} or {@code send} before any {@link HttpResponse} exists, so
- * such a failure can never reach the status check below and can never be classified as a rejected
- * credential. Only a response the server actually produced is ever classified. Preserve that ordering:
- * a transient network fault reported as a dead credential is exactly the inversion the classification
- * exists to prevent.
+ * <strong>A transport failure is never classified as a rejected credential, by construction rather
+ * than by a guard.</strong> A connection failure, a DNS failure, an SSRF-blocked target or an interrupt
+ * throws out of {@code BackChannelHttp.validatedHandler} or {@code send} before any {@link HttpResponse}
+ * exists, so such a failure can never reach the status check below and can never be classified as a
+ * rejected credential. Only a response the server actually produced is ever classified. Preserve that
+ * ordering: a transient network fault reported as a dead credential is exactly the inversion the
+ * classification exists to prevent.
+ * <p>
+ * That is not a guarantee that the server did nothing. A plain {@link TransportException} — a lost
+ * response, a {@code 5xx} the server returned after processing the request, an unrecognized error — can
+ * follow a refresh-token rotation, because a token request is a non-idempotent {@code POST}: the
+ * server-side outcome is unknown. Only the typed pre-redemption refusals ({@link InvalidScopeException},
+ * {@link ClientAuthenticationFailedException}, {@link CredentialRejectedException}) carry the server's
+ * answer that it did not redeem the grant.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -152,7 +159,8 @@ public class TokenEndpointClient {
      * authorization server rejects the first attempt with a {@code use_dpop_nonce} challenge — a
      * non-success status carrying a {@code DPoP-Nonce} response header (RFC 9449 §8) — the nonce is
      * echoed into a fresh proof and the request is retried once, rather than surfacing the recoverable
-     * challenge as an opaque transport failure. mTLS constraints add no header (the binding is
+     * challenge as an opaque transport failure. An {@code invalid_scope} answer is terminal and is never
+     * retried with a nonce, whatever headers it carries. mTLS constraints add no header (the binding is
      * transport-level) and never trigger a nonce retry.
      *
      * @param tokenEndpoint    the absolute token endpoint URL (from discovery); must be TLS unless
@@ -163,9 +171,13 @@ public class TokenEndpointClient {
      *                         bearer-token request
      * @return the normalized token response
      * @throws TransportException if the request fails or the response is not successful (after a
-     *         nonce retry where applicable) — in both cases, except for the
-     *         {@link RedeemedResponseException} subtype described below, the authorization server
-     *         never consumed the presented grant. Four narrower subtypes carry the distinctions a caller may need to
+     *         nonce retry where applicable). The {@link RedeemedResponseException} subtype described
+     *         below means the grant was redeemed. A plain {@link TransportException} makes no claim
+     *         about the server-side outcome: a lost response or a {@code 5xx} can follow a
+     *         refresh-token rotation, so the grant may or may not have been consumed. Only the three
+     *         typed refusals {@link InvalidScopeException}, {@link ClientAuthenticationFailedException}
+     *         and {@link CredentialRejectedException} guarantee that the server did not redeem the
+     *         grant. Four narrower subtypes carry the distinctions a caller may need to
      *         act on: {@link InvalidScopeException} when the non-success status is a {@code 4xx} whose
      *         RFC 6749 §5.2 body names exactly {@code invalid_scope}, so the server refused the requested
      *         scope before applying any grant and repeating the request will not change the answer — any
@@ -216,6 +228,12 @@ public class TokenEndpointClient {
         HttpResponse<String> response = send(handler, client, body,
                 proofHeaders(targetUri, requestHeaders, senderConstraint, null));
         if (!HttpStatusFamily.isSuccess(response.statusCode())) {
+            // An invalid_scope answer is terminal and is classified before any nonce retry: the nonce
+            // retry exists for use_dpop_nonce only, and retrying a scope refusal could turn it into a
+            // transport failure of the retry, which would be reported as PRE_REDEMPTION.
+            if (scopeRefused(response)) {
+                throw scopeRefusal(response);
+            }
             Optional<String> nonce = dpopNonceChallenge(response, senderConstraint);
             if (nonce.isPresent()) {
                 response = send(handler, client, body,
@@ -239,12 +257,7 @@ public class TokenEndpointClient {
                                 + response.statusCode() + " (RFC 6749 §5.2 'invalid_grant')");
             }
             if (scopeRefused(response)) {
-                // Status and fixed text only in the message (CWE-117); the error_description travels on
-                // the exception, sanitized by its constructor (ADR-0022), never the raw body.
-                throw new InvalidScopeException(
-                        "Token endpoint refused the requested scope with HTTP "
-                                + response.statusCode() + " (RFC 6749 §5.2 'invalid_scope')",
-                        InvalidScopeException.ERROR_CODE, errorDescription(response.body()));
+                throw scopeRefusal(response);
             }
             throw new TransportException(
                     "Token endpoint returned unexpected HTTP status " + response.statusCode());
@@ -257,6 +270,18 @@ public class TokenEndpointClient {
         TokenResponse tokenResponse = parse(response.body());
         verifySenderConstraint(tokenResponse, senderConstraint);
         return tokenResponse;
+    }
+
+    /**
+     * Builds the typed refusal for an {@code invalid_scope} answer. Status and fixed text only in the
+     * message (CWE-117); the error_description travels on the exception, sanitized by its constructor
+     * (ADR-0022), never the raw body.
+     */
+    private InvalidScopeException scopeRefusal(HttpResponse<String> response) {
+        return new InvalidScopeException(
+                "Token endpoint refused the requested scope with HTTP "
+                        + response.statusCode() + " (RFC 6749 §5.2 'invalid_scope')",
+                InvalidScopeException.ERROR_CODE, errorDescription(response.body()));
     }
 
     /**

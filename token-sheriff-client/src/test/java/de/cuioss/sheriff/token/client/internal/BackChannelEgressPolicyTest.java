@@ -52,6 +52,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -75,6 +76,7 @@ class BackChannelEgressPolicyTest {
     private static final String METADATA_ADDRESS = "169.254.169.254";
     private static final String SITE_LOCAL_ADDRESS = "10.0.0.1";
     private static final String SSRF_REFUSAL = "SSRF egress blocked";
+    private static final String QUERY_SECRET = "client_secret=hunter2";
     private static final String PUBLIC_ISSUER = "https://idp.invalid/realms/demo";
     private static final String REALM_PATH = "/realms/demo";
     private static final String WELL_KNOWN_PATH = REALM_PATH + "/.well-known/openid-configuration";
@@ -207,6 +209,21 @@ class BackChannelEgressPolicyTest {
                 .build());
 
         assertRefusedWithoutContact(() -> client.requestToken(serverUrl(TOKEN_PATH), CLIENT_CREDENTIALS, Map.of()));
+    }
+
+    @Test
+    @DisplayName("A refusal carries no part of the contacted URL, neither in its message nor in its cause chain")
+    void shouldNotEchoTheContactedUrlInTheRefusal() {
+        var client = new TokenEndpointClient(mappedConfiguration(METADATA_ADDRESS));
+        String endpointWithSecrets = serverUrl(TOKEN_PATH) + "?" + QUERY_SECRET;
+
+        var thrown = assertThrows(TransportException.class,
+                () -> client.requestToken(endpointWithSecrets, CLIENT_CREDENTIALS, Map.of()));
+
+        assertTrue(causeChainMentions(thrown, SSRF_REFUSAL), "the refusal must name its reason");
+        assertFalse(causeChainMentions(thrown, "hunter2"), "the query secret must not be echoed");
+        assertFalse(causeChainMentions(thrown, TOKEN_PATH), "the URL path must not be echoed");
+        assertFalse(causeChainMentions(thrown, serverHost), "the contacted host must not be echoed");
     }
 
     private void assertRefusedWithoutContact(Executable call) {

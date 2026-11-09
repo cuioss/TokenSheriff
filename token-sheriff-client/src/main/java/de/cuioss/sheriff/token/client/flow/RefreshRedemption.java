@@ -34,9 +34,13 @@ import java.util.Objects;
  * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION} failure (connection failure, DNS failure,
  * {@code 5xx}), where the client keeps the presented refresh token locally and the session must not be
  * quarantined — although the server may already have rotated the token after a connection failure or
- * a {@code 5xx}, since a token request is a non-idempotent {@code POST}; and {@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED}, where the server
+ * a {@code 5xx}, since a token request is a non-idempotent {@code POST};
+ * {@link RefreshFailureClassification.Kind#SCOPE_REFUSED}, where the server refused the requested
+ * scope ({@code invalid_scope}) without issuing a grant — the session is kept and the same request must
+ * not be retried, since the answer depends on the request and a retry cannot change it; and
+ * {@link RefreshFailureClassification.Kind#CREDENTIAL_REJECTED}, where the server
  * declared the presented token invalid without redeeming it — no redemption state exists because
- * nothing was redeemed, yet the session must still be cleared.
+ * nothing was redeemed, yet the session must still be cleared. These three carry no redemption state.
  * <p>
  * Three states are distinguished, and the third is not a variant of the first two:
  * <ul>

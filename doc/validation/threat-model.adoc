@@ -63,7 +63,7 @@ _See Requirements xref:requirements.adoc#VALIDATION-8.1[VALIDATION-8.1] and xref
 
 ==== Open Recommendations
 
-* Revocation checks for tokens revoked before they expire (a deny list of revoked token identifiers); the library has none built in, and a custom `TokenValidationRule` is the extension point for one
+* Revocation checks for tokens revoked before they expire (a deny list of revoked token identifiers); the library has none built in. A custom `TokenValidationRule` is the extension point for an access-token check, because rules run in the access-token pipeline only; an application that needs ID-token revocation must check it separately
 * Rate limiting for token validation attempts
 * JWK thumbprint validation for JWKS endpoints
 

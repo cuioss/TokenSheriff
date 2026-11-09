@@ -491,10 +491,17 @@ That premise is false: the client drives its own OIDC/OAuth back-channel HTTP an
 in-module egress control — each discovery-advertised endpoint URL is run through the
 `de.cuioss.http.security` URL-path validation pipeline, and a non-TLS endpoint is refused, *before*
 the fetch (xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP],
-xref:threat-model.adoc#T-SSRF-ADVERTISED[T-SSRF-ADVERTISED]). The scope of that control is
-*path-structure and scheme*, not host-address reachability; host-address SSRF filtering
-(link-local / internal-address blocking) remains a network- / deployment-level concern, not an
-engine control. Every endpoint the client models and uses that an `https` issuer's discovery
+xref:threat-model.adoc#T-SSRF-ADVERTISED[T-SSRF-ADVERTISED]). The path-structure and scheme
+checks are complemented by a *host-address egress policy* (xref:#CLIENT-24[CLIENT-24],
+xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]): before every fetch the
+client's own `EgressPolicy` resolves the host of the URL actually contacted and refuses it when any
+resolved address is loopback, link-local (including the cloud-metadata range), site-local,
+unique-local, carrier-grade NAT, wildcard, broadcast or multicast. The policy is on by default; the
+only relaxations are the configuration inputs `allowLoopbackEgress` (loopback only) and
+`allowedEgressHosts` (listed hosts bypass the range check, advertised endpoints included). Its
+limit is DNS rebinding: the host is resolved at the check and again by the HTTP client when it
+connects, so a DNS answer that changes in between is not seen, and a deployment that needs that
+guarantee still needs a network-level control. Every endpoint the client models and uses that an `https` issuer's discovery
 document advertises (`authorization_endpoint`, `token_endpoint`, `userinfo_endpoint`, `jwks_uri`,
 `end_session_endpoint`, `revocation_endpoint`, `introspection_endpoint`,
 `pushed_authorization_request_endpoint`) MUST be `https`, and `allowInsecureHttp` does not relax

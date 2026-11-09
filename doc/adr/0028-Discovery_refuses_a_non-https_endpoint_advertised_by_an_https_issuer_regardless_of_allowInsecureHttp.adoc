@@ -46,11 +46,9 @@ When the configured issuer is `https`, every endpoint the client models and uses
 document advertises must be `https` as well. A document that advertises a non-`https` value for any of
 them is refused, and discovery fails. `allowInsecureHttp` does not relax this check.
 
-* The checked set is the endpoint fields the client's provider metadata models:
-  `authorization_endpoint`, `token_endpoint`, `userinfo_endpoint`, `jwks_uri`,
-  `end_session_endpoint`, `revocation_endpoint`, `introspection_endpoint` and
-  `pushed_authorization_request_endpoint`. An advertised field outside that set is neither read nor
-  checked.
+* The checked set is the endpoint fields the client's provider metadata models; it is held in one
+  place, the endpoint map built by `DiscoveryResolver.validateEndpointSchemes`, which this record does
+  not repeat. An advertised field outside that set is neither read nor checked.
 * An absent endpoint is not a violation. A present value that is not an `https` URL is, including a
   blank value: it fails the check rather than being read as absent.
 * The refusal names the endpoint label only. The advertised URL is untrusted document content and is
@@ -66,10 +64,14 @@ what the document may advertise.
 
 === Positive
 
-* A TLS issuer cannot downgrade any endpoint the client calls, whatever the document says and whatever
+* A TLS issuer's document cannot downgrade any endpoint it advertises, whatever it says and whatever
   the cleartext switch is set to for local reasons.
 * The guarantee an operator reads off the configured issuer — TLS issuer, TLS endpoints — holds for
-  every endpoint the client uses.
+  the scheme of every endpoint the discovery document advertises. It is a guarantee about the
+  advertised scheme, not about the connection actually made: with `allowInsecureHttp` and an `http`
+  back-channel origin, a same-origin `https` endpoint is retargeted to that origin and contacted over
+  `http`. That retargeting is the operator's explicit choice, and the scheme check at discovery does
+  not see it.
 * The refusal happens once, at discovery, before any credential is sent to an advertised endpoint.
 
 === Negative

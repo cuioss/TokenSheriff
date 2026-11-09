@@ -106,6 +106,10 @@ public final class BackChannelHttp {
 
     private static final CuiLogger LOGGER = new CuiLogger(BackChannelHttp.class);
 
+    /** Fixed refusal reason of the host-address egress policy; carries no part of the refused URL. */
+    private static final String HOST_EGRESS_REFUSAL =
+            "SSRF egress blocked: the host of the contacted URL is not permitted by the host-address egress policy";
+
     /**
      * Bound origin for the back-channel clients (token, PAR, userinfo, revocation) that build their
      * own {@code ParserConfig} internally: their payload ceiling is deliberately fixed on that path
@@ -225,18 +229,20 @@ public final class BackChannelHttp {
     /**
      * Applies the client's host-address {@link EgressPolicy} to the URL actually contacted — after the
      * back-channel origin rewrite, so the check sees the host the request really goes to. A refusal is
-     * the policy's own {@link TransportException} SSRF-blocked branch, prefixed with the caller-safe
-     * failure context; the contacted URL it names cannot carry a line break, because
-     * {@link URI#create(String)} refuses one.
+     * reported as a {@link TransportException} with a fixed message: the failure context and the refusal
+     * reason only. The policy's own exception is not chained and its message is not reused, because it
+     * names the whole contacted URL, which can carry userinfo or query secrets and would reach every
+     * log line that prints the exception or its cause.
      *
      * @throws TransportException if the contacted URL has no host or resolves to a disallowed address
      */
     private void applyHostEgressPolicy(String targetUrl, String failureContext) {
         try {
             hostEgressPolicy.check(URI.create(targetUrl));
-        } catch (TransportException e) {
+        } catch (TransportException ignored) {
+            // Deliberately neither chained nor reused: the policy's message names the whole URL (CWE-532).
             LOGGER.debug("Host-address egress policy refused the contacted endpoint");
-            throw new TransportException(failureContext + ": " + e.getMessage(), e);
+            throw new TransportException(failureContext + ": " + HOST_EGRESS_REFUSAL);
         }
     }
 

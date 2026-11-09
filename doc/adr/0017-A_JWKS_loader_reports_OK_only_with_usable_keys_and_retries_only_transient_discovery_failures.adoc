@@ -164,8 +164,8 @@ of something that cannot.
 
 The decision above reads "background refresh enabled" as a promise that a refresh cycle will run.
 That promise does not always hold. An initialization can fail unexpectedly before its refresh task is
-scheduled: no HTTP handler can be built for an advertised `jwks_uri`, or the initial fetch or the key
-loading throws. The refresh executor can reject the task. And a direct-mode loader that never published
+scheduled: the initial fetch or the key loading throws. (An advertised `jwks_uri` for which no HTTP
+handler can be built is not such a failure; the amendment below makes it a terminal rejection.) The refresh executor can reject the task. And a direct-mode loader that never published
 an endpoint has nothing a refresh cycle could fetch from. In each of these cases `UNDEFINED` would
 announce a retry that never comes, and the readiness check would report `loading` as `IN_PROGRESS`
 forever.
