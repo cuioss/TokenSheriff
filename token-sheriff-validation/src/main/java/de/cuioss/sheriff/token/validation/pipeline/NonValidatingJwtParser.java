@@ -110,8 +110,9 @@ import java.util.Objects;
  * {@link ParserConfig#getMaxTokenSize()}, except for a 5-part JWE when JWE decryption is configured, which
  * is bound by the effective JWE limit {@link JweDecryptionConfig#getMaxEncryptedTokenSize()}. A size
  * pre-check also runs in {@code TokenStringValidator} at the start of all three pipelines (access, ID and
- * refresh token), before this parser is reached; when JWE decryption is configured it applies the JWE
- * limit to every token, so a JWS between the two limits is rejected by this parser):
+ * refresh token), before this parser is reached; when JWE decryption is configured it selects the limit
+ * by token shape: the JWE limit for a 5-part compact token, the larger of the two limits for every other
+ * token, so a JWS between the two limits is rejected by this parser):
  * {@snippet :
  * // An invalid token format is rejected, never returned
  * try {
@@ -304,9 +305,10 @@ public class NonValidatingJwtParser {
                 "TokenStringValidator precondition: token must not be null/empty");
 
         // Size limit: a 5-part compact JWE is bound by the JWE limit when JWE is configured, every other
-        // token by the parser's own limit. TokenStringValidator applies the JWE limit to every token
-        // when JWE is configured, so a JWS between the two limits reaches this check and is rejected
-        // here as a typed, accounted rejection rather than escaping as an unchecked exception.
+        // token by the parser's own limit. When JWE is configured, TokenStringValidator applies only a
+        // coarse pre-check to a non-JWE token (the larger of the two limits), so a JWS between the
+        // exact limits reaches this check and is rejected here as a typed, accounted rejection rather
+        // than escaping as an unchecked exception.
         int tokenSize = token.getBytes(StandardCharsets.UTF_8).length;
         int sizeLimit = sizeLimitFor(token);
         if (tokenSize > sizeLimit) {
