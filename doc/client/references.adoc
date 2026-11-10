@@ -81,6 +81,10 @@ or commons bibliographies.
 | OAuth 2.0 Step-Up Authentication Challenge Protocol — September 2023
 | Retrieval & flow (step-up)
 
+| https://www.rfc-editor.org/rfc/rfc6750[RFC 6750]
+| The OAuth 2.0 Authorization Framework: Bearer Token Usage — October 2012 (§3.1 `insufficient_scope` challenge)
+| Retrieval & flow (insufficient_scope challenge)
+
 | https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OpenID Connect RP-Initiated Logout 1.0]
 | RP-initiated logout via `end_session_endpoint` (`id_token_hint`, `post_logout_redirect_uri`, `state`)
 | Retrieval & flow (logout)

@@ -7,7 +7,8 @@
 
 == Overview
 
-_Realizes xref:../requirements.adoc#CLIENT-12[CLIENT-12] and xref:../requirements.adoc#CLIENT-13[CLIENT-13].
+_Realizes xref:../requirements.adoc#CLIENT-12[CLIENT-12], xref:../requirements.adoc#CLIENT-13[CLIENT-13]
+and xref:../requirements.adoc#CLIENT-25[CLIENT-25].
 See xref:../threat-model.adoc[Threat Model], xref:../best-practices.adoc[Best Practices] and
 xref:../architecture.adoc[Architecture]._
 
@@ -70,6 +71,51 @@ rejected when it is older than `max_age` plus a clock-skew allowance:
 A challenge whose `max_age` is negative is rejected (fail-closed) before this arithmetic runs,
 whatever the `auth_time` and the allowance: a negative `max_age` is no meaningful bound, and
 evaluating it would let the allowance widen it into an accepting one.
+
+[[_insufficient_scope_challenge]]
+== The `insufficient_scope` challenge (RFC 6750)
+
+Next to the RFC 9470 challenge, a resource server can refuse an access token because it lacks a
+scope: `WWW-Authenticate: Bearer error="insufficient_scope"`, optionally naming the required
+`scope`, a `realm` and an `error_description` (RFC 6750 §3.1). `InsufficientScopeChallengeParser`
+reads that challenge into an `InsufficientScopeChallenge` record — the `scope` set in first-seen
+order without duplicates (empty when the challenge names none), and the optional `realm` and
+`error_description`, the latter escaped and length-bounded before it is stored
+(xref:../requirements.adoc#CLIENT-25[CLIENT-25],
+xref:../threat-model.adoc#T-CHALLENGE-INJECTION[T-CHALLENGE-INJECTION]).
+
+The parser only reports the challenge: acting on it — for example obtaining a token with a wider
+scope — is the consumer's decision. It does not refresh or re-request a token, widen or request a
+scope, perform I/O or keep state, and it does not parse the `invalid_token` or `invalid_request`
+challenges.
+
+=== The shared `auth-param` reader and header guard
+
+Both challenge parsers read the `WWW-Authenticate` value through one package-private helper,
+`BearerChallengeParams`, which splits the RFC 9110 `auth-param` list on commas outside a
+quoted-string and unescapes quoted values. Its header guard refuses the whole value, never
+repairing it, when the value:
+
+* is longer than 8192 characters (checked before any other work);
+* carries `CR`, `LF` or `NUL`, or any other control character or `DEL` — horizontal tab is
+  tolerated as optional whitespace and inside a quoted-string;
+* does not start with the `Bearer` scheme;
+* shows a following challenge as a segment — a non-empty segment without `=` (such as `Basic` or
+  `realm`) or a name that is not an RFC 9110 `token` (such as `basic realm`) — so a parameter of a
+  second challenge (`Bearer error="insufficient_scope", Basic, scope="x"`) is never read as a
+  Bearer parameter;
+* names an `auth-param` twice.
+
+The `insufficient_scope` parser reads in a strict mode that additionally refuses an empty
+`auth-param` name, an unterminated quoted value and a trailing backslash. It then requires every
+`scope` token to match the RFC 6749 §3.3 `scope-token` grammar and accepts at most 64 tokens.
+
+The step-up parser reads in a lenient mode that keeps its earlier handling of an empty name
+(skipped) and an unterminated quoted value (kept verbatim), but it now applies the same guard:
+a challenge carrying another control character, longer than 8192 characters, or followed by
+another scheme or a valueless segment is refused rather than read.
+
+* Source: https://www.rfc-editor.org/rfc/rfc6750#section-3.1[RFC 6750 §3.1], https://www.rfc-editor.org/rfc/rfc6749#section-3.3[RFC 6749 §3.3], https://www.rfc-editor.org/rfc/rfc9110#section-11.2[RFC 9110 §11.2].
 
 == RP-initiated logout
 
