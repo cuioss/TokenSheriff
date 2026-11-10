@@ -168,9 +168,9 @@ class InsufficientScopeChallengeParserTest {
         @DisplayName("Should refuse a scope made of Unicode whitespace alone, as the same character beside a token")
         void shouldRefuseUnicodeBlankScope() {
             assertAll("U+2003 EM SPACE",
-                    () -> assertRefused(CHALLENGE_PREFIX + ", scope=\" \"",
+                    () -> assertRefused(CHALLENGE_PREFIX + ", scope=\"\u2003\"",
                             "a Unicode-blank scope goes through the token grammar"),
-                    () -> assertRefused(CHALLENGE_PREFIX + ", scope=\" read\"",
+                    () -> assertRefused(CHALLENGE_PREFIX + ", scope=\"\u2003read\"",
                             "the same character beside a token"));
         }
 
@@ -241,7 +241,7 @@ class InsufficientScopeChallengeParserTest {
         @Test
         @DisplayName("Should escape control and line-separator characters in error_description")
         void shouldEscapeDescription() {
-            String header = CHALLENGE_PREFIX + ", error_description=\"a\tb\u0085c d\"";
+            String header = CHALLENGE_PREFIX + ", error_description=\"a\tb\u0085c\u2028d\"";
 
             assertEquals(Optional.of("a\\tb\\u0085c\\u2028d"), parseRequired(header).getErrorDescription(),
                     "HT, NEL and LS pass the header guard and are stored only escaped");
@@ -251,7 +251,7 @@ class InsufficientScopeChallengeParserTest {
         @DisplayName("Should escape a Unicode line separator in realm")
         void shouldEscapeLineSeparatorInRealm() {
             var realm = scopeToken();
-            String header = "Bearer realm=\"" + realm + " forged\", error=\"insufficient_scope\"";
+            String header = "Bearer realm=\"" + realm + "\u2028forged\", error=\"insufficient_scope\"";
 
             assertEquals(Optional.of(realm + "\\u2028forged"), parseRequired(header).getRealm(),
                     "LS passes the header guard and the realm stores it only escaped");
