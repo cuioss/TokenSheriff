@@ -80,7 +80,7 @@ scope: `WWW-Authenticate: Bearer error="insufficient_scope"`, optionally naming 
 `scope`, a `realm` and an `error_description` (RFC 6750 §3.1). `InsufficientScopeChallengeParser`
 reads that challenge into an `InsufficientScopeChallenge` record — the `scope` set in first-seen
 order without duplicates (empty when the challenge names none), and the optional `realm` and
-`error_description`, the latter escaped and length-bounded before it is stored
+`error_description`, both escaped and length-bounded before they are stored
 (xref:../requirements.adoc#CLIENT-25[CLIENT-25],
 xref:../threat-model.adoc#T-CHALLENGE-INJECTION[T-CHALLENGE-INJECTION]).
 

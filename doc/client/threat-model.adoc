@@ -147,7 +147,8 @@ The client engine:
   (horizontal tab tolerated), is followed by another scheme or carries a valueless segment, or
   names an `auth-param` twice. The `insufficient_scope` parser additionally refuses an empty name,
   an unterminated quoted value, a trailing backslash, a `scope` token outside the RFC 6749 §3.3
-  grammar and more than 64 `scope` tokens, and escapes the `error_description` before storing it.
+  grammar and more than 64 `scope` tokens, and escapes the `realm` and the `error_description`
+  before storing them.
 | https://www.rfc-editor.org/rfc/rfc6750#section-3.1[RFC 6750 §3.1], https://www.rfc-editor.org/rfc/rfc9110#section-11.2[RFC 9110 §11.2], https://www.rfc-editor.org/rfc/rfc9110#section-5.5[RFC 9110 §5.5]
 | xref:requirements.adoc#CLIENT-25[CLIENT-25], xref:requirements.adoc#CLIENT-12[CLIENT-12]
 

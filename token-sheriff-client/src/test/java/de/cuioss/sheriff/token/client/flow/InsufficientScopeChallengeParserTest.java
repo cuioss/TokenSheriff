@@ -189,7 +189,7 @@ class InsufficientScopeChallengeParserTest {
     }
 
     @Nested
-    @DisplayName("(d) realm and sanitised error_description")
+    @DisplayName("(d) Sanitised realm and error_description")
     class RealmAndDescription {
 
         @Test
@@ -224,6 +224,16 @@ class InsufficientScopeChallengeParserTest {
 
             assertEquals(Optional.of("a\\tb\\u0085c\\u2028d"), parseRequired(header).getErrorDescription(),
                     "HT, NEL and LS pass the header guard and are stored only escaped");
+        }
+
+        @Test
+        @DisplayName("Should escape a Unicode line separator in realm")
+        void shouldEscapeLineSeparatorInRealm() {
+            var realm = scopeToken();
+            String header = "Bearer realm=\"" + realm + " forged\", error=\"insufficient_scope\"";
+
+            assertEquals(Optional.of(realm + "\\u2028forged"), parseRequired(header).getRealm(),
+                    "LS passes the header guard and the realm stores it only escaped");
         }
 
         @Test

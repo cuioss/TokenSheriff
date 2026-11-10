@@ -378,8 +378,8 @@ every value the fail-closed header guard refuses, MUST yield no challenge:
 
 The `scope` value is split on single spaces, empty tokens are dropped and duplicates collapsed in
 first-seen order; an absent or blank `scope` yields a challenge with an empty scope set. The
-`error_description` MUST be escaped and length-bounded before it is stored and MUST NOT be logged
-raw. The parser is stateless and performs no I/O. The engine does *not* refresh or re-request a
+`realm` and the `error_description` MUST be escaped and length-bounded before they are stored and
+MUST NOT be logged raw. The parser is stateless and performs no I/O. The engine does *not* refresh or re-request a
 token, does not widen or request any scope, and does not parse the `invalid_token` or
 `invalid_request` challenges; acting on the challenge is the caller's decision. The same header
 guard reads the RFC 9470 step-up challenge (xref:#CLIENT-12[]).

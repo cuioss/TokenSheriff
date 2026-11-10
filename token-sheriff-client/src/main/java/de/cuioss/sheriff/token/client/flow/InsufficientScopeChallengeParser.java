@@ -45,8 +45,10 @@ import java.util.Set;
  * duplicates collapsed in first-seen order. Every token must match the RFC 6749 §3.3 {@code scope-token}
  * grammar ({@code %x21 / %x23-5B / %x5D-7E}) and at most {@value #MAX_SCOPE_TOKENS} tokens are read;
  * beyond either the whole challenge yields {@link Optional#empty()}. An absent or blank {@code scope}
- * yields a challenge with an empty scope set. The {@code error_description} is escaped and bounded by
- * {@link LogSanitizer} before it is stored, and it is never logged.
+ * yields a challenge with an empty scope set. The {@code realm} and the {@code error_description} are
+ * escaped and bounded by {@link LogSanitizer} before they are stored — the header guard refuses C0
+ * controls and {@code DEL} only, so C1 controls and the Unicode line separators U+2028 and U+2029 reach
+ * them — and neither is ever logged.
  * <p>
  * Usage example:
  * {@snippet :
@@ -100,8 +102,9 @@ public final class InsufficientScopeChallengeParser {
         if (scopes.isEmpty()) {
             return Optional.empty();
         }
+        String realm = LogSanitizer.sanitize(params.get("realm"));
         String errorDescription = LogSanitizer.sanitize(params.get("error_description"));
-        return Optional.of(new InsufficientScopeChallenge(scopes.get(), params.get("realm"), errorDescription));
+        return Optional.of(new InsufficientScopeChallenge(scopes.get(), realm, errorDescription));
     }
 
     private static Optional<Set<String>> parseScopes(@Nullable String scope) {
@@ -148,7 +151,8 @@ public final class InsufficientScopeChallengeParser {
      *
      * @param scopes           the scopes the resource server named, in first-seen order without
      *                         duplicates; empty when the challenge named none, never {@code null}
-     * @param realm            the protection realm, or {@code null} when absent
+     * @param realm            the protection realm, escaped and bounded by {@link LogSanitizer}, or
+     *                         {@code null} when absent
      * @param errorDescription the {@code error_description}, escaped and bounded by {@link LogSanitizer},
      *                         or {@code null} when absent
      */
@@ -166,7 +170,7 @@ public final class InsufficientScopeChallengeParser {
         }
 
         /**
-         * @return the protection realm, if the challenge named one
+         * @return the escaped and bounded protection realm, if the challenge named one
          */
         public Optional<String> getRealm() {
             return Optional.ofNullable(realm);
