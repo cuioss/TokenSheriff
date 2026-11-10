@@ -43,13 +43,17 @@ Integration tests for the Token-Sheriff Quarkus extensions with native container
 ./mvnw clean verify -Pmulti-idp-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
 
 # JVM unit tests only (no Docker required)
-./mvnw clean test -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
+./mvnw clean verify -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
 
 # Manual container testing
 ./scripts/start-integration-container.sh
 curl -k https://localhost:10443/q/health
 ./scripts/stop-integration-container.sh
 ----
+
+The JVM unit tests use the `token-sheriff-validation` `generators` test jar, which only the
+`package` phase builds, so they run through `verify` with `-am`, never through the `test` goal.
+Build commands are owned by link:../../AGENTS.md[AGENTS.md] (Essential Build Commands).
 
 == Image Variants
 

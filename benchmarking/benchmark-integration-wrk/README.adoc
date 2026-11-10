@@ -323,12 +323,15 @@ Health checks scale better but also degrade at 300 connections (P90 15ms vs 2.5m
 
 [source,bash]
 ----
-# Unit tests for WRK result parser
-./mvnw test -pl benchmarking/benchmark-integration-wrk
+# Unit tests for WRK result parser (builds the modules it depends on)
+./mvnw clean verify -pl benchmarking/benchmark-integration-wrk -am
 
 # Integration test with containers
 ./mvnw verify -Pbenchmark -pl benchmarking/benchmark-integration-wrk
 ----
+
+Build commands are owned by link:../../AGENTS.md[AGENTS.md] (Essential Build Commands), which
+explains why the `test` goal is not used in this reactor.
 
 === Adding New Benchmarks
 

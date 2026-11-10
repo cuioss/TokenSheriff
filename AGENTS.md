@@ -68,6 +68,10 @@ Multi-module Maven project:
 - `bom/` - Bill of Materials for dependency management
 
 ### Essential Build Commands
+
+This section and *Test Execution Commands* below are the one place build commands are stated;
+other documents point here.
+
 ```bash
 # Development build
 ./mvnw clean verify
@@ -75,12 +79,23 @@ Multi-module Maven project:
 # Full build with all tests
 ./mvnw clean install
 
-# Build single module
-./mvnw clean install -pl <module-name>
+# Build single module (with the modules it depends on)
+./mvnw clean verify -pl <module-path> -am
 
 # Run single test
-./mvnw test -Dtest=ClassName#methodName
+./mvnw verify -pl <module-path> -am -Dtest=ClassName#methodName -Dsurefire.failIfNoSpecifiedTests=false
 ```
+
+**Never gate on the `test-compile` or `test` goal.** `token-sheriff-validation` publishes its test
+fixtures as a `generators` classifier jar, and that jar is only built in the `package` phase.
+`token-sheriff-client`, `token-sheriff-validation-quarkus` and
+`token-sheriff-quarkus-integration-tests` consume it in `test` scope, and `benchmarking/benchmark-core`
+consumes it in `compile` scope. A build that stops before `package` therefore cannot resolve it: a
+reactor `./mvnw clean test-compile` fails with about 110 "package
+`de.cuioss.sheriff.token.validation.test…` does not exist" errors in `token-sheriff-client`,
+`token-sheriff-validation-quarkus` and `benchmark-core`, and adding `-pl <module> -am` does not help
+(`./mvnw test-compile -pl token-sheriff-client -am` fails the same way). Use `verify` (or
+`package -DskipTests`) instead; `-am` with `verify` builds the jar in the same run.
 
 ### Code Standards
 - **Indentation**: 4 spaces (configured in `.editorconfig`)
@@ -130,7 +145,6 @@ This project uses CUI logging standards with Java Util Logging:
   (`{Original}{Topic}Test`, plus at most one package-private `{Original}Support` fixture for shared setup), as a pure
   move: test methods move verbatim, no assertion, input or expected value changes, and no test is added, removed or
   renamed, so the executed test count is identical before and after.
-- **Current state**: 30 test classes are above 500 lines; the largest is `NonValidatingJwtParserTest` with 1024 lines.
 
 ### CUI Test Generator
 This project has CUI Test Generator dependencies available for test data generation:
@@ -147,8 +161,11 @@ Mandatory for 3+ similar test variants. Common annotations:
 
 ### Test Execution Commands
 ```bash
-# Run all tests
-./mvnw test
+# Run all tests (verify, not test: see Essential Build Commands)
+./mvnw clean verify
+
+# Run the tests of one module
+./mvnw clean verify -pl <module-path> -am
 
 # Run integration tests
 ./mvnw clean verify -Pintegration-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
