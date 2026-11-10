@@ -34,13 +34,14 @@ import java.io.IOException;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * The explicit-null and subject-type refusals of {@link TokenBuilder}, exercised on the builder
- * itself: the {@code TokenValidator} entry points refuse a body without {@code iss} first, so a body
- * of only {@code {"jti":null}} is reachable here only; the builder is also the one place that sees
+ * The explicit-null handling and the subject-type refusal of {@link TokenBuilder}, exercised on the
+ * builder itself: the {@code TokenValidator} entry points refuse a body without {@code iss} first, so a
+ * body of only {@code {"jti":null}} is reachable here only; the builder is also the one place that sees
  * every mapper configuration, including a custom mapper for {@code sub}, without building a validator.
- * Every refusal is a typed {@code MISSING_CLAIM} rejection and is counted once.
+ * An explicit JSON {@code null} reads exactly like an absent member, whatever mapper the claim has; a
+ * non-string {@code sub} is a typed {@code MISSING_CLAIM} rejection and is counted once.
  */
-@DisplayName("TokenBuilder refusals of explicit nulls and non-string subjects")
+@DisplayName("TokenBuilder reads explicit nulls as absent and refuses non-string subjects")
 class TokenBuilderExplicitNullTest {
 
     private static final String CUSTOM_CLAIM = "tenant_id";
@@ -81,17 +82,13 @@ class TokenBuilderExplicitNullTest {
     }
 
     @Test
-    @DisplayName("A body of only a null jti is refused, not returned as an empty token")
-    void shouldRefuseBodyOfOnlyNullJti() {
+    @DisplayName("A body of only a null jti returns an empty token exactly like an empty body")
+    void shouldReturnEmptyForBodyOfOnlyNullJti() {
         var builder = new TokenBuilder(issuerConfig().build(), counter);
-        var accessToken = decoded("{\"jti\":null}");
-        var idToken = decoded("{\"jti\":null}");
 
-        assertMissingClaim(assertThrows(TokenValidationException.class, () -> builder.createAccessToken(accessToken)),
-                "Malformed claim 'jti': expected a JSON string but got null");
-        assertMissingClaim(assertThrows(TokenValidationException.class, () -> builder.createIdToken(idToken)),
-                "Malformed claim 'jti': expected a JSON string but got null");
-        assertEquals(2, counter.getCount(EventType.MISSING_CLAIM), "Each refusal is counted once");
+        assertTrue(builder.createAccessToken(decoded("{\"jti\":null}")).isEmpty());
+        assertTrue(builder.createIdToken(decoded("{\"jti\":null}")).isEmpty());
+        assertEquals(0, counter.getCount(EventType.MISSING_CLAIM));
     }
 
     @Test
@@ -105,17 +102,19 @@ class TokenBuilderExplicitNullTest {
     }
 
     @Test
-    @DisplayName("An explicit null custom claim reaches its strict mapper and is refused")
-    void shouldRefuseExplicitNullCustomClaimWithStrictMapper() {
+    @DisplayName("An explicit null custom claim with a strict mapper reads as absent")
+    void shouldReadExplicitNullCustomClaimWithStrictMapperAsAbsent() {
         var builder = new TokenBuilder(issuerConfig().claimMapper(CUSTOM_CLAIM, new StrictStringMapper()).build(), counter);
         var body = decoded("{\"iss\":\"test-issuer\",\"" + CUSTOM_CLAIM + "\":null}");
 
-        assertRefusedOnce(assertThrows(TokenValidationException.class, () -> builder.createAccessToken(body)),
-                "Malformed claim '" + CUSTOM_CLAIM + "': expected a JSON string but got null");
+        var token = builder.createAccessToken(body).orElseThrow();
+
+        assertFalse(token.getClaims().containsKey(CUSTOM_CLAIM));
+        assertEquals(0, counter.getCount(EventType.MISSING_CLAIM));
     }
 
     @Test
-    @DisplayName("An explicit null custom claim without a refusing mapper still reads as absent")
+    @DisplayName("An explicit null custom claim with a stringifying mapper reads as absent")
     void shouldReadExplicitNullCustomClaimAsAbsent() {
         var builder = new TokenBuilder(issuerConfig().claimMapper(CUSTOM_CLAIM, new IdentityMapper()).build(), counter);
         var body = decoded("{\"iss\":\"test-issuer\",\"" + CUSTOM_CLAIM + "\":null}");

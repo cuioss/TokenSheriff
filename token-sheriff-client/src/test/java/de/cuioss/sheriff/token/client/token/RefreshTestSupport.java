@@ -46,7 +46,8 @@ import java.util.List;
  * endpoint serving real, pipeline-validatable JWTs.
  * <p>
  * Extracted so the wired refresh contract can be pinned across several focused test classes without
- * either redeclaring the fixture or growing a single class past the module's 400-line budget. It
+ * either redeclaring the fixture or growing a single class past the project's 500-line test-class
+ * guideline. It
  * follows the {@code flow.WiredFlowTestSupport} precedent: a package-private abstract base carrying
  * the {@code @EnableMockWebServer} dispatcher accessor and the generated token holders, which a
  * subclass initializes from its own {@code @BeforeEach} via {@link #initRefreshFixture()}.

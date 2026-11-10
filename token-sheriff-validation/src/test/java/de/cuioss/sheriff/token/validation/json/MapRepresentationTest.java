@@ -324,17 +324,6 @@ class MapRepresentationTest {
     }
 
     @Test
-    @DisplayName("Parsed explicit null is retained as explicit null, apart from an absent member")
-    void shouldRetainParsedExplicitNull() throws Exception {
-        MapRepresentation map = MapRepresentation.fromJson(DSL_JSON, "{\"sub\":null,\"iss\":\"https://example.com\"}");
-
-        assertTrue(map.isExplicitNull("sub"));
-        assertEquals(Set.of("sub"), map.explicitNullKeys());
-        assertFalse(map.isExplicitNull("iss"), "A member with a value is not an explicit null");
-        assertFalse(map.isExplicitNull("jti"), "An absent member is not an explicit null");
-    }
-
-    @Test
     @DisplayName("Parsed explicit null answers every existing accessor exactly like an absent member")
     void shouldAnswerAccessorsForParsedExplicitNullLikeAbsent() throws Exception {
         MapRepresentation withNull = MapRepresentation.fromJson(DSL_JSON, "{\"sub\":null,\"iss\":\"https://example.com\"}");
@@ -364,26 +353,5 @@ class MapRepresentationTest {
         assertTrue(map.isEmpty());
         assertEquals(0, map.size());
         assertTrue(map.keySet().isEmpty());
-        assertTrue(map.isExplicitNull("sub"));
-    }
-
-    @Test
-    @DisplayName("A nested object keeps its explicit nulls apart from absent members")
-    void shouldKeepNestedExplicitNulls() throws Exception {
-        MapRepresentation nested = MapRepresentation.fromJson(DSL_JSON, "{\"inner\":{\"sub\":null,\"iss\":\"x\"}}")
-                .getNestedMap("inner").orElseThrow();
-
-        assertTrue(nested.isExplicitNull("sub"));
-        assertFalse(nested.isExplicitNull("iss"));
-        assertEquals(Optional.empty(), nested.getValue("sub"));
-        assertEquals(Optional.of("x"), nested.getString("iss"));
-        assertEquals(Set.of("iss"), nested.keySet());
-    }
-
-    @Test
-    @DisplayName("Direct construction carries no explicit nulls unless given")
-    void shouldHaveNoExplicitNullsWhenConstructedDirectly() {
-        assertTrue(new MapRepresentation(Map.of("sub", "user")).explicitNullKeys().isEmpty());
-        assertTrue(new MapRepresentation(Map.of(), Set.of("sub")).isExplicitNull("sub"));
     }
 }

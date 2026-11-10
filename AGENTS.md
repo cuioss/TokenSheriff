@@ -122,13 +122,15 @@ This project uses CUI logging standards with Java Util Logging:
 - **Signal integrity**: the rules for proving a check discriminates before trusting its verdict — coverage-gate negative controls, measuring from `clean`, no-verdict versus failing-verdict, and asserting identity rather than a proxy property — are stated once in `doc/client/specification/test-strategy.adoc` § Signal integrity, and that section applies to every module in this repository.
 
 ### Test Class Size
-- **Budget**: a test class should stay within 400 lines.
-- **Split rule**: a test class of **more than 1000 lines** must be split by topic into sibling classes in the same
-  package (`{Original}{Topic}Test`, plus at most one package-private `{Original}Support` fixture for shared setup).
-  The split is a pure move: test methods move verbatim, no assertion, input or expected value changes, and no test is
-  added, removed or renamed, so the executed test count is identical before and after. Each resulting class stays
-  under 1000 lines and aims at the 400-line budget where the topic grouping allows.
-- The threshold is strictly *more than* 1000 lines: a class of exactly 1000 lines is within the rule and is not split.
+- **Guideline**: avoid test classes above 500 lines. This is a guideline, not a gate: no build or review check fails
+  on it, and an existing class above 500 lines carries no obligation to be split.
+- **New or grown classes**: a test class that a pull request creates or grows should stay at or under 500 lines.
+  When it cannot, the pull request body gives the reason.
+- **Splitting (advice)**: when a class is split, split it by topic into sibling classes in the same package
+  (`{Original}{Topic}Test`, plus at most one package-private `{Original}Support` fixture for shared setup), as a pure
+  move: test methods move verbatim, no assertion, input or expected value changes, and no test is added, removed or
+  renamed, so the executed test count is identical before and after.
+- **Current state**: 30 test classes are above 500 lines; the largest is `NonValidatingJwtParserTest` with 1024 lines.
 
 ### CUI Test Generator
 This project has CUI Test Generator dependencies available for test data generation:
