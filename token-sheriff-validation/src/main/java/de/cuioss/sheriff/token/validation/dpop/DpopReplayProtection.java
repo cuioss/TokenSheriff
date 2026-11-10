@@ -18,12 +18,7 @@ package de.cuioss.sheriff.token.validation.dpop;
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.io.Closeable;
-import java.util.Comparator;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -35,6 +30,20 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>
  * This instance is shared across all issuers since jti values must be globally
  * unique per RFC 9449.
+ * </p>
+ * <h2>Soft capacity</h2>
+ * <p>
+ * The configured {@code maxSize} is a <em>soft cap</em>, not a hard maximum. A jti that is
+ * still inside its freshness window is never evicted, because forgetting it early would
+ * permit a replay. The cache can therefore exceed {@code maxSize} by at most the number of
+ * jtis that arrive within one TTL window (arrival rate x TTL). Those entries are reclaimed
+ * once their window has closed, either by the periodic expiry sweep (every 60 seconds) or
+ * by a later over-cap insert.
+ * </p>
+ * <p>
+ * An over-cap insert evicts oldest-first from an insertion-ordered queue kept next to the
+ * map, and stops at the first entry still inside its window. When nothing is evictable it
+ * therefore examines a constant number of entries rather than scanning the whole cache.
  * </p>
  * <p>
  * A daemon thread periodically evicts expired entries to prevent unbounded memory growth.
@@ -48,20 +57,35 @@ public class DpopReplayProtection implements Closeable {
     private static final CuiLogger LOGGER = new CuiLogger(DpopReplayProtection.class);
     private static final long EVICTION_INTERVAL_SECONDS = 60;
 
+    /**
+     * A stored jti value. The insertion order makes every entry unique, so a
+     * {@code remove(key, value)} never removes a newer entry stored under the same jti.
+     */
     private record Entry(long insertionOrder, long timestampMillis) {
     }
 
+    /** Queue node referencing the map entry it was created for; stale once the map holds another value. */
+    private record Node(String jti, Entry entry) {
+    }
+
+    /** Source of truth for replay decisions. */
     private final ConcurrentHashMap<String, Entry> seenJti = new ConcurrentHashMap<>();
+    /** Insertion-ordered references to map entries; nodes whose entry was replaced or removed are skipped. */
+    private final ConcurrentLinkedQueue<Node> insertionQueue = new ConcurrentLinkedQueue<>();
+    /** Guards queue consumption (head inspection and removal) in the eviction paths. */
+    private final Object evictionLock = new Object();
     private final AtomicLong insertionCounter = new AtomicLong(0);
     private final long ttlMillis;
     private final int maxSize;
     private final ScheduledExecutorService scheduler;
+    private volatile int lastOverCapExamined;
 
     /**
      * Creates a new DpopReplayProtection with the given configuration.
      *
      * @param ttlSeconds maximum time in seconds to retain jti entries
-     * @param maxSize    maximum number of jti entries to store
+     * @param maxSize    soft cap on the number of jti entries; in-window entries are never
+     *                   evicted, so the cache may exceed it by the jtis arriving within one TTL
      */
     public DpopReplayProtection(long ttlSeconds, int maxSize) {
         this.ttlMillis = ttlSeconds * 1000;
@@ -90,12 +114,17 @@ public class DpopReplayProtection implements Closeable {
         Entry existing = seenJti.putIfAbsent(jti, newEntry);
 
         if (existing != null) {
-            // Entry exists - check if it has expired and try atomic replacement
-            return (now - existing.timestampMillis()) >= ttlMillis
-                    && seenJti.replace(jti, existing, newEntry);
+            // Entry exists - accept only if it has expired and the atomic replacement wins
+            if ((now - existing.timestampMillis()) >= ttlMillis && seenJti.replace(jti, existing, newEntry)) {
+                insertionQueue.offer(new Node(jti, newEntry));
+                return true;
+            }
+            return false;
         }
 
-        // Successfully stored new jti - evict oldest if needed
+        insertionQueue.offer(new Node(jti, newEntry));
+
+        // Successfully stored new jti - evict oldest expired entries if over the soft cap
         if (seenJti.size() > maxSize) {
             evictOldest();
         }
@@ -103,15 +132,31 @@ public class DpopReplayProtection implements Closeable {
         return true; // New jti, not a replay
     }
 
+    /**
+     * Number of queue entries the most recent over-cap insert examined. Package-private probe
+     * that lets tests pin the eviction cost without a wall-clock assertion.
+     *
+     * @return entries examined by the last over-cap eviction
+     */
+    int lastOverCapExamined() {
+        return lastOverCapExamined;
+    }
+
     private void evictExpired() {
         long now = System.currentTimeMillis();
         int removed = 0;
-        var iterator = seenJti.entrySet().iterator();
-        while (iterator.hasNext()) {
-            var entry = iterator.next();
-            if ((now - entry.getValue().timestampMillis()) >= ttlMillis) {
-                iterator.remove();
-                removed++;
+        synchronized (evictionLock) {
+            var iterator = insertionQueue.iterator();
+            while (iterator.hasNext()) {
+                Node node = iterator.next();
+                if (isStale(node)) {
+                    iterator.remove();
+                } else if (isExpired(node.entry(), now)) {
+                    iterator.remove();
+                    if (seenJti.remove(node.jti(), node.entry())) {
+                        removed++;
+                    }
+                }
             }
         }
         if (removed > 0) {
@@ -120,32 +165,57 @@ public class DpopReplayProtection implements Closeable {
     }
 
     private void evictOldest() {
-        int overflow = seenJti.size() - maxSize;
-        if (overflow <= 0) {
-            return;
-        }
         long now = System.currentTimeMillis();
-        // Only evict entries whose freshness window (ttlMillis) has already elapsed, oldest first.
-        // Evicting a jti still inside its window would forget it early and permit a replay, defeating
-        // the protection this cache exists to provide. Under a flood of in-window jtis the cache may
-        // temporarily exceed maxSize; the periodic evictExpired sweep reclaims those entries once
-        // their windows close.
-        var evictable = seenJti.entrySet().stream()
-                .filter(entry -> (now - entry.getValue().timestampMillis()) >= ttlMillis)
-                .sorted(Map.Entry.comparingByValue(
-                        Comparator.comparingLong(Entry::insertionOrder)))
-                .limit(overflow)
-                .toList();
-        evictable.forEach(entry -> seenJti.remove(entry.getKey(), entry.getValue()));
-        if (evictable.size() < overflow) {
-            LOGGER.debug("DPoP replay cache over soft capacity: retained %s in-window jtis to preserve replay protection (overflow=%s, evicted=%s)",
-                    seenJti.size(), overflow, evictable.size());
+        int examined = 0;
+        int evicted = 0;
+        int overflow;
+        synchronized (evictionLock) {
+            overflow = seenJti.size() - maxSize;
+            int remaining = overflow;
+            // Pop from the head only while the head entry is stale or expired. Evicting a jti still
+            // inside its window would forget it early and permit a replay, so the first in-window
+            // entry ends the pass: every later entry was inserted after it.
+            while (remaining > 0) {
+                Node head = insertionQueue.peek();
+                if (head == null) {
+                    break;
+                }
+                examined++;
+                if (isStale(head)) {
+                    insertionQueue.poll();
+                } else if (isExpired(head.entry(), now)) {
+                    insertionQueue.poll();
+                    if (seenJti.remove(head.jti(), head.entry())) {
+                        evicted++;
+                        remaining--;
+                    }
+                } else {
+                    break;
+                }
+            }
         }
+        lastOverCapExamined = examined;
+        if (evicted < overflow) {
+            LOGGER.debug("DPoP replay cache over soft capacity: retained %s in-window jtis to preserve replay protection (overflow=%s, evicted=%s)",
+                    seenJti.size(), overflow, evicted);
+        }
+    }
+
+    /** A node is stale once the map no longer holds its entry (replaced after expiry, or removed). */
+    private boolean isStale(Node node) {
+        return !node.entry().equals(seenJti.get(node.jti()));
+    }
+
+    private boolean isExpired(Entry entry, long now) {
+        return (now - entry.timestampMillis()) >= ttlMillis;
     }
 
     @Override
     public void close() {
         scheduler.shutdownNow();
-        seenJti.clear();
+        synchronized (evictionLock) {
+            seenJti.clear();
+            insertionQueue.clear();
+        }
     }
 }

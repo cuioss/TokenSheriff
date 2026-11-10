@@ -322,8 +322,8 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.7[VALIDATION-8.7: DPoP Send
 
 |DP1
 |DPoP proof replay
-|JTI-based replay protection with bounded cache (default 10,000 entries, 300s TTL) in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/dpop/DpopReplayProtection.java[DpopReplayProtection]
-|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/dpop/DpopProofValidatorTest.java[DpopProofValidatorTest]
+|JTI-based replay protection in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/dpop/DpopReplayProtection.java[DpopReplayProtection]. The cache size is a soft cap (default soft cap 10,000 entries, TTL 360s): a jti still inside its TTL window is never evicted, so the cache can exceed the cap by at most the jtis arriving within one TTL window (bounded by arrival rate x TTL); those entries are reclaimed once their window closes
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/dpop/DpopProofValidatorTest.java[DpopProofValidatorTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/dpop/DpopReplayProtectionTest.java[DpopReplayProtectionTest]
 
 |DP2
 |Token exfiltration (no sender binding)

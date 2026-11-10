@@ -32,7 +32,10 @@ import lombok.ToString;
  *   <li>{@code required} - When {@code true}, tokens without {@code cnf.jkt} are rejected.
  *       When {@code false} (default), tokens without {@code cnf.jkt} pass normally (bearer mode).</li>
  *   <li>{@code proofMaxAgeSeconds} - Maximum age of a DPoP proof JWT's {@code iat} claim (default: 300s).</li>
- *   <li>{@code nonceCacheSize} - Maximum number of jti entries for replay protection (default: 10000).</li>
+ *   <li>{@code nonceCacheSize} - Soft cap on the number of jti entries for replay protection
+ *       (default: 10000). It is not a maximum: a jti still inside its TTL window is never evicted,
+ *       so the cache can exceed the cap by at most the number of jtis that arrive within one TTL
+ *       window (arrival rate x TTL); those entries are reclaimed once their window has closed.</li>
  *   <li>{@code nonceCacheTtlSeconds} - TTL for jti replay entries (default: 360s). A value at or
  *       below zero, or above 86400, is rejected by {@code build()} with an
  *       {@link IllegalArgumentException}. A positive value below {@code proofMaxAgeSeconds + 60} is
@@ -56,7 +59,7 @@ public class DpopConfig {
     /** Default maximum age in seconds for DPoP proof {@code iat} claim. */
     public static final long DEFAULT_PROOF_MAX_AGE_SECONDS = 300;
 
-    /** Default maximum number of jti entries in the replay cache. */
+    /** Default soft cap on the number of jti entries in the replay cache. */
     public static final int DEFAULT_NONCE_CACHE_SIZE = 10_000;
 
     /**
@@ -94,7 +97,13 @@ public class DpopConfig {
     long proofMaxAgeSeconds;
 
     /**
-     * Maximum number of entries in the jti replay protection cache.
+     * Soft cap on the number of entries in the jti replay protection cache.
+     * <p>
+     * This is not a hard maximum. A jti still inside its TTL window is never evicted, because
+     * forgetting it early would permit a replay, so the cache can exceed this value by at most the
+     * number of jtis that arrive within one TTL window. Those entries are reclaimed by the periodic
+     * expiry sweep or by an over-cap insert once their window has closed.
+     * </p>
      */
     int nonceCacheSize;
 
@@ -153,9 +162,9 @@ public class DpopConfig {
         }
 
         /**
-         * Sets the maximum size of the jti replay cache.
+         * Sets the soft cap of the jti replay cache.
          *
-         * @param nonceCacheSize maximum number of entries
+         * @param nonceCacheSize soft cap on the number of entries; in-window entries are never evicted
          * @return this builder instance
          */
         public DpopConfigBuilder nonceCacheSize(int nonceCacheSize) {
