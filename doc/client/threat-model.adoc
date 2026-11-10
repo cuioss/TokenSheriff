@@ -136,6 +136,22 @@ The client engine:
 | https://www.rfc-editor.org/rfc/rfc9470[RFC 9470]
 | xref:requirements.adoc#CLIENT-12[CLIENT-12]
 
+| [[T-CHALLENGE-INJECTION]]T-CHALLENGE-INJECTION
+| *Header injection and scope smuggling through `WWW-Authenticate`.* A resource server response,
+  or anything able to shape it, makes a challenge parser read a parameter that is not the Bearer
+  challenge's own: a second challenge whose parameters are read as Bearer parameters
+  (`Bearer error="insufficient_scope", Basic, scope="x"`), a duplicate `auth-param`, a line break
+  or other control character that splits or forges the value, or an oversized value.
+| Fail closed in the shared header guard: refuse the whole value, never repair it, when it is
+  longer than 8192 characters, carries `CR`, `LF`, `NUL`, any other control character or `DEL`
+  (horizontal tab tolerated), is followed by another scheme or carries a valueless segment, or
+  names an `auth-param` twice. The `insufficient_scope` parser additionally refuses an empty name,
+  an unterminated quoted value, a trailing backslash, a `scope` token outside the RFC 6749 §3.3
+  grammar and more than 64 `scope` tokens, and escapes the `realm` and the `error_description`
+  before storing them.
+| https://www.rfc-editor.org/rfc/rfc6750#section-3.1[RFC 6750 §3.1], https://www.rfc-editor.org/rfc/rfc9110#section-11.2[RFC 9110 §11.2], https://www.rfc-editor.org/rfc/rfc9110#section-5.5[RFC 9110 §5.5]
+| xref:requirements.adoc#CLIENT-25[CLIENT-25], xref:requirements.adoc#CLIENT-12[CLIENT-12]
+
 | [[T-LOGOUT]]T-LOGOUT
 | *Logout that leaves tokens live / open-redirect on `post_logout_redirect_uri`.* Logout
   clears the browser session but held tokens stay usable, or the post-logout redirect is

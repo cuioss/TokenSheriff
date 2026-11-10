@@ -15,15 +15,10 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
-import de.cuioss.sheriff.token.client.internal.HeaderValues;
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -36,6 +31,16 @@ import java.util.Optional;
  * — the {@code acr_values} and/or {@code max_age} it requires. This parser extracts that challenge
  * so {@link StepUpHandler} can drive a fresh, stronger authorization request. Any header that is not
  * an {@code insufficient_user_authentication} Bearer challenge yields {@link Optional#empty()}.
+ * <p>
+ * The {@code auth-param} list is read by the header guard shared with
+ * {@link InsufficientScopeChallengeParser}. Besides a value carrying {@code CR}, {@code LF} or
+ * {@code NUL} and a duplicate {@code auth-param}, the guard refuses the whole value when it carries any
+ * other control character or {@code DEL} (horizontal tab is tolerated), when it is longer than 8192
+ * characters, and when the Bearer challenge is followed by another scheme or carries a valueless
+ * segment (such as {@code , Basic, acr_values="x"} or {@code , realm}): such a segment is refused, not
+ * skipped, so a parameter of a following challenge can never be read as a Bearer parameter. A segment
+ * with an empty name ({@code =orphan}) is still skipped and an unterminated quoted value is still kept
+ * verbatim.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -47,7 +52,6 @@ public class StepUpChallengeParser {
     public static final String INSUFFICIENT_USER_AUTHENTICATION = "insufficient_user_authentication";
 
     private static final CuiLogger LOGGER = new CuiLogger(StepUpChallengeParser.class);
-    private static final String BEARER_PREFIX = "bearer ";
 
     /**
      * Parses the {@code WWW-Authenticate} header value into a step-up challenge.
@@ -55,24 +59,14 @@ public class StepUpChallengeParser {
      * @param wwwAuthenticate the raw header value, or {@code null}
      * @return the parsed challenge, or {@link Optional#empty()} if the header is absent, carries a
      *         {@code CR}, {@code LF} or {@code NUL} anywhere (a split, folded or truncated field value
-     *         is refused, never repaired), or is not an {@code insufficient_user_authentication}
-     *         Bearer challenge
+     *         is refused, never repaired), carries any other control character or {@code DEL} (horizontal
+     *         tab excepted), is longer than 8192 characters, is followed by another scheme or carries a
+     *         valueless segment, names an {@code auth-param} twice, or is not an
+     *         {@code insufficient_user_authentication} Bearer challenge
      */
     public Optional<StepUpChallenge> parse(@Nullable String wwwAuthenticate) {
-        if (wwwAuthenticate == null || wwwAuthenticate.isBlank()) {
-            return Optional.empty();
-        }
-        if (HeaderValues.containsLineBreakOrNul(wwwAuthenticate)) {
-            // Checked before any strip(): stripping would remove the separator from between two
-            // auth-params and turn a split or folded header into an actionable challenge (fail closed).
-            LOGGER.debug("Ignoring step-up challenge carrying CR, LF or NUL");
-            return Optional.empty();
-        }
-        String trimmed = wwwAuthenticate.strip();
-        if (!trimmed.toLowerCase(Locale.ROOT).startsWith(BEARER_PREFIX)) {
-            return Optional.empty();
-        }
-        Optional<Map<String, String>> parsed = parseParams(trimmed.substring(BEARER_PREFIX.length()));
+        Optional<Map<String, String>> parsed = BearerChallengeParams.parse(wwwAuthenticate,
+                BearerChallengeParams.Mode.LENIENT);
         if (parsed.isEmpty()) {
             return Optional.empty();
         }
@@ -94,67 +88,6 @@ public class StepUpChallengeParser {
         return Optional.of(new StepUpChallenge(acrValues, maxAge));
     }
 
-    /**
-     * Parses the RFC 9110 {@code auth-param} list of a Bearer challenge into a case-insensitive map.
-     * The list is split on commas that sit <em>outside</em> a quoted-string, so a quoted value may
-     * itself contain commas and backslash-escaped quotes without being torn apart. A duplicate
-     * {@code auth-param} name is malformed per RFC 9110 §11.2, so the whole challenge is rejected
-     * (fail-closed) rather than silently taking a last-wins value an attacker could inject.
-     *
-     * @param paramList the comma-separated {@code auth-param} list following the {@code Bearer} scheme
-     * @return the parsed parameters, or {@link Optional#empty()} if a duplicate parameter is present
-     */
-    private static Optional<Map<String, String>> parseParams(String paramList) {
-        Map<String, String> params = new HashMap<>();
-        for (String segment : splitTopLevel(paramList)) {
-            String pair = segment.strip();
-            int eq = pair.indexOf('=');
-            if (eq <= 0) {
-                continue;
-            }
-            String key = pair.substring(0, eq).strip().toLowerCase(Locale.ROOT);
-            String value = unquote(pair.substring(eq + 1).strip());
-            if (params.putIfAbsent(key, value) != null) {
-                LOGGER.debug("Ignoring step-up challenge with duplicate auth-param '%s'",
-                        LogSanitizer.sanitize(key));
-                return Optional.empty();
-            }
-        }
-        return Optional.of(params);
-    }
-
-    /**
-     * Splits {@code input} on top-level commas — commas that are not inside a double-quoted string.
-     * Backslash escapes are honoured inside quotes so {@code \"} does not prematurely close the
-     * quoted-string and a comma inside the quotes stays with its value.
-     */
-    private static List<String> splitTopLevel(String input) {
-        List<String> parts = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        boolean inQuotes = false;
-        boolean escaped = false;
-        for (int i = 0; i < input.length(); i++) {
-            char c = input.charAt(i);
-            if (escaped) {
-                current.append(c);
-                escaped = false;
-            } else if (c == '\\' && inQuotes) {
-                current.append(c);
-                escaped = true;
-            } else if (c == '"') {
-                inQuotes = !inQuotes;
-                current.append(c);
-            } else if (c == ',' && !inQuotes) {
-                parts.add(current.toString());
-                current.setLength(0);
-            } else {
-                current.append(c);
-            }
-        }
-        parts.add(current.toString());
-        return parts;
-    }
-
     private static @Nullable String blankToNull(@Nullable String value) {
         return value == null || value.isBlank() ? null : value;
     }
@@ -169,32 +102,6 @@ public class StepUpChallengeParser {
             LOGGER.debug("Ignoring non-numeric step-up max_age '%s'", LogSanitizer.sanitize(value));
             return null;
         }
-    }
-
-    /**
-     * Strips the surrounding double-quotes from a {@code quoted-string} value and unescapes its
-     * backslash escapes ({@code \"} → {@code "}, {@code \\} → {@code \}), per RFC 9110 §5.6.4.
-     * An unquoted {@code token} value is returned unchanged.
-     */
-    private static String unquote(String value) {
-        if (value.length() < 2 || value.charAt(0) != '"' || value.charAt(value.length() - 1) != '"') {
-            return value;
-        }
-        String inner = value.substring(1, value.length() - 1);
-        StringBuilder sb = new StringBuilder(inner.length());
-        boolean escaped = false;
-        for (int i = 0; i < inner.length(); i++) {
-            char c = inner.charAt(i);
-            if (escaped) {
-                sb.append(c);
-                escaped = false;
-            } else if (c == '\\') {
-                escaped = true;
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString();
     }
 
     /**

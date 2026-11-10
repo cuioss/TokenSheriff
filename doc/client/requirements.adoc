@@ -359,6 +359,33 @@ points it at the reachable address itself.
 
 * Source: xref:../commons/specification/transport.adoc#client_back_channel_origin[Transport specification — client back-channel origin], https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation[OIDC Discovery 1.0 §4.3] (issuer identity), https://www.rfc-editor.org/rfc/rfc9449#section-4.2[RFC 9449 §4.2] (`htu` is the target URI of the request), xref:../adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008] (hostname verification applies to the host contacted).
 
+[#CLIENT-25]
+=== CLIENT-25: RFC 6750 insufficient_scope challenge parsing
+
+The engine MUST be able to read a resource server's RFC 6750 §3.1 `insufficient_scope` challenge
+off a `WWW-Authenticate` response header (`InsufficientScopeChallengeParser`), yielding the named
+`scope` set, the optional `realm` and the optional `error_description`. Only a value starting with
+the `Bearer` scheme whose `error` is exactly `insufficient_scope` parses; every other value, and
+every value the fail-closed header guard refuses, MUST yield no challenge:
+
+* a value longer than 8192 characters, or one carrying `CR`, `LF`, `NUL`, any other control
+  character or `DEL` (horizontal tab is tolerated as optional whitespace);
+* a value in which the Bearer challenge is followed by another scheme or carries a valueless
+  segment, an empty `auth-param` name or a name that is not an RFC 9110 `token`, so a parameter of
+  a second challenge can never be read as a Bearer parameter;
+* a duplicate `auth-param`, an unterminated quoted value or a trailing backslash;
+* a `scope` token outside the RFC 6749 §3.3 `scope-token` grammar, or more than 64 `scope` tokens.
+
+The `scope` value is split on single spaces, empty tokens are dropped and duplicates collapsed in
+first-seen order; an absent or blank `scope` yields a challenge with an empty scope set. The
+`realm` and the `error_description` MUST be escaped and length-bounded before they are stored and
+MUST NOT be logged raw. The parser is stateless and performs no I/O. The engine does *not* refresh or re-request a
+token, does not widen or request any scope, and does not parse the `invalid_token` or
+`invalid_request` challenges; acting on the challenge is the caller's decision. The same header
+guard reads the RFC 9470 step-up challenge (xref:#CLIENT-12[]).
+
+* Source: https://www.rfc-editor.org/rfc/rfc6750#section-3.1[RFC 6750 §3.1] (`insufficient_scope`, `scope`, `realm`, `error_description`), https://www.rfc-editor.org/rfc/rfc6749#section-3.3[RFC 6749 §3.3] (`scope-token` grammar), https://www.rfc-editor.org/rfc/rfc9110#section-11.2[RFC 9110 §11.2] (`auth-param` syntax).
+
 == Token requirements
 
 _The server-side lifecycle delta on top of the validation module — storage, refresh,
@@ -570,6 +597,7 @@ sourced xref:best-practices.adoc[best-practices] checklist, and realized in a sp
 | CLIENT-14 | T-URL-LEAK, T-TLS-TOKEN (delegated) | retrieval-flow
 | CLIENT-23 | T-TLS-TOKEN (per-client trust material for the delegated TLS primitive) | retrieval-flow
 | CLIENT-24 | T-SSRF-ADVERTISED, T-TLS-TOKEN (back-channel routing without identity or TLS relaxation) | xref:../commons/specification/transport.adoc#client_back_channel_origin[transport (client back-channel origin)]
+| CLIENT-25 | T-CHALLENGE-INJECTION | step-up-and-logout
 | CLIENT-15 | T-AUD-CONFUSION | xref:specification/token-handling.adoc[token-handling]
 | CLIENT-16 | T-IDTOKEN-INTEGRITY | token-handling
 | CLIENT-17 | T-REFRESH-THEFT, T-LOGOUT | token-handling

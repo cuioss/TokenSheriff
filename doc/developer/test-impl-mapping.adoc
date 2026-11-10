@@ -91,7 +91,8 @@ Package prefix: `de.cuioss.sheriff.token`.
 `JweDecryptorEcdhEsAndCompressionTest`, `JweDecryptorTest`
 
 |`validation.jwks`
-|`FileJwksLoaderTest`, `InMemoryJwksLoaderTest`, `JwksLoaderFactoryTest`, `LoaderStatusTest`
+|`FileJwksLoaderTest`, `InMemoryJwksLoaderTest`, `JwksLoaderFactoryTest`,
+`JwksLoaderKeyIdsContractTest`, `LoaderStatusTest`
 
 |`validation.jwks.http`
 |`HttpJwksLoaderAsyncInitializationTest`, `HttpJwksLoaderEgressRefreshTest`,
@@ -149,7 +150,8 @@ tests check that infrastructure, not production code: `InMemoryKeyHandlingTest`,
 
 Fixtures that are not test classes: `BoundedBodyHandlerTestSupport` (`commons.transport`),
 `DiscoveryGenerationDispatcher` (`validation.jwks.http`), `DpopProofValidatorSupport`
-(`validation.dpop`) and `JsonTypedIdentifierClaimFixture` (`validation.pipeline.validator`).
+(`validation.dpop`), `JwksLoaderKeyIdsContractSupport` (`validation.jwks`) and
+`JsonTypedIdentifierClaimFixture` (`validation.pipeline.validator`).
 
 [#client]
 == token-sheriff-client
@@ -178,7 +180,8 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 |`flow`
 |`AuthorizationCodeFlowTest`, `AuthorizationRequestBuilderTest`, `CallbackHandlerTest`,
 `CallbackParametersAttackDatabaseTest`, `CallbackParametersTest`, `ClientCredentialsFlowTest`,
-`CodeInjectionTest`, `IssValidatorTest`, `ParClientTest`, `PkceChallengeTest`,
+`CodeInjectionTest`, `InsufficientScopeChallengeAttackDatabaseTest`,
+`InsufficientScopeChallengeParserTest`, `IssValidatorTest`, `ParClientTest`, `PkceChallengeTest`,
 `PkceDowngradeTest`, `RedeemedRefreshFailureTest`, `RefreshFailureClassificationTest`,
 `RefreshFlowTest`, `RefreshRedemptionTest`, `StepUpChallengeAttackDatabaseTest`,
 `StepUpChallengeParserTest`, `StepUpHandlerTest`, `StepUpResultVerifierTest`,
@@ -383,8 +386,8 @@ application and identity provider. Package prefix: `de.cuioss.sheriff.token.inte
 |Client: mix-up defence
 |`MixUpSpecIT` (`client`)
 
-|Client: step-up
-|`StepUpSpecIT` (`client`)
+|Client: step-up and `insufficient_scope` challenges
+|`StepUpSpecIT`, `InsufficientScopeChallengeSpecIT` (`client`)
 
 |Client: logout
 |`LogoutSpecIT` (`client`)

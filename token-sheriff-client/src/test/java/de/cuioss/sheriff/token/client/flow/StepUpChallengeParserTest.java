@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Optional;
 
@@ -186,15 +187,13 @@ class StepUpChallengeParserTest {
         }
 
         @Test
-        @DisplayName("Should skip a segment carrying no '=' rather than rejecting the whole challenge")
-        void shouldSkipSegmentWithoutEquals() {
+        @DisplayName("Should refuse the whole challenge when a segment carries no '='")
+        void shouldRefuseSegmentWithoutEquals() {
             var acr = acrToken();
             String header = CHALLENGE_PREFIX + ", acr_values=\"" + acr + "\", realm";
 
-            var challenge = parseRequired(header);
-
-            assertEquals(Optional.of(acr), challenge.getAcrValues(),
-                    "a valueless segment is ignored and the well-formed parameters still apply");
+            assertTrue(parser.parse(header).isEmpty(),
+                    "a valueless segment may be a following scheme, so the whole challenge is refused, not skipped");
         }
 
         @Test
@@ -261,6 +260,81 @@ class StepUpChallengeParserTest {
                             "a blank acr_values constrains nothing and is dropped"),
                     () -> assertEquals(Optional.of(300), challenge.getMaxAge(),
                             "dropping acr_values must not discard the max_age constraint"));
+        }
+    }
+
+    /**
+     * The three fail-closed tightenings the shared {@link BearerChallengeParams} header guard adds to
+     * this parser: other control characters, the length bound and a following scheme.
+     */
+    @Nested
+    @DisplayName("Shared header guard tightenings")
+    class HeaderGuardTightenings {
+
+        @ParameterizedTest(name = "control character code point {0}")
+        @ValueSource(ints = {0x01, 0x1F, 0x7F})
+        @DisplayName("Should refuse a challenge carrying a control character other than CR, LF or NUL")
+        void shouldRefuseOtherControlCharacter(int codePoint) {
+            String control = String.valueOf((char) codePoint);
+            String header = CHALLENGE_PREFIX + ", acr_values=\"" + acrToken() + control + "\"";
+
+            assertTrue(parser.parse(header).isEmpty(),
+                    "a C0 control character or DEL anywhere in the value refuses the whole challenge");
+        }
+
+        @Test
+        @DisplayName("Should accept a horizontal tab as optional whitespace and inside a quoted value")
+        void shouldAcceptHorizontalTab() {
+            var acr = acrToken();
+            String header = CHALLENGE_PREFIX + ",\tacr_values=\"" + acr + "\t" + acr + "\"";
+
+            var challenge = parseRequired(header);
+
+            assertEquals(Optional.of(acr + "\t" + acr), challenge.getAcrValues(),
+                    "horizontal tab is RFC 9110 optional whitespace and qdtext, so it is tolerated");
+        }
+
+        @Test
+        @DisplayName("Should parse a challenge of exactly 8192 characters and refuse one character more")
+        void shouldBoundHeaderLength() {
+            String atBound = headerOfLength(BearerChallengeParams.MAX_HEADER_LENGTH);
+            String beyondBound = headerOfLength(BearerChallengeParams.MAX_HEADER_LENGTH + 1);
+
+            assertAll("8192-character bound",
+                    () -> assertTrue(parser.parse(atBound).isPresent(),
+                            "a value at the bound is still read"),
+                    () -> assertTrue(parser.parse(beyondBound).isEmpty(),
+                            "a value beyond the bound is refused before any other work"));
+        }
+
+        @Test
+        @DisplayName("Should refuse a step-up challenge followed by a Basic challenge carrying acr_values")
+        void shouldRefuseSecondSchemeSmugglingAcrValues() {
+            // At HEAD before the shared guard, the valueless 'Basic' segment was skipped and the following
+            // challenge's acr_values was read as a Bearer parameter — an actionable forged step-up.
+            String header = CHALLENGE_PREFIX + ", Basic, acr_values=\"x\"";
+
+            assertTrue(parser.parse(header).isEmpty(),
+                    "a parameter after a following scheme must never be read as a Bearer parameter");
+        }
+
+        @Test
+        @DisplayName("Should refuse a step-up challenge followed by another scheme with parameters")
+        void shouldRefuseSecondSchemeWithParameters() {
+            var acr = acrToken();
+            String withSecondScheme = CHALLENGE_PREFIX + ", acr_values=\"" + acr + "\", Basic realm=\"x\"";
+            String withoutSecondScheme = CHALLENGE_PREFIX + ", acr_values=\"" + acr + "\"";
+
+            assertAll("second scheme",
+                    () -> assertTrue(parser.parse(withSecondScheme).isEmpty(),
+                            "'basic realm' is not an auth-param token name, so the whole value is refused"),
+                    () -> assertEquals(Optional.of(acr), parseRequired(withoutSecondScheme).getAcrValues(),
+                            "positive control: the same challenge without the second scheme parses"));
+        }
+
+        private String headerOfLength(int length) {
+            String prefix = CHALLENGE_PREFIX + ", acr_values=\"";
+            return prefix + "a".repeat(length - prefix.length() - 1) + "\"";
         }
     }
 }
