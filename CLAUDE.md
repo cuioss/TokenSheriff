@@ -28,7 +28,9 @@ Branch protection on `main` forbids direct pushes. Always:
 Never gate on a reactor-wide `test-compile` or `test` (`mvnw test-compile`, `mvnw test`): they always fail with
 "package `de.cuioss.sheriff.token.validation.test…` does not exist", on `main` as well. `token-sheriff-client` and
 `benchmark-core` consume the `token-sheriff-validation:generators` test jar, which is only built in the `package`
-phase. Use `verify` (or `package -DskipTests`) instead; `verify -Ppre-commit` is the quality gate and runs all tests.
+phase. Use `verify` (or `package -DskipTests`) instead; `verify -Ppre-commit` is the quality gate.
+Run the Quarkus integration tests separately with
+`./mvnw clean verify -Pintegration-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am`.
 
 ## Tool Usage
 
