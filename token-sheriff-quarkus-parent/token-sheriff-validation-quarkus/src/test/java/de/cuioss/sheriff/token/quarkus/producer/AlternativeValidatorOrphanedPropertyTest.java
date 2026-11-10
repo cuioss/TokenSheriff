@@ -79,6 +79,8 @@ class AlternativeValidatorOrphanedPropertyTest {
         static final AtomicReference<TokenValidator> PRODUCED = new AtomicReference<>();
 
         @Produces
+        // @Singleton is necessary here: the tests assertSame this very TokenValidator against PRODUCED, and an
+        // @ApplicationScoped producer would inject a client proxy whose identity never equals the produced instance.
         @Singleton
         TokenValidator applicationValidator() {
             TestTokenHolder tokenHolder = new TestTokenHolder(TokenType.ACCESS_TOKEN,
