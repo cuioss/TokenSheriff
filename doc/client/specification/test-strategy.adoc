@@ -459,6 +459,17 @@ an isolated-component or server-capability test alone does not qualify the row a
   (`backChannelOrigin=https://127.0.0.1:1443`); a DPoP-constrained `authorization_code` exchange
   and a refresh both succeed and both access tokens carry `cnf.jkt`
   (xref:../../adr/0015-DPoP_htu_names_the_back-channel_URL_actually_contacted.adoc[ADR-0015]) | all
+
+| xref:../requirements.adoc#CLIENT-25[CLIENT-25] | T-CHALLENGE-INJECTION
+| `InsufficientScopeChallengeParserTest`: scheme and exact `error`, `scope-token` grammar, empty-token
+  drop, duplicate collapse and order, absent / blank `scope`, `realm` and sanitised
+  `error_description`, duplicate `auth-param`, the 8192-character and 64-token bounds, a second
+  scheme refused, statelessness; `InsufficientScopeChallengeAttackDatabaseTest`: line breaks, every
+  other C0 control character and `DEL` (HT accepted), the OWASP and ModSecurity corpora, broken
+  quoting — all refused without an exception
+| `InsufficientScopeChallengeSpecIT`: the public parser consumed from outside `token-sheriff-client`;
+  an RFC 6750 §3.1 header parses, a second scheme, a line-break injection and a different `error`
+  are refused (no OP emits `insufficient_scope` in a flow, so no Keycloak round trip) | all
 |===
 
 == Per-increment definition of done (test view)
