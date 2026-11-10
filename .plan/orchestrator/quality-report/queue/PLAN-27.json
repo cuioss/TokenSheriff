@@ -2,10 +2,10 @@
   "id": "PLAN-27",
   "slug": "test-size-guideline-restore",
   "workstream": "WS-05",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-27-test-size-guideline-restore",
+  "pr": "887",
+  "landing": "landings/PLAN-27.md",
   "seq": 27
 }

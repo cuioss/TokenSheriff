@@ -165,6 +165,19 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   tests and `security-reference.adoc`; the strict type check and the numeric-`sub` refusal stay). (2) `AGENTS.md` § Test Class Size back to the 500-line
   guideline, plus three client test Javadocs that cite a "400-line budget". Three deliverables, thirteen files, disjoint from PLAN-26. Staged on the
   operator's decision on the PLAN-25 landing (see Decisions). Emit only on the operator's word; it may run beside PLAN-26.
+  SHIPPED 2026-11-10 as #887 (`aeb86e4d`), see `landings/PLAN-27.md`: 18 files merged against 13 declared (the spec's Expected Surface omitted the renamed
+  pin test, `SubjectClaimTypeRejectionTest`, `test-impl-mapping.adoc` and a fourth "400-line" Javadoc; a `CLAUDE.md` build note was added outside the spec).
+  Layer 3 clean by reading; the doc figures and the `CLAUDE.md` note are wrong (Open Defects).
+- PLAN-28 (staged 2026-11-10, WS-05; operator: "gather all leftovers, open issues and watches and put them into a cleanup plan; after #26 lands, add corresponding
+  leftovers as well"): the epic cleanup sweep, `plans/PLAN-28-epic-cleanup-sweep.md`. Seven items: (1) DPoP replay cache and proof logging, (2) the documentation PLAN-27 shipped
+  wrong, (3) test pins and gaps left without evidence, (4) verify-or-soften and record, (5) native-image `@BearerAuth` coverage, (6) the e2e teardown hang and screenshot flake, (7)
+  the PLAN-26 leftovers (FILLED 2026-11-10, see Decisions). 39 resolved surface entries, declarative; the cross-check finds no overlap prompt, comparison determinate; no blocking
+  verdict row. Nothing else is running. Emit only on the operator's word.
+- PLAN-26 (staged 2026-11-09, WS-01; slug `jwks-key-ids-contract-pin` is historical, the plan carries two deliverables): SHIPPED 2026-11-10 as #888 (`7520e165`), see
+  `landings/PLAN-26.md`. 18 files merged against 12 declared (the Expected Surface omitted the integration test, `references.adoc`, `test-strategy.adoc`, `test-impl-mapping.adoc` and
+  the two READMEs; no collision resulted). Deliverable 1 is the `getKeyIds()` contract test (test only); deliverable 2 is `InsufficientScopeChallengeParser` on a shared
+  `BearerChallengeParams`, with `StepUpChallengeParser` now refusing a valueless segment, a following scheme, other control characters and a header over 8192 characters (a
+  fail-closed tightening wider than the spec's list, declared in the PR body and stated in `step-up-and-logout.adoc`; the consumer effect is a Watch). Layer 3 minor findings only; carried by PLAN-28 deliverable 7 (a) to (f).
 
 ## Decisions
 
@@ -560,6 +573,42 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   none shared with PLAN-26); no class is split and the four splits already made stay. Consequence: decisions 1, 3 and the numeric-`sub` half of 2 are
   downstream-visible (a JWE up to 32 KiB accepted, a non-string identifier refused, private-range IdPs refused unless listed) and belong in any API
   Sheriff release note, held until a release and the operator's word; the null-refusal never shipped in a release (last tag `0.9.8`), so it needs none.
+- 2026-11-10 — PLAN-27 ANALYZED (`landings/PLAN-27.md`, #887, `aeb86e4d`; PLAN-26 is still running, its PR #888 is open). Landing reconciled: row shipped, pr, landing
+  and plan id stamped. Three-layer analysis by one read-only leaf, every `checked` point re-read: layer 1 three minor findings (the mutation recipe named a branch criteria
+  (e)/(f) delete, the Expected Surface omitted five files, the per-claim refusal hypothesis is false for `jti` and conditional for `azp`/`client_id`); layer 2 four minor findings (the
+  `AGENTS.md` figures, the `CLAUDE.md` note, the relative-only pin, the PR narrative's `azp`/`client_id` attribution) and one not shown by reading; layer 3 clean by reading, no
+  fail-open (a null top-level member is dropped at parse, so a custom mapper and the `sub` guard never see it). No layer-3 defect, so nothing was reported as a fix candidate.
+  `landing-check` was `complete: false` (three review-count keys `unknown`): recorded below. Corroboration of the null revert is by git and reading, not by a run: the
+  4149-test and mutation results are the lane's claims. The 16 candidate lessons were dispositioned (inbox 001 to 016): 13 FOLDED as recurrences into three existing lessons
+  (001-005 and 007-012 into `2026-11-09-16-003`, 006 into `2026-11-09-16-004`, 014 into `2026-11-05-23-007`), 2 PROMOTED (015 as `2026-11-10-09-001`, 016 as `2026-11-10-09-002`),
+  1 DISCARDED (013, a one-off `CLAUDE.md` claim fixed in `abef336e`); each has a decision-log line. The Expected Surface of PLAN-27 is not corrected in the spec because the spec is
+  shipped and no longer gated; the under-declaration is in the landing report (L1-2).
+- 2026-11-10 — PLAN-28 STAGED (operator: gather the epic's leftovers, Open Defects and Watches into one cleanup plan, and add PLAN-26's after it lands; GitHub issues
+  are NOT in scope, the operator said so). Gathered from this file's Open Defects and Watches (read in full). CARRIED into `plans/PLAN-28-epic-cleanup-sweep.md`: the DPoP
+  defects, the PLAN-27 doc defects, the PLAN-25 no-evidence items, the e2e hang and its screenshot flake, the relative-only null pin. NOT CARRIED, with the reason in the spec's
+  "Not carried": upstream-owned items (`effort`, incomplete landing facts, lesson routing, addenda, quota and merge-message residue), operator-owned release items, the docs-only
+  Sonar skip (HYPOTHESIS: a reusable workflow in `cuioss-organization`), TC-9 (deliberately not staged since 2026-10-31, add only on the operator's word), informational notes.
+  Re-reading the DPoP lines CORRECTED two claims of the 2026-11-09 Open Defect (growth is bounded by rate x TTL, and the insert cost is one full scan, not a full sort). Scope
+  guard: seven items, above ~6, kept as one plan because the operator asked for one and the items are independent; the plan lifecycle may cut it along (1), (2)+(4), (3), (5), (6),
+  (7), as PLAN-25 was cut. Sequencing: after PLAN-26, per the operator; PLAN-28 and PLAN-26 are not run together.
+- 2026-11-10 — OPERATOR DECISION on PLAN-28 deliverable 1(a) (DPoP replay cache past `maxSize`): "soft cap is fine, document it". The soft cap STAYS: no hard cap, no refusal of new
+  proofs, an in-window jti is never evicted. PLAN-28 now documents the behaviour and its bound (arrival rate x `nonceCacheTtlSeconds`, reclaimed by the periodic `evictExpired` sweep)
+  in the `DpopConfig` Javadoc and in `doc/validation/threat-model.adoc` row DP1, and pins it with a test (in-window jtis past `maxSize` are all still refused as replays, and are reclaimed
+  once their window closes). Re-read for this decision: that row calls the cache "bounded" and gives a 300 s TTL while `DpopConfig.java:69` defaults to 360 s; both corrected in the same
+  item. Items (b), the per-insert full scan, and (c), the unsanitised `jti`/`htm`/`htu` log arguments, are unaffected and stay.
+- 2026-11-10 — PLAN-26 ANALYZED (`landings/PLAN-26.md`, #888, `7520e165`; inbox `jwks-key-ids-contract-pin-001` to `005`). Landing reconciled: row shipped, pr 888, landing and
+  plan id `jwks-key-ids-contract-pin` stamped; `landing-check` was `complete: true`. PR state, the merge commit and the 24 green checks were read through `ci`. Three-layer analysis by one
+  read-only leaf, every `checked` point re-read at its line: layer 1 four minor findings (the spec asks for a behaviour-preserving splitter guarded by the unchanged sibling test while
+  criterion (h) cannot be met without tightening the sibling; the (h) hypothesis names the wrong leak, the real one being a valueless segment that `parseParams` skipped; `performBackgroundRefresh`
+  is package-private so criterion (f) was unusable from the factory test; the sibling test count was 14 by annotation, not 13) and an Expected Surface that omitted six files; layer 2 the
+  sibling tightening wider than the spec's list with an existing test inverted (the leaf rated it major; adjudicated minor because the PR body declares it and its mutation record shows it
+  load-bearing), two extra public constants, a thin statelessness test and an IT in no deliverable; layer 3 five minor findings and one info, none a blocker (all returned fields are sanitised,
+  a second challenge never leaks in STRICT mode, bounds apply before the work, the scope grammar is exact). Runtime claims (4287 tests, the mutation runs, the e2e hang) are the lane's.
+  The real defect the plan closed: `Bearer error="insufficient_user_authentication", Basic, acr_values="x"` gave `StepUpChallengeParser` an actionable challenge with `acr_values=x`.
+  The five candidate-lesson and landing messages were dispositioned: 001 PROMOTED as `2026-11-10-14-001` (merged with 002, its follow-up), 002 FOLDED into it, 003 FOLDED into
+  `2026-11-10-09-002` (the second invented manage-findings surface, now a verb), 004 PROMOTED as `2026-11-10-14-002`, 005 reconciled; each has a decision-log line. The leftovers were
+  ADDED to PLAN-28 as deliverable 7 (a) to (e), with 10 new Expected Surface entries (all existing at `7520e165`), plus the e2e hang recurrence on deliverable 6 and the reactor-baseline
+  evidence on 2(b). The gate re-read: PLAN-28 declarative, 39 entries, comparison determinate, no overlap prompt, `blocking_count` 0. PLAN-28 is NOT emitted; the operator's word emits it.
 
 ## Open Defects
 
@@ -578,14 +627,39 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
 - 2026-11-09 — PLAN-25 inverted four mailbox decisions (`landings/PLAN-25.md`, layer 2, re-read on `aeb3fa49`); DECIDED by the operator the
   same day (see Decisions): (1) the raised JWE limit (32 KiB), the strict numeric `sub` and (3) the default-on client egress policy STAND as shipped;
   the explicit-null refusal in (2) and the test-size rule (4) are reverted by staged PLAN-27 (null read as absent again; `AGENTS.md:124-131` back to a
-  500-line guideline). Retire when PLAN-27 lands. The 2026-11-06 JWE Open Defect (an unhandled `IllegalArgumentException` above 8 KiB) is gone: the 8 to 32 KiB case is typed and
+  500-line guideline). RETIRED 2026-11-10: PLAN-27 landed as #887 (`landings/PLAN-27.md`): `MapRepresentation` and `StrictStringMapper` are byte-identical to
+  `2eceb09e` (re-run), `git grep` finds no `isExplicitNullRefused`/`explicitNullKeys` in tracked code or docs, the numeric-`sub` refusal and the strict-`sub` guard
+  stay, and `AGENTS.md` § Test Class Size is the 500-line guideline. The doc figures that landed with it are a new Open Defect below. The 2026-11-06 JWE Open Defect (an unhandled `IllegalArgumentException` above 8 KiB) is gone: the 8 to 32 KiB case is typed and
   accepted when it is a JWE.
 - 2026-11-09 — Defects in merged code, reported to the operator in the analysis turn (PLAN-25 layer 3; not fixed inline; a fix plan only on the
-  operator's word): (1) the DPoP replay cache never evicts an in-window jti, so it grows past `maxSize` without bound under a flood of fresh
-  jtis (`DpopReplayProtection.java:99-101,122-144`, a documented choice; pre-existing since #565; the flood needs a valid DPoP-bound token);
-  (2) the same flood makes every insert beyond `maxSize` stream and sort the whole map while nothing is evictable, a CPU amplification (same
-  lines, not named by the landing); (3) `DpopProofValidator.java:351,441,457` log the proof's `jti`, `htm` and `htu` unsanitised (CWE-117), and
-  `LogRecordSanitizationGuardTest.java:58-59` does not name those fields, so the guard cannot see them. Retire when a fix plan lands with tests.
+  operator's word): (1) the DPoP replay cache never evicts an in-window jti, so it grows past `maxSize` under a flood of fresh
+  jtis (`DpopReplayProtection.java:99-101,122-144`, a documented choice; pre-existing since #565; the flood needs a valid DPoP-bound token;
+  CORRECTED 2026-11-10 by a re-read at `aeb86e4d`: the growth is bounded by arrival rate x TTL window, not unbounded, and a periodic
+  `evictExpired` sweep reclaims it);
+  (2) the same flood makes every insert beyond `maxSize` scan the whole map while nothing is evictable, a CPU amplification (same
+  lines, not named by the landing; CORRECTED 2026-11-10: `evictOldest` filters to expired entries BEFORE it sorts, so the cost is one full scan per insert, not a sort of the whole map);
+  (3) `DpopProofValidator.java:351,441,457` log the proof's `jti`, `htm` and `htu` as raw arguments (CWE-117; whether anything downstream sanitises them is a HYPOTHESIS, re-read at those lines), and
+  `LogRecordSanitizationGuardTest.java:58-64` does not name those fields, so the guard cannot see them. CARRIED 2026-11-10 by staged PLAN-28 deliverable 1. DECIDED 2026-11-10 (operator) for (1): the
+  soft cap stays and is documented, not changed. Retire when it lands with tests.
+- 2026-11-10 — Wrong or contradicting documentation shipped by PLAN-27 (#887; `landings/PLAN-27.md` L2-1, L2-2, re-read on `aeb86e4d`), no fix plan staged, a doc-fix plan
+  only on the operator's word: (1) `AGENTS.md:133` says 30 test classes are above 500 lines and the largest has 1024; at `aeb86e4d` the largest is 1023 and the count is 39 over
+  all tracked `src/test` Java (34 `*Test.java`, 31 in validation and client). (2) `CLAUDE.md:26-34` says a reactor-wide `mvnw test-compile` or `mvnw test` "always" fails and that
+  only `token-sheriff-client` and `benchmark-core` consume the `validation:generators` test jar, but `AGENTS.md:82,151` still tell agents to run `./mvnw test`, and five poms
+  carry the `generators` classifier (the validation pom produces it; `token-sheriff-validation-quarkus`, `quarkus-integration-tests`, `token-sheriff-client` and `benchmark-core`
+  consume it); the "always fails on `main`" claim is not shown by reading (a build the orchestrator does not run). (3) `security-reference.adoc:34` says "no later step can tell
+  the two apart" for a null and an omitted member, which holds for top-level members only (a nested null is kept, as before; re-read at `MapRepresentation.fromJson`, lines 100-118). CARRIED 2026-11-10 by staged
+  PLAN-28 deliverable 2. Retire when a doc fix lands or the operator accepts the residue.
+- 2026-11-10 — PLAN-27 landing facts incomplete: `landing-check` `complete: false`, missing keys `unresolved_review_threads`, `review_body_findings_total`,
+  `review_body_findings_handled` (all `unknown`; the lane says no finalize step publishes them); `surface_delta` `unmeasured`. The landing was reconciled as far as it goes and the
+  CodeRabbit state was read from the PR directly (two inline findings, both fixed in `abef336e`; the last commit merged under the recorded `barrier-ask-override` ruling).
+  Plan-marshall owns the facts; same class as the `effort` residue. Retire when upstream publishes them or the operator accepts the gap.
+- 2026-11-10 — Minor looseness and test gaps left by PLAN-26 (#888; `landings/PLAN-26.md` L2-3, L2-4, L3-1 to L3-6, re-read on `7520e165`), no blocker, none reported as a fix plan:
+  `BearerChallengeParams.readValue` accepts an unquoted `scope=read write` in STRICT mode (`:207-210`) and `CLIENT-25` is silent on it; a Unicode-whitespace-only `scope` yields an empty
+  scope set while the same character beside a token is refused (`InsufficientScopeChallengeParser.java:112`); the LENIENT `unquote` pollutes `acr_values="a" Basic realm="x"` (inherited) and
+  its Javadoc misstates an escaped final quote; the statelessness test cannot catch static state; the OWASP and ModSecurity corpus tests are refused by the scheme check alone; point (f) of
+  the contract test does not fail for a live view over the old loader's map; the second assertion of point (c) can never fail; points (g) and (h) are timing-bound (1 s refresh, 3 s grace);
+  a raw U+2028 sits in a test literal; the shared `ErrorTextSanitizer` can split a surrogate pair and does not escape bidi controls (pre-existing). CARRIED 2026-11-10 by PLAN-28 deliverable 7
+  (a) to (e). Retire when PLAN-28 ships and each point is fixed or dropped with the line that closes it.
 - 2026-11-09 — PLAN-19 doc drift RETIRED by the PLAN-25 landing: COMMONS-2 now documents the `allowInsecureHttp` opt-in
   (`doc/commons/requirements.adoc:57-64`) and the Quarkus parent README attributes the mapping to `ClientConfigMapper`
   (`token-sheriff-quarkus-parent/README.adoc:14`), both re-read; the Javadoc and ADR-0010:187 corrections are leaf-reported and not re-read.
@@ -618,9 +692,11 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   IdPs refused unless `allowed-egress-hosts` lists them), explicit JSON null identifier claims and non-string `sub` refused, a JWE of 8 to 32 KiB
   accepted (not an error), and a token-endpoint success with a non-JSON Content-Type treated as a redeemed-response failure; the first three
   were decided 2026-11-09 (the raised JWE limit, the strict non-string and numeric-`sub` refusals and the default-on egress policy stand; the
-  explicit-null refusal is being reverted by PLAN-27), so any release note describes them as shipped and still waits on a release and the operator's word. PLAN-26's own claims
-  were stamped at `f85c5ab3` and PLAN-25 touched `StepUpChallengeParser`, `HeaderValues` and the client docs since, so PLAN-26 is to be
-  re-grounded at `aeb3fa49` before it is emitted. Retire when PLAN-26 has landed and the C decision and the reply are done or declined.
+  explicit-null refusal was reverted by PLAN-27, shipped 2026-11-10 as #887, so it is in no release and needs no note), so any release note describes the other three as shipped and still waits on a release and the operator's word. UPDATE 2026-11-10 (PLAN-26
+  shipped as #888, `7520e165`; `landings/PLAN-26.md`): (B) is pinned by `JwksLoaderKeyIdsContractTest` through the factory for points (a) to (h), and (C) is answered in code by
+  `InsufficientScopeChallengeParser` (new public API, `CLIENT-25`), both on `main` and in no release. A release note would also state that `StepUpChallengeParser` now refuses a
+  valueless segment, a following scheme, other control characters and a header over 8192 characters. The reply and the release note stay held until a release and the operator's word.
+  Retire when the reply is done or declined.
 - 2026-11-09 — PLAN-25 items with NO evidence in either PR (leaf reading, `landings/PLAN-25.md`; held, not carried by PLAN-26): 1(a) and 1(b)
   (the unannotated-override fail-open verdict; `BearerTokenInterceptor` untouched; no native run), the CI-runner container question, 4(b)'s
   scratch-run result, 7(l)(5) ADR-0026 soften-or-verify, 7(l)(6) the AsciiDoc link check over the 16 PLAN-19 files, 10(c) the health-check catch
@@ -628,7 +704,8 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   e2e root cause. Also not shown: the `verify -Ppre-commit` whole-tree run and the native IT run. Beyond the spec and so not in the mailbox: the
   non-JSON Content-Type refusal at token, PAR and userinfo (a success with another type becomes `RedeemedResponseException`), `expires_in` must be
   a JSON number, and about 20 created or edited test classes over 500 lines. PR bodies were not read, so whether each narrowing was stated
-  there is unknown. Retire an item when the operator accepts it or it is verified.
+  there is unknown. Retire an item when the operator accepts it or it is verified. CARRIED 2026-11-10 by staged PLAN-28: 1(a)/(b), the CI-runner question
+  and the native `StrictStringMapper` run as deliverable 5; 4(b), 10(c) and 10(d) as deliverable 3; 7(l)(5), 7(l)(6), 10(h) and the beyond-spec narrowings as deliverable 4.
 - 2026-11-09 — Informational from the PLAN-25 landing: the lane's Done-when assumed one PR and the split left no owner for "report both
   numbers in the PR body" of part two (spec premise, informational). The 2026-11-09 PLAN-25 landing message's `archive-plan:pending` step
   is the lane's own. Nothing further from this epic.
@@ -659,7 +736,9 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   shipped a hardened stop script (`stop-dev-environment.sh`: validated PID, whole tree TERM, 20 s grace, KILL, bounded `docker compose
   down`); the cause was never named and the criterion was waived to CI. The End-to-End workflow is green on both main pushes (`47045031`,
   `aeb3fa49`), which meets the "two clean runs" condition, but a green pair does not show the hang is gone. The #883 merge-queue run was also
-  ejected once by a Playwright screenshot comparison flake (an accessibility spec; project-owned, no flake policy). Retire it
+  ejected once by a Playwright screenshot comparison flake (an accessibility spec; project-owned, no flake policy). RECURRED 2026-11-10 (PLAN-26 landing, #888): the `e2e-tests` job hung
+  30 minutes on head `4c19ef2d` and was cancelled with an empty log AFTER the hardened stop script was on `main`; the approved re-run passed in 240 s (the hung run is the lane's claim,
+  `ci checks status 888` shows only the passing re-run). The hardened script therefore did not cure it, and the "two clean runs" condition below is not met by a green pair. CARRIED 2026-11-10 by staged PLAN-28 deliverable 6. Retire it
   when a clean e2e run on `main` is observed twice or a cause is found. Seen once before as the PLAN-13 merge-queue ejection on a
   hung `e2e-tests` job (see the PLAN-13 and PLAN-14 residuals in `settled.md`).
 > ↪ Relocated to `settled.md` § "Per-plan landing residuals (PLAN-01 to PLAN-23, dispositioned 2026-11-07)" — every item is carried by a PLAN-25 deliverable, dropped, or recorded as informational in its Residual Register
@@ -682,7 +761,20 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   recorded an Open Defect and asked again, and the operator's second set of answers differed from the first on one point (null versus type). A plan
   that overrides a mailbox decision should say so in its landing message with the question and the answer verbatim. Upstream observation for the
   plan-marshall maintainers (addendum nine, operator-owned, NOT sent); no change here. Retire when sent or declined.
+- 2026-11-10 — PLAN-27's null pin is relative only (`IdentifierClaimNullEquivalenceTest.java:150-185`, `landings/PLAN-27.md` L2-3): it proves null equals omitted but does not assert an omitted
+  `jti` or `client_id` is ACCEPTED, and the removed PLAN-25 test "An absent optional identifier claim still validates" got no direct replacement; a keyword grep of
+  `token-sheriff-validation/src/test` found no other such test, which is a lead, not a finding (another test may cover it). Also by reading only: `azp: null` plus a matching
+  `client_id` now validates through the RFC 9068 fallback exactly like an omitted `azp` (`AuthorizedPartyValidator.java:80-122`, intended by the revert). Retire when a test is read or
+  added that pins an omitted optional claim as accepted, or the operator accepts it. CARRIED 2026-11-10 by staged PLAN-28 deliverable 3(a).
 - 2026-11-09 — PLAN-26 was re-grounded at `aeb3fa49` before its emit (see Decisions): eleven claims re-stamped corroborated, two spec statements corrected
   (`StepUpChallengeParser` already refuses CR, LF and NUL since PLAN-25, so deliverable 2(f) reuses `HeaderValues.containsLineBreakOrNul` and the
   sibling test is 13 tests, 266 lines), three hypotheses stay `unverifiable` for the plan's own outline. The re-grounding was done by the orchestrator
   with direct reads and greps, not by a leaf, and the spec text was edited with a Python replace instead of the Edit tool (process deviation).
+  RETIRED 2026-11-10: PLAN-26 shipped (#888). Its landing analysis settled the three hypotheses (the second-challenge leak was a valueless segment, not `Basic realm=`; the
+  step-up test count was 14 by annotation, not the 13 this re-grounding wrote; `performBackgroundRefresh` is package-private and unusable from the factory test) and found
+  the re-grounding had not read the access modifier. The process deviation itself stands as a recorded note.
+- 2026-11-10 — `StepUpChallengeParser` refuses more than it did (PLAN-26 layer 2, `landings/PLAN-26.md` L2-1): a valueless segment, any following scheme, a non-token `auth-param`
+  name, other control characters and a header over 8192 characters now yield no challenge. Fail-closed and declared in the PR body, but a legitimate multi-scheme response such as
+  `Bearer error="insufficient_user_authentication", acr_values="x", Basic realm="y"` no longer triggers step-up for a consumer, where it did before. A real consumer effect, not a
+  defect. Watch whether API Sheriff or another consumer reports a step-up that stopped working; no change proposed. Retire when a consumer has confirmed it is unaffected or the operator
+  accepts it. Stated for the release note (see the API Sheriff Watch).

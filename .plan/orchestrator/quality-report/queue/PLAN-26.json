@@ -2,10 +2,10 @@
   "id": "PLAN-26",
   "slug": "jwks-key-ids-contract-pin",
   "workstream": "WS-01",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "jwks-key-ids-contract-pin",
+  "pr": "888",
+  "landing": "landings/PLAN-26.md",
   "seq": 26
 }
