@@ -225,6 +225,31 @@ The client engine:
 | xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP], xref:requirements.adoc#CLIENT-24[CLIENT-24]
 |===
 
+[NOTE]
+====
+*Two response checks are deliberate narrowings beyond the specifications.* Both are stated as rules
+in xref:requirements.adoc#CLIENT-14[CLIENT-14]; neither is required of a client by the standards
+they rest on.
+
+* *Media type.* https://www.rfc-editor.org/rfc/rfc6749#section-5.1[RFC 6749 §5.1],
+  https://www.rfc-editor.org/rfc/rfc9126#section-2.2[RFC 9126 §2.2] and
+  https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse[OIDC Core §5.3.2] tell the
+  authorization server which media type to send; none obliges a client to refuse a response that
+  arrives with another. The engine refuses it: a token or PAR response without `application/json` on
+  every `Content-Type` line, and a userinfo response with neither `application/json` nor
+  `application/jwt`, is not read.
+* *`expires_in` type.* RFC 6749 §5.1 and RFC 9126 §2.2 have the authorization server send
+  `expires_in` as a JSON number. A lenient client reads the number out of a quoted value; the engine
+  refuses a token or PAR response whose `expires_in` is a string such as `"3600"` as malformed.
+
+Both checks run after a success status. At the token endpoint the grant is then already redeemed,
+so the refusal is raised as `RedeemedResponseException`: an authorization-code login fails, and a
+refresh is classified as redeemed and, since whether the refresh token was rotated cannot be known,
+its session is quarantined as presumed rotated (xref:#T-REFRESH-REFUSAL[]). An authorization server that labels its responses with another
+media type, or sends `expires_in` as a string, cannot be used with this engine. That is the accepted
+cost: the engine does not guess how to read a response that does not follow its own format.
+====
+
 == Token aspect
 
 [cols="1,2,3,1,1", options="header"]
