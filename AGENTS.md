@@ -69,8 +69,11 @@ Multi-module Maven project:
 
 ### Essential Build Commands
 
-This section and *Test Execution Commands* below are the one place build commands are stated;
-other documents point here.
+This section and *Test Execution Commands* below collect the everyday build and test commands for
+the whole repository. They are not the only place commands appear: *Build-Configuration
+Verification* and *Pre-Commit Validation* in this file state the commands for their own tasks, and
+module READMEs (for example under `benchmarking/` and `token-sheriff-quarkus-parent/`) state the
+commands specific to their module.
 
 ```bash
 # Development build

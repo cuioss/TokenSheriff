@@ -27,16 +27,20 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.security.interfaces.RSAPublicKey;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Pins that each {@link DpopProofValidator} WARN carrying remote text (the proof's {@code jti},
  * {@code htm} and {@code htu}, the request method and URI, and the token's {@code cnf.jkt}) logs only
  * the escaped form of a CR/LF or U+2028 payload (ADR-0022, CWE-117).
+ * <p>
+ * A proof header value quoted in a {@code DPOP_PROOF_INVALID} rejection (the {@code typ}, the
+ * {@code alg} and the JWK {@code kty}) is pinned the same way, in the WARN line and in the thrown
+ * message alike, because both are written from the one message the validator rejects with.
  * <p>
  * Kept apart from {@code DpopProofValidatorTest}, which is already past the 500-line test guideline;
  * the shared fixture lives in {@link DpopProofValidatorSupport}.
@@ -112,6 +116,62 @@ class DpopProofValidatorLogSanitizationTest extends DpopProofValidatorSupport {
         assertEquals(EventType.DPOP_THUMBPRINT_MISMATCH, ex.getEventType());
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "wrong\\r\\nFORGED-JKT");
         LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, "wrong\r\nFORGED-JKT");
+    }
+
+    @Test
+    @DisplayName("Invalid-typ rejection escapes a CR/LF in the proof typ, in the WARN and the thrown message")
+    void shouldSanitiseTypInInvalidProofRejection() {
+        DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+        // JSON escapes: the decoded typ carries a real CR LF
+        String proof = buildDpopProofWithCustomTyp(FIXTURE_KEY_PAIR, jwkMap, "RS256", RAW_ACCESS_TOKEN,
+                "dpop+jwt\\r\\nFORGED-TYP");
+
+        var ex = assertThrows(TokenValidationException.class, () -> validator.validate(
+                request(proof, REQUEST_URI, "GET"), accessToken, RAW_ACCESS_TOKEN));
+
+        assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
+        assertEscapedInWarningAndMessage(ex, "dpop+jwt\\r\\nFORGED-TYP", "dpop+jwt\r\nFORGED-TYP");
+    }
+
+    @Test
+    @DisplayName("Unsupported-alg rejection escapes a CR/LF in the proof alg, in the WARN and the thrown message")
+    void shouldSanitiseAlgInInvalidProofRejection() {
+        DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+        String proof = buildDpopProof(FIXTURE_KEY_PAIR, jwkMap, "RS256\\r\\nFORGED-ALG", RAW_ACCESS_TOKEN);
+
+        var ex = assertThrows(TokenValidationException.class, () -> validator.validate(
+                request(proof, REQUEST_URI, "GET"), accessToken, RAW_ACCESS_TOKEN));
+
+        assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
+        assertEscapedInWarningAndMessage(ex, "RS256\\r\\nFORGED-ALG", "RS256\r\nFORGED-ALG");
+    }
+
+    @Test
+    @DisplayName("Unsupported-kty rejection escapes a CR/LF in the proof JWK kty, in the WARN and the thrown message")
+    void shouldSanitiseKtyInInvalidProofRejection() {
+        DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
+        Map<String, Object> forgedJwk = new LinkedHashMap<>(jwkMap);
+        forgedJwk.put("kty", "XYZ\\r\\nFORGED-KTY");
+        String proof = buildDpopProof(FIXTURE_KEY_PAIR, forgedJwk, "RS256", RAW_ACCESS_TOKEN);
+
+        var ex = assertThrows(TokenValidationException.class, () -> validator.validate(
+                request(proof, REQUEST_URI, "GET"), accessToken, RAW_ACCESS_TOKEN));
+
+        assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
+        assertEscapedInWarningAndMessage(ex, "XYZ\\r\\nFORGED-KTY", "XYZ\r\nFORGED-KTY");
+    }
+
+    /**
+     * @param ex      the rejection thrown by the validator
+     * @param escaped the remote value in its escaped form, as the sanitiser writes it
+     * @param raw     the same value as decoded from the proof, carrying the raw control characters
+     */
+    private static void assertEscapedInWarningAndMessage(TokenValidationException ex, String escaped, String raw) {
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, escaped);
+        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, raw);
+        assertTrue(ex.getMessage().contains(escaped), "thrown message must carry the escaped value: " + ex.getMessage());
+        assertTrue(ex.getMessage().chars().noneMatch(c -> c < 0x20),
+                "thrown message must carry no raw control character: " + ex.getMessage());
     }
 
     /**

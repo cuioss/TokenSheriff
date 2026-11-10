@@ -272,10 +272,11 @@ public class DpopProofValidator {
             // DSL-JSON reports a truncated escape (a trailing lone backslash, a cut-off unicode escape) by
             // reading past the end of its buffer, i.e. as ArrayIndexOutOfBoundsException rather than
             // IOException; it is the same malformed-input condition and takes the same rejection.
-            // A DSL-JSON parse error quotes the client-supplied proof bytes around the failure position,
-            // so the message is neutralized against log injection (CWE-117) before it is logged or thrown.
+            // A DSL-JSON parse error quotes the client-supplied proof bytes around the failure position;
+            // rejectWith neutralizes the whole message against log injection (CWE-117) before it is
+            // logged or thrown, so it is not sanitised here a second time.
             rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
-                    "Failed to decode DPoP proof JWT: %s".formatted(ErrorTextSanitizer.sanitize(e.getMessage())));
+                    "Failed to decode DPoP proof JWT: %s".formatted(e.getMessage()));
             return null; // unreachable but needed for compilation
         }
 
@@ -338,8 +339,6 @@ public class DpopProofValidator {
         // present. No translation is added: it would be unreachable code that no test could exercise.
         String computedThumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
         if (!computedThumbprint.equals(expectedThumbprint)) {
-            // computedThumbprint is a locally computed digest; expectedThumbprint is the token's
-            // cnf.jkt, i.e. remote text, and is sanitised before it reaches the log (ADR-0022).
             // computedThumbprint is a locally computed digest; expectedThumbprint is the token's
             // cnf.jkt, i.e. remote text, and is sanitised before it reaches the log (ADR-0022).
             LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_THUMBPRINT_MISMATCH, computedThumbprint,
@@ -610,10 +609,24 @@ public class DpopProofValidator {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
     }
 
+    /**
+     * Logs a rejection at WARN, counts it and throws it.
+     * <p>
+     * Callers quote proof header values ({@code typ}, {@code alg}, the JWK {@code kty} and
+     * {@code crv}) and exception messages that echo the proof input, all of which are remote text. The
+     * message is therefore sanitised here, once, before it reaches the log line and before it becomes
+     * the exception message (ADR-0022, CWE-117), so no caller has to sanitise its own arguments.
+     *
+     * @param eventType the security event to count and to carry on the exception
+     * @param logRecord the WARN record the message is logged under
+     * @param message   the rejection message, possibly quoting remote text
+     * @throws TokenValidationException always
+     */
     private void rejectWith(EventType eventType,
             LogRecord logRecord, String message) {
-        LOGGER.warn(logRecord, message);
+        String sanitizedMessage = ErrorTextSanitizer.sanitize(message);
+        LOGGER.warn(logRecord, sanitizedMessage);
         securityEventCounter.increment(eventType);
-        throw new TokenValidationException(eventType, message);
+        throw new TokenValidationException(eventType, sanitizedMessage);
     }
 }
