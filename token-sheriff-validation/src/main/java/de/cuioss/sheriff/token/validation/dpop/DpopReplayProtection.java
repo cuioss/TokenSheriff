@@ -142,6 +142,13 @@ public class DpopReplayProtection implements Closeable {
         return lastOverCapExamined;
     }
 
+    /**
+     * Periodic sweep over the whole queue. Unlike {@link #evictOldest()} it does not stop at the first
+     * in-window entry: entry timestamps come from the wall clock, so after the clock steps backwards an
+     * entry inserted later carries an earlier timestamp and can expire while an entry ahead of it is
+     * still in its window. Stopping at that entry would keep every expired entry behind it until it
+     * expired too, which breaks the soft-cap promise that expired entries are reclaimed by this sweep.
+     */
     private void evictExpired() {
         long now = System.currentTimeMillis();
         int removed = 0;
@@ -174,12 +181,9 @@ public class DpopReplayProtection implements Closeable {
             int remaining = overflow;
             // Pop from the head only while the head entry is stale or expired. Evicting a jti still
             // inside its window would forget it early and permit a replay, so the first in-window
-            // entry ends the pass: every later entry was inserted after it.
-            while (remaining > 0) {
-                Node head = insertionQueue.peek();
-                if (head == null) {
-                    break;
-                }
+            // entry ends the pass: every later entry was inserted after it. An empty queue ends it too.
+            Node head = insertionQueue.peek();
+            while (remaining > 0 && head != null) {
                 examined++;
                 if (isStale(head)) {
                     insertionQueue.poll();
@@ -192,6 +196,7 @@ public class DpopReplayProtection implements Closeable {
                 } else {
                     break;
                 }
+                head = insertionQueue.peek();
             }
         }
         lastOverCapExamined = examined;

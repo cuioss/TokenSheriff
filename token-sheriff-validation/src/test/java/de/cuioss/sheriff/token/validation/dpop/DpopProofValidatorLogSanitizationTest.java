@@ -34,13 +34,14 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Pins that each {@link DpopProofValidator} WARN carrying remote text (the proof's {@code jti},
- * {@code htm} and {@code htu}, the request method and URI, and the token's {@code cnf.jkt}) logs only
- * the escaped form of a CR/LF or U+2028 payload (ADR-0022, CWE-117).
+ * Pins that each {@link DpopProofValidator} rejection carrying remote text (the proof's {@code jti},
+ * {@code htm} and {@code htu}, the request method and URI, and the token's {@code cnf.jkt}) carries only
+ * the escaped form of a CR/LF or U+2028 payload, in the WARN line and in the thrown message alike
+ * (ADR-0022, CWE-117).
  * <p>
  * A proof header value quoted in a {@code DPOP_PROOF_INVALID} rejection (the {@code typ}, the
- * {@code alg} and the JWK {@code kty}) is pinned the same way, in the WARN line and in the thrown
- * message alike, because both are written from the one message the validator rejects with.
+ * {@code alg} and the JWK {@code kty}) is pinned the same way, because both are written from the one
+ * message the validator rejects with.
  * <p>
  * Kept apart from {@code DpopProofValidatorTest}, which is already past the 500-line test guideline;
  * the shared fixture lives in {@link DpopProofValidatorSupport}.
@@ -51,71 +52,71 @@ class DpopProofValidatorLogSanitizationTest extends DpopProofValidatorSupport {
 
     private static final String RAW_ACCESS_TOKEN = "some.access.token";
     private static final String REQUEST_URI = "https://resource.example.org/protectedresource";
+    /** U+2028, built from its code point so the source carries no invisible character. */
+    private static final String LINE_SEPARATOR = String.valueOf((char) 0x2028);
 
     private final Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) FIXTURE_KEY_PAIR.getPublic());
     private final String thumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
 
     @Test
-    @DisplayName("Replay WARN escapes a CR/LF in the proof jti")
+    @DisplayName("Replay WARN and thrown message escape a CR/LF in the proof jti")
     void shouldSanitiseJtiInReplayWarning() {
         // JSON escapes: the decoded jti carries a real CR LF
         String jsonJti = "replayed\\r\\nFORGED-REPLAY";
         DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
         validator.validate(request(proof(jsonJti, "GET", REQUEST_URI), REQUEST_URI, "GET"), accessToken, RAW_ACCESS_TOKEN);
+        AccessTokenRequest replay = request(proof(jsonJti, "GET", REQUEST_URI), REQUEST_URI, "GET");
 
-        var ex = assertThrows(TokenValidationException.class, () -> validator.validate(
-                request(proof(jsonJti, "GET", REQUEST_URI), REQUEST_URI, "GET"), accessToken, RAW_ACCESS_TOKEN));
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(replay, accessToken, RAW_ACCESS_TOKEN));
 
         assertEquals(EventType.DPOP_REPLAY_DETECTED, ex.getEventType());
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "replayed\\r\\nFORGED-REPLAY");
-        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, "replayed\r\nFORGED-REPLAY");
+        assertEscapedInWarningAndMessage(ex, "replayed\\r\\nFORGED-REPLAY", "replayed\r\nFORGED-REPLAY");
     }
 
     @Test
-    @DisplayName("htm-mismatch WARN escapes a CR/LF in htm and a U+2028 in the request method")
+    @DisplayName("htm-mismatch WARN and thrown message escape a CR/LF in htm and a U+2028 in the request method")
     void shouldSanitiseHtmAndRequestMethodInHtmMismatchWarning() {
         DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
-        String requestMethod = "POST FORGED-METHOD";
+        String requestMethod = "POST" + LINE_SEPARATOR + "FORGED-METHOD";
+        AccessTokenRequest htmMismatch = request(proof("htm-jti", "GET\\r\\nFORGED-HTM", REQUEST_URI), REQUEST_URI,
+                requestMethod);
 
-        var ex = assertThrows(TokenValidationException.class, () -> validator.validate(
-                request(proof("htm-jti", "GET\\r\\nFORGED-HTM", REQUEST_URI), REQUEST_URI, requestMethod),
-                accessToken, RAW_ACCESS_TOKEN));
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(htmMismatch, accessToken, RAW_ACCESS_TOKEN));
 
         assertEquals(EventType.DPOP_HTM_MISMATCH, ex.getEventType());
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "GET\\r\\nFORGED-HTM");
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "POST\\u2028FORGED-METHOD");
-        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, "GET\r\nFORGED-HTM");
-        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, requestMethod);
+        assertEscapedInWarningAndMessage(ex, "GET\\r\\nFORGED-HTM", "GET\r\nFORGED-HTM");
+        assertEscapedInWarningAndMessage(ex, "POST\\u2028FORGED-METHOD", requestMethod);
     }
 
     @Test
-    @DisplayName("htu-mismatch WARN escapes a CR/LF in htu and a U+2028 in the request URI")
+    @DisplayName("htu-mismatch WARN and thrown message escape a CR/LF in htu and a U+2028 in the request URI")
     void shouldSanitiseHtuAndRequestUriInHtuMismatchWarning() {
         DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
-        String requestUri = "https://resource.example.org/other FORGED-URI";
+        String requestUri = "https://resource.example.org/other" + LINE_SEPARATOR + "FORGED-URI";
+        AccessTokenRequest htuMismatch = request(
+                proof("htu-jti", "GET", "https://resource.example.org/p\\nFORGED-HTU"), requestUri, "GET");
 
-        var ex = assertThrows(TokenValidationException.class, () -> validator.validate(
-                request(proof("htu-jti", "GET", "https://resource.example.org/p\\nFORGED-HTU"), requestUri, "GET"),
-                accessToken, RAW_ACCESS_TOKEN));
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(htuMismatch, accessToken, RAW_ACCESS_TOKEN));
 
         assertEquals(EventType.DPOP_HTU_MISMATCH, ex.getEventType());
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "/p\\nFORGED-HTU");
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "/other\\u2028FORGED-URI");
-        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, "/p\nFORGED-HTU");
-        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, requestUri);
+        assertEscapedInWarningAndMessage(ex, "/p\\nFORGED-HTU", "/p\nFORGED-HTU");
+        assertEscapedInWarningAndMessage(ex, "/other\\u2028FORGED-URI", requestUri);
     }
 
     @Test
-    @DisplayName("Thumbprint-mismatch WARN escapes a CR/LF in the token cnf.jkt")
+    @DisplayName("Thumbprint-mismatch WARN and thrown message escape a CR/LF in the token cnf.jkt")
     void shouldSanitiseExpectedThumbprintInThumbprintMismatchWarning() {
         DecodedJwt accessToken = createAccessTokenJwt("wrong\r\nFORGED-JKT");
+        AccessTokenRequest jktMismatch = request(proof("jkt-jti", "GET", REQUEST_URI), REQUEST_URI, "GET");
 
-        var ex = assertThrows(TokenValidationException.class, () -> validator.validate(
-                request(proof("jkt-jti", "GET", REQUEST_URI), REQUEST_URI, "GET"), accessToken, RAW_ACCESS_TOKEN));
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(jktMismatch, accessToken, RAW_ACCESS_TOKEN));
 
         assertEquals(EventType.DPOP_THUMBPRINT_MISMATCH, ex.getEventType());
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, "wrong\\r\\nFORGED-JKT");
-        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, "wrong\r\nFORGED-JKT");
+        assertEscapedInWarningAndMessage(ex, "wrong\\r\\nFORGED-JKT", "wrong\r\nFORGED-JKT");
     }
 
     @Test
@@ -125,9 +126,10 @@ class DpopProofValidatorLogSanitizationTest extends DpopProofValidatorSupport {
         // JSON escapes: the decoded typ carries a real CR LF
         String proof = buildDpopProofWithCustomTyp(FIXTURE_KEY_PAIR, jwkMap, "RS256", RAW_ACCESS_TOKEN,
                 "dpop+jwt\\r\\nFORGED-TYP");
+        AccessTokenRequest invalidTyp = request(proof, REQUEST_URI, "GET");
 
-        var ex = assertThrows(TokenValidationException.class, () -> validator.validate(
-                request(proof, REQUEST_URI, "GET"), accessToken, RAW_ACCESS_TOKEN));
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(invalidTyp, accessToken, RAW_ACCESS_TOKEN));
 
         assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
         assertEscapedInWarningAndMessage(ex, "dpop+jwt\\r\\nFORGED-TYP", "dpop+jwt\r\nFORGED-TYP");
@@ -138,9 +140,10 @@ class DpopProofValidatorLogSanitizationTest extends DpopProofValidatorSupport {
     void shouldSanitiseAlgInInvalidProofRejection() {
         DecodedJwt accessToken = createAccessTokenJwt(thumbprint);
         String proof = buildDpopProof(FIXTURE_KEY_PAIR, jwkMap, "RS256\\r\\nFORGED-ALG", RAW_ACCESS_TOKEN);
+        AccessTokenRequest invalidAlg = request(proof, REQUEST_URI, "GET");
 
-        var ex = assertThrows(TokenValidationException.class, () -> validator.validate(
-                request(proof, REQUEST_URI, "GET"), accessToken, RAW_ACCESS_TOKEN));
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(invalidAlg, accessToken, RAW_ACCESS_TOKEN));
 
         assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
         assertEscapedInWarningAndMessage(ex, "RS256\\r\\nFORGED-ALG", "RS256\r\nFORGED-ALG");
@@ -153,15 +156,19 @@ class DpopProofValidatorLogSanitizationTest extends DpopProofValidatorSupport {
         Map<String, Object> forgedJwk = new LinkedHashMap<>(jwkMap);
         forgedJwk.put("kty", "XYZ\\r\\nFORGED-KTY");
         String proof = buildDpopProof(FIXTURE_KEY_PAIR, forgedJwk, "RS256", RAW_ACCESS_TOKEN);
+        AccessTokenRequest invalidKty = request(proof, REQUEST_URI, "GET");
 
-        var ex = assertThrows(TokenValidationException.class, () -> validator.validate(
-                request(proof, REQUEST_URI, "GET"), accessToken, RAW_ACCESS_TOKEN));
+        var ex = assertThrows(TokenValidationException.class,
+                () -> validator.validate(invalidKty, accessToken, RAW_ACCESS_TOKEN));
 
         assertEquals(EventType.DPOP_PROOF_INVALID, ex.getEventType());
         assertEscapedInWarningAndMessage(ex, "XYZ\\r\\nFORGED-KTY", "XYZ\r\nFORGED-KTY");
     }
 
     /**
+     * Asserts the escaped form is present, and the raw form absent, in the WARN log and in the thrown
+     * message, and that the thrown message carries no raw control or line-separator character.
+     *
      * @param ex      the rejection thrown by the validator
      * @param escaped the remote value in its escaped form, as the sanitiser writes it
      * @param raw     the same value as decoded from the proof, carrying the raw control characters
@@ -170,8 +177,8 @@ class DpopProofValidatorLogSanitizationTest extends DpopProofValidatorSupport {
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, escaped);
         LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, raw);
         assertTrue(ex.getMessage().contains(escaped), "thrown message must carry the escaped value: " + ex.getMessage());
-        assertTrue(ex.getMessage().chars().noneMatch(c -> c < 0x20),
-                "thrown message must carry no raw control character: " + ex.getMessage());
+        assertTrue(ex.getMessage().chars().noneMatch(c -> c < 0x20 || c == 0x2028 || c == 0x2029),
+                "thrown message must carry no raw control or line-separator character: " + ex.getMessage());
     }
 
     /**

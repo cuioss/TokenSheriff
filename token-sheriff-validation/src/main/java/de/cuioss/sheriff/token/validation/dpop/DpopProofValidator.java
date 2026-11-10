@@ -340,22 +340,25 @@ public class DpopProofValidator {
         String computedThumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
         if (!computedThumbprint.equals(expectedThumbprint)) {
             // computedThumbprint is a locally computed digest; expectedThumbprint is the token's
-            // cnf.jkt, i.e. remote text, and is sanitised before it reaches the log (ADR-0022).
+            // cnf.jkt, i.e. remote text, and is sanitised before it reaches the log or the thrown
+            // message (ADR-0022).
+            String sanitizedExpected = ErrorTextSanitizer.sanitize(expectedThumbprint);
             LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_THUMBPRINT_MISMATCH, computedThumbprint,
-                    ErrorTextSanitizer.sanitize(expectedThumbprint));
+                    sanitizedExpected);
             securityEventCounter.increment(EventType.DPOP_THUMBPRINT_MISMATCH);
             throw new TokenValidationException(EventType.DPOP_THUMBPRINT_MISMATCH,
                     "DPoP proof JWK thumbprint '%s' does not match token cnf.jkt '%s'"
-                            .formatted(computedThumbprint, expectedThumbprint));
+                            .formatted(computedThumbprint, sanitizedExpected));
         }
 
         // Replay protection runs last: a proof rejected by any stateless check above must not
         // consume its jti, otherwise it would burn the replay slot of the legitimate proof.
         if (!replayProtection.checkAndStore(jti)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_REPLAY_DETECTED, ErrorTextSanitizer.sanitize(jti));
+            String sanitizedJti = ErrorTextSanitizer.sanitize(jti);
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_REPLAY_DETECTED, sanitizedJti);
             securityEventCounter.increment(EventType.DPOP_REPLAY_DETECTED);
             throw new TokenValidationException(EventType.DPOP_REPLAY_DETECTED,
-                    "DPoP proof replay detected for jti: %s".formatted(jti));
+                    "DPoP proof replay detected for jti: %s".formatted(sanitizedJti));
         }
 
         LOGGER.debug("DPoP proof validation successful");
@@ -442,12 +445,13 @@ public class DpopProofValidator {
                     "DPoP proof is missing required claim: htm");
         }
         if (!request.requestMethod().equalsIgnoreCase(htm.get())) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTM_MISMATCH, ErrorTextSanitizer.sanitize(htm.get()),
-                    ErrorTextSanitizer.sanitize(request.requestMethod()));
+            String sanitizedHtm = ErrorTextSanitizer.sanitize(htm.get());
+            String sanitizedMethod = ErrorTextSanitizer.sanitize(request.requestMethod());
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTM_MISMATCH, sanitizedHtm, sanitizedMethod);
             securityEventCounter.increment(EventType.DPOP_HTM_MISMATCH);
             throw new TokenValidationException(EventType.DPOP_HTM_MISMATCH,
                     "DPoP proof htm claim '%s' does not match request method '%s'"
-                            .formatted(htm.get(), request.requestMethod()));
+                            .formatted(sanitizedHtm, sanitizedMethod));
         }
 
         // Validate htu (HTTP URI) — strip query and fragment per RFC 9449
@@ -459,12 +463,13 @@ public class DpopProofValidator {
         String normalizedHtu = stripQueryAndFragment(htu.get());
         String normalizedRequestUri = stripQueryAndFragment(request.requestUri());
         if (!normalizedHtu.equals(normalizedRequestUri)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTU_MISMATCH, ErrorTextSanitizer.sanitize(htu.get()),
-                    ErrorTextSanitizer.sanitize(request.requestUri()));
+            String sanitizedHtu = ErrorTextSanitizer.sanitize(htu.get());
+            String sanitizedUri = ErrorTextSanitizer.sanitize(request.requestUri());
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTU_MISMATCH, sanitizedHtu, sanitizedUri);
             securityEventCounter.increment(EventType.DPOP_HTU_MISMATCH);
             throw new TokenValidationException(EventType.DPOP_HTU_MISMATCH,
                     "DPoP proof htu claim '%s' does not match request URI '%s'"
-                            .formatted(htu.get(), request.requestUri()));
+                            .formatted(sanitizedHtu, sanitizedUri));
         }
     }
 

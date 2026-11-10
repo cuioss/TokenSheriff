@@ -246,7 +246,7 @@ they rest on.
 Both checks run after a success status. At the token endpoint the grant is then already redeemed,
 so the refusal is raised as `RedeemedResponseException`: an authorization-code login fails, and a
 refresh is classified as redeemed and, since whether the refresh token was rotated cannot be known,
-its session is quarantined as presumed rotated (xref:#T-REFRESH-REFUSAL[]). An authorization server that labels its responses with another
+its session is quarantined with the presented token presumed burned (xref:#T-REFRESH-REFUSAL[]). An authorization server that labels its responses with another
 media type, or sends `expires_in` as a string, cannot be used with this engine. That is the accepted
 cost: the engine does not guess how to read a response that does not follow its own format.
 ====
@@ -345,7 +345,7 @@ cost: the engine does not guess how to read a response that does not follow its 
   revokes nothing. *Redeemed* quarantines when the presented token was burned. The quarantine on a
   rotated refresh covers every post-redemption refusal of the lifecycle manager: a freshly issued
   access token that fails client-side validation, a broader scope under
-  `strictScopeReconciliation`, an unparseable success response (presumed rotated), a refreshed ID
+  `strictScopeReconciliation`, an unparseable success response (presented token presumed burned), a refreshed ID
   token that fails pipeline validation (`TokenValidationException`) or is inconsistent with the
   access token, and a refused identity or sender-constraint binding; the last three quarantine only
   when the server rotated the refresh token. Every typed refusal is recognised by an allow-list of
