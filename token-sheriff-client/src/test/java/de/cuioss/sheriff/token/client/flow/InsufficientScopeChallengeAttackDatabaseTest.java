@@ -194,8 +194,8 @@ class InsufficientScopeChallengeAttackDatabaseTest {
 
     /**
      * Asserts that a payload placed inside the quoted values of an otherwise valid challenge either refuses
-     * the whole challenge, or is stored with no unescaped control or line-separator character and with
-     * every scope token inside the RFC 6749 §3.3 grammar.
+     * the whole challenge, or is stored with no unescaped control, line-separator or bidirectional
+     * control character and with every scope token inside the RFC 6749 §3.3 grammar.
      */
     private void assertEmbeddedPayloadContained(String payload) {
         Optional<InsufficientScopeChallenge> challenge = assertDoesNotThrow(
@@ -215,8 +215,14 @@ class InsufficientScopeChallengeAttackDatabaseTest {
                         "every stored scope token is inside the scope-token grammar"));
     }
 
+    /**
+     * @return whether {@code stored} carries none of the characters {@code ErrorTextSanitizer} escapes: an
+     *         ISO control, the line separators U+2028 and U+2029, or a bidirectional control U+202A to
+     *         U+202E or U+2066 to U+2069
+     */
     private static boolean isEscaped(String stored) {
-        return stored.codePoints().noneMatch(c -> Character.isISOControl(c) || c == 0x2028 || c == 0x2029);
+        return stored.codePoints().noneMatch(c -> Character.isISOControl(c) || c == 0x2028 || c == 0x2029
+                || (c >= 0x202A && c <= 0x202E) || (c >= 0x2066 && c <= 0x2069));
     }
 
     private static boolean isScopeToken(String token) {
