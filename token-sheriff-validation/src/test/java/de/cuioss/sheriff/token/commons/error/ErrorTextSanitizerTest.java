@@ -75,7 +75,53 @@ class ErrorTextSanitizerTest {
     }
 
     static Stream<Character> keptCharacters() {
-        return Stream.of((char) 0x0020, (char) 0x007E, (char) 0x00A0, (char) 0x2027, (char) 0x202A, 'z');
+        return Stream.of((char) 0x0020, (char) 0x007E, (char) 0x00A0, (char) 0x2027, (char) 0x202F, (char) 0x2065,
+                (char) 0x206A, 'z');
+    }
+
+    /**
+     * @return the nine bidirectional embedding, override and isolate controls
+     */
+    static Stream<Character> bidiControls() {
+        return Stream.of((char) 0x202A, (char) 0x202B, (char) 0x202C, (char) 0x202D, (char) 0x202E,
+                (char) 0x2066, (char) 0x2067, (char) 0x2068, (char) 0x2069);
+    }
+
+    @ParameterizedTest
+    @MethodSource("bidiControls")
+    @DisplayName("Should escape a bidirectional control in the default form and replace it in the replacing variant")
+    void shouldNeutraliseBidiControl(char bidi) {
+        String value = "left" + bidi + "right";
+
+        assertAll("bidi control U+" + Integer.toHexString(bidi),
+                () -> assertEquals("left" + BACKSLASH + String.format("u%04x", (int) bidi) + "right",
+                        ErrorTextSanitizer.sanitize(value), "the default form escapes the reordering control"),
+                () -> assertEquals("left?right", ErrorTextSanitizer.sanitize(value, '?', 64, "..."),
+                        "the replacing variant replaces it"));
+    }
+
+    @Test
+    @DisplayName("Should never split a surrogate pair straddling the cut, in either form")
+    void shouldNotSplitSurrogatePairAtTheCut() {
+        String pair = new String(Character.toChars(0x1F600));
+        String defaultInput = "a".repeat(ErrorTextSanitizer.MAX_LENGTH - 1) + pair + "z";
+        String variantInput = "a".repeat(63) + pair + "z";
+
+        String defaultResult = ErrorTextSanitizer.sanitize(defaultInput);
+        String variantResult = ErrorTextSanitizer.sanitize(variantInput, '?', 64, "...");
+
+        assertAll("surrogate-safe cut",
+                () -> assertEquals("a".repeat(ErrorTextSanitizer.MAX_LENGTH - 1) + ErrorTextSanitizer.TRUNCATION_MARKER,
+                        defaultResult, "the default form keeps one character fewer instead of a lone high surrogate"),
+                () -> assertEquals("a".repeat(63) + "...", variantResult,
+                        "the replacing variant keeps one character fewer instead of a lone high surrogate"),
+                () -> assertTrue(defaultResult.chars().noneMatch(c -> Character.isSurrogate((char) c)),
+                        "no lone surrogate survives the default form"),
+                () -> assertTrue(variantResult.chars().noneMatch(c -> Character.isSurrogate((char) c)),
+                        "no lone surrogate survives the replacing variant"),
+                () -> assertEquals("a".repeat(62) + pair + "...",
+                        ErrorTextSanitizer.sanitize("a".repeat(62) + pair + "z", '?', 64, "..."),
+                        "positive control: a pair that ends at the cut is kept whole"));
     }
 
     @ParameterizedTest

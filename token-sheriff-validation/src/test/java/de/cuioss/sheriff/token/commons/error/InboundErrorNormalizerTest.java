@@ -173,7 +173,7 @@ class InboundErrorNormalizerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(chars = {(char) 0x007E, (char) 0x00A0, (char) 0x2027, (char) 0x202A})
+    @ValueSource(chars = {(char) 0x007E, (char) 0x00A0, (char) 0x2027, (char) 0x202F, (char) 0x2065, (char) 0x206A})
     @DisplayName("Should pass the characters just outside the escaped ranges through unescaped in both fields")
     void shouldPassRangeBoundaryNeighboursThrough(char neighbour) {
         String message = normalizeWithCharInBothFields(neighbour);
