@@ -117,42 +117,55 @@ final class BearerChallengeParams {
     private static Optional<Map<String, String>> parseParams(String paramList, Mode mode) {
         Map<String, String> params = new HashMap<>();
         for (String segment : splitTopLevel(paramList)) {
-            String pair = segment.strip();
-            if (pair.isEmpty()) {
-                continue;
-            }
-            int eq = pair.indexOf('=');
-            if (eq < 0) {
-                LOGGER.debug("Ignoring WWW-Authenticate challenge with a valueless segment or a second scheme");
-                return Optional.empty();
-            }
-            if (eq == 0) {
-                if (mode == Mode.STRICT) {
-                    LOGGER.debug("Ignoring WWW-Authenticate challenge with an empty auth-param name");
-                    return Optional.empty();
-                }
-                continue;
-            }
-            String name = pair.substring(0, eq).strip();
-            if (!isToken(name)) {
-                LOGGER.debug("Ignoring WWW-Authenticate challenge with auth-param name '%s', not a token",
-                        LogSanitizer.sanitize(name));
-                return Optional.empty();
-            }
-            Optional<String> value = readValue(pair.substring(eq + 1).strip(), mode);
-            if (value.isEmpty()) {
-                LOGGER.debug("Ignoring WWW-Authenticate challenge with a malformed value for '%s'",
-                        LogSanitizer.sanitize(name));
-                return Optional.empty();
-            }
-            String key = name.toLowerCase(Locale.ROOT);
-            if (params.putIfAbsent(key, value.get()) != null) {
-                LOGGER.debug("Ignoring WWW-Authenticate challenge with duplicate auth-param '%s'",
-                        LogSanitizer.sanitize(key));
+            if (!readSegment(segment, mode, params)) {
                 return Optional.empty();
             }
         }
         return Optional.of(params);
+    }
+
+    /**
+     * Reads one comma-separated segment of the {@code auth-param} list into {@code params}.
+     * An empty segment, and in {@link Mode#LENIENT} a segment with an empty name, is skipped.
+     *
+     * @return {@code false} if the segment refuses the whole value, {@code true} otherwise
+     */
+    private static boolean readSegment(String segment, Mode mode, Map<String, String> params) {
+        String pair = segment.strip();
+        if (pair.isEmpty()) {
+            return true;
+        }
+        int eq = pair.indexOf('=');
+        if (eq < 0) {
+            LOGGER.debug("Ignoring WWW-Authenticate challenge with a valueless segment or a second scheme");
+            return false;
+        }
+        if (eq == 0) {
+            if (mode == Mode.STRICT) {
+                LOGGER.debug("Ignoring WWW-Authenticate challenge with an empty auth-param name");
+                return false;
+            }
+            return true;
+        }
+        String name = pair.substring(0, eq).strip();
+        if (!isToken(name)) {
+            LOGGER.debug("Ignoring WWW-Authenticate challenge with auth-param name '%s', not a token",
+                    LogSanitizer.sanitize(name));
+            return false;
+        }
+        Optional<String> value = readValue(pair.substring(eq + 1).strip(), mode);
+        if (value.isEmpty()) {
+            LOGGER.debug("Ignoring WWW-Authenticate challenge with a malformed value for '%s'",
+                    LogSanitizer.sanitize(name));
+            return false;
+        }
+        String key = name.toLowerCase(Locale.ROOT);
+        if (params.putIfAbsent(key, value.get()) != null) {
+            LOGGER.debug("Ignoring WWW-Authenticate challenge with duplicate auth-param '%s'",
+                    LogSanitizer.sanitize(key));
+            return false;
+        }
+        return true;
     }
 
     /**
