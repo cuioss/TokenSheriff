@@ -23,6 +23,13 @@ Branch protection on `main` forbids direct pushes. Always:
    a failing check or an unresolved reviewer comment. If a merge is blocked, report why instead of working around it.
 8. After merge, return to `main`: `git checkout main && git pull`
 
+## Maven Build Gotcha: Reactor `test-compile` and `test` Fail
+
+Never gate on a reactor-wide `test-compile` or `test` (`mvnw test-compile`, `mvnw test`): they always fail with
+"package `de.cuioss.sheriff.token.validation.test…` does not exist", on `main` as well. `token-sheriff-client` and
+`benchmark-core` consume the `token-sheriff-validation:generators` test jar, which is only built in the `package`
+phase. Use `verify` (or `package -DskipTests`) instead; `verify -Ppre-commit` is the quality gate and runs all tests.
+
 ## Tool Usage
 
 - Use proper tools (Edit, Read, Write) instead of shell commands (echo, cat)
