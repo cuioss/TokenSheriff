@@ -107,8 +107,11 @@ repairing it, when the value:
 * names an `auth-param` twice.
 
 The `insufficient_scope` parser reads in a strict mode that additionally refuses an empty
-`auth-param` name, an unterminated quoted value and a trailing backslash. It then requires every
-`scope` token to match the RFC 6749 §3.3 `scope-token` grammar and accepts at most 64 tokens.
+`auth-param` name, an unterminated quoted value, a trailing backslash and an unquoted `scope`
+value (RFC 6750 §3 defines `scope` as a `quoted-string`, so `scope=read` is refused as well as
+`scope=read write`). It then requires every `scope` token to match the RFC 6749 §3.3
+`scope-token` grammar and accepts at most 64 tokens; only a `scope` of ASCII spaces alone counts
+as empty, so a `scope` made of other whitespace (such as U+2003) is read as a token and refused.
 
 The step-up parser reads in a lenient mode that keeps its earlier handling of an empty name
 (skipped) and an unterminated quoted value (kept verbatim), but it now applies the same guard:

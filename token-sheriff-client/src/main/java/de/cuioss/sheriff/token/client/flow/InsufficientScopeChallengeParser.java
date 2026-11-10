@@ -41,11 +41,15 @@ import java.util.Set;
  * {@code LF}, {@code NUL}, any other control character or {@code DEL} (horizontal tab is tolerated as
  * optional whitespace), followed by another scheme, carrying a valueless segment or an empty
  * {@code auth-param} name, naming an {@code auth-param} twice, or carrying an unterminated quoted value
- * or a stray backslash. The {@code scope} value is split on single spaces; empty tokens are dropped and
- * duplicates collapsed in first-seen order. Every token must match the RFC 6749 §3.3 {@code scope-token}
- * grammar ({@code %x21 / %x23-5B / %x5D-7E}) and at most {@value #MAX_SCOPE_TOKENS} tokens are read;
- * beyond either the whole challenge yields {@link Optional#empty()}. An absent or blank {@code scope}
- * yields a challenge with an empty scope set. The {@code realm} and the {@code error_description} are
+ * or a stray backslash. An unquoted {@code scope} value ({@code scope=read} as well as
+ * {@code scope=read write}) also yields {@link Optional#empty()}: RFC 6750 §3 defines the {@code scope}
+ * attribute as a {@code quoted-string}. The {@code scope} value is split on single spaces; empty tokens
+ * are dropped and duplicates collapsed in first-seen order. Every token must match the RFC 6749 §3.3
+ * {@code scope-token} grammar ({@code %x21 / %x23-5B / %x5D-7E}) and at most {@value #MAX_SCOPE_TOKENS}
+ * tokens are read; beyond either the whole challenge yields {@link Optional#empty()}. An absent
+ * {@code scope}, or one made of ASCII spaces alone, yields a challenge with an empty scope set; a
+ * {@code scope} made of other whitespace (for example U+2003) goes through the token grammar and is
+ * refused, as the same character beside a token is. The {@code realm} and the {@code error_description} are
  * escaped and bounded by {@link LogSanitizer} before they are stored — the header guard refuses C0
  * controls and {@code DEL} only, so C1 controls and the Unicode line separators U+2028 and U+2029 reach
  * them — and neither is ever logged.
@@ -65,6 +69,9 @@ import java.util.Set;
  * I/O, keeps no state between calls, and does not parse the {@code invalid_token} or
  * {@code invalid_request} challenges of RFC 6750 §3.1. Acting on the challenge is the caller's decision.
  * The parser is stateless and safe for concurrent use.
+ * <p>
+ * The constants {@link #INSUFFICIENT_SCOPE} and {@link #MAX_SCOPE_TOKENS} are public API: callers may
+ * compare against the error code and rely on the token bound.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -79,18 +86,22 @@ public final class InsufficientScopeChallengeParser {
     public static final int MAX_SCOPE_TOKENS = 64;
 
     private static final CuiLogger LOGGER = new CuiLogger(InsufficientScopeChallengeParser.class);
+    private static final String SCOPE = "scope";
+    private static final Set<String> QUOTED_ONLY = Set.of(SCOPE);
+    private static final char SPACE = ' ';
 
     /**
      * Parses the {@code WWW-Authenticate} header value into an {@code insufficient_scope} challenge.
      *
      * @param wwwAuthenticate the raw header value, or {@code null}
      * @return the parsed challenge, or {@link Optional#empty()} if the header is absent, refused by the
-     *         header guard, not an {@code insufficient_scope} Bearer challenge, or carries a {@code scope}
-     *         outside the {@code scope-token} grammar or with more than {@value #MAX_SCOPE_TOKENS} tokens
+     *         header guard, not an {@code insufficient_scope} Bearer challenge, or carries an unquoted
+     *         {@code scope} or a {@code scope} outside the {@code scope-token} grammar or with more than
+     *         {@value #MAX_SCOPE_TOKENS} tokens
      */
     public Optional<InsufficientScopeChallenge> parse(@Nullable String wwwAuthenticate) {
         Optional<Map<String, String>> parsed = BearerChallengeParams.parse(wwwAuthenticate,
-                BearerChallengeParams.Mode.STRICT);
+                BearerChallengeParams.Mode.STRICT, QUOTED_ONLY);
         if (parsed.isEmpty()) {
             return Optional.empty();
         }
@@ -98,7 +109,7 @@ public final class InsufficientScopeChallengeParser {
         if (!INSUFFICIENT_SCOPE.equals(params.get("error"))) {
             return Optional.empty();
         }
-        Optional<Set<String>> scopes = parseScopes(params.get("scope"));
+        Optional<Set<String>> scopes = parseScopes(params.get(SCOPE));
         if (scopes.isEmpty()) {
             return Optional.empty();
         }
@@ -109,11 +120,11 @@ public final class InsufficientScopeChallengeParser {
 
     private static Optional<Set<String>> parseScopes(@Nullable String scope) {
         Set<String> scopes = new LinkedHashSet<>();
-        if (scope == null || scope.isBlank()) {
+        if (scope == null || isAsciiSpacesOnly(scope)) {
             return Optional.of(scopes);
         }
         int tokenCount = 0;
-        for (String token : scope.split(" ")) {
+        for (String token : scope.split(String.valueOf(SPACE))) {
             if (token.isEmpty()) {
                 continue;
             }
@@ -130,6 +141,19 @@ public final class InsufficientScopeChallengeParser {
             scopes.add(token);
         }
         return Optional.of(scopes);
+    }
+
+    /**
+     * @return whether {@code scope} is empty or holds ASCII spaces ({@code U+0020}) only; any other
+     *         whitespace is left to the {@code scope-token} grammar, which refuses it
+     */
+    private static boolean isAsciiSpacesOnly(String scope) {
+        for (int i = 0; i < scope.length(); i++) {
+            if (scope.charAt(i) != SPACE) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

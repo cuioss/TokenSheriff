@@ -28,10 +28,16 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -146,11 +152,26 @@ class InsufficientScopeChallengeParserTest {
         }
 
         @Test
-        @DisplayName("Should accept an unquoted single-token scope")
-        void shouldAcceptUnquotedScope() {
+        @DisplayName("Should refuse an unquoted scope of any shape, since RFC 6750 §3 requires a quoted-string")
+        void shouldRefuseUnquotedScope() {
             var scope = scopeToken();
 
-            assertEquals(List.of(scope), List.copyOf(parseRequired(CHALLENGE_PREFIX + ", scope=" + scope).scopes()));
+            assertAll("unquoted scope",
+                    () -> assertRefused(CHALLENGE_PREFIX + ", scope=" + scope, "unquoted single-token scope"),
+                    () -> assertRefused(CHALLENGE_PREFIX + ", scope=read write", "unquoted multi-token scope"),
+                    () -> assertEquals(List.of(scope),
+                            List.copyOf(parseRequired(CHALLENGE_PREFIX + ", scope=\"" + scope + "\"").scopes()),
+                            "positive control: the same token quoted still parses"));
+        }
+
+        @Test
+        @DisplayName("Should refuse a scope made of Unicode whitespace alone, as the same character beside a token")
+        void shouldRefuseUnicodeBlankScope() {
+            assertAll("U+2003 EM SPACE",
+                    () -> assertRefused(CHALLENGE_PREFIX + ", scope=\" \"",
+                            "a Unicode-blank scope goes through the token grammar"),
+                    () -> assertRefused(CHALLENGE_PREFIX + ", scope=\" read\"",
+                            "the same character beside a token"));
         }
 
         @ParameterizedTest(name = "scope value {0}")
@@ -179,7 +200,7 @@ class InsufficientScopeChallengeParserTest {
 
         @ParameterizedTest(name = "scope part [{0}]")
         @ValueSource(strings = {"", ", scope=\"\"", ", scope=\"   \""})
-        @DisplayName("Should yield a challenge with an empty scope set when scope is absent or blank")
+        @DisplayName("Should yield a challenge with an empty scope set when scope is absent or ASCII spaces alone")
         void shouldYieldEmptyScopeSet(String scopePart) {
             var challenge = parseRequired(CHALLENGE_PREFIX + scopePart);
 
@@ -365,16 +386,24 @@ class InsufficientScopeChallengeParserTest {
     @DisplayName("(i) Statelessness")
     class Statelessness {
 
+        private static final int CONCURRENT_CALLS = 200;
+        private static final int THREADS = 8;
+
         @Test
         @DisplayName("Should declare no instance fields")
         void shouldHaveNoInstanceState() {
-            List<String> instanceFields = Arrays.stream(InsufficientScopeChallengeParser.class.getDeclaredFields())
-                    .filter(field -> !Modifier.isStatic(field.getModifiers()))
-                    .filter(field -> !field.isSynthetic())
-                    .map(Field::getName)
-                    .toList();
+            List<String> instanceFields = declaredFields(field -> !Modifier.isStatic(field.getModifiers()));
 
             assertTrue(instanceFields.isEmpty(), "the parser must keep no state: " + instanceFields);
+        }
+
+        @Test
+        @DisplayName("Should declare no static field that is not final")
+        void shouldHaveNoMutableStaticState() {
+            List<String> mutableStatics = declaredFields(
+                    field -> Modifier.isStatic(field.getModifiers()) && !Modifier.isFinal(field.getModifiers()));
+
+            assertTrue(mutableStatics.isEmpty(), "the parser must keep no shared mutable state: " + mutableStatics);
         }
 
         @Test
@@ -384,6 +413,37 @@ class InsufficientScopeChallengeParserTest {
 
             assertEquals(parser.parse(header), parser.parse(header),
                     "a stateless parser returns the same challenge for the same header");
+        }
+
+        @Test
+        @DisplayName("Should return each caller its own challenge when one instance is called concurrently")
+        void shouldBeSafeForConcurrentCalls() throws Exception {
+            List<Callable<Boolean>> calls = new ArrayList<>();
+            for (int i = 0; i < CONCURRENT_CALLS; i++) {
+                String scope = "s" + i;
+                String realm = "r" + i;
+                String header = "Bearer realm=\"" + realm + "\", error=\"insufficient_scope\", scope=\"" + scope + "\"";
+                calls.add(() -> parser.parse(header)
+                        .map(c -> c.scopes().equals(Set.of(scope)) && c.getRealm().equals(Optional.of(realm)))
+                        .orElse(false));
+            }
+
+            ExecutorService executor = Executors.newFixedThreadPool(THREADS);
+            try {
+                for (Future<Boolean> result : executor.invokeAll(calls)) {
+                    assertTrue(result.get(), "a concurrent call must see only its own header");
+                }
+            } finally {
+                executor.shutdownNow();
+            }
+        }
+
+        private static List<String> declaredFields(Predicate<Field> filter) {
+            return Arrays.stream(InsufficientScopeChallengeParser.class.getDeclaredFields())
+                    .filter(field -> !field.isSynthetic())
+                    .filter(filter)
+                    .map(Field::getName)
+                    .toList();
         }
     }
 }

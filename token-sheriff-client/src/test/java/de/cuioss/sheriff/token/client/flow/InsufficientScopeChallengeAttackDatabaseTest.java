@@ -45,7 +45,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * and {@code DEL}, the curated {@code http.security} attack corpora and broken quoting through
  * {@link InsufficientScopeChallengeParser}, asserting it fails closed — a forged or malformed
  * {@code WWW-Authenticate} header never yields an {@code insufficient_scope} challenge and never throws.
- * Modelled on {@link StepUpChallengeAttackDatabaseTest}.
+ * The corpora run twice: once as the whole header, and once embedded in the realm, the
+ * {@code error_description} and the scope of an otherwise valid challenge, where each payload must
+ * refuse the challenge or be stored only escaped. Modelled on {@link StepUpChallengeAttackDatabaseTest}.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -137,6 +139,33 @@ class InsufficientScopeChallengeAttackDatabaseTest {
         assertRefused(testCase.attackString(), "ModSecurity payload");
     }
 
+    @ParameterizedTest
+    @ArgumentsSource(OWASPTop10AttackDatabase.ArgumentsProvider.class)
+    @DisplayName("Should refuse or store only escaped an OWASP payload embedded in realm, error_description and scope")
+    void owaspEmbeddedPayloadIsContained(AttackTestCase testCase) {
+        assertEmbeddedPayloadContained(testCase.attackString());
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(ModSecurityCRSAttackDatabase.ArgumentsProvider.class)
+    @DisplayName("Should refuse or store only escaped a ModSecurity payload embedded in realm, error_description and scope")
+    void modSecurityEmbeddedPayloadIsContained(AttackTestCase testCase) {
+        assertEmbeddedPayloadContained(testCase.attackString());
+    }
+
+    @Test
+    @DisplayName("Should parse the embedding challenge around a benign value")
+    void shouldParseEmbeddingChallengeAroundBenignValue() {
+        var value = scopeToken();
+        Optional<InsufficientScopeChallenge> challenge = parser.parse(embeddingChallenge(value));
+
+        assertTrue(challenge.isPresent(), "positive control: the embedding challenge itself is valid");
+        assertAll("benign embedded value",
+                () -> assertEquals(Optional.of(value), challenge.get().getRealm()),
+                () -> assertEquals(Optional.of(value), challenge.get().getErrorDescription()),
+                () -> assertEquals(List.of("read", value), List.copyOf(challenge.get().scopes())));
+    }
+
     @ParameterizedTest(name = "scope part [{0}]")
     @ValueSource(strings = {
             ", scope=\"read",
@@ -152,6 +181,47 @@ class InsufficientScopeChallengeAttackDatabaseTest {
         Optional<InsufficientScopeChallenge> challenge = assertDoesNotThrow(() -> parser.parse(header));
 
         assertTrue(challenge.isEmpty(), "broken quoting is refused in strict mode: " + header);
+    }
+
+    /**
+     * @return an otherwise valid challenge carrying {@code value} in the realm, the error_description and,
+     *         beside the token {@code read}, the scope
+     */
+    private static String embeddingChallenge(String value) {
+        return "Bearer realm=\"" + value + "\", error=\"insufficient_scope\", error_description=\"" + value
+                + "\", scope=\"read " + value + "\"";
+    }
+
+    /**
+     * Asserts that a payload placed inside the quoted values of an otherwise valid challenge either refuses
+     * the whole challenge, or is stored with no unescaped control or line-separator character and with
+     * every scope token inside the RFC 6749 §3.3 grammar.
+     */
+    private void assertEmbeddedPayloadContained(String payload) {
+        Optional<InsufficientScopeChallenge> challenge = assertDoesNotThrow(
+                () -> parser.parse(embeddingChallenge(payload)), "an embedded payload must not throw");
+        if (challenge.isEmpty()) {
+            return;
+        }
+        InsufficientScopeChallenge parsed = challenge.get();
+        assertAll("embedded payload " + payload,
+                () -> assertTrue(parsed.getRealm().map(InsufficientScopeChallengeAttackDatabaseTest::isEscaped)
+                        .orElse(true), "realm is stored only escaped"),
+                () -> assertTrue(parsed.getErrorDescription()
+                                .map(InsufficientScopeChallengeAttackDatabaseTest::isEscaped).orElse(true),
+                        "error_description is stored only escaped"),
+                () -> assertTrue(parsed.scopes().stream().allMatch(
+                                InsufficientScopeChallengeAttackDatabaseTest::isScopeToken),
+                        "every stored scope token is inside the scope-token grammar"));
+    }
+
+    private static boolean isEscaped(String stored) {
+        return stored.codePoints().noneMatch(c -> Character.isISOControl(c) || c == 0x2028 || c == 0x2029);
+    }
+
+    private static boolean isScopeToken(String token) {
+        return !token.isEmpty() && token.chars().allMatch(c -> c == 0x21 || (c >= 0x23 && c <= 0x5B)
+                || (c >= 0x5D && c <= 0x7E));
     }
 
     private void assertRefused(String header, String reason) {

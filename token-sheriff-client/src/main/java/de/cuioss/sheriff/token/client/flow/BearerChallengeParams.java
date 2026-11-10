@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Reads the RFC 9110 {@code auth-param} list of a single {@code Bearer} challenge off a
@@ -50,8 +51,9 @@ import java.util.Optional;
  * <p>
  * The two modes differ only where the grammar is broken: {@link Mode#LENIENT} skips a segment with an
  * empty name and keeps an unterminated quoted value verbatim; {@link Mode#STRICT} refuses the whole
- * value for an empty name, an unterminated quoted value, a trailing backslash or a quote or backslash
- * in an unquoted value.
+ * value for an empty name, an unterminated quoted value, a trailing backslash, a quote or backslash
+ * in an unquoted value, or an unquoted value for an {@code auth-param} the caller names as
+ * quoted-only (see {@link #parse(String, Mode, Set)}).
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -82,7 +84,8 @@ final class BearerChallengeParams {
     }
 
     /**
-     * Reads the {@code auth-param}s of a {@code Bearer} challenge.
+     * Reads the {@code auth-param}s of a {@code Bearer} challenge, with no {@code auth-param} required
+     * to be quoted.
      *
      * @param wwwAuthenticate the raw header value, or {@code null}
      * @param mode            how malformed grammar is treated
@@ -90,6 +93,22 @@ final class BearerChallengeParams {
      *         blank or refused by the header guard described on this class
      */
     static Optional<Map<String, String>> parse(@Nullable String wwwAuthenticate, Mode mode) {
+        return parse(wwwAuthenticate, mode, Set.of());
+    }
+
+    /**
+     * Reads the {@code auth-param}s of a {@code Bearer} challenge.
+     *
+     * @param wwwAuthenticate the raw header value, or {@code null}
+     * @param mode            how malformed grammar is treated
+     * @param quotedOnly      the lower-case names of the {@code auth-param}s whose value must be a
+     *                        {@code quoted-string}; in {@link Mode#STRICT} an unquoted value for one of them
+     *                        refuses the whole value, in {@link Mode#LENIENT} the set is not consulted
+     * @return the parameters keyed by lower-case name, or {@link Optional#empty()} if the value is absent,
+     *         blank or refused by the header guard described on this class
+     */
+    static Optional<Map<String, String>> parse(@Nullable String wwwAuthenticate, Mode mode,
+            Set<String> quotedOnly) {
         if (wwwAuthenticate == null || wwwAuthenticate.isBlank()) {
             return Optional.empty();
         }
@@ -111,13 +130,14 @@ final class BearerChallengeParams {
         if (!trimmed.toLowerCase(Locale.ROOT).startsWith(BEARER_PREFIX)) {
             return Optional.empty();
         }
-        return parseParams(trimmed.substring(BEARER_PREFIX.length()), mode);
+        return parseParams(trimmed.substring(BEARER_PREFIX.length()), mode, quotedOnly);
     }
 
-    private static Optional<Map<String, String>> parseParams(String paramList, Mode mode) {
+    private static Optional<Map<String, String>> parseParams(String paramList, Mode mode,
+            Set<String> quotedOnly) {
         Map<String, String> params = new HashMap<>();
         for (String segment : splitTopLevel(paramList)) {
-            if (!readSegment(segment, mode, params)) {
+            if (!readSegment(segment, mode, quotedOnly, params)) {
                 return Optional.empty();
             }
         }
@@ -130,7 +150,8 @@ final class BearerChallengeParams {
      *
      * @return {@code false} if the segment refuses the whole value, {@code true} otherwise
      */
-    private static boolean readSegment(String segment, Mode mode, Map<String, String> params) {
+    private static boolean readSegment(String segment, Mode mode, Set<String> quotedOnly,
+            Map<String, String> params) {
         String pair = segment.strip();
         if (pair.isEmpty()) {
             return true;
@@ -153,13 +174,19 @@ final class BearerChallengeParams {
                     LogSanitizer.sanitize(name));
             return false;
         }
-        Optional<String> value = readValue(pair.substring(eq + 1).strip(), mode);
+        String key = name.toLowerCase(Locale.ROOT);
+        String rawValue = pair.substring(eq + 1).strip();
+        if (mode == Mode.STRICT && quotedOnly.contains(key) && !rawValue.startsWith("\"")) {
+            LOGGER.debug("Ignoring WWW-Authenticate challenge with an unquoted value for '%s'",
+                    LogSanitizer.sanitize(key));
+            return false;
+        }
+        Optional<String> value = readValue(rawValue, mode);
         if (value.isEmpty()) {
             LOGGER.debug("Ignoring WWW-Authenticate challenge with a malformed value for '%s'",
                     LogSanitizer.sanitize(name));
             return false;
         }
-        String key = name.toLowerCase(Locale.ROOT);
         if (params.putIfAbsent(key, value.get()) != null) {
             LOGGER.debug("Ignoring WWW-Authenticate challenge with duplicate auth-param '%s'",
                     LogSanitizer.sanitize(key));
@@ -212,9 +239,12 @@ final class BearerChallengeParams {
     }
 
     /**
-     * Strips the surrounding double-quotes from a {@code quoted-string} value and unescapes its
-     * backslash escapes ({@code \"} → {@code "}, {@code \\} → {@code \}), per RFC 9110 §5.6.4.
-     * An unquoted {@code token} value, and a value that never closes its quote, is returned unchanged.
+     * Strips the outer double-quotes and unescapes backslash escapes ({@code \"} → {@code "},
+     * {@code \\} → {@code \}), per RFC 9110 §5.6.4, whenever the first and the last character are both
+     * {@code "} — even when the value is not one well-formed {@code quoted-string}: the value
+     * {@code "a" Basic realm="x"} becomes {@code a" Basic realm="x}. Only a value that does not both
+     * start and end with {@code "} (an unquoted {@code token}, or a value that never closes its quote) is
+     * returned unchanged.
      */
     private static String unquote(String value) {
         if (value.length() < 2 || value.charAt(0) != '"' || value.charAt(value.length() - 1) != '"') {
