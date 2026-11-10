@@ -246,6 +246,17 @@ class InsufficientScopeChallengeParserTest {
                     parseRequired(header).getErrorDescription(),
                     "the description is bounded before it is stored");
         }
+
+        @Test
+        @DisplayName("Should truncate an over-length realm and mark the truncation")
+        void shouldTruncateRealm() {
+            String longRealm = "r".repeat(ErrorTextSanitizer.MAX_LENGTH + 44);
+            String header = "Bearer realm=\"" + longRealm + "\", error=\"insufficient_scope\"";
+
+            assertEquals(Optional.of("r".repeat(ErrorTextSanitizer.MAX_LENGTH) + ErrorTextSanitizer.TRUNCATION_MARKER),
+                    parseRequired(header).getRealm(),
+                    "the realm is bounded before it is stored");
+        }
     }
 
     @Nested
