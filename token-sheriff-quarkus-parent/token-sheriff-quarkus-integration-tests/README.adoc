@@ -43,7 +43,7 @@ Integration tests for the Token-Sheriff Quarkus extensions with native container
 ./mvnw clean verify -Pmulti-idp-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
 
 # JVM unit tests only (no Docker required)
-./mvnw clean verify -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
+./mvnw clean verify -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am -DskipITs=true
 
 # Manual container testing
 ./scripts/start-integration-container.sh
@@ -53,7 +53,15 @@ curl -k https://localhost:10443/q/health
 
 The JVM unit tests use the `token-sheriff-validation` `generators` test jar, which only the
 `package` phase builds, so they run through `verify` with `-am`, never through the `test` goal.
-Build commands are owned by link:../../AGENTS.md[AGENTS.md] (Essential Build Commands).
+`-am` also builds `token-sheriff-client`, whose Failsafe suite (`WiredFlowNegativePathIT`) would
+otherwise run under `verify`; `-DskipITs=true` keeps the command to unit tests.
+
+Each `clean` above first runs this module's `stop-docker-containers` execution
+(`./scripts/stop-integration-container.sh --clean` at `pre-clean`), which stops a running Compose
+stack and removes its images and volumes. To keep a running stack during the JVM unit-test command,
+add `-Dexec.skip=true` to it. Do not add it to the two profile commands: there it would also skip the
+native build and the container start their integration tests need. See
+link:../../AGENTS.md[AGENTS.md] (Essential Build Commands), which owns the build commands.
 
 == Image Variants
 
