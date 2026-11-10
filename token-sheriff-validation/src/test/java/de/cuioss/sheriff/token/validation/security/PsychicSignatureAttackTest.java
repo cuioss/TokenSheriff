@@ -50,6 +50,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * short-circuited against a mismatched (RSA) key before ever exercising the psychic-signature defense.
  * Each row also asserts the range check's own message: a patched JDK rejects {@code (0, 0)} as well, so
  * the event type alone stays green with the library's defense removed.
+ * <p>
+ * Evidence: in a local scratch run with the {@code checkEcdsaComponentRange} call in
+ * {@code SignatureVerificationUtil.verifySignature} disabled (never committed), all three rows of this
+ * class failed on the range-check message assertion, so the class discriminates the library's own
+ * defense from the provider's.
  */
 @EnableTestLogger
 @EnableGeneratorController
