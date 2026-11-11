@@ -61,9 +61,15 @@ phase builds, so the command goes through `verify` with `-am`, never through the
 otherwise run under `verify`; `-DskipITs=true` keeps the command to unit tests.
 
 Each `clean` above first runs this module's `stop-docker-containers` execution
-(`./scripts/stop-integration-container.sh --clean` at `pre-clean`), which stops a running Compose
-stack and removes its images and volumes. To keep a running stack, run the command without `clean`
-(`./mvnw verify …`), so that neither the stop nor the deletion of `target/` happens.
+(`./scripts/stop-integration-container.sh --clean` at `pre-clean`), which normally stops a running
+Compose stack and removes its images and volumes. The stop is best-effort: the execution accepts exit
+code 1 beside 0, and the script exits 0 without stopping anything when Docker Compose or the Docker
+daemon is unavailable, so a failing compose command or a missing Docker does not fail the build and
+the stack can survive while `clean` deletes `target/`. The two profile commands start their own
+stack and stop it after the integration tests (`stop-integration-app` at `post-integration-test`),
+whether or not `clean` is present. To keep a running stack with the third, profile-free command, run
+it without `clean` (`./mvnw verify -pl … -am -DskipITs=true`), so that neither the stop nor the
+deletion of `target/` happens.
 `-Dexec.skip=true` is not enough: it skips only the stop script, while `clean` still deletes this
 module's `target/`, which `docker-compose.yml` bind-mounts into the running containers as their log
 directories (`${LOG_TARGET_DIR:-./target}` and `${RETRY_PROBE_LOG_DIR:-./target/retry-probe}`). See

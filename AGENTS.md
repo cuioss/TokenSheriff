@@ -89,13 +89,17 @@ commands specific to their module.
 ./mvnw verify -pl <module-path> -am -Dtest=ClassName#methodName -Dsurefire.failIfNoSpecifiedTests=false -DskipITs=true -Djacoco.skip=true
 ```
 
-**`clean` stops the integration stack.** In `token-sheriff-quarkus-integration-tests` the
+**`clean` normally stops the integration stack.** In `token-sheriff-quarkus-integration-tests` the
 `exec-maven-plugin` execution `stop-docker-containers` is bound to `pre-clean` and runs
-`./scripts/stop-integration-container.sh --clean`, which stops the running Docker Compose stack and
-removes its images and volumes. Every reactor `clean` that includes that module (the development build
-above, *Run all tests* below) therefore ends an integration or benchmark session that is running at the
-time. To keep it running, run the command without `clean` (for example `./mvnw verify`), so that
-neither the `pre-clean` stop nor the deletion of `target/` happens. Adding `-Dexec.skip=true` is not
+`./scripts/stop-integration-container.sh --clean`, which tries to stop the running Docker Compose
+stack and remove its images and volumes. The stop is best-effort: the execution accepts exit code 1
+beside 0, and the script exits 0 without stopping anything when Docker Compose or the Docker daemon is
+unavailable, so a failing compose command or a missing Docker does not fail the build. Every reactor
+`clean` that includes that module (the development build above, *Run all tests* below) therefore
+normally ends an integration or benchmark session that is running at the time, but the stack can also
+survive while `clean` deletes `target/` underneath it. To keep it running, run the command without
+`clean` (for example `./mvnw verify`), so that neither the `pre-clean` stop nor the deletion of
+`target/` happens. Adding `-Dexec.skip=true` is not
 enough: it skips only the stop script, while `clean` still deletes the module's `target/`, which
 `docker-compose.yml` bind-mounts into the running containers as their log directories
 (`${LOG_TARGET_DIR:-./target}` and `${RETRY_PROBE_LOG_DIR:-./target/retry-probe}`, the log
@@ -120,7 +124,10 @@ reactor `./mvnw clean test-compile` fails with about 110 "package
 `de.cuioss.sheriff.token.validation.test…` does not exist" errors in `token-sheriff-client`,
 `token-sheriff-validation-quarkus` and `benchmark-core`, and adding `-pl <module> -am` does not help
 (`./mvnw test-compile -pl token-sheriff-client -am` fails the same way). Use `verify` (or
-`package -DskipTests`) instead; `-am` with `verify` builds the jar in the same run.
+`package -DskipTests`) instead; `-am` with `verify` builds the jar in the same run. `-DskipTests` does
+not skip every test: `benchmarking/benchmark-integration-wrk` sets the Surefire `skipTests` parameter
+to `false` in its plugin configuration, which overrides the user property, so a reactor
+`package -DskipTests` still runs that module's WRK parser unit tests.
 
 ### Code Standards
 - **Indentation**: 4 spaces (configured in `.editorconfig`)
@@ -187,7 +194,8 @@ Mandatory for 3+ similar test variants. Common annotations:
 ### Test Execution Commands
 ```bash
 # Run all tests (verify, not test: see Essential Build Commands).
-# clean stops a running integration stack; omit clean to keep it (see Essential Build Commands)
+# clean normally stops a running integration stack (best-effort); omit clean to keep it
+# (see Essential Build Commands)
 ./mvnw clean verify
 
 # Run the tests of one module

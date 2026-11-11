@@ -73,12 +73,16 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * Limit of point (f): a rotation installs a new key loader for the new key set and leaves the old one's
  * map untouched, so a set that were a live view over the old loader's map would also stay unchanged.
- * Point (f) therefore pins that the returned set does not follow the rotation; that the set is a copy
- * rather than a view of a single loader's map is pinned by point (e) and by {@code JWKSKeyLoaderTest}.
+ * Point (f) therefore pins that the returned set does not follow the rotation. Point (e) and
+ * {@code JWKSKeyLoaderTest} pin that the snapshot cannot be modified through the returned set. The
+ * implementation, {@code JWKSKeyLoader.getKeyIds}, builds the set with
+ * {@code Collectors.toUnmodifiableSet}, which is a copy, but no test distinguishes a copy from an
+ * unmodifiable view of a single loader's map.
  * <p>
- * The grace period of point (g) is {@code GRACE_PERIOD_SECONDS} (10 s), several times the time between
- * the rotation and the check that the retired id still resolves, so a CI stall cannot push that check
- * outside the grace window.
+ * The grace period of point (g) is {@code GRACE_PERIOD_SECONDS} (10 s), several times the expected time
+ * between the rotation and the check that the retired id still resolves, which makes a CI stall of
+ * several seconds harmless. The loader compares wall-clock time, so the check still depends on the wall
+ * clock: a stall longer than the grace period would fail it.
  */
 @EnableTestLogger
 @EnableGeneratorController
