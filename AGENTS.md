@@ -94,10 +94,12 @@ commands specific to their module.
 `./scripts/stop-integration-container.sh --clean`, which stops the running Docker Compose stack and
 removes its images and volumes. Every reactor `clean` that includes that module (the development build
 above, *Run all tests* below) therefore ends an integration or benchmark session that is running at the
-time. To keep it running, add `-Dexec.skip=true`: on the default lane that skips only this cleanup,
-because the benchmark executions are already skipped through `skip.benchmark` and every other
-`exec-maven-plugin` execution sits in a profile. Do not add it to a `-Ppre-commit` run, where it would
-also skip the root POM's `assert-javautilapis-excluded` guard.
+time. To keep it running, run the command without `clean` (for example `./mvnw verify`), so that
+neither the `pre-clean` stop nor the deletion of `target/` happens. Adding `-Dexec.skip=true` is not
+enough: it skips only the stop script, while `clean` still deletes the module's `target/`, which
+`docker-compose.yml` bind-mounts into the running containers as their log directories
+(`${LOG_TARGET_DIR:-./target}` and `${RETRY_PROBE_LOG_DIR:-./target/retry-probe}`, the log
+`WellKnownRetryConfigSpecIT` reads).
 
 **What the single-test command skips, and what it cannot check.** `-Dtest` selects Surefire tests
 only. Without `-DskipITs=true`, `verify` still runs every Failsafe suite of the selected module (in
@@ -185,7 +187,7 @@ Mandatory for 3+ similar test variants. Common annotations:
 ### Test Execution Commands
 ```bash
 # Run all tests (verify, not test: see Essential Build Commands).
-# clean stops a running integration stack; add -Dexec.skip=true to keep it (see Essential Build Commands)
+# clean stops a running integration stack; omit clean to keep it (see Essential Build Commands)
 ./mvnw clean verify
 
 # Run the tests of one module

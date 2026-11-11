@@ -42,7 +42,7 @@ Integration tests for the Token-Sheriff Quarkus extensions with native container
 # Multi-IDP integration tests - Keycloak + Dex (requires Docker)
 ./mvnw clean verify -Pmulti-idp-tests -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
 
-# JVM unit tests only (no Docker required)
+# Unit tests of the upstream modules, no integration specs (no Docker required)
 ./mvnw clean verify -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am -DskipITs=true
 
 # Manual container testing
@@ -51,16 +51,22 @@ curl -k https://localhost:10443/q/health
 ./scripts/stop-integration-container.sh
 ----
 
-The JVM unit tests use the `token-sheriff-validation` `generators` test jar, which only the
-`package` phase builds, so they run through `verify` with `-am`, never through the `test` goal.
+This module has no Surefire unit tests of its own: every test class under `src/test` is a
+`*SpecIT` / `*IT` Failsafe class or a support class. With `-DskipITs=true` the third command
+therefore runs the unit tests of the upstream modules that `-am` builds and nothing in this module;
+the integration specs of this module run only through the two profile commands above it. The
+upstream tests use the `token-sheriff-validation` `generators` test jar, which only the `package`
+phase builds, so the command goes through `verify` with `-am`, never through the `test` goal.
 `-am` also builds `token-sheriff-client`, whose Failsafe suite (`WiredFlowNegativePathIT`) would
 otherwise run under `verify`; `-DskipITs=true` keeps the command to unit tests.
 
 Each `clean` above first runs this module's `stop-docker-containers` execution
 (`./scripts/stop-integration-container.sh --clean` at `pre-clean`), which stops a running Compose
-stack and removes its images and volumes. To keep a running stack during the JVM unit-test command,
-add `-Dexec.skip=true` to it. Do not add it to the two profile commands: there it would also skip the
-native build and the container start their integration tests need. See
+stack and removes its images and volumes. To keep a running stack, run the command without `clean`
+(`./mvnw verify …`), so that neither the stop nor the deletion of `target/` happens.
+`-Dexec.skip=true` is not enough: it skips only the stop script, while `clean` still deletes this
+module's `target/`, which `docker-compose.yml` bind-mounts into the running containers as their log
+directories (`${LOG_TARGET_DIR:-./target}` and `${RETRY_PROBE_LOG_DIR:-./target/retry-probe}`). See
 link:../../AGENTS.md[AGENTS.md] (Essential Build Commands), which owns the build commands.
 
 == Image Variants
