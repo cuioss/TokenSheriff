@@ -2,10 +2,10 @@
   "id": "PLAN-28",
   "slug": "epic-cleanup-sweep",
   "workstream": "WS-05",
-  "status": "running",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-28-epic-cleanup-sweep",
+  "pr": "892",
+  "landing": "landings/PLAN-28.md",
   "seq": 28
 }

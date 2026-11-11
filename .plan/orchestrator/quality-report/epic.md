@@ -173,6 +173,9 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   wrong, (3) test pins and gaps left without evidence, (4) verify-or-soften and record, (5) native-image `@BearerAuth` coverage, (6) the e2e teardown hang and screenshot flake, (7)
   the PLAN-26 leftovers (FILLED 2026-11-10, see Decisions). 39 resolved surface entries, declarative; the cross-check finds no overlap prompt, comparison determinate; no blocking
   verdict row. Nothing else is running. Emit only on the operator's word.
+  SHIPPED 2026-11-11 as #892 (`c7b2675b`; recreated from #891, closed unmerged), see `landings/PLAN-28.md`: emitted and started on the operator's word 2026-11-10, run by the lane as nine
+  deliverables in one PR (35 files, +1263/-184). 10 of the 35 merged files were not in the declared surface (seven added by the lane's own Q-Gate rounds) and 14 declared files were not touched (the
+  evidence-only closures D3(b), D4, D6, D7). No blocker or major by reading; the minor residue is one Open Defect. The first merge-queue entry was ejected by the e2e teardown hang (Watch).
 - PLAN-26 (staged 2026-11-09, WS-01; slug `jwks-key-ids-contract-pin` is historical, the plan carries two deliverables): SHIPPED 2026-11-10 as #888 (`7520e165`), see
   `landings/PLAN-26.md`. 18 files merged against 12 declared (the Expected Surface omitted the integration test, `references.adoc`, `test-strategy.adoc`, `test-impl-mapping.adoc` and
   the two READMEs; no collision resulted). Deliverable 1 is the `getKeyIds()` contract test (test only); deliverable 2 is `InsufficientScopeChallengeParser` on a shared
@@ -609,6 +612,22 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   `2026-11-10-09-002` (the second invented manage-findings surface, now a verb), 004 PROMOTED as `2026-11-10-14-002`, 005 reconciled; each has a decision-log line. The leftovers were
   ADDED to PLAN-28 as deliverable 7 (a) to (e), with 10 new Expected Surface entries (all existing at `7520e165`), plus the e2e hang recurrence on deliverable 6 and the reactor-baseline
   evidence on 2(b). The gate re-read: PLAN-28 declarative, 39 entries, comparison determinate, no overlap prompt, `blocking_count` 0. PLAN-28 is NOT emitted; the operator's word emits it.
+- 2026-11-10 — PLAN-28 EMITTED and STARTED on the operator's word ("emit PLAN-28", then "is running"), after the ledger was landed first (#889, `a16b20af`) at the operator's instruction. Gate on `a16b20af`:
+  declarative, 39 entries, comparison determinate, no overlap prompt, `blocking_count` 0; one of three slots filled. The row was recorded `launched` then `running` on the operator's confirmation (`auto_emit` false).
+  A cleanup pass ran next (corpus clean, invariants ok, settled-narrative relocation deferred, archive drain refused, restart verdict `not_ready` for the running plan and `registry_parity`) and the ledger was landed again (#890, `e61ceb42`).
+- 2026-11-11 — PLAN-28 ANALYZED (`landings/PLAN-28.md`, #892, `c7b2675b`; inbox `plan-28-epic-cleanup-sweep-001` to `021`). Landing reconciled: row shipped, pr 892, landing and plan id stamped; `landing-check` was
+  `complete: false` (three review-count keys `unknown`, recorded in the existing incomplete-landing Open Defect). PR state, the merge commit, the 24 green checks and the closed #891 were read through `ci`. Three-layer analysis by
+  one read-only leaf, the cited points re-read at `c7b2675b`: layer 1 two minor findings (three spec premises stale on `main`: the new class-level endpoint exists, the screenshot comparison does not, the SpecIT is named in
+  two docs; the unquoted-scope refusal rests on RFC 6750 text nobody could read) plus two info; layer 2 seven minor findings (the PR body says the thumbprint, replay, htm and htu messages were left out while the diff sanitises them,
+  the over-cap test pins a probe not the cost, the concurrent test cannot reach the evict race, the embedded-payload attack test is mostly vacuous for `realm` and `error_description`, D3(d) closed with four rows and no recorded reason
+  for three cases, D3(b) closed by a Javadoc record, the single-owner doc goal only partly met); layer 3 five minor findings and two info, none a blocker (every remote-text sink in `DpopProofValidator` is sanitised once for the log and the thrown
+  message, the replay cache keeps an in-window `jti` and examines one node on an over-cap insert, STRICT refuses any unquoted scope and LENIENT is unchanged, the surrogate cut is correct). The residue is one Open Defect. Runtime
+  claims (4363 tests, the scratch-run failure counts, the rsvg render, the 884-link check, the native run, the e2e hang) are the lane's. The `StepUpResultVerifier` hypothesis (PLAN-26 L3-3) is settled by reading: a polluted LENIENT value can only name tokens
+  the resource server chose. The 20 candidate lessons were dispositioned (inbox 001 to 020): 6 PROMOTED as new lessons (`2026-11-11-12-001` the outline's affected files from a repository-wide search, `-002` the test-integrity phantom
+  removals, `-003` the argparse class, `-004` the SVG render, `-005` raw Unicode in test literals, `-006` documented build commands), 14 FOLDED (001-008 and 011 into `-001`, 014 and 015 into `-002`, 018-020 into `-003`, 013 and themes 2 and 3 of 016
+  into `2026-11-10-14-001`); each has a decision-log line. The two earlier plan-marshall lessons filed here on 2026-11-10 (`2026-11-10-09-002`, `2026-11-10-14-002`), and the other plan-marshall-owned ones this epic filed with the
+  foreign-store override, were no longer in the lesson store on 2026-11-11 (`list` shows only `token-sheriff-*` components and `get` returns `not_found` here; the plan-marshall repository's lessons directory holds no file for
+  `2026-11-10-09-002`, `-14-002`, `-09-001` or `2026-11-09-16-003`; nothing was searched beyond those two stores): the content of the first two was carried into `2026-11-11-12-003`. The cause is not known.
 
 ## Open Defects
 
@@ -641,6 +660,9 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   (3) `DpopProofValidator.java:351,441,457` log the proof's `jti`, `htm` and `htu` as raw arguments (CWE-117; whether anything downstream sanitises them is a HYPOTHESIS, re-read at those lines), and
   `LogRecordSanitizationGuardTest.java:58-64` does not name those fields, so the guard cannot see them. CARRIED 2026-11-10 by staged PLAN-28 deliverable 1. DECIDED 2026-11-10 (operator) for (1): the
   soft cap stays and is documented, not changed. Retire when it lands with tests.
+  RETIRED 2026-11-11: PLAN-28 shipped (#892, `landings/PLAN-28.md`), re-read at `c7b2675b`: (1) the soft cap is kept and documented (`DpopConfig`, class Javadoc, threat-model DP1); (2) the over-cap insert pops from the head and ends at the first
+  in-window entry, examining one node when nothing is evictable (`DpopReplayProtection.java:174-216`); (3) every remote-text sink in `DpopProofValidator`, the `jti`, `htm`, `htu`, thumbprint and each `rejectWith` text, is sanitised
+  once for the log and the thrown message (`:343-362`, `:446-473`, `:630-636`). New minor residue, not a regression: a global monitor on every over-cap insert (see the PLAN-28 residue defect).
 - 2026-11-10 — Wrong or contradicting documentation shipped by PLAN-27 (#887; `landings/PLAN-27.md` L2-1, L2-2, re-read on `aeb86e4d`), no fix plan staged, a doc-fix plan
   only on the operator's word: (1) `AGENTS.md:133` says 30 test classes are above 500 lines and the largest has 1024; at `aeb86e4d` the largest is 1023 and the count is 39 over
   all tracked `src/test` Java (34 `*Test.java`, 31 in validation and client). (2) `CLAUDE.md:26-34` says a reactor-wide `mvnw test-compile` or `mvnw test` "always" fails and that
@@ -649,10 +671,16 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   consume it); the "always fails on `main`" claim is not shown by reading (a build the orchestrator does not run). (3) `security-reference.adoc:34` says "no later step can tell
   the two apart" for a null and an omitted member, which holds for top-level members only (a nested null is kept, as before; re-read at `MapRepresentation.fromJson`, lines 100-118). CARRIED 2026-11-10 by staged
   PLAN-28 deliverable 2. Retire when a doc fix lands or the operator accepts the residue.
+  RETIRED 2026-11-11 by PLAN-28 (#892), re-read at `c7b2675b`: `AGENTS.md:172-173` is the 500-line guideline with no stale count; `security-reference.adoc:34` now limits the null-equals-omitted claim to top-level members; the build-command
+  claims moved from `CLAUDE.md` into `AGENTS.md:82-130` and match the poms (the leaf's reading; whether a reactor `test-compile` fails stays a build the orchestrator does not run). The wording of the pre-clean stop is still broader than its
+  mechanism (see the PLAN-28 residue defect).
 - 2026-11-10 — PLAN-27 landing facts incomplete: `landing-check` `complete: false`, missing keys `unresolved_review_threads`, `review_body_findings_total`,
   `review_body_findings_handled` (all `unknown`; the lane says no finalize step publishes them); `surface_delta` `unmeasured`. The landing was reconciled as far as it goes and the
   CodeRabbit state was read from the PR directly (two inline findings, both fixed in `abef336e`; the last commit merged under the recorded `barrier-ask-override` ruling).
   Plan-marshall owns the facts; same class as the `effort` residue. Retire when upstream publishes them or the operator accepts the gap.
+  RECURRED 2026-11-11 (PLAN-28 landing, #892): `landing-check` `complete: false`, missing keys `review_body_findings_total`, `review_body_findings_handled`, `sonar_open_new_issues` (all `unknown`; `unresolved_review_threads` was present, 0);
+  `surface_delta` `unmeasured`. The lane says no finalize step parses review bodies and `sonar-roundtrip` does not read security hotspots. The landing was reconciled as far as it goes; the check state was read from `ci` directly (24 green,
+  `build / sonar-build` success, CodeRabbit success). Same class, upstream-owned.
 - 2026-11-10 — Minor looseness and test gaps left by PLAN-26 (#888; `landings/PLAN-26.md` L2-3, L2-4, L3-1 to L3-6, re-read on `7520e165`), no blocker, none reported as a fix plan:
   `BearerChallengeParams.readValue` accepts an unquoted `scope=read write` in STRICT mode (`:207-210`) and `CLIENT-25` is silent on it; a Unicode-whitespace-only `scope` yields an empty
   scope set while the same character beside a token is refused (`InsufficientScopeChallengeParser.java:112`); the LENIENT `unquote` pollutes `acr_values="a" Basic realm="x"` (inherited) and
@@ -660,6 +688,24 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   the contract test does not fail for a live view over the old loader's map; the second assertion of point (c) can never fail; points (g) and (h) are timing-bound (1 s refresh, 3 s grace);
   a raw U+2028 sits in a test literal; the shared `ErrorTextSanitizer` can split a surrogate pair and does not escape bidi controls (pre-existing). CARRIED 2026-11-10 by PLAN-28 deliverable 7
   (a) to (e). Retire when PLAN-28 ships and each point is fixed or dropped with the line that closes it.
+  RETIRED 2026-11-11 by PLAN-28 (#892) except the points the residue defect names, re-read at `c7b2675b`: STRICT refuses any unquoted `scope` (`BearerChallengeParams.java:179-183`, operator decision); a Unicode-blank `scope` goes through the
+  token grammar and is refused (`InsufficientScopeChallengeParser.java:121-157`); `ErrorTextSanitizer` cuts surrogate-safe and escapes the nine bidi controls (`:168-214`); the public constants stay public and are named; the `StepUpResultVerifier`
+  split was read and cannot widen (`:105-128`); the point (c) positive control and the wider grace period are in the contract test (leaf). No raw U+2028, U+2029 or U+2003 is left in the three test files (re-counted, 0). Point (f) is closed by saying so, not by a test: a live view over the OLD loader's map is still not caught, and the
+  test Javadoc now states that (`JwksLoaderKeyIdsContractTest.java:75-80`). Not closed: the LENIENT `unquote` Javadoc still says a value that never closes its quote is returned unchanged (L3-1); the
+  OWASP and ModSecurity corpus rows stay largely vacuous for `realm` and `error_description` (L2-4).
+- 2026-11-11 — Minor residue after PLAN-28 (#892; `landings/PLAN-28.md` L2-1 to L2-7 and L3-1 to L3-5, re-read at `c7b2675b` where marked), no blocker, none reported as a fix plan, a doc-and-test plan only on the operator's word:
+  (1) the LENIENT `unquote` Javadoc still claims a value "that never closes its quote" is returned unchanged, but `"a\"` is stripped to `a` (`BearerChallengeParams.java:241-268`, re-read; spec item 7(c) named it);
+  (2) `JweDecryptor.sanitizeHeaderValue` Javadoc (`:311-318`, re-read) lists control characters and U+2028/2029 only, the shared sanitiser also replaces the bidi controls (the `LogSanitizer` Javadoc likewise, per the PR);
+  (3) `ErrorTextSanitizer` leaves U+200E, U+200F, U+061C, the zero-width characters U+200B to U+200D and U+2060 to U+2064, U+FEFF and the tag characters un-neutralised (re-read `:184-214`): a residual invisible-character spoof of a log line;
+  (4) `AGENTS.md:95-98` and the integration-tests `README.adoc:64-68` say a failing compose command does not fail the build, but the pom accepts exit codes 0 and 1 only and the script runs under `set -e` (re-read); the PR names it; and
+  `AGENTS.md` says it is "not the only place commands appear" while the module READMEs say it owns them (the single-owner goal is half met);
+  (5) one global monitor `evictionLock` is taken by every over-cap `jti` insert, and the periodic sweep holds it for a whole-queue walk (the sweep not re-read): over-cap inserters stall once per 60 s in proportion to the queue,
+  the magnitude only a run can show (`DpopReplayProtection.java:76,155-168,174-216`); the cap itself is the operator's soft cap;
+  (6) test pins: the over-cap test asserts a test-only probe, not the cost; the concurrent replay test uses a 300 s TTL so no evict race runs; the embedded-payload attack-database test returns early for most corpus payloads and `isEscaped`
+  re-lists the bidi ranges; no row for an empty unquoted `scope=`; the statelessness additions miss a static final mutable collection; D3(d) has four epk rows and no recorded reason that apu/apv, unsupported compression and an inner-JWS
+  decode failure need none; D3(b) is closed by a Javadoc record of a scratch run; `JweDecryptorEcdhEsAndCompressionTest` is 516 lines (guideline 500, reason in the PR body);
+  (7) the PR body is stale: its Non-goals say the thumbprint, replay, htm and htu messages are left out (the diff sanitises them), and it states 186 lines for a 197-line test. Retire when the operator accepts the residue or a plan fixes each point
+  with the line that closes it.
 - 2026-11-09 — PLAN-19 doc drift RETIRED by the PLAN-25 landing: COMMONS-2 now documents the `allowInsecureHttp` opt-in
   (`doc/commons/requirements.adoc:57-64`) and the Quarkus parent README attributes the mapping to `ClientConfigMapper`
   (`token-sheriff-quarkus-parent/README.adoc:14`), both re-read; the Javadoc and ADR-0010:187 corrections are leaf-reported and not re-read.
@@ -696,6 +742,9 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   shipped as #888, `7520e165`; `landings/PLAN-26.md`): (B) is pinned by `JwksLoaderKeyIdsContractTest` through the factory for points (a) to (h), and (C) is answered in code by
   `InsufficientScopeChallengeParser` (new public API, `CLIENT-25`), both on `main` and in no release. A release note would also state that `StepUpChallengeParser` now refuses a
   valueless segment, a following scheme, other control characters and a header over 8192 characters. The reply and the release note stay held until a release and the operator's word.
+  UPDATE 2026-11-11 (PLAN-28 shipped as #892, `c7b2675b`; `landings/PLAN-28.md`): the release note for (C) would also say that the STRICT `insufficient_scope` parser now refuses ANY unquoted `scope` value (operator decision; a resource
+  server that sends `scope=read` unquoted loses `insufficient_scope` handling, an availability effect, stated in `CLIENT-25`) and a Unicode-blank scope, and that the shared `ErrorTextSanitizer` now escapes the nine bidi controls and cuts
+  at a surrogate boundary (log and exception text only). DPoP proof rejections now carry sanitised text in the thrown message too. All on `main` and in no release.
   Retire when the reply is done or declined.
 - 2026-11-09 — PLAN-25 items with NO evidence in either PR (leaf reading, `landings/PLAN-25.md`; held, not carried by PLAN-26): 1(a) and 1(b)
   (the unannotated-override fail-open verdict; `BearerTokenInterceptor` untouched; no native run), the CI-runner container question, 4(b)'s
@@ -706,6 +755,11 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   a JSON number, and about 20 created or edited test classes over 500 lines. PR bodies were not read, so whether each narrowing was stated
   there is unknown. Retire an item when the operator accepts it or it is verified. CARRIED 2026-11-10 by staged PLAN-28: 1(a)/(b), the CI-runner question
   and the native `StrictStringMapper` run as deliverable 5; 4(b), 10(c) and 10(d) as deliverable 3; 7(l)(5), 7(l)(6), 10(h) and the beyond-spec narrowings as deliverable 4.
+  RETIRED 2026-11-11 by PLAN-28 (#892, `landings/PLAN-28.md`), with the closure kind named per item, not as a blanket: shipped with code or text re-read at `c7b2675b` (ADR-0026 text and `AlternativeValidatorOrphanedPropertyTest`, the
+  `step-up-and-logout.adoc` and `quarkus-config-doc.adoc` edits, the doc wording); closed by EVIDENCE ONLY with no repository change, the evidence being the lane's and not re-run here: 1(a)/(b) and the native `StrictStringMapper` run
+  (the class-level endpoints already exist, `reflect-config.json` untouched), 4(b) (a Javadoc record of a scratch run, `PsychicSignatureAttackTest`), 10(c) (the health-check catch placement, files untouched; whether the OpenRewrite
+  recipe honours it is not shown by reading), 10(d) (four epk rows; three cases with no recorded closure), 10(h) (the `rsvg-convert` render, a lane claim), 7(l)(6) (the 884-link check, a lane claim) and the CI-runner question. Retired on the
+  operator's cleanup instruction; the lane-claim items are not verified by this analysis.
 - 2026-11-09 — Informational from the PLAN-25 landing: the lane's Done-when assumed one PR and the split left no owner for "report both
   numbers in the PR body" of part two (spec premise, informational). The 2026-11-09 PLAN-25 landing message's `archive-plan:pending` step
   is the lane's own. Nothing further from this epic.
@@ -741,6 +795,10 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   `ci checks status 888` shows only the passing re-run). The hardened script therefore did not cure it, and the "two clean runs" condition below is not met by a green pair. CARRIED 2026-11-10 by staged PLAN-28 deliverable 6. Retire it
   when a clean e2e run on `main` is observed twice or a cause is found. Seen once before as the PLAN-13 merge-queue ejection on a
   hung `e2e-tests` job (see the PLAN-13 and PLAN-14 residuals in `settled.md`).
+  RECURRED AGAIN 2026-11-11 (PLAN-28 landing, #892), on the merge queue: the first entry was ejected after the End-to-End `merge_group` run 42990351708 hit the 30-minute job timeout (orphan java and playwright processes on the runner,
+  per the lane; the run was not read here), while the identical tree passed the PR-level run in about 4 minutes each time and the re-enqueue (`merge_group` run 43012955220) landed in 363 s. PLAN-28 deliverable 6 (item 6) closed with
+  evidence only and NO repository change: the lane records the cause as the reusable workflow in `cuioss-organization` and not fixable in this repository (a lane claim, HYPOTHESIS here; `stop-dev-environment.sh` is untouched and
+  cannot name a hang that precedes teardown). Two data points now say it is intermittent, not deterministic: PR-level runs pass, merge-group runs hang. Still not retired: retire it when a clean merge-group run is observed twice or a cause is found.
 > ↪ Relocated to `settled.md` § "Per-plan landing residuals (PLAN-01 to PLAN-23, dispositioned 2026-11-07)" — every item is carried by a PLAN-25 deliverable, dropped, or recorded as informational in its Residual Register
 
 - > ↪ Relocated to `settled.md` § "Sonar read 2026-10-30 (PLAN-01 to PLAN-05 PRs)" — point-in-time read of closed PRs, superseded by the 2026-11-06 direct reads
@@ -766,6 +824,8 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   `token-sheriff-validation/src/test` found no other such test, which is a lead, not a finding (another test may cover it). Also by reading only: `azp: null` plus a matching
   `client_id` now validates through the RFC 9068 fallback exactly like an omitted `azp` (`AuthorizedPartyValidator.java:80-122`, intended by the revert). Retire when a test is read or
   added that pins an omitted optional claim as accepted, or the operator accepts it. CARRIED 2026-11-10 by staged PLAN-28 deliverable 3(a).
+  RETIRED 2026-11-11 by PLAN-28 (#892): `IdentifierClaimNullEquivalenceTest.java:166-180` now has an absolute pin, `shouldAcceptAccessTokenOmittingOptionalIdentifierClaim`, parameterised over `jti` and `client_id` (an omitted claim validates,
+  `assertNull(outcome.eventType())`), re-read at `c7b2675b`. Whether the `validClaims()` fixture holds both claims was not read. The `azp: null` fallback note stays a reading, intended by the PLAN-27 revert.
 - 2026-11-09 — PLAN-26 was re-grounded at `aeb3fa49` before its emit (see Decisions): eleven claims re-stamped corroborated, two spec statements corrected
   (`StepUpChallengeParser` already refuses CR, LF and NUL since PLAN-25, so deliverable 2(f) reuses `HeaderValues.containsLineBreakOrNul` and the
   sibling test is 13 tests, 266 lines), three hypotheses stay `unverifiable` for the plan's own outline. The re-grounding was done by the orchestrator
