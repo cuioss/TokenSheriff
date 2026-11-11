@@ -34,9 +34,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Keeps remote text out of this module's log lines unless it passed the commons-layer sanitiser
  * (ADR-0022: untrusted text is neutralised by the one {@code ErrorTextSanitizer} utility).
  * <p>
- * Key ids, key types, algorithm names and curve names arrive in JWKS documents and token headers, and
- * a parser's exception message quotes the input it rejected. Written raw into a log line, any of them
- * can carry CR/LF and forge further lines (CWE-117).
+ * Key ids, key types, algorithm names and curve names arrive in JWKS documents and token headers, the
+ * DPoP proof claims {@code jti}, {@code htm} and {@code htu} arrive in the proof, the request method and
+ * URI arrive on the request line, the token's {@code cnf.jkt} arrives in the token, and a parser's
+ * exception message quotes the input it rejected. Written raw into a log line, any of them can carry
+ * CR/LF and forge further lines (CWE-117).
  * <p>
  * <strong>What is scanned.</strong> Every {@code LOGGER.trace/debug/info/warn/error(...)} call in the
  * module's {@code src/main/java}, as source text. An argument is <em>remote text</em> when it names
@@ -53,10 +55,13 @@ class LogRecordSanitizationGuardTest {
 
     /**
      * Identifiers and accessor names that carry text from a JWKS document, a token header or a remote
-     * error. Matched as whole identifier tokens.
+     * error, from a DPoP proof's claims ({@code jti}, {@code htm}, {@code htu}), from the request line
+     * ({@code requestMethod}, {@code requestUri}), or from the token's {@code cnf.jkt}
+     * ({@code expectedThumbprint}). Matched as whole identifier tokens.
      */
     private static final Set<String> REMOTE_TEXT_NAMES = Set.of(
-            "kid", "kty", "keyId", "keyType", "alg", "algorithm", "crv", "actual", "getMessage");
+            "kid", "kty", "keyId", "keyType", "alg", "algorithm", "crv", "actual", "getMessage",
+            "jti", "htm", "htu", "requestMethod", "requestUri", "expectedThumbprint");
 
     /**
      * Remote-by-name arguments that are safe for a recorded reason. Keyed by
@@ -148,12 +153,16 @@ class LogRecordSanitizationGuardTest {
                         // LOGGER.warn(WARN.E, kid); in a comment is not a call
                         LOGGER.warn(WARN.F, expected, actual);
                         LOGGER.warn(WARN.G, expected, sanitizeRemote(actual));
+                        LOGGER.warn(WARN.H, jti);
+                        LOGGER.warn(WARN.I, ErrorTextSanitizer.sanitize(jti));
+                        LOGGER.warn(WARN.J, request.requestUri());
+                        LOGGER.warn(WARN.K, ErrorTextSanitizer.sanitize(request.requestUri()));
                     }
                 }
                 """;
         List<LoggerCall> synthetic = loggerCalls("Sample.java", source);
 
-        assertEquals(7, synthetic.size(), "the commented call must not be scanned: " + synthetic);
+        assertEquals(11, synthetic.size(), "the commented call must not be scanned: " + synthetic);
         assertEquals(List.of("kid"), violations(synthetic.getFirst()));
         assertEquals(List.of(), violations(synthetic.get(1)));
         assertEquals(List.of("e (exception rendered with its message)"), violations(synthetic.get(2)));
@@ -161,6 +170,11 @@ class LogRecordSanitizationGuardTest {
         assertEquals(List.of(), violations(synthetic.get(4)));
         assertEquals(List.of("actual"), violations(synthetic.get(5)), "an unsanitised actual argument is a violation");
         assertEquals(List.of(), violations(synthetic.get(6)), "a sanitised actual argument is not");
+        assertEquals(List.of("jti"), violations(synthetic.get(7)), "an unsanitised DPoP jti is a violation");
+        assertEquals(List.of(), violations(synthetic.get(8)), "a sanitised DPoP jti is not");
+        assertEquals(List.of("request.requestUri()"), violations(synthetic.get(9)),
+                "an unsanitised request URI is a violation");
+        assertEquals(List.of(), violations(synthetic.get(10)), "a sanitised request URI is not");
     }
 
     private boolean isRemoteText(String argument) {

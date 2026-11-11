@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -160,6 +161,22 @@ class IdentifierClaimNullEquivalenceTest {
         assertTrue(accessToken.claimNames().containsAll(Set.of("iss", "sub", "jti", "azp")));
         assertEquals(0, accessToken.missingClaimDelta());
         assertEquals(0, idToken.missingClaimDelta());
+    }
+
+    @ParameterizedTest(name = "omitted {0}")
+    @ValueSource(strings = {"jti", "client_id"})
+    @DisplayName("An access token that omits an optional identifier claim is accepted")
+    void shouldAcceptAccessTokenOmittingOptionalIdentifierClaim(String claimName) {
+        // Absolute pin: the equivalence test below only proves null == omitted, which would also
+        // hold if both were refused.
+        Map<String, String> omitted = validClaims();
+        omitted.remove(claimName);
+
+        Outcome outcome = validate(TokenKind.ACCESS_TOKEN, omitted);
+
+        assertNull(outcome.eventType(), "An access token without " + claimName + " must validate: " + outcome.message());
+        assertFalse(outcome.claimNames().contains(claimName));
+        assertEquals(0, outcome.missingClaimDelta());
     }
 
     static Stream<Arguments> identifierClaims() {

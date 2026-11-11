@@ -21,11 +21,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -160,6 +163,89 @@ class DpopReplayProtectionTest {
 
         // Exactly one thread should have succeeded
         assertEquals(1, acceptCount.get());
+    }
+
+    @Test
+    void shouldNeverForgetInWindowJtisPastSoftCap() {
+        try (var smallCache = new DpopReplayProtection(300, 5)) {
+            List<String> jtis = IntStream.range(0, 50).mapToObj(i -> "in-window-" + i).toList();
+            jtis.forEach(jti -> assertTrue(smallCache.checkAndStore(jti), "first use must be accepted: " + jti));
+
+            // Every jti is still inside its window, so none may be forgotten even though the
+            // cache is ten times over its soft cap.
+            jtis.forEach(jti -> assertFalse(smallCache.checkAndStore(jti), "in-window replay must be refused: " + jti));
+        }
+    }
+
+    @Test
+    void shouldReclaimOverCapEntriesOnceWindowCloses() {
+        try (var shortTtl = new DpopReplayProtection(1, 5)) {
+            for (int i = 0; i < 20; i++) {
+                assertTrue(shortTtl.checkAndStore("expiring-" + i));
+            }
+
+            // Once the window has closed, an over-cap insert reclaims the expired entries
+            // oldest-first: 21 entries against a cap of 5 means 16 are evicted.
+            Awaitility.await().pollDelay(Duration.ofMillis(1100)).atMost(Duration.ofSeconds(3))
+                    .untilAsserted(() -> assertTrue(shortTtl.checkAndStore("after-window-" + UUID.randomUUID())));
+            assertEquals(16, shortTtl.lastOverCapExamined(),
+                    "the over-cap insert must evict exactly the overflow of expired entries");
+        }
+    }
+
+    @Test
+    void shouldExamineBoundedEntriesWhenNothingIsEvictable() {
+        try (var smallCache = new DpopReplayProtection(300, 5)) {
+            for (int i = 0; i < 1_000; i++) {
+                assertTrue(smallCache.checkAndStore("flood-" + i));
+            }
+
+            // All 1,000 entries are in-window: the over-cap insert must stop at the first
+            // in-window head instead of scanning the whole cache.
+            assertTrue(smallCache.checkAndStore("one-more"));
+            assertEquals(1, smallCache.lastOverCapExamined(),
+                    "an over-cap insert with nothing evictable must examine a constant number of entries");
+        }
+    }
+
+    @Test
+    void shouldNotForgetInWindowJtiUnderConcurrentInsertsPastSoftCap() throws Exception {
+        int threadCount = 8;
+        int operationsPerThread = 200;
+        try (var smallCache = new DpopReplayProtection(300, 10)) {
+            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+            CountDownLatch startLatch = new CountDownLatch(1);
+            CountDownLatch doneLatch = new CountDownLatch(threadCount);
+            AtomicInteger acceptCount = new AtomicInteger(0);
+            for (int t = 0; t < threadCount; t++) {
+                int threadId = t;
+                executor.submit(() -> {
+                    try {
+                        startLatch.await();
+                        for (int i = 0; i < operationsPerThread; i++) {
+                            if (smallCache.checkAndStore("concurrent-" + threadId + "-" + i)) {
+                                acceptCount.incrementAndGet();
+                            }
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        doneLatch.countDown();
+                    }
+                });
+            }
+            startLatch.countDown();
+            assertTrue(doneLatch.await(30, TimeUnit.SECONDS));
+            executor.shutdown();
+
+            assertEquals(threadCount * operationsPerThread, acceptCount.get());
+            for (int t = 0; t < threadCount; t++) {
+                for (int i = 0; i < operationsPerThread; i++) {
+                    String jti = "concurrent-" + t + "-" + i;
+                    assertFalse(smallCache.checkAndStore(jti), "in-window jti forgotten: " + jti);
+                }
+            }
+        }
     }
 
     @Test

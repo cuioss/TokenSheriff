@@ -26,9 +26,12 @@ The Quarkus extensions for Token-Sheriff, consisting of:
 # JFR profiling build (UBI-based native image) - from project root
 ./mvnw clean verify -Pjfr -pl token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests -am
 
-# Run unit tests only
-./mvnw test -pl token-sheriff-quarkus-parent/token-sheriff-validation-quarkus
+# Run unit tests only (verify, not test: see AGENTS.md, Essential Build Commands)
+./mvnw clean verify -pl token-sheriff-quarkus-parent/token-sheriff-validation-quarkus -am
 ----
+
+Build commands are owned by link:../AGENTS.md[AGENTS.md]; the `test` goal cannot resolve the
+`token-sheriff-validation` `generators` test jar this module's tests use.
 
 == Maven Coordinates
 

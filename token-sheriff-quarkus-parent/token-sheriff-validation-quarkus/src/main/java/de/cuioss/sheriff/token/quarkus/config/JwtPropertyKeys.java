@@ -310,10 +310,14 @@ public final class JwtPropertyKeys {
         public static final String DPOP_PROOF_MAX_AGE_SECONDS = DPOP_BASE + "proof-max-age-seconds";
 
         /**
-         * Maximum number of jti entries in the DPoP replay protection cache.
+         * Soft cap on the number of jti entries in the DPoP replay protection cache.
          * Template: "sheriff.token.issuers.%s.dpop.nonce-cache-size"
          * <p>
          * Default value is {@code 10000}.
+         * </p>
+         * <p>
+         * This is not a hard maximum: a jti still inside its TTL window is never evicted, so the
+         * cache can exceed the cap by at most the number of jtis that arrive within one TTL window.
          * </p>
          */
         public static final String DPOP_NONCE_CACHE_SIZE = DPOP_BASE + "nonce-cache-size";

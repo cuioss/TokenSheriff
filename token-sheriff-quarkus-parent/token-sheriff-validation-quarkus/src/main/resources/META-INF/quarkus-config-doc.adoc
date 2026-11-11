@@ -107,7 +107,7 @@ xref:../../../../../../doc/adr/0017-A_JWKS_loader_reports_OK_only_with_usable_ke
 |`dpop.enabled` |boolean |`false` |Enable DPoP validation
 |`dpop.required` |boolean |`false` |Require DPoP for all tokens
 |`dpop.proof-max-age-seconds` |long |`300` |Max age for DPoP proof `iat`
-|`dpop.nonce-cache-size` |int |`10000` |JTI replay cache size
+|`dpop.nonce-cache-size` |int |`10000` |Soft cap on the JTI replay cache. Not a hard maximum: a JTI still inside its TTL window is never evicted, so the cache can exceed the cap by at most the JTIs arriving within one TTL window
 |`dpop.nonce-cache-ttl-seconds` |long |`360` |JTI cache entry TTL. The effective TTL is never below `proof-max-age-seconds + 60` (the replay-window floor); a smaller value is raised to that floor
 |===
 

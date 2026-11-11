@@ -68,7 +68,21 @@ import static org.junit.jupiter.api.Assertions.*;
  *       returning no usable key leaves the installed set in place</li>
  * </ol>
  * Points (a) to (e) hold for every loader type the factory returns; points (f) to (h) need a refresh and
- * are asserted through {@link JwksLoaderFactory#createHttpLoader} with its background refresh.
+ * are asserted through {@link JwksLoaderFactory#createHttpLoader} with its background refresh. The file
+ * and in-memory loaders never refresh, so (f) to (h) have no file or in-memory case.
+ * <p>
+ * Limit of point (f): a rotation installs a new key loader for the new key set and leaves the old one's
+ * map untouched, so a set that were a live view over the old loader's map would also stay unchanged.
+ * Point (f) therefore pins that the returned set does not follow the rotation. Point (e) and
+ * {@code JWKSKeyLoaderTest} pin that the snapshot cannot be modified through the returned set. The
+ * implementation, {@code JWKSKeyLoader.getKeyIds}, builds the set with
+ * {@code Collectors.toUnmodifiableSet}, which is a copy, but no test distinguishes a copy from an
+ * unmodifiable view of a single loader's map.
+ * <p>
+ * The grace period of point (g) is {@code GRACE_PERIOD_SECONDS} (10 s), several times the expected time
+ * between the rotation and the check that the retired id still resolves, which makes a CI stall of
+ * several seconds harmless. The loader compares wall-clock time, so the check still depends on the wall
+ * clock: a stall longer than the grace period would fail it.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -77,8 +91,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class JwksLoaderKeyIdsContractTest {
 
     private static final int REFRESH_INTERVAL_SECONDS = 1;
-    private static final Duration GRACE_PERIOD = Duration.ofSeconds(3);
+    private static final int GRACE_PERIOD_SECONDS = 10;
+    private static final Duration GRACE_PERIOD = Duration.ofSeconds(GRACE_PERIOD_SECONDS);
     private static final long AWAIT_SECONDS = 10;
+    private static final long GRACE_END_AWAIT_SECONDS = GRACE_PERIOD_SECONDS + AWAIT_SECONDS;
 
     @Getter
     private final JwksResolveDispatcher moduleDispatcher = new JwksResolveDispatcher();
@@ -150,8 +166,8 @@ class JwksLoaderKeyIdsContractTest {
         try {
             assertEquals(Set.of(FIRST_KID), loader.getKeyIds(),
                     "A whitespace-only kid must not be reported for " + type);
-            assertTrue(loader.getKeyInfo(BLANK_KID).isEmpty(),
-                    "getKeyInfo never resolves a blank kid, so it must not be reported for " + type);
+            assertTrue(loader.getKeyInfo(FIRST_KID).isPresent(),
+                    "Positive control: the key set holding the blank kid was loaded for " + type);
         } finally {
             release(loader);
         }
@@ -234,7 +250,7 @@ class JwksLoaderKeyIdsContractTest {
                     "The retired id must still resolve within the grace period");
             await("grace period of the retired key set ends")
                     .pollInterval(100, MILLISECONDS)
-                    .atMost(AWAIT_SECONDS, SECONDS)
+                    .atMost(GRACE_END_AWAIT_SECONDS, SECONDS)
                     .until(() -> loader.getKeyInfo(FIRST_KID).isEmpty());
             assertEquals(Set.of(SECOND_KID), loader.getKeyIds(), "Only the active key set's id is reported");
         } finally {

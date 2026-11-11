@@ -272,10 +272,11 @@ public class DpopProofValidator {
             // DSL-JSON reports a truncated escape (a trailing lone backslash, a cut-off unicode escape) by
             // reading past the end of its buffer, i.e. as ArrayIndexOutOfBoundsException rather than
             // IOException; it is the same malformed-input condition and takes the same rejection.
-            // A DSL-JSON parse error quotes the client-supplied proof bytes around the failure position,
-            // so the message is neutralized against log injection (CWE-117) before it is logged or thrown.
+            // A DSL-JSON parse error quotes the client-supplied proof bytes around the failure position;
+            // rejectWith neutralizes the whole message against log injection (CWE-117) before it is
+            // logged or thrown, so it is not sanitised here a second time.
             rejectWith(EventType.DPOP_PROOF_INVALID, JWTValidationLogMessages.WARN.DPOP_PROOF_INVALID,
-                    "Failed to decode DPoP proof JWT: %s".formatted(ErrorTextSanitizer.sanitize(e.getMessage())));
+                    "Failed to decode DPoP proof JWT: %s".formatted(e.getMessage()));
             return null; // unreachable but needed for compilation
         }
 
@@ -338,20 +339,26 @@ public class DpopProofValidator {
         // present. No translation is added: it would be unreachable code that no test could exercise.
         String computedThumbprint = JwkThumbprintUtil.computeThumbprint(jwkMap);
         if (!computedThumbprint.equals(expectedThumbprint)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_THUMBPRINT_MISMATCH, computedThumbprint, expectedThumbprint);
+            // computedThumbprint is a locally computed digest; expectedThumbprint is the token's
+            // cnf.jkt, i.e. remote text, and is sanitised before it reaches the log or the thrown
+            // message (ADR-0022).
+            String sanitizedExpected = ErrorTextSanitizer.sanitize(expectedThumbprint);
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_THUMBPRINT_MISMATCH, computedThumbprint,
+                    sanitizedExpected);
             securityEventCounter.increment(EventType.DPOP_THUMBPRINT_MISMATCH);
             throw new TokenValidationException(EventType.DPOP_THUMBPRINT_MISMATCH,
                     "DPoP proof JWK thumbprint '%s' does not match token cnf.jkt '%s'"
-                            .formatted(computedThumbprint, expectedThumbprint));
+                            .formatted(computedThumbprint, sanitizedExpected));
         }
 
         // Replay protection runs last: a proof rejected by any stateless check above must not
         // consume its jti, otherwise it would burn the replay slot of the legitimate proof.
         if (!replayProtection.checkAndStore(jti)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_REPLAY_DETECTED, jti);
+            String sanitizedJti = ErrorTextSanitizer.sanitize(jti);
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_REPLAY_DETECTED, sanitizedJti);
             securityEventCounter.increment(EventType.DPOP_REPLAY_DETECTED);
             throw new TokenValidationException(EventType.DPOP_REPLAY_DETECTED,
-                    "DPoP proof replay detected for jti: %s".formatted(jti));
+                    "DPoP proof replay detected for jti: %s".formatted(sanitizedJti));
         }
 
         LOGGER.debug("DPoP proof validation successful");
@@ -438,11 +445,13 @@ public class DpopProofValidator {
                     "DPoP proof is missing required claim: htm");
         }
         if (!request.requestMethod().equalsIgnoreCase(htm.get())) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTM_MISMATCH, htm.get(), request.requestMethod());
+            String sanitizedHtm = ErrorTextSanitizer.sanitize(htm.get());
+            String sanitizedMethod = ErrorTextSanitizer.sanitize(request.requestMethod());
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTM_MISMATCH, sanitizedHtm, sanitizedMethod);
             securityEventCounter.increment(EventType.DPOP_HTM_MISMATCH);
             throw new TokenValidationException(EventType.DPOP_HTM_MISMATCH,
                     "DPoP proof htm claim '%s' does not match request method '%s'"
-                            .formatted(htm.get(), request.requestMethod()));
+                            .formatted(sanitizedHtm, sanitizedMethod));
         }
 
         // Validate htu (HTTP URI) — strip query and fragment per RFC 9449
@@ -454,11 +463,13 @@ public class DpopProofValidator {
         String normalizedHtu = stripQueryAndFragment(htu.get());
         String normalizedRequestUri = stripQueryAndFragment(request.requestUri());
         if (!normalizedHtu.equals(normalizedRequestUri)) {
-            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTU_MISMATCH, htu.get(), request.requestUri());
+            String sanitizedHtu = ErrorTextSanitizer.sanitize(htu.get());
+            String sanitizedUri = ErrorTextSanitizer.sanitize(request.requestUri());
+            LOGGER.warn(JWTValidationLogMessages.WARN.DPOP_HTU_MISMATCH, sanitizedHtu, sanitizedUri);
             securityEventCounter.increment(EventType.DPOP_HTU_MISMATCH);
             throw new TokenValidationException(EventType.DPOP_HTU_MISMATCH,
                     "DPoP proof htu claim '%s' does not match request URI '%s'"
-                            .formatted(htu.get(), request.requestUri()));
+                            .formatted(sanitizedHtu, sanitizedUri));
         }
     }
 
@@ -603,10 +614,24 @@ public class DpopProofValidator {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
     }
 
+    /**
+     * Logs a rejection at WARN, counts it and throws it.
+     * <p>
+     * Callers quote proof header values ({@code typ}, {@code alg}, the JWK {@code kty} and
+     * {@code crv}) and exception messages that echo the proof input, all of which are remote text. The
+     * message is therefore sanitised here, once, before it reaches the log line and before it becomes
+     * the exception message (ADR-0022, CWE-117), so no caller has to sanitise its own arguments.
+     *
+     * @param eventType the security event to count and to carry on the exception
+     * @param logRecord the WARN record the message is logged under
+     * @param message   the rejection message, possibly quoting remote text
+     * @throws TokenValidationException always
+     */
     private void rejectWith(EventType eventType,
             LogRecord logRecord, String message) {
-        LOGGER.warn(logRecord, message);
+        String sanitizedMessage = ErrorTextSanitizer.sanitize(message);
+        LOGGER.warn(logRecord, sanitizedMessage);
         securityEventCounter.increment(eventType);
-        throw new TokenValidationException(eventType, message);
+        throw new TokenValidationException(eventType, sanitizedMessage);
     }
 }

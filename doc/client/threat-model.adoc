@@ -146,9 +146,10 @@ The client engine:
   longer than 8192 characters, carries `CR`, `LF`, `NUL`, any other control character or `DEL`
   (horizontal tab tolerated), is followed by another scheme or carries a valueless segment, or
   names an `auth-param` twice. The `insufficient_scope` parser additionally refuses an empty name,
-  an unterminated quoted value, a trailing backslash, a `scope` token outside the RFC 6749 §3.3
-  grammar and more than 64 `scope` tokens, and escapes the `realm` and the `error_description`
-  before storing them.
+  an unterminated quoted value, a trailing backslash, an unquoted `scope` value (RFC 6750 §3
+  defines `scope` as a `quoted-string`), a `scope` token outside the RFC 6749 §3.3 grammar and
+  more than 64 `scope` tokens, and escapes the `realm` and the `error_description` before storing
+  them.
 | https://www.rfc-editor.org/rfc/rfc6750#section-3.1[RFC 6750 §3.1], https://www.rfc-editor.org/rfc/rfc9110#section-11.2[RFC 9110 §11.2], https://www.rfc-editor.org/rfc/rfc9110#section-5.5[RFC 9110 §5.5]
 | xref:requirements.adoc#CLIENT-25[CLIENT-25], xref:requirements.adoc#CLIENT-12[CLIENT-12]
 
@@ -224,6 +225,31 @@ The client engine:
 | https://www.rfc-editor.org/rfc/rfc9700#section-2.6[RFC 9700 §2.6], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180]
 | xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP], xref:requirements.adoc#CLIENT-24[CLIENT-24]
 |===
+
+[NOTE]
+====
+*Two response checks are deliberate narrowings beyond the specifications.* Both are stated as rules
+in xref:requirements.adoc#CLIENT-14[CLIENT-14]; neither is required of a client by the standards
+they rest on.
+
+* *Media type.* https://www.rfc-editor.org/rfc/rfc6749#section-5.1[RFC 6749 §5.1],
+  https://www.rfc-editor.org/rfc/rfc9126#section-2.2[RFC 9126 §2.2] and
+  https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse[OIDC Core §5.3.2] tell the
+  authorization server which media type to send; none obliges a client to refuse a response that
+  arrives with another. The engine refuses it: a token or PAR response without `application/json` on
+  every `Content-Type` line, and a userinfo response with neither `application/json` nor
+  `application/jwt`, is not read.
+* *`expires_in` type.* RFC 6749 §5.1 and RFC 9126 §2.2 have the authorization server send
+  `expires_in` as a JSON number. A lenient client reads the number out of a quoted value; the engine
+  refuses a token or PAR response whose `expires_in` is a string such as `"3600"` as malformed.
+
+Both checks run after a success status. At the token endpoint the grant is then already redeemed,
+so the refusal is raised as `RedeemedResponseException`: an authorization-code login fails, and a
+refresh is classified as redeemed and, since whether the refresh token was rotated cannot be known,
+its session is quarantined with the presented token presumed burned (xref:#T-REFRESH-REFUSAL[]). An authorization server that labels its responses with another
+media type, or sends `expires_in` as a string, cannot be used with this engine. That is the accepted
+cost: the engine does not guess how to read a response that does not follow its own format.
+====
 
 == Token aspect
 
@@ -319,7 +345,7 @@ The client engine:
   revokes nothing. *Redeemed* quarantines when the presented token was burned. The quarantine on a
   rotated refresh covers every post-redemption refusal of the lifecycle manager: a freshly issued
   access token that fails client-side validation, a broader scope under
-  `strictScopeReconciliation`, an unparseable success response (presumed rotated), a refreshed ID
+  `strictScopeReconciliation`, an unparseable success response (presented token presumed burned), a refreshed ID
   token that fails pipeline validation (`TokenValidationException`) or is inconsistent with the
   access token, and a refused identity or sender-constraint binding; the last three quarantine only
   when the server rotated the refresh token. Every typed refusal is recognised by an allow-list of

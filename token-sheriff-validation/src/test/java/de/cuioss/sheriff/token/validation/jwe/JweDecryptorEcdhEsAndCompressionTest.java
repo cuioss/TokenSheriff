@@ -325,6 +325,30 @@ class JweDecryptorEcdhEsAndCompressionTest {
                     "The raw kty value must not reach any log line");
         }
 
+        @ParameterizedTest(name = "{0} = {1}")
+        @CsvSource(delimiter = '|', value = {"x | null", "y | null", "x | \"\"", "y | \"  \""})
+        @DisplayName("Should reject an epk with a null or blank coordinate once as JWE_DECRYPTION_FAILED")
+        void shouldRejectEpkWithNullOrBlankCoordinate(String coordinate, String jsonLiteral) {
+            KeyPair recipientKeyPair = JweTestTokenFactory.generateEcKeyPair("secp256r1");
+            String[] parts = JweTestTokenFactory.createEcdhEsJweWrappedAccessToken(
+                    InMemoryKeyMaterialHandler.getDefaultPrivateKey(), JweTestTokenFactory.generateEcKeyPair("secp256r1"),
+                    (ECPublicKey) recipientKeyPair.getPublic(), "A128GCM", ISSUER).split("\\.");
+            String headerJson = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
+            String tampered = headerJson.replaceFirst("\"" + coordinate + "\":\"[^\"]*\"", "\"" + coordinate + "\":" + jsonLiteral);
+            assertNotEquals(headerJson, tampered, "The ECDH-ES fixture must embed an epk " + coordinate + " coordinate");
+            parts[0] = Base64.getUrlEncoder().withoutPadding().encodeToString(tampered.getBytes(StandardCharsets.UTF_8));
+            JwtHeader header = parseHeader(parts[0]);
+            JweDecryptionConfig config = JweDecryptionConfig.builder().defaultDecryptionKey(recipientKeyPair.getPrivate()).build();
+
+            TokenValidationException ex = assertThrows(TokenValidationException.class,
+                    () -> decryptor.decrypt(parts, header, config, counter));
+
+            assertEquals(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED, ex.getEventType());
+            assertEquals(1, counter.getCount(SecurityEventCounter.EventType.JWE_DECRYPTION_FAILED));
+            LogAsserts.assertSingleLogMessagePresent(TestLogLevel.WARN,
+                    JWTValidationLogMessages.WARN.JWE_DECRYPTION_FAILED.format(ex.getMessage()));
+        }
+
         /**
          * Replaces the {@code "kty":"EC",} member the test factory writes first into the {@code epk}
          * object with {@code ktyMember} (which may be empty to drop the member).

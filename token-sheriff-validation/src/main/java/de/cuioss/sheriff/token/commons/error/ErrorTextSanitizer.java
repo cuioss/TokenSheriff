@@ -22,15 +22,18 @@ import org.jspecify.annotations.Nullable;
  * caller-visible message, defending against log injection / log forging (CWE-117).
  * <p>
  * The sanitizer escapes (rather than drops) {@code CR}, {@code LF}, tab, the remaining ASCII control
- * characters, DEL, the C1 control characters U+0080 to U+009F (including U+0085 NEL), and the Unicode
+ * characters, DEL, the C1 control characters U+0080 to U+009F (including U+0085 NEL), the Unicode
  * line separators U+2028 (LS) and U+2029 (PS) — which Unicode-aware log viewers and appenders treat as
- * line breaks — preserving the value's investigative content while making it impossible to inject a line
- * break. {@code CR}, {@code LF} and tab render as {@code \r}, {@code \n} and {@code \t}; every other
- * escaped character renders as a backslash-{@code u} four-digit hex escape.
+ * line breaks — and the bidirectional controls U+202A to U+202E and U+2066 to U+2069 — which reorder
+ * the displayed text and can disguise what a line says (CVE-2021-42574, "Trojan Source") — preserving
+ * the value's investigative content while making it impossible to inject a line break or a reordering.
+ * {@code CR}, {@code LF} and tab render as {@code \r}, {@code \n} and {@code \t}; every other escaped
+ * character renders as a backslash-{@code u} four-digit hex escape.
  * <p>
  * The value is also truncated to {@value #MAX_LENGTH} characters before escaping, so an attacker cannot
- * flood the output with an arbitrarily long value. When truncation occurs the marker
- * {@value #TRUNCATION_MARKER} is appended so the elision is visible.
+ * flood the output with an arbitrarily long value. The cut never splits a surrogate pair: when the last
+ * retained character would be a high surrogate, one character fewer is kept. When truncation occurs the
+ * marker {@value #TRUNCATION_MARKER} is appended so the elision is visible.
  * <p>
  * A second, parameterised form,
  * {@link #sanitize(String, char, int, String)}, replaces each of the same unsafe characters with a
@@ -66,16 +69,30 @@ public final class ErrorTextSanitizer {
     /** U+2029 PARAGRAPH SEPARATOR (PS). */
     private static final char PARAGRAPH_SEPARATOR = 0x2029;
 
+    /** U+202A LEFT-TO-RIGHT EMBEDDING, the first of the embedding and override controls. */
+    private static final char FIRST_EMBEDDING_CONTROL = 0x202A;
+
+    /** U+202E RIGHT-TO-LEFT OVERRIDE, the last of the embedding and override controls. */
+    private static final char LAST_EMBEDDING_CONTROL = 0x202E;
+
+    /** U+2066 LEFT-TO-RIGHT ISOLATE, the first of the isolate controls. */
+    private static final char FIRST_ISOLATE_CONTROL = 0x2066;
+
+    /** U+2069 POP DIRECTIONAL ISOLATE, the last of the isolate controls. */
+    private static final char LAST_ISOLATE_CONTROL = 0x2069;
+
     private ErrorTextSanitizer() {
         // utility class — never instantiated
     }
 
     /**
      * Escapes {@code CR}, {@code LF}, tab, every other ASCII control character, DEL, the C1 control
-     * characters U+0080 to U+009F (including U+0085 NEL), and the Unicode line separators U+2028 (LS)
-     * and U+2029 (PS) in {@code value} — all but {@code CR}, {@code LF} and tab as a backslash-{@code u}
-     * four-digit hex escape — so it cannot forge a new log or response line, and truncates the value to
-     * {@value #MAX_LENGTH} characters to bound flooding.
+     * characters U+0080 to U+009F (including U+0085 NEL), the Unicode line separators U+2028 (LS)
+     * and U+2029 (PS), and the bidirectional controls U+202A to U+202E and U+2066 to U+2069 in
+     * {@code value} — all but {@code CR}, {@code LF} and tab as a backslash-{@code u} four-digit hex
+     * escape — so it cannot forge or visually reorder a log or response line, and truncates the value to
+     * {@value #MAX_LENGTH} characters (one fewer when the cut would split a surrogate pair) to bound
+     * flooding.
      *
      * @param value the untrusted value to sanitize; may be {@code null}
      * @return the sanitized (and, when over-long, truncated and marked) value, or {@code null} when
@@ -86,7 +103,7 @@ public final class ErrorTextSanitizer {
             return null;
         }
         boolean truncated = value.length() > MAX_LENGTH;
-        String bounded = truncated ? value.substring(0, MAX_LENGTH) : value;
+        String bounded = truncated ? cut(value, MAX_LENGTH) : value;
         StringBuilder sanitized = new StringBuilder(bounded.length());
         for (int i = 0; i < bounded.length(); i++) {
             char c = bounded.charAt(i);
@@ -95,7 +112,7 @@ public final class ErrorTextSanitizer {
                 case '\n' -> sanitized.append("\\n");
                 case '\t' -> sanitized.append("\\t");
                 default -> {
-                    if (isControlCharacter(c) || isUnicodeLineSeparator(c)) {
+                    if (isUnsafe(c)) {
                         sanitized.append(String.format("\\u%04x", (int) c));
                     } else {
                         sanitized.append(c);
@@ -111,10 +128,11 @@ public final class ErrorTextSanitizer {
 
     /**
      * Replaces every character {@link #sanitize(String)} would escape — the ASCII control characters
-     * (including {@code CR}, {@code LF} and tab), DEL, the C1 control characters U+0080 to U+009F and
-     * the Unicode line separators U+2028 (LS) and U+2029 (PS) — with {@code replacement}. A value longer
-     * than {@code maxLength} characters keeps its first {@code maxLength} characters followed by
-     * {@code truncationMarker}.
+     * (including {@code CR}, {@code LF} and tab), DEL, the C1 control characters U+0080 to U+009F, the
+     * Unicode line separators U+2028 (LS) and U+2029 (PS), and the bidirectional controls U+202A to
+     * U+202E and U+2066 to U+2069 — with {@code replacement}. A value longer than {@code maxLength}
+     * characters keeps its first {@code maxLength} characters followed by {@code truncationMarker}; when
+     * that cut would split a surrogate pair, it keeps one character fewer.
      * <p>
      * The result cannot forge a new log or message line only when {@code replacement} and
      * {@code truncationMarker} themselves contain no such character. This method does not validate
@@ -130,16 +148,51 @@ public final class ErrorTextSanitizer {
      */
     public static String sanitize(String value, char replacement, int maxLength, String truncationMarker) {
         boolean truncated = value.length() > maxLength;
-        String bounded = truncated ? value.substring(0, maxLength) : value;
+        String bounded = truncated ? cut(value, maxLength) : value;
         StringBuilder sanitized = new StringBuilder(bounded.length() + truncationMarker.length());
         for (int i = 0; i < bounded.length(); i++) {
             char c = bounded.charAt(i);
-            sanitized.append(isControlCharacter(c) || isUnicodeLineSeparator(c) ? replacement : c);
+            sanitized.append(isUnsafe(c) ? replacement : c);
         }
         if (truncated) {
             sanitized.append(truncationMarker);
         }
         return sanitized.toString();
+    }
+
+    /**
+     * Keeps the first {@code maxLength} characters of {@code value}, or one fewer when the last kept
+     * character would be a high surrogate, so the cut never leaves a lone half of a surrogate pair.
+     *
+     * @param value     the value to cut, longer than {@code maxLength}
+     * @param maxLength the maximum number of characters kept
+     * @return the leading part of {@code value}
+     */
+    private static String cut(String value, int maxLength) {
+        int end = maxLength;
+        if (end > 0 && Character.isHighSurrogate(value.charAt(end - 1))) {
+            end--;
+        }
+        return value.substring(0, end);
+    }
+
+    /**
+     * @param c the character to test
+     * @return whether {@code c} is escaped by {@link #sanitize(String)} and replaced by
+     *         {@link #sanitize(String, char, int, String)}
+     */
+    private static boolean isUnsafe(char c) {
+        return isControlCharacter(c) || isUnicodeLineSeparator(c) || isBidiControl(c);
+    }
+
+    /**
+     * @param c the character to test
+     * @return whether {@code c} is a bidirectional embedding, override or isolate control (U+202A to
+     *         U+202E, U+2066 to U+2069), which reorders how the surrounding text is displayed
+     */
+    private static boolean isBidiControl(char c) {
+        return (c >= FIRST_EMBEDDING_CONTROL && c <= LAST_EMBEDDING_CONTROL)
+                || (c >= FIRST_ISOLATE_CONTROL && c <= LAST_ISOLATE_CONTROL);
     }
 
     /**
