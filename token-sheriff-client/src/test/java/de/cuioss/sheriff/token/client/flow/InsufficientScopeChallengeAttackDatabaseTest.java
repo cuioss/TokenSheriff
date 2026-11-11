@@ -166,6 +166,34 @@ class InsufficientScopeChallengeAttackDatabaseTest {
                 () -> assertEquals(List.of("read", value), List.copyOf(challenge.get().scopes())));
     }
 
+    @ParameterizedTest(name = "code point {0}")
+    @MethodSource("bidirectionalControls")
+    @DisplayName("Should store a bidirectional control in realm and error_description only escaped when the scope is valid")
+    void shouldEscapeBidirectionalControlBesideValidScope(int codePoint) {
+        var scope = scopeToken();
+        String value = "x" + (char) codePoint + "y";
+        String escaped = "x" + String.format("\\u%04x", codePoint) + "y";
+        String header = "Bearer realm=\"" + value + "\", error=\"insufficient_scope\", error_description=\""
+                + value + "\", scope=\"" + scope + "\"";
+
+        Optional<InsufficientScopeChallenge> challenge = parser.parse(header);
+
+        assertTrue(challenge.isPresent(), "a valid scope keeps the challenge, so the sanitised fields are reached");
+        assertAll("code point " + codePoint,
+                () -> assertEquals(Optional.of(escaped), challenge.get().getRealm(),
+                        "realm stores the bidirectional control only escaped"),
+                () -> assertEquals(Optional.of(escaped), challenge.get().getErrorDescription(),
+                        "error_description stores the bidirectional control only escaped"));
+    }
+
+    /**
+     * @return the bidirectional embedding and override controls U+202A to U+202E and the isolate controls
+     *         U+2066 to U+2069, as code points
+     */
+    static IntStream bidirectionalControls() {
+        return IntStream.concat(IntStream.rangeClosed(0x202A, 0x202E), IntStream.rangeClosed(0x2066, 0x2069));
+    }
+
     @ParameterizedTest(name = "scope part [{0}]")
     @ValueSource(strings = {
             ", scope=\"read",
@@ -195,7 +223,10 @@ class InsufficientScopeChallengeAttackDatabaseTest {
     /**
      * Asserts that a payload placed inside the quoted values of an otherwise valid challenge either refuses
      * the whole challenge, or is stored with no unescaped control, line-separator or bidirectional
-     * control character and with every scope token inside the RFC 6749 §3.3 grammar.
+     * control character and with every scope token inside the RFC 6749 §3.3 grammar. A payload outside the
+     * scope-token grammar, such as a bidirectional control, refuses the challenge through the scope before
+     * the realm and the error_description are inspected; those two fields are covered beside a valid scope
+     * by {@link #shouldEscapeBidirectionalControlBesideValidScope(int)}.
      */
     private void assertEmbeddedPayloadContained(String payload) {
         Optional<InsufficientScopeChallenge> challenge = assertDoesNotThrow(
