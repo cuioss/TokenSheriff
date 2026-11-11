@@ -627,7 +627,8 @@ PLAN-11 ∥ PLAN-12 → PLAN-13 ∥ PLAN-14 → PLAN-15 ∥ PLAN-16 → PLAN-17 
   removals, `-003` the argparse class, `-004` the SVG render, `-005` raw Unicode in test literals, `-006` documented build commands), 14 FOLDED (001-008 and 011 into `-001`, 014 and 015 into `-002`, 018-020 into `-003`, 013 and themes 2 and 3 of 016
   into `2026-11-10-14-001`); each has a decision-log line. The two earlier plan-marshall lessons filed here on 2026-11-10 (`2026-11-10-09-002`, `2026-11-10-14-002`), and the other plan-marshall-owned ones this epic filed with the
   foreign-store override, were no longer in the lesson store on 2026-11-11 (`list` shows only `token-sheriff-*` components and `get` returns `not_found` here; the plan-marshall repository's lessons directory holds no file for
-  `2026-11-10-09-002`, `-14-002`, `-09-001` or `2026-11-09-16-003`; nothing was searched beyond those two stores): the content of the first two was carried into `2026-11-11-12-003`. The cause is not known.
+  `2026-11-10-09-002`, `-14-002`, `-09-001` or `2026-11-09-16-003`; nothing was searched beyond those two stores): the content of the first two was carried into `2026-11-11-12-003`. EXPLAINED by the operator 2026-11-11: the plan-marshall-owned lessons were consumed (by plan-marshall's own lesson handling), so
+  their absence is expected and nothing is lost.
 
 ## Open Defects
 

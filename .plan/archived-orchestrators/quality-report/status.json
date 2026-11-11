@@ -1,7 +1,7 @@
 {
   "kind": "orchestrator",
   "title": "Quality report remediation",
-  "phase": "orchestrating",
+  "phase": "closed",
   "workstreams": [
     "WS-01-validation-core",
     "WS-02-client",
