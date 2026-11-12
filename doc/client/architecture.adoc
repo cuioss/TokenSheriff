@@ -52,7 +52,10 @@ The engine owns three responsibilities and *delegates the rest*:
 | Concern | Where it lives
 
 | *Retrieval & flow* — construct the authorization request (PKCE, `state`, `nonce`,
-  `acr_values`; PAR is a caller-composed building block the built-in flow does not use);
+  `acr_values`, and the per-call options of xref:requirements.adoc#CLIENT-27[CLIENT-27]; PAR stays
+  a building block (`ParClient`), and the built-in authorization-code flow also offers an opt-in
+  pushed path (`AuthorizationCodeFlow.authorizePushed`) that refuses, never falls back, when no
+  PAR endpoint is advertised — xref:requirements.adoc#CLIENT-10[CLIENT-10]);
   exchange the code; authenticate to the token endpoint; request
   sender-constrained tokens; drive step-up and RP-initiated logout.
 | *This engine* (`client`), xref:specification/retrieval-flow.adoc[retrieval-flow] +

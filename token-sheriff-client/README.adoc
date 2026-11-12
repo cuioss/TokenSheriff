@@ -32,7 +32,9 @@ Organized by package under `de.cuioss.sheriff.token.client`:
 * *Flows* (`flow`) — authorization-code flow with mandatory PKCE `S256`
   (`AuthorizationCodeFlow`, `PkceChallenge`), client-credentials (`ClientCredentialsFlow`)
   and refresh (`RefreshFlow`) grants, pushed authorization requests (`ParClient`, RFC 9126 — a
-  building block the caller composes; `AuthorizationCodeFlow` does not use it),
+  building block the caller may compose; `AuthorizationCodeFlow` additionally offers the opt-in
+  `authorizePushed` path, whose redirect carries only `client_id` and `request_uri`, and which
+  refuses with a typed error, never falling back, when no PAR endpoint is advertised),
   RFC 9207 `iss` mix-up defence (`IssValidator`), callback validation (`CallbackHandler`,
   `CallbackParameters`), RFC 9470 step-up authentication (`StepUpHandler`), and RFC 6750 §3.1
   `insufficient_scope` challenge parsing (`InsufficientScopeChallengeParser`).
