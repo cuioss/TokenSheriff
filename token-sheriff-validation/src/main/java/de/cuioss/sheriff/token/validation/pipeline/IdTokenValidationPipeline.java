@@ -177,7 +177,7 @@ public class IdTokenValidationPipeline {
         LOGGER.debug("Verifying token signature without claim validation");
 
         VerifiedJwt verified = parseAndVerify(tokenString,
-                (headerValidator, decodedJwt) -> headerValidator.validateWithoutTokenType(decodedJwt));
+                TokenHeaderValidator::validateWithoutTokenType);
         DecodedJwt decodedJwt = verified.decodedJwt();
 
         Map<String, ClaimValue> claims = ValidatorLookup.getOrThrow(tokenBuilders,

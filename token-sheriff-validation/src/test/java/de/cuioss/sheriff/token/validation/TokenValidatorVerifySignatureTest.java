@@ -289,8 +289,9 @@ class TokenValidatorVerifySignatureTest {
             assertFalse(TokenContent.class.isAssignableFrom(verified.getClass()),
                     "a signature-only result must not be usable as a validated token");
             assertEquals(token, verified.getRawToken());
-            assertEquals(ISSUER, verified.getClaims().get(ClaimName.ISSUER.getName()).getOriginalString());
-            assertThrows(UnsupportedOperationException.class, () -> verified.getClaims().clear(),
+            var claims = verified.getClaims();
+            assertEquals(ISSUER, claims.get(ClaimName.ISSUER.getName()).getOriginalString());
+            assertThrows(UnsupportedOperationException.class, claims::clear,
                     "the claims are unmodifiable");
         }
 

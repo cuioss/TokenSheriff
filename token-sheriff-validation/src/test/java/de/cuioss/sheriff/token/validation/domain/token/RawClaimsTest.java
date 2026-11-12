@@ -130,7 +130,7 @@ class RawClaimsTest {
             assertThrows(UnsupportedOperationException.class, () -> arr.add("new"));
             assertThrows(UnsupportedOperationException.class, () -> arr.set(0, "changed"));
             assertThrows(UnsupportedOperationException.class, () -> nestedList.add("new"));
-            assertThrows(UnsupportedOperationException.class, () -> mapInList.clear());
+            assertThrows(UnsupportedOperationException.class, mapInList::clear);
         }
 
         @Test
