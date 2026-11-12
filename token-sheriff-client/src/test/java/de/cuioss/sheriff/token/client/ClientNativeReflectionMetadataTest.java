@@ -64,7 +64,6 @@ class ClientNativeReflectionMetadataTest {
     private static final String REFLECT_CONFIG =
             "META-INF/native-image/de.cuioss.sheriff.token/token-sheriff-client/reflect-config.json";
     private static final String NAME_ATTRIBUTE = "name";
-    private static final String CONDITION_ATTRIBUTE = "condition";
     private static final Set<String> CONVERTER_FLAGS = Set.of("allDeclaredConstructors");
 
     /**
@@ -187,8 +186,11 @@ class ClientNativeReflectionMetadataTest {
 
     /**
      * Reads the reflection flags each entry enables, discovered from the file: every attribute
-     * except {@code name} and {@code condition} counts unless it is an explicit {@code false}. A
-     * flag the guard has never heard of therefore surfaces as a widening instead of being ignored.
+     * except {@code name} counts unless it is an explicit {@code false}. A flag the guard has never
+     * heard of therefore surfaces as a widening instead of being ignored. A {@code condition}
+     * attribute is deliberately counted as well: a conditional entry is registered only when its
+     * condition type is reachable in the native application, so the exact-set guard must not treat
+     * a conditional entry as an unconditional registration.
      *
      * @param entries the parsed reflect-config entries
      * @return the enabled flags per registered name
@@ -200,7 +202,6 @@ class ClientNativeReflectionMetadataTest {
             Set<String> enabledFlags = new TreeSet<>();
             for (Map.Entry<String, JsonValue> attribute : object.entrySet()) {
                 if (!NAME_ATTRIBUTE.equals(attribute.getKey())
-                        && !CONDITION_ATTRIBUTE.equals(attribute.getKey())
                         && attribute.getValue().getValueType() != JsonValue.ValueType.FALSE) {
                     enabledFlags.add(attribute.getKey());
                 }

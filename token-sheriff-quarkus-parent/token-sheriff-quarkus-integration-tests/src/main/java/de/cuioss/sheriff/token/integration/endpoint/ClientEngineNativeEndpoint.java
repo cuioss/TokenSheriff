@@ -74,6 +74,10 @@ import java.util.regex.Pattern;
  * </ul>
  * TEST CONFIGURATION ONLY: the engine configuration allow-lists the Docker host {@code keycloak} and
  * opts into loopback egress for the in-app stub.
+ * <p>
+ * Thread-safety: the bean holds no mutable instance state. Every request builds its own
+ * {@link TokenEndpointClient}, configuration and proof key, and the remaining fields are immutable
+ * constants, so concurrent requests are safe.
  *
  * @since 1.0
  */
