@@ -1,0 +1,66 @@
+[
+  {
+    "name": "de.cuioss.sheriff.token.client.discovery._ProviderMetadata_DslJsonConverter",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.flow._ParResponse_DslJsonConverter",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.token._TokenResponse_DslJsonConverter",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.token._TokenErrorResponse_DslJsonConverter",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.token._UserInfoResponse_DslJsonConverter",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.internal._AccessTokenConfirmation_DslJsonConverter",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.internal._AccessTokenConfirmation$Confirmation_DslJsonConverter",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.internal._AccessTokenConfirmation$JsonObjectProbe_DslJsonConverter",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.discovery.ProviderMetadata",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.flow.ParResponse",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.token.TokenResponse",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.token.TokenErrorResponse",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.token.UserInfoResponse",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.internal.AccessTokenConfirmation",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.internal.AccessTokenConfirmation$Confirmation",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "de.cuioss.sheriff.token.client.internal.AccessTokenConfirmation$JsonObjectProbe",
+    "allDeclaredConstructors": true
+  }
+]
