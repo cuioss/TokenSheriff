@@ -212,7 +212,7 @@ class ClientNativeReflectionMetadataTest {
 
     private static JsonArray readReflectConfig() {
         try (JsonReader reader = Json.createReader(
-                new StringReader(NativeImageClassScanner.readResource(REFLECT_CONFIG)))) {
+                     new StringReader(NativeImageClassScanner.readResource(REFLECT_CONFIG)))) {
             return reader.readArray();
         }
     }
