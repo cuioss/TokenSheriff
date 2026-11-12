@@ -178,7 +178,7 @@ discovered from dotted property names only, not from environment-variable-only c
 |Property |Type |Default |Description
 |`sheriff.token.health.jwks.cache-seconds` |int |`30` |Health check result cache TTL
 |`sheriff.token.health.jwks.report-external-validator` |boolean |`false` |Report the issuers of an externally produced `TokenValidator` on the JWKS readiness check
-|`sheriff.token.health.jwks.disclose-issuer` |boolean |`true` |Include `issuer.N.url` for the issuers of an externally produced `TokenValidator`
+|`sheriff.token.health.jwks.disclose-issuer` |boolean |`true` |Include `issuer.N.url` for every issuer the JWKS readiness check reports, configured or external; `false` omits it so only counts and the readiness verdict are reported
 |===
 
 == Metrics

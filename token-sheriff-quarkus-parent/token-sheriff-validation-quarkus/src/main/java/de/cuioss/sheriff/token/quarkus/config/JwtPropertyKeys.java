@@ -766,13 +766,14 @@ public final class JwtPropertyKeys {
             public static final String REPORT_EXTERNAL_VALIDATOR = BASE + ".report-external-validator";
 
             /**
-             * Whether the JWKS readiness probe discloses the issuer identifier of an externally
-             * produced {@code TokenValidator} as {@code issuer.N.url}.
+             * Whether the JWKS readiness probe discloses the identifier of each reported issuer as
+             * {@code issuer.N.url}.
              * <p>
-             * Default: {@code true}. When set to {@code false}, the {@code issuer.N.url} entry is
-             * omitted for the issuers of an external validator reported through
-             * {@link #REPORT_EXTERNAL_VALIDATOR}; the other per-issuer entries stay. The key does not
-             * affect the issuers of the extension's own {@code sheriff.token.issuers.*} namespace.
+             * Default: {@code true}. When set to {@code false}, the {@code issuer.N.url} entries are
+             * omitted from the probe as a whole: for the issuers of the extension's own
+             * {@code sheriff.token.issuers.*} namespace and for the issuers of an external validator
+             * reported through {@link #REPORT_EXTERNAL_VALIDATOR} alike. Only the per-issuer
+             * {@code jwksType} and {@code status}, the counts and the readiness verdict are reported.
              * </p>
              */
             public static final String DISCLOSE_ISSUER = BASE + ".disclose-issuer";

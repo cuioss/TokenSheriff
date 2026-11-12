@@ -482,33 +482,73 @@ class JwksEndpointHealthCheckTest {
     }
 
     @Test
-    @DisplayName("disclose-issuer=false omits issuer.N.url for an external validator only")
-    void nonDisclosingPayload() {
+    @DisplayName("disclose-issuer=false omits issuer.N.url for an external validator, the default discloses it")
+    void nonDisclosingPayloadForExternalValidator() {
         try (TokenValidator external = externalValidator(new IssuerSpec("ext-secret", LoaderStatus.OK))) {
-            HealthCheckResponse externalResponse =
+            HealthCheckResponse nonDisclosing =
                     new JwksEndpointHealthCheck(reportingExternal(external), 30, false).call();
-            HealthCheckResponse propertyResponse = new JwksEndpointHealthCheck(
-                    observing(IssuerConfig.builder()
-                            .issuerIdentifier("configured-issuer")
-                            .jwksLoader(new HealthyJwksLoader())
-                            .audienceValidationDisabled(true)
-                            .build()),
-                    30, false).call();
+            HealthCheckResponse disclosing =
+                    new JwksEndpointHealthCheck(reportingExternal(external), 30, true).call();
 
-            Map<String, Object> externalData = externalResponse.getData().orElseThrow();
-            Map<String, Object> propertyData = propertyResponse.getData().orElseThrow();
-            assertAll("non-disclosing payload",
-                    () -> assertEquals(HealthCheckResponse.Status.UP, externalResponse.getStatus()),
-                    () -> assertFalse(externalData.containsKey("issuer.0.url"),
+            Map<String, Object> nonDisclosingData = nonDisclosing.getData().orElseThrow();
+            Map<String, Object> disclosingData = disclosing.getData().orElseThrow();
+            assertAll("non-disclosing external payload",
+                    () -> assertEquals(HealthCheckResponse.Status.UP, nonDisclosing.getStatus()),
+                    () -> assertFalse(nonDisclosingData.containsKey("issuer.0.url"),
                             "the external issuer identifier must not be disclosed"),
-                    () -> assertFalse(externalData.containsValue("ext-secret"),
+                    () -> assertFalse(nonDisclosingData.containsValue("ext-secret"),
                             "the external issuer identifier must appear nowhere in the payload"),
-                    () -> assertEquals("memory", externalData.get("issuer.0.jwksType")),
-                    () -> assertEquals("UP", externalData.get("issuer.0.status")),
-                    () -> assertEquals(1, ((Number) externalData.get("checkedEndpoints")).intValue()),
-                    () -> assertEquals("configured-issuer", propertyData.get("issuer.0.url"),
-                            "the key does not affect the extension's own issuers"));
+                    () -> assertEquals("memory", nonDisclosingData.get("issuer.0.jwksType")),
+                    () -> assertEquals("UP", nonDisclosingData.get("issuer.0.status")),
+                    () -> assertEquals(1, ((Number) nonDisclosingData.get("checkedEndpoints")).intValue()),
+                    () -> assertEquals("READY", nonDisclosingData.get("readiness")),
+                    () -> assertEquals("COMPLETE", nonDisclosingData.get("loading")),
+                    () -> assertEquals("ext-secret", disclosingData.get("issuer.0.url"),
+                            "positive control: the default discloses the external issuer identifier"));
         }
+    }
+
+    @Test
+    @DisplayName("disclose-issuer=false omits issuer.N.url for configured issuers, the default discloses it")
+    void nonDisclosingPayloadForConfiguredIssuers() {
+        IssuerConfig healthy = IssuerConfig.builder()
+                .issuerIdentifier("configured-secret")
+                .jwksLoader(new HealthyJwksLoader())
+                .audienceValidationDisabled(true)
+                .build();
+        IssuerConfig unhealthy = IssuerConfig.builder()
+                .issuerIdentifier("configured-failing")
+                .jwksLoader(new UnhealthyJwksLoader())
+                .audienceValidationDisabled(true)
+                .build();
+
+        HealthCheckResponse nonDisclosing =
+                new JwksEndpointHealthCheck(observing(healthy, unhealthy), 30, false).call();
+        HealthCheckResponse disclosing =
+                new JwksEndpointHealthCheck(observing(healthy, unhealthy), 30, true).call();
+
+        Map<String, Object> nonDisclosingData = nonDisclosing.getData().orElseThrow();
+        Map<String, Object> disclosingData = disclosing.getData().orElseThrow();
+        assertAll("non-disclosing configured payload",
+                () -> assertEquals(HealthCheckResponse.Status.DOWN, nonDisclosing.getStatus()),
+                () -> assertFalse(nonDisclosingData.containsKey("issuer.0.url"),
+                        "the configured issuer identifier must not be disclosed"),
+                () -> assertFalse(nonDisclosingData.containsKey("issuer.1.url"),
+                        "the configured issuer identifier must not be disclosed"),
+                () -> assertFalse(nonDisclosingData.containsValue("configured-secret"),
+                        "the configured issuer identifier must appear nowhere in the payload"),
+                () -> assertFalse(nonDisclosingData.containsValue("configured-failing"),
+                        "the configured issuer identifier must appear nowhere in the payload"),
+                () -> assertEquals("memory", nonDisclosingData.get("issuer.0.jwksType")),
+                () -> assertEquals("UP", nonDisclosingData.get("issuer.0.status")),
+                () -> assertEquals("DOWN", nonDisclosingData.get("issuer.1.status")),
+                () -> assertEquals(2, ((Number) nonDisclosingData.get("checkedEndpoints")).intValue()),
+                () -> assertEquals("NOT_READY", nonDisclosingData.get("readiness")),
+                () -> assertEquals("COMPLETE", nonDisclosingData.get("loading")),
+                () -> assertEquals("configured-secret", disclosingData.get("issuer.0.url"),
+                        "positive control: the default discloses the configured issuer identifier"),
+                () -> assertEquals("configured-failing", disclosingData.get("issuer.1.url"),
+                        "positive control: the default discloses the configured issuer identifier"));
     }
 
     @Test

@@ -48,8 +48,9 @@ and a `readiness` marker naming the resolution outcome:
 
 ==== Reporting an external validator
 
-By default an externally produced `TokenValidator` is reported as above, with no per-issuer data. Two
-keys let the readiness check report its issuers:
+By default an externally produced `TokenValidator` is reported as above, with no per-issuer data. The
+first key below lets the readiness check report its issuers; the second governs whether issuer
+identifiers are disclosed for every reported issuer:
 
 [cols="2,1,4", options="header"]
 |===
@@ -58,8 +59,10 @@ keys let the readiness check report its issuers:
 outcome is `EXTERNAL_VALIDATOR`, the check reports every enabled issuer of the external validator
 through `TokenValidator.getIssuerStatuses()`. Reading these read-only views fetches no keys and
 exposes no JWKS loader.
-|`sheriff.token.health.jwks.disclose-issuer` |`true` |When `false`, the `issuer.N.url` entry is
-omitted for the issuers of an external validator; `jwksType` and `status` stay.
+|`sheriff.token.health.jwks.disclose-issuer` |`true` |When `false`, the `issuer.N.url` entries are
+omitted from the probe as a whole: for configured issuers (`PROPERTY_CONFIGURED`) and for the
+issuers of an external validator alike. Only the per-issuer `jwksType` and `status`, the counts and
+the readiness verdict are reported.
 |===
 
 With the opt-in set, the issuers of the external validator are reported with the same keys, and the
@@ -81,9 +84,11 @@ same readiness, loading and `DOWN` logic, as configured issuers:
 }
 ----
 
-With `disclose-issuer=false` as well, the same payload carries no `issuer.0.url`. Neither key changes
-the payload for the `PROPERTY_CONFIGURED` and `NOT_CONFIGURED` outcomes, and with both keys at their
-defaults every outcome keeps the payload shown above.
+With `disclose-issuer=false`, this payload, and the `PROPERTY_CONFIGURED` payload shown at the top of
+this section, carry no `issuer.N.url` entry; no issuer identifier appears anywhere in the payload.
+`report-external-validator` does not change the payload for the `PROPERTY_CONFIGURED` and
+`NOT_CONFIGURED` outcomes, and with both keys at their defaults every outcome keeps the payload shown
+above.
 
 === Token Validator Health Check
 
@@ -164,7 +169,9 @@ own producer. The three resolution outcomes are `PROPERTY_CONFIGURED`, `EXTERNAL
 === JWKS Endpoint Health Check
 
 * Caches results for 30 seconds to prevent excessive network calls
-* Reports per-issuer status including URL, JWKS type, and connectivity
+* Reports per-issuer status including URL, JWKS type, and connectivity; with
+  `sheriff.token.health.jwks.disclose-issuer=false` the URL (`issuer.N.url`) is omitted for every
+  reported issuer
 * Returns DOWN if any observed JWKS endpoint has a non-OK loader status (unreachable, still initializing, or in error state)
 * Short-circuits to UP with `checkedEndpoints=0` and `readiness` set to `EXTERNAL_VALIDATOR` or
   `NOT_CONFIGURED` when no issuer configuration is observable — an unconfigured optional extension is

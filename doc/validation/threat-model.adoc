@@ -370,7 +370,7 @@ _See Requirement xref:requirements.adoc#VALIDATION-13[VALIDATION-13: Public Vali
 
 |PS2
 |Issuer disclosure through the JWKS readiness probe
-|An external validator's issuers are reported only with the opt-in `sheriff.token.health.jwks.report-external-validator=true` (default `false`); `sheriff.token.health.jwks.disclose-issuer=false` omits their `issuer.N.url`. Reading the status through link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/IssuerStatusView.java[IssuerStatusView] fetches no keys and exposes no loader
+|An external validator's issuers are reported only with the opt-in `sheriff.token.health.jwks.report-external-validator=true` (default `false`); `sheriff.token.health.jwks.disclose-issuer=false` omits the `issuer.N.url` of every reported issuer, configured or external, so the probe carries no issuer identifier and only the counts and the readiness verdict. Reading the status through link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/IssuerStatusView.java[IssuerStatusView] fetches no keys and exposes no loader
 |link:../../token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/test/java/de/cuioss/sheriff/token/quarkus/health/JwksEndpointHealthCheckTest.java[JwksEndpointHealthCheckTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorIssuerStatusTest.java[TokenValidatorIssuerStatusTest]
 
 |PS3

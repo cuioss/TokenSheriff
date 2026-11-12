@@ -54,8 +54,12 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WAR
  * With the opt-in {@value JwtPropertyKeys.HEALTH.JWKS#REPORT_EXTERNAL_VALIDATOR}, the issuers of an
  * externally produced validator are reported through its read-only, non-fetching issuer status views,
  * with the same per-issuer keys and the same readiness, loading and {@code DOWN} logic as configured
- * issuers. {@value JwtPropertyKeys.HEALTH.JWKS#DISCLOSE_ISSUER}{@code =false} omits their
- * {@code issuer.N.url} entry.
+ * issuers.
+ * </p>
+ * <p>
+ * {@value JwtPropertyKeys.HEALTH.JWKS#DISCLOSE_ISSUER}{@code =false} omits the
+ * {@code issuer.N.url} entry of every reported issuer, configured or external, so the payload
+ * carries only the per-issuer JWKS type and status, the counts and the readiness verdict.
  * </p>
  *
  * @since 1.0
@@ -93,8 +97,8 @@ public class JwksEndpointHealthCheck implements HealthCheck {
      *
      * @param resolver       the resolver naming the observed validator
      * @param cacheSeconds   the cache time-to-live in seconds for health check results
-     * @param discloseIssuer whether the issuers of an external validator are reported with their
-     *                       identifier as {@code issuer.N.url}
+     * @param discloseIssuer whether every reported issuer, configured or external, is reported with
+     *                       its identifier as {@code issuer.N.url}
      */
     @Inject
     public JwksEndpointHealthCheck(ObservedValidatorResolver resolver,
@@ -127,13 +131,11 @@ public class JwksEndpointHealthCheck implements HealthCheck {
         var responseBuilder = HealthCheckResponse.named(HEALTHCHECK_NAME).up();
 
         List<EndpointResult> results;
-        boolean includeUrl;
         List<IssuerConfig> issuerConfigs = resolver.observedIssuerConfigs();
         if (!issuerConfigs.isEmpty()) {
             results = issuerConfigs.stream()
                     .map(issuerConfig -> EndpointResult.fromIssuerConfig(issuerConfig.getIssuerIdentifier(), issuerConfig))
                     .toList();
-            includeUrl = true;
         } else {
             List<IssuerStatusView> issuerStatuses = resolver.observedIssuerStatuses();
             if (issuerStatuses.isEmpty()) {
@@ -146,12 +148,11 @@ public class JwksEndpointHealthCheck implements HealthCheck {
             results = issuerStatuses.stream()
                     .map(EndpointResult::fromIssuerStatus)
                     .toList();
-            includeUrl = discloseIssuer;
         }
 
         // Add all endpoint data to response
         for (int i = 0; i < results.size(); i++) {
-            results.get(i).addToResponse(responseBuilder, "issuer." + i + ".", includeUrl);
+            results.get(i).addToResponse(responseBuilder, "issuer." + i + ".", discloseIssuer);
         }
 
         // Calculate overall readiness and loading status
