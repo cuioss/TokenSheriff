@@ -42,13 +42,7 @@ import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.Signature;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -96,7 +90,7 @@ class RawClaimsTest {
 
             List<?> list = assertInstanceOf(List.class, claims.get("list"));
             assertEquals(5, list.size());
-            assertEquals("c", list.get(0));
+            assertEquals("c", list.getFirst());
             assertEquals("a", list.get(1));
             assertEquals(List.of(3L, 1L), list.get(2));
             assertEquals(Map.of("x", "y"), list.get(3));
@@ -126,7 +120,7 @@ class RawClaimsTest {
             Map<String, Object> obj = asMap(claims.get("obj"));
             Map<String, Object> inner = asMap(obj.get("inner"));
             List<Object> arr = asList(claims.get("arr"));
-            List<Object> nestedList = asList(arr.get(0));
+            List<Object> nestedList = asList(arr.getFirst());
             Map<String, Object> mapInList = asMap(arr.get(1));
 
             assertThrows(UnsupportedOperationException.class, () -> claims.put("new", "value"));

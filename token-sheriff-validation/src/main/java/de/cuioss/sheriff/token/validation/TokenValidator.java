@@ -74,6 +74,9 @@ import java.util.Map;
  * {@link #getRawClaims(TokenContent)} returns the payload of a validated token as a native JSON map by
  * decoding its raw token again with this validator's parser and bounds.
  * <p>
+ * {@link #getIssuerStatuses()} returns a read-only, non-fetching {@link IssuerStatusView} of every enabled
+ * issuer.
+ * <p>
  * This class is thread-safe after construction.
  * All validation methods can be called concurrently from multiple threads.
  * <p>
@@ -219,6 +222,11 @@ public class TokenValidator implements Closeable {
     private final List<JwksLoader> jwksLoaders;
 
     /**
+     * Read-only views of the enabled issuers in configuration order, returned by {@link #getIssuerStatuses()}.
+     */
+    private final List<IssuerStatusView> issuerStatuses;
+
+    /**
      * Private constructor used by builder.
      */
     @Builder
@@ -248,6 +256,9 @@ public class TokenValidator implements Closeable {
         }
         this.jwksLoaders = enabledIssuerConfigs.stream()
                 .map(IssuerConfig::getJwksLoader)
+                .toList();
+        this.issuerStatuses = enabledIssuerConfigs.stream()
+                .map(config -> new IssuerStatusView(config.getIssuerIdentifier(), config.getJwksLoader()))
                 .toList();
 
         // Use default ParserConfig if not provided
@@ -562,6 +573,19 @@ public class TokenValidator implements Closeable {
      */
     public Map<String, Object> getRawClaims(TokenContent token) {
         return jwtParser.decode(token.getRawToken()).body().toNativeClaims();
+    }
+
+    /**
+     * Returns a read-only view of every enabled issuer.
+     * <p>
+     * Each view names the issuer and its JWKS type and reads the issuer's current {@code LoaderStatus}
+     * without fetching keys. The views expose neither the issuer configuration nor the JWKS loader, so the
+     * loaders stay owned by this validator and are closed only by {@link #close()}.
+     *
+     * @return the enabled issuers in configuration order as an immutable list, never empty
+     */
+    public List<IssuerStatusView> getIssuerStatuses() {
+        return issuerStatuses;
     }
 
     /**
