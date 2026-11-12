@@ -324,6 +324,33 @@ mock can emit* (malformed metadata, oversized bodies, forged signatures) stay in
 layer; the integration attack cases assert the *client's own rejection behaviour* and the
 protections a real OP naturally enforces.
 
+== [[_native_image_contract]] Native-image contract
+
+_Verifies xref:../requirements.adoc#CLIENT-26[CLIENT-26]._ The native-image metadata the engine jar
+ships names classes as strings, so nothing in the compiler notices when it drifts from the code. Two
+unit guards in `token-sheriff-client/src/test` pin it against the compiled classes, and one native
+integration test proves the engine's refusals still hold inside the native executable:
+
+* `ClientNativeReflectionMetadataTest` enumerates every generated `_*_DslJsonConverter` and the
+  `@CompiledJson` type it serves from the compiled classes and asserts that the shipped
+  `reflect-config.json` registers exactly that set — an addition and an omission both fail. A
+  non-vacuity check asserts the enumeration finds known converters, so an empty scan cannot pass.
+* `ClientNativeRuntimeInitializationTest` enumerates every class holding a static `Random` (a
+  `SecureRandom` included) from the compiled classes and asserts that the shipped `native-image.properties` initializes
+  exactly that set at run time; its non-vacuity check asserts the enumeration finds `FlowContext`
+  and `PkceChallenge`.
+* `ClientNativeImageSpecIT` runs against the native executable of
+  `token-sheriff-quarkus-integration-tests` and calls the `ClientEngineNativeEndpoint` probes, which
+  drive the production `TokenEndpointClient` from `src/main`: a Keycloak `invalid_grant` answer is
+  classified as `credential_rejected`, a token whose `cnf.jkt` names another key is refused as
+  `jkt_mismatch`, and the matching-key control is `accepted`, so the mismatch refusal comes from
+  the binding check and not from a response that could not be parsed.
+
+The integration test is only evidence if it can fail. Its negative control — remove the client
+`reflect-config.json` entries, rebuild the native image, and observe that the two refusal probes no
+longer answer `credential_rejected` and `jkt_mismatch` — is demonstrated once per change to the
+contract and is not committed (xref:#_signal_integrity[]).
+
 == [[_traceability]] Traceability matrix
 
 Each `CLIENT-N` requirement maps to its threat(s), its unit coverage, its integration
@@ -470,6 +497,14 @@ an isolated-component or server-capability test alone does not qualify the row a
 | `InsufficientScopeChallengeSpecIT`: the public parser consumed from outside `token-sheriff-client`;
   an RFC 6750 §3.1 header parses, a second scheme, a line-break injection and a different `error`
   are refused (no OP emits `insufficient_scope` in a flow, so no Keycloak round trip) | all
+
+| xref:../requirements.adoc#CLIENT-26[CLIENT-26] | (native-image contract)
+| `ClientNativeReflectionMetadataTest` and `ClientNativeRuntimeInitializationTest`: the shipped
+  metadata registers exactly the converters and `SecureRandom` holders enumerated from the compiled
+  classes (xref:#_native_image_contract[])
+| `ClientNativeImageSpecIT`: inside the native executable, `credential_rejected` for Keycloak's
+  `invalid_grant`, `jkt_mismatch` for a `cnf.jkt` naming another key, `accepted` for the matching
+  key | all
 |===
 
 == Per-increment definition of done (test view)

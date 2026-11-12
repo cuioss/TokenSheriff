@@ -335,6 +335,10 @@ These tests check the code base as a whole rather than one package.
 |token-sheriff-validation
 |`NativeImageMetadataTest`
 
+|Native-image metadata of the client (`CLIENT-26`)
+|token-sheriff-client
+|`ClientNativeReflectionMetadataTest`, `ClientNativeRuntimeInitializationTest`
+
 |Surefire fork groups
 |token-sheriff-validation-quarkus
 |`SurefireForkGroupGuardTest` (test package `quarkus.architecture`)
@@ -394,6 +398,9 @@ application and identity provider. Package prefix: `de.cuioss.sheriff.token.inte
 
 |Client: UserInfo
 |`UserInfoSpecIT` (`client`)
+
+|Client: native-image contract (`CLIENT-26`)
+|`ClientNativeImageSpecIT` (`client`)
 
 |Client: refresh
 |`RefreshConcurrentRedemptionSpecIT`, `RefreshConstraintLifecycleSpecIT`,
