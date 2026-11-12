@@ -187,7 +187,11 @@ The validator's design:
   Sharing a clock is not enough: two reads of one clock can straddle the `iat` plus window edge, the first
   accepting a replay as fresh and the second purging its entry, and the replay would be admitted. The
   single-instant rule closes that, and it is held by the validator's code, not by an obligation of the caller;
-  the guard type is internal to the `logout` package, and a guard is never shared between validators.
+  the guard type is internal to the `logout` package, and a guard is never shared between validators. The rule
+  holds across threads as well: the clock read, the claim checks and the admission of one token are a single
+  critical section of the validator, so the instants of concurrent validations are read in the order their
+  admissions are decided, and a later thread's instant cannot purge an entry before an earlier reading has
+  been decided against it.
 * *Boundaries.* An `iat` exactly at either edge of the symmetric freshness window is accepted and one second
   beyond is refused; an `exp` exactly now is refused and one second later is accepted, as RFC 7519 §4.1.4
   requires the current time to be before `exp`.

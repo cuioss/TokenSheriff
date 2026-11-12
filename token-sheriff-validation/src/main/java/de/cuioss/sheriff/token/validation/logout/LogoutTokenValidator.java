@@ -102,6 +102,15 @@ public final class LogoutTokenValidator {
     private final Clock clock;
 
     /**
+     * Orders the clock read, the claim checks and the replay admission of every validation. Without it, thread A
+     * could read an instant at which a token is still fresh, thread B could then read a later instant and purge
+     * that token's {@code jti} entry, and A would admit the replay afterwards. With it, the instants of
+     * concurrent validations are read in the order their admissions are decided, so a later instant can only
+     * purge an entry whose token every earlier decision has already settled.
+     */
+    private final Object decisionLock = new Object();
+
+    /**
      * Creates a validator.
      *
      * @param tokenValidator   the validator whose signature-only entry verifies the token
@@ -152,23 +161,29 @@ public final class LogoutTokenValidator {
             return LogoutTokenValidationResult.refused(LogoutTokenCheck.SIGNATURE);
         }
         Map<String, Object> claims = verified.getRawClaims();
-        // The clock is read exactly once: the replay guard decides its purge on this same instant, so freshness
-        // and retention can never be judged on two readings that straddle the iat + window edge
-        Instant now = clock.instant();
-        Optional<LogoutTokenCheck> failedCheck = firstFailedCheck(verified, claims, now);
-        if (failedCheck.isPresent()) {
-            return LogoutTokenValidationResult.refused(failedCheck.get());
+        // Clock read, claim checks and admission are one critical section. The clock is read exactly once, and
+        // the replay guard decides its purge on that same instant, so freshness and retention cannot be judged
+        // on two readings that straddle the iat + window edge. Holding the lock across the three steps orders the
+        // instants of concurrent validations with their admissions: a later reading cannot purge an entry
+        // before an earlier reading has decided against it. The section does no I/O and runs no signature work,
+        // which happened above.
+        synchronized (decisionLock) {
+            Instant now = clock.instant();
+            Optional<LogoutTokenCheck> failedCheck = firstFailedCheck(verified, claims, now);
+            if (failedCheck.isPresent()) {
+                return LogoutTokenValidationResult.refused(failedCheck.get());
+            }
+            // Every claim read below passed its check above: iat is a number, jti a non-blank string, and
+            // sub and sid are each absent or a non-blank string
+            Instant retainUntil = numericDate(claims.get("iat")).orElseThrow().plus(freshnessWindow);
+            String jwtId = (String) claims.get("jti");
+            return switch (replayGuard.admit(jwtId, retainUntil, now)) {
+                case ADMITTED -> LogoutTokenValidationResult.accepted(expectedIssuer,
+                        (String) claims.get("sub"), (String) claims.get("sid"), jwtId);
+                case REPLAYED -> LogoutTokenValidationResult.refused(LogoutTokenCheck.REPLAYED);
+                case FULL -> LogoutTokenValidationResult.refused(LogoutTokenCheck.REPLAY_GUARD_FULL);
+            };
         }
-        // Every claim read below passed its check above: iat is a number, jti a non-blank string, and
-        // sub and sid are each absent or a non-blank string
-        Instant retainUntil = numericDate(claims.get("iat")).orElseThrow().plus(freshnessWindow);
-        String jwtId = (String) claims.get("jti");
-        return switch (replayGuard.admit(jwtId, retainUntil, now)) {
-            case ADMITTED -> LogoutTokenValidationResult.accepted(expectedIssuer, (String) claims.get("sub"),
-                    (String) claims.get("sid"), jwtId);
-            case REPLAYED -> LogoutTokenValidationResult.refused(LogoutTokenCheck.REPLAYED);
-            case FULL -> LogoutTokenValidationResult.refused(LogoutTokenCheck.REPLAY_GUARD_FULL);
-        };
     }
 
     /**

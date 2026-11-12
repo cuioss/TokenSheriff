@@ -41,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -559,6 +560,46 @@ class LogoutTokenValidatorTest {
         }
 
         @Test
+        @DisplayName("A later validation on another thread cannot purge the entry an earlier reading is still deciding against")
+        void shouldNotLetLaterReadingPurgeEntryOfEarlierConcurrentValidation() throws Exception {
+            Instant edge = NOW.plus(WINDOW);
+            Instant pastEdge = edge.plusSeconds(1);
+            Map<String, Object> replayed = validClaims();
+            replayed.put("exp", pastEdge.plusSeconds(60).getEpochSecond());
+            String replayedToken = signed(replayed, "logout+jwt");
+            // A fresh token at pastEdge: its admission purges every entry retained only until the edge
+            Map<String, Object> later = validClaims();
+            later.put("jti", "jti-later-reading");
+            later.put("iat", pastEdge.getEpochSecond());
+            later.put("exp", pastEdge.plusSeconds(60).getEpochSecond());
+            String laterToken = signed(later, "logout+jwt");
+
+            ConcurrentReadingClock clock = new ConcurrentReadingClock(NOW, edge, pastEdge);
+            LogoutTokenValidator onClock = validator(10, clock);
+            assertTrue(onClock.validate(replayedToken).isAccepted(), "first presentation");
+            clock.arm();
+
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            try {
+                // Thread A reads the edge instant, where the replayed token is still fresh, and then stays inside
+                // its decision until the later validation has finished or the wait runs out
+                Future<LogoutTokenValidationResult> earlier = executor.submit(() -> {
+                    clock.markCurrentThreadAsEarlierReading();
+                    return onClock.validate(replayedToken);
+                });
+                assertTrue(clock.awaitEarlierReadingDone(), "the earlier validation read its clock");
+
+                LogoutTokenValidationResult laterResult = onClock.validate(laterToken);
+                clock.laterValidationFinished();
+
+                assertTrue(laterResult.isAccepted(), "the later token is fresh at its own instant");
+                assertRefused(LogoutTokenCheck.REPLAYED, earlier.get(10, TimeUnit.SECONDS));
+            } finally {
+                executor.shutdownNow();
+            }
+        }
+
+        @Test
         @DisplayName("A new jti is refused as REPLAY_GUARD_FULL when the guard is at capacity")
         void shouldRefuseWhenGuardFull() {
             LogoutTokenValidator tight = validator(1, CLOCK);
@@ -786,6 +827,75 @@ class LogoutTokenValidatorTest {
                 return initial;
             }
             return read == 1 ? firstRead : laterRead;
+        }
+    }
+
+    /**
+     * A clock for two validations racing on two threads. Until armed it answers {@code initial}. Once armed, the
+     * thread marked as the earlier reading reads {@code earlier}, announces that it has read, and then holds its
+     * decision open until {@link #laterValidationFinished()} or a bounded wait; every other thread reads
+     * {@code later}. A validator that does not order clock read and admission lets the later reading finish
+     * first and purge the entry; one that does makes the later validation wait for the earlier decision.
+     */
+    private static final class ConcurrentReadingClock extends Clock {
+
+        private final Instant initial;
+        private final Instant earlier;
+        private final Instant later;
+        private final CountDownLatch earlierRead = new CountDownLatch(1);
+        private final CountDownLatch laterFinished = new CountDownLatch(1);
+        private final ThreadLocal<Boolean> earlierReading = ThreadLocal.withInitial(() -> Boolean.FALSE);
+        private volatile boolean armed;
+
+        ConcurrentReadingClock(Instant initial, Instant earlier, Instant later) {
+            this.initial = initial;
+            this.earlier = earlier;
+            this.later = later;
+        }
+
+        void arm() {
+            armed = true;
+        }
+
+        void markCurrentThreadAsEarlierReading() {
+            earlierReading.set(Boolean.TRUE);
+        }
+
+        boolean awaitEarlierReadingDone() throws InterruptedException {
+            return earlierRead.await(10, TimeUnit.SECONDS);
+        }
+
+        void laterValidationFinished() {
+            laterFinished.countDown();
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            if (!armed) {
+                return initial;
+            }
+            if (!Boolean.TRUE.equals(earlierReading.get())) {
+                return later;
+            }
+            earlierRead.countDown();
+            try {
+                // A validator that orders read and admission keeps the later validation waiting, so this wait
+                // runs out; one that does not lets the later validation finish and release it at once
+                laterFinished.await(1500, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return earlier;
         }
     }
 

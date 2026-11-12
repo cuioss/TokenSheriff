@@ -40,8 +40,11 @@ import java.util.Objects;
  * validator accepts an {@code iat} while now is at most {@code iat} plus its freshness window and retains the
  * {@code jti} until exactly that instant, so an entry is purged only at an instant at which its token is already
  * refused as stale. Two separate clock reads could straddle that edge - the first accepting the token as fresh,
- * the second purging its entry - and admit a replay; one instant cannot. No caller can construct a guard or
- * hand one to a validator.
+ * the second purging its entry - and admit a replay; one instant cannot. The rule holds across threads too,
+ * because the validator reads the clock, runs the claim checks and calls {@code admit} as one critical section:
+ * the instants of concurrent validations are read in the order their admissions are decided, so a later
+ * instant never purges an entry before an earlier one has been decided against it. No caller can construct a
+ * guard or hand one to a validator.
  * <p>
  * This class is thread-safe. An admission is a check-then-act on shared state - purge, look up the digest,
  * test the capacity, insert - so all four steps run as one critical section under a single private monitor:

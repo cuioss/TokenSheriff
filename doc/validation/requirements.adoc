@@ -587,7 +587,7 @@ The library must refuse a logout token whose `jti` was already admitted, through
 * *Digest-only* - each `jti` is kept as its SHA-256 digest, until `iat` plus the freshness window
 * *Thread-safe* - one admission is a single critical section, so no two threads admit the same `jti` or take the last free entry
 * *Owned by the validator* - the logout-token validator builds its guard from the configured capacity; no caller supplies a guard
-* *Decided on one instant* - the guard reads no clock; the validator reads its clock once per token and passes that instant to the guard, so expired entries are purged on exactly the instant `iat` freshness was judged on, and two clock reads cannot straddle the `iat` plus window edge and admit a replay
+* *Decided on one instant* - the guard reads no clock; the validator reads its clock once per token and passes that instant to the guard, so expired entries are purged on exactly the instant `iat` freshness was judged on, and two clock reads cannot straddle the `iat` plus window edge and admit a replay; the clock read, the claim checks and the admission of one token are one critical section, so concurrent validations cannot purge an entry an earlier reading is still deciding against
 
 The guard is consulted last, so a token refused by any other check takes no guard capacity.
 
