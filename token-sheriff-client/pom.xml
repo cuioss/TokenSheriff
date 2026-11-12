@@ -140,6 +140,7 @@
             <groupId>de.cuioss.sheriff.token</groupId>
             <artifactId>token-sheriff-validation</artifactId>
             <version>${project.version}</version>
+            <type>test-jar</type>
             <classifier>generators</classifier>
             <scope>test</scope>
         </dependency>
