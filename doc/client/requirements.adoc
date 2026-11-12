@@ -578,6 +578,26 @@ xref:specification/test-strategy.adoc[Test strategy].
 
 * Source: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/05-Authorization_Testing/05-Testing_for_OAuth_Weaknesses[OWASP WSTG — Testing for OAuth Weaknesses], xref:../commons/requirements.adoc#COMMONS-7[COMMONS-7].
 
+[#CLIENT-26]
+=== CLIENT-26: GraalVM native-image contract shipped with the engine
+
+The `token-sheriff-client` jar MUST carry its own GraalVM native-image metadata under
+`META-INF/native-image/de.cuioss.sheriff.token/token-sheriff-client/`: it registers every generated
+`_*_DslJsonConverter` and the `@CompiledJson` type it serves for reflection, and initializes every
+class holding a static `SecureRandom` — or any other `Random` — (today `FlowContext` and
+`PkceChallenge`) at run time, so a seeded generator is never frozen into the image heap and no
+consumer needs a native-image workaround of its own. The metadata travels in the jar rather than in
+a Quarkus `@BuildStep` because a jar resource set reaches every consumer — Quarkus applications, the
+API Sheriff dependency shape that uses the engine without the client Quarkus extension, and bare
+GraalVM builds alike — while a `@BuildStep` reaches only consumers of `token-sheriff-client-quarkus`.
+This follows the precedent of the core library, which ships its reflection metadata in the
+`token-sheriff-validation` jar the same way. The metadata names classes as strings, so tests
+enumerate the converters and `SecureRandom` holders from the compiled classes and pin the exact set
+(xref:specification/test-strategy.adoc#_native_image_contract[test strategy]). The metadata changes
+no JVM-mode behaviour.
+
+* Source: https://www.graalvm.org/latest/reference-manual/native-image/overview/BuildConfiguration/[GraalVM — Native Image build configuration] (`META-INF/native-image` auto-detection), xref:../../token-sheriff-quarkus-parent/doc/configuration/native-image-configuration.adoc#_reflection_configuration[Native Image Configuration — Reflection Configuration] (core-library precedent).
+
 == Traceability
 
 Each requirement is threat-driven (xref:threat-model.adoc[threat model]), reflected in the
@@ -611,4 +631,5 @@ sourced xref:best-practices.adoc[best-practices] checklist, and realized in a sp
 | CLIENT-19 | (BFF groundwork — non-preclusion) | xref:architecture.adoc[architecture], token-handling
 | CLIENT-20 | xref:../commons/threat-model.adoc#T-LEAK[commons T-LEAK] (delegated) | token-handling
 | CLIENT-21..22 | (cross-cutting: engine boundary + adversarial coverage) | xref:architecture.adoc[architecture], xref:specification/test-strategy.adoc[test-strategy], all specs
+| CLIENT-26 | (non-functional: native-image contract) | xref:specification/test-strategy.adoc#_native_image_contract[test-strategy (native-image contract)]
 |===

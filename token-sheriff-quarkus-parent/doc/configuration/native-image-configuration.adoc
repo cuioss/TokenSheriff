@@ -36,6 +36,14 @@ reflection without any extension-side or application-side configuration:
 Because this metadata travels with the core jar, it applies to Quarkus and non-Quarkus native
 builds alike — no manual `reflect-config.json` entries are required in consuming applications.
 
+The `token-sheriff-client` jar ships its own metadata the same way, under
+`META-INF/native-image/de.cuioss.sheriff.token/token-sheriff-client/`: the generated DslJson
+converters and the types they serve are registered for reflection, and `FlowContext` and
+`PkceChallenge` are initialized at run time. GraalVM auto-detects it, so a consumer of the client
+engine needs no application-side `reflect-config.json` entry, with or without the client Quarkus
+extension. The contract is specified as `CLIENT-26` in
+xref:../../../doc/client/requirements.adoc#CLIENT-26[Client Requirements].
+
 The Quarkus deployment module (`TokenSheriffProcessor`) registers only the types the extension
 itself owns or bridges, such as the Micrometer `MeterRegistry`, the MicroProfile `JsonWebToken`
 adapter, and the CDI-discoverable claim mapper interface. It does not declare the core library's

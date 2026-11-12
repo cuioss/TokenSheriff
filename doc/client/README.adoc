@@ -49,7 +49,7 @@ xref:architecture.adoc[Architecture]):
 | Document | Purpose
 
 | xref:requirements.adoc[Requirements]
-| `CLIENT-1`–`CLIENT-25`, grouped by aspect; each sourced and threat-driven.
+| `CLIENT-1`–`CLIENT-26`, grouped by aspect; each sourced and threat-driven.
 
 | xref:architecture.adoc[Architecture]
 | The engine seam, its commons / validation boundaries, the auth-code + PKCE sequence, and the BFF binding shapes it must keep viable — `CLIENT-21` (engine boundary) and `CLIENT-24` (the back-channel origin of the xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP], specified in xref:../commons/specification/transport.adoc#client_back_channel_origin[commons transport — client back-channel origin]).
@@ -76,7 +76,7 @@ xref:architecture.adoc[Architecture]):
 | The server-side lifecycle delta — validation, storage, refresh, revocation, sender-constraint preservation (`CLIENT-15`–`CLIENT-20`).
 
 | xref:specification/test-strategy.adoc[Spec — Test strategy]
-| The two-layer verification model (MockWebServer unit + real-Keycloak integration), the adversarial coverage, and the `CLIENT-N` → threat → test traceability matrix (`CLIENT-22`).
+| The two-layer verification model (MockWebServer unit + real-Keycloak integration), the adversarial coverage, and the `CLIENT-N` → threat → test traceability matrix (`CLIENT-22`, `CLIENT-26`).
 |===
 
 == See also

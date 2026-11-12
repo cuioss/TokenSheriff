@@ -188,6 +188,7 @@ token-sheriff-quarkus-integration-tests/
 │   ├── java/de/cuioss/sheriff/token/integration/
 │   │   ├── TestApplication.java
 │   │   └── endpoint/
+│   │       ├── ClientEngineNativeEndpoint.java
 │   │       ├── JwtValidationEndpoint.java
 │   │       └── MockJwtValidationEndpoint.java
 │   ├── resources/application.properties
@@ -212,7 +213,7 @@ token-sheriff-quarkus-integration-tests/
 │   ├── bearer/BearerAuthSpecIT.java
 │   ├── client/{DiscoverySpecIT,ClientAuthSpecIT,AuthCodePkceSpecIT,MixUpSpecIT,ParSpecIT,
 │   │           UserInfoSpecIT,DpopBoundSpecIT,LogoutSpecIT,StepUpSpecIT,
-│   │           InsufficientScopeChallengeSpecIT,FullFlowE2EIT,
+│   │           InsufficientScopeChallengeSpecIT,ClientNativeImageSpecIT,FullFlowE2EIT,
 │   │           RefreshProductionPathSpecIT,RefreshErrorPathSpecIT,RefreshLifecycleSpecIT,
 │   │           RefreshClientAuthSpecIT,RefreshConcurrentRedemptionSpecIT,
 │   │           RefreshConstraintLifecycleSpecIT,RefreshIdentityScopeSpecIT,
@@ -259,7 +260,7 @@ Tests use `@ParameterizedTest` with `@MethodSource` to run against multiple OIDC
 * **bearer/BearerAuthSpecIT**: Bearer token producers and interceptors (Keycloak-only — requires ROLES, GROUPS, CUSTOM_SCOPES)
 * **security/DpopSpecIT**: DPoP RFC 9449 validation (parameterized over DPoP-capable providers)
 * **security/JweDecryptionSpecIT**: JWE RFC 7516 decryption (parameterized over JWE-capable providers)
-* `client/**`: Client-engine specs against a real Keycloak — discovery (`DiscoverySpecIT`), client authentication with the `client_credentials` grant (`ClientAuthSpecIT`), authorization-code + PKCE (`AuthCodePkceSpecIT`), mix-up defence (`MixUpSpecIT`), PAR (`ParSpecIT`), userinfo (`UserInfoSpecIT`), DPoP-bound tokens (`DpopBoundSpecIT`), a DPoP-constrained code exchange and refresh through a mapped back-channel origin (`DpopBackChannelOriginSpecIT`, see xref:#_back_channel_origin_spec[]), RP-initiated logout (`LogoutSpecIT`), step-up (`StepUpSpecIT`), the RFC 6750 `insufficient_scope` challenge parser consumed from outside the client module, with no Keycloak flow (`InsufficientScopeChallengeSpecIT`, CLIENT-25), the full-flow E2E (`FullFlowE2EIT`), and the refresh specs (`Refresh*SpecIT`) — among them refresh with rotation through the production `RefreshFlow` (`RefreshProductionPathSpecIT`) and the refusal of an unknown and of a revoked refresh token (`RefreshErrorPathSpecIT`)
+* `client/**`: Client-engine specs against a real Keycloak — discovery (`DiscoverySpecIT`), client authentication with the `client_credentials` grant (`ClientAuthSpecIT`), authorization-code + PKCE (`AuthCodePkceSpecIT`), mix-up defence (`MixUpSpecIT`), PAR (`ParSpecIT`), userinfo (`UserInfoSpecIT`), DPoP-bound tokens (`DpopBoundSpecIT`), a DPoP-constrained code exchange and refresh through a mapped back-channel origin (`DpopBackChannelOriginSpecIT`, see xref:#_back_channel_origin_spec[]), RP-initiated logout (`LogoutSpecIT`), step-up (`StepUpSpecIT`), the RFC 6750 `insufficient_scope` challenge parser consumed from outside the client module, with no Keycloak flow (`InsufficientScopeChallengeSpecIT`, CLIENT-25), the native executable's classification of an `invalid_grant` refusal and of a `cnf.jkt` mismatch (`ClientNativeImageSpecIT`, CLIENT-26), the full-flow E2E (`FullFlowE2EIT`), and the refresh specs (`Refresh*SpecIT`) — among them refresh with rotation through the production `RefreshFlow` (`RefreshProductionPathSpecIT`) and the refusal of an unknown and of a revoked refresh token (`RefreshErrorPathSpecIT`)
 * **health/HealthCheckIntegrationIT**: Health endpoint validation
 * **health/HealthCheckResponsivenessIT**: Health endpoint responsiveness testing
 * **api/ApiValidationSpecIT**: API input validation (provider-independent)
