@@ -82,11 +82,11 @@ class TokenValidatorIssuerStatusTest {
     @DisplayName("The views list the enabled issuers in configuration order, leaving disabled issuers out")
     void shouldListEnabledIssuersInConfigurationOrder() {
         try (TokenValidator validator = TokenValidator.builder()
-                .issuerConfig(stubIssuerConfig(new StatusControlledLoader(FIRST_ISSUER, LoaderStatus.OK)))
-                .issuerConfig(IssuerConfig.builder().enabled(false).issuerIdentifier(DISABLED_ISSUER).build())
-                .issuerConfig(stubIssuerConfig(new StatusControlledLoader(SECOND_ISSUER, LoaderStatus.OK)))
-                .issuerConfig(stubIssuerConfig(new StatusControlledLoader(THIRD_ISSUER, LoaderStatus.OK)))
-                .build()) {
+                     .issuerConfig(stubIssuerConfig(new StatusControlledLoader(FIRST_ISSUER, LoaderStatus.OK)))
+                     .issuerConfig(IssuerConfig.builder().enabled(false).issuerIdentifier(DISABLED_ISSUER).build())
+                     .issuerConfig(stubIssuerConfig(new StatusControlledLoader(SECOND_ISSUER, LoaderStatus.OK)))
+                     .issuerConfig(stubIssuerConfig(new StatusControlledLoader(THIRD_ISSUER, LoaderStatus.OK)))
+                     .build()) {
 
             List<String> issuers = validator.getIssuerStatuses().stream()
                     .map(IssuerStatusView::issuerIdentifier)
@@ -104,8 +104,8 @@ class TokenValidatorIssuerStatusTest {
     @DisplayName("The returned list is immutable")
     void shouldReturnImmutableList() {
         try (TokenValidator validator = TokenValidator.builder()
-                .issuerConfig(stubIssuerConfig(new StatusControlledLoader(FIRST_ISSUER, LoaderStatus.OK)))
-                .build()) {
+                     .issuerConfig(stubIssuerConfig(new StatusControlledLoader(FIRST_ISSUER, LoaderStatus.OK)))
+                     .build()) {
             List<IssuerStatusView> statuses = validator.getIssuerStatuses();
             IssuerStatusView view = statuses.getFirst();
 
@@ -123,8 +123,8 @@ class TokenValidatorIssuerStatusTest {
     void shouldExposeNoLoaderOrConfiguration() {
         StatusControlledLoader loader = new StatusControlledLoader(FIRST_ISSUER, LoaderStatus.OK);
         try (TokenValidator validator = TokenValidator.builder()
-                .issuerConfig(stubIssuerConfig(loader))
-                .build()) {
+                     .issuerConfig(stubIssuerConfig(loader))
+                     .build()) {
             IssuerStatusView view = validator.getIssuerStatuses().getFirst();
 
             assertEquals(FIRST_ISSUER, view.issuerIdentifier());
@@ -163,14 +163,13 @@ class TokenValidatorIssuerStatusTest {
                 .refreshIntervalSeconds(1)
                 .retryConfig(fastRetry())
                 .build());
-        TokenValidator validator = TokenValidator.builder()
-                .issuerConfig(IssuerConfig.builder()
-                        .issuerIdentifier(HTTP_ISSUER)
-                        .expectedAudience(AUDIENCE)
-                        .jwksLoader(httpLoader)
-                        .build())
-                .build();
-        try {
+        try (TokenValidator validator = TokenValidator.builder()
+                     .issuerConfig(IssuerConfig.builder()
+                             .issuerIdentifier(HTTP_ISSUER)
+                             .expectedAudience(AUDIENCE)
+                             .jwksLoader(httpLoader)
+                             .build())
+                     .build()) {
             assertEquals(LoaderStatus.OK, httpLoader.initJWKSLoader(new SecurityEventCounter()).join());
             readAndDropViews(validator);
 
@@ -179,8 +178,6 @@ class TokenValidatorIssuerStatusTest {
                     .atMost(Duration.ofSeconds(10))
                     .until(() -> moduleDispatcher.getCallCounter() >= callsAfterDrop + 2);
             assertEquals(LoaderStatus.OK, httpLoader.getLoaderStatus(), "the loader stays active");
-        } finally {
-            validator.close();
         }
 
         assertEquals(LoaderStatus.UNDEFINED, httpLoader.getLoaderStatus(), "close() resets the loader");
@@ -201,12 +198,12 @@ class TokenValidatorIssuerStatusTest {
                 .refreshIntervalSeconds(3600)
                 .build());
         try (TokenValidator validator = TokenValidator.builder()
-                .issuerConfig(IssuerConfig.builder()
-                        .issuerIdentifier(HTTP_ISSUER)
-                        .expectedAudience(AUDIENCE)
-                        .jwksLoader(httpLoader)
-                        .build())
-                .build()) {
+                     .issuerConfig(IssuerConfig.builder()
+                             .issuerIdentifier(HTTP_ISSUER)
+                             .expectedAudience(AUDIENCE)
+                             .jwksLoader(httpLoader)
+                             .build())
+                     .build()) {
             assertEquals(LoaderStatus.OK, httpLoader.initJWKSLoader(new SecurityEventCounter()).join());
             int callsBeforeReads = moduleDispatcher.getCallCounter();
             assertTrue(callsBeforeReads > 0, "the initial load must have reached the counting server");
@@ -227,8 +224,8 @@ class TokenValidatorIssuerStatusTest {
     void shouldReflectStatusTransitions() {
         StatusControlledLoader loader = new StatusControlledLoader(FIRST_ISSUER, LoaderStatus.UNDEFINED);
         try (TokenValidator validator = TokenValidator.builder()
-                .issuerConfig(stubIssuerConfig(loader))
-                .build()) {
+                     .issuerConfig(stubIssuerConfig(loader))
+                     .build()) {
             IssuerStatusView view = validator.getIssuerStatuses().getFirst();
             assertEquals(LoaderStatus.UNDEFINED, view.loaderStatus());
 

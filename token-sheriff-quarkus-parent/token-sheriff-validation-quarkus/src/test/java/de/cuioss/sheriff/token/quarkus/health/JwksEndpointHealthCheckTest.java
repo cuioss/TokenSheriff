@@ -429,7 +429,7 @@ class JwksEndpointHealthCheckTest {
     @DisplayName("Opted-in external validator with ready issuers reports UP with per-issuer data")
     void optedInExternalValidatorUp() {
         try (TokenValidator external = externalValidator(
-                new IssuerSpec("ext-issuer-a", LoaderStatus.OK), new IssuerSpec("ext-issuer-b", LoaderStatus.OK))) {
+                     new IssuerSpec("ext-issuer-a", LoaderStatus.OK), new IssuerSpec("ext-issuer-b", LoaderStatus.OK))) {
             HealthCheckResponse response = new JwksEndpointHealthCheck(reportingExternal(external), 30).call();
 
             Map<String, Object> data = response.getData().orElseThrow();
@@ -450,7 +450,7 @@ class JwksEndpointHealthCheckTest {
     @DisplayName("Opted-in external validator with a failed issuer reports DOWN")
     void optedInExternalValidatorDown() {
         try (TokenValidator external = externalValidator(
-                new IssuerSpec("ext-healthy", LoaderStatus.OK), new IssuerSpec("ext-failed", LoaderStatus.ERROR))) {
+                     new IssuerSpec("ext-healthy", LoaderStatus.OK), new IssuerSpec("ext-failed", LoaderStatus.ERROR))) {
             HealthCheckResponse response = new JwksEndpointHealthCheck(reportingExternal(external), 30).call();
 
             Map<String, Object> data = response.getData().orElseThrow();
