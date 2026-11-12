@@ -174,6 +174,13 @@ public class RefreshFlow {
     /**
      * Exchanges a refresh token for a freshly validated access token, reporting any rotation and any
      * granted-scope delta.
+     * <p>
+     * The request carries the configured {@link ClientConfiguration#getScopes() scopes}, and they are
+     * the baseline the granted scope is reconciled against. This is the one entry point
+     * {@link de.cuioss.sheriff.token.client.lifecycle.TokenLifecycleManager} calls and the overridable
+     * entry point of this type. It does not route through
+     * {@link #refresh(ProviderMetadata, String, List)}, so a subclass that overrides only that overload
+     * does not change what the lifecycle does.
      *
      * @param metadata     the resolved provider metadata carrying the token endpoint; must not be
      *                     {@code null}
@@ -194,6 +201,53 @@ public class RefreshFlow {
      *         lenient posture — thrown as the {@link RedeemedScopeRefusalException} subtype
      */
     public RotationResult refresh(ProviderMetadata metadata, String refreshToken) {
+        return redeem(metadata, refreshToken, configuration.getScopes());
+    }
+
+    /**
+     * Exchanges a refresh token for a freshly validated access token, requesting the given scopes
+     * instead of the configured ones for this call only.
+     * <p>
+     * This overload is for callers that vary the requested scope per call. The given scopes are sent
+     * as the {@code scope} parameter and are the baseline the granted scope is reconciled against, so
+     * a grant that equals them is {@link ScopeDelta#EQUAL} even when it differs from the configured
+     * scopes. The scopes are validated by the same scope-token rule as the configured scopes
+     * ({@link ClientConfiguration#validateScopes(List)}); the shared {@link ClientConfiguration} is not
+     * changed. Every other behaviour — rotation, validation, sanitisation and the strict-posture
+     * refusal — is that of {@link #refresh(ProviderMetadata, String)}.
+     *
+     * @param metadata     the resolved provider metadata carrying the token endpoint; must not be
+     *                     {@code null}
+     * @param refreshToken the refresh token to redeem; must not be {@code null} or blank
+     * @param scopes       the scopes to request for this call, in request order; must not be
+     *                     {@code null} or empty and must hold one scope-token per entry
+     * @return the rotation result, as for {@link #refresh(ProviderMetadata, String)}, with the
+     *         reconciliation outcome computed against {@code scopes}
+     * @throws IllegalArgumentException if {@code scopes} is empty or holds a {@code null}, blank or
+     *         multi-token entry
+     * @throws de.cuioss.sheriff.token.commons.error.TransportException as for
+     *         {@link #refresh(ProviderMetadata, String)}
+     * @throws de.cuioss.sheriff.token.validation.exception.TokenValidationException if the returned
+     *         token fails validation
+     * @throws ClientProtocolException if the granted scope is broader than {@code scopes} and
+     *         {@code ClientConfiguration.strictScopeReconciliation} is enabled — thrown as the
+     *         {@link RedeemedScopeRefusalException} subtype
+     */
+    public RotationResult refresh(ProviderMetadata metadata, String refreshToken, List<String> scopes) {
+        List<String> requestedScopes = ClientConfiguration.validateScopes(scopes);
+        if (requestedScopes.isEmpty()) {
+            throw new IllegalArgumentException("per-call scopes must not be empty; "
+                    + "use refresh(metadata, refreshToken) to request the configured scopes");
+        }
+        return redeem(metadata, refreshToken, requestedScopes);
+    }
+
+    /**
+     * Performs the refresh exchange for the given requested scopes, which are both the {@code scope}
+     * request parameter and the reconciliation baseline. An empty list sends no {@code scope}
+     * parameter and reconciles to {@link ScopeDelta#UNDECLARED}.
+     */
+    private RotationResult redeem(ProviderMetadata metadata, String refreshToken, List<String> requestedScopes) {
         Objects.requireNonNull(metadata, "metadata must not be null");
         Objects.requireNonNull(refreshToken, "refreshToken must not be null");
         if (refreshToken.isBlank()) {
@@ -205,8 +259,8 @@ public class RefreshFlow {
         Map<String, String> form = new HashMap<>(Map.of(
                 PARAM_GRANT_TYPE, GRANT_REFRESH_TOKEN,
                 PARAM_REFRESH_TOKEN, refreshToken));
-        if (!configuration.getScopes().isEmpty()) {
-            form.put(PARAM_SCOPE, String.join(SCOPE_DELIMITER, configuration.getScopes()));
+        if (!requestedScopes.isEmpty()) {
+            form.put(PARAM_SCOPE, String.join(SCOPE_DELIMITER, requestedScopes));
         }
 
         Map<String, String> headers = new HashMap<>();
@@ -238,8 +292,8 @@ public class RefreshFlow {
         LOGGER.debug("Refreshed access token for client '%s' (rotated=%s)", configuration.getClientId(), rotated);
 
         String grantedScope = tokenResponse.getScope().orElse(null);
-        ScopeDelta scopeDelta = classifyScopeDelta(grantedScope);
-        reportScopeDelta(scopeDelta, grantedScope, redemption);
+        ScopeDelta scopeDelta = classifyScopeDelta(grantedScope, requestedScopes);
+        reportScopeDelta(scopeDelta, grantedScope, requestedScopes, redemption);
 
         // The plausibility-capped lifetime, never the raw field: an absent, non-positive or absurd
         // expires_in maps to 0 ("no known expiry") instead of an overflowing or immortal expiry.
@@ -252,7 +306,7 @@ public class RefreshFlow {
      * see {@link RefreshFailureClassification}.
      * <p>
      * <strong>What it covers, and nothing else:</strong> a failure raised by
-     * {@link #refresh(ProviderMetadata, String)}, and a {@link RefreshTokenFamilyRevokedException} raised
+     * {@link #refresh(ProviderMetadata, String)} or {@link #refresh(ProviderMetadata, String, List)}, and a {@link RefreshTokenFamilyRevokedException} raised
      * by the {@link de.cuioss.sheriff.token.client.token.RefreshTokenFamily} the caller feeds the
      * rotation into. Any other throwable — one raised by the caller's own store, binding or ID-token
      * checks, for example — is outside its domain: it answers
@@ -336,22 +390,22 @@ public class RefreshFlow {
     /**
      * Classifies the scope the authorization server granted against the scope this client requested.
      * <p>
-     * A pure query — it neither logs nor throws; {@link #reportScopeDelta(ScopeDelta, String)} owns
-     * those effects. Reconciliation is skipped (yielding {@link ScopeDelta#UNDECLARED}) when this
-     * client requested no scope, since there is then no baseline to compare against, and when the AS
-     * omitted the {@code scope} parameter, which RFC 6749 §5.1 defines as identical to the requested
-     * scope.
+     * A pure query — it neither logs nor throws;
+     * {@link #reportScopeDelta(ScopeDelta, String, List, RefreshRedemption)} owns those effects.
+     * Reconciliation is skipped (yielding {@link ScopeDelta#UNDECLARED}) when this call requested no
+     * scope, since there is then no baseline to compare against, and when the AS omitted the
+     * {@code scope} parameter, which RFC 6749 §5.1 defines as identical to the requested scope.
      * <p>
      * A granted set that both adds an unrequested scope and drops a requested one is classified
      * {@link ScopeDelta#BROADENED}: the unrequested member is the signal that matters, and folding the
      * mixed case into the broader classification keeps the opt-in strict posture from silently
      * accepting a grant it was enabled to refuse.
      *
-     * @param grantedScope the raw granted {@code scope} value, or {@code null} when the AS omitted it
+     * @param grantedScope    the raw granted {@code scope} value, or {@code null} when the AS omitted it
+     * @param requestedScopes the scopes this call requested — the reconciliation baseline
      * @return the reconciliation outcome; never {@code null}
      */
-    private ScopeDelta classifyScopeDelta(@Nullable String grantedScope) {
-        List<String> requestedScopes = configuration.getScopes();
+    private static ScopeDelta classifyScopeDelta(@Nullable String grantedScope, List<String> requestedScopes) {
         if (requestedScopes.isEmpty() || grantedScope == null || grantedScope.isBlank()) {
             return ScopeDelta.UNDECLARED;
         }
@@ -378,21 +432,22 @@ public class RefreshFlow {
      * The granted value crossed a trust boundary, so it is sanitized before interpolation into the log
      * template and the exception message (CWE-117 log forging).
      *
-     * @param scopeDelta   the reconciliation outcome
-     * @param grantedScope the raw granted {@code scope} value, or {@code null} when the AS omitted it
-     * @param redemption   what the authorization server did to the presented refresh token, carried on
-     *                     the refusal so the caller can fail the session closed
+     * @param scopeDelta      the reconciliation outcome
+     * @param grantedScope    the raw granted {@code scope} value, or {@code null} when the AS omitted it
+     * @param requestedScopes the scopes this call requested — the reconciliation baseline
+     * @param redemption      what the authorization server did to the presented refresh token, carried
+     *                        on the refusal so the caller can fail the session closed
      * @throws RedeemedScopeRefusalException when the grant is broadened and strict reconciliation is
      *         enabled — a {@link ClientProtocolException} subtype, so the documented contract is
      *         unchanged
      */
     private void reportScopeDelta(ScopeDelta scopeDelta, @Nullable String grantedScope,
-            RefreshRedemption redemption) {
+            List<String> requestedScopes, RefreshRedemption redemption) {
         if (scopeDelta == ScopeDelta.EQUAL || scopeDelta == ScopeDelta.UNDECLARED) {
             return;
         }
         String safeGranted = LogSanitizer.sanitize(grantedScope);
-        String requested = String.join(SCOPE_DELIMITER, configuration.getScopes());
+        String requested = String.join(SCOPE_DELIMITER, requestedScopes);
         if (scopeDelta == ScopeDelta.NARROWED) {
             LOGGER.warn(ClientLogMessages.WARN.SCOPE_NARROWED, safeGranted, requested);
             return;
