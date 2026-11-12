@@ -1,0 +1,13 @@
+{
+  "kind": "orchestrator",
+  "title": "API Sheriff separation seams (0.9.10)",
+  "phase": "orchestrating",
+  "workstreams": [
+    "WS-01",
+    "WS-02"
+  ],
+  "metadata": {
+    "parallelization_scope": "1"
+  },
+  "created": "2026-11-12T10:03:32Z"
+}
