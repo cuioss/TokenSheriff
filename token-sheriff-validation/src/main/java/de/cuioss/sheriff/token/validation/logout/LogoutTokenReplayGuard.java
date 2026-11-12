@@ -18,7 +18,6 @@ package de.cuioss.sheriff.token.validation.logout;
 import de.cuioss.sheriff.token.validation.util.Sha256Util;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HexFormat;
@@ -34,11 +33,15 @@ import java.util.Objects;
  * evicted to make room, because forgetting it early would let its token be replayed. Entries whose
  * retention has passed are purged on every admission, which is how capacity is regained.
  * <p>
- * The guard is owned by one {@link LogoutTokenValidator}, which builds it from the capacity it is configured
- * with and its own clock. The pairing is structural: the validator admits an {@code iat} up to its freshness
- * window ahead of its clock and retains the {@code jti} until {@code iat} plus that window, so a guard whose
- * clock ran ahead of the validator's would purge a {@code jti} while its token is still accepted as fresh, and a
- * replay would be admitted. No caller can therefore construct a guard or hand one to a validator.
+ * The guard reads no clock of its own. Each admission names the instant it is decided at, and the purge is
+ * judged against exactly that instant. The guard is owned by one {@link LogoutTokenValidator}, which builds it
+ * from the capacity it is configured with and passes, on every admission, the same instant it judged the
+ * token's {@code iat} against. That single-instant rule is what keeps purge and freshness consistent: the
+ * validator accepts an {@code iat} while now is at most {@code iat} plus its freshness window and retains the
+ * {@code jti} until exactly that instant, so an entry is purged only at an instant at which its token is already
+ * refused as stale. Two separate clock reads could straddle that edge - the first accepting the token as fresh,
+ * the second purging its entry - and admit a replay; one instant cannot. No caller can construct a guard or
+ * hand one to a validator.
  * <p>
  * This class is thread-safe. An admission is a check-then-act on shared state - purge, look up the digest,
  * test the capacity, insert - so all four steps run as one critical section under a single private monitor:
@@ -50,7 +53,7 @@ import java.util.Objects;
 final class LogoutTokenReplayGuard {
 
     /**
-     * The outcome of {@link #admit(String, Instant)}.
+     * The outcome of {@link #admit(String, Instant, Instant)}.
      */
     enum Admission {
 
@@ -65,7 +68,6 @@ final class LogoutTokenReplayGuard {
     }
 
     private final int capacity;
-    private final Clock clock;
     private final Object lock = new Object();
 
     /** Hex-encoded SHA-256 digest of each admitted {@code jti}, mapped to the instant it is retained until. */
@@ -75,32 +77,34 @@ final class LogoutTokenReplayGuard {
      * Creates an empty guard for the validator that owns it.
      *
      * @param capacity the maximum number of live entries, greater than zero
-     * @param clock    the owning validator's clock, which decides whether an entry's retention has passed
      * @throws IllegalArgumentException if {@code capacity} is not greater than zero
      */
-    LogoutTokenReplayGuard(int capacity, Clock clock) {
+    LogoutTokenReplayGuard(int capacity) {
         if (capacity <= 0) {
             throw new IllegalArgumentException("capacity must be greater than 0, but was: " + capacity);
         }
         this.capacity = capacity;
-        this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
     /**
      * Admits a {@code jti} unless it is still retained or the guard is full.
      * <p>
-     * An entry is retained up to and including {@code retainUntil}; it is purged once the clock is past it.
+     * An entry is retained up to and including {@code retainUntil}; it is purged by an admission decided at an
+     * instant past it. The guard reads no clock: {@code now} is the instant the caller decided the token's
+     * freshness at, so purge and freshness are judged on one and the same instant.
      *
      * @param jti         the {@code jti} of the logout token, stored as its SHA-256 digest only
      * @param retainUntil the instant up to which the {@code jti} is refused as a replay
+     * @param now         the instant this admission is decided at, which decides whether a retained entry has
+     *                    expired; the same instant the caller judged the token's freshness against
      * @return whether the {@code jti} was admitted, refused as a replay, or refused because the guard is full
      */
-    Admission admit(String jti, Instant retainUntil) {
+    Admission admit(String jti, Instant retainUntil, Instant now) {
         Objects.requireNonNull(jti, "jti must not be null");
         Objects.requireNonNull(retainUntil, "retainUntil must not be null");
+        Objects.requireNonNull(now, "now must not be null");
         String digest = digest(jti);
         synchronized (lock) {
-            Instant now = clock.instant();
             retainedUntil.values().removeIf(until -> until.isBefore(now));
             if (retainedUntil.containsKey(digest)) {
                 return Admission.REPLAYED;

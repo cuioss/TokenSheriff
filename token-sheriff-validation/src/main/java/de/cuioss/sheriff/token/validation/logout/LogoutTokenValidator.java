@@ -61,11 +61,18 @@ import java.util.*;
  * entry maps the claims, with a {@link ClaimMappingException}. The refusal keeps the identity of the claim's
  * check, {@link LogoutTokenCheck#ISSUED_AT} or {@link LogoutTokenCheck#EXPIRATION}, but is reached before the
  * other claim checks run; a mapping failure of any other claim is refused as {@link LogoutTokenCheck#SIGNATURE}.
+ * That includes a {@code sub} present as a JSON number, boolean, array or object: the signature-only entry maps
+ * {@code sub} strictly as a string, so such a token is refused as {@link LogoutTokenCheck#SIGNATURE}, not as
+ * {@link LogoutTokenCheck#SUBJECT_OR_SESSION}. A {@code sub} present as a JSON {@code null}, and a {@code sid}
+ * of any non-string type, reach the {@link LogoutTokenCheck#SUBJECT_OR_SESSION} check.
  * The replay guard is consulted last, so a token refused by any other check never takes guard capacity. An
  * admitted {@code jti} is retained until {@code iat} plus the freshness window; after that the token is refused
- * by the {@code iat} check anyway. The validator builds its replay guard itself, from the capacity it is given
- * and its own clock, so the guard decides retention with the same time source that judges {@code iat}; a guard
- * is never shared between validators.
+ * by the {@code iat} check anyway. Each validation reads the clock exactly once, judges {@code iat} and
+ * {@code exp} against that instant, and hands the same instant to the replay guard, which reads no clock of its
+ * own and decides its purge on it. Freshness and retention are therefore judged on one instant: an entry is
+ * purged only at an instant at which its token is already refused by the {@code iat} check. Two clock readings
+ * could straddle the {@code iat} plus window edge and admit a replay; one reading cannot. The validator builds
+ * its replay guard itself, from the capacity it is given; a guard is never shared between validators.
  * <p>
  * The validator does not log and returns no text taken from the token, so the caller decides how a refusal
  * is logged or metered. Receiving the logout request over HTTP and ending the named session stay with the
@@ -104,8 +111,8 @@ public final class LogoutTokenValidator {
      * @param replayGuardCapacity the maximum number of live {@code jti} entries of the replay guard this validator
      *                            builds, greater than zero; size it above the number of logout tokens the issuer
      *                            can send within twice the freshness window
-     * @param clock               the clock that decides {@code iat} freshness and {@code exp}, and the retention of
-     *                            the replay guard
+     * @param clock               the clock read once per validation; that one instant decides {@code iat}
+     *                            freshness, {@code exp}, and the purge of the replay guard
      * @throws IllegalArgumentException if {@code freshnessWindow} is zero or negative, {@code replayGuardCapacity}
      *                                  is not greater than zero, or an identifier is blank
      */
@@ -123,7 +130,7 @@ public final class LogoutTokenValidator {
             throw new IllegalArgumentException("freshnessWindow must be positive, but was: " + freshnessWindow);
         }
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
-        this.replayGuard = new LogoutTokenReplayGuard(replayGuardCapacity, this.clock);
+        this.replayGuard = new LogoutTokenReplayGuard(replayGuardCapacity);
     }
 
     /**
@@ -145,7 +152,10 @@ public final class LogoutTokenValidator {
             return LogoutTokenValidationResult.refused(LogoutTokenCheck.SIGNATURE);
         }
         Map<String, Object> claims = verified.getRawClaims();
-        Optional<LogoutTokenCheck> failedCheck = firstFailedCheck(verified, claims, clock.instant());
+        // The clock is read exactly once: the replay guard decides its purge on this same instant, so freshness
+        // and retention can never be judged on two readings that straddle the iat + window edge
+        Instant now = clock.instant();
+        Optional<LogoutTokenCheck> failedCheck = firstFailedCheck(verified, claims, now);
         if (failedCheck.isPresent()) {
             return LogoutTokenValidationResult.refused(failedCheck.get());
         }
@@ -153,7 +163,7 @@ public final class LogoutTokenValidator {
         // sub and sid are each absent or a non-blank string
         Instant retainUntil = numericDate(claims.get("iat")).orElseThrow().plus(freshnessWindow);
         String jwtId = (String) claims.get("jti");
-        return switch (replayGuard.admit(jwtId, retainUntil)) {
+        return switch (replayGuard.admit(jwtId, retainUntil, now)) {
             case ADMITTED -> LogoutTokenValidationResult.accepted(expectedIssuer, (String) claims.get("sub"),
                     (String) claims.get("sid"), jwtId);
             case REPLAYED -> LogoutTokenValidationResult.refused(LogoutTokenCheck.REPLAYED);

@@ -77,7 +77,7 @@ WARNING: `TokenValidator.verifySignature(String)` reaches *no claim verdict*. It
 
 A caller of the signature-only entry must therefore check every claim it relies on itself, or use `createAccessToken` / `createIdToken` when it needs an access or ID token verdict. `SignatureVerifiedToken` implements neither `TokenContent` nor `MinimalTokenContent`, so a signature-only result cannot be passed to code that accepts a validated token, and it is never cached. The logout-token validator below is the library's own consumer of this entry: it checks every claim of a logout token on top of it.
 
-The native JSON claims (`SignatureVerifiedToken.getRawClaims()`, `TokenValidator.getRawClaims(TokenContent)`) follow the null handling described under <<claims-validation>> unchanged: a top-level `null` member is omitted, a `null` nested inside an object or array is kept. A caller of the signature-only entry that must tell a top-level `null` member from an absent one reads `SignatureVerifiedToken.getNullClaimNames()`, which names the omitted members.
+The native JSON claims (`SignatureVerifiedToken.getRawClaims()`, `TokenValidator.getRawClaims(TokenContent)`) follow the null handling described under xref:#claims-validation[Claims Validation] unchanged: a top-level `null` member is omitted, a `null` nested inside an object or array is kept. A caller of the signature-only entry that must tell a top-level `null` member from an absent one reads `SignatureVerifiedToken.getNullClaimNames()`, which names the omitted members.
 
 The claims are mapped after the signature check. A value a claim mapper fails on, such as a non-numeric `exp`, refuses the token with a `ClaimMappingException`, a `TokenValidationException` that names the claim.
 
@@ -86,12 +86,12 @@ The claims are mapped after the signature check. A value a claim mapper fails on
 
 _See Requirement xref:requirements.adoc#VALIDATION-13.4[VALIDATION-13.4: Logout Token Validation]_
 
-`LogoutTokenValidator` validates a logout token of https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0] on top of the <<signature-only-verification,signature-only entry>>. It runs these checks in a fixed order and refuses the token with the first `LogoutTokenCheck` that fails:
+`LogoutTokenValidator` validates a logout token of https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0] on top of the xref:#signature-only-verification[signature-only entry]. It runs these checks in a fixed order and refuses the token with the first `LogoutTokenCheck` that fails:
 
 [cols="1,3", options="header"]
 |===
 |Check |Refused when
-|`SIGNATURE` |The signature-only entry refuses the token: empty or oversized, unknown or unavailable issuer, refused header, or invalid signature. The precise reason is counted as a security event by `verifySignature`.
+|`SIGNATURE` |The signature-only entry refuses the token: empty or oversized, unknown or unavailable issuer, refused header, invalid signature, or a claim it cannot map other than `iat` and `exp` - a `sub` that is a JSON number, boolean, array or object among them. The precise reason is counted as a security event by `verifySignature`.
 |`TYPE` |A `typ` header is present and is neither `logout+jwt` nor `application/logout+jwt`, compared case-insensitively.
 |`ISSUER` |`iss` is not the expected issuer.
 |`AUDIENCE` |`aud`, a string or an array, does not contain the expected audience.
@@ -101,10 +101,10 @@ _See Requirement xref:requirements.adoc#VALIDATION-13.4[VALIDATION-13.4: Logout 
 |`NONCE` |`nonce` is present, whatever its value, a JSON `null` included.
 |`SUBJECT_OR_SESSION` |Neither `sub` nor `sid` is a non-blank string, or one of them is present as anything else, a JSON `null` included.
 |`JWT_ID` |`jti` is absent or not a non-blank string.
-|`REPLAYED` / `REPLAY_GUARD_FULL` |The <<logout-replay-guard,replay guard>> refuses the `jti`.
+|`REPLAYED` / `REPLAY_GUARD_FULL` |The xref:#logout-replay-guard[replay guard] refuses the `jti`.
 |===
 
-*A non-numeric `iat` or `exp` keeps its check.* The signature-only entry maps the claims before the validator reads them, and a present `iat` or `exp` that is not a number fails that mapping with a `ClaimMappingException`. The validator refuses such a token as `ISSUED_AT` or `EXPIRATION`, the check that owns the claim, not as `SIGNATURE`; because the refusal happens during mapping, it is reached before the `TYPE`, `ISSUER` and `AUDIENCE` checks run. A mapping failure of any other claim is refused as `SIGNATURE`.
+*A non-numeric `iat` or `exp` keeps its check.* The signature-only entry maps the claims before the validator reads them, and a present `iat` or `exp` that is not a number fails that mapping with a `ClaimMappingException`. The validator refuses such a token as `ISSUED_AT` or `EXPIRATION`, the check that owns the claim, not as `SIGNATURE`; because the refusal happens during mapping, it is reached before the `TYPE`, `ISSUER` and `AUDIENCE` checks run. A mapping failure of any other claim is refused as `SIGNATURE`. That includes a `sub` present as a JSON number, boolean, array or object: the signature-only entry maps `sub` strictly as a string, so such a token is refused as `SIGNATURE`, not as `SUBJECT_OR_SESSION`. A `sid` of any type, and a `sub` given as JSON `null`, reach the `SUBJECT_OR_SESSION` check.
 
 *A JSON `null` counts as present.* The native claims omit a top-level `null` member, so the validator also reads `SignatureVerifiedToken.getNullClaimNames()`: `"nonce": null` is refused as `NONCE`, because Back-Channel Logout 1.0 prohibits the claim whatever its value, and a `null` `sub` or `sid` is refused as `SUBJECT_OR_SESSION`.
 
@@ -125,7 +125,7 @@ The guard is bounded by a capacity of live entries and *fails closed*: when it i
 
 An admission - purge, look up, test capacity, insert - is one critical section under a private monitor, so no two threads admit the same `jti` or both take the last free entry.
 
-The guard decides retention with the validator's own clock. `LogoutTokenValidator` takes a capacity (`replayGuardCapacity`) and builds its guard from that capacity and the clock that also judges `iat`; no caller can supply a guard or a guard clock, and a guard is never shared between validators. A guard reading a clock that ran ahead of the validator's would purge a `jti` while its token is still accepted as fresh, and a replay would be admitted; building the guard inside the validator rules that pairing error out by construction.
+*Purge and freshness are decided on one instant.* `LogoutTokenValidator` takes a capacity (`replayGuardCapacity`) and builds its guard from it; no caller can supply a guard, and a guard is never shared between validators. The guard reads no clock. The validator reads its clock exactly once per token, judges `iat` and `exp` against that instant, and passes the same instant to the guard, which purges every entry whose retention is before it. A token is accepted while now is at most `iat` plus the freshness window, and its `jti` is retained until exactly that instant, so on one instant an entry is purged only when its token is already refused as `ISSUED_AT`. Sharing a clock would not be enough: two reads of one clock can straddle the `iat` plus window edge, the first accepting a replay as fresh and the second purging its entry, and the replay would be admitted. The single-instant rule closes that gap; a regression test drives a clock whose second read lies past the edge and asserts the replay is still refused.
 
 == JWT Attack Mitigations
 
@@ -158,7 +158,7 @@ The guard decides retention with the validator's own clock. `LogoutTokenValidato
 === Token Handling
 
 * **Always use `TokenValidator`** - never decode tokens without validation
-* **Do not treat `verifySignature` as authentication** - its result carries no claim verdict; see <<signature-only-verification>>
+* **Do not treat `verifySignature` as authentication** - its result carries no claim verdict; see xref:#signature-only-verification[Signature-Only Verification]
 * **Configure audience validation** - set `expectedAudience` to your resource server identifier
 * **Configure issuer validation** - only trust known identity providers
 * **Use short token lifetimes** - 5-15 minutes for access tokens

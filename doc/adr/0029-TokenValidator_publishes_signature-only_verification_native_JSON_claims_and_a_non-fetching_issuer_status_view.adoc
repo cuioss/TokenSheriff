@@ -159,8 +159,13 @@ The validator's design:
 * *Bounded result.* A refusal names exactly one value of the enum `LogoutTokenCheck` (`SIGNATURE`, `TYPE`,
   `ISSUER`, `AUDIENCE`, `ISSUED_AT`, `EXPIRATION`, `EVENTS`, `NONCE`, `SUBJECT_OR_SESSION`, `JWT_ID`,
   `REPLAYED`, `REPLAY_GUARD_FULL`); an acceptance carries `iss`, `jti` and the optional `sub` and `sid`. The
-  result never carries free text. Any refusal by the signature-only entry maps to `SIGNATURE`; its precise
-  security event has already been counted under OD-3.
+  result never carries free text. A refusal by the signature-only entry maps to `SIGNATURE`, with one
+  exception: a claim-mapping failure of `iat` or `exp` (a present value that is not a number) maps to
+  `ISSUED_AT` or `EXPIRATION`, the check that owns the claim, although it is reached before the other claim
+  checks run. A claim-mapping failure of any other claim, a `sub` that is a JSON number, boolean, array or
+  object among them, maps to `SIGNATURE`. Either way the precise security event has already been counted under
+  OD-3. Because the native claims omit a top-level JSON `null` member, presence checks (`nonce`, `sub`, `sid`)
+  read `SignatureVerifiedToken#getNullClaimNames()` as well, so a member present as `null` counts as present.
 * *No new event and no log record.* No `EventType`, `MeasurementType` or log record is added. The validator
   never logs remote text; the caller logs or meters the returned check.
 * *Fixed order, guard last.* Checks run in a fixed order (`typ`, `iss`, `aud`, `iat`, `exp`, `events`,
@@ -173,18 +178,21 @@ The validator's design:
   capacity. A full guard refuses a new token as `REPLAY_GUARD_FULL`; it never evicts a live entry to make room.
   Purge, lookup, capacity test and insert run under one monitor, so no two threads admit the same `jti` or take
   the same last free slot.
-* *Guard owned by the validator.* The `LogoutTokenValidator` builder takes a replay-guard capacity, not a
-  guard, and builds the guard from that capacity and its own clock. The validator admits an `iat` up to the
-  freshness window ahead of its clock and retains the `jti` until `iat` plus that window, so a guard reading a
-  clock that runs ahead would purge a `jti` while its token is still fresh and admit a replay. Building the
-  guard inside the validator makes the shared time source structural rather than a documented obligation of
-  the caller; the guard type is internal to the `logout` package, and a guard is never shared between
-  validators.
+* *Guard owned by the validator, decided on one instant.* The `LogoutTokenValidator` builder takes a
+  replay-guard capacity, not a guard, and builds the guard from that capacity. The guard reads no clock. Each
+  validation reads the validator's clock exactly once, judges `iat` and `exp` against that instant, and passes
+  the same instant to the guard, which purges every entry whose retention is before it. The validator accepts
+  an `iat` while now is at most `iat` plus the freshness window and retains the `jti` until exactly that
+  instant, so on one instant an entry is purged only when its token is already refused by the `iat` check.
+  Sharing a clock is not enough: two reads of one clock can straddle the `iat` plus window edge, the first
+  accepting a replay as fresh and the second purging its entry, and the replay would be admitted. The
+  single-instant rule closes that, and it is held by the validator's code, not by an obligation of the caller;
+  the guard type is internal to the `logout` package, and a guard is never shared between validators.
 * *Boundaries.* An `iat` exactly at either edge of the symmetric freshness window is accepted and one second
   beyond is refused; an `exp` exactly now is refused and one second later is accepted, as RFC 7519 §4.1.4
   requires the current time to be before `exp`.
 
-==== Revision: `exp` exactly now, and the guard's clock
+==== Revision: `exp` exactly now, and the guard's time source
 
 The decision as first accepted differed in two points, both revised before release in response to review of
 the change that introduced the package:
@@ -194,8 +202,10 @@ the change that introduced the package:
   `ValidationContext.isExpired`, which already refuses equality. The decision is changed to refuse an `exp`
   that is not after now, so the logout validator and the verdict pipeline share one expiry boundary.
 * It let the caller build the replay guard with its own `Clock` and required, in Javadoc only, that this be
-  the validator's time source. The decision is changed so that the validator builds the guard from its own
-  clock and no caller can supply one, which removes the pairing rule instead of documenting it.
+  the validator's time source. The decision was first changed so that the validator built the guard from its
+  own clock. Review then showed that one shared clock still leaves two reads of it, which can straddle the
+  `iat` plus window edge and admit a replay. The decision is changed again: the guard holds no clock, and the
+  validator passes the single instant it judged freshness on into every admission.
 
 The HTTP receiver endpoint for back-channel logout and the termination of the affected sessions stay with
 the consuming application. The library validates the token; it does not receive it or act on it.

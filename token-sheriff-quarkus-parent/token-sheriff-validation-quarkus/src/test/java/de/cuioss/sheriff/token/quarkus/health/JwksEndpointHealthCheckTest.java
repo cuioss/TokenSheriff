@@ -552,7 +552,7 @@ class JwksEndpointHealthCheckTest {
     }
 
     @Test
-    @DisplayName("Without the opt-in, NOT_CONFIGURED and an ambiguous resolution still report zero endpoints")
+    @DisplayName("An external validator without the opt-in, and NOT_CONFIGURED even with it, report zero endpoints")
     void zeroEndpointsWithoutObservableIssuerStatuses() {
         try (TokenValidator external = externalValidator(new IssuerSpec("ext-issuer", LoaderStatus.OK))) {
             HealthCheckResponse notOptedIn = new JwksEndpointHealthCheck(

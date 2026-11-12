@@ -27,7 +27,9 @@
  * <p>
  * The checks run in this fixed order, and the first one that fails names the refusal:
  * <ol>
- *   <li>the signature, issuer and header checks of the signature-only entry</li>
+ *   <li>the signature, issuer and header checks of the signature-only entry, which also refuses a claim it
+ *   cannot map - a {@code sub} that is a JSON number, boolean, array or object among them; a mapping failure
+ *   of {@code iat} or {@code exp} is refused as the {@code iat} or {@code exp} check</li>
  *   <li>a present {@code typ} header is {@code logout+jwt}, with or without the {@code application/} prefix and
  *   compared case-insensitively; an absent {@code typ} is accepted</li>
  *   <li>{@code iss} equals the expected issuer</li>
@@ -54,8 +56,9 @@
  *   <li>{@link de.cuioss.sheriff.token.validation.logout.LogoutTokenCheck} - The bounded set of checks a refusal
  *   names</li>
  *   <li>{@code LogoutTokenReplayGuard} - A bounded, fail-closed store of seen {@code jti} digests, internal to the
- *   package; each validator builds its own from its configured capacity and its own clock, so the guard and the
- *   {@code iat} check always read the same time source</li>
+ *   package; each validator builds its own from its configured capacity. The guard reads no clock: the validator
+ *   reads its clock once per token and hands that same instant to the guard, so the guard's purge and the
+ *   {@code iat} check are decided on one instant and cannot straddle the edge of the freshness window</li>
  * </ul>
  * <p>
  * The package does not log and puts no remote text into a result; the caller logs or meters the returned

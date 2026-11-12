@@ -571,6 +571,8 @@ The library must validate a logout token of https://openid.net/specs/openid-conn
 . `jti` is present as a non-blank string
 . The `jti` passes the replay guard of xref:#VALIDATION-13.5[VALIDATION-13.5]
 
+A claim the signature-only entry cannot map refuses the token at the first step: a present `iat` or `exp` that is not a number is refused as `ISSUED_AT` or `EXPIRATION`, any other unmappable claim - a `sub` that is a JSON number, boolean, array or object among them - as `SIGNATURE`.
+
 A refusal names exactly one `LogoutTokenCheck`, the first check that failed. The set of checks is bounded and the result carries no text taken from the token. The validator does not log; receiving the logout request over HTTP and ending the named session stay with the consuming application.
 
 _See specification: xref:security-reference.adoc#logout-token-validation[Logout Token Validation]_
@@ -584,7 +586,8 @@ The library must refuse a logout token whose `jti` was already admitted, through
 * *Fail closed* - at capacity, a new `jti` is refused as `REPLAY_GUARD_FULL`; a live entry is never evicted to make room
 * *Digest-only* - each `jti` is kept as its SHA-256 digest, until `iat` plus the freshness window
 * *Thread-safe* - one admission is a single critical section, so no two threads admit the same `jti` or take the last free entry
-* *Owned by the validator* - the logout-token validator builds its guard from the configured capacity and its own clock, so retention is decided with the same time source that judges `iat`; no caller supplies a guard or a guard clock
+* *Owned by the validator* - the logout-token validator builds its guard from the configured capacity; no caller supplies a guard
+* *Decided on one instant* - the guard reads no clock; the validator reads its clock once per token and passes that instant to the guard, so expired entries are purged on exactly the instant `iat` freshness was judged on, and two clock reads cannot straddle the `iat` plus window edge and admit a replay
 
 The guard is consulted last, so a token refused by any other check takes no guard capacity.
 

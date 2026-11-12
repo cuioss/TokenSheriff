@@ -41,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -438,6 +439,20 @@ class LogoutTokenValidatorTest {
             assertRefused(LogoutTokenCheck.SUBJECT_OR_SESSION, underTest.validate(signed(claims, "logout+jwt")));
         }
 
+        @ParameterizedTest(name = "sub {0} is refused as SIGNATURE")
+        @ValueSource(strings = {"42", "true", "[\"subject-1\"]", "{\"id\":\"subject-1\"}"})
+        @DisplayName("A sub that is a JSON number, boolean, array or object is refused as SIGNATURE")
+        void shouldRefuseNonStringSubjectAsSignature(String subJson) {
+            Map<String, String> members = validJsonMembers();
+            members.put("sub", subJson);
+
+            // The signature-only entry maps sub strictly as a string and refuses any other JSON type before the
+            // logout checks run, so the refusal is SIGNATURE (documented on LogoutTokenCheck#SIGNATURE)
+            assertRefused(LogoutTokenCheck.SIGNATURE, underTest.validate(signedJson(members)));
+            assertTrue(underTest.validate(signedJson(validJsonMembers())).isAccepted(),
+                    "positive control: the same payload with a string sub");
+        }
+
         @Test
         @DisplayName("A sub given as JSON null beside a valid sid is refused as SUBJECT_OR_SESSION")
         void shouldRefuseNullSubject() {
@@ -502,6 +517,45 @@ class LogoutTokenValidatorTest {
 
             clock.set(NOW.plus(WINDOW).plusSeconds(1));
             assertRefused(LogoutTokenCheck.ISSUED_AT, onMutableClock.validate(token));
+        }
+
+        @Test
+        @DisplayName("A replay at the iat + window edge is refused although a second clock read would be past it")
+        void shouldRefuseReplayAtEdgeWhenClockReadsStraddle() {
+            Instant edge = NOW.plus(WINDOW);
+            Instant pastEdge = edge.plusSeconds(1);
+            Map<String, Object> claims = validClaims();
+            claims.put("exp", pastEdge.plusSeconds(60).getEpochSecond());
+            String token = signed(claims, "logout+jwt");
+            Map<String, Object> otherJti = new LinkedHashMap<>(claims);
+            otherJti.put("jti", "jti-straddle-control");
+            // Every validation after the first sees the edge on its first clock read and an instant past the edge
+            // on any further read: a validator that read the clock twice would purge the entry and admit the replay
+            StraddlingClock clock = new StraddlingClock(NOW, edge, pastEdge);
+            LogoutTokenValidator onStraddlingClock = validator(10, clock);
+            assertTrue(onStraddlingClock.validate(token).isAccepted(), "first presentation");
+
+            clock.straddleNextValidation();
+            assertRefused(LogoutTokenCheck.REPLAYED, onStraddlingClock.validate(token));
+            assertEquals(1, clock.readsOfLastValidation(), "the validator reads its clock once per validation");
+
+            clock.straddleNextValidation();
+            assertTrue(onStraddlingClock.validate(signed(otherJti, "logout+jwt")).isAccepted(),
+                    "positive control: a new jti on the same straddling instants passes freshness at the edge");
+        }
+
+        @Test
+        @DisplayName("A replay inside the freshness window is refused as REPLAYED on a straddling clock")
+        void shouldRefuseReplayInsideWindowOnStraddlingClock() {
+            Instant inside = NOW.plusSeconds(60);
+            StraddlingClock clock = new StraddlingClock(NOW, inside, NOW.plus(WINDOW).plusSeconds(1));
+            LogoutTokenValidator onStraddlingClock = validator(10, clock);
+            String token = signed(validClaims(), "logout+jwt");
+            assertTrue(onStraddlingClock.validate(token).isAccepted(), "first presentation");
+
+            clock.straddleNextValidation();
+
+            assertRefused(LogoutTokenCheck.REPLAYED, onStraddlingClock.validate(token));
         }
 
         @Test
@@ -685,6 +739,54 @@ class LogoutTokenValidatorTest {
     private static void assertRefused(LogoutTokenCheck expected, LogoutTokenValidationResult result) {
         assertFalse(result.isAccepted(), () -> "expected refusal as " + expected + " but was " + result);
         assertEquals(Optional.of(expected), result.getFailedCheck());
+    }
+
+    /**
+     * A clock that answers {@code initial} until it is armed; once armed by {@link #straddleNextValidation()},
+     * its first read answers {@code firstRead} and every further read {@code laterRead}, so two reads within one
+     * validation straddle whatever edge lies between the two instants.
+     */
+    private static final class StraddlingClock extends Clock {
+
+        private final Instant initial;
+        private final Instant firstRead;
+        private final Instant laterRead;
+        private final AtomicInteger reads = new AtomicInteger();
+        private volatile boolean armed;
+
+        StraddlingClock(Instant initial, Instant firstRead, Instant laterRead) {
+            this.initial = initial;
+            this.firstRead = firstRead;
+            this.laterRead = laterRead;
+        }
+
+        void straddleNextValidation() {
+            reads.set(0);
+            armed = true;
+        }
+
+        int readsOfLastValidation() {
+            return reads.get();
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            int read = reads.incrementAndGet();
+            if (!armed) {
+                return initial;
+            }
+            return read == 1 ? firstRead : laterRead;
+        }
     }
 
     /**

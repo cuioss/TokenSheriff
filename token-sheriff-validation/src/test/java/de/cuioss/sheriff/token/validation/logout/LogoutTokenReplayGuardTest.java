@@ -20,7 +20,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.time.*;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -31,11 +32,12 @@ import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests {@link LogoutTokenReplayGuard}: admission, replay refusal, retention expiry, the fail-closed capacity
- * bound that never evicts a live entry, and the atomicity of admission under concurrency.
+ * Tests {@link LogoutTokenReplayGuard}: admission, replay refusal, retention expiry judged on the instant each
+ * admission names, the fail-closed capacity bound that never evicts a live entry, and the atomicity of admission
+ * under concurrency.
  * <p>
- * Each guard is constructed the way its owning {@link LogoutTokenValidator} constructs it, from a capacity and
- * the clock the validator itself reads; that the validator hands the guard its own clock is tested in
+ * The guard reads no clock; every admission passes the instant it is decided at. That the validator passes the
+ * same instant it judged {@code iat} against, and reads its clock only once, is tested in
  * {@code LogoutTokenValidatorTest}.
  */
 @DisplayName("LogoutTokenReplayGuard")
@@ -52,27 +54,39 @@ class LogoutTokenReplayGuardTest {
         @Test
         @DisplayName("A new jti is admitted and the same jti is then refused as REPLAYED")
         void shouldAdmitThenRefuseReplay() {
-            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(10, Clock.fixed(START, ZoneOffset.UTC));
+            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(10);
 
-            assertEquals(Admission.ADMITTED, guard.admit("jti-1", START.plus(RETENTION)));
-            assertEquals(Admission.REPLAYED, guard.admit("jti-1", START.plus(RETENTION)));
-            assertEquals(Admission.ADMITTED, guard.admit("jti-2", START.plus(RETENTION)), "a different jti");
+            assertEquals(Admission.ADMITTED, guard.admit("jti-1", START.plus(RETENTION), START));
+            assertEquals(Admission.REPLAYED, guard.admit("jti-1", START.plus(RETENTION), START));
+            assertEquals(Admission.ADMITTED, guard.admit("jti-2", START.plus(RETENTION), START), "a different jti");
         }
 
         @Test
         @DisplayName("A jti is retained up to and including its retention instant and readmitted afterwards")
         void shouldReadmitAfterExpiry() {
-            MutableClock clock = new MutableClock(START);
-            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(10, clock);
+            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(10);
             Instant retainUntil = START.plus(RETENTION);
-            assertEquals(Admission.ADMITTED, guard.admit("jti-1", retainUntil));
+            assertEquals(Admission.ADMITTED, guard.admit("jti-1", retainUntil, START));
 
-            clock.set(retainUntil);
-            assertEquals(Admission.REPLAYED, guard.admit("jti-1", retainUntil), "still retained at the instant");
+            assertEquals(Admission.REPLAYED, guard.admit("jti-1", retainUntil, retainUntil),
+                    "still retained at the instant");
 
-            clock.set(retainUntil.plusSeconds(1));
-            assertEquals(Admission.ADMITTED, guard.admit("jti-1", retainUntil.plus(RETENTION)),
-                    "readmitted once the retention has passed");
+            assertEquals(Admission.ADMITTED, guard.admit("jti-1", retainUntil.plus(RETENTION),
+                    retainUntil.plusSeconds(1)), "readmitted once the retention has passed");
+        }
+
+        @Test
+        @DisplayName("The purge is decided on the instant the admission names, not on the current time")
+        void shouldDecidePurgeOnTheGivenInstant() {
+            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(10);
+            Instant longPast = START.minus(Duration.ofDays(1));
+            Instant retainUntil = longPast.plus(RETENTION);
+            assertEquals(Admission.ADMITTED, guard.admit("jti-1", retainUntil, longPast));
+
+            assertEquals(Admission.REPLAYED, guard.admit("jti-1", retainUntil, retainUntil),
+                    "retained at its retention instant although that instant lies a day before now");
+            assertEquals(Admission.ADMITTED, guard.admit("jti-1", retainUntil, retainUntil.plusNanos(1)),
+                    "positive control: purged by an admission decided just past its retention");
         }
     }
 
@@ -83,31 +97,30 @@ class LogoutTokenReplayGuardTest {
         @Test
         @DisplayName("At capacity a new jti is refused as FULL and every live jti is still refused as REPLAYED")
         void shouldRefuseWhenFullWithoutEvicting() {
-            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(3, Clock.fixed(START, ZoneOffset.UTC));
+            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(3);
             List<String> live = List.of("jti-1", "jti-2", "jti-3");
-            live.forEach(jti -> assertEquals(Admission.ADMITTED, guard.admit(jti, START.plus(RETENTION))));
+            live.forEach(jti -> assertEquals(Admission.ADMITTED, guard.admit(jti, START.plus(RETENTION), START)));
 
-            assertEquals(Admission.FULL, guard.admit("jti-4", START.plus(RETENTION)));
+            assertEquals(Admission.FULL, guard.admit("jti-4", START.plus(RETENTION), START));
 
-            live.forEach(jti -> assertEquals(Admission.REPLAYED, guard.admit(jti, START.plus(RETENTION)),
+            live.forEach(jti -> assertEquals(Admission.REPLAYED, guard.admit(jti, START.plus(RETENTION), START),
                     () -> jti + " must not have been evicted"));
-            assertEquals(Admission.FULL, guard.admit("jti-4", START.plus(RETENTION)), "still full");
+            assertEquals(Admission.FULL, guard.admit("jti-4", START.plus(RETENTION), START), "still full");
         }
 
         @Test
         @DisplayName("Capacity is regained once retained entries expire")
         void shouldRegainCapacityAfterExpiry() {
-            MutableClock clock = new MutableClock(START);
-            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(2, clock);
-            assertEquals(Admission.ADMITTED, guard.admit("jti-1", START.plusSeconds(10)));
-            assertEquals(Admission.ADMITTED, guard.admit("jti-2", START.plus(RETENTION)));
-            assertEquals(Admission.FULL, guard.admit("jti-3", START.plus(RETENTION)));
+            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(2);
+            assertEquals(Admission.ADMITTED, guard.admit("jti-1", START.plusSeconds(10), START));
+            assertEquals(Admission.ADMITTED, guard.admit("jti-2", START.plus(RETENTION), START));
+            assertEquals(Admission.FULL, guard.admit("jti-3", START.plus(RETENTION), START));
 
-            clock.set(START.plusSeconds(11));
+            Instant later = START.plusSeconds(11);
 
-            assertEquals(Admission.ADMITTED, guard.admit("jti-3", START.plus(RETENTION)), "jti-1 expired");
-            assertEquals(Admission.REPLAYED, guard.admit("jti-2", START.plus(RETENTION)), "jti-2 still live");
-            assertEquals(Admission.FULL, guard.admit("jti-4", START.plus(RETENTION)));
+            assertEquals(Admission.ADMITTED, guard.admit("jti-3", START.plus(RETENTION), later), "jti-1 expired");
+            assertEquals(Admission.REPLAYED, guard.admit("jti-2", START.plus(RETENTION), later), "jti-2 still live");
+            assertEquals(Admission.FULL, guard.admit("jti-4", START.plus(RETENTION), later));
         }
     }
 
@@ -118,10 +131,10 @@ class LogoutTokenReplayGuardTest {
         @Test
         @DisplayName("Many threads admitting the same jti yield exactly one admission")
         void shouldAdmitSameJtiExactlyOnce() throws Exception {
-            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(100, Clock.fixed(START, ZoneOffset.UTC));
+            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(100);
             List<Callable<Admission>> calls = new ArrayList<>();
             for (int i = 0; i < THREADS; i++) {
-                calls.add(() -> guard.admit("shared-jti", START.plus(RETENTION)));
+                calls.add(() -> guard.admit("shared-jti", START.plus(RETENTION), START));
             }
 
             Map<Admission, Integer> outcomes = runConcurrently(calls);
@@ -136,14 +149,14 @@ class LogoutTokenReplayGuardTest {
         void shouldNeverExceedCapacity() throws Exception {
             int capacity = 10;
             int prefilled = 7;
-            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(capacity, Clock.fixed(START, ZoneOffset.UTC));
+            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(capacity);
             for (int i = 0; i < prefilled; i++) {
-                assertEquals(Admission.ADMITTED, guard.admit("prefilled-" + i, START.plus(RETENTION)));
+                assertEquals(Admission.ADMITTED, guard.admit("prefilled-" + i, START.plus(RETENTION), START));
             }
             List<Callable<Admission>> calls = new ArrayList<>();
             for (int i = 0; i < THREADS; i++) {
                 String jti = "concurrent-" + i;
-                calls.add(() -> guard.admit(jti, START.plus(RETENTION)));
+                calls.add(() -> guard.admit(jti, START.plus(RETENTION), START));
             }
 
             Map<Admission, Integer> outcomes = runConcurrently(calls);
@@ -152,7 +165,7 @@ class LogoutTokenReplayGuardTest {
             assertEquals(THREADS - (capacity - prefilled), outcomes.get(Admission.FULL));
             assertEquals(0, outcomes.get(Admission.REPLAYED));
             for (int i = 0; i < prefilled; i++) {
-                assertEquals(Admission.REPLAYED, guard.admit("prefilled-" + i, START.plus(RETENTION)),
+                assertEquals(Admission.REPLAYED, guard.admit("prefilled-" + i, START.plus(RETENTION), START),
                         "no prefilled entry was evicted");
             }
         }
@@ -193,59 +206,22 @@ class LogoutTokenReplayGuardTest {
         @Test
         @DisplayName("A capacity of zero or less is rejected")
         void shouldRejectNonPositiveCapacity() {
-            Clock clock = Clock.fixed(START, ZoneOffset.UTC);
-
-            assertThrows(IllegalArgumentException.class, () -> new LogoutTokenReplayGuard(0, clock));
-            assertThrows(IllegalArgumentException.class, () -> new LogoutTokenReplayGuard(-1, clock));
-            assertNotNull(new LogoutTokenReplayGuard(1, clock), "positive control: capacity 1");
+            assertThrows(IllegalArgumentException.class, () -> new LogoutTokenReplayGuard(0));
+            assertThrows(IllegalArgumentException.class, () -> new LogoutTokenReplayGuard(-1));
+            assertNotNull(new LogoutTokenReplayGuard(1), "positive control: capacity 1");
         }
 
         @Test
-        @DisplayName("A null clock is rejected")
-        void shouldRejectNullClock() {
-            assertThrows(NullPointerException.class, () -> new LogoutTokenReplayGuard(1, null));
-        }
-
-        @Test
-        @DisplayName("A null jti or retention instant is rejected")
+        @DisplayName("A null jti, retention instant or decision instant is rejected")
         void shouldRejectNullArguments() {
-            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(1, Clock.fixed(START, ZoneOffset.UTC));
+            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(1);
             Instant retainUntil = START.plus(RETENTION);
 
-            assertThrows(NullPointerException.class, () -> guard.admit(null, retainUntil));
-            assertThrows(NullPointerException.class, () -> guard.admit("jti-1", null));
-            assertEquals(Admission.ADMITTED, guard.admit("jti-1", retainUntil), "nothing was stored by a rejection");
-        }
-    }
-
-    /**
-     * A clock whose instant the test sets.
-     */
-    private static final class MutableClock extends Clock {
-
-        private volatile Instant instant;
-
-        MutableClock(Instant instant) {
-            this.instant = instant;
-        }
-
-        void set(Instant newInstant) {
-            this.instant = newInstant;
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return instant;
+            assertThrows(NullPointerException.class, () -> guard.admit(null, retainUntil, START));
+            assertThrows(NullPointerException.class, () -> guard.admit("jti-1", null, START));
+            assertThrows(NullPointerException.class, () -> guard.admit("jti-1", retainUntil, null));
+            assertEquals(Admission.ADMITTED, guard.admit("jti-1", retainUntil, START),
+                    "nothing was stored by a rejection");
         }
     }
 }

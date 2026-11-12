@@ -115,19 +115,20 @@ nothing in the selected module: confirm in the Surefire summary
 (`Tests run: …` for the selected module) or in its `target/surefire-reports` that the requested test
 ran.
 
-**Never gate on the `test-compile` or `test` goal.** `token-sheriff-validation` publishes its test
-fixtures as a `generators` classifier jar, and that jar is only built in the `package` phase.
+**The test fixtures resolve in the reactor before `package`.** `token-sheriff-validation` publishes
+its test fixtures through the `maven-jar-plugin` `test-jar` goal with the `generators` classifier.
 `token-sheriff-client`, `token-sheriff-validation-quarkus` and
 `token-sheriff-quarkus-integration-tests` consume it in `test` scope, and `benchmarking/benchmark-core`
-consumes it in `compile` scope. A build that stops before `package` therefore cannot resolve it: a
-reactor `./mvnw clean test-compile` fails with about 110 "package
-`de.cuioss.sheriff.token.validation.test…` does not exist" errors in `token-sheriff-client`,
-`token-sheriff-validation-quarkus` and `benchmark-core`, and adding `-pl <module> -am` does not help
-(`./mvnw test-compile -pl token-sheriff-client -am` fails the same way). Use `verify` (or
-`package -DskipTests`) instead; `-am` with `verify` builds the jar in the same run. `-DskipTests` does
-not skip every test: `benchmarking/benchmark-integration-wrk` sets the Surefire `skipTests` parameter
-to `false` in its plugin configuration, which overrides the user property, so a reactor
-`package -DskipTests` still runs that module's WRK parser unit tests.
+consumes it in `compile` scope; every consumer declares it with `<type>test-jar</type>` and the
+`generators` classifier. That type lets a reactor build resolve the fixtures from
+`token-sheriff-validation/target/test-classes`, so a reactor `./mvnw clean test-compile`, and
+`./mvnw test-compile -pl <module> -am`, compile without the jar having been built. When you add a new
+consumer of the fixtures, declare it the same way: declared as a plain `jar`, the dependency resolves
+only after `package` and a build stopping before it fails with "package
+`de.cuioss.sheriff.token.validation.test…` does not exist". `-DskipTests` does not skip every test:
+`benchmarking/benchmark-integration-wrk` sets the Surefire `skipTests` parameter to `false` in its
+plugin configuration, which overrides the user property, so a reactor `package -DskipTests` still runs
+that module's WRK parser unit tests.
 
 ### Code Standards
 - **Indentation**: 4 spaces (configured in `.editorconfig`)

@@ -41,7 +41,10 @@ import java.util.Set;
  * The type deliberately implements neither {@link TokenContent} nor {@link MinimalTokenContent}, so a
  * signature-only result cannot reach code that accepts a validated token. It is never cached.
  * <p>
- * Instances are immutable and thread-safe.
+ * An instance is immutable and thread-safe provided its constructor precondition holds: the mapped claims
+ * and the null claim names are copied, but the raw claims are retained as given, so they must already be
+ * deep-immutable. {@code TokenValidator#verifySignature(String)} always passes such a map; a caller that
+ * constructs an instance itself and passes a mutable map gets an instance whose raw claims change with it.
  *
  * @since 1.0
  */
@@ -84,12 +87,13 @@ public final class SignatureVerifiedToken {
      * Creates a new signature-verified token.
      * <p>
      * The given claims map is defensively copied into an unmodifiable map. It must not contain
-     * {@code null} keys or values. The raw claims are retained as given and must already be
-     * deep-immutable, as {@code MapRepresentation#toNativeClaims()} produces them. The null claim names
-     * are copied into an unmodifiable set.
+     * {@code null} keys or values. The raw claims are retained as given, not copied, and must already be
+     * deep-immutable, as {@code MapRepresentation#toNativeClaims()} produces them; the immutability of the
+     * instance rests on this precondition. The null claim names are copied into an unmodifiable set.
      *
      * @param claims         the mapped, unvalidated claims of the token, may be empty
-     * @param rawClaims      the payload as a deep-immutable native JSON map, may be empty
+     * @param rawClaims      the payload as a deep-immutable native JSON map, retained without a copy; may be
+     *                       empty
      * @param nullClaimNames the names of the top-level payload members whose JSON value is {@code null},
      *                       which {@code rawClaims} omits; may be empty
      * @param typHeader      the protected-header {@code typ} value verbatim, {@code null} when absent

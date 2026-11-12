@@ -28,8 +28,13 @@ public enum LogoutTokenCheck {
 
     /**
      * The signature-only entry refused the token: an empty or oversized token, an unknown or unavailable
-     * issuer, a refused header or an invalid signature. The precise reason was already counted as a security
-     * event by {@code TokenValidator#verifySignature(String)}.
+     * issuer, a refused header, an invalid signature, or a claim it could not map. The precise reason was
+     * already counted as a security event by {@code TokenValidator#verifySignature(String)}.
+     * <p>
+     * A claim-mapping failure of {@code iat} or {@code exp} is the exception: it is refused as
+     * {@link #ISSUED_AT} or {@link #EXPIRATION}. A {@code sub} present as a JSON number, boolean, array or
+     * object is refused here, as {@code SIGNATURE}, not as {@link #SUBJECT_OR_SESSION}: the signature-only
+     * entry maps {@code sub} strictly as a string and refuses any other JSON type before the logout checks run.
      */
     SIGNATURE,
 
@@ -59,7 +64,8 @@ public enum LogoutTokenCheck {
 
     /**
      * Neither {@code sub} nor {@code sid} is present as a non-blank string, or one is present as anything else,
-     * a JSON {@code null} included.
+     * a JSON {@code null} included. A {@code sub} present as a non-string JSON value other than {@code null}
+     * never reaches this check: the signature-only entry already refuses it, as {@link #SIGNATURE}.
      */
     SUBJECT_OR_SESSION,
 

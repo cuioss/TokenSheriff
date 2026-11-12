@@ -81,20 +81,25 @@ raw logout token
    |
    v
 LogoutTokenValidator.validate(rawToken)
-   |-- TokenValidator.verifySignature(rawToken) ---> SignatureVerifiedToken   (refused -> SIGNATURE)
+   |-- TokenValidator.verifySignature(rawToken) ---> SignatureVerifiedToken   (refused -> SIGNATURE;
+   |                                                                           unmappable iat -> ISSUED_AT,
+   |                                                                           unmappable exp -> EXPIRATION)
+   |-- now = clock.instant()                         read once per token
    |-- getTypHeader()                                typ check                 (-> TYPE)
-   |-- getRawClaims()                                iss, aud, iat, exp,
+   |-- getRawClaims(), getNullClaimNames()           iss, aud, iat, exp,
    |                                                 events, nonce, sub/sid,
-   |                                                 jti checks                (-> ISSUER ... JWT_ID)
-   |-- LogoutTokenReplayGuard.admit(jti, iat + window)                         (-> REPLAYED / REPLAY_GUARD_FULL)
+   |                                                 jti checks at now         (-> ISSUER ... JWT_ID)
+   |-- LogoutTokenReplayGuard.admit(jti, iat + window, now)                    (-> REPLAYED / REPLAY_GUARD_FULL)
    v
 LogoutTokenValidationResult: accepted claims, or the one failed LogoutTokenCheck
 ----
 
-* **LogoutTokenValidator** - Built with the `TokenValidator`, the expected issuer and audience, the `iat` freshness window, the replay-guard capacity and a clock. It builds its own replay guard from that capacity and clock, runs the checks in a fixed order and returns the first that fails. It is thread-safe; its only mutable state is the guard it owns.
+A claim the signature-only entry cannot map refuses the token before the claim checks run. A present `iat` or `exp` that is not a number keeps the identity of its check, `ISSUED_AT` or `EXPIRATION`; any other unmappable claim, a `sub` that is a JSON number, boolean, array or object among them, is refused as `SIGNATURE`.
+
+* **LogoutTokenValidator** - Built with the `TokenValidator`, the expected issuer and audience, the `iat` freshness window, the replay-guard capacity and a clock. It builds its own replay guard from that capacity, reads the clock once per token, runs the checks in a fixed order against that instant and returns the first that fails. It is thread-safe; its only mutable state is the guard it owns.
 * **LogoutTokenValidationResult** - For an accepted token, the `iss`, the `jti` and the `sub` and/or `sid` that name the session to end; for a refused token, the single failed check and no claim. Its `toString()` names only the outcome.
 * **LogoutTokenCheck** - The bounded set of checks a refusal names. A caller can log or meter it without carrying any text taken from the token.
-* **LogoutTokenReplayGuard** - A bounded, fail-closed store of the SHA-256 digests of admitted `jti` values, internal to the package. Each validator builds its own from the configured capacity and the validator's clock, so retention is decided with the same time source that judges `iat`. It is consulted last, so a token refused by any other check takes no capacity.
+* **LogoutTokenReplayGuard** - A bounded, fail-closed store of the SHA-256 digests of admitted `jti` values, internal to the package. Each validator builds its own from the configured capacity. The guard reads no clock: every admission passes the one instant the validator judged `iat` against, so purge and freshness are decided on the same instant and two clock reads cannot straddle the `iat` plus window edge. It is consulted last, so a token refused by any other check takes no capacity.
 
 The package does not log. Receiving the logout request over HTTP and ending the session the token names stay with the consuming application. The checks and their security rationale are in xref:security-reference.adoc#logout-token-validation[Logout Token Validation].
 
