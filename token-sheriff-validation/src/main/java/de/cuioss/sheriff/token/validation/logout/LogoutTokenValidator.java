@@ -295,7 +295,10 @@ public final class LogoutTokenValidator {
     }
 
     /**
-     * Reads a JSON number as a NumericDate in seconds since the epoch; a fraction is rounded down.
+     * Reads a JSON number as a NumericDate in seconds since the epoch, keeping its fraction: RFC 7519 section 2
+     * permits a non-integer NumericDate, so {@code iat} and {@code exp} are judged, and the replay retention
+     * instant is computed, on the exact claim value. Only a fraction below one nanosecond is truncated, toward
+     * the earlier instant, as {@link Instant} cannot carry it.
      *
      * @param value the claim value
      * @return the instant, empty when the value is not a number or not a representable instant
@@ -305,8 +308,12 @@ public final class LogoutTokenValidator {
             return Optional.empty();
         }
         try {
-            long seconds = new BigDecimal(number.toString()).setScale(0, RoundingMode.FLOOR).longValueExact();
-            return Optional.of(Instant.ofEpochSecond(seconds));
+            BigDecimal exact = new BigDecimal(number.toString());
+            BigDecimal wholeSeconds = exact.setScale(0, RoundingMode.FLOOR);
+            // exact - floor(exact) lies in [0, 1), so the nanosecond part lies in [0, 999_999_999]
+            long nanos = exact.subtract(wholeSeconds).movePointRight(9).setScale(0, RoundingMode.FLOOR)
+                    .longValueExact();
+            return Optional.of(Instant.ofEpochSecond(wholeSeconds.longValueExact(), nanos));
         } catch (NumberFormatException | ArithmeticException | DateTimeException e) {
             return Optional.empty();
         }

@@ -306,6 +306,86 @@ class LogoutTokenValidatorTest {
         }
     }
 
+    /**
+     * RFC 7519 section 2 permits a non-integer NumericDate. The clock sits half a second past {@link #NOW}, so
+     * every edge lies inside a second, and each fraction is exact in binary so the JSON number carries it
+     * unchanged. A validator that rounded the claim to whole seconds would decide the cases marked below the
+     * other way.
+     */
+    @Nested
+    @DisplayName("Fractional NumericDate")
+    class FractionalNumericDate {
+
+        private LogoutTokenValidator onMidSecondClock;
+
+        @BeforeEach
+        void setUpMidSecondClock() {
+            onMidSecondClock = validator(100, Clock.fixed(NOW.plusMillis(500), ZoneOffset.UTC));
+        }
+
+        @Test
+        @DisplayName("exp a fraction of a second after a clock inside the same second is accepted")
+        void shouldAcceptExpirationFractionallyInFuture() {
+            // Rounded down, exp would be NOW, which is before the clock, and the token would be refused
+            assertTrue(onMidSecondClock.validate(withMembers("exp", NOW, ".75", "jti-exp-future")).isAccepted());
+        }
+
+        @Test
+        @DisplayName("exp a fraction of a second before the clock is refused as EXPIRATION")
+        void shouldRefuseExpirationFractionallyInPast() {
+            assertRefused(LogoutTokenCheck.EXPIRATION,
+                    onMidSecondClock.validate(withMembers("exp", NOW, ".25", "jti-exp-past")));
+        }
+
+        @Test
+        @DisplayName("iat a fraction of a second inside the earliest edge is accepted, just outside is refused")
+        void shouldHonourFractionalEarliestEdge() {
+            // The earliest edge is NOW - WINDOW + 0.5; rounded down, the inside case would fall before it
+            assertTrue(onMidSecondClock.validate(withMembers("iat", NOW.minus(WINDOW), ".75", "jti-early-inside"))
+                    .isAccepted());
+            assertRefused(LogoutTokenCheck.ISSUED_AT,
+                    onMidSecondClock.validate(withMembers("iat", NOW.minus(WINDOW), ".25", "jti-early-outside")));
+        }
+
+        @Test
+        @DisplayName("iat a fraction of a second inside the latest edge is accepted, just outside is refused")
+        void shouldHonourFractionalLatestEdge() {
+            // The latest edge is NOW + WINDOW + 0.5; rounded down, the outside case would fall on NOW + WINDOW
+            assertTrue(onMidSecondClock.validate(withMembers("iat", NOW.plus(WINDOW), ".25", "jti-late-inside"))
+                    .isAccepted());
+            assertRefused(LogoutTokenCheck.ISSUED_AT,
+                    onMidSecondClock.validate(withMembers("iat", NOW.plus(WINDOW), ".75", "jti-late-outside")));
+        }
+
+        @Test
+        @DisplayName("A fractional iat retains the jti until iat plus the window, exactly")
+        void shouldRetainJtiUntilFractionalIssuedAtPlusWindow() {
+            MutableClock clock = new MutableClock(NOW);
+            LogoutTokenValidator onMutableClock = validator(10, clock);
+            Map<String, String> members = validJsonMembers();
+            members.put("iat", NOW.getEpochSecond() + ".75");
+            members.put("exp", String.valueOf(NOW.plus(WINDOW).plusSeconds(60).getEpochSecond()));
+            String token = signedJson(members);
+            assertTrue(onMutableClock.validate(token).isAccepted(), "first presentation");
+
+            // At NOW + WINDOW + 0.5 the token is still fresh, so the entry must still be retained
+            clock.set(NOW.plus(WINDOW).plusMillis(500));
+
+            assertRefused(LogoutTokenCheck.REPLAYED, onMutableClock.validate(token));
+        }
+
+        /**
+         * @return a signed logout token whose {@code claim} is {@code base} in epoch seconds followed by the
+         * literal {@code fraction}, and whose {@code jti} is {@code jti}
+         */
+        private String withMembers(String claim, Instant base, String fraction, String jti) {
+            Map<String, String> members = validJsonMembers();
+            members.put(claim, base.getEpochSecond() + fraction);
+            members.put("jti", quoted(jti));
+            return signedJson(members);
+        }
+    }
+
     @Nested
     @DisplayName("EVENTS")
     class Events {
