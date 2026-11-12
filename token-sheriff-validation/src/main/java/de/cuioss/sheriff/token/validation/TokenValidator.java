@@ -23,6 +23,7 @@ import de.cuioss.sheriff.token.validation.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.context.RefreshTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
+import de.cuioss.sheriff.token.validation.domain.token.SignatureVerifiedToken;
 import de.cuioss.sheriff.token.validation.domain.token.UnvalidatedRefreshToken;
 import de.cuioss.sheriff.token.validation.dpop.DpopProofValidator;
 import de.cuioss.sheriff.token.validation.dpop.DpopReplayProtection;
@@ -63,6 +64,11 @@ import java.util.Map;
  *   <li>Token building</li>
  *   <li>Claim validation</li>
  * </ol>
+ * <p>
+ * {@link #verifySignature(String)} is a separate entry that stops after the signature: it returns a
+ * {@link SignatureVerifiedToken} carrying the mapped claims and the verbatim {@code typ} header with
+ * <strong>no claim verdict</strong>. Its result is not an authentication decision and is not a
+ * {@code TokenContent}.
  * <p>
  * This class is thread-safe after construction.
  * All validation methods can be called concurrently from multiple threads.
@@ -489,6 +495,41 @@ public class TokenValidator implements Closeable {
         securityEventCounter.increment(SecurityEventCounter.EventType.REFRESH_TOKEN_CREATED);
 
         return refreshToken;
+    }
+
+    /**
+     * Verifies the signature of a token without reaching any claim verdict.
+     * <p>
+     * <strong>WARNING:</strong> the result is not an authentication decision. The token string limits,
+     * issuer resolution (the issuer must be enabled and its JWKS loader healthy), the header checks for
+     * algorithm, key ID and embedded JWK, and the signature are verified, and the claims are mapped.
+     * No claim is validated: an expired token, a token issued for another audience or a token without
+     * {@code sub} or {@code azp} is returned as long as its signature is valid. The issuer's expected
+     * token type is not checked; the {@code typ} header is returned verbatim for the caller to judge.
+     * A JWE is decrypted when JWE decryption is configured.
+     * <p>
+     * The access-token cache is neither read nor written, and no performance measurement is recorded.
+     * A success counts {@link SecurityEventCounter.EventType#SIGNATURE_ONLY_VERIFIED} once; a refusal
+     * counts the event of the stage that refused the token.
+     *
+     * @param rawToken the raw token string
+     * @return the signature-verified token carrying the unvalidated claims and the verbatim {@code typ}
+     * @throws TokenValidationException if the token string, the issuer, the header or the signature is
+     *                                  refused, or a claim cannot be mapped
+     */
+    public SignatureVerifiedToken verifySignature(String rawToken) {
+        LOGGER.debug("Verifying token signature");
+
+        // Pre-pipeline validation (null, blank, size)
+        tokenStringValidator.validate(rawToken);
+
+        // Delegate to the ID token pipeline's signature-only sibling (no claim validation, no cache, no metrics)
+        SignatureVerifiedToken verifiedToken = idTokenPipeline.verifySignature(rawToken);
+
+        LOGGER.debug("Successfully verified token signature");
+        securityEventCounter.increment(SecurityEventCounter.EventType.SIGNATURE_ONLY_VERIFIED);
+
+        return verifiedToken;
     }
 
     /**

@@ -43,6 +43,9 @@ import java.util.Optional;
  *   <li>ID Tokens - via {@link #createIdToken}</li>
  * </ul>
  * <p>
+ * {@link #mapClaims} maps the claims alone, without building a token content object, for the
+ * signature-only verification entry.
+ * <p>
  * During token creation, the builder extracts and maps claims from the token body
  * using appropriate claim mappers based on the issuer configuration or standard claim names.
  * <p>
@@ -130,6 +133,21 @@ public class TokenBuilder {
         Map<String, ClaimValue> claims = extractClaims(body);
 
         return Optional.of(new IdTokenContent(claims, decodedJwt.rawToken()));
+    }
+
+    /**
+     * Maps the claims of a decoded JWT without building a token content object.
+     * <p>
+     * Uses the same claim mappers as {@link #createIdToken(DecodedJwt)}, including the strict
+     * string guard on {@code sub} and the plain-string fallback for unknown claims. No claim is
+     * validated: expiry, audience and every other claim rule are left to the caller.
+     *
+     * @param decodedJwt the decoded JWT
+     * @return an unmodifiable map of claim names to mapped claim values, empty for an empty body
+     * @throws TokenValidationException if a claim value is malformed and cannot be mapped
+     */
+    public Map<String, ClaimValue> mapClaims(DecodedJwt decodedJwt) {
+        return Map.copyOf(extractClaims(decodedJwt.body()));
     }
 
 

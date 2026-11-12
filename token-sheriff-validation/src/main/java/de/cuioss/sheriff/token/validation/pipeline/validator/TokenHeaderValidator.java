@@ -105,6 +105,28 @@ public class TokenHeaderValidator {
     }
 
     /**
+     * Validates a decoded JWT Token's header for signature-only verification.
+     * <p>
+     * Applies the same algorithm, key ID and embedded-JWK checks as
+     * {@link #validate(DecodedJwt, TokenValidationRequest)} but skips the per-issuer
+     * {@code expectedTokenType} check: one issuer signs several token types with the same keys, and the
+     * signature-only entry returns the {@code typ} header verbatim for the caller to judge.
+     *
+     * @param decodedJwt the decoded JWT Token to validate
+     * @throws TokenValidationException if the algorithm is missing or unsupported, the key ID is
+     *                                  missing, or the header embeds a JWK
+     */
+    public void validateWithoutTokenType(DecodedJwt decodedJwt) {
+        LOGGER.trace("Validating token header without token type");
+
+        validateAlgorithm(decodedJwt);
+        validateKeyId(decodedJwt);
+        validateNoEmbeddedJwk(decodedJwt);
+
+        LOGGER.debug("Token header is valid (token type not checked)");
+    }
+
+    /**
      * Validates that the token does not contain an embedded JWK in the header.
      * This is protection against the embedded JWK attack (CVE-2018-0114).
      *

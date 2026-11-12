@@ -124,7 +124,10 @@ public class SecurityEventCounter {
         ACCESS_TOKEN_CREATED(null),
         ID_TOKEN_CREATED(null),
         REFRESH_TOKEN_CREATED(null),
-        ACCESS_TOKEN_CACHE_HIT(null);
+        ACCESS_TOKEN_CACHE_HIT(null),
+        // A signature verified without any claim verdict (TokenValidator#verifySignature).
+        // Counted apart from ID_TOKEN_CREATED so that count stays limited to validated ID tokens.
+        SIGNATURE_ONLY_VERIFIED(null);
 
         private final EventCategory category;
 

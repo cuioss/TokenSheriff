@@ -27,6 +27,10 @@
  *   <li>{@link de.cuioss.sheriff.token.validation.domain.token.UnvalidatedRefreshToken} - Unvalidated container for OAuth2 refresh tokens</li>
  * </ul>
  * <p>
+ * {@link de.cuioss.sheriff.token.validation.domain.token.SignatureVerifiedToken} stands outside this
+ * hierarchy: it carries a token whose signature was verified but whose claims were not, so it must
+ * never be treated as an authentication result.
+ * <p>
  * The token implementations:
  * <ul>
  *   <li>Provide type-safe access to claims through consistent APIs</li>

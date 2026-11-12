@@ -19,9 +19,11 @@ import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfigCache;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
+import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.context.ValidationContext;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
+import de.cuioss.sheriff.token.validation.domain.token.SignatureVerifiedToken;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenClaimValidator;
 import de.cuioss.sheriff.token.validation.pipeline.validator.TokenHeaderValidator;
@@ -29,6 +31,7 @@ import de.cuioss.sheriff.token.validation.pipeline.validator.TokenSignatureValid
 import de.cuioss.tools.logging.CuiLogger;
 
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 /**
  * Pipeline for validating ID tokens.
@@ -47,6 +50,10 @@ import java.util.Map;
  *   <li>Build typed IdTokenContent object</li>
  *   <li>Validate token claims (expiration, audience, etc.)</li>
  * </ol>
+ * <p>
+ * {@link #verifySignature(String)} runs steps 1 to 6 for a signature-only verification: the header
+ * check skips the issuer's expected token type, claims are mapped without building an
+ * {@code IdTokenContent}, and step 7 does not run.
  * <p>
  * <strong>Note:</strong> TokenStringValidator has already validated that the token
  * is non-null, non-blank, and within size limits before this pipeline is called.
@@ -115,33 +122,14 @@ public class IdTokenValidationPipeline {
      */
     public IdTokenContent validate(IdTokenRequest request) {
         LOGGER.debug("Validating ID token");
-        String tokenString = request.tokenString();
 
         // TokenStringValidator has already checked: null, blank, size
 
-        // 1. Parse token
-        DecodedJwt decodedJwt = jwtParser.decode(tokenString);
-
-        // 2. Extract issuer
-        String issuerString = decodedJwt.getIssuer().orElseThrow(() -> {
-            LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_CLAIM, "iss");
-            securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_CLAIM);
-            return new TokenValidationException(
-                    SecurityEventCounter.EventType.MISSING_CLAIM,
-                    "Missing required issuer (iss) claim in token"
-            );
-        });
-
-        // 3. Resolve issuer config
-        IssuerConfig issuerConfig = issuerConfigCache.resolveConfig(issuerString);
-
-        // 4. Validate header
-        ValidatorLookup.getOrThrow(headerValidators, issuerConfig.getIssuerIdentifier(), "header validator")
-                .validate(decodedJwt, request);
-
-        // 5. Validate signature
-        ValidatorLookup.getOrThrow(signatureValidators, issuerConfig.getIssuerIdentifier(), "signature validator")
-                .validateSignature(decodedJwt);
+        // 1-5. Parse, extract issuer, resolve issuer config, validate header and signature
+        VerifiedJwt verified = parseAndVerify(request.tokenString(),
+                (headerValidator, decodedJwt) -> headerValidator.validate(decodedJwt, request));
+        DecodedJwt decodedJwt = verified.decodedJwt();
+        IssuerConfig issuerConfig = verified.issuerConfig();
 
         // 6. Build token
         TokenBuilder tokenBuilder = ValidatorLookup.getOrThrow(tokenBuilders, issuerConfig.getIssuerIdentifier(), "token builder");
@@ -166,5 +154,83 @@ public class IdTokenValidationPipeline {
         LOGGER.debug("Successfully validated ID token");
 
         return validatedToken;
+    }
+
+    /**
+     * Verifies the signature of a token and maps its claims, without reaching any claim verdict.
+     * <p>
+     * Runs steps 1 to 6 of {@link #validate(IdTokenRequest)} — parse (including JWE decryption),
+     * issuer extraction, issuer resolution, header, signature and claim mapping — with two
+     * differences: the header check skips the issuer's {@code expectedTokenType}, and claims are
+     * mapped without building an {@link IdTokenContent}. Step 7, claim validation, does not run, so
+     * an expired token, a token for another audience or a token without {@code sub} is returned as
+     * long as its signature is valid. No security event is counted for the success; a refusal
+     * counts the event of the stage that refused it.
+     *
+     * @param tokenString the token string (guaranteed non-null, non-blank, within size limits)
+     * @return the signature-verified token carrying the unvalidated claims and the verbatim
+     *         {@code typ} header
+     * @throws TokenValidationException if parsing, issuer resolution, the header check, the
+     *                                  signature check or claim mapping fails
+     */
+    public SignatureVerifiedToken verifySignature(String tokenString) {
+        LOGGER.debug("Verifying token signature without claim validation");
+
+        VerifiedJwt verified = parseAndVerify(tokenString,
+                (headerValidator, decodedJwt) -> headerValidator.validateWithoutTokenType(decodedJwt));
+        DecodedJwt decodedJwt = verified.decodedJwt();
+
+        Map<String, ClaimValue> claims = ValidatorLookup.getOrThrow(tokenBuilders,
+                verified.issuerConfig().getIssuerIdentifier(), "token builder").mapClaims(decodedJwt);
+
+        LOGGER.debug("Successfully verified token signature");
+        return new SignatureVerifiedToken(claims, decodedJwt.header().getTyp().orElse(null), decodedJwt.rawToken());
+    }
+
+    /**
+     * Runs the steps shared by {@link #validate(IdTokenRequest)} and {@link #verifySignature(String)}:
+     * parse, issuer extraction, issuer resolution, header check and signature check.
+     *
+     * @param tokenString the token string
+     * @param headerCheck the header check to apply with the issuer's header validator
+     * @return the decoded token and the resolved issuer configuration
+     * @throws TokenValidationException if any of the steps fails
+     */
+    private VerifiedJwt parseAndVerify(String tokenString, BiConsumer<TokenHeaderValidator, DecodedJwt> headerCheck) {
+        // 1. Parse token
+        DecodedJwt decodedJwt = jwtParser.decode(tokenString);
+
+        // 2. Extract issuer
+        String issuerString = decodedJwt.getIssuer().orElseThrow(() -> {
+            LOGGER.warn(JWTValidationLogMessages.WARN.MISSING_CLAIM, "iss");
+            securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_CLAIM);
+            return new TokenValidationException(
+                    SecurityEventCounter.EventType.MISSING_CLAIM,
+                    "Missing required issuer (iss) claim in token"
+            );
+        });
+
+        // 3. Resolve issuer config
+        IssuerConfig issuerConfig = issuerConfigCache.resolveConfig(issuerString);
+
+        // 4. Validate header
+        headerCheck.accept(
+                ValidatorLookup.getOrThrow(headerValidators, issuerConfig.getIssuerIdentifier(), "header validator"),
+                decodedJwt);
+
+        // 5. Validate signature
+        ValidatorLookup.getOrThrow(signatureValidators, issuerConfig.getIssuerIdentifier(), "signature validator")
+                .validateSignature(decodedJwt);
+
+        return new VerifiedJwt(decodedJwt, issuerConfig);
+    }
+
+    /**
+     * A decoded token whose header and signature passed, with the issuer configuration it resolved to.
+     *
+     * @param decodedJwt   the decoded token
+     * @param issuerConfig the resolved issuer configuration
+     */
+    private record VerifiedJwt(DecodedJwt decodedJwt, IssuerConfig issuerConfig) {
     }
 }
