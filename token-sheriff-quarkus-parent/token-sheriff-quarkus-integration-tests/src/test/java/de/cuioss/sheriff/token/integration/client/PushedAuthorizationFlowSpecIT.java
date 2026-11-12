@@ -48,9 +48,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -91,6 +93,9 @@ class PushedAuthorizationFlowSpecIT extends BaseIntegrationTest {
     /** The username input of Keycloak's login form — present only when the login page is served. */
     private static final Pattern LOGIN_FORM_USERNAME = Pattern.compile("name=\"username\"");
 
+    /** The bound on same-origin {@code 3xx} hops one browser-like follow takes before it stops. */
+    private static final int MAX_SAME_ORIGIN_HOPS = 5;
+
     @Test
     @DisplayName("Should push the request and return a single-use redirect carrying only client_id and request_uri")
     void shouldAuthorizeThroughPushedRequest() throws Exception {
@@ -118,18 +123,20 @@ class PushedAuthorizationFlowSpecIT extends BaseIntegrationTest {
                 () -> assertTrue(query.get("request_uri").startsWith(REQUEST_URI_PREFIX),
                         "the request_uri must be the opaque URN Keycloak issued, got " + query.get("request_uri")));
 
-        HttpResponse<String> first = follow(authorizationUrl);
-        LOGGER.debug("First redirect follow: status=%s", first.statusCode());
+        FollowResult first = follow(authorizationUrl);
+        LOGGER.debug("First redirect follow: %s", first.describe());
         assertAll("Keycloak accepts the client_id + request_uri redirect",
-                () -> assertEquals(200, first.statusCode(), "Keycloak must serve the login page"),
-                () -> assertTrue(LOGIN_FORM_USERNAME.matcher(first.body()).find(),
-                        "the response must be the login form, not an error page"));
+                () -> assertEquals(200, first.response().statusCode(),
+                        "Keycloak must serve the login page, " + first.describe()),
+                () -> assertTrue(LOGIN_FORM_USERNAME.matcher(first.response().body()).find(),
+                        "the response must be the login form, not an error page, " + first.describe()));
 
-        HttpResponse<String> second = follow(authorizationUrl);
-        LOGGER.debug("Second redirect follow: status=%s", second.statusCode());
-        assertFalse(second.statusCode() == 200 && LOGIN_FORM_USERNAME.matcher(second.body()).find(),
-                "a request_uri is single-use (RFC 9126 §4): the second follow must not serve the login page,"
-                        + " got status " + second.statusCode());
+        FollowResult second = follow(authorizationUrl);
+        LOGGER.debug("Second redirect follow: %s", second.describe());
+        assertFalse(second.response().statusCode() == 200
+                        && LOGIN_FORM_USERNAME.matcher(second.response().body()).find(),
+                "a request_uri is single-use (RFC 9126 §4): the second follow must not serve the login page, "
+                        + second.describe());
     }
 
     private static ClientConfiguration clientConfiguration() {
@@ -181,17 +188,72 @@ class PushedAuthorizationFlowSpecIT extends BaseIntegrationTest {
         return parameters;
     }
 
-    /** Follows the redirect as a fresh browser would: no session cookies, no automatic redirects. */
-    private static HttpResponse<String> follow(String authorizationUrl) throws Exception {
+    /**
+     * Follows the redirect as a fresh browser would. Each call starts with its own empty cookie jar, so no
+     * session cookie is shared between two follows; within one follow the jar is kept across hops, and
+     * same-origin {@code 3xx} hops (same scheme, host and port as the authorization URL) are followed
+     * transparently, up to {@link #MAX_SAME_ORIGIN_HOPS}. A {@code Location} that leaves the origin is
+     * never followed: that response is returned so the caller can inspect it.
+     */
+    private static FollowResult follow(String authorizationUrl) throws Exception {
         HttpClient browser = HttpClient.newBuilder()
                 .sslContext(trustAllContext())
                 .cookieHandler(new CookieManager())
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
-        HttpRequest request = HttpRequest.newBuilder().uri(URI.create(authorizationUrl))
-                .header("Accept", "text/html").GET().build();
-        return browser.send(request, HttpResponse.BodyHandlers.ofString());
+        URI origin = URI.create(authorizationUrl);
+        URI current = origin;
+        List<String> locations = new ArrayList<>();
+        for (int hop = 0; ; hop++) {
+            HttpRequest request = HttpRequest.newBuilder().uri(current)
+                    .header("Accept", "text/html").GET().build();
+            HttpResponse<String> response = browser.send(request, HttpResponse.BodyHandlers.ofString());
+            Optional<String> location = isRedirect(response.statusCode())
+                    ? response.headers().firstValue("Location")
+                    : Optional.empty();
+            LOGGER.debug("Redirect follow hop %s: status=%s, Location=%s", hop, response.statusCode(),
+                    location.orElse("<none>"));
+            if (location.isEmpty()) {
+                return new FollowResult(response, locations);
+            }
+            locations.add(location.get());
+            URI next = current.resolve(location.get());
+            if (!sameOrigin(origin, next) || hop + 1 >= MAX_SAME_ORIGIN_HOPS) {
+                return new FollowResult(response, locations);
+            }
+            current = next;
+        }
+    }
+
+    private static boolean isRedirect(int status) {
+        return status >= 300 && status < 400;
+    }
+
+    private static boolean sameOrigin(URI origin, URI candidate) {
+        return origin.getScheme().equalsIgnoreCase(String.valueOf(candidate.getScheme()))
+                && origin.getHost().equalsIgnoreCase(String.valueOf(candidate.getHost()))
+                && effectivePort(origin) == effectivePort(candidate);
+    }
+
+    private static int effectivePort(URI uri) {
+        if (uri.getPort() != -1) {
+            return uri.getPort();
+        }
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+    }
+
+    /**
+     * The final response of one redirect follow together with the {@code Location} of every
+     * {@code 3xx} hop seen on the way, so an assertion failure is diagnosable from its message alone.
+     */
+    private record FollowResult(HttpResponse<String> response, List<String> locations) {
+
+        String describe() {
+            return "final status=" + response.statusCode() + ", final Location="
+                    + response.headers().firstValue("Location").orElse("<none>")
+                    + ", Location chain=" + locations;
+        }
     }
 
     private static SSLContext trustAllContext() throws Exception {
