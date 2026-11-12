@@ -37,7 +37,7 @@
  *   <li>{@code events} is a JSON object whose
  *   {@code http://schemas.openid.net/event/backchannel-logout} member is a JSON object</li>
  *   <li>{@code nonce} is absent</li>
- *   <li>{@code sub} and/or {@code sid} is present as a string</li>
+ *   <li>{@code sub} and/or {@code sid} is present, and each of them that is present is a non-blank string</li>
  *   <li>{@code jti} is present as a non-blank string</li>
  *   <li>the {@code jti} has not been seen within its retention, and the replay guard has room for it</li>
  * </ol>

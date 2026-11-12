@@ -93,7 +93,8 @@ public final class LogoutTokenValidator {
      * @param expectedIssuer   the issuer the {@code iss} claim must equal
      * @param expectedAudience the audience the {@code aud} claim must contain
      * @param freshnessWindow  how far {@code iat} may lie before or after now, positive
-     * @param replayGuard      the guard that refuses a {@code jti} seen before
+     * @param replayGuard      the guard that refuses a {@code jti} seen before; it must be built with the same
+     *                         time source as {@code clock} (see {@link LogoutTokenReplayGuard#LogoutTokenReplayGuard(int, Clock)})
      * @param clock            the clock that decides {@code iat} freshness and {@code exp}
      * @throws IllegalArgumentException if {@code freshnessWindow} is zero or negative, or an identifier is blank
      */

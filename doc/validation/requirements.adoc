@@ -567,7 +567,7 @@ The library must validate a logout token of https://openid.net/specs/openid-conn
 . `exp` is a number not in the past
 . `events` is a JSON object whose `http://schemas.openid.net/event/backchannel-logout` member is a JSON object
 . `nonce` is absent
-. `sub` and/or `sid` is present as a string
+. `sub` and/or `sid` is present, and each of them that is present is a non-blank string
 . `jti` is present as a non-blank string
 . The `jti` passes the replay guard of xref:#VALIDATION-13.5[VALIDATION-13.5]
 

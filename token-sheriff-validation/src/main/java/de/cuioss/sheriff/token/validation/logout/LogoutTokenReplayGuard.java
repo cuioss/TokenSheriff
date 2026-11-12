@@ -69,7 +69,12 @@ public final class LogoutTokenReplayGuard {
      * Creates an empty guard.
      *
      * @param capacity the maximum number of live entries, greater than zero
-     * @param clock    the clock that decides whether an entry's retention has passed
+     * @param clock    the clock that decides whether an entry's retention has passed. When the guard serves a
+     *                 {@link LogoutTokenValidator}, this MUST be the same time source as the validator's clock:
+     *                 the validator admits an {@code iat} up to its freshness window ahead of its own clock and
+     *                 retains the {@code jti} until {@code iat} plus that window, so a guard clock that runs
+     *                 ahead of the validator's would purge a {@code jti} while its token is still accepted as
+     *                 fresh, and a replay would be admitted
      * @throws IllegalArgumentException if {@code capacity} is not greater than zero
      */
     public LogoutTokenReplayGuard(int capacity, Clock clock) {
