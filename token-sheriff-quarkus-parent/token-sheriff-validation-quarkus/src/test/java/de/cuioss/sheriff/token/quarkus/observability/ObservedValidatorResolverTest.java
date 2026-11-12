@@ -15,12 +15,18 @@
  */
 package de.cuioss.sheriff.token.quarkus.observability;
 
+import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.JwksType;
+import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.token.quarkus.producer.TokenValidatorProducer;
 import de.cuioss.sheriff.token.quarkus.test.TestConfig;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
+import de.cuioss.sheriff.token.validation.IssuerStatusView;
 import de.cuioss.sheriff.token.validation.TokenValidator;
+import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
+import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import jakarta.enterprise.inject.Instance;
@@ -31,8 +37,12 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import static de.cuioss.test.juli.LogAsserts.assertLogMessagePresentContaining;
 import static org.easymock.EasyMock.*;
@@ -241,12 +251,179 @@ class ObservedValidatorResolverTest {
         }
     }
 
+    @Nested
+    @DisplayName("Issuer status reporting")
+    class IssuerStatusReporting {
+
+        private static final String EXTERNAL_ISSUER = "https://external-issuer.example.com";
+
+        @Test
+        @DisplayName("should report the external validator's issuer statuses when the opt-in is set")
+        void shouldReportExternalIssuerStatusesWhenOptedIn() {
+            try (TokenValidator external = externalValidator()) {
+                RecordingHandle producerHandle = new RecordingHandle(TokenValidatorProducer.class,
+                        createNiceMock(TokenValidator.class));
+                ObservedValidatorResolver resolver = new ObservedValidatorResolver(
+                        reportingConfig("true"),
+                        validatorInstance(List.of(producerHandle, new RecordingHandle(ForeignValidatorAlpha.class, external))),
+                        valueInstance(new ArrayList<>()),
+                        valueInstance(ParserConfig.builder().build()));
+
+                List<IssuerStatusView> statuses = resolver.observedIssuerStatuses();
+
+                assertAll("opted-in external reporting",
+                        () -> assertEquals(ObservedValidatorResolver.Outcome.EXTERNAL_VALIDATOR, resolver.outcome()),
+                        () -> assertEquals(List.of(EXTERNAL_ISSUER),
+                                statuses.stream().map(IssuerStatusView::issuerIdentifier).toList(),
+                                "the external validator's enabled issuers must be reported"),
+                        () -> assertEquals(LoaderStatus.OK, statuses.getFirst().loaderStatus()),
+                        () -> assertTrue(resolver.observedIssuerConfigs().isEmpty(),
+                                "observedIssuerConfigs() stays empty for an external validator"),
+                        () -> assertFalse(producerHandle.wasGetInvoked(),
+                                "Negative control: the TokenValidatorProducer handle must never be get()-ed"));
+            }
+        }
+
+        @Test
+        @DisplayName("should report no issuer statuses for an external validator without the opt-in")
+        void shouldReportNothingWithoutOptIn() {
+            try (TokenValidator external = externalValidator()) {
+                ObservedValidatorResolver defaultResolver = new ObservedValidatorResolver(
+                        new TestConfig(Map.of()),
+                        validatorInstance(new RecordingHandle(ForeignValidatorAlpha.class, external)),
+                        valueInstance(new ArrayList<>()),
+                        valueInstance(ParserConfig.builder().build()));
+                ObservedValidatorResolver optedOutResolver = new ObservedValidatorResolver(
+                        reportingConfig("false"),
+                        validatorInstance(new RecordingHandle(ForeignValidatorAlpha.class, external)),
+                        valueInstance(new ArrayList<>()),
+                        valueInstance(ParserConfig.builder().build()));
+
+                assertAll("default is off",
+                        () -> assertEquals(ObservedValidatorResolver.Outcome.EXTERNAL_VALIDATOR, defaultResolver.outcome()),
+                        () -> assertTrue(defaultResolver.observedIssuerStatuses().isEmpty(),
+                                "an absent key must mean no reporting"),
+                        () -> assertTrue(optedOutResolver.observedIssuerStatuses().isEmpty(),
+                                "an explicit false must mean no reporting"));
+            }
+        }
+
+        @Test
+        @DisplayName("should report no issuer statuses on PROPERTY_CONFIGURED even with the opt-in")
+        void shouldReportNothingWhenPropertyConfigured() {
+            TokenValidator produced = createNiceMock(TokenValidator.class);
+            List<IssuerConfig> producedIssuerConfigs = new ArrayList<>();
+            Map<String, String> properties = new HashMap<>(Map.of(
+                    JwtPropertyKeys.ISSUERS.ENABLED.formatted(TEST_ISSUER), "true",
+                    JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(TEST_ISSUER), "https://example.com"));
+            properties.put(JwtPropertyKeys.HEALTH.JWKS.REPORT_EXTERNAL_VALIDATOR, "true");
+            ObservedValidatorResolver resolver = new ObservedValidatorResolver(
+                    new TestConfig(properties),
+                    validatorInstance(new RecordingHandle(TokenValidatorProducer.class, produced)),
+                    valueInstance(producedIssuerConfigs),
+                    valueInstance(ParserConfig.builder().build()));
+
+            assertAll("property-configured resolution is unchanged by the opt-in",
+                    () -> assertEquals(ObservedValidatorResolver.Outcome.PROPERTY_CONFIGURED, resolver.outcome()),
+                    () -> assertSame(producedIssuerConfigs, resolver.observedIssuerConfigs()),
+                    () -> assertTrue(resolver.observedIssuerStatuses().isEmpty(),
+                            "the opt-in applies to external validators only"));
+        }
+
+        @Test
+        @DisplayName("should report no issuer statuses when several foreign validators exist, even with the opt-in")
+        void shouldReportNothingWhenAmbiguous() {
+            ObservedValidatorResolver resolver = new ObservedValidatorResolver(
+                    reportingConfig("true"),
+                    validatorInstance(List.of(
+                            new RecordingHandle(ForeignValidatorAlpha.class, createNiceMock(TokenValidator.class)),
+                            new RecordingHandle(ForeignValidatorBeta.class, createNiceMock(TokenValidator.class)))),
+                    valueInstance(new ArrayList<>()),
+                    valueInstance(ParserConfig.builder().build()));
+
+            assertEquals(ObservedValidatorResolver.Outcome.NOT_CONFIGURED, resolver.outcome());
+            assertTrue(resolver.observedIssuerStatuses().isEmpty(),
+                    "an ambiguous resolution observes no validator and reports no issuer");
+        }
+
+        @Test
+        @DisplayName("should honour the pinned opt-in and default it to off")
+        void shouldHonourPinnedOptIn() {
+            try (TokenValidator external = externalValidator()) {
+                ObservedValidatorResolver optedIn = new ObservedValidatorResolver(
+                        ObservedValidatorResolver.Outcome.EXTERNAL_VALIDATOR, external, List.of(), null, true);
+                ObservedValidatorResolver pinnedDefault = new ObservedValidatorResolver(
+                        ObservedValidatorResolver.Outcome.EXTERNAL_VALIDATOR, external, List.of(), null);
+                ObservedValidatorResolver notConfigured = new ObservedValidatorResolver(
+                        ObservedValidatorResolver.Outcome.NOT_CONFIGURED, null, List.of(), null, true);
+
+                assertAll("pinned opt-in",
+                        () -> assertEquals(List.of(EXTERNAL_ISSUER), optedIn.observedIssuerStatuses().stream()
+                                .map(IssuerStatusView::issuerIdentifier).toList()),
+                        () -> assertTrue(pinnedDefault.observedIssuerStatuses().isEmpty(),
+                                "the four-argument constructor keeps the opt-in off"),
+                        () -> assertTrue(notConfigured.observedIssuerStatuses().isEmpty(),
+                                "NOT_CONFIGURED reports no issuer even with the opt-in"));
+            }
+        }
+
+        private static Config reportingConfig(String value) {
+            return new TestConfig(Map.of(JwtPropertyKeys.HEALTH.JWKS.REPORT_EXTERNAL_VALIDATOR, value));
+        }
+
+        private static TokenValidator externalValidator() {
+            return TokenValidator.builder()
+                    .issuerConfig(IssuerConfig.builder()
+                            .issuerIdentifier(EXTERNAL_ISSUER)
+                            .audienceValidationDisabled(true)
+                            .jwksLoader(new OkJwksLoader())
+                            .build())
+                    .build();
+        }
+    }
+
     private static ObservedValidatorResolver resolverOver(RecordingHandle... handles) {
         return new ObservedValidatorResolver(
                 new TestConfig(Map.of()),
                 validatorInstance(List.of(handles)),
                 valueInstance(new ArrayList<>()),
                 valueInstance(ParserConfig.builder().build()));
+    }
+
+    /**
+     * An in-memory JWKS loader that always reports {@link LoaderStatus#OK} and serves no key.
+     */
+    private static final class OkJwksLoader implements JwksLoader {
+
+        @Override
+        public Optional<KeyInfo> getKeyInfo(String kid) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Set<String> getKeyIds() {
+            return Set.of();
+        }
+
+        @Override
+        public JwksType getJwksType() {
+            return JwksType.MEMORY;
+        }
+
+        @Override
+        public LoaderStatus getLoaderStatus() {
+            return LoaderStatus.OK;
+        }
+
+        @Override
+        public Optional<String> getIssuerIdentifier() {
+            return Optional.empty();
+        }
+
+        @Override
+        public CompletableFuture<LoaderStatus> initJWKSLoader(SecurityEventCounter securityEventCounter) {
+            return CompletableFuture.completedFuture(LoaderStatus.OK);
+        }
     }
 
     private static Config configWithEnabledIssuer() {

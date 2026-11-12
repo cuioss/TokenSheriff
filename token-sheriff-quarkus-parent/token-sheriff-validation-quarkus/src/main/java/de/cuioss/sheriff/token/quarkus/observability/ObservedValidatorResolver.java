@@ -17,8 +17,10 @@ package de.cuioss.sheriff.token.quarkus.observability;
 
 import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.quarkus.config.IssuerConfigResolver;
+import de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.token.quarkus.producer.TokenValidatorProducer;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
+import de.cuioss.sheriff.token.validation.IssuerStatusView;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.tools.logging.CuiLogger;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -67,7 +69,9 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WAR
  * On the {@link Outcome#EXTERNAL_VALIDATOR} and {@link Outcome#NOT_CONFIGURED} outcomes
  * {@link #observedIssuerConfigs()} is empty and {@link #observedParserConfig()} is
  * {@link Optional#empty()}: the core {@code TokenValidator} exposes neither its issuer
- * configurations nor its parser configuration.
+ * configurations nor its parser configuration. On {@link Outcome#EXTERNAL_VALIDATOR},
+ * {@link #observedIssuerStatuses()} reports the external validator's read-only issuer status views
+ * when the {@value JwtPropertyKeys.HEALTH.JWKS#REPORT_EXTERNAL_VALIDATOR} opt-in is set.
  * </p>
  * <p>
  * The resolution is memoized, but a {@link Outcome#NOT_CONFIGURED} outcome is re-resolved on every
@@ -118,6 +122,12 @@ public class ObservedValidatorResolver {
 
     private final @Nullable CdiHandles cdi;
 
+    /**
+     * The {@value JwtPropertyKeys.HEALTH.JWKS#REPORT_EXTERNAL_VALIDATOR} opt-in of a resolver pinned to
+     * an already-resolved outcome. A CDI-constructed resolver reads the key from its {@link Config}.
+     */
+    private final boolean pinnedReportExternalValidator;
+
     private final AtomicReference<Resolution> resolution = new AtomicReference<>(UNRESOLVED);
     private volatile @Nullable Outcome lastLoggedOutcome;
     private final AtomicReference<List<String>> lastWarnedCandidates = new AtomicReference<>(List.of());
@@ -135,6 +145,7 @@ public class ObservedValidatorResolver {
     public ObservedValidatorResolver(Config config, @Any Instance<TokenValidator> tokenValidators,
             Instance<List<IssuerConfig>> issuerConfigsHandle, Instance<ParserConfig> parserConfigHandle) {
         this.cdi = new CdiHandles(config, tokenValidators, issuerConfigsHandle, parserConfigHandle);
+        this.pinnedReportExternalValidator = false;
     }
 
     /**
@@ -148,7 +159,25 @@ public class ObservedValidatorResolver {
      */
     public ObservedValidatorResolver(Outcome outcome, @Nullable TokenValidator validator,
             List<IssuerConfig> issuerConfigs, @Nullable ParserConfig parserConfig) {
+        this(outcome, validator, issuerConfigs, parserConfig, false);
+    }
+
+    /**
+     * Creates a resolver pinned to an already-resolved outcome and to a fixed value of the
+     * {@value JwtPropertyKeys.HEALTH.JWKS#REPORT_EXTERNAL_VALIDATOR} opt-in, so this bean and its
+     * consumers can be exercised without a CDI container.
+     *
+     * @param outcome                 the fixed resolution outcome
+     * @param validator               the observed validator, or {@code null} when nothing is observable
+     * @param issuerConfigs           the observed issuer configurations
+     * @param parserConfig            the observed parser configuration, or {@code null} when unavailable
+     * @param reportExternalValidator whether {@link #observedIssuerStatuses()} reports the issuers of an
+     *                                external validator
+     */
+    public ObservedValidatorResolver(Outcome outcome, @Nullable TokenValidator validator,
+            List<IssuerConfig> issuerConfigs, @Nullable ParserConfig parserConfig, boolean reportExternalValidator) {
         this.cdi = null;
+        this.pinnedReportExternalValidator = reportExternalValidator;
         this.resolution.set(new Resolution(outcome, validator, List.copyOf(issuerConfigs), parserConfig));
     }
 
@@ -180,6 +209,36 @@ public class ObservedValidatorResolver {
      */
     public Optional<ParserConfig> observedParserConfig() {
         return Optional.ofNullable(resolve().parserConfig());
+    }
+
+    /**
+     * Returns the read-only issuer status views of an externally produced validator.
+     * <p>
+     * The views are reported only when the outcome is {@link Outcome#EXTERNAL_VALIDATOR} and the
+     * {@value JwtPropertyKeys.HEALTH.JWKS#REPORT_EXTERNAL_VALIDATOR} opt-in is {@code true}. Reading
+     * them fetches no keys and exposes no JWKS loader.
+     * </p>
+     *
+     * @return the external validator's {@link TokenValidator#getIssuerStatuses()}; empty for every
+     *         other outcome and when the opt-in is not set
+     */
+    public List<IssuerStatusView> observedIssuerStatuses() {
+        Resolution current = resolve();
+        TokenValidator validator = current.validator();
+        if (current.outcome() != Outcome.EXTERNAL_VALIDATOR || validator == null || !reportExternalValidator()) {
+            return List.of();
+        }
+        return validator.getIssuerStatuses();
+    }
+
+    private boolean reportExternalValidator() {
+        CdiHandles handles = cdi;
+        if (handles == null) {
+            return pinnedReportExternalValidator;
+        }
+        return handles.config()
+                .getOptionalValue(JwtPropertyKeys.HEALTH.JWKS.REPORT_EXTERNAL_VALIDATOR, Boolean.class)
+                .orElse(false);
     }
 
     private Resolution resolve() {
