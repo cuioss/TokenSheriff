@@ -55,6 +55,12 @@ public final class SignatureVerifiedToken {
     private final Map<String, ClaimValue> claims;
 
     /**
+     * The payload as a deep-immutable native JSON map, not validated.
+     */
+    @ToString.Exclude
+    private final Map<String, Object> rawClaims;
+
+    /**
      * The protected-header {@code typ} value verbatim, or {@code null} when the header carries none.
      */
     private final @Nullable String typHeader;
@@ -70,14 +76,18 @@ public final class SignatureVerifiedToken {
      * Creates a new signature-verified token.
      * <p>
      * The given claims map is defensively copied into an unmodifiable map. It must not contain
-     * {@code null} keys or values.
+     * {@code null} keys or values. The raw claims are retained as given and must already be
+     * deep-immutable, as {@code MapRepresentation#toNativeClaims()} produces them.
      *
      * @param claims    the mapped, unvalidated claims of the token, may be empty
+     * @param rawClaims the payload as a deep-immutable native JSON map, may be empty
      * @param typHeader the protected-header {@code typ} value verbatim, {@code null} when absent
      * @param rawToken  the raw token string as presented
      */
-    public SignatureVerifiedToken(Map<String, ClaimValue> claims, @Nullable String typHeader, String rawToken) {
+    public SignatureVerifiedToken(Map<String, ClaimValue> claims, Map<String, Object> rawClaims,
+            @Nullable String typHeader, String rawToken) {
         this.claims = Map.copyOf(Objects.requireNonNull(claims, "claims must not be null"));
+        this.rawClaims = Objects.requireNonNull(rawClaims, "rawClaims must not be null");
         this.typHeader = typHeader;
         this.rawToken = Objects.requireNonNull(rawToken, "rawToken must not be null");
     }
@@ -92,6 +102,20 @@ public final class SignatureVerifiedToken {
      */
     public Map<String, ClaimValue> getClaims() {
         return claims;
+    }
+
+    /**
+     * Returns the payload of the token as a native JSON map.
+     * <p>
+     * JSON objects are unmodifiable maps in member order, JSON arrays unmodifiable lists in element
+     * order, and numbers, booleans and strings keep their JSON type; a {@code null} nested inside an
+     * object or array is kept, a top-level {@code null} member is omitted. None of the values has been
+     * validated. For a JWE this is the payload of the inner, decrypted token.
+     *
+     * @return the deep-immutable native claims, never {@code null}, may be empty
+     */
+    public Map<String, Object> getRawClaims() {
+        return rawClaims;
     }
 
     /**

@@ -24,6 +24,7 @@ import de.cuioss.sheriff.token.validation.domain.context.RefreshTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.SignatureVerifiedToken;
+import de.cuioss.sheriff.token.validation.domain.token.TokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.UnvalidatedRefreshToken;
 import de.cuioss.sheriff.token.validation.dpop.DpopProofValidator;
 import de.cuioss.sheriff.token.validation.dpop.DpopReplayProtection;
@@ -69,6 +70,9 @@ import java.util.Map;
  * {@link SignatureVerifiedToken} carrying the mapped claims and the verbatim {@code typ} header with
  * <strong>no claim verdict</strong>. Its result is not an authentication decision and is not a
  * {@code TokenContent}.
+ * <p>
+ * {@link #getRawClaims(TokenContent)} returns the payload of a validated token as a native JSON map by
+ * decoding its raw token again with this validator's parser and bounds.
  * <p>
  * This class is thread-safe after construction.
  * All validation methods can be called concurrently from multiple threads.
@@ -195,6 +199,13 @@ public class TokenValidator implements Closeable {
     private final RefreshTokenValidationPipeline refreshTokenPipeline;
 
     /**
+     * The parser shared by the pipelines, bound by this validator's {@link ParserConfig} and JWE
+     * decryption configuration. Kept to re-derive the native claims of a validated token in
+     * {@link #getRawClaims(TokenContent)}.
+     */
+    private final NonValidatingJwtParser jwtParser;
+
+    /**
      * Shared DPoP replay protection instance, or null if no issuer has DPoP enabled.
      * Stored for lifecycle management ({@link #close()}).
      */
@@ -257,11 +268,11 @@ public class TokenValidator implements Closeable {
             this.performanceMonitor = TokenValidatorMonitorConfig.disabled().createMonitor();
         }
 
-        // Construction-time dependencies - used only to build pipelines, not stored as fields.
+        // The parser is shared by the pipelines and kept for getRawClaims(TokenContent).
         // The JWE config hands the parser the effective JWE size limit, the same one TokenStringValidator
         // applies below, so the access, ID and refresh pipelines (which share this parser) accept a JWE up
         // to maxEncryptedTokenSize while a JWS and the inner JWS stay bound by ParserConfig.maxTokenSize.
-        NonValidatingJwtParser jwtParser = NonValidatingJwtParser.builder()
+        this.jwtParser = NonValidatingJwtParser.builder()
                 .config(parserConfig)
                 .securityEventCounter(this.securityEventCounter)
                 .jweDecryptionConfig(jweDecryptionConfig)
@@ -530,6 +541,27 @@ public class TokenValidator implements Closeable {
         securityEventCounter.increment(SecurityEventCounter.EventType.SIGNATURE_ONLY_VERIFIED);
 
         return verifiedToken;
+    }
+
+    /**
+     * Returns the payload of a validated token as a native JSON map.
+     * <p>
+     * The token's raw token is decoded again with this validator's own parser, so the
+     * {@link ParserConfig} size, depth, array and string bounds apply, and a JWE is decrypted with this
+     * validator's JWE configuration to read the inner payload. A payload the parser refuses is refused as
+     * a whole, never partially returned. The token content itself is unchanged and nothing is cached: each
+     * call decodes, and for a JWE decrypts, again.
+     * <p>
+     * JSON objects are unmodifiable maps in member order, JSON arrays unmodifiable lists in element order,
+     * and numbers, booleans and strings keep their JSON type; a {@code null} nested inside an object or
+     * array is kept, a top-level {@code null} member is omitted.
+     *
+     * @param token a token validated by this validator
+     * @return the deep-immutable native claims of the token, never {@code null}
+     * @throws TokenValidationException if the raw token cannot be decoded within this validator's bounds
+     */
+    public Map<String, Object> getRawClaims(TokenContent token) {
+        return jwtParser.decode(token.getRawToken()).body().toNativeClaims();
     }
 
     /**
