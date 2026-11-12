@@ -33,6 +33,12 @@ import java.util.Objects;
  *
  * @since 1.0
  */
+// java:S110 — the inheritance depth is inherited wholesale from the library's existing exception
+// taxonomy (TokenValidationException and its ancestors); this type adds exactly one level to it.
+// The subtype relation is load-bearing: a caller that handles TokenValidationException handles a claim
+// mapping failure unchanged, and the event type and its category-driven mapping at an HTTP edge keep
+// holding. Flattening the hierarchy to satisfy a parent-count heuristic would break those catch blocks.
+@SuppressWarnings("java:S110")
 public class ClaimMappingException extends TokenValidationException {
 
     @Serial
