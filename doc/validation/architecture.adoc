@@ -91,10 +91,10 @@ LogoutTokenValidator.validate(rawToken)
 LogoutTokenValidationResult: accepted claims, or the one failed LogoutTokenCheck
 ----
 
-* **LogoutTokenValidator** - Built with the `TokenValidator`, the expected issuer and audience, the `iat` freshness window, the replay guard and a clock. It runs the checks in a fixed order and returns the first that fails. It is immutable and thread-safe.
+* **LogoutTokenValidator** - Built with the `TokenValidator`, the expected issuer and audience, the `iat` freshness window, the replay-guard capacity and a clock. It builds its own replay guard from that capacity and clock, runs the checks in a fixed order and returns the first that fails. It is thread-safe; its only mutable state is the guard it owns.
 * **LogoutTokenValidationResult** - For an accepted token, the `iss`, the `jti` and the `sub` and/or `sid` that name the session to end; for a refused token, the single failed check and no claim. Its `toString()` names only the outcome.
 * **LogoutTokenCheck** - The bounded set of checks a refusal names. A caller can log or meter it without carrying any text taken from the token.
-* **LogoutTokenReplayGuard** - A bounded, fail-closed store of the SHA-256 digests of admitted `jti` values. It is consulted last, so a token refused by any other check takes no capacity.
+* **LogoutTokenReplayGuard** - A bounded, fail-closed store of the SHA-256 digests of admitted `jti` values, internal to the package. Each validator builds its own from the configured capacity and the validator's clock, so retention is decided with the same time source that judges `iat`. It is consulted last, so a token refused by any other check takes no capacity.
 
 The package does not log. Receiving the logout request over HTTP and ending the session the token names stay with the consuming application. The checks and their security rationale are in xref:security-reference.adoc#logout-token-validation[Logout Token Validation].
 

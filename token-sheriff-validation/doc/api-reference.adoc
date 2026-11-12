@@ -41,6 +41,7 @@ A token whose signature was verified and whose claims were not. It implements ne
 public final class SignatureVerifiedToken {
     public Map<String, ClaimValue> getClaims();     // mapped, not validated
     public Map<String, Object> getRawClaims();      // native JSON, not validated
+    public Set<String> getNullClaimNames();         // top-level null members, omitted from getRawClaims
     public Optional<String> getTypHeader();         // verbatim, not compared
     public String getRawToken();
 }
@@ -134,8 +135,8 @@ public final class LogoutTokenValidator {
         public LogoutTokenValidatorBuilder expectedIssuer(String issuer);
         public LogoutTokenValidatorBuilder expectedAudience(String audience);
         public LogoutTokenValidatorBuilder freshnessWindow(Duration window);  // positive
-        public LogoutTokenValidatorBuilder replayGuard(LogoutTokenReplayGuard guard);
-        public LogoutTokenValidatorBuilder clock(Clock clock);
+        public LogoutTokenValidatorBuilder replayGuardCapacity(int capacity);  // > 0, live jti entries
+        public LogoutTokenValidatorBuilder clock(Clock clock);  // also the replay guard's clock
         public LogoutTokenValidator build();
     }
 
@@ -155,14 +156,9 @@ public enum LogoutTokenCheck {
     SIGNATURE, TYPE, ISSUER, AUDIENCE, ISSUED_AT, EXPIRATION, EVENTS, NONCE,
     SUBJECT_OR_SESSION, JWT_ID, REPLAYED, REPLAY_GUARD_FULL
 }
-
-public final class LogoutTokenReplayGuard {
-    public LogoutTokenReplayGuard(int capacity, Clock clock);   // capacity > 0
-    public Admission admit(String jti, Instant retainUntil);
-
-    public enum Admission { ADMITTED, REPLAYED, FULL }
-}
 ----
+
+The replay guard, `LogoutTokenReplayGuard`, is internal to the package. Each `LogoutTokenValidator` builds its own guard from `replayGuardCapacity` and the validator's `clock`, so the guard decides retention with the same time source that judges `iat`; no caller constructs a guard or supplies its clock. See xref:../../doc/validation/security-reference.adoc#logout-replay-guard[Logout Replay Guard].
 
 == Configuration Classes
 
@@ -245,6 +241,11 @@ public interface ClaimMapper {
 public class TokenValidationException extends RuntimeException {
     public EventType getEventType();
     public EventCategory getCategory();
+}
+
+// A claim mapper failed on a malformed value, e.g. a non-numeric exp; event type MISSING_CLAIM
+public class ClaimMappingException extends TokenValidationException {
+    public String getClaimName();
 }
 ----
 

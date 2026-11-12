@@ -532,7 +532,9 @@ public class TokenValidator implements Closeable {
      * <p>
      * The access-token cache is neither read nor written, and no performance measurement is recorded.
      * A success counts {@link SecurityEventCounter.EventType#SIGNATURE_ONLY_VERIFIED} once; a refusal
-     * counts the event of the stage that refused the token.
+     * counts the event of the stage that refused the token. Claims are mapped after the signature check;
+     * a value a claim mapper fails on, such as a non-numeric {@code exp}, is refused with a
+     * {@link de.cuioss.sheriff.token.validation.exception.ClaimMappingException} naming that claim.
      *
      * @param rawToken the raw token string
      * @return the signature-verified token carrying the unvalidated claims and the verbatim {@code typ}

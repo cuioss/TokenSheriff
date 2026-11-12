@@ -25,6 +25,7 @@ import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,21 +52,35 @@ import java.util.Set;
  *   <li>Direct compatibility with ClaimMapper implementations</li>
  * </ul>
  *
+ * @param data            the parsed members; a top-level member whose JSON value is {@code null} is not
+ *                        part of it when the representation was created by {@link #fromJson(DslJson, byte[])}
+ * @param nullMemberNames the names of the top-level members whose JSON value is {@code null}, which
+ *                        {@link #fromJson(DslJson, byte[])} drops from {@code data}; empty when there are none
  * @since 1.0
  * @author Oliver Wolff
  */
-public record MapRepresentation(Map<String, Object> data) implements Serializable {
+public record MapRepresentation(Map<String, Object> data, Set<String> nullMemberNames) implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
     /**
-     * Compact constructor that rejects null data.
+     * Compact constructor that rejects null data and copies the null member names into an unmodifiable set.
      * <p>
      * Callers that want an empty representation should pass {@link Map#of()}.
      */
     public MapRepresentation {
         Objects.requireNonNull(data, "data must not be null");
+        nullMemberNames = Set.copyOf(Objects.requireNonNull(nullMemberNames, "nullMemberNames must not be null"));
+    }
+
+    /**
+     * Creates a representation of the given data with no top-level {@code null} member recorded.
+     *
+     * @param data the members, must not be {@code null}
+     */
+    public MapRepresentation(Map<String, Object> data) {
+        this(data, Set.of());
     }
 
     /**
@@ -108,14 +123,18 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
             return new MapRepresentation(Map.of());
         }
 
-        // Create an unmodifiable copy in member order, filtering out top-level null values
+        // Create an unmodifiable copy in member order, filtering out top-level null values; the names of
+        // the filtered members are kept, so a caller can still tell a null member from an absent one
         Map<String, Object> filteredData = LinkedHashMap.newLinkedHashMap(parsedData.size());
+        Set<String> nullMembers = new HashSet<>();
         parsedData.forEach((key, value) -> {
             if (value != null) {
                 filteredData.put(key, value);
+            } else {
+                nullMembers.add(key);
             }
         });
-        return new MapRepresentation(Collections.unmodifiableMap(filteredData));
+        return new MapRepresentation(Collections.unmodifiableMap(filteredData), nullMembers);
     }
 
     /**
@@ -124,8 +143,8 @@ public record MapRepresentation(Map<String, Object> data) implements Serializabl
      * JSON objects become unmodifiable maps in member order, JSON arrays unmodifiable lists in element
      * order; numbers, booleans and strings are returned as parsed. A {@code null} nested inside an object
      * or an array is kept, while a top-level {@code null} member was already dropped by
-     * {@link #fromJson(DslJson, byte[])}. Every level is a fresh copy, so the result shares no mutable
-     * state with this representation.
+     * {@link #fromJson(DslJson, byte[])}; its name is in {@link #nullMemberNames()}. Every level is a fresh
+     * copy, so the result shares no mutable state with this representation.
      *
      * @return the deep-immutable native map of the parsed data, never {@code null}
      */

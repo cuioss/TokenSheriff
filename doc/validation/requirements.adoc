@@ -537,7 +537,7 @@ The library must return the payload of a validated token, through `TokenValidato
 
 * The payload is decoded with the validator's own parser, so the `ParserConfig` size, depth, array and string bounds apply; a payload the parser refuses is refused as a whole
 * JSON objects are unmodifiable maps in member order, JSON arrays unmodifiable lists in element order, and numbers, booleans and strings keep their JSON type
-* A `null` nested inside an object or array is kept; a top-level `null` member is omitted
+* A `null` nested inside an object or array is kept; a top-level `null` member is omitted, and for a signature-verified token it is named by `SignatureVerifiedToken.getNullClaimNames()`
 * For a JWE, the payload of the inner, decrypted token is returned
 
 _See specification: xref:architecture.adoc#token-validator-seams[TokenValidator Public Seams]_
@@ -564,9 +564,9 @@ The library must validate a logout token of https://openid.net/specs/openid-conn
 . `iss` equals the expected issuer
 . `aud`, a string or an array, contains the expected audience
 . `iat` is a number within the freshness window around now
-. `exp` is a number not in the past
+. `exp` is a number after now; an `exp` exactly now is refused (RFC 7519 §4.1.4)
 . `events` is a JSON object whose `http://schemas.openid.net/event/backchannel-logout` member is a JSON object
-. `nonce` is absent
+. `nonce` is absent, not even present as a JSON `null`
 . `sub` and/or `sid` is present, and each of them that is present is a non-blank string
 . `jti` is present as a non-blank string
 . The `jti` passes the replay guard of xref:#VALIDATION-13.5[VALIDATION-13.5]
@@ -584,6 +584,7 @@ The library must refuse a logout token whose `jti` was already admitted, through
 * *Fail closed* - at capacity, a new `jti` is refused as `REPLAY_GUARD_FULL`; a live entry is never evicted to make room
 * *Digest-only* - each `jti` is kept as its SHA-256 digest, until `iat` plus the freshness window
 * *Thread-safe* - one admission is a single critical section, so no two threads admit the same `jti` or take the last free entry
+* *Owned by the validator* - the logout-token validator builds its guard from the configured capacity and its own clock, so retention is decided with the same time source that judges `iat`; no caller supplies a guard or a guard clock
 
 The guard is consulted last, so a token refused by any other check takes no guard capacity.
 

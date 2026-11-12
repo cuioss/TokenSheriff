@@ -343,6 +343,8 @@ class MapRepresentationTest {
             assertFalse(map.isEmpty());
         }
         assertEquals(absent.data(), withNull.data());
+        assertEquals(Set.of("sub"), withNull.nullMemberNames());
+        assertEquals(Set.of(), absent.nullMemberNames());
     }
 
     @Test

@@ -344,6 +344,19 @@ class RawClaimsTest {
             assertEquals(List.copyOf(reParsed.keySet()), List.copyOf(verified.keySet()), "same member order");
             assertFalse(verified.containsKey("gone"));
         }
+
+        @Test
+        @DisplayName("A top-level null member is named by the null claim names, a nested one is not")
+        void shouldNameTopLevelNullMembers() {
+            String token = token("\"obj\":{\"empty\":null},\"gone\":null,\"kept\":\"value\"");
+
+            SignatureVerifiedToken verified = validator().verifySignature(token);
+
+            assertEquals(Set.of("gone"), verified.getNullClaimNames());
+            assertFalse(verified.getRawClaims().containsKey("gone"), "the null member stays omitted from the raw claims");
+            assertEquals(Set.of(), validator().verifySignature(token("\"kept\":\"value\"")).getNullClaimNames(),
+                    "positive control: a payload without a null member names none");
+        }
     }
 
     // === Fixtures ===

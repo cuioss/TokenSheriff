@@ -173,8 +173,29 @@ The validator's design:
   capacity. A full guard refuses a new token as `REPLAY_GUARD_FULL`; it never evicts a live entry to make room.
   Purge, lookup, capacity test and insert run under one monitor, so no two threads admit the same `jti` or take
   the same last free slot.
+* *Guard owned by the validator.* The `LogoutTokenValidator` builder takes a replay-guard capacity, not a
+  guard, and builds the guard from that capacity and its own clock. The validator admits an `iat` up to the
+  freshness window ahead of its clock and retains the `jti` until `iat` plus that window, so a guard reading a
+  clock that runs ahead would purge a `jti` while its token is still fresh and admit a replay. Building the
+  guard inside the validator makes the shared time source structural rather than a documented obligation of
+  the caller; the guard type is internal to the `logout` package, and a guard is never shared between
+  validators.
 * *Boundaries.* An `iat` exactly at either edge of the symmetric freshness window is accepted and one second
-  beyond is refused; an `exp` exactly now is accepted and one second earlier is refused.
+  beyond is refused; an `exp` exactly now is refused and one second later is accepted, as RFC 7519 §4.1.4
+  requires the current time to be before `exp`.
+
+==== Revision: `exp` exactly now, and the guard's clock
+
+The decision as first accepted differed in two points, both revised before release in response to review of
+the change that introduced the package:
+
+* It accepted an `exp` exactly now and refused one second earlier. That boundary contradicted RFC 7519 §4.1.4
+  ("the current date/time MUST be before the expiration date/time") and the verdict pipeline's own
+  `ValidationContext.isExpired`, which already refuses equality. The decision is changed to refuse an `exp`
+  that is not after now, so the logout validator and the verdict pipeline share one expiry boundary.
+* It let the caller build the replay guard with its own `Clock` and required, in Javadoc only, that this be
+  the validator's time source. The decision is changed so that the validator builds the guard from its own
+  clock and no caller can supply one, which removes the pairing rule instead of documenting it.
 
 The HTTP receiver endpoint for back-channel logout and the termination of the affected sessions stay with
 the consuming application. The library validates the token; it does not receive it or act on it.

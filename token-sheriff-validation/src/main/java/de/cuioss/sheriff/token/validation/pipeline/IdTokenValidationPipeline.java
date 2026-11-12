@@ -185,7 +185,8 @@ public class IdTokenValidationPipeline {
 
         LOGGER.debug("Successfully verified token signature");
         return new SignatureVerifiedToken(claims, decodedJwt.body().toNativeClaims(),
-                decodedJwt.header().getTyp().orElse(null), decodedJwt.rawToken());
+                decodedJwt.body().nullMemberNames(), decodedJwt.header().getTyp().orElse(null),
+                decodedJwt.rawToken());
     }
 
     /**

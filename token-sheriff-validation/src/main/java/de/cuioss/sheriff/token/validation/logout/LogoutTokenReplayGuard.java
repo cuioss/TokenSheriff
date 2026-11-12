@@ -34,6 +34,12 @@ import java.util.Objects;
  * evicted to make room, because forgetting it early would let its token be replayed. Entries whose
  * retention has passed are purged on every admission, which is how capacity is regained.
  * <p>
+ * The guard is owned by one {@link LogoutTokenValidator}, which builds it from the capacity it is configured
+ * with and its own clock. The pairing is structural: the validator admits an {@code iat} up to its freshness
+ * window ahead of its clock and retains the {@code jti} until {@code iat} plus that window, so a guard whose
+ * clock ran ahead of the validator's would purge a {@code jti} while its token is still accepted as fresh, and a
+ * replay would be admitted. No caller can therefore construct a guard or hand one to a validator.
+ * <p>
  * This class is thread-safe. An admission is a check-then-act on shared state - purge, look up the digest,
  * test the capacity, insert - so all four steps run as one critical section under a single private monitor:
  * no two threads can both admit the same {@code jti} or both take the last free entry. The guard starts no
@@ -41,12 +47,12 @@ import java.util.Objects;
  *
  * @since 1.0
  */
-public final class LogoutTokenReplayGuard {
+final class LogoutTokenReplayGuard {
 
     /**
      * The outcome of {@link #admit(String, Instant)}.
      */
-    public enum Admission {
+    enum Admission {
 
         /** The {@code jti} was not retained and is now stored. */
         ADMITTED,
@@ -66,18 +72,13 @@ public final class LogoutTokenReplayGuard {
     private final Map<String, Instant> retainedUntil = new HashMap<>();
 
     /**
-     * Creates an empty guard.
+     * Creates an empty guard for the validator that owns it.
      *
      * @param capacity the maximum number of live entries, greater than zero
-     * @param clock    the clock that decides whether an entry's retention has passed. When the guard serves a
-     *                 {@link LogoutTokenValidator}, this MUST be the same time source as the validator's clock:
-     *                 the validator admits an {@code iat} up to its freshness window ahead of its own clock and
-     *                 retains the {@code jti} until {@code iat} plus that window, so a guard clock that runs
-     *                 ahead of the validator's would purge a {@code jti} while its token is still accepted as
-     *                 fresh, and a replay would be admitted
+     * @param clock    the owning validator's clock, which decides whether an entry's retention has passed
      * @throws IllegalArgumentException if {@code capacity} is not greater than zero
      */
-    public LogoutTokenReplayGuard(int capacity, Clock clock) {
+    LogoutTokenReplayGuard(int capacity, Clock clock) {
         if (capacity <= 0) {
             throw new IllegalArgumentException("capacity must be greater than 0, but was: " + capacity);
         }
@@ -94,7 +95,7 @@ public final class LogoutTokenReplayGuard {
      * @param retainUntil the instant up to which the {@code jti} is refused as a replay
      * @return whether the {@code jti} was admitted, refused as a replay, or refused because the guard is full
      */
-    public Admission admit(String jti, Instant retainUntil) {
+    Admission admit(String jti, Instant retainUntil) {
         Objects.requireNonNull(jti, "jti must not be null");
         Objects.requireNonNull(retainUntil, "retainUntil must not be null");
         String digest = digest(jti);

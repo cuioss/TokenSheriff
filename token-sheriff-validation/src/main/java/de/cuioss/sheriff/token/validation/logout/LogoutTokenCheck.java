@@ -45,7 +45,7 @@ public enum LogoutTokenCheck {
     /** {@code iat} is absent, not a number, or outside the freshness window around now. */
     ISSUED_AT,
 
-    /** {@code exp} is absent, not a number, or in the past. */
+    /** {@code exp} is absent, not a number, or not after now; an {@code exp} exactly now is refused. */
     EXPIRATION,
 
     /**
@@ -54,10 +54,13 @@ public enum LogoutTokenCheck {
      */
     EVENTS,
 
-    /** {@code nonce} is present; a logout token must not carry one. */
+    /** {@code nonce} is present, a JSON {@code null} included; a logout token must not carry one. */
     NONCE,
 
-    /** Neither {@code sub} nor {@code sid} is present as a non-blank string, or one is present as anything else. */
+    /**
+     * Neither {@code sub} nor {@code sid} is present as a non-blank string, or one is present as anything else,
+     * a JSON {@code null} included.
+     */
     SUBJECT_OR_SESSION,
 
     /** {@code jti} is absent or not a non-blank string. */

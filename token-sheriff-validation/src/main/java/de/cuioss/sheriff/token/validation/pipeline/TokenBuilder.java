@@ -23,6 +23,7 @@ import de.cuioss.sheriff.token.validation.domain.claim.mapper.ClaimMapper;
 import de.cuioss.sheriff.token.validation.domain.claim.mapper.StrictStringMapper;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
+import de.cuioss.sheriff.token.validation.exception.ClaimMappingException;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import org.jspecify.annotations.Nullable;
@@ -187,8 +188,9 @@ public class TokenBuilder {
      * <p>
      * Mappers (including custom SPI implementations) can throw arbitrary runtime
      * exceptions on malformed claim values (e.g. a string-typed 'exp'). These are translated
-     * to {@link TokenValidationException} to honor the documented contract of TokenValidator,
-     * and counted as {@link SecurityEventCounter.EventType#MISSING_CLAIM}. A
+     * to a {@link ClaimMappingException} naming the claim, a {@link TokenValidationException}, to honor
+     * the documented contract of TokenValidator, and counted as
+     * {@link SecurityEventCounter.EventType#MISSING_CLAIM}. A
      * {@link TokenValidationException} thrown by a mapper is counted under its own event type
      * and rethrown unchanged.
      *
@@ -212,11 +214,7 @@ public class TokenBuilder {
         // catch is deliberate; TokenValidationException is rethrown above.
         catch (RuntimeException e) {
             securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_CLAIM);
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.MISSING_CLAIM,
-                    "Malformed claim '" + key + "': " + e.getMessage(),
-                    e
-            );
+            throw new ClaimMappingException(key, "Malformed claim '" + key + "': " + e.getMessage(), e);
         }
     }
 

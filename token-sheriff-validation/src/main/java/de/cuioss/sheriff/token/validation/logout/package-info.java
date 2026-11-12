@@ -33,10 +33,10 @@
  *   <li>{@code iss} equals the expected issuer</li>
  *   <li>{@code aud}, a string or an array, contains the expected audience</li>
  *   <li>{@code iat} is a number within the freshness window around now</li>
- *   <li>{@code exp} is a number not in the past</li>
+ *   <li>{@code exp} is a number after now; an {@code exp} exactly now is refused</li>
  *   <li>{@code events} is a JSON object whose
  *   {@code http://schemas.openid.net/event/backchannel-logout} member is a JSON object</li>
- *   <li>{@code nonce} is absent</li>
+ *   <li>{@code nonce} is absent, not even present as a JSON {@code null}</li>
  *   <li>{@code sub} and/or {@code sid} is present, and each of them that is present is a non-blank string</li>
  *   <li>{@code jti} is present as a non-blank string</li>
  *   <li>the {@code jti} has not been seen within its retention, and the replay guard has room for it</li>
@@ -53,8 +53,9 @@
  *   one failed check</li>
  *   <li>{@link de.cuioss.sheriff.token.validation.logout.LogoutTokenCheck} - The bounded set of checks a refusal
  *   names</li>
- *   <li>{@link de.cuioss.sheriff.token.validation.logout.LogoutTokenReplayGuard} - A bounded, fail-closed store of
- *   seen {@code jti} digests</li>
+ *   <li>{@code LogoutTokenReplayGuard} - A bounded, fail-closed store of seen {@code jti} digests, internal to the
+ *   package; each validator builds its own from its configured capacity and its own clock, so the guard and the
+ *   {@code iat} check always read the same time source</li>
  * </ul>
  * <p>
  * The package does not log and puts no remote text into a result; the caller logs or meters the returned

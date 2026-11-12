@@ -33,6 +33,10 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests {@link LogoutTokenReplayGuard}: admission, replay refusal, retention expiry, the fail-closed capacity
  * bound that never evicts a live entry, and the atomicity of admission under concurrency.
+ * <p>
+ * Each guard is constructed the way its owning {@link LogoutTokenValidator} constructs it, from a capacity and
+ * the clock the validator itself reads; that the validator hands the guard its own clock is tested in
+ * {@code LogoutTokenValidatorTest}.
  */
 @DisplayName("LogoutTokenReplayGuard")
 class LogoutTokenReplayGuardTest {

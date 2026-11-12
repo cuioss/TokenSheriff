@@ -24,6 +24,7 @@ import org.jspecify.annotations.Nullable;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * A token whose <strong>signature</strong> was verified and whose <strong>claims were not</strong>.
@@ -61,6 +62,13 @@ public final class SignatureVerifiedToken {
     private final Map<String, Object> rawClaims;
 
     /**
+     * The names of the top-level payload members whose JSON value is {@code null}, omitted from
+     * {@link #rawClaims}.
+     */
+    @ToString.Exclude
+    private final Set<String> nullClaimNames;
+
+    /**
      * The protected-header {@code typ} value verbatim, or {@code null} when the header carries none.
      */
     private final @Nullable String typHeader;
@@ -77,17 +85,21 @@ public final class SignatureVerifiedToken {
      * <p>
      * The given claims map is defensively copied into an unmodifiable map. It must not contain
      * {@code null} keys or values. The raw claims are retained as given and must already be
-     * deep-immutable, as {@code MapRepresentation#toNativeClaims()} produces them.
+     * deep-immutable, as {@code MapRepresentation#toNativeClaims()} produces them. The null claim names
+     * are copied into an unmodifiable set.
      *
-     * @param claims    the mapped, unvalidated claims of the token, may be empty
-     * @param rawClaims the payload as a deep-immutable native JSON map, may be empty
-     * @param typHeader the protected-header {@code typ} value verbatim, {@code null} when absent
-     * @param rawToken  the raw token string as presented
+     * @param claims         the mapped, unvalidated claims of the token, may be empty
+     * @param rawClaims      the payload as a deep-immutable native JSON map, may be empty
+     * @param nullClaimNames the names of the top-level payload members whose JSON value is {@code null},
+     *                       which {@code rawClaims} omits; may be empty
+     * @param typHeader      the protected-header {@code typ} value verbatim, {@code null} when absent
+     * @param rawToken       the raw token string as presented
      */
     public SignatureVerifiedToken(Map<String, ClaimValue> claims, Map<String, Object> rawClaims,
-            @Nullable String typHeader, String rawToken) {
+            Set<String> nullClaimNames, @Nullable String typHeader, String rawToken) {
         this.claims = Map.copyOf(Objects.requireNonNull(claims, "claims must not be null"));
         this.rawClaims = Objects.requireNonNull(rawClaims, "rawClaims must not be null");
+        this.nullClaimNames = Set.copyOf(Objects.requireNonNull(nullClaimNames, "nullClaimNames must not be null"));
         this.typHeader = typHeader;
         this.rawToken = Objects.requireNonNull(rawToken, "rawToken must not be null");
     }
@@ -109,13 +121,27 @@ public final class SignatureVerifiedToken {
      * <p>
      * JSON objects are unmodifiable maps in member order, JSON arrays unmodifiable lists in element
      * order, and numbers, booleans and strings keep their JSON type; a {@code null} nested inside an
-     * object or array is kept, a top-level {@code null} member is omitted. None of the values has been
-     * validated. For a JWE this is the payload of the inner, decrypted token.
+     * object or array is kept, a top-level {@code null} member is omitted and named by
+     * {@link #getNullClaimNames()}. None of the values has been validated. For a JWE this is the payload of
+     * the inner, decrypted token.
      *
      * @return the deep-immutable native claims, never {@code null}, may be empty
      */
     public Map<String, Object> getRawClaims() {
         return rawClaims;
+    }
+
+    /**
+     * Returns the names of the top-level payload members whose JSON value is {@code null}.
+     * <p>
+     * {@link #getRawClaims()} omits these members, so a caller that must know whether a claim is present
+     * at all, whatever its value, checks both: a member is present when it is a key of the raw claims or
+     * one of these names.
+     *
+     * @return the unmodifiable set of null member names, never {@code null}, may be empty
+     */
+    public Set<String> getNullClaimNames() {
+        return nullClaimNames;
     }
 
     /**

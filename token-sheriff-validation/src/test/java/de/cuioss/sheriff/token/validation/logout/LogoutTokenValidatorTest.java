@@ -28,15 +28,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -64,7 +69,7 @@ class LogoutTokenValidatorTest {
                 .issuerConfig(issuerConfig(ISSUER))
                 .issuerConfig(issuerConfig(OTHER_ISSUER))
                 .build();
-        underTest = validator(new LogoutTokenReplayGuard(100, CLOCK));
+        underTest = validator(100, CLOCK);
     }
 
     @AfterEach
@@ -238,6 +243,17 @@ class LogoutTokenValidatorTest {
             assertRefused(LogoutTokenCheck.ISSUED_AT, underTest.validate(signed(claims, "logout+jwt")));
         }
 
+        @Test
+        @DisplayName("A token whose iat is a string is refused as ISSUED_AT")
+        void shouldRefuseNonNumericIssuedAt() {
+            Map<String, String> members = validJsonMembers();
+            members.put("iat", quoted(String.valueOf(NOW.getEpochSecond())));
+
+            assertRefused(LogoutTokenCheck.ISSUED_AT, underTest.validate(signedJson(members)));
+            assertTrue(underTest.validate(signedJson(validJsonMembers())).isAccepted(),
+                    "positive control: the same payload with a numeric iat");
+        }
+
         private String withIssuedAt(Instant issuedAt, String jti) {
             Map<String, Object> claims = validClaims();
             claims.put("iat", issuedAt.getEpochSecond());
@@ -251,11 +267,13 @@ class LogoutTokenValidatorTest {
     class Expiration {
 
         @Test
-        @DisplayName("exp exactly now is accepted, one second in the past is refused")
+        @DisplayName("exp exactly now is refused (RFC 7519 section 4.1.4), one second after now is accepted")
         void shouldHonourExpirationEdge() {
-            assertTrue(underTest.validate(withExpiration(NOW, "jti-exp-now")).isAccepted());
+            assertRefused(LogoutTokenCheck.EXPIRATION, underTest.validate(withExpiration(NOW, "jti-exp-now")));
             assertRefused(LogoutTokenCheck.EXPIRATION,
                     underTest.validate(withExpiration(NOW.minusSeconds(1), "jti-exp-past")));
+            assertTrue(underTest.validate(withExpiration(NOW.plusSeconds(1), "jti-exp-next")).isAccepted(),
+                    "positive control: exp one second after now");
         }
 
         @Test
@@ -265,6 +283,17 @@ class LogoutTokenValidatorTest {
             claims.remove("exp");
 
             assertRefused(LogoutTokenCheck.EXPIRATION, underTest.validate(signed(claims, "logout+jwt")));
+        }
+
+        @Test
+        @DisplayName("A token whose exp is a string is refused as EXPIRATION")
+        void shouldRefuseNonNumericExpiration() {
+            Map<String, String> members = validJsonMembers();
+            members.put("exp", quoted("tomorrow"));
+
+            assertRefused(LogoutTokenCheck.EXPIRATION, underTest.validate(signedJson(members)));
+            assertTrue(underTest.validate(signedJson(validJsonMembers())).isAccepted(),
+                    "positive control: the same payload with a numeric exp");
         }
 
         private String withExpiration(Instant expiration, String jti) {
@@ -347,6 +376,17 @@ class LogoutTokenValidatorTest {
 
             assertRefused(LogoutTokenCheck.NONCE, underTest.validate(signed(claims, "logout+jwt")));
         }
+
+        @Test
+        @DisplayName("A token carrying nonce as JSON null is refused as NONCE")
+        void shouldRefuseNullNonce() {
+            Map<String, String> members = validJsonMembers();
+            members.put("nonce", "null");
+
+            assertRefused(LogoutTokenCheck.NONCE, underTest.validate(signedJson(members)));
+            assertTrue(underTest.validate(signedJson(validJsonMembers())).isAccepted(),
+                    "positive control: the same payload without nonce");
+        }
     }
 
     @Nested
@@ -397,6 +437,18 @@ class LogoutTokenValidatorTest {
 
             assertRefused(LogoutTokenCheck.SUBJECT_OR_SESSION, underTest.validate(signed(claims, "logout+jwt")));
         }
+
+        @Test
+        @DisplayName("A sub given as JSON null beside a valid sid is refused as SUBJECT_OR_SESSION")
+        void shouldRefuseNullSubject() {
+            Map<String, String> members = validJsonMembers();
+            members.put("sub", "null");
+
+            assertRefused(LogoutTokenCheck.SUBJECT_OR_SESSION, underTest.validate(signedJson(members)));
+            members.remove("sub");
+            assertTrue(underTest.validate(signedJson(members)).isAccepted(),
+                    "positive control: the same payload with sub omitted");
+        }
     }
 
     @Nested
@@ -436,9 +488,26 @@ class LogoutTokenValidatorTest {
         }
 
         @Test
+        @DisplayName("The guard retains a jti on the validator's clock for the whole freshness window of its iat")
+        void shouldRetainJtiOnValidatorClock() {
+            MutableClock clock = new MutableClock(NOW);
+            LogoutTokenValidator onMutableClock = validator(10, clock);
+            Map<String, Object> claims = validClaims();
+            claims.put("exp", NOW.plus(WINDOW).plusSeconds(60).getEpochSecond());
+            String token = signed(claims, "logout+jwt");
+            assertTrue(onMutableClock.validate(token).isAccepted(), "first presentation");
+
+            clock.set(NOW.plus(WINDOW));
+            assertRefused(LogoutTokenCheck.REPLAYED, onMutableClock.validate(token));
+
+            clock.set(NOW.plus(WINDOW).plusSeconds(1));
+            assertRefused(LogoutTokenCheck.ISSUED_AT, onMutableClock.validate(token));
+        }
+
+        @Test
         @DisplayName("A new jti is refused as REPLAY_GUARD_FULL when the guard is at capacity")
         void shouldRefuseWhenGuardFull() {
-            LogoutTokenValidator tight = validator(new LogoutTokenReplayGuard(1, CLOCK));
+            LogoutTokenValidator tight = validator(1, CLOCK);
             Map<String, Object> second = validClaims();
             second.put("jti", "jti-2");
 
@@ -449,7 +518,7 @@ class LogoutTokenValidatorTest {
         @Test
         @DisplayName("A token refused by an earlier check takes no guard capacity")
         void shouldNotConsumeCapacityOnRefusal() {
-            LogoutTokenValidator tight = validator(new LogoutTokenReplayGuard(1, CLOCK));
+            LogoutTokenValidator tight = validator(1, CLOCK);
             Map<String, Object> withNonce = validClaims();
             withNonce.put("nonce", "n");
 
@@ -466,11 +535,10 @@ class LogoutTokenValidatorTest {
         @Test
         @DisplayName("A zero or negative freshness window is rejected")
         void shouldRejectNonPositiveWindow() {
-            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(1, CLOCK);
             var zero = LogoutTokenValidator.builder().tokenValidator(tokenValidator).expectedIssuer(ISSUER)
-                    .expectedAudience(AUDIENCE).freshnessWindow(Duration.ZERO).replayGuard(guard).clock(CLOCK);
+                    .expectedAudience(AUDIENCE).freshnessWindow(Duration.ZERO).replayGuardCapacity(1).clock(CLOCK);
             var negative = LogoutTokenValidator.builder().tokenValidator(tokenValidator).expectedIssuer(ISSUER)
-                    .expectedAudience(AUDIENCE).freshnessWindow(Duration.ofSeconds(-1)).replayGuard(guard)
+                    .expectedAudience(AUDIENCE).freshnessWindow(Duration.ofSeconds(-1)).replayGuardCapacity(1)
                     .clock(CLOCK);
 
             assertThrows(IllegalArgumentException.class, zero::build);
@@ -478,13 +546,28 @@ class LogoutTokenValidatorTest {
         }
 
         @Test
+        @DisplayName("A replay guard capacity of zero, negative or unset is rejected")
+        void shouldRejectNonPositiveCapacity() {
+            var zero = LogoutTokenValidator.builder().tokenValidator(tokenValidator).expectedIssuer(ISSUER)
+                    .expectedAudience(AUDIENCE).freshnessWindow(WINDOW).replayGuardCapacity(0).clock(CLOCK);
+            var negative = LogoutTokenValidator.builder().tokenValidator(tokenValidator).expectedIssuer(ISSUER)
+                    .expectedAudience(AUDIENCE).freshnessWindow(WINDOW).replayGuardCapacity(-1).clock(CLOCK);
+            var unset = LogoutTokenValidator.builder().tokenValidator(tokenValidator).expectedIssuer(ISSUER)
+                    .expectedAudience(AUDIENCE).freshnessWindow(WINDOW).clock(CLOCK);
+
+            assertThrows(IllegalArgumentException.class, zero::build);
+            assertThrows(IllegalArgumentException.class, negative::build);
+            assertThrows(IllegalArgumentException.class, unset::build);
+            assertNotNull(validator(1, CLOCK), "positive control: capacity 1");
+        }
+
+        @Test
         @DisplayName("A blank issuer or audience is rejected")
         void shouldRejectBlankIdentifiers() {
-            LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(1, CLOCK);
             var blankIssuer = LogoutTokenValidator.builder().tokenValidator(tokenValidator).expectedIssuer(" ")
-                    .expectedAudience(AUDIENCE).freshnessWindow(WINDOW).replayGuard(guard).clock(CLOCK);
+                    .expectedAudience(AUDIENCE).freshnessWindow(WINDOW).replayGuardCapacity(1).clock(CLOCK);
             var blankAudience = LogoutTokenValidator.builder().tokenValidator(tokenValidator).expectedIssuer(ISSUER)
-                    .expectedAudience("").freshnessWindow(WINDOW).replayGuard(guard).clock(CLOCK);
+                    .expectedAudience("").freshnessWindow(WINDOW).replayGuardCapacity(1).clock(CLOCK);
 
             assertThrows(IllegalArgumentException.class, blankIssuer::build);
             assertThrows(IllegalArgumentException.class, blankAudience::build);
@@ -494,10 +577,9 @@ class LogoutTokenValidatorTest {
         @DisplayName("A missing collaborator is rejected")
         void shouldRejectNullCollaborator() {
             var noClock = LogoutTokenValidator.builder().tokenValidator(tokenValidator).expectedIssuer(ISSUER)
-                    .expectedAudience(AUDIENCE).freshnessWindow(WINDOW)
-                    .replayGuard(new LogoutTokenReplayGuard(1, CLOCK));
+                    .expectedAudience(AUDIENCE).freshnessWindow(WINDOW).replayGuardCapacity(1);
             var noValidator = LogoutTokenValidator.builder().expectedIssuer(ISSUER).expectedAudience(AUDIENCE)
-                    .freshnessWindow(WINDOW).replayGuard(new LogoutTokenReplayGuard(1, CLOCK)).clock(CLOCK);
+                    .freshnessWindow(WINDOW).replayGuardCapacity(1).clock(CLOCK);
 
             assertThrows(NullPointerException.class, noClock::build);
             assertThrows(NullPointerException.class, noValidator::build);
@@ -506,14 +588,14 @@ class LogoutTokenValidatorTest {
 
     // === Fixtures ===
 
-    private LogoutTokenValidator validator(LogoutTokenReplayGuard guard) {
+    private LogoutTokenValidator validator(int replayGuardCapacity, Clock clock) {
         return LogoutTokenValidator.builder()
                 .tokenValidator(tokenValidator)
                 .expectedIssuer(ISSUER)
                 .expectedAudience(AUDIENCE)
                 .freshnessWindow(WINDOW)
-                .replayGuard(guard)
-                .clock(CLOCK)
+                .replayGuardCapacity(replayGuardCapacity)
+                .clock(clock)
                 .build();
     }
 
@@ -544,6 +626,54 @@ class LogoutTokenValidatorTest {
                 .compact();
     }
 
+    /**
+     * @return mutable members of a logout token that passes every check, each value as literal JSON text
+     */
+    private static Map<String, String> validJsonMembers() {
+        Map<String, String> members = new LinkedHashMap<>();
+        members.put("iss", quoted(ISSUER));
+        members.put("sub", quoted("subject-1"));
+        members.put("sid", quoted("session-1"));
+        members.put("aud", quoted(AUDIENCE));
+        members.put("iat", String.valueOf(NOW.getEpochSecond()));
+        members.put("exp", String.valueOf(NOW.plusSeconds(120).getEpochSecond()));
+        members.put("jti", quoted("jti-1"));
+        members.put("events", "{" + quoted(LogoutTokenValidator.BACKCHANNEL_LOGOUT_EVENT) + ":{}}");
+        return members;
+    }
+
+    /**
+     * Signs a payload written as literal JSON with the default RS256 test key and {@code typ: logout+jwt},
+     * so a JSON {@code null} or a string-typed date reaches the parser exactly as written.
+     *
+     * @param members the payload members, each value as literal JSON text
+     * @return the compact JWS
+     */
+    private static String signedJson(Map<String, String> members) {
+        String header = "{\"alg\":\"RS256\",\"kid\":" + quoted(InMemoryKeyMaterialHandler.DEFAULT_KEY_ID)
+                + ",\"typ\":\"logout+jwt\"}";
+        String payload = members.entrySet().stream()
+                .map(member -> quoted(member.getKey()) + ":" + member.getValue())
+                .collect(Collectors.joining(",", "{", "}"));
+        String signingInput = base64Url(header) + "." + base64Url(payload);
+        try {
+            java.security.Signature signer = java.security.Signature.getInstance("SHA256withRSA");
+            signer.initSign(InMemoryKeyMaterialHandler.getDefaultPrivateKey());
+            signer.update(signingInput.getBytes(StandardCharsets.US_ASCII));
+            return signingInput + "." + Base64.getUrlEncoder().withoutPadding().encodeToString(signer.sign());
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Failed to sign the test token", e);
+        }
+    }
+
+    private static String quoted(String text) {
+        return "\"" + text + "\"";
+    }
+
+    private static String base64Url(String json) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+    }
+
     private static IssuerConfig issuerConfig(String issuer) {
         return IssuerConfig.builder()
                 .issuerIdentifier(issuer)
@@ -555,5 +685,36 @@ class LogoutTokenValidatorTest {
     private static void assertRefused(LogoutTokenCheck expected, LogoutTokenValidationResult result) {
         assertFalse(result.isAccepted(), () -> "expected refusal as " + expected + " but was " + result);
         assertEquals(Optional.of(expected), result.getFailedCheck());
+    }
+
+    /**
+     * A clock whose instant the test sets.
+     */
+    private static final class MutableClock extends Clock {
+
+        private volatile Instant instant;
+
+        MutableClock(Instant instant) {
+            this.instant = instant;
+        }
+
+        void set(Instant newInstant) {
+            this.instant = newInstant;
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return instant;
+        }
     }
 }

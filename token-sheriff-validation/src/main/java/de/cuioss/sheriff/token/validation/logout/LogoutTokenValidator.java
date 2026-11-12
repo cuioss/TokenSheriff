@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.validation.logout;
 
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.sheriff.token.validation.domain.token.SignatureVerifiedToken;
+import de.cuioss.sheriff.token.validation.exception.ClaimMappingException;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import lombok.Builder;
 import org.jspecify.annotations.Nullable;
@@ -43,27 +44,34 @@ import java.util.*;
  *   <li>{@link LogoutTokenCheck#AUDIENCE} - {@code aud}, a string or an array, lacks the expected audience</li>
  *   <li>{@link LogoutTokenCheck#ISSUED_AT} - {@code iat} is absent, not a number, or more than the freshness
  *   window before or after now; exactly at either edge is accepted</li>
- *   <li>{@link LogoutTokenCheck#EXPIRATION} - {@code exp} is absent, not a number, or before now; exactly now is
- *   accepted</li>
+ *   <li>{@link LogoutTokenCheck#EXPIRATION} - {@code exp} is absent, not a number, or not after now; an
+ *   {@code exp} exactly now is refused, as RFC 7519 section 4.1.4 requires the current time to be before it</li>
  *   <li>{@link LogoutTokenCheck#EVENTS} - {@code events} is not a JSON object whose
  *   {@value #BACKCHANNEL_LOGOUT_EVENT} member is a JSON object; the claim is read as JSON, never scanned as
  *   text</li>
- *   <li>{@link LogoutTokenCheck#NONCE} - {@code nonce} is present</li>
+ *   <li>{@link LogoutTokenCheck#NONCE} - {@code nonce} is present, whatever its value, a JSON {@code null}
+ *   included</li>
  *   <li>{@link LogoutTokenCheck#SUBJECT_OR_SESSION} - neither {@code sub} nor {@code sid} is a non-blank string,
- *   or one of them is present as anything else</li>
+ *   or one of them is present as anything else, a JSON {@code null} included</li>
  *   <li>{@link LogoutTokenCheck#JWT_ID} - {@code jti} is absent or not a non-blank string</li>
  *   <li>{@link LogoutTokenCheck#REPLAYED} / {@link LogoutTokenCheck#REPLAY_GUARD_FULL} - the replay guard refused
  *   the {@code jti}</li>
  * </ol>
+ * A present {@code iat} or {@code exp} whose value is not a number is already refused when the signature-only
+ * entry maps the claims, with a {@link ClaimMappingException}. The refusal keeps the identity of the claim's
+ * check, {@link LogoutTokenCheck#ISSUED_AT} or {@link LogoutTokenCheck#EXPIRATION}, but is reached before the
+ * other claim checks run; a mapping failure of any other claim is refused as {@link LogoutTokenCheck#SIGNATURE}.
  * The replay guard is consulted last, so a token refused by any other check never takes guard capacity. An
  * admitted {@code jti} is retained until {@code iat} plus the freshness window; after that the token is refused
- * by the {@code iat} check anyway.
+ * by the {@code iat} check anyway. The validator builds its replay guard itself, from the capacity it is given
+ * and its own clock, so the guard decides retention with the same time source that judges {@code iat}; a guard
+ * is never shared between validators.
  * <p>
  * The validator does not log and returns no text taken from the token, so the caller decides how a refusal
  * is logged or metered. Receiving the logout request over HTTP and ending the named session stay with the
  * consuming application.
  * <p>
- * This class is immutable and thread-safe.
+ * This class is thread-safe. Its only mutable state is the replay guard it owns, whose admissions are atomic.
  *
  * @since 1.0
  * @see <a href="https://openid.net/specs/openid-connect-backchannel-1_0.html#Validation">Back-Channel Logout 1.0
@@ -92,15 +100,18 @@ public final class LogoutTokenValidator {
      * @param tokenValidator   the validator whose signature-only entry verifies the token
      * @param expectedIssuer   the issuer the {@code iss} claim must equal
      * @param expectedAudience the audience the {@code aud} claim must contain
-     * @param freshnessWindow  how far {@code iat} may lie before or after now, positive
-     * @param replayGuard      the guard that refuses a {@code jti} seen before; it must be built with the same
-     *                         time source as {@code clock} (see {@link LogoutTokenReplayGuard#LogoutTokenReplayGuard(int, Clock)})
-     * @param clock            the clock that decides {@code iat} freshness and {@code exp}
-     * @throws IllegalArgumentException if {@code freshnessWindow} is zero or negative, or an identifier is blank
+     * @param freshnessWindow     how far {@code iat} may lie before or after now, positive
+     * @param replayGuardCapacity the maximum number of live {@code jti} entries of the replay guard this validator
+     *                            builds, greater than zero; size it above the number of logout tokens the issuer
+     *                            can send within twice the freshness window
+     * @param clock               the clock that decides {@code iat} freshness and {@code exp}, and the retention of
+     *                            the replay guard
+     * @throws IllegalArgumentException if {@code freshnessWindow} is zero or negative, {@code replayGuardCapacity}
+     *                                  is not greater than zero, or an identifier is blank
      */
     @Builder
     private LogoutTokenValidator(TokenValidator tokenValidator, String expectedIssuer, String expectedAudience,
-            Duration freshnessWindow, LogoutTokenReplayGuard replayGuard, Clock clock) {
+            Duration freshnessWindow, int replayGuardCapacity, Clock clock) {
         this.tokenValidator = Objects.requireNonNull(tokenValidator, "tokenValidator must not be null");
         this.expectedIssuer = Objects.requireNonNull(expectedIssuer, "expectedIssuer must not be null");
         this.expectedAudience = Objects.requireNonNull(expectedAudience, "expectedAudience must not be null");
@@ -111,8 +122,8 @@ public final class LogoutTokenValidator {
         if (freshnessWindow.isZero() || freshnessWindow.isNegative()) {
             throw new IllegalArgumentException("freshnessWindow must be positive, but was: " + freshnessWindow);
         }
-        this.replayGuard = Objects.requireNonNull(replayGuard, "replayGuard must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.replayGuard = new LogoutTokenReplayGuard(replayGuardCapacity, this.clock);
     }
 
     /**
@@ -125,51 +136,122 @@ public final class LogoutTokenValidator {
     public LogoutTokenValidationResult validate(@Nullable String rawToken) {
         SignatureVerifiedToken verified;
         try {
-            verified = tokenValidator.verifySignature(rawToken);
+            // A null token is handed on as the empty string, which the signature-only entry refuses and
+            // counts exactly as it counts a null one
+            verified = tokenValidator.verifySignature(Objects.requireNonNullElse(rawToken, ""));
+        } catch (ClaimMappingException e) {
+            return LogoutTokenValidationResult.refused(checkOfUnmappableClaim(e.getClaimName()));
         } catch (TokenValidationException e) {
             return LogoutTokenValidationResult.refused(LogoutTokenCheck.SIGNATURE);
         }
-        if (!isLogoutType(verified.getTypHeader().orElse(null))) {
-            return LogoutTokenValidationResult.refused(LogoutTokenCheck.TYPE);
-        }
         Map<String, Object> claims = verified.getRawClaims();
-        if (!expectedIssuer.equals(claims.get("iss"))) {
-            return LogoutTokenValidationResult.refused(LogoutTokenCheck.ISSUER);
+        Optional<LogoutTokenCheck> failedCheck = firstFailedCheck(verified, claims, clock.instant());
+        if (failedCheck.isPresent()) {
+            return LogoutTokenValidationResult.refused(failedCheck.get());
         }
-        if (!containsAudience(claims.get("aud"))) {
-            return LogoutTokenValidationResult.refused(LogoutTokenCheck.AUDIENCE);
-        }
-        Instant now = clock.instant();
-        Optional<Instant> issuedAt = numericDate(claims.get("iat"));
-        if (issuedAt.isEmpty() || issuedAt.get().isBefore(now.minus(freshnessWindow))
-                || issuedAt.get().isAfter(now.plus(freshnessWindow))) {
-            return LogoutTokenValidationResult.refused(LogoutTokenCheck.ISSUED_AT);
-        }
-        Optional<Instant> expiration = numericDate(claims.get("exp"));
-        if (expiration.isEmpty() || expiration.get().isBefore(now)) {
-            return LogoutTokenValidationResult.refused(LogoutTokenCheck.EXPIRATION);
-        }
-        if (!(claims.get("events") instanceof Map<?, ?> events && events.get(BACKCHANNEL_LOGOUT_EVENT) instanceof Map)) {
-            return LogoutTokenValidationResult.refused(LogoutTokenCheck.EVENTS);
-        }
-        if (claims.containsKey("nonce")) {
-            return LogoutTokenValidationResult.refused(LogoutTokenCheck.NONCE);
-        }
-        Object subject = claims.get("sub");
-        Object sessionId = claims.get("sid");
-        if (!isAbsentOrNonBlankString(subject) || !isAbsentOrNonBlankString(sessionId)
-                || (subject == null && sessionId == null)) {
-            return LogoutTokenValidationResult.refused(LogoutTokenCheck.SUBJECT_OR_SESSION);
-        }
-        if (!(claims.get("jti") instanceof String jwtId) || jwtId.isBlank()) {
-            return LogoutTokenValidationResult.refused(LogoutTokenCheck.JWT_ID);
-        }
-        return switch (replayGuard.admit(jwtId, issuedAt.get().plus(freshnessWindow))) {
-            case ADMITTED -> LogoutTokenValidationResult.accepted(expectedIssuer, (String) subject,
-                    (String) sessionId, jwtId);
+        // Every claim read below passed its check above: iat is a number, jti a non-blank string, and
+        // sub and sid are each absent or a non-blank string
+        Instant retainUntil = numericDate(claims.get("iat")).orElseThrow().plus(freshnessWindow);
+        String jwtId = (String) claims.get("jti");
+        return switch (replayGuard.admit(jwtId, retainUntil)) {
+            case ADMITTED -> LogoutTokenValidationResult.accepted(expectedIssuer, (String) claims.get("sub"),
+                    (String) claims.get("sid"), jwtId);
             case REPLAYED -> LogoutTokenValidationResult.refused(LogoutTokenCheck.REPLAYED);
             case FULL -> LogoutTokenValidationResult.refused(LogoutTokenCheck.REPLAY_GUARD_FULL);
         };
+    }
+
+    /**
+     * Runs the claim checks from {@link LogoutTokenCheck#TYPE} to {@link LogoutTokenCheck#JWT_ID} in the
+     * documented order.
+     *
+     * @param verified the signature-verified token
+     * @param claims   its native claims
+     * @param now      the instant {@code iat} and {@code exp} are judged against
+     * @return the first check that fails, empty when every check passes
+     */
+    private Optional<LogoutTokenCheck> firstFailedCheck(SignatureVerifiedToken verified, Map<String, Object> claims,
+            Instant now) {
+        if (!isLogoutType(verified.getTypHeader().orElse(null))) {
+            return Optional.of(LogoutTokenCheck.TYPE);
+        }
+        if (!expectedIssuer.equals(claims.get("iss"))) {
+            return Optional.of(LogoutTokenCheck.ISSUER);
+        }
+        if (!containsAudience(claims.get("aud"))) {
+            return Optional.of(LogoutTokenCheck.AUDIENCE);
+        }
+        if (!isFresh(claims.get("iat"), now)) {
+            return Optional.of(LogoutTokenCheck.ISSUED_AT);
+        }
+        if (!isUnexpired(claims.get("exp"), now)) {
+            return Optional.of(LogoutTokenCheck.EXPIRATION);
+        }
+        if (!hasLogoutEvent(claims.get("events"))) {
+            return Optional.of(LogoutTokenCheck.EVENTS);
+        }
+        if (isPresent(verified, "nonce")) {
+            return Optional.of(LogoutTokenCheck.NONCE);
+        }
+        if (!hasSubjectOrSession(verified)) {
+            return Optional.of(LogoutTokenCheck.SUBJECT_OR_SESSION);
+        }
+        if (!(claims.get("jti") instanceof String jwtId) || jwtId.isBlank()) {
+            return Optional.of(LogoutTokenCheck.JWT_ID);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Attributes a claim the signature-only entry could not map to the check that owns the claim.
+     *
+     * @param claimName the name of the claim whose value could not be mapped
+     * @return {@link LogoutTokenCheck#ISSUED_AT} for {@code iat}, {@link LogoutTokenCheck#EXPIRATION} for
+     * {@code exp}, and {@link LogoutTokenCheck#SIGNATURE} for any other claim
+     */
+    private static LogoutTokenCheck checkOfUnmappableClaim(String claimName) {
+        return switch (claimName) {
+            case "iat" -> LogoutTokenCheck.ISSUED_AT;
+            case "exp" -> LogoutTokenCheck.EXPIRATION;
+            default -> LogoutTokenCheck.SIGNATURE;
+        };
+    }
+
+    private boolean isFresh(@Nullable Object issuedAtClaim, Instant now) {
+        return numericDate(issuedAtClaim)
+                .filter(issuedAt -> !issuedAt.isBefore(now.minus(freshnessWindow))
+                        && !issuedAt.isAfter(now.plus(freshnessWindow)))
+                .isPresent();
+    }
+
+    private static boolean isUnexpired(@Nullable Object expirationClaim, Instant now) {
+        return numericDate(expirationClaim).filter(expiration -> expiration.isAfter(now)).isPresent();
+    }
+
+    private static boolean hasLogoutEvent(@Nullable Object eventsClaim) {
+        return eventsClaim instanceof Map<?, ?> events && events.get(BACKCHANNEL_LOGOUT_EVENT) instanceof Map;
+    }
+
+    /**
+     * A claim is present when the payload carries the member, whatever its value: the native claims omit a
+     * top-level JSON {@code null} member, which {@link SignatureVerifiedToken#getNullClaimNames()} names.
+     */
+    private static boolean isPresent(SignatureVerifiedToken verified, String claimName) {
+        return verified.getRawClaims().containsKey(claimName) || verified.getNullClaimNames().contains(claimName);
+    }
+
+    /**
+     * At least one of {@code sub} and {@code sid} is a non-blank string, and neither is present as anything
+     * else, a JSON {@code null} included.
+     */
+    private static boolean hasSubjectOrSession(SignatureVerifiedToken verified) {
+        return isAbsentOrNonBlankString(verified, "sub") && isAbsentOrNonBlankString(verified, "sid")
+                && (isPresent(verified, "sub") || isPresent(verified, "sid"));
+    }
+
+    private static boolean isAbsentOrNonBlankString(SignatureVerifiedToken verified, String claimName) {
+        return !isPresent(verified, claimName)
+                || verified.getRawClaims().get(claimName) instanceof String text && !text.isBlank();
     }
 
     private static boolean isLogoutType(@Nullable String typHeader) {
@@ -185,10 +267,6 @@ public final class LogoutTokenValidator {
             return expectedAudience.equals(single);
         }
         return audience instanceof List<?> many && many.contains(expectedAudience);
-    }
-
-    private static boolean isAbsentOrNonBlankString(@Nullable Object value) {
-        return value == null || value instanceof String text && !text.isBlank();
     }
 
     /**
