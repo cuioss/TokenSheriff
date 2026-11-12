@@ -46,6 +46,45 @@ and a `readiness` marker naming the resolution outcome:
 }
 ----
 
+==== Reporting an external validator
+
+By default an externally produced `TokenValidator` is reported as above, with no per-issuer data. Two
+keys let the readiness check report its issuers:
+
+[cols="2,1,4", options="header"]
+|===
+|Property |Default |Effect
+|`sheriff.token.health.jwks.report-external-validator` |`false` |When `true` and the resolution
+outcome is `EXTERNAL_VALIDATOR`, the check reports every enabled issuer of the external validator
+through `TokenValidator.getIssuerStatuses()`. Reading these read-only views fetches no keys and
+exposes no JWKS loader.
+|`sheriff.token.health.jwks.disclose-issuer` |`true` |When `false`, the `issuer.N.url` entry is
+omitted for the issuers of an external validator; `jwksType` and `status` stay.
+|===
+
+With the opt-in set, the issuers of the external validator are reported with the same keys, and the
+same readiness, loading and `DOWN` logic, as configured issuers:
+
+[source,json]
+----
+{
+  "status": "UP",
+  "name": "jwks-endpoints",
+  "data": {
+    "checkedEndpoints": 1,
+    "readiness": "READY",
+    "loading": "COMPLETE",
+    "issuer.0.url": "https://gateway-idp.example.com",
+    "issuer.0.jwksType": "http",
+    "issuer.0.status": "UP"
+  }
+}
+----
+
+With `disclose-issuer=false` as well, the same payload carries no `issuer.0.url`. Neither key changes
+the payload for the `PROPERTY_CONFIGURED` and `NOT_CONFIGURED` outcomes, and with both keys at their
+defaults every outcome keeps the payload shown above.
+
 === Token Validator Health Check
 
 * **Type:** Liveness (`@Liveness`) | **Name:** `jwt-validator` | **Endpoint:** `/q/health/live`
@@ -130,6 +169,8 @@ own producer. The three resolution outcomes are `PROPERTY_CONFIGURED`, `EXTERNAL
 * Short-circuits to UP with `checkedEndpoints=0` and `readiness` set to `EXTERNAL_VALIDATOR` or
   `NOT_CONFIGURED` when no issuer configuration is observable — an unconfigured optional extension is
   no reason to hold the whole application out of the load balancer
+* With `sheriff.token.health.jwks.report-external-validator=true`, reports the issuers of an
+  external validator instead of short-circuiting, and returns DOWN when any of them is not ready
 
 === Token Validator Health Check
 
@@ -146,5 +187,6 @@ own producer. The three resolution outcomes are `PROPERTY_CONFIGURED`, `EXTERNAL
   readiness by the JWKS Endpoint Health Check
 
 NOTE: An externally-produced `TokenValidator` does not expose its issuer configurations or its parser
-limits, so the health checks can detect it but cannot enumerate its issuers or probe its JWKS
-loaders. They report the explicit markers above rather than fabricating a verdict.
+limits. By default the health checks therefore detect it without enumerating its issuers, and report
+the explicit markers above rather than fabricating a verdict. Its read-only issuer status views are
+reported only on the readiness check, and only with the `report-external-validator` opt-in.

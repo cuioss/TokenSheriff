@@ -22,6 +22,8 @@ The JWT Token Validation library:
 * Supports multiple issuers with per-issuer configuration
 * Implements key management and rotation
 * Supports DPoP sender-constrained tokens (RFC 9449)
+* Offers a signature-only verification entry, native JSON claims and a read-only issuer status view
+* Validates logout tokens of OpenID Connect Back-Channel Logout 1.0 with a bounded replay guard
 
 == STRIDE Threat Analysis
 
@@ -351,6 +353,47 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.7[VALIDATION-8.7: DPoP Send
 * Server nonce support (`nonce` claim in DPoP proof)
 * DPoP proof binding for refresh tokens
 
+=== Public Seams and Back-Channel Logout Threats
+
+_See Requirement xref:requirements.adoc#VALIDATION-13[VALIDATION-13: Public Validation Seams and Back-Channel Logout]_
+
+==== Threats and Mitigations
+
+[cols="1,2,3,2", options="header"]
+|===
+|ID |Threat |Mitigation |Test Coverage
+
+|PS1
+|Misuse of a signature-only result as an authentication decision
+|`TokenValidator.verifySignature` returns a link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/domain/token/SignatureVerifiedToken.java[SignatureVerifiedToken] that implements neither `TokenContent` nor `MinimalTokenContent`, so it cannot reach code that accepts a validated token and is never cached; the missing claim verdict and the unchecked `typ` are stated once in xref:security-reference.adoc#signature-only-verification[Signature-Only Verification]. A caller that reads claims from it without checking them remains possible and is the residual risk
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorVerifySignatureTest.java[TokenValidatorVerifySignatureTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorVerifySignatureAttackTest.java[TokenValidatorVerifySignatureAttackTest]
+
+|PS2
+|Issuer disclosure through the JWKS readiness probe
+|An external validator's issuers are reported only with the opt-in `sheriff.token.health.jwks.report-external-validator=true` (default `false`); `sheriff.token.health.jwks.disclose-issuer=false` omits their `issuer.N.url`. Reading the status through link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/IssuerStatusView.java[IssuerStatusView] fetches no keys and exposes no loader
+|link:../../token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/test/java/de/cuioss/sheriff/token/quarkus/health/JwksEndpointHealthCheckTest.java[JwksEndpointHealthCheckTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorIssuerStatusTest.java[TokenValidatorIssuerStatusTest]
+
+|PS3
+|Logout-token replay
+|The `jti` of each admitted logout token is kept as a SHA-256 digest in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenReplayGuard.java[LogoutTokenReplayGuard] until `iat` plus the freshness window; a retained `jti` is refused as `REPLAYED`, and a token past that instant is refused by the `iat` check
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidatorTest.java[LogoutTokenValidatorTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenReplayGuardTest.java[LogoutTokenReplayGuardTest]
+
+|PS4
+|Forged or cross-type logout token (for example an ID token presented as a logout token)
+|link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidator.java[LogoutTokenValidator] verifies the signature through the signature-only entry, refuses a present `typ` other than `logout+jwt`, requires an `events` object with the back-channel logout member and refuses a present `nonce`, so an ID token is refused even when `typ` is absent; see xref:security-reference.adoc#logout-token-validation[Logout Token Validation]
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidatorTest.java[LogoutTokenValidatorTest]
+
+|PS5
+|Replay-guard exhaustion
+|The guard is bounded and fails closed: at capacity a new logout token is refused as `REPLAY_GUARD_FULL` rather than a live entry evicted, so exhaustion denies new logouts but never re-opens a replay. Expired entries are purged on every admission, and the guard is consulted last, so a token refused by any other check takes no capacity. Size the capacity above the number of logout tokens an issuer can send within twice the freshness window
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenReplayGuardTest.java[LogoutTokenReplayGuardTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidatorTest.java[LogoutTokenValidatorTest]
+|===
+
+==== Open Recommendations
+
+* Alert on `REPLAY_GUARD_FULL` refusals, which signal either an undersized guard or a flood of logout tokens
+* The HTTP receiver endpoint for back-channel logout requests is the consuming application's concern and needs its own request-size and rate limits
+
 == Coverage Summary
 
 [cols="1,1,1,1", options="header"]
@@ -364,7 +407,8 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.7[VALIDATION-8.7: DPoP Send
 |Denial of Service |6 |6 (100%) |6 (100%)
 |Elevation of Privilege |9 |9 (100%) |9 (100%)
 |DPoP |5 |5 (100%) |5 (100%)
-|**Total** |**41** |**39 (95%)** |**39 (95%)**
+|Public Seams and Back-Channel Logout |5 |5 (100%) |5 (100%)
+|**Total** |**46** |**44 (96%)** |**44 (96%)**
 |===
 
 Unmitigated: R5 (log tampering — application-level), I5 (side-channel — low risk for validation library).
@@ -378,6 +422,7 @@ The 100%-covered cells above are backed by the wired negative-path attack tiers 
 
 * link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/WiredNegativePathAttackTest.java[WiredNegativePathAttackTest] — HMAC/RSA algorithm confusion (Spoofing/EoP), JWE decompression bomb (Denial of Service), cross-issuer key substitution (Tampering), unsupported JWE key-management algorithm, DPoP sender-binding violations (DPoP), and embedded-JWK header injection (Spoofing/EoP). Extended with the CVE-derived tier VTEST-10..16 (see xref:cve-lessons-register.adoc[CVE Lessons Register]): `alg` case-variant of "none" (Spoofing), over-depth JSON payload (Denial of Service), cross-audience token rejection (EoP), JWE header algorithm downgrade (Tampering), RSA-OAEP decryption-failure indistinguishability (Information Disclosure), `client_id`→`azp` fallback rejection (EoP), and an all-zero ES256 DPoP proof signature rejected at the ECDSA range check (Spoofing/Tampering, CVE-2022-21449 class).
 * link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/PsychicSignatureAttackTest.java[PsychicSignatureAttackTest] — zero-value ECDSA psychic-signature bypass (Tampering).
+* link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorVerifySignatureAttackTest.java[TokenValidatorVerifySignatureAttackTest] and link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidatorTest.java[LogoutTokenValidatorTest] — crafted tokens driven through a real `TokenValidator` into the signature-only entry and the logout-token validator (Public Seams and Back-Channel Logout).
 
 Any future threat marked covered without a corresponding wired negative-path test violates this rule and must be treated as an uncovered threat.
 ====
@@ -392,3 +437,4 @@ Any future threat marked covered without a corresponding wired negative-path tes
 * https://blog.doyensec.com/2025/01/30/oauth-common-vulnerabilities.html[OAuth Common Vulnerabilities (Doyensec, 2025)]
 * https://datatracker.ietf.org/doc/html/rfc6749[RFC 6749 - The OAuth 2.0 Authorization Framework]
 * https://openid.net/specs/openid-connect-core-1_0.html[OpenID Connect Core 1.0]
+* https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0]

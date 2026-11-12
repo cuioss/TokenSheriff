@@ -24,6 +24,7 @@ The following standards and specifications are referenced in this document:
 * https://datatracker.ietf.org/doc/html/rfc7516[RFC 7516 - JSON Web Encryption (JWE)] - May 2015
 * https://datatracker.ietf.org/doc/html/rfc6749[RFC 6749 - OAuth 2.0 Authorization Framework] - October 2012
 * https://openid.net/specs/openid-connect-core-1_0.html[OpenID Connect Core 1.0] - November 2014
+* https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0] - September 2022
 * https://datatracker.ietf.org/doc/html/rfc8725[RFC 8725 - JSON Web Token Best Current Practices] - February 2020 (updates RFC 7519)
 * https://datatracker.ietf.org/doc/html/rfc9068[RFC 9068 - JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens] - October 2021
 * https://datatracker.ietf.org/doc/html/rfc9449[RFC 9449 - OAuth 2.0 Demonstrating Proof of Possession (DPoP)] - September 2023
@@ -48,7 +49,7 @@ Token-Sheriff already satisfies the OAuth 2.1 resource server requirements:
 * **RFC 9068 token type validation** - Optional per-issuer `typ: at+jwt` header validation (see xref:#VALIDATION-8.6[VALIDATION-8.6])
 * **RFC 9449 DPoP sender-constrained tokens** - Optional per-issuer DPoP proof validation binding access tokens to client public keys (see xref:#VALIDATION-8.7[VALIDATION-8.7])
 
-NOTE: Requirement IDs are stable identifiers referenced across documentation and are not sequential. Functional requirements use IDs 1-8 and 12; non-functional requirements use IDs 9-10.
+NOTE: Requirement IDs are stable identifiers referenced across documentation and are not sequential. Functional requirements use IDs 1-8, 12 and 13; non-functional requirements use IDs 9-10.
 
 == Functional Requirements
 
@@ -509,6 +510,84 @@ Tests must verify compliance with:
 * https://datatracker.ietf.org/doc/html/rfc8725[RFC 8725 - JSON Web Token Best Current Practices]
 
 _See specification: xref:security-reference.adoc[Security Reference]_
+
+[#VALIDATION-13]
+=== VALIDATION-13: Public Validation Seams and Back-Channel Logout
+
+The library must offer consumers the narrow entries they need to build on token validation without reaching into its internals, and must validate the logout tokens of https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0] (September 2022).
+
+_See specifications: xref:architecture.adoc#token-validator-seams[TokenValidator Public Seams], xref:architecture.adoc#logout-package[Logout Token Validation] and xref:../adr/0029-TokenValidator_publishes_signature-only_verification_native_JSON_claims_and_a_non-fetching_issuer_status_view.adoc[ADR-0029]_
+
+[#VALIDATION-13.1]
+==== VALIDATION-13.1: Signature-Only Verification
+
+`TokenValidator` must offer a signature-only entry, `verifySignature(String)`, that applies the token string limits, resolves an enabled issuer whose JWKS loader is healthy, runs the header checks for algorithm, key ID and embedded JWK, verifies the signature and maps the claims, and reaches no claim verdict.
+
+* The result, `SignatureVerifiedToken`, is not a `TokenContent`, so it cannot reach code that accepts a validated token
+* The issuer's expected token type is not checked; the `typ` header is returned verbatim for the caller to judge
+* The access-token cache is neither read nor written
+* A success counts the `SIGNATURE_ONLY_VERIFIED` security event; a refusal counts the event of the stage that refused it
+
+_See specification: xref:security-reference.adoc#signature-only-verification[Signature-Only Verification]_
+
+[#VALIDATION-13.2]
+==== VALIDATION-13.2: Native JSON Claims
+
+The library must return the payload of a validated token, through `TokenValidator.getRawClaims(TokenContent)`, and of a signature-verified token, through `SignatureVerifiedToken.getRawClaims()`, as a native JSON map.
+
+* The payload is decoded with the validator's own parser, so the `ParserConfig` size, depth, array and string bounds apply; a payload the parser refuses is refused as a whole
+* JSON objects are unmodifiable maps in member order, JSON arrays unmodifiable lists in element order, and numbers, booleans and strings keep their JSON type
+* A `null` nested inside an object or array is kept; a top-level `null` member is omitted
+* For a JWE, the payload of the inner, decrypted token is returned
+
+_See specification: xref:architecture.adoc#token-validator-seams[TokenValidator Public Seams]_
+
+[#VALIDATION-13.3]
+==== VALIDATION-13.3: Issuer Status View
+
+`TokenValidator.getIssuerStatuses()` must return an immutable list with one `IssuerStatusView` per enabled issuer, in configuration order.
+
+* Each view names the issuer and its JWKS type and reads the current loader status on every call
+* Reading the status fetches no keys
+* The view exposes neither the issuer configuration nor the JWKS loader, so no caller can close, refresh or replace a loader through it; the loaders are closed only by `TokenValidator.close()`
+* Disabled issuers are not listed
+
+_See specification: xref:architecture.adoc#token-validator-seams[TokenValidator Public Seams]_
+
+[#VALIDATION-13.4]
+==== VALIDATION-13.4: Logout Token Validation
+
+The library must validate a logout token of https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0] with every check of sections 2.4 and 2.6 of that specification, run in this fixed order:
+
+. The signature, through the signature-only entry of xref:#VALIDATION-13.1[VALIDATION-13.1]
+. A present `typ` header is `logout+jwt` or `application/logout+jwt`, compared case-insensitively; an absent `typ` is accepted
+. `iss` equals the expected issuer
+. `aud`, a string or an array, contains the expected audience
+. `iat` is a number within the freshness window around now
+. `exp` is a number not in the past
+. `events` is a JSON object whose `http://schemas.openid.net/event/backchannel-logout` member is a JSON object
+. `nonce` is absent
+. `sub` and/or `sid` is present as a string
+. `jti` is present as a non-blank string
+. The `jti` passes the replay guard of xref:#VALIDATION-13.5[VALIDATION-13.5]
+
+A refusal names exactly one `LogoutTokenCheck`, the first check that failed. The set of checks is bounded and the result carries no text taken from the token. The validator does not log; receiving the logout request over HTTP and ending the named session stay with the consuming application.
+
+_See specification: xref:security-reference.adoc#logout-token-validation[Logout Token Validation]_
+
+[#VALIDATION-13.5]
+==== VALIDATION-13.5: Logout Token Replay Guard
+
+The library must refuse a logout token whose `jti` was already admitted, through a replay guard that is:
+
+* *Bounded* - it holds at most a configured number of live entries
+* *Fail closed* - at capacity, a new `jti` is refused as `REPLAY_GUARD_FULL`; a live entry is never evicted to make room
+* *Digest-only* - each `jti` is kept as its SHA-256 digest, until `iat` plus the freshness window
+* *Thread-safe* - one admission is a single critical section, so no two threads admit the same `jti` or take the last free entry
+
+The guard is consulted last, so a token refused by any other check takes no guard capacity.
+
+_See specification: xref:security-reference.adoc#logout-replay-guard[Logout Replay Guard]_
 
 == Non-Functional Requirements
 

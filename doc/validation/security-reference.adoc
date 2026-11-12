@@ -68,6 +68,57 @@ A member name duplicated in a JWT header or payload is not rejected as a duplica
 
 Algorithm upgrades without breaking changes via `SignatureAlgorithmPreferences`. Per-issuer algorithm configuration supported.
 
+[[signature-only-verification]]
+=== Signature-Only Verification
+
+_See Requirement xref:requirements.adoc#VALIDATION-13.1[VALIDATION-13.1: Signature-Only Verification]_
+
+WARNING: `TokenValidator.verifySignature(String)` reaches *no claim verdict*. Its `SignatureVerifiedToken` is not an authentication decision. It establishes only that the token is within the token string limits, was signed by a key of an enabled issuer whose JWKS loader is healthy, and passes the header checks for algorithm, key ID and embedded JWK. The token may be expired, issued for another audience, lack `sub` or `azp`, or be of any token type. The issuer's configured expected token type is *not* checked: the `typ` header is returned verbatim, and judging it is the caller's job.
+
+A caller of the signature-only entry must therefore check every claim it relies on itself, or use `createAccessToken` / `createIdToken` when it needs an access or ID token verdict. `SignatureVerifiedToken` implements neither `TokenContent` nor `MinimalTokenContent`, so a signature-only result cannot be passed to code that accepts a validated token, and it is never cached. The logout-token validator below is the library's own consumer of this entry: it checks every claim of a logout token on top of it.
+
+The native JSON claims (`SignatureVerifiedToken.getRawClaims()`, `TokenValidator.getRawClaims(TokenContent)`) follow the null handling described under <<claims-validation>> unchanged: a top-level `null` member is omitted, a `null` nested inside an object or array is kept.
+
+[[logout-token-validation]]
+=== Logout Token Validation
+
+_See Requirement xref:requirements.adoc#VALIDATION-13.4[VALIDATION-13.4: Logout Token Validation]_
+
+`LogoutTokenValidator` validates a logout token of https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0] on top of the <<signature-only-verification,signature-only entry>>. It runs these checks in a fixed order and refuses the token with the first `LogoutTokenCheck` that fails:
+
+[cols="1,3", options="header"]
+|===
+|Check |Refused when
+|`SIGNATURE` |The signature-only entry refuses the token: empty or oversized, unknown or unavailable issuer, refused header, or invalid signature. The precise reason is counted as a security event by `verifySignature`.
+|`TYPE` |A `typ` header is present and is neither `logout+jwt` nor `application/logout+jwt`, compared case-insensitively.
+|`ISSUER` |`iss` is not the expected issuer.
+|`AUDIENCE` |`aud`, a string or an array, does not contain the expected audience.
+|`ISSUED_AT` |`iat` is absent, not a number, or further than the freshness window before or after now.
+|`EXPIRATION` |`exp` is absent, not a number, or before now.
+|`EVENTS` |`events` is not a JSON object whose `http://schemas.openid.net/event/backchannel-logout` member is a JSON object. The claim is read as JSON, never scanned as text.
+|`NONCE` |`nonce` is present.
+|`SUBJECT_OR_SESSION` |Neither `sub` nor `sid` is a non-blank string, or one of them is present as anything else.
+|`JWT_ID` |`jti` is absent or not a non-blank string.
+|`REPLAYED` / `REPLAY_GUARD_FULL` |The <<logout-replay-guard,replay guard>> refuses the `jti`.
+|===
+
+*Absent `typ` is accepted.* Back-Channel Logout 1.0 recommends `typ: logout+jwt` but does not require it, and many OpenID Providers omit it. Requiring it would refuse their legitimate logout tokens, so a present `typ` is checked and an absent one passes.
+
+*`events` and the absent `nonce` close ID-token confusion.* An ID token from the same issuer for the same audience is signed by the same key and carries `iss`, `aud`, `iat`, `exp` and `sub`, so with an absent `typ` it would otherwise pass as a logout token. An ID token carries no `events` member with the back-channel logout event, which refuses it as `EVENTS`; and an ID token carries `nonce` whenever the client sent one in its authentication request, which a logout token must not, so such a token is refused as `NONCE` as well. The two checks refuse an ID token presented as a logout token even when `typ` is absent. The reverse direction is closed by the token pipelines: the logout-token validator never produces a `TokenContent`, so its result cannot be used where an ID-token verdict is expected.
+
+The validator does not log and the refusal carries no text taken from the token, so a caller can log or meter the bounded `LogoutTokenCheck` value safely. Receiving the logout request over HTTP and ending the session the token names stay with the consuming application.
+
+[[logout-replay-guard]]
+=== Logout Replay Guard
+
+_See Requirement xref:requirements.adoc#VALIDATION-13.5[VALIDATION-13.5: Logout Token Replay Guard]_
+
+`LogoutTokenReplayGuard` keeps the SHA-256 digest of each admitted `jti`, never the `jti` itself, until `iat` plus the freshness window. A token is not accepted after that instant anyway, because the `ISSUED_AT` check refuses it, so the retention covers exactly the period in which a replay could otherwise succeed. A `jti` still retained is refused as `REPLAYED`.
+
+The guard is bounded by a capacity of live entries and *fails closed*: when it is full, a new `jti` is refused as `REPLAY_GUARD_FULL` and no live entry is evicted to make room, because forgetting a live entry early would let its token be replayed. Expired entries are purged on every admission, which is how capacity is regained. Size the capacity above the number of logout tokens an issuer can send within twice the freshness window; a guard that reports `REPLAY_GUARD_FULL` refuses new logouts until entries expire. The guard is consulted last, so a token refused by any other check never takes capacity.
+
+An admission - purge, look up, test capacity, insert - is one critical section under a private monitor, so no two threads admit the same `jti` or both take the last free entry.
+
 == JWT Attack Mitigations
 
 [cols="1,2,2,1", options="header"]
@@ -99,6 +150,7 @@ Algorithm upgrades without breaking changes via `SignatureAlgorithmPreferences`.
 === Token Handling
 
 * **Always use `TokenValidator`** - never decode tokens without validation
+* **Do not treat `verifySignature` as authentication** - its result carries no claim verdict; see <<signature-only-verification>>
 * **Configure audience validation** - set `expectedAudience` to your resource server identifier
 * **Configure issuer validation** - only trust known identity providers
 * **Use short token lifetimes** - 5-15 minutes for access tokens
