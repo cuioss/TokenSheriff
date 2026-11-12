@@ -41,6 +41,7 @@ import javax.net.ssl.X509TrustManager;
 import java.net.CookieManager;
 import java.net.URI;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -53,6 +54,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -69,13 +71,23 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *   <li>the redirect the engine returns carries exactly {@code client_id} and {@code request_uri} —
  *       none of the pushed parameters reach the front channel;</li>
  *   <li>Keycloak accepts that redirect: following it serves the login page, not an error page;</li>
+ *   <li>logging the integration user in on that login page completes the authorization: Keycloak
+ *       answers with the {@code form_post} document carrying an authorization code;</li>
  *   <li>the {@code request_uri} is single-use (RFC 9126 §4): following the same redirect a second time
  *       no longer serves the login page.</li>
  * </ol>
+ * The login step is what makes the single use observable. RFC 9126 §4 lets an authorization server
+ * accept a duplicate request "due to a user reloading/refreshing their user agent", and Keycloak enforces
+ * one-time use at the point of authorization, not when the authorization endpoint is visited: the
+ * authorization-endpoint parser only reads the pushed request from the single-use store, and the entry is
+ * removed when the login completes and the authorization response is built. Before that login, a second
+ * follow is therefore served the login page again; after it, Keycloak no longer finds the pushed request
+ * and answers with an error page.
+ * <p>
  * The engine reaches Keycloak over the chain-validating test truststore, as in the other client-engine
- * specs ({@link RefreshEngineSupport#chainValidatingSslContext()}); the browser leg, which only follows
- * the redirect, runs against a trust-all TLS context (integration-test scope only), mirroring
- * {@link AuthCodePkceSpecIT}.
+ * specs ({@link RefreshEngineSupport#chainValidatingSslContext()}); the browser leg, which follows the
+ * redirect and submits the login form, runs against a trust-all TLS context (integration-test scope only),
+ * mirroring {@link AuthCodePkceSpecIT}.
  */
 @DisplayName("RFC 9126 pushed authorization through AuthorizationCodeFlow against real Keycloak")
 class PushedAuthorizationFlowSpecIT extends BaseIntegrationTest {
@@ -86,6 +98,11 @@ class PushedAuthorizationFlowSpecIT extends BaseIntegrationTest {
     private static final String CLIENT_ID = "integration-client";
     private static final String CLIENT_SECRET = "integration-secret";
     private static final String REDIRECT_URI = "https://localhost/callback";
+    private static final String USERNAME = "integration-user";
+    private static final String PASSWORD = "integration-password";
+
+    /** The {@code action} target of the login form Keycloak serves. */
+    private static final Pattern FORM_ACTION = Pattern.compile("action=\"([^\"]+)\"");
 
     /** The RFC 9126 §2.2 URN prefix of a {@code request_uri} the authorization server issues. */
     private static final String REQUEST_URI_PREFIX = "urn:ietf:params:oauth:request_uri:";
@@ -123,7 +140,8 @@ class PushedAuthorizationFlowSpecIT extends BaseIntegrationTest {
                 () -> assertTrue(query.get("request_uri").startsWith(REQUEST_URI_PREFIX),
                         "the request_uri must be the opaque URN Keycloak issued, got " + query.get("request_uri")));
 
-        FollowResult first = follow(authorizationUrl);
+        HttpClient firstBrowser = newBrowser();
+        FollowResult first = follow(firstBrowser, authorizationUrl);
         LOGGER.debug("First redirect follow: %s", first.describe());
         assertAll("Keycloak accepts the client_id + request_uri redirect",
                 () -> assertEquals(200, first.response().statusCode(),
@@ -131,12 +149,28 @@ class PushedAuthorizationFlowSpecIT extends BaseIntegrationTest {
                 () -> assertTrue(LOGIN_FORM_USERNAME.matcher(first.response().body()).find(),
                         "the response must be the login form, not an error page, " + first.describe()));
 
-        FollowResult second = follow(authorizationUrl);
+        // Keycloak consumes the request_uri when the authorization completes, so log in first.
+        HttpResponse<String> loginResult = login(firstBrowser, first.response().body());
+        LOGGER.debug("Login result: status=%s", loginResult.statusCode());
+        assertEquals(200, loginResult.statusCode(),
+                "a successful login must return the form_post auto-submit document");
+        FormPostSupport.FormPost callback = FormPostSupport.parse(loginResult.body());
+        assertAll("the login completes the pushed authorization",
+                () -> assertTrue(callback.action().startsWith(REDIRECT_URI),
+                        "the form_post target must be the pushed redirect_uri, got " + callback.action()),
+                () -> assertTrue(callback.query().contains("code="),
+                        "the form_post document must carry the authorization code"));
+
+        FollowResult second = follow(newBrowser(), authorizationUrl);
         LOGGER.debug("Second redirect follow: %s", second.describe());
-        assertFalse(second.response().statusCode() == 200
-                        && LOGIN_FORM_USERNAME.matcher(second.response().body()).find(),
-                "a request_uri is single-use (RFC 9126 §4): the second follow must not serve the login page, "
-                        + second.describe());
+        assertAll("the consumed request_uri is refused",
+                () -> assertFalse(second.response().statusCode() == 200
+                                && LOGIN_FORM_USERNAME.matcher(second.response().body()).find(),
+                        "a request_uri is single-use (RFC 9126 §4): the second follow must not serve the login page, "
+                                + second.describe()),
+                () -> assertEquals(400, second.response().statusCode(),
+                        "Keycloak must answer a consumed request_uri with its invalid-request error page, "
+                                + second.describe()));
     }
 
     private static ClientConfiguration clientConfiguration() {
@@ -189,19 +223,25 @@ class PushedAuthorizationFlowSpecIT extends BaseIntegrationTest {
     }
 
     /**
-     * Follows the redirect as a fresh browser would. Each call starts with its own empty cookie jar, so no
-     * session cookie is shared between two follows; within one follow the jar is kept across hops, and
-     * same-origin {@code 3xx} hops (same scheme, host and port as the authorization URL) are followed
-     * transparently, up to {@link #MAX_SAME_ORIGIN_HOPS}. A {@code Location} that leaves the origin is
-     * never followed: that response is returned so the caller can inspect it.
+     * A fresh browser: its own empty cookie jar, so no session cookie is shared with another browser, and
+     * no automatic redirect handling, so {@link #follow} sees every hop.
      */
-    private static FollowResult follow(String authorizationUrl) throws Exception {
-        HttpClient browser = HttpClient.newBuilder()
+    private static HttpClient newBrowser() throws Exception {
+        return HttpClient.newBuilder()
                 .sslContext(trustAllContext())
                 .cookieHandler(new CookieManager())
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
+    }
+
+    /**
+     * Follows the redirect with the given browser. Its cookie jar is kept across hops, and same-origin
+     * {@code 3xx} hops (same scheme, host and port as the authorization URL) are followed transparently,
+     * up to {@link #MAX_SAME_ORIGIN_HOPS}. A {@code Location} that leaves the origin is never followed:
+     * that response is returned so the caller can inspect it.
+     */
+    private static FollowResult follow(HttpClient browser, String authorizationUrl) throws Exception {
         URI origin = URI.create(authorizationUrl);
         URI current = origin;
         List<String> locations = new ArrayList<>();
@@ -224,6 +264,26 @@ class PushedAuthorizationFlowSpecIT extends BaseIntegrationTest {
             }
             current = next;
         }
+    }
+
+    /**
+     * Submits the integration user's credentials to the login form served by the first follow, with the
+     * same browser, so the authentication-session cookies of that follow stay valid. Keycloak builds the
+     * form action from its static public hostname, so the POST follows it as emitted.
+     */
+    private static HttpResponse<String> login(HttpClient browser, String loginPage) throws Exception {
+        Matcher action = FORM_ACTION.matcher(loginPage);
+        assertTrue(action.find(), "the Keycloak login page must expose a form action URL");
+        String actionUrl = action.group(1).replace("&amp;", "&");
+        String form = param("username", USERNAME) + "&" + param("password", PASSWORD);
+        HttpRequest request = HttpRequest.newBuilder().uri(URI.create(actionUrl))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form)).build();
+        return browser.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String param(String key, String value) {
+        return URLEncoder.encode(key, StandardCharsets.UTF_8) + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     private static boolean isRedirect(int status) {
