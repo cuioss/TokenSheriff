@@ -24,7 +24,9 @@ import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.tools.logging.CuiLogger;
 
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -34,17 +36,29 @@ import java.util.Objects;
  * <p>
  * The URL always carries {@code response_type=code}, the {@code client_id}, the exact
  * {@code redirect_uri}, the requested {@code scope}, the anti-CSRF {@code state}, the {@code nonce},
- * and the PKCE {@code code_challenge} / {@code code_challenge_method=S256}. It also always requests
- * {@code response_mode=form_post} (OAuth 2.0 Form Post Response Mode) so the authorization response —
- * {@code code}, {@code state}, and the RFC 9207 {@code iss} — is delivered in the body of a POST to
- * the redirect URI rather than as query parameters on a redirect URL, where it would leak into
- * browser history, server logs, and the {@code Referer} header ({@code CLIENT-1} / {@code CLIENT-14},
- * {@code T-URL-LEAK}). When the flow context requests {@code acr_values} and/or a {@code max_age}
- * freshness constraint (RFC 9470 step-up), they are appended. The parameters are inserted before any
- * {@code #fragment} of the authorization endpoint, so they always reach the authorization server and the
- * fragment is kept unchanged (see {@link EndpointQuery}). The builder fails closed when the
- * authorization server does not advertise PKCE {@code S256}, so a downgrade to a non-PKCE (or
- * {@code plain}) request can never be issued ({@code CLIENT-2}).
+ * the PKCE {@code code_challenge} / {@code code_challenge_method=S256}, and a {@code response_mode}.
+ * <p>
+ * <strong>{@code response_mode=form_post} is the default.</strong> With it (OAuth 2.0 Form Post
+ * Response Mode) the authorization response — {@code code}, {@code state}, and the RFC 9207
+ * {@code iss} — is delivered in the body of a POST to the redirect URI rather than as query parameters
+ * on a redirect URL, where it would leak into browser history, server logs, and the {@code Referer}
+ * header ({@code CLIENT-1} / {@code CLIENT-14}, {@code T-URL-LEAK}). {@link #build(ClientConfiguration,
+ * ProviderMetadata, FlowContext)} always requests it. Two opt-ins are available per call through
+ * {@link AuthorizationRequestOptions} and {@link #build(ClientConfiguration, ProviderMetadata,
+ * FlowContext, AuthorizationRequestOptions)}: {@link ResponseMode#QUERY} (which re-opens
+ * {@code T-URL-LEAK} and leaves the mitigation to the caller) and an OpenID Connect {@link Prompt}. The
+ * options may also replace the configured scopes for the call.
+ * <p>
+ * When the flow context requests {@code acr_values} and/or a {@code max_age} freshness constraint
+ * (RFC 9470 step-up), they are appended. The parameters are inserted before any {@code #fragment} of the
+ * authorization endpoint, so they always reach the authorization server and the fragment is kept
+ * unchanged (see {@link EndpointQuery}). The builder fails closed when the authorization server does not
+ * advertise PKCE {@code S256}, so a downgrade to a non-PKCE (or {@code plain}) request can never be
+ * issued ({@code CLIENT-2}).
+ * <p>
+ * {@link #parameters(ClientConfiguration, ProviderMetadata, FlowContext, AuthorizationRequestOptions)}
+ * exposes the validated parameter set as an ordered, unmodifiable map, for example for a pushed
+ * authorization request (RFC 9126).
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -67,10 +81,11 @@ public class AuthorizationRequestBuilder {
     private static final String PARAM_ACR_VALUES = "acr_values";
     private static final String PARAM_MAX_AGE = "max_age";
     private static final String PARAM_RESPONSE_MODE = "response_mode";
-    private static final String RESPONSE_MODE_FORM_POST = "form_post";
+    private static final String PARAM_PROMPT = "prompt";
 
     /**
-     * Builds the authorization request URL for the given flow context.
+     * Builds the authorization request URL for the given flow context, with the configured scopes and
+     * {@code response_mode=form_post}.
      *
      * @param configuration the client configuration; must not be {@code null}
      * @param metadata      the resolved provider metadata carrying the authorization endpoint; must
@@ -83,6 +98,73 @@ public class AuthorizationRequestBuilder {
      *                               advertise PKCE {@code S256}
      */
     public String build(ClientConfiguration configuration, ProviderMetadata metadata, FlowContext context) {
+        String authorizationEndpoint = validatedEndpoint(configuration, metadata, context);
+        // The query goes in front of any #fragment, or state, nonce and PKCE would never reach the AS.
+        return EndpointQuery.append(authorizationEndpoint,
+                FormEncoder.encode(assemble(configuration, context, AuthorizationRequestOptions.DEFAULTS)));
+    }
+
+    /**
+     * Builds the authorization request URL for the given flow context with per-call options.
+     * <p>
+     * With {@link AuthorizationRequestOptions#DEFAULTS} the URL is identical to the one
+     * {@link #build(ClientConfiguration, ProviderMetadata, FlowContext)} returns.
+     *
+     * @param configuration the client configuration; must not be {@code null}
+     * @param metadata      the resolved provider metadata carrying the authorization endpoint; must
+     *                      not be {@code null}
+     * @param context       the flow context carrying {@code state}, {@code nonce}, PKCE, and the
+     *                      redirect URI; must not be {@code null}
+     * @param options       the per-call options; must not be {@code null}
+     * @return the fully-formed authorization request URL
+     * @throws ClientProtocolException if the AS advertises no authorization endpoint, the endpoint is
+     *                               not a TLS URL (see {@link EndpointSchemePolicy}), or the AS does not
+     *                               advertise PKCE {@code S256}
+     * @since 1.0
+     */
+    public String build(ClientConfiguration configuration, ProviderMetadata metadata, FlowContext context,
+            AuthorizationRequestOptions options) {
+        Objects.requireNonNull(options, "options must not be null");
+        String authorizationEndpoint = validatedEndpoint(configuration, metadata, context);
+        return EndpointQuery.append(authorizationEndpoint, FormEncoder.encode(assemble(configuration, context, options)));
+    }
+
+    /**
+     * Returns the validated parameters of the authorization request: exactly the names and values the
+     * matching {@link #build(ClientConfiguration, ProviderMetadata, FlowContext, AuthorizationRequestOptions)}
+     * call emits, in the same order.
+     * <p>
+     * The checks are the ones {@code build} performs, with the same exception types and messages: the
+     * authorization endpoint must be advertised and a TLS URL, and the AS must advertise PKCE
+     * {@code S256}. An absent optional parameter ({@code scope} with no scopes, {@code prompt},
+     * {@code acr_values}, {@code max_age}) is omitted, never present with an empty value.
+     *
+     * @param configuration the client configuration; must not be {@code null}
+     * @param metadata      the resolved provider metadata carrying the authorization endpoint; must
+     *                      not be {@code null}
+     * @param context       the flow context carrying {@code state}, {@code nonce}, PKCE, and the
+     *                      redirect URI; must not be {@code null}
+     * @param options       the per-call options; must not be {@code null}
+     * @return an unmodifiable, insertion-ordered map of the request parameters
+     * @throws ClientProtocolException if the AS advertises no authorization endpoint, the endpoint is
+     *                               not a TLS URL (see {@link EndpointSchemePolicy}), or the AS does not
+     *                               advertise PKCE {@code S256}
+     * @since 1.0
+     */
+    public Map<String, String> parameters(ClientConfiguration configuration, ProviderMetadata metadata,
+            FlowContext context, AuthorizationRequestOptions options) {
+        Objects.requireNonNull(options, "options must not be null");
+        validatedEndpoint(configuration, metadata, context);
+        return assemble(configuration, context, options);
+    }
+
+    /**
+     * Applies the null guards and the endpoint checks shared by every public entry point.
+     *
+     * @return the advertised authorization endpoint
+     */
+    private static String validatedEndpoint(ClientConfiguration configuration, ProviderMetadata metadata,
+            FlowContext context) {
         Objects.requireNonNull(configuration, "configuration must not be null");
         Objects.requireNonNull(metadata, "metadata must not be null");
         Objects.requireNonNull(context, "context must not be null");
@@ -100,23 +182,41 @@ public class AuthorizationRequestBuilder {
                     "authorization server does not advertise PKCE 'S256'; refusing to start the authorization_code"
                             + " flow");
         }
+        return authorizationEndpoint;
+    }
 
-        Map<String, String> params = new HashMap<>(Map.of(
-                PARAM_RESPONSE_TYPE, RESPONSE_TYPE_CODE,
-                PARAM_CLIENT_ID, configuration.getClientId(),
-                PARAM_REDIRECT_URI, context.redirectUri()));
-        if (!configuration.getScopes().isEmpty()) {
-            params.put(PARAM_SCOPE, String.join(" ", configuration.getScopes()));
-        }
-        params.put(PARAM_STATE, context.state());
-        params.put(PARAM_NONCE, context.nonce());
-        params.put(PARAM_CODE_CHALLENGE, context.pkceChallenge().codeChallenge());
-        params.put(PARAM_CODE_CHALLENGE_METHOD, context.pkceChallenge().method());
-        params.put(PARAM_RESPONSE_MODE, RESPONSE_MODE_FORM_POST);
-        context.acrValues().ifPresent(acr -> params.put(PARAM_ACR_VALUES, acr));
+    /**
+     * Assembles the ordered parameter map.
+     * <p>
+     * The insertion order is the order in which the request has always been emitted, so a request
+     * without options stays byte-for-byte identical: {@code max_age}, {@code scope},
+     * {@code acr_values}, {@code response_type}, {@code redirect_uri}, {@code state},
+     * {@code code_challenge_method}, {@code nonce}, {@code client_id}, {@code code_challenge},
+     * {@code response_mode}, followed by the opt-in {@code prompt}.
+     */
+    private static Map<String, String> assemble(ClientConfiguration configuration, FlowContext context,
+            AuthorizationRequestOptions options) {
+        List<String> overriddenScopes = options.getScopes();
+        List<String> scopes = overriddenScopes != null ? overriddenScopes : configuration.getScopes();
+
+        Map<String, String> params = new LinkedHashMap<>();
         context.maxAge().ifPresent(maxAge -> params.put(PARAM_MAX_AGE, Integer.toString(maxAge)));
-
-        // The query goes in front of any #fragment, or state, nonce and PKCE would never reach the AS.
-        return EndpointQuery.append(authorizationEndpoint, FormEncoder.encode(params));
+        if (!scopes.isEmpty()) {
+            params.put(PARAM_SCOPE, String.join(" ", scopes));
+        }
+        context.acrValues().ifPresent(acr -> params.put(PARAM_ACR_VALUES, acr));
+        params.put(PARAM_RESPONSE_TYPE, RESPONSE_TYPE_CODE);
+        params.put(PARAM_REDIRECT_URI, context.redirectUri());
+        params.put(PARAM_STATE, context.state());
+        params.put(PARAM_CODE_CHALLENGE_METHOD, context.pkceChallenge().method());
+        params.put(PARAM_NONCE, context.nonce());
+        params.put(PARAM_CLIENT_ID, configuration.getClientId());
+        params.put(PARAM_CODE_CHALLENGE, context.pkceChallenge().codeChallenge());
+        params.put(PARAM_RESPONSE_MODE, options.getResponseMode().wireValue());
+        Prompt prompt = options.getPrompt();
+        if (prompt != null) {
+            params.put(PARAM_PROMPT, prompt.wireValue());
+        }
+        return Collections.unmodifiableMap(params);
     }
 }

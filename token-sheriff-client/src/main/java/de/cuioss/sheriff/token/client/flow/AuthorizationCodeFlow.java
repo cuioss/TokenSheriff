@@ -19,15 +19,19 @@ import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
+import de.cuioss.sheriff.token.client.internal.EndpointQuery;
+import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.client.token.IdTokenValidationBridge;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
 import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
+import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -45,6 +49,18 @@ import java.util.Objects;
  *       token's {@code nonce} to the flow and, per OIDC Core §3.1.3.6, its {@code at_hash} to the
  *       returned access token).</li>
  * </ol>
+ * Two further entry points start the flow with per-call {@link AuthorizationRequestOptions}:
+ * <ul>
+ *   <li>{@link #authorize(ProviderMetadata, AuthorizationRequestOptions)} builds the front-channel URL
+ *       with the options applied;</li>
+ *   <li>{@link #authorizePushed(ProviderMetadata, ClientAuthentication, AuthorizationRequestOptions)}
+ *       pushes the parameters to the RFC 9126 PAR endpoint and returns a URL that carries only
+ *       {@code client_id} and the issued {@code request_uri}. It is refused when the AS advertises no PAR
+ *       endpoint; there is no fallback to a front-channel request.</li>
+ * </ul>
+ * {@code response_mode=form_post} stays the default on every entry point. {@link ResponseMode#QUERY}
+ * is an explicit opt-in that re-opens {@code T-URL-LEAK} and leaves the mitigation to the caller.
+ * <p>
  * Only validated tokens are returned — a successful HTTP exchange alone is never trusted
  * ({@code CLIENT-15}).
  *
@@ -61,6 +77,8 @@ public class AuthorizationCodeFlow {
     private static final String PARAM_CODE = "code";
     private static final String PARAM_REDIRECT_URI = "redirect_uri";
     private static final String PARAM_CODE_VERIFIER = "code_verifier";
+    private static final String PARAM_CLIENT_ID = "client_id";
+    private static final String PARAM_REQUEST_URI = "request_uri";
 
     private final ClientConfiguration configuration;
     private final TokenEndpointClient tokenEndpointClient;
@@ -71,6 +89,7 @@ public class AuthorizationCodeFlow {
     private final CallbackHandler callbackHandler;
     @Nullable
     private final SenderConstraint senderConstraint;
+    private final ParClient parClient;
 
     /**
      * Creates a flow with a default {@link IssValidator}, {@link AuthorizationRequestBuilder}, and
@@ -140,6 +159,7 @@ public class AuthorizationCodeFlow {
                 "authorizationRequestBuilder must not be null");
         this.callbackHandler = Objects.requireNonNull(callbackHandler, "callbackHandler must not be null");
         this.senderConstraint = senderConstraint;
+        this.parClient = new ParClient(this.configuration);
     }
 
     /**
@@ -160,6 +180,86 @@ public class AuthorizationCodeFlow {
         FlowContext context = FlowContext.create(redirectUri);
         String url = authorizationRequestBuilder.build(configuration, metadata, context);
         return new AuthorizationRedirect(url, context);
+    }
+
+    /**
+     * Starts the flow with per-call options: mints a flow context and builds the authorization URL to
+     * redirect to.
+     * <p>
+     * With {@link AuthorizationRequestOptions#DEFAULTS} the URL is the one
+     * {@link #authorize(ProviderMetadata)} builds. {@link ResponseMode#QUERY} is an explicit opt-in: it
+     * places {@code code}, {@code state} and {@code iss} in the redirect URL and re-opens
+     * {@code T-URL-LEAK}, leaving the mitigation to the caller.
+     *
+     * @param metadata the resolved provider metadata; must not be {@code null}
+     * @param options  the per-call options; must not be {@code null}
+     * @return the authorization redirect (URL + flow context to persist)
+     * @throws IllegalArgumentException if the client declares no redirect URI
+     * @throws ClientProtocolException  if the AS advertises no authorization endpoint, the endpoint is
+     *                                  not a TLS URL, or the AS advertises no PKCE {@code S256}
+     * @since 1.0
+     */
+    public AuthorizationRedirect authorize(ProviderMetadata metadata, AuthorizationRequestOptions options) {
+        Objects.requireNonNull(metadata, "metadata must not be null");
+        Objects.requireNonNull(options, "options must not be null");
+        FlowContext context = FlowContext.create(requireRedirectUri());
+        String url = authorizationRequestBuilder.build(configuration, metadata, context, options);
+        return new AuthorizationRedirect(url, context);
+    }
+
+    /**
+     * Starts the flow through a pushed authorization request (RFC 9126): mints a flow context, pushes
+     * the authorization parameters to the AS over the authenticated back channel, and returns a redirect
+     * URL that carries only {@code client_id} and the issued {@code request_uri}.
+     * <p>
+     * The pushed parameters are exactly the ones
+     * {@link AuthorizationRequestBuilder#parameters(ClientConfiguration, ProviderMetadata, FlowContext,
+     * AuthorizationRequestOptions)} returns, so the same TLS and PKCE {@code S256} checks apply to the
+     * authorization endpoint. When the AS advertises no PAR endpoint the call is refused before any HTTP
+     * request; it never falls back to a front-channel request.
+     *
+     * @param metadata             the resolved provider metadata; must not be {@code null}
+     * @param clientAuthentication the client authentication to present at the PAR endpoint; must not be
+     *                             {@code null}
+     * @param options              the per-call options; must not be {@code null}
+     * @return the authorization redirect (URL carrying {@code client_id} and {@code request_uri} + flow
+     *         context to persist)
+     * @throws IllegalArgumentException if the client declares no redirect URI
+     * @throws ClientProtocolException  if the AS advertises no PAR endpoint, no authorization endpoint,
+     *                                  a non-TLS authorization endpoint, or no PKCE {@code S256}
+     * @throws de.cuioss.sheriff.token.commons.error.TransportException if the PAR request fails or its
+     *         response carries no {@code request_uri}
+     * @since 1.0
+     */
+    public AuthorizationRedirect authorizePushed(ProviderMetadata metadata, ClientAuthentication clientAuthentication,
+            AuthorizationRequestOptions options) {
+        Objects.requireNonNull(metadata, "metadata must not be null");
+        Objects.requireNonNull(clientAuthentication, "clientAuthentication must not be null");
+        Objects.requireNonNull(options, "options must not be null");
+        String parEndpoint = metadata.getPushedAuthorizationRequestEndpoint()
+                .orElseThrow(() -> new ClientProtocolException(
+                        "provider metadata is missing the pushed authorization request endpoint"));
+        FlowContext context = FlowContext.create(requireRedirectUri());
+        Map<String, String> parameters = authorizationRequestBuilder.parameters(configuration, metadata, context,
+                options);
+        // parameters(...) has already verified the authorization endpoint is present and TLS.
+        String authorizationEndpoint = metadata.getAuthorizationEndpoint()
+                .orElseThrow(() -> new ClientProtocolException(
+                        "provider metadata is missing the authorization endpoint"));
+        ParResponse parResponse = parClient.pushAuthorizationRequest(parEndpoint, parameters, clientAuthentication);
+        Map<String, String> redirectParameters = new LinkedHashMap<>();
+        redirectParameters.put(PARAM_CLIENT_ID, configuration.getClientId());
+        redirectParameters.put(PARAM_REQUEST_URI, parResponse.requestUri);
+        String url = EndpointQuery.append(authorizationEndpoint, FormEncoder.encode(redirectParameters));
+        return new AuthorizationRedirect(url, context);
+    }
+
+    private String requireRedirectUri() {
+        String redirectUri = configuration.getRedirectUri();
+        if (redirectUri == null || redirectUri.isBlank()) {
+            throw new IllegalArgumentException("client declares no redirect URI");
+        }
+        return redirectUri;
     }
 
     /**
@@ -236,7 +336,8 @@ public class AuthorizationCodeFlow {
     }
 
     /**
-     * The authorization redirect produced by {@link #authorize(ProviderMetadata)}.
+     * The authorization redirect produced by {@link #authorize(ProviderMetadata)} and the other
+     * entry points that start the flow.
      *
      * @param authorizationUrl the authorization request URL to redirect the user to
      * @param context          the flow context to persist until the callback returns
