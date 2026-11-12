@@ -1,0 +1,271 @@
+= ADR-0029: TokenValidator publishes signature-only verification, native JSON claims and a non-fetching issuer status view
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// Progressive-disclosure metadata block (see manage-adr SKILL.md → "ADR Template
+// Structure"). Read by `manage-adr.py scan` so a caller can assess an ADR's
+// relevance without reading the full file. List fields are comma-separated.
+// summary: TokenValidator gains three additive, opt-in seams - verifySignature returning a SignatureVerifiedToken outside both sealed token hierarchies, a validator-owned native-JSON claim reader, and a read-only non-fetching IssuerStatusView list - plus an opt-in external-validator report in the JWKS readiness probe and a token-type-free back-channel logout-token validator with a bounded fail-closed replay guard; the three create methods and every shipped probe keep their default behaviour
+// tags: public-api, signature, claims, observability, health-checks, back-channel-logout, replay-protection, fail-closed
+// affects: token-sheriff-validation, token-sheriff-validation-quarkus
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Accepted
+
+== Context
+
+A token-validation library is consumed by two kinds of caller. The first wants a verdict: is this token an
+authenticated access, ID or refresh token for one of my issuers? `TokenValidator` answers that through
+`createAccessToken`, `createIdToken` and `createRefreshToken`, each of which runs the full pipeline (string
+limits, issuer resolution, header posture, signature, `TokenType`-driven claim validation) and returns a
+`TokenContent`.
+
+The second kind of caller builds its own protocol on top of the library and needs the building blocks
+rather than the verdict. A gateway that receives OpenID Connect back-channel logout tokens, or that needs to
+read structured claims, or that reports the health of the issuers its validator depends on, otherwise has to
+re-assemble library internals: re-run the signature check outside the pipeline, re-parse the payload with its
+own JSON parser and its own bounds, and reach for the issuer configuration to read loader status. Every such
+re-assembly duplicates security-relevant code under different limits, and each copy drifts from the one the
+library tests.
+
+Exposing those building blocks creates three failure modes the architecture has to handle:
+
+* *A signature-only result mistaken for a verdict.* A token whose signature is valid but whose `exp`, `aud`
+  or `sub` was never checked must not flow into code that treats a `TokenContent` as an authentication
+  decision.
+* *Structured claims flattened or unbounded.* A claim reader that returns text loses the JSON type of
+  objects and arrays; one that re-parses with a different parser escapes the `ParserConfig` size, depth and
+  array bounds the validator enforces.
+* *Ownership leaks through observability.* A status accessor that hands out the issuer configuration or the
+  JWKS loader lets a caller close or replace a loader the validator owns.
+
+The structural choice point is how far the facade opens: whether it publishes these seams at all, which
+types carry them, and what each seam is forbidden to do so that the existing verdict paths keep their
+behaviour.
+
+Three findings from verifying the codebase shape the decision:
+
+* The raw token of a JWE-arrived token is the outer JWE, not the inner JWS: the parser keeps the original
+  compact serialization as the raw token and holds the decrypted inner token only in its parts and body.
+  Decoding `getRawToken()` blindly therefore never yields the inner payload. Only the component holding the
+  decryption keys and the parser configuration, the validator, can re-derive it.
+* Besides the JWKS readiness-probe test, the external-validator `UP` result with zero checked endpoints is
+  pinned at container level by the foreign-validator observability test, and the empty observed issuer
+  configuration list by the resolver, liveness-probe and DevUI runtime tests. Any opt-in reporting must
+  therefore live beside the existing resolver method, not change it.
+* `TokenType` fixes a mandatory-claim set per type (`ACCESS_TOKEN` requires `iss`, `exp`, `iat`, `sub`;
+  `ID_TOKEN` adds `aud`). A logout token requires `sub` and/or `sid`, a rule a fixed mandatory set cannot
+  express. A signature-only entry builds no `TokenContent` and runs no `TokenType`-driven validation, so a
+  logout validator built on it needs no new `TokenType` member.
+
+== Decision
+
+`TokenValidator` publishes additive, opt-in seams that expose exactly the checks it already owns, each on a
+type that cannot be mistaken for a verdict or used to change validator-owned state. The default behaviour of
+`createAccessToken`, `createIdToken` and `createRefreshToken` and of every shipped health probe is unchanged.
+
+=== OD-1: The signature-only result is a dedicated type outside both sealed hierarchies
+
+`TokenValidator#verifySignature(String)` returns a new `final` immutable type `SignatureVerifiedToken` in
+`domain.token`. It is neither a `TokenContent` nor a `MinimalTokenContent`. Both hierarchies are sealed, and a
+permitted subtype, or reuse of `IdTokenContent`, would let a token whose claims were never validated flow into
+every consumer that accepts those types. The type carries the mapped claims, the protected-header `typ`
+verbatim and the raw token, and its Javadoc states that no claim is validated. `UnvalidatedRefreshToken` is
+the naming and warning precedent.
+
+The entry runs the existing string limits, then the steps the ID-token pipeline already shares: parse
+(including JWE decryption), `iss` extraction, issuer resolution through the issuer config cache, header
+posture, signature, and claim mapping. It is a sibling method on `IdTokenValidationPipeline`; `validate` keeps
+its seven steps. The entry neither reads nor writes the access-token cache.
+
+=== OD-2: The per-issuer token-type check is skipped and `typ` is returned verbatim
+
+The signature-only entry does not apply the issuer's configured `expectedTokenType`. An issuer configured for
+`at+jwt` would otherwise refuse every `logout+jwt` token signed by the same keys, and the entry delivers no
+verdict about the token's type anyway. The `typ` header value is returned unchanged for the caller to judge.
+Every other header check (algorithm allow-list, `kid`, refusal of an embedded `jwk`) still applies.
+
+=== OD-3: One success event, and a refusal counts the event of the failing stage
+
+A successful signature-only verification increments one new `EventType`, `SIGNATURE_ONLY_VERIFIED`
+(category `null`). No `MeasurementType` and no timing are added. A refusal increments exactly the one event
+of the stage that refused it, using the existing event types. This mirrors `createIdToken`, which counts one
+`*_CREATED` event and records no timing, without inflating `ID_TOKEN_CREATED` counts with tokens that were
+never validated as ID tokens.
+
+=== OD-4: Claims are exposed as a deep-immutable native map, retained only where nothing is cached
+
+The native-JSON claim shape is `Map<String, Object>`, deep-immutable: objects as unmodifiable
+insertion-ordered maps, arrays as unmodifiable lists in element order, numbers, booleans and strings
+unchanged, nested `null` kept, top-level `null` dropped as the parser already does.
+
+`SignatureVerifiedToken` retains the map, filled from the body the pipeline already decoded; the type is never
+cached. For validated tokens the map is not stored at all: `TokenValidator#getRawClaims(TokenContent)`
+re-decodes the token's raw token with the validator's own parser, so `ParserConfig` bounds and JWE decryption
+apply and a hostile payload is refused rather than partially returned. This adds no field to
+`BaseTokenContent`, `AccessTokenContent` or `CachedToken`, adds nothing to their serialized form, and leaves
+`ClaimValue`, `ClaimValueType` and the unknown-claim fallback unchanged.
+
+=== OD-5: Issuer status is a narrow, non-fetching view
+
+`TokenValidator#getIssuerStatuses()` returns an immutable list of `IssuerStatusView`, one per enabled issuer
+in configuration order, never empty. A view carries the issuer identifier, the JWKS type and a
+`loaderStatus()` that reads the loader's current `LoaderStatus` without triggering a fetch. It exposes neither
+the `IssuerConfig` nor the loader. `IssuerConfig#getJwksLoader()` hands out a closable loader, so offering it
+would let a caller break the ownership ADR-0016 assigns to the validator; the view needs no amendment to that
+ADR.
+
+=== OD-6: The readiness probe can withhold issuer identifiers
+
+The JWKS readiness probe gains the opt-out key `sheriff.token.health.jwks.disclose-issuer`, default `true`.
+With `false` the per-issuer `issuer.N.url` entries are omitted and only counts and the verdict are reported.
+The default payload is unchanged.
+
+=== OD-7: External-validator reporting in the readiness probe is opt-in
+
+The JWKS readiness probe gains the opt-in key `sheriff.token.health.jwks.report-external-validator`, default
+`false`. With `true`, and only when the observed validator is an embedder-supplied one, the probe reports
+that validator's issuers with their real loader status through `IssuerStatusView`. The default stays opt-in
+because reporting a real status can turn an embedder's readiness `DOWN`. The opt-in lives in a new resolver
+method beside the existing observed-issuer-configuration method, which keeps its current result for every
+outcome, so liveness and DevUI consumers are untouched. This follows ADR-0002: observability reads the
+resolved validator through its public contract, and `getIssuerStatuses()` is that contract.
+
+=== OD-8: The library publishes a back-channel logout-token validator; an absent `typ` is accepted
+
+Two directions were open. In the first, the library publishes a back-channel logout-token validator and a
+replay guard built on the seams above. In the second, the library publishes only the seams and leaves logout
+validation to each consumer. The first direction is chosen; the second is not.
+
+`token-sheriff-validation` gains a package `logout` with `LogoutTokenValidator`, `LogoutTokenValidationResult`,
+`LogoutTokenCheck` and `LogoutTokenReplayGuard`, implementing the logout-token checks of OpenID Connect
+Back-Channel Logout 1.0 §2.4 and §2.6. A present `typ` must equal `logout+jwt`, case-insensitively, with or
+without the `application/` prefix. An absent `typ` is accepted, because the specification recommends the
+header but does not require it, and tokens from identity providers that omit it would otherwise be refused.
+The `events` and absent-`nonce` checks keep confusion with an ID token closed.
+
+The validator's design:
+
+* *Token-type-free.* No `TokenType` member is added. The validator composes
+  `TokenValidator#verifySignature` and checks the native raw claims of the `SignatureVerifiedToken` itself;
+  every logout-specific rule lives in the `logout` package.
+* *Bounded result.* A refusal names exactly one value of the enum `LogoutTokenCheck` (`SIGNATURE`, `TYPE`,
+  `ISSUER`, `AUDIENCE`, `ISSUED_AT`, `EXPIRATION`, `EVENTS`, `NONCE`, `SUBJECT_OR_SESSION`, `JWT_ID`,
+  `REPLAYED`, `REPLAY_GUARD_FULL`); an acceptance carries `iss`, `jti` and the optional `sub` and `sid`. The
+  result never carries free text. Any refusal by the signature-only entry maps to `SIGNATURE`; its precise
+  security event has already been counted under OD-3.
+* *No new event and no log record.* No `EventType`, `MeasurementType` or log record is added. The validator
+  never logs remote text; the caller logs or meters the returned check.
+* *Fixed order, guard last.* Checks run in a fixed order (`typ`, `iss`, `aud`, `iat`, `exp`, `events`,
+  `nonce`, `sub`/`sid`, `jti`) and the replay guard is consulted last, so a token failing any other check never
+  consumes guard capacity. `events` is read as a JSON object holding the back-channel logout event key, never
+  by scanning a string.
+* *Bounded retention.* The guard retains a `jti` until `iat` plus the freshness window. Beyond that point the
+  token is refused by the `iat` check anyway, so no entry is ever needed past its window.
+* *Fail closed.* The guard stores the SHA-256 digest of each `jti`, never the value itself, and has a fixed
+  capacity. A full guard refuses a new token as `REPLAY_GUARD_FULL`; it never evicts a live entry to make room.
+  Purge, lookup, capacity test and insert run under one monitor, so no two threads admit the same `jti` or take
+  the same last free slot.
+* *Boundaries.* An `iat` exactly at either edge of the symmetric freshness window is accepted and one second
+  beyond is refused; an `exp` exactly now is accepted and one second earlier is refused.
+
+The HTTP receiver endpoint for back-channel logout and the termination of the affected sessions stay with
+the consuming application. The library validates the token; it does not receive it or act on it.
+
+== Consequences
+
+=== Positive
+
+* A consumer that builds its own protocol on the library reuses the library's string limits, issuer
+  resolution, header posture, signature verification and parser bounds instead of re-assembling them.
+* A signature-only result cannot reach code that accepts `TokenContent` or `MinimalTokenContent`; the type
+  system, not documentation alone, keeps it out of the verdict paths.
+* Claim reading keeps the JSON type of nested objects and arrays and is bounded by the same `ParserConfig`
+  the validator enforces, including for JWE-arrived tokens.
+* Cached and serialized token content are unchanged, so the access-token cache footprint does not grow.
+* Issuer health can be observed for an embedder-supplied validator without any path to close or replace its
+  loaders.
+* Back-channel logout tokens are validated by one tested implementation whose result is a bounded enum, so
+  a caller can meter refusals by check without parsing text.
+* The three `create*` methods and every shipped probe behave as before; the existing tests pinning them pass
+  unmodified.
+
+=== Negative
+
+* The facade's public surface grows by three methods and two types that must stay stable.
+* `getRawClaims(TokenContent)` re-decodes, and for a JWE re-decrypts, on every call. The cost is the
+  deliberate price of not storing claims in cached entries.
+* A successful signature-only verification adds one counter that the Quarkus metrics collector registers by
+  default.
+* Accepting an absent `typ` widens the token shapes the logout validator admits; the remaining checks carry
+  the protection the header would otherwise add.
+
+=== Risks
+
+* A caller can still treat a `SignatureVerifiedToken` as an authentication decision. The separate type, the
+  Javadoc and the security reference state that it is not; the risk is documented rather than prevented.
+* A full replay guard refuses every new logout token until entries expire. This is fail-closed by design;
+  the distinct `REPLAY_GUARD_FULL` value lets the caller alert on it, and capacity has to be sized against
+  the expected logout rate within the freshness window.
+* Opting into external-validator reporting can turn readiness `DOWN` when a foreign validator's loader is
+  not `OK`, which is why the key is opt-in.
+
+== Alternatives Considered
+
+**Make the signature-only result a permitted subtype of `TokenContent`, or return an `IdTokenContent`.**
+This would reuse every existing accessor. It was rejected because it places a token with unvalidated claims
+in the hierarchy that every authentication consumer accepts, so a single wrong call site turns a signature
+check into an authentication decision.
+
+**Apply the issuer's `expectedTokenType` in the signature-only entry.** This keeps header posture identical
+to the verdict paths. It was rejected because one issuer signs several token types with the same keys, and
+an issuer configured for access tokens would refuse every logout token the entry exists to serve.
+
+**Store the native claims on every validated token.** This makes claim reading free after validation. It was
+rejected because it grows every cached access-token entry and the serialized form of token content for a
+capability only some callers use, and the JWE case still needs the validator to have produced the map.
+
+**Expose the issuer configuration or the JWKS loader for status reads.** This needs no new type. It was
+rejected because both hand out a closable loader and break the ownership of ADR-0016.
+
+**Report external validators in the readiness probe by default.** This gives embedders real status without
+configuration. It was rejected because it changes an existing deployment's readiness verdict on upgrade.
+
+**Publish only the seams and leave logout-token validation to each consumer.** This keeps the library
+smaller. It was rejected because each consumer then re-implements the same specification checks and replay
+guard, and the seams already provide exactly the signature and native-JSON inputs those checks need.
+
+**Add a logout `TokenType` and route logout tokens through the verdict pipeline.** This would reuse the
+claim-validation stage. It was rejected because a fixed mandatory-claim set cannot express "`sub` and/or
+`sid`", and a new member ripples into every exhaustive switch over `TokenType` for no gain.
+
+**Refuse logout tokens without a `typ` header.** This is the stricter posture. It was rejected because the
+specification only recommends the header, so conforming identity providers that omit it would be refused,
+while the `events` and absent-`nonce` checks already close ID-token confusion.
+
+**Evict the oldest replay-guard entry when the guard is full.** This keeps accepting new logouts. It was
+rejected because an attacker who floods the guard could then evict a live `jti` and replay it.
+
+The rejected options share one flaw: each either places an unvalidated or validator-owned object where a
+caller can misuse it, or moves security-relevant checks out of the one tested place that owns them.
+
+== References
+
+* ADR-0002 — observability reads the resolved validator through its public contract; the issuer status view
+  is that contract. Not amended.
+* ADR-0016 — the validator owns and closes its JWKS loaders; the status view exposes no loader. Not amended.
+* ADR-0017 — the loader status contract the status view reports.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/TokenValidator.java` — the facade
+  and its new members.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/logout/` — the logout-token
+  validator and replay guard.
+* `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/health/JwksEndpointHealthCheck.java`
+  — the readiness probe and its two new keys.
+* OpenID Connect Back-Channel Logout 1.0, §2.4 and §2.6 — the logout-token contents and validation rules.
