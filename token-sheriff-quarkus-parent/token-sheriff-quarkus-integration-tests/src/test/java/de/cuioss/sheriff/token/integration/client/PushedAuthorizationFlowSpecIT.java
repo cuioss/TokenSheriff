@@ -49,11 +49,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -165,7 +161,7 @@ class PushedAuthorizationFlowSpecIT extends BaseIntegrationTest {
         LOGGER.debug("Second redirect follow: %s", second.describe());
         assertAll("the consumed request_uri is refused",
                 () -> assertFalse(second.response().statusCode() == 200
-                                && LOGIN_FORM_USERNAME.matcher(second.response().body()).find(),
+                        && LOGIN_FORM_USERNAME.matcher(second.response().body()).find(),
                         "a request_uri is single-use (RFC 9126 §4): the second follow must not serve the login page, "
                                 + second.describe()),
                 () -> assertEquals(400, second.response().statusCode(),
