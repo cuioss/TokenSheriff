@@ -21,16 +21,9 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("JwtPropertyKeys")
 class JwtPropertyKeysTest {
@@ -217,7 +210,7 @@ class JwtPropertyKeysTest {
                 try {
                     String value = (String) field.get(null);
                     if (value.startsWith(JwtPropertyKeys.ISSUERS.HTTP_BASE)
-                            && !value.equals(JwtPropertyKeys.ISSUERS.HTTP_BASE)) {
+                            && !JwtPropertyKeys.ISSUERS.HTTP_BASE.equals(value)) {
                         keys.add(value);
                     }
                 } catch (IllegalAccessException e) {
