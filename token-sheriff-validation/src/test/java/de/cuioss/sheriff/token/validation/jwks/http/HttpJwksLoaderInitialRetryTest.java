@@ -41,15 +41,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.awaitility.Awaitility.await;
@@ -301,7 +293,7 @@ class HttpJwksLoaderInitialRetryTest {
 
     @Test
     @DisplayName("Well-known mode: a failed initial JWKS fetch is retried until keys are installed")
-    void shouldRetryFailedFetchInWellKnownMode() throws IOException {
+    void shouldRetryFailedFetchInWellKnownMode() throws Exception {
         WellKnownDispatcher dispatcher = new WellKnownDispatcher();
         dispatcher.setJwksFailing(true);
         try (MockWebServer server = startServer(dispatcher)) {
@@ -322,7 +314,7 @@ class HttpJwksLoaderInitialRetryTest {
 
     @Test
     @DisplayName("Well-known mode: a rejected re-discovery during the retries ends them in a terminal ERROR")
-    void shouldStopAtTerminalErrorInWellKnownMode() throws IOException {
+    void shouldStopAtTerminalErrorInWellKnownMode() throws Exception {
         WellKnownDispatcher dispatcher = new WellKnownDispatcher();
         dispatcher.setDiscovery(WellKnownDispatcher.Discovery.NO_JWKS_URI);
         try (MockWebServer server = startServer(dispatcher)) {
@@ -345,7 +337,7 @@ class HttpJwksLoaderInitialRetryTest {
 
     @Test
     @DisplayName("Well-known mode: a terminal rejection at initialization schedules no attempt")
-    void shouldNotRetryTerminalRejectionAtInitialization() throws IOException {
+    void shouldNotRetryTerminalRejectionAtInitialization() throws Exception {
         WellKnownDispatcher dispatcher = new WellKnownDispatcher();
         dispatcher.setDiscovery(WellKnownDispatcher.Discovery.FOREIGN_ISSUER);
         try (MockWebServer server = startServer(dispatcher)) {

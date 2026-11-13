@@ -42,8 +42,10 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
@@ -71,12 +73,12 @@ class HttpJwksLoaderDefaultBehaviourUnchangedTest {
     @Getter
     private final UnknownKidJwksDispatcher moduleDispatcher = new UnknownKidJwksDispatcher();
 
-    private ScheduledThreadPoolExecutor executor;
+    private CountingScheduler executor;
 
     @BeforeEach
     void setUp() {
         moduleDispatcher.serve(UnknownKidJwksDispatcher.Mode.DEFAULT_KEY);
-        executor = new ScheduledThreadPoolExecutor(1);
+        executor = new CountingScheduler();
     }
 
     @AfterEach
@@ -126,15 +128,16 @@ class HttpJwksLoaderDefaultBehaviourUnchangedTest {
     void shouldNotFetchOnUnknownKidByDefault(URIBuilder uriBuilder) throws Exception {
         HttpJwksLoader loader = initializedLoader(configBuilder(uriBuilder).build(), LoaderStatus.OK);
         int afterInit = moduleDispatcher.getRequestCount();
-        long tasksAfterInit = executor.getTaskCount();
+        int submissionsAfterInit = executor.getSubmissions();
 
         lookUpUnknownKids(loader);
+        int submissionsAfterLookups = executor.getSubmissions();
         drainExecutor();
 
         assertAll("the default loader stays silent",
                 () -> assertEquals(afterInit, moduleDispatcher.getRequestCount(), "no request reaches the server"),
-                () -> assertEquals(tasksAfterInit + 1, executor.getTaskCount(),
-                        "only the test's own drain task was handed to the executor"),
+                () -> assertEquals(submissionsAfterInit, submissionsAfterLookups,
+                        "the lookups hand nothing to the executor"),
                 () -> assertEquals(Set.of(DEFAULT_KID), loader.getKeyIds()),
                 () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()));
         LogAsserts.assertNoLogMessagePresent(TestLogLevel.INFO,
@@ -148,11 +151,16 @@ class HttpJwksLoaderDefaultBehaviourUnchangedTest {
         HttpJwksLoader loader = initializedLoader(configBuilder(uriBuilder).unknownKidRefreshWindow(WINDOW).build(),
                 LoaderStatus.OK);
         int afterInit = moduleDispatcher.getRequestCount();
+        int submissionsAfterInit = executor.getSubmissions();
 
         lookUpUnknownKids(loader);
+        int submissionsAfterLookups = executor.getSubmissions();
         drainExecutor();
 
-        assertEquals(afterInit + 1, moduleDispatcher.getRequestCount(), "one fetch for the claimed window");
+        assertAll(
+                () -> assertEquals(afterInit + 1, moduleDispatcher.getRequestCount(), "one fetch for the claimed window"),
+                () -> assertEquals(submissionsAfterInit + 1, submissionsAfterLookups,
+                        "the claimed window hands exactly one fetch to the executor"));
         loader.close();
     }
 
@@ -232,5 +240,30 @@ class HttpJwksLoaderDefaultBehaviourUnchangedTest {
                 () -> assertEquals(afterInit + 1, moduleDispatcher.getRequestCount(),
                         "the miss schedules one background fetch"));
         loader.close();
+    }
+
+    /**
+     * Single-thread scheduler that counts every task handed to it through {@code execute}, {@code submit}
+     * or a one-shot {@code schedule} (all of which route through {@link #schedule(Runnable, long, TimeUnit)}).
+     * The count is taken synchronously on the caller's thread, so it is exact at any point, unlike the
+     * approximate {@link #getTaskCount()}.
+     */
+    private static final class CountingScheduler extends ScheduledThreadPoolExecutor {
+
+        private final AtomicInteger submissions = new AtomicInteger();
+
+        CountingScheduler() {
+            super(1);
+        }
+
+        @Override
+        public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
+            submissions.incrementAndGet();
+            return super.schedule(command, delay, unit);
+        }
+
+        int getSubmissions() {
+            return submissions.get();
+        }
     }
 }
