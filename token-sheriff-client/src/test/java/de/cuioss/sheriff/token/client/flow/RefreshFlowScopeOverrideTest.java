@@ -43,11 +43,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
@@ -263,25 +263,32 @@ class RefreshFlowScopeOverrideTest {
     }
 
     @Test
-    @DisplayName("Should refuse a null, blank, multi-token or empty override before any HTTP call")
-    void shouldRefuseInvalidOverridesBeforeAnyRequest(URIBuilder uriBuilder) {
+    @DisplayName("Should refuse a null override list before any HTTP call")
+    void shouldRefuseNullOverrideBeforeAnyRequest(URIBuilder uriBuilder) {
         var flow = flow(config(false));
         var metadata = metadata(uriBuilder);
         String presented = presentedToken();
-        List<String> nullEntry = Arrays.asList("openid", null);
-        List<String> blankEntry = List.of("openid", "  ");
-        List<String> multiTokenEntry = List.of("openid email");
-        List<String> empty = List.of();
 
-        assertAll("invalid overrides",
-                () -> assertThrows(NullPointerException.class, () -> flow.refresh(metadata, presented, null)),
-                () -> assertThrows(IllegalArgumentException.class, () -> flow.refresh(metadata, presented, nullEntry)),
-                () -> assertThrows(IllegalArgumentException.class,
-                        () -> flow.refresh(metadata, presented, blankEntry)),
-                () -> assertThrows(IllegalArgumentException.class,
-                        () -> flow.refresh(metadata, presented, multiTokenEntry)),
-                () -> assertThrows(IllegalArgumentException.class,
-                        () -> flow.refresh(metadata, presented, empty)));
+        assertThrows(NullPointerException.class, () -> flow.refresh(metadata, presented, null));
+        moduleDispatcher.assertCallsAnswered(0);
+    }
+
+    /**
+     * Runs every invalid variant of the shared scope-token rule — a null, blank, multi-token or empty
+     * override, and entries holding a character outside the RFC 6749 §3.3 scope-token set — through the
+     * per-call refresh overload. The display name carries the index only: the variants hold control
+     * characters that must not reach a test report.
+     */
+    @ParameterizedTest(name = "refuses variant #{index}")
+    @MethodSource("de.cuioss.sheriff.token.client.flow.AuthorizationRequestOptionsTest#invalidScopeOverrides")
+    @DisplayName("Should refuse an invalid or non-scope-token-character override before any HTTP call")
+    void shouldRefuseInvalidOverridesBeforeAnyRequest(List<String> scopes, URIBuilder uriBuilder) {
+        var flow = flow(config(false));
+        var metadata = metadata(uriBuilder);
+        String presented = presentedToken();
+
+        assertThrows(IllegalArgumentException.class, () -> flow.refresh(metadata, presented, scopes),
+                "an invalid per-call override is refused by the shared scope-token rule");
         moduleDispatcher.assertCallsAnswered(0);
     }
 

@@ -435,8 +435,9 @@ delimiter is refused; with no `prompt` option the parameter is not sent.
 *Per-call scope override.* A call MAY replace the configured scopes on the front-channel
 authorization request, on the pushed request (xref:#CLIENT-10[]), on a step-up re-authorization
 (xref:#CLIENT-12[]) and on a refresh (xref:#CLIENT-17[]). The override MUST be validated by the same
-scope-token rule as the configured scopes (each entry exactly one RFC 6749 §3.3 `scope-token`;
-`null`, blank and multi-token entries refused), and an empty override MUST be refused — a caller that
+scope-token rule as the configured scopes (each entry exactly one RFC 6749 §3.3 `scope-token`,
+whose characters are printable ASCII except space, double quote and backslash; `null`, blank and
+multi-token entries and entries holding any other character refused), and an empty override MUST be refused — a caller that
 wants the configured scopes omits the override. On a refresh the per-call scopes are both the
 requested `scope` and the baseline the granted scope is reconciled against, so a grant equal to the
 per-call scopes is reconciled as equal even where it differs from the configured scopes. The

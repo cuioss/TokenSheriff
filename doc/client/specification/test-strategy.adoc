@@ -526,12 +526,16 @@ an isolated-component or server-capability test alone does not qualify the row a
 | xref:../requirements.adoc#CLIENT-27[CLIENT-27] | T-URL-LEAK, T-PARAM-INTEGRITY
 | `AuthorizationRequestBuilderParametersTest`: the ordered, unmodifiable parameter map equals what
   `build` emits, and a request without options is unchanged; `AuthorizationRequestOptionsTest`: the
-  closed `response_mode` / `prompt` sets and the scope-override validation, empty refused;
+  closed `response_mode` / `prompt` sets and the scope-override validation, empty and
+  non-scope-token characters refused; `ClientConfigurationTest` (`IssuerAndScopeValidation`): the
+  shared scope-token rule accepts exactly the RFC 6749 §3.3 character set and never echoes a rejected
+  entry;
   `AuthorizationRequestInjectionAttackDatabaseTest`: no payload adds, duplicates or splits a
   parameter; `AuthorizationCodeFlowOptionsTest`, `StepUpHandlerOptionsTest` and
   `AuthorizationCodeFlowPushedTest`: the options reach the front-channel, step-up and pushed
   requests; `RefreshFlowScopeOverrideTest`: the per-call refresh scopes are sent and are the
-  reconciliation baseline, the configuration is not mutated, concurrent calls keep their own sets,
+  reconciliation baseline, invalid overrides are refused before any request, the configuration is
+  not mutated, concurrent calls keep their own sets,
   and the two-argument refresh form is unchanged
 | `PushedAuthorizationFlowSpecIT`: the pushed path against real Keycloak (capability-gated) | all
 |===

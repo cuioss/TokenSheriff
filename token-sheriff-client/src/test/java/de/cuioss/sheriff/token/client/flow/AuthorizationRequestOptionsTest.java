@@ -77,6 +77,12 @@ class AuthorizationRequestOptionsTest {
         }
     }
 
+    /**
+     * Scope overrides the shared scope-token rule refuses: a null, blank, multi-token or empty list, and
+     * entries holding a character outside the RFC 6749 §3.3 scope-token set
+     * {@code %x21 / %x23-5B / %x5D-7E}. Shared with {@code RefreshFlowScopeOverrideTest}, so both entry
+     * points are exercised against the same variants.
+     */
     static Stream<List<String>> invalidScopeOverrides() {
         return Stream.of(
                 Arrays.asList("openid", null),
@@ -85,16 +91,26 @@ class AuthorizationRequestOptionsTest {
                 List.of("openid profile"),
                 List.of("openid\tprofile"),
                 List.of("openid\r\nprofile"),
-                List.of());
+                List.of(),
+                List.of("openid", "say\"hello"),
+                List.of("openid", "back\\slash"),
+                List.of("openid", "nul\u0000byte"),
+                List.of("openid", "del\u007Fbyte"),
+                List.of("openid", "ctl\u0001byte"),
+                List.of("openid", "café"),
+                List.of("openid", "smile😀"),
+                List.of("openid", "non breaking"));
     }
 
     @Nested
     @DisplayName("Scope override")
     class ScopeOverride {
 
-        @ParameterizedTest
+        // The display name carries the index only: the variants hold control characters that must not
+        // reach a test report.
+        @ParameterizedTest(name = "refuses variant #{index}")
         @MethodSource("de.cuioss.sheriff.token.client.flow.AuthorizationRequestOptionsTest#invalidScopeOverrides")
-        @DisplayName("Should refuse a null, blank, multi-token or empty scope override")
+        @DisplayName("Should refuse a null, blank, multi-token, empty or non-scope-token-character scope override")
         void shouldRefuseInvalidOverride(List<String> scopes) {
             var optionsBuilder = AuthorizationRequestOptions.builder().scopes(scopes);
 
