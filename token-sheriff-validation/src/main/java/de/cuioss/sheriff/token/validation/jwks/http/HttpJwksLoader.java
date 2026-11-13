@@ -47,8 +47,10 @@ import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.LongSupplier;
 
 import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.ERROR;
 import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.INFO;
@@ -86,6 +88,19 @@ import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
  * {@link LoaderStatus#UNDEFINED} and logs {@code JWKS_KEYS_STALE} once, while the installed and retired
  * keys stay in place; the next refresh that installs usable keys publishes {@code OK} again. After
  * {@link #close()} no refresh still in flight publishes {@code OK}.
+ * <p>
+ * <strong>Unknown-kid refresh (opt-in):</strong> when an
+ * {@linkplain HttpJwksLoaderConfig#getUnknownKidRefreshWindow() unknown-kid refresh window} is configured
+ * and a key set is installed, a {@link #getKeyInfo(String)} miss claims the window with one
+ * compare-and-set on a monotonic clock and hands one fetch to the refresh executor; the lookup performs no
+ * I/O, does not wait and still misses. At most one such fetch runs per window and per loader. The fetched
+ * key set is installed through the same commit step as a periodic refresh, and only when it holds the
+ * requested key id and the generation is still live; installing it publishes {@code OK} like any other
+ * installation. A failed, unchanged or non-matching fetch is discarded: keys, retired key sets, status,
+ * endpoint and the time of the last successful load stay unchanged, and the outcome is not counted as a
+ * failed refresh cycle, so it neither drives re-discovery nor the staleness bound. One in-flight guard
+ * serialises the periodic and the unknown-kid fetches; a periodic cycle that finds it held skips its fetch
+ * without counting the cycle.
  * <p>
  * <strong>Re-discovery:</strong> in well-known mode, after {@value #REDISCOVERY_FAILURE_THRESHOLD}
  * consecutive refresh cycles that installed no keys, the next cycle repeats the well-known discovery
@@ -153,6 +168,16 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * repeats the discovery before its next fetch.
      */
     static final int REDISCOVERY_FAILURE_THRESHOLD = 3;
+
+    // Fixed reasons of the UNKNOWN_KID_REFRESH_DISCARDED warning; no remote content is ever logged with it
+    static final String DISCARD_CLOSED = "the loader was closed or re-initialized meanwhile";
+    static final String DISCARD_NO_ENDPOINT = "no JWKS endpoint is published";
+    static final String DISCARD_EGRESS_BLOCKED = "the egress check of the JWKS fetch URI failed";
+    static final String DISCARD_FETCH_FAILED = "the JWKS fetch failed or returned no content";
+    static final String DISCARD_UNCHANGED = "the fetched JWKS is unchanged";
+    static final String DISCARD_NO_USABLE_KEY = "the fetched JWKS yields no usable key";
+    static final String DISCARD_KID_ABSENT = "the fetched JWKS does not hold the requested key id";
+    static final String DISCARD_PARSE_FAILED = "the fetched JWKS could not be parsed";
 
     /** Upper bound for the length of a failure description rendered into a log line. */
     private static final int MAX_LOGGED_FAILURE_LENGTH = 256;
@@ -252,10 +277,32 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * and the background refresh task it schedules carries that same value, fixed when the task is
      * scheduled rather than read when a cycle begins. Once the value has moved on, such work installs
      * no keys, publishes no status or endpoint, schedules no task and issues no fetch, so work of a
-     * closed generation cannot leak into a later initialization of the same loader. Guarded by
-     * {@link #lifecycleLock}.
+     * closed generation cannot leak into a later initialization of the same loader. Written only under
+     * {@link #lifecycleLock}; volatile so that {@link #getKeyInfo(String)} can capture it for an
+     * unknown-kid fetch without taking the lock, which an installation may hold while it parses a key set.
+     * The fetch re-checks it under the lock before it commits anything.
      */
-    private long epoch;
+    private volatile long epoch;
+
+    /**
+     * The monotonic clock, in nanoseconds, the unknown-kid refresh window is measured on. Only
+     * differences of its values are meaningful, so comparisons are overflow-safe subtractions.
+     */
+    private final LongSupplier monotonicClock;
+
+    /**
+     * The {@link #monotonicClock} value from which the next unknown-kid refresh window may be claimed.
+     * Claimed by a single compare-and-set, so concurrent misses claim one window at most once.
+     */
+    private final AtomicLong nextAllowedNanos;
+
+    /**
+     * The in-flight guard shared by every fetch path that runs on the refresh executor: the periodic
+     * refresh cycle and the unknown-kid fetch. Taken by compare-and-set and released in a
+     * {@code finally} block, so at most one of these fetches runs at a time, whatever the executor's
+     * thread count.
+     */
+    private final AtomicBoolean fetchInFlight = new AtomicBoolean();
 
     /**
      * The {@link #epoch} of the initialization whose background refresh task was scheduled last,
@@ -286,8 +333,25 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * @param egressPolicy the SSRF egress guard to apply on every JWKS fetch
      */
     HttpJwksLoader(HttpJwksLoaderConfig config, EgressPolicy egressPolicy) {
+        this(config, egressPolicy, System::nanoTime);
+    }
+
+    /**
+     * Constructor allowing an explicit {@link EgressPolicy} and monotonic clock.
+     * <p>
+     * Package-private test seam: tests inject a clock to drive the expiry of the unknown-kid refresh
+     * window deterministically, including values around the {@code long} overflow. The first window can
+     * be claimed at once.
+     *
+     * @param config         the configuration for this loader
+     * @param egressPolicy   the SSRF egress guard to apply on every JWKS fetch
+     * @param monotonicClock the monotonic clock in nanoseconds, {@code System::nanoTime} in production
+     */
+    HttpJwksLoader(HttpJwksLoaderConfig config, EgressPolicy egressPolicy, LongSupplier monotonicClock) {
         this.config = config;
         this.egressPolicy = egressPolicy;
+        this.monotonicClock = monotonicClock;
+        this.nextAllowedNanos = new AtomicLong(monotonicClock.getAsLong());
     }
 
     /**
@@ -721,6 +785,15 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Looks the key id up in the installed key set and then in the retired key sets still within the
+     * grace period. When both miss, a key set is installed and an
+     * {@linkplain HttpJwksLoaderConfig#getUnknownKidRefreshWindow() unknown-kid refresh window} is
+     * configured, the miss may schedule one background fetch (see the class documentation); the lookup
+     * itself performs no I/O, never waits for that fetch and still returns empty.
+     */
     @Override
     public Optional<KeyInfo> getKeyInfo(String kid) {
         // Check current keys
@@ -742,7 +815,127 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             }
         }
 
+        Optional<Duration> window = config.getUnknownKidRefreshWindow();
+        if (window.isPresent() && current != null) {
+            scheduleUnknownKidRefresh(kid, window.get());
+        }
         return Optional.empty();
+    }
+
+    /**
+     * Claims the unknown-kid refresh window and, when won, hands one fetch for {@code kid} to the
+     * refresh executor, without I/O or waiting on the caller's thread.
+     * <p>
+     * Two claims are taken, each a single compare-and-set, so there is no check-then-act gap: the window
+     * claim on {@link #nextAllowedNanos} (compared overflow-safely with the monotonic clock and moved on
+     * by one window) and the in-flight guard {@link #fetchInFlight}. A lost claim means another caller
+     * owns the window or a fetch is already running; it is logged at DEBUG only. The fetch carries the
+     * {@link #epoch} read here, so it commits nothing once a {@link #close()} moved it on. An executor
+     * that rejects the fetch releases the guard and never throws on the caller.
+     *
+     * @param kid    the key id that was not found
+     * @param window the configured unknown-kid refresh window
+     */
+    private void scheduleUnknownKidRefresh(String kid, Duration window) {
+        long now = monotonicClock.getAsLong();
+        long allowedFrom = nextAllowedNanos.get();
+        if (now - allowedFrom < 0) {
+            LOGGER.debug("Unknown-kid refresh window still claimed, no fetch scheduled");
+            return;
+        }
+        if (!nextAllowedNanos.compareAndSet(allowedFrom, now + window.toNanos())) {
+            LOGGER.debug("Unknown-kid refresh window claimed concurrently, no fetch scheduled");
+            return;
+        }
+        if (!fetchInFlight.compareAndSet(false, true)) {
+            LOGGER.debug("A JWKS fetch is already in flight, no unknown-kid fetch scheduled");
+            return;
+        }
+        long claimEpoch = epoch;
+        try {
+            config.getScheduledExecutorService().execute(() -> fetchForUnknownKid(kid, claimEpoch));
+        } catch (RejectedExecutionException e) {
+            fetchInFlight.set(false);
+            LOGGER.debug("Refresh executor rejected the unknown-kid fetch (%s)", e.getClass().getName());
+            return;
+        }
+        LOGGER.info(INFO.UNKNOWN_KID_REFRESH_SCHEDULED, ErrorTextSanitizer.sanitize(kid), loggableIssuerIdentifier());
+    }
+
+    /**
+     * The off-to-the-side fetch scheduled by {@link #scheduleUnknownKidRefresh(String, Duration)}, run on
+     * the refresh executor while holding the in-flight guard, which it releases when it ends.
+     * <p>
+     * It re-runs the egress check on the current endpoint's fetch URI, fetches with that endpoint's
+     * adapter and builds a candidate key set. The candidate is committed through the shared commit step,
+     * under {@link #lifecycleLock}, only when it holds {@code kid} and the generation {@code claimEpoch}
+     * is still live. Every other outcome is discarded with {@code UNKNOWN_KID_REFRESH_DISCARDED}: keys,
+     * retired key sets, the installed JWKS content, the time of the last successful load, status and
+     * endpoint stay unchanged, and {@link #recordFailedCycle(long)} is never called, so the outcome
+     * counts towards neither re-discovery nor the staleness bound. Only the failures a fetch or a parse
+     * can raise are caught.
+     *
+     * @param kid        the key id the fetched key set must hold
+     * @param claimEpoch the {@link #epoch} read when the window was claimed
+     */
+    private void fetchForUnknownKid(String kid, long claimEpoch) {
+        try {
+            JwksEndpoint current;
+            lifecycleLock.lock();
+            try {
+                if (!isLive(claimEpoch)) {
+                    discardUnknownKidFetch(DISCARD_CLOSED);
+                    return;
+                }
+                current = endpoint.get();
+            } finally {
+                lifecycleLock.unlock();
+            }
+            if (current == null) {
+                discardUnknownKidFetch(DISCARD_NO_ENDPOINT);
+                return;
+            }
+            if (!egressCheckPassed(current.fetchUri())) {
+                discardUnknownKidFetch(DISCARD_EGRESS_BLOCKED);
+                return;
+            }
+            HttpResult<Jwks> result = current.adapter().getBlocking();
+            Jwks fetched = result.isSuccess() ? result.getContent().orElse(null) : null;
+            if (fetched == null) {
+                discardUnknownKidFetch(DISCARD_FETCH_FAILED);
+                return;
+            }
+            if (fetched.equals(currentJwksContent.get())) {
+                discardUnknownKidFetch(DISCARD_UNCHANGED);
+                return;
+            }
+            JWKSKeyLoader candidate = buildUsableKeySet(fetched);
+            if (candidate == null) {
+                discardUnknownKidFetch(DISCARD_NO_USABLE_KEY);
+                return;
+            }
+            if (candidate.getKeyInfo(kid).isEmpty()) {
+                discardUnknownKidFetch(DISCARD_KID_ABSENT);
+                return;
+            }
+            if (!commitKeySetAndPublishOk(fetched, candidate, claimEpoch)) {
+                discardUnknownKidFetch(DISCARD_CLOSED);
+            }
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            discardUnknownKidFetch(DISCARD_PARSE_FAILED);
+            LOGGER.debug("Unknown-kid fetch failed (%s)", e.getClass().getName());
+        } finally {
+            fetchInFlight.set(false);
+        }
+    }
+
+    /**
+     * Logs a discarded unknown-kid fetch; nothing else is changed.
+     *
+     * @param reason the fixed reason text
+     */
+    private void discardUnknownKidFetch(String reason) {
+        LOGGER.warn(WARN.UNKNOWN_KID_REFRESH_DISCARDED, loggableIssuerIdentifier(), reason);
     }
 
     /**
@@ -804,14 +997,47 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             if (logInitialLoad) {
                 LOGGER.info(INFO.JWKS_LOADED, loggableResolvedIssuer());
             }
-            lastSuccessfulLoad.set(Instant.now());
-            consecutiveRefreshFailures.set(0);
-            rediscoverySuppressed.set(false);
-            status.set(LoaderStatus.OK);
+            publishOk();
             return true;
         } finally {
             lifecycleLock.unlock();
         }
+    }
+
+    /**
+     * Commits a usable candidate key set through the shared commit step and publishes
+     * {@link LoaderStatus#OK}, as one atomic step under {@link #lifecycleLock}, but only while the
+     * generation {@code startEpoch} is still live.
+     *
+     * @param newJwks    the JWKS the candidate was built from
+     * @param candidate  the usable key set built by {@link #buildUsableKeySet(Jwks)}
+     * @param startEpoch the {@link #epoch} the calling work started under
+     * @return {@code true} if the key set was committed and {@code OK} published, {@code false} if a
+     *         {@link #close()} moved the epoch on, in which case nothing was changed
+     */
+    private boolean commitKeySetAndPublishOk(Jwks newJwks, JWKSKeyLoader candidate, long startEpoch) {
+        lifecycleLock.lock();
+        try {
+            if (!isLive(startEpoch)) {
+                return false;
+            }
+            commitKeySet(newJwks, candidate);
+            publishOk();
+            return true;
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    /**
+     * Records a successful load and publishes {@link LoaderStatus#OK}. The caller must hold
+     * {@link #lifecycleLock} and must have installed, or confirmed, a usable key set.
+     */
+    private void publishOk() {
+        lastSuccessfulLoad.set(Instant.now());
+        consecutiveRefreshFailures.set(0);
+        rediscoverySuppressed.set(false);
+        status.set(LoaderStatus.OK);
     }
 
     /**
@@ -912,20 +1138,45 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             return currentKeys.get() != null;
         }
 
+        // Never retire a good key set for an empty/ERROR refresh (L9). If the freshly-loaded key
+        // set produced no usable keys, keep the current keys and leave the content reference
+        // unchanged so the next scheduled refresh retries against the same content.
+        JWKSKeyLoader newLoader = buildUsableKeySet(newJwks);
+        if (newLoader == null) {
+            LOGGER.warn(WARN.JWKS_REFRESH_RETURNED_NO_KEYS, loggableResolvedIssuer());
+            return false;
+        }
+
+        commitKeySet(newJwks, newLoader);
+        return true;
+    }
+
+    /**
+     * Builds the key set of the given JWKS and returns it if it is usable. Touches no shared state of
+     * this loader, so it may run outside {@link #lifecycleLock}.
+     *
+     * @param newJwks the fetched JWKS
+     * @return the usable key set, {@code null} if the JWKS yields no usable key
+     */
+    private @Nullable JWKSKeyLoader buildUsableKeySet(Jwks newJwks) {
         JWKSKeyLoader newLoader = JWKSKeyLoader.builder()
                 .jwksContent(newJwks)
                 .jwksType(config.getJwksType())
                 .build();
         newLoader.initJWKSLoader(securityEventCounter);
+        return newLoader.getLoaderStatus() == LoaderStatus.OK ? newLoader : null;
+    }
 
-        // Never retire a good key set for an empty/ERROR refresh (L9). If the freshly-loaded key
-        // set produced no usable keys, keep the current keys and leave the content reference
-        // unchanged so the next scheduled refresh retries against the same content.
-        if (newLoader.getLoaderStatus() != LoaderStatus.OK) {
-            LOGGER.warn(WARN.JWKS_REFRESH_RETURNED_NO_KEYS, loggableResolvedIssuer());
-            return false;
-        }
-
+    /**
+     * The commit step shared by every installation path: makes a usable key set the current one,
+     * retires the previous set within the grace period and the {@code maxRetiredKeySets} bound, and logs
+     * {@code JWKS_KEYS_UPDATED}. The caller must hold {@link #lifecycleLock} and must have checked that
+     * its generation is still live.
+     *
+     * @param newJwks   the JWKS the key set was built from
+     * @param newLoader the usable key set built by {@link #buildUsableKeySet(Jwks)}
+     */
+    private void commitKeySet(Jwks newJwks, JWKSKeyLoader newLoader) {
         // Content has changed and the new key set is usable — commit the reference.
         currentJwksContent.set(newJwks);
 
@@ -954,7 +1205,6 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         List<String> installedKeyIds = newLoader.getKeyIds().stream().sorted()
                 .map(ErrorTextSanitizer::sanitize).toList();
         LOGGER.info(INFO.JWKS_KEYS_UPDATED, loggableResolvedIssuer(), installedKeyIds);
-        return true;
     }
 
     /**
@@ -1066,9 +1316,31 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * connects, and a rebind between the check and that connection is not seen. The endpoint is read
      * once, so the URI that is checked is the URI the adapter fetches.
      *
+     * <p>
+     * The cycle takes the in-flight guard shared with the unknown-kid fetch first. When another fetch
+     * holds it, the cycle skips its fetch and is not counted as a failed cycle.
+     *
      * @param cycleEpoch the {@link #epoch} of the generation this cycle belongs to
      */
     private void performBackgroundRefresh(long cycleEpoch) {
+        if (!fetchInFlight.compareAndSet(false, true)) {
+            LOGGER.debug("Skipping a background refresh cycle, another JWKS fetch is in flight");
+            return;
+        }
+        try {
+            runRefreshCycle(cycleEpoch);
+        } finally {
+            fetchInFlight.set(false);
+        }
+    }
+
+    /**
+     * The body of one background refresh cycle, run while holding the in-flight guard (see
+     * {@link #performBackgroundRefresh(long)}).
+     *
+     * @param cycleEpoch the {@link #epoch} of the generation this cycle belongs to
+     */
+    private void runRefreshCycle(long cycleEpoch) {
         JwksEndpoint current;
         lifecycleLock.lock();
         try {

@@ -136,6 +136,17 @@ public final class JWTValidationLogMessages {
                 .identifier(9)
                 .template("JWE decryption enabled with %s decryption key(s)")
                 .build();
+
+        /**
+         * Logged when a key lookup for an unknown key id claims the opt-in unknown-kid refresh window
+         * and schedules one background JWKS fetch. Parameters: the sanitised key id, then the issuer.
+         * Lookups that find the window or the fetch already claimed log at DEBUG only.
+         */
+        public static final LogRecord UNKNOWN_KID_REFRESH_SCHEDULED = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(10)
+                .template("Key id '%s' is unknown for issuer %s, scheduled one background JWKS refresh")
+                .build();
     }
 
     /**
@@ -532,6 +543,18 @@ public final class JWTValidationLogMessages {
                 .prefix(PREFIX)
                 .identifier(172)
                 .template("Advertised jwks_uri for issuer %s cannot be used, the loader stops retrying: %s")
+                .build();
+
+        /**
+         * Logged when the background JWKS fetch triggered by an unknown key id is discarded. Nothing
+         * is installed and nothing is counted as a failed refresh cycle: keys, retired key sets,
+         * status and endpoint stay unchanged. Parameters: the issuer, then a fixed reason text; no
+         * remote content is logged.
+         */
+        public static final LogRecord UNKNOWN_KID_REFRESH_DISCARDED = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(173)
+                .template("Unknown-kid JWKS refresh for issuer %s discarded, the installed keys stay in place: %s")
                 .build();
 
     }
