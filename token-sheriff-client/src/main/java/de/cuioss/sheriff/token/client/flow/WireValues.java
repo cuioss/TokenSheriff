@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.client.flow;
 
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
+import de.cuioss.tools.string.MoreStrings;
 
 import java.util.function.Function;
 
@@ -54,9 +55,9 @@ final class WireValues {
      */
     static <E extends Enum<E>> E parse(String parameter, String value, E[] constants,
             Function<E, String> wireValue) {
-        // value is declared non-null because null is never an accepted value; the null check stays as
-        // the defensive boundary check for callers outside null-checked code.
-        if (value == null || value.isBlank()) {
+        // value is declared non-null because null is never an accepted value; the null-safe blank check
+        // stays as the defensive boundary check for callers outside null-checked code.
+        if (MoreStrings.isBlank(value)) {
             throw new IllegalArgumentException(parameter + " must not be null or blank");
         }
         for (E constant : constants) {
