@@ -114,7 +114,7 @@ class AuthorizationCodeFlowPushedTest {
         metadata.issuer = ISSUER;
         metadata.authorizationEndpoint = authorizationEndpoint;
         metadata.pushedAuthorizationRequestEndpoint = uriBuilder.addPathSegments("oidc", "par").buildAsString();
-        metadata.codeChallengeMethodsSupported = s256 ? List.of("S256") : List.of("plain");
+        metadata.codeChallengeMethodsSupported = List.of(s256 ? "S256" : "plain");
         return metadata;
     }
 

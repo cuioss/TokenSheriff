@@ -83,7 +83,7 @@ class AuthorizationRequestBuilderParametersTest {
         if (authorizationEndpoint != null) {
             metadata.authorizationEndpoint = authorizationEndpoint;
         }
-        metadata.codeChallengeMethodsSupported = s256 ? List.of("S256") : List.of("plain");
+        metadata.codeChallengeMethodsSupported = List.of(s256 ? "S256" : "plain");
         return metadata;
     }
 
