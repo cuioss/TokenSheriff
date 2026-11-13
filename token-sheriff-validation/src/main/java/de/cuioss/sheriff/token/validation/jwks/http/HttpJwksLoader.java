@@ -286,12 +286,13 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * and the background refresh task it schedules carries that same value, fixed when the task is
      * scheduled rather than read when a cycle begins. Once the value has moved on, such work installs
      * no keys, publishes no status or endpoint, schedules no task and issues no fetch, so work of a
-     * closed generation cannot leak into a later initialization of the same loader. Written only under
-     * {@link #lifecycleLock}; volatile so that {@link #getKeyInfo(String)} can capture it for an
-     * unknown-kid fetch without taking the lock, which an installation may hold while it parses a key set.
-     * The fetch re-checks it under the lock before it commits anything.
+     * closed generation cannot leak into a later initialization of the same loader. An {@link AtomicLong}
+     * that is written only under {@link #lifecycleLock}, by {@link #close()}; it is readable without the
+     * lock, so {@link #getKeyInfo(String)} can capture it for an unknown-kid fetch without taking the
+     * lock, which an installation may hold while it parses a key set. The fetch re-checks it under the
+     * lock before it commits anything.
      */
-    private volatile long epoch;
+    private final AtomicLong epoch = new AtomicLong();
 
     /**
      * The monotonic clock, in nanoseconds, the unknown-kid refresh window is measured on. Only
@@ -417,7 +418,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             }
             initFuture = reserved;
             closed = false;
-            claimedEpoch = epoch;
+            claimedEpoch = epoch.get();
         } finally {
             lifecycleLock.unlock();
         }
@@ -865,7 +866,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             LOGGER.debug("A JWKS fetch is already in flight, no unknown-kid fetch scheduled");
             return;
         }
-        long claimEpoch = epoch;
+        long claimEpoch = epoch.get();
         try {
             config.getScheduledExecutorService().execute(() -> fetchForUnknownKid(kid, claimEpoch));
         } catch (RejectedExecutionException e) {
@@ -886,8 +887,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * is still live. Every other outcome is discarded with {@code UNKNOWN_KID_REFRESH_DISCARDED}: keys,
      * retired key sets, the installed JWKS content, the time of the last successful load, status and
      * endpoint stay unchanged, and {@link #recordFailedCycle(long)} is never called, so the outcome
-     * counts towards neither re-discovery nor the staleness bound. Only the failures a fetch or a parse
-     * can raise are caught.
+     * counts towards neither re-discovery nor the staleness bound. A parse or state failure is discarded
+     * as a failed parse; any other unexpected runtime failure is discarded as a failed fetch, and only its
+     * exception type is logged, at debug level.
      *
      * @param kid        the key id the fetched key set must hold
      * @param claimEpoch the {@link #epoch} read when the window was claimed
@@ -938,6 +940,14 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         } catch (IllegalArgumentException | IllegalStateException e) {
             discardUnknownKidFetch(DISCARD_PARSE_FAILED);
             LOGGER.debug("Unknown-kid fetch failed (%s)", e.getClass().getName());
+        }
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
+        // Intentional catch-all safety net: any other failure of the adapter or the key-set build would
+        // escape onto the refresh executor worker, where the default handler prints it unsanitised
+        // (CWE-117). It is a per-fetch outcome: discarded, never counted as a failed refresh cycle.
+        catch (RuntimeException e) {
+            discardUnknownKidFetch(DISCARD_FETCH_FAILED);
+            LOGGER.debug("Unknown-kid fetch failed unexpectedly (%s)", e.getClass().getName());
         } finally {
             fetchInFlight.set(false);
         }
@@ -1114,7 +1124,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     private long currentEpoch() {
         lifecycleLock.lock();
         try {
-            return epoch;
+            return epoch.get();
         } finally {
             lifecycleLock.unlock();
         }
@@ -1129,7 +1139,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * @return {@code true} if the work may still install keys, publish a status or schedule a task
      */
     private boolean isLive(long startEpoch) {
-        return !closed && startEpoch == epoch;
+        return !closed && startEpoch == epoch.get();
     }
 
     /**
@@ -1280,7 +1290,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     private void scheduleInitialLoadRetry(long startEpoch, Duration delay) {
         lifecycleLock.lock();
         try {
-            if (!isLive(startEpoch) || currentKeys.get() != null || status.get() == LoaderStatus.ERROR) {
+            if (!isInitialLoadRetryWanted(startEpoch)) {
                 return;
             }
             config.getScheduledExecutorService().schedule(() -> runInitialLoadRetry(startEpoch, delay),
@@ -1294,18 +1304,52 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     }
 
     /**
-     * One retry attempt of a failed initial load: runs one regular refresh cycle (which takes the
-     * in-flight guard, re-resolves a failed discovery, honours terminal rejections and never publishes
-     * {@link LoaderStatus#LOADING}) and then schedules the next attempt with the doubled delay, also when
-     * the cycle threw. Attempts are strictly sequential, since each schedules its successor only after it
-     * ended.
+     * Whether a retry attempt of a failed initial load is still wanted: the generation {@code startEpoch}
+     * is live, no key set is installed and the status is not the terminal {@link LoaderStatus#ERROR}. The
+     * caller must hold {@link #lifecycleLock}.
+     *
+     * @param startEpoch the {@link #epoch} of the initialization whose initial load failed
+     * @return {@code true} if a retry attempt may be scheduled or run
+     */
+    private boolean isInitialLoadRetryWanted(long startEpoch) {
+        return isLive(startEpoch) && currentKeys.get() == null && status.get() != LoaderStatus.ERROR;
+    }
+
+    /**
+     * Whether a scheduled retry attempt of a failed initial load is still wanted when it starts, checked
+     * under {@link #lifecycleLock} with the same condition as {@link #scheduleInitialLoadRetry(long, Duration)}.
+     *
+     * @param startEpoch the {@link #epoch} of the initialization whose initial load failed
+     * @return {@code true} if the attempt should run its refresh cycle
+     */
+    private boolean isInitialLoadRetryNeeded(long startEpoch) {
+        lifecycleLock.lock();
+        try {
+            return isInitialLoadRetryWanted(startEpoch);
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    /**
+     * One retry attempt of a failed initial load. The attempt first re-checks, under
+     * {@link #lifecycleLock}, that a retry is still wanted — the generation is live, no key set is
+     * installed and the status is not the terminal {@link LoaderStatus#ERROR} — so an attempt that became
+     * pending before a terminal rejection, a periodic cycle that installed keys or a {@link #close()}
+     * runs no cycle. Only then does it run one regular refresh cycle (which takes the in-flight guard,
+     * re-resolves a failed discovery and never publishes {@link LoaderStatus#LOADING}). It then schedules
+     * the next attempt with the doubled delay, also when the cycle threw; the scheduling applies the same
+     * condition, so the attempts stop by themselves. Attempts are strictly sequential, since each
+     * schedules its successor only after it ended.
      *
      * @param startEpoch the {@link #epoch} of the initialization whose initial load failed
      * @param delay      the delay this attempt was scheduled with
      */
     private void runInitialLoadRetry(long startEpoch, Duration delay) {
         try {
-            performBackgroundRefresh(startEpoch);
+            if (isInitialLoadRetryNeeded(startEpoch)) {
+                performBackgroundRefresh(startEpoch);
+            }
         } finally {
             scheduleInitialLoadRetry(startEpoch,
                     cappedRetryDelay(delay.multipliedBy(HttpJwksLoaderConfig.INITIAL_LOAD_RETRY_BACKOFF_FACTOR)));
@@ -1754,7 +1798,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         lifecycleLock.lock();
         try {
             closed = true;
-            epoch++;
+            epoch.incrementAndGet();
             ScheduledFuture<?> task = refreshTask.get();
             if (task != null) {
                 task.cancel(false);

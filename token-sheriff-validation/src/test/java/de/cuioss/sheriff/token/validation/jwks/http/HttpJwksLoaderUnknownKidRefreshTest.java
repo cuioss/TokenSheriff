@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.validation.jwks.http;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
+import de.cuioss.sheriff.token.commons.transport.EgressPolicy;
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.validation.JWTValidationLogMessages;
@@ -31,11 +32,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetAddress;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -231,6 +234,51 @@ class HttpJwksLoaderUnknownKidRefreshTest {
         assertEquals(afterInit + 2, moduleDispatcher.getRequestCount(), "each loader fetches once");
         first.close();
         second.close();
+    }
+
+    @Test
+    @DisplayName("An unexpected runtime failure of the fetch is discarded, uncounted, and releases the in-flight guard")
+    void shouldDiscardUnexpectedRuntimeFailure(URIBuilder uriBuilder) throws Exception {
+        String remoteContent = "remote-jwks-content-\nforged-line";
+        AtomicBoolean failing = new AtomicBoolean(false);
+        EgressPolicy.HostResolver resolver = host -> {
+            if (failing.get()) {
+                throw new UnsupportedOperationException(remoteContent);
+            }
+            return InetAddress.getAllByName(host);
+        };
+        // A maximum staleness this small degrades the loader on the first counted failed cycle
+        HttpJwksLoaderConfig config = configBuilder(uriBuilder).maxStaleness(Duration.ofMillis(1)).build();
+        HttpJwksLoader loader = new HttpJwksLoader(config,
+                EgressPolicy.builder().allowLoopback(true).resolver(resolver).build(), clock::get);
+        assertEquals(LoaderStatus.OK, loader.initJWKSLoader(new SecurityEventCounter()).join());
+        moduleDispatcher.serve(UnknownKidJwksDispatcher.Mode.ROTATED_KEY);
+        int afterInit = moduleDispatcher.getRequestCount();
+
+        failing.set(true);
+        assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty());
+        drainExecutor();
+
+        assertAll("the failure is discarded and changes nothing",
+                () -> assertEquals(afterInit, moduleDispatcher.getRequestCount(), "the fetch failed before the request"),
+                () -> assertEquals(Set.of(DEFAULT_KID), loader.getKeyIds()),
+                () -> assertTrue(loader.getJwksFetchUri().isPresent(), "the endpoint is kept"),
+                () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus(),
+                        "an uncounted failure cannot trigger the staleness degradation"));
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
+                JWTValidationLogMessages.WARN.UNKNOWN_KID_REFRESH_DISCARDED.resolveIdentifierString());
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, HttpJwksLoader.DISCARD_FETCH_FAILED);
+        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, remoteContent);
+
+        failing.set(false);
+        clock.addAndGet(WINDOW.toNanos());
+        assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty());
+        drainExecutor();
+
+        assertAll("the in-flight guard was released, so the next window fetches again",
+                () -> assertEquals(afterInit + 1, moduleDispatcher.getRequestCount()),
+                () -> assertTrue(loader.getKeyInfo(ROTATED_KID).isPresent()));
+        loader.close();
     }
 
     @Test

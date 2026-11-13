@@ -350,6 +350,73 @@ class HttpJwksLoaderInitialRetryTest {
         }
     }
 
+    @Test
+    @DisplayName("A pending attempt runs no cycle once a periodic cycle reached the terminal ERROR")
+    void shouldNotRunPendingAttemptAfterTerminalError() throws Exception {
+        WellKnownDispatcher dispatcher = new WellKnownDispatcher();
+        dispatcher.setDiscovery(WellKnownDispatcher.Discovery.NO_JWKS_URI);
+        try (MockWebServer server = startServer(dispatcher)) {
+            HttpJwksLoader loader = initializedLoader(wellKnownConfig(server), LoaderStatus.UNDEFINED);
+            dispatcher.setDiscovery(WellKnownDispatcher.Discovery.FOREIGN_ISSUER);
+            scheduler.getPeriodicTask().run();
+            assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus(), "the periodic cycle's rejection is terminal");
+            int discoveriesAtError = dispatcher.getDiscoveryFetches();
+
+            assertTrue(scheduler.runNextOneShot(), "the attempt scheduled at initialization was still pending");
+
+            assertAll("the pending attempt is inert",
+                    () -> assertEquals(discoveriesAtError, dispatcher.getDiscoveryFetches(),
+                            "the discovery is not repeated"),
+                    () -> assertEquals(0, dispatcher.getJwksFetches(), "no JWKS was fetched"),
+                    () -> assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus()),
+                    () -> assertEquals(seconds(1), scheduler.getOneShotDelays(), "no successor is scheduled"),
+                    () -> assertEquals(0, scheduler.pendingOneShots()));
+            loader.close();
+        }
+    }
+
+    @Test
+    @DisplayName("A pending attempt runs no cycle once a periodic cycle installed keys")
+    void shouldNotRunPendingAttemptAfterKeysInstalled(URIBuilder uriBuilder) {
+        HttpJwksLoader loader = initializedLoader(directConfig(uriBuilder, scheduler).initialLoadRetry(true).build(),
+                LoaderStatus.UNDEFINED);
+        moduleDispatcher.serve(UnknownKidJwksDispatcher.Mode.DEFAULT_KEY);
+        scheduler.getPeriodicTask().run();
+        assertEquals(LoaderStatus.OK, loader.getLoaderStatus(), "the periodic cycle installed the key set");
+        int requestsAtInstall = moduleDispatcher.getRequestCount();
+
+        assertTrue(scheduler.runNextOneShot(), "the attempt scheduled at initialization was still pending");
+
+        assertAll("the pending attempt is inert",
+                () -> assertEquals(requestsAtInstall, moduleDispatcher.getRequestCount(), "no further JWKS fetch"),
+                () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
+                () -> assertEquals(seconds(1), scheduler.getOneShotDelays(), "no successor is scheduled"),
+                () -> assertEquals(0, scheduler.pendingOneShots()));
+        loader.close();
+    }
+
+    @Test
+    @DisplayName("Well-known mode: a pending attempt of a closed loader repeats no discovery")
+    void shouldNotRediscoverInPendingAttemptAfterClose() throws Exception {
+        WellKnownDispatcher dispatcher = new WellKnownDispatcher();
+        dispatcher.setDiscovery(WellKnownDispatcher.Discovery.NO_JWKS_URI);
+        try (MockWebServer server = startServer(dispatcher)) {
+            HttpJwksLoader loader = initializedLoader(wellKnownConfig(server), LoaderStatus.UNDEFINED);
+            int discoveriesAtClose = dispatcher.getDiscoveryFetches();
+            loader.close();
+
+            assertTrue(scheduler.runNextOneShot(), "the attempt scheduled at initialization was still pending");
+
+            assertAll("the pending attempt is inert",
+                    () -> assertEquals(discoveriesAtClose, dispatcher.getDiscoveryFetches(),
+                            "the discovery is not repeated"),
+                    () -> assertEquals(0, dispatcher.getJwksFetches(), "no JWKS was fetched"),
+                    () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
+                    () -> assertEquals(seconds(1), scheduler.getOneShotDelays(), "no successor is scheduled"),
+                    () -> assertEquals(0, scheduler.pendingOneShots()));
+        }
+    }
+
     private static MockWebServer startServer(WellKnownDispatcher dispatcher) throws IOException {
         MockWebServer server = new MockWebServer();
         server.setDispatcher(dispatcher);
@@ -438,7 +505,7 @@ class HttpJwksLoaderInitialRetryTest {
     /**
      * Well-known endpoint whose discovery document can advertise a matching issuer, a foreign issuer or no
      * {@code jwks_uri} at all (an unavailable discovery), and whose JWKS endpoint can fail with HTTP 500.
-     * JWKS fetches are counted.
+     * Discovery requests and JWKS fetches are counted.
      */
     private static final class WellKnownDispatcher extends Dispatcher {
 
@@ -446,6 +513,7 @@ class HttpJwksLoaderInitialRetryTest {
             MATCHING, NO_JWKS_URI, FOREIGN_ISSUER
         }
 
+        private final AtomicInteger discoveryFetches = new AtomicInteger();
         private final AtomicInteger jwksFetches = new AtomicInteger();
         private volatile Discovery discovery = Discovery.MATCHING;
         private volatile boolean jwksFailing;
@@ -462,12 +530,17 @@ class HttpJwksLoaderInitialRetryTest {
             return jwksFetches.get();
         }
 
+        int getDiscoveryFetches() {
+            return discoveryFetches.get();
+        }
+
         @Override
         public MockResponse dispatch(RecordedRequest request) {
             HttpUrl url = request.getUrl();
             String path = url.encodedPath();
             Headers json = Headers.of("Content-Type", "application/json");
             if (WELL_KNOWN_PATH.equals(path)) {
+                discoveryFetches.incrementAndGet();
                 String baseUrl = url.newBuilder().encodedPath("/").build().toString();
                 String serverIssuer = baseUrl.substring(0, baseUrl.length() - 1);
                 String jwksUri = serverIssuer + WELL_KNOWN_JWKS_PATH;

@@ -171,8 +171,8 @@ class HttpJwksLoaderUnknownKidAttackTest {
     }
 
     @ParameterizedTest(name = "{0}")
-    @EnumSource(value = UnknownKidJwksDispatcher.Mode.class,
-            names = {"SERVER_ERROR", "SLOW", "OVERSIZED", "MALFORMED", "EMPTY_KEY_SET"})
+    @EnumSource(value = UnknownKidJwksDispatcher.Mode.class, mode = EnumSource.Mode.EXCLUDE,
+            names = {"DEFAULT_KEY", "ROTATED_KEY"})
     @DisplayName("A failing or hostile response changes nothing and is not counted")
     void shouldIgnoreFailingResponse(UnknownKidJwksDispatcher.Mode failure, URIBuilder uriBuilder) throws Exception {
         // A maximum staleness this small degrades the loader on the first counted failed cycle

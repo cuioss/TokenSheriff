@@ -206,9 +206,10 @@ class HttpJwksLoaderDefaultBehaviourUnchangedTest {
         TokenSignatureValidator validator = new TokenSignatureValidator(loader, counter,
                 new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
         int afterInit = moduleDispatcher.getRequestCount();
+        DecodedJwt forgedToken = tokenWithKid("unknown-kid");
 
         TokenValidationException refusal = assertThrows(TokenValidationException.class,
-                () -> validator.validateSignature(tokenWithKid("unknown-kid")));
+                () -> validator.validateSignature(forgedToken));
         drainExecutor();
 
         assertAll(
@@ -229,9 +230,10 @@ class HttpJwksLoaderDefaultBehaviourUnchangedTest {
         TokenSignatureValidator validator = new TokenSignatureValidator(loader, counter,
                 new SignatureTemplateManager(new SignatureAlgorithmPreferences()));
         int afterInit = moduleDispatcher.getRequestCount();
+        DecodedJwt forgedToken = tokenWithKid("unknown-kid");
 
         TokenValidationException refusal = assertThrows(TokenValidationException.class,
-                () -> validator.validateSignature(tokenWithKid("unknown-kid")));
+                () -> validator.validateSignature(forgedToken));
         drainExecutor();
 
         assertAll(
