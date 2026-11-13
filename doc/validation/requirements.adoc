@@ -277,6 +277,41 @@ This ensures that tokens signed with recently rotated keys remain valid during t
 
 _See specification: xref:architecture.adoc#jwks-integration[JwksLoader]_
 
+[#VALIDATION-4.6]
+==== VALIDATION-4.6: Unknown Key ID Refresh
+
+The library must support an opt-in, bounded refresh of an HTTP-loaded key set when a token names a key ID (`kid`) that is in neither the installed nor a retired key set. This shortens the time until a key rotated at the identity provider is accepted, without making the token path depend on the JWKS endpoint.
+
+Key requirements:
+
+* Off by default: without the setting, an unknown `kid` never causes a fetch, and a rotated key is picked up only by the periodic refresh
+* The window is configured per loader, that is per issuer, from 5 to 3600 seconds inclusive, with no default value
+* At most one fetch per window and per loader, whatever the request rate and the number of distinct `kid` values presented
+* The key lookup performs no I/O and never waits: it only schedules the fetch on the loader's background refresh executor, and the triggering token is still rejected
+* The fetched key set is installed only if it holds the triggering `kid`; installation uses the same commit step, grace period and retired-set bound as the periodic refresh (xref:#VALIDATION-4.5[VALIDATION-4.5])
+* A failed fetch, or one whose key set lacks the triggering `kid`, changes nothing: keys, retired key sets, status, endpoint and the time of the last successful load stay unchanged, and the outcome is not counted as a failed refresh cycle
+* The setting cannot be combined with a disabled background refresh (refresh interval 0)
+
+The trade-off is documented: an attacker presenting an invented `kid` consumes the window, so a legitimate rotation is picked up at the latest one window later or at the next periodic refresh, whichever is first.
+
+_See specifications: xref:architecture.adoc#jwks-integration[JwksLoader], xref:threat-model.adoc[Threat Model] and xref:../adr/0030-An_opt-in_unknown-kid_refresh_claims_one_window_per_loader_and_installs_only_a_key_set_holding_the_kid.adoc[ADR-0030]_
+
+[#VALIDATION-4.7]
+==== VALIDATION-4.7: Initial Load Retry
+
+The library must support an opt-in, backed-off retry of a failed initial JWKS load, so that an issuer whose identity provider was unreachable at startup becomes usable sooner than one refresh interval later.
+
+Key requirements:
+
+* Off by default: without the setting, a failed initial load is retried only by the periodic refresh
+* A single on/off setting with fixed delays: the first retry after 1 second, the delay doubling up to 30 seconds and never above the refresh interval
+* Retries are strictly sequential and never overlap the periodic refresh or an unknown key ID refresh (xref:#VALIDATION-4.6[VALIDATION-4.6])
+* Retries stop at the first installed key set, at a terminal error and when the loader is closed
+* The loader status never reports `LOADING` during retries and reports `OK` only once keys are installed
+* The setting cannot be combined with a disabled background refresh (refresh interval 0)
+
+_See specifications: xref:architecture.adoc#jwks-integration[JwksLoader] and xref:../adr/0030-An_opt-in_unknown-kid_refresh_claims_one_window_per_loader_and_installs_only_a_key_set_holding_the_kid.adoc[ADR-0030]_
+
 [#VALIDATION-5]
 === VALIDATION-5: Token Parsing
 
