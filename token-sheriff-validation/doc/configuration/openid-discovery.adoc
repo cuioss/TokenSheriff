@@ -189,7 +189,8 @@ status degrades as described above when `maxStaleness` is configured.
 
 Two further opt-in settings shorten the time until keys become usable. Both default to off, apply to a
 direct JWKS configuration and to well-known discovery alike, and run on the loader's background refresh
-executor, so `build()` rejects either of them combined with `refreshIntervalSeconds(0)`. The design and
+executor, so `build()` rejects an unknown key ID refresh window, and `initialLoadRetry(true)`, combined with
+`refreshIntervalSeconds(0)`; `initialLoadRetry(false)` is accepted with it. The design and
 its bounds are recorded in
 xref:../../../doc/adr/0030-An_opt-in_unknown-kid_refresh_claims_one_window_per_loader_and_installs_only_a_key_set_holding_the_kid.adoc[ADR-0030].
 
@@ -228,8 +229,9 @@ periodic refresh. With `unknownKidRefreshWindow(Duration)` set:
 The lookup is reachable before any signature check, so an attacker presenting an invented key ID consumes
 the window. An attacker who does so in every window defers the on-demand pickup of a legitimate rotation
 entirely, because the fetched key set is installed only if it holds the attacker's invented key ID; such a
-rotation is then picked up by the next periodic refresh only. Without a sustained attack, a legitimate
-rotation is picked up at the latest one window later. Choose the refresh interval as the longest delay
+rotation is then picked up by the periodic refresh only. The window is a refresh rate limit, not a pickup
+deadline: it bounds how often a fetch is claimed, not when a rotation is accepted. Choose the refresh
+interval as the longest delay
 you accept for picking up a rotated key under attack; the setter rejects a `null`, zero, negative or
 out-of-range value.
 

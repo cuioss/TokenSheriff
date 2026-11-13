@@ -106,9 +106,10 @@ so an issuer without them behaves exactly as before: an unknown `kid` never caus
 initial load is retried only by the periodic refresh. The window is a whole number of seconds from `5` to
 `3600`; it bounds the fetches an attacker can cause with forged `kid` values to one per window and issuer,
 and the lookup that triggers a fetch never waits for it. `initial-load-retry` accepts `true` or `false`
-only. For either property, an unparseable or out-of-range value, a value combined with
-`jwks.http.refresh-interval-seconds=0`, or a value on an issuer configured with `jwks.file-path` or
-`jwks.content` fails at application startup. In environment-variable form they are
+only. For either property, an unparseable or out-of-range value, or a value on an issuer configured with
+`jwks.file-path` or `jwks.content`, fails at application startup. Combined with
+`jwks.http.refresh-interval-seconds=0`, any window value and `initial-load-retry=true` fail at application
+startup as well; `initial-load-retry=false` is valid with a zero refresh interval. In environment-variable form they are
 `SHERIFF_TOKEN_ISSUERS_<NAME>_JWKS_HTTP_UNKNOWN_KID_REFRESH_WINDOW_SECONDS` and
 `SHERIFF_TOKEN_ISSUERS_<NAME>_JWKS_HTTP_INITIAL_LOAD_RETRY`. See
 xref:../../../../../../doc/adr/0030-An_opt-in_unknown-kid_refresh_claims_one_window_per_loader_and_installs_only_a_key_set_holding_the_kid.adoc[ADR-0030].

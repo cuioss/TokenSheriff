@@ -83,8 +83,9 @@ the same in-flight guard as every other fetch.
   its successor only after it ended, with a fixed delay of 1 second doubling to 30 seconds and never above
   the refresh interval. Retries stop at the first installed key set, at the terminal `ERROR` and at `close()`;
   the status never reports `LOADING`.
-* **Both require background refresh.** Both opt-ins run on the refresh executor, so `build()` rejects either
-  of them combined with a refresh interval of 0, instead of accepting a setting that could never act.
+* **Both require background refresh.** Both opt-ins run on the refresh executor, so `build()` rejects a
+  configured window, and `initialLoadRetry(true)`, combined with a refresh interval of 0, instead of accepting
+  a setting that could never act; `initialLoadRetry(false)` is accepted with it.
 * **Per-issuer configuration in Quarkus.** Both settings are exposed as
   `sheriff.token.issuers.<name>.jwks.http.unknown-kid-refresh-window-seconds` and
   `sheriff.token.issuers.<name>.jwks.http.initial-load-retry`. Either property on an issuer that does not load
@@ -121,7 +122,8 @@ orphaned-configuration rule of ADR-0026.
 
 === Positive
 
-* A rotated key is accepted within one window instead of one refresh interval, for loaders that opt in.
+* For loaders that opt in, a rotated key can be accepted after one on-demand fetch instead of waiting for the
+  next refresh interval; the window bounds how often such a fetch is claimed.
 * Request-triggered fetches are bounded by configuration, not by the request rate: an invented-`kid` flood
   reaches the identity provider at most once per window per issuer.
 * The request path never waits on the network; a lookup costs at most one clock read and two compare-and-set
@@ -138,10 +140,12 @@ orphaned-configuration rule of ADR-0026.
 
 * An attacker presenting an invented `kid` consumes the window. An attacker who does so in every window
   defers the on-demand pickup of a legitimate rotation entirely, because the fetched key set is installed
-  only if it holds the attacker's invented `kid`; such a rotation is then picked up by the next periodic
-  refresh only, so the on-demand path never makes the loader worse than without it. Without a sustained
-  attack, a legitimate rotation is picked up at the latest one window later. The bound trades latency for
-  amplification resistance, and the window length sets that trade-off.
+  only if it holds the attacker's invented `kid`; such a rotation is then picked up by the periodic refresh
+  only. An unknown-`kid` fetch that overlaps a periodic cycle also makes that cycle skip its fetch (see
+  below), so a rotation that depended on the skipped cycle is picked up one refresh interval later than with
+  the periodic refresh alone. Without a sustained attack, a legitimate rotation is typically picked up within
+  one window, but the window limits how often a fetch is claimed and is not a pickup deadline. The bound trades
+  latency for amplification resistance, and the window length sets that trade-off.
 * The token that triggers a refresh is always rejected, even when its key becomes available a moment later;
   clients see one refusal per rotation.
 * While an unknown-`kid` fetch or a retry holds the guard, a periodic cycle skips its fetch, so the periodic
@@ -153,6 +157,12 @@ orphaned-configuration rule of ADR-0026.
 * The window is per loader, not global: a deployment with many issuers allows one fetch per window for each.
 * The correctness of the bound depends on every fetch path taking the in-flight guard and every installation
   going through the shared commit step; a new fetch path that bypasses either reopens overlap or displacement.
+* Known limitation: a periodic cycle that skips because the shared in-flight guard is held also skips its
+  staleness evaluation, since the skip returns before the failed cycle is recorded and the opt-in
+  `maxStaleness` bound is checked. With the default single-thread, loader-owned executor the cycles serialise,
+  so this cannot occur. With a caller-supplied multi-thread executor and a slow identity provider, a caller
+  who claims a window in every window can keep the guard held and so defer the `maxStaleness` degradation. No
+  production caller supplies such an executor today.
 
 == Alternatives Considered
 
