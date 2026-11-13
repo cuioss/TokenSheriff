@@ -19,6 +19,7 @@ import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.token.quarkus.observability.ObservedValidatorResolver;
 import de.cuioss.sheriff.token.validation.IssuerConfig;
+import de.cuioss.sheriff.token.validation.IssuerStatusView;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
 import de.cuioss.tools.logging.CuiLogger;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -49,6 +50,17 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WAR
  * {@code checkedEndpoints=0}: an unconfigured optional extension is no reason to hold the whole
  * application out of the load balancer. The {@code readiness} data key carries the real state.
  * </p>
+ * <p>
+ * With the opt-in {@value JwtPropertyKeys.HEALTH.JWKS#REPORT_EXTERNAL_VALIDATOR}, the issuers of an
+ * externally produced validator are reported through its read-only, non-fetching issuer status views,
+ * with the same per-issuer keys and the same readiness, loading and {@code DOWN} logic as configured
+ * issuers.
+ * </p>
+ * <p>
+ * {@value JwtPropertyKeys.HEALTH.JWKS#DISCLOSE_ISSUER}{@code =false} omits the
+ * {@code issuer.N.url} entry of every reported issuer, configured or external, so the payload
+ * carries only the per-issuer JWKS type and status, the counts and the readiness verdict.
+ * </p>
  *
  * @since 1.0
  */
@@ -62,15 +74,39 @@ public class JwksEndpointHealthCheck implements HealthCheck {
     private static final String STATUS_UP = "UP";
     private static final String STATUS_DOWN = "DOWN";
 
+    private static final String DEFAULT_DISCLOSE_ISSUER = "true";
+
     private final ObservedValidatorResolver resolver;
     private final ConcurrentHashMap<String, CachedResponse> healthCheckCache = new ConcurrentHashMap<>();
     private final long cacheTimeoutMillis;
+    private final boolean discloseIssuer;
 
+    /**
+     * Creates the health check with the default {@value JwtPropertyKeys.HEALTH.JWKS#DISCLOSE_ISSUER}
+     * of {@code true}.
+     *
+     * @param resolver     the resolver naming the observed validator
+     * @param cacheSeconds the cache time-to-live in seconds for health check results
+     */
+    public JwksEndpointHealthCheck(ObservedValidatorResolver resolver, int cacheSeconds) {
+        this(resolver, cacheSeconds, true);
+    }
+
+    /**
+     * CDI constructor.
+     *
+     * @param resolver       the resolver naming the observed validator
+     * @param cacheSeconds   the cache time-to-live in seconds for health check results
+     * @param discloseIssuer whether every reported issuer, configured or external, is reported with
+     *                       its identifier as {@code issuer.N.url}
+     */
     @Inject
     public JwksEndpointHealthCheck(ObservedValidatorResolver resolver,
-            @ConfigProperty(name = JwtPropertyKeys.HEALTH.JWKS.CACHE_SECONDS, defaultValue = DEFAULT_CACHE_SECONDS) int cacheSeconds) {
+            @ConfigProperty(name = JwtPropertyKeys.HEALTH.JWKS.CACHE_SECONDS, defaultValue = DEFAULT_CACHE_SECONDS) int cacheSeconds,
+            @ConfigProperty(name = JwtPropertyKeys.HEALTH.JWKS.DISCLOSE_ISSUER, defaultValue = DEFAULT_DISCLOSE_ISSUER) boolean discloseIssuer) {
         this.resolver = resolver;
         this.cacheTimeoutMillis = TimeUnit.SECONDS.toMillis(cacheSeconds);
+        this.discloseIssuer = discloseIssuer;
     }
 
     @Override
@@ -94,22 +130,29 @@ public class JwksEndpointHealthCheck implements HealthCheck {
     private HealthCheckResponse performHealthCheck() {
         var responseBuilder = HealthCheckResponse.named(HEALTHCHECK_NAME).up();
 
+        List<EndpointResult> results;
         List<IssuerConfig> issuerConfigs = resolver.observedIssuerConfigs();
-        if (issuerConfigs.isEmpty()) {
-            return responseBuilder
-                    .withData("checkedEndpoints", 0)
-                    .withData("readiness", resolver.outcome().name())
-                    .withData("loading", "COMPLETE")
-                    .build();
+        if (!issuerConfigs.isEmpty()) {
+            results = issuerConfigs.stream()
+                    .map(issuerConfig -> EndpointResult.fromIssuerConfig(issuerConfig.getIssuerIdentifier(), issuerConfig))
+                    .toList();
+        } else {
+            List<IssuerStatusView> issuerStatuses = resolver.observedIssuerStatuses();
+            if (issuerStatuses.isEmpty()) {
+                return responseBuilder
+                        .withData("checkedEndpoints", 0)
+                        .withData("readiness", resolver.outcome().name())
+                        .withData("loading", "COMPLETE")
+                        .build();
+            }
+            results = issuerStatuses.stream()
+                    .map(EndpointResult::fromIssuerStatus)
+                    .toList();
         }
-
-        var results = issuerConfigs.stream()
-                .map(issuerConfig -> EndpointResult.fromIssuerConfig(issuerConfig.getIssuerIdentifier(), issuerConfig))
-                .toList();
 
         // Add all endpoint data to response
         for (int i = 0; i < results.size(); i++) {
-            results.get(i).addToResponse(responseBuilder, "issuer." + i + ".");
+            results.get(i).addToResponse(responseBuilder, "issuer." + i + ".", discloseIssuer);
         }
 
         // Calculate overall readiness and loading status
@@ -168,14 +211,36 @@ public class JwksEndpointHealthCheck implements HealthCheck {
         }
 
         /**
+         * Creates an EndpointResult from the read-only status view of an external validator's issuer.
+         * Reading the view fetches no keys.
+         *
+         * @param view the issuer status view
+         * @return the endpoint result
+         */
+        static EndpointResult fromIssuerStatus(IssuerStatusView view) {
+            String issuer = view.issuerIdentifier();
+            try {
+                LoaderStatus status = view.loaderStatus();
+                LOGGER.debug("JWKS loader status for issuer %s: %s", issuer, status);
+                return new EndpointResult(issuer, view.jwksType().toString(), status);
+            } catch (IllegalStateException | IllegalArgumentException e) {
+                LOGGER.warn(e, WARN.ERROR_CHECKING_JWKS_LOADER, issuer, e.getMessage());
+                return new EndpointResult(issuer, "none", LoaderStatus.ERROR);
+            }
+        }
+
+        /**
          * Adds this endpoint's data to the health check response builder.
          *
          * @param responseBuilder the response builder
          * @param prefix          the prefix for the data keys
+         * @param includeUrl      whether the issuer identifier is added as {@code url}
          */
-        void addToResponse(HealthCheckResponseBuilder responseBuilder, String prefix) {
+        void addToResponse(HealthCheckResponseBuilder responseBuilder, String prefix, boolean includeUrl) {
             boolean up = status == LoaderStatus.OK;
-            responseBuilder.withData(prefix + "url", issuer);
+            if (includeUrl) {
+                responseBuilder.withData(prefix + "url", issuer);
+            }
             responseBuilder.withData(prefix + "jwksType", jwksType);
             responseBuilder.withData(prefix + "status", up ? STATUS_UP : STATUS_DOWN);
         }

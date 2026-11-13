@@ -23,6 +23,7 @@ import de.cuioss.sheriff.token.validation.domain.claim.mapper.ClaimMapper;
 import de.cuioss.sheriff.token.validation.domain.claim.mapper.StrictStringMapper;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
+import de.cuioss.sheriff.token.validation.exception.ClaimMappingException;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.sheriff.token.validation.json.MapRepresentation;
 import org.jspecify.annotations.Nullable;
@@ -42,6 +43,9 @@ import java.util.Optional;
  *   <li>Access Tokens - via {@link #createAccessToken}</li>
  *   <li>ID Tokens - via {@link #createIdToken}</li>
  * </ul>
+ * <p>
+ * {@link #mapClaims} maps the claims alone, without building a token content object, for the
+ * signature-only verification entry.
  * <p>
  * During token creation, the builder extracts and maps claims from the token body
  * using appropriate claim mappers based on the issuer configuration or standard claim names.
@@ -132,6 +136,21 @@ public class TokenBuilder {
         return Optional.of(new IdTokenContent(claims, decodedJwt.rawToken()));
     }
 
+    /**
+     * Maps the claims of a decoded JWT without building a token content object.
+     * <p>
+     * Uses the same claim mappers as {@link #createIdToken(DecodedJwt)}, including the strict
+     * string guard on {@code sub} and the plain-string fallback for unknown claims. No claim is
+     * validated: expiry, audience and every other claim rule are left to the caller.
+     *
+     * @param decodedJwt the decoded JWT
+     * @return an unmodifiable map of claim names to mapped claim values, empty for an empty body
+     * @throws TokenValidationException if a claim value is malformed and cannot be mapped
+     */
+    public Map<String, ClaimValue> mapClaims(DecodedJwt decodedJwt) {
+        return Map.copyOf(extractClaims(decodedJwt.body()));
+    }
+
 
     /**
      * Extracts claims from a MapRepresentation using proper claim mappers.
@@ -169,8 +188,9 @@ public class TokenBuilder {
      * <p>
      * Mappers (including custom SPI implementations) can throw arbitrary runtime
      * exceptions on malformed claim values (e.g. a string-typed 'exp'). These are translated
-     * to {@link TokenValidationException} to honor the documented contract of TokenValidator,
-     * and counted as {@link SecurityEventCounter.EventType#MISSING_CLAIM}. A
+     * to a {@link ClaimMappingException} naming the claim, a {@link TokenValidationException}, to honor
+     * the documented contract of TokenValidator, and counted as
+     * {@link SecurityEventCounter.EventType#MISSING_CLAIM}. A
      * {@link TokenValidationException} thrown by a mapper is counted under its own event type
      * and rethrown unchanged.
      *
@@ -194,11 +214,7 @@ public class TokenBuilder {
         // catch is deliberate; TokenValidationException is rethrown above.
         catch (RuntimeException e) {
             securityEventCounter.increment(SecurityEventCounter.EventType.MISSING_CLAIM);
-            throw new TokenValidationException(
-                    SecurityEventCounter.EventType.MISSING_CLAIM,
-                    "Malformed claim '" + key + "': " + e.getMessage(),
-                    e
-            );
+            throw new ClaimMappingException(key, "Malformed claim '" + key + "': " + e.getMessage(), e);
         }
     }
 

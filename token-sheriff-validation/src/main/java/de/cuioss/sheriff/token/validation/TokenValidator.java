@@ -23,6 +23,8 @@ import de.cuioss.sheriff.token.validation.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.context.RefreshTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
+import de.cuioss.sheriff.token.validation.domain.token.SignatureVerifiedToken;
+import de.cuioss.sheriff.token.validation.domain.token.TokenContent;
 import de.cuioss.sheriff.token.validation.domain.token.UnvalidatedRefreshToken;
 import de.cuioss.sheriff.token.validation.dpop.DpopProofValidator;
 import de.cuioss.sheriff.token.validation.dpop.DpopReplayProtection;
@@ -63,6 +65,17 @@ import java.util.Map;
  *   <li>Token building</li>
  *   <li>Claim validation</li>
  * </ol>
+ * <p>
+ * {@link #verifySignature(String)} is a separate entry that stops after the signature: it returns a
+ * {@link SignatureVerifiedToken} carrying the mapped claims and the verbatim {@code typ} header with
+ * <strong>no claim verdict</strong>. Its result is not an authentication decision and is not a
+ * {@code TokenContent}.
+ * <p>
+ * {@link #getRawClaims(TokenContent)} returns the payload of a validated token as a native JSON map by
+ * decoding its raw token again with this validator's parser and bounds.
+ * <p>
+ * {@link #getIssuerStatuses()} returns a read-only, non-fetching {@link IssuerStatusView} of every enabled
+ * issuer.
  * <p>
  * This class is thread-safe after construction.
  * All validation methods can be called concurrently from multiple threads.
@@ -189,6 +202,13 @@ public class TokenValidator implements Closeable {
     private final RefreshTokenValidationPipeline refreshTokenPipeline;
 
     /**
+     * The parser shared by the pipelines, bound by this validator's {@link ParserConfig} and JWE
+     * decryption configuration. Kept to re-derive the native claims of a validated token in
+     * {@link #getRawClaims(TokenContent)}.
+     */
+    private final NonValidatingJwtParser jwtParser;
+
+    /**
      * Shared DPoP replay protection instance, or null if no issuer has DPoP enabled.
      * Stored for lifecycle management ({@link #close()}).
      */
@@ -200,6 +220,11 @@ public class TokenValidator implements Closeable {
      * closes every loader that is {@link AutoCloseable}.
      */
     private final List<JwksLoader> jwksLoaders;
+
+    /**
+     * Read-only views of the enabled issuers in configuration order, returned by {@link #getIssuerStatuses()}.
+     */
+    private final List<IssuerStatusView> issuerStatuses;
 
     /**
      * Private constructor used by builder.
@@ -232,6 +257,9 @@ public class TokenValidator implements Closeable {
         this.jwksLoaders = enabledIssuerConfigs.stream()
                 .map(IssuerConfig::getJwksLoader)
                 .toList();
+        this.issuerStatuses = enabledIssuerConfigs.stream()
+                .map(config -> new IssuerStatusView(config.getIssuerIdentifier(), config.getJwksLoader()))
+                .toList();
 
         // Use default ParserConfig if not provided
         if (parserConfig == null) {
@@ -251,11 +279,11 @@ public class TokenValidator implements Closeable {
             this.performanceMonitor = TokenValidatorMonitorConfig.disabled().createMonitor();
         }
 
-        // Construction-time dependencies - used only to build pipelines, not stored as fields.
+        // The parser is shared by the pipelines and kept for getRawClaims(TokenContent).
         // The JWE config hands the parser the effective JWE size limit, the same one TokenStringValidator
         // applies below, so the access, ID and refresh pipelines (which share this parser) accept a JWE up
         // to maxEncryptedTokenSize while a JWS and the inner JWS stay bound by ParserConfig.maxTokenSize.
-        NonValidatingJwtParser jwtParser = NonValidatingJwtParser.builder()
+        this.jwtParser = NonValidatingJwtParser.builder()
                 .config(parserConfig)
                 .securityEventCounter(this.securityEventCounter)
                 .jweDecryptionConfig(jweDecryptionConfig)
@@ -489,6 +517,77 @@ public class TokenValidator implements Closeable {
         securityEventCounter.increment(SecurityEventCounter.EventType.REFRESH_TOKEN_CREATED);
 
         return refreshToken;
+    }
+
+    /**
+     * Verifies the signature of a token without reaching any claim verdict.
+     * <p>
+     * <strong>WARNING:</strong> the result is not an authentication decision. The token string limits,
+     * issuer resolution (the issuer must be enabled and its JWKS loader healthy), the header checks for
+     * algorithm, key ID and embedded JWK, and the signature are verified, and the claims are mapped.
+     * No claim is validated: an expired token, a token issued for another audience or a token without
+     * {@code sub} or {@code azp} is returned as long as its signature is valid. The issuer's expected
+     * token type is not checked; the {@code typ} header is returned verbatim for the caller to judge.
+     * A JWE is decrypted when JWE decryption is configured.
+     * <p>
+     * The access-token cache is neither read nor written, and no performance measurement is recorded.
+     * A success counts {@link SecurityEventCounter.EventType#SIGNATURE_ONLY_VERIFIED} once; a refusal
+     * counts the event of the stage that refused the token. Claims are mapped after the signature check;
+     * a value a claim mapper fails on, such as a non-numeric {@code exp}, is refused with a
+     * {@link de.cuioss.sheriff.token.validation.exception.ClaimMappingException} naming that claim.
+     *
+     * @param rawToken the raw token string
+     * @return the signature-verified token carrying the unvalidated claims and the verbatim {@code typ}
+     * @throws TokenValidationException if the token string, the issuer, the header or the signature is
+     *                                  refused, or a claim cannot be mapped
+     */
+    public SignatureVerifiedToken verifySignature(String rawToken) {
+        LOGGER.debug("Verifying token signature");
+
+        // Pre-pipeline validation (null, blank, size)
+        tokenStringValidator.validate(rawToken);
+
+        // Delegate to the ID token pipeline's signature-only sibling (no claim validation, no cache, no metrics)
+        SignatureVerifiedToken verifiedToken = idTokenPipeline.verifySignature(rawToken);
+
+        LOGGER.debug("Successfully verified token signature");
+        securityEventCounter.increment(SecurityEventCounter.EventType.SIGNATURE_ONLY_VERIFIED);
+
+        return verifiedToken;
+    }
+
+    /**
+     * Returns the payload of a validated token as a native JSON map.
+     * <p>
+     * The token's raw token is decoded again with this validator's own parser, so the
+     * {@link ParserConfig} size, depth, array and string bounds apply, and a JWE is decrypted with this
+     * validator's JWE configuration to read the inner payload. A payload the parser refuses is refused as
+     * a whole, never partially returned. The token content itself is unchanged and nothing is cached: each
+     * call decodes, and for a JWE decrypts, again.
+     * <p>
+     * JSON objects are unmodifiable maps in member order, JSON arrays unmodifiable lists in element order,
+     * and numbers, booleans and strings keep their JSON type; a {@code null} nested inside an object or
+     * array is kept, a top-level {@code null} member is omitted.
+     *
+     * @param token a token validated by this validator
+     * @return the deep-immutable native claims of the token, never {@code null}
+     * @throws TokenValidationException if the raw token cannot be decoded within this validator's bounds
+     */
+    public Map<String, Object> getRawClaims(TokenContent token) {
+        return jwtParser.decode(token.getRawToken()).body().toNativeClaims();
+    }
+
+    /**
+     * Returns a read-only view of every enabled issuer.
+     * <p>
+     * Each view names the issuer and its JWKS type and reads the issuer's current {@code LoaderStatus}
+     * without fetching keys. The views expose neither the issuer configuration nor the JWKS loader, so the
+     * loaders stay owned by this validator and are closed only by {@link #close()}.
+     *
+     * @return the enabled issuers in configuration order as an immutable list, never empty
+     */
+    public List<IssuerStatusView> getIssuerStatuses() {
+        return issuerStatuses;
     }
 
     /**

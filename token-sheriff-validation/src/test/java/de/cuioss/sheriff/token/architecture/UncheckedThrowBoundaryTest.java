@@ -163,6 +163,11 @@ class UncheckedThrowBoundaryTest {
                     + "#build", CONSTRUCTION_TIME),
             Map.entry("de.cuioss.sheriff.token.validation.jwks.key.JWKSKeyLoader$JWKSKeyLoaderBuilder#build",
                     CONSTRUCTION_TIME),
+            Map.entry("de.cuioss.sheriff.token.validation.logout.LogoutTokenReplayGuard#<init>",
+                    CONSTRUCTION_TIME + " (the capacity argument check; admit itself constructs none)"),
+            Map.entry("de.cuioss.sheriff.token.validation.logout.LogoutTokenValidator#<init>",
+                    CONSTRUCTION_TIME + " (the @Builder constructor's argument checks; validate returns a"
+                            + " LogoutTokenCheck instead of throwing)"),
             Map.entry("de.cuioss.sheriff.token.validation.jwks.key.JWKSKeyLoader$JWKSKeyLoaderBuilder"
                     + "#loadJwksFromFile", CONSTRUCTION_TIME + " (only reached for a configured jwksFilePath)"),
             Map.entry("de.cuioss.sheriff.token.validation.metrics.TokenValidatorMonitor#<init>",

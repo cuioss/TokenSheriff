@@ -48,6 +48,61 @@ _See Requirement xref:requirements.adoc#VALIDATION-2[VALIDATION-2: Token Represe
 
 The `TokenValidator` manages multiple `IssuerConfig` instances, selects the appropriate configuration for each token, and orchestrates the validation pipeline. It is immutable and thread-safe after construction.
 
+[[token-validator-seams]]
+==== Public Seams
+
+_See Requirement xref:requirements.adoc#VALIDATION-13[VALIDATION-13: Public Validation Seams and Back-Channel Logout]_
+
+Beside `createAccessToken`, `createIdToken` and `createRefreshToken`, `TokenValidator` publishes three narrow entries for consumers that build on token validation (xref:../adr/0029-TokenValidator_publishes_signature-only_verification_native_JSON_claims_and_a_non-fetching_issuer_status_view.adoc[ADR-0029]):
+
+[cols="1,1,3", options="header"]
+|===
+|Member |Returns |Purpose
+|`verifySignature(String)` |`SignatureVerifiedToken` |Runs the token string, issuer, header and signature stages of the ID-token pipeline and maps the claims, with no claim verdict. Neither cache nor performance monitor is involved; a success counts `SIGNATURE_ONLY_VERIFIED`. See xref:security-reference.adoc#signature-only-verification[Signature-Only Verification] before relying on the result.
+|`getRawClaims(TokenContent)` |`Map<String, Object>` |Decodes the raw token of a validated token again with the validator's own parser and bounds, and returns its payload as deep-immutable native JSON. Nothing is cached; a JWE is decrypted again on every call.
+|`getIssuerStatuses()` |`List<IssuerStatusView>` |One read-only view per enabled issuer, in configuration order. Reading a view's status fetches no keys.
+|===
+
+Two types carry these results:
+
+* **SignatureVerifiedToken** (`domain.token`) - The mapped claims, the native JSON claims and the verbatim `typ` header of a token whose signature was verified and whose claims were not. It implements neither `TokenContent` nor `MinimalTokenContent`, so it cannot be passed where a validated token is expected, and it is never cached.
+* **IssuerStatusView** - The issuer identifier, the JWKS type and the current `LoaderStatus` of one enabled issuer. It holds the loader only to read its status: it exposes neither the `IssuerConfig` nor the `JwksLoader`, so the loaders stay owned by the validator and are closed only by `TokenValidator.close()`.
+
+[[logout-package]]
+=== Logout Token Validation
+
+_See Requirements xref:requirements.adoc#VALIDATION-13.4[VALIDATION-13.4: Logout Token Validation] and xref:requirements.adoc#VALIDATION-13.5[VALIDATION-13.5: Logout Token Replay Guard]_
+
+The `logout` package validates logout tokens of https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0]. It is built on the public seams above rather than on the token pipelines: a logout token is neither an access token nor an ID token, so no `TokenType` verdict applies to it.
+
+[source]
+----
+raw logout token
+   |
+   v
+LogoutTokenValidator.validate(rawToken)
+   |-- TokenValidator.verifySignature(rawToken) ---> SignatureVerifiedToken   (refused -> SIGNATURE;
+   |                                                                           unmappable iat -> ISSUED_AT,
+   |                                                                           unmappable exp -> EXPIRATION)
+   |-- now = clock.instant()                         read once per token
+   |-- getTypHeader()                                typ check                 (-> TYPE)
+   |-- getRawClaims(), getNullClaimNames()           iss, aud, iat, exp,
+   |                                                 events, nonce, sub/sid,
+   |                                                 jti checks at now         (-> ISSUER ... JWT_ID)
+   |-- LogoutTokenReplayGuard.admit(jti, iat + window, now)                    (-> REPLAYED / REPLAY_GUARD_FULL)
+   v
+LogoutTokenValidationResult: accepted claims, or the one failed LogoutTokenCheck
+----
+
+A claim the signature-only entry cannot map refuses the token before the claim checks run. A present `iat` or `exp` that is not a number keeps the identity of its check, `ISSUED_AT` or `EXPIRATION`; any other unmappable claim, a `sub` that is a JSON number, boolean, array or object among them, is refused as `SIGNATURE`.
+
+* **LogoutTokenValidator** - Built with the `TokenValidator`, the expected issuer and audience, the `iat` freshness window, the replay-guard capacity and a clock. It builds its own replay guard from that capacity, reads the clock once per token, runs the checks in a fixed order against that instant and returns the first that fails. It is thread-safe; its only mutable state is the guard it owns.
+* **LogoutTokenValidationResult** - For an accepted token, the `iss`, the `jti` and the `sub` and/or `sid` that name the session to end; for a refused token, the single failed check and no claim. Its `toString()` names only the outcome.
+* **LogoutTokenCheck** - The bounded set of checks a refusal names. A caller can log or meter it without carrying any text taken from the token.
+* **LogoutTokenReplayGuard** - A bounded, fail-closed store of the SHA-256 digests of admitted `jti` values, internal to the package. Each validator builds its own from the configured capacity. The guard reads no clock: every admission passes the one instant the validator judged `iat` against, so purge and freshness are decided on the same instant and two clock reads cannot straddle the `iat` plus window edge. It is consulted last, so a token refused by any other check takes no capacity.
+
+The package does not log. Receiving the logout request over HTTP and ending the session the token names stay with the consuming application. The checks and their security rationale are in xref:security-reference.adoc#logout-token-validation[Logout Token Validation].
+
 [[token-structure]]
 [[token-types]]
 === Token Architecture and Types
@@ -142,3 +197,4 @@ With JWE decryption configured, the size check that `TokenStringValidator` and `
 * xref:requirements.adoc[Requirements]
 * xref:security-reference.adoc[Security Reference]
 * xref:specification/token-decryption.adoc[Token Decryption (JWE)]
+* xref:../adr/0029-TokenValidator_publishes_signature-only_verification_native_JSON_claims_and_a_non-fetching_issuer_status_view.adoc[ADR-0029: TokenValidator public seams]

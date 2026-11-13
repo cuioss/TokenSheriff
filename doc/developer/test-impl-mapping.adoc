@@ -53,9 +53,10 @@ Package prefix: `de.cuioss.sheriff.token`.
 `IssuerConfigClaimSubOptionalTest`, `IssuerConfigDiscoveryIssuerTest`, `IssuerConfigTest`,
 `OAuth2JWTBestPracticesComplianceTest`, `OpenIDConnectComplianceTest`,
 `RFC7519JWTComplianceTest`, `TokenTypeTest`, `TokenValidatorConcurrencyTest`,
-`TokenValidatorJweTest`, `TokenValidatorMetricsTest`, `TokenValidatorMetricsVerificationTest`,
-`TokenValidatorPerformanceIntegrationTest`, `TokenValidatorSecurityEventTest`,
-`TokenValidatorTest`
+`TokenValidatorIssuerStatusTest`, `TokenValidatorJweTest`, `TokenValidatorMetricsTest`,
+`TokenValidatorMetricsVerificationTest`, `TokenValidatorPerformanceIntegrationTest`,
+`TokenValidatorSecurityEventTest`, `TokenValidatorTest`,
+`TokenValidatorVerifySignatureAttackTest`, `TokenValidatorVerifySignatureTest`
 
 |`validation.cache`
 |`AccessTokenCacheConfigTest`, `AccessTokenCacheTest`
@@ -74,7 +75,7 @@ Package prefix: `de.cuioss.sheriff.token`.
 
 |`validation.domain.token`
 |`AccessTokenContentTest`, `BaseTokenContentTest`, `IdTokenContentTest`,
-`MinimalTokenContentTest`, `TokenContentTest`, `UnvalidatedRefreshTokenTest`
+`MinimalTokenContentTest`, `RawClaimsTest`, `TokenContentTest`, `UnvalidatedRefreshTokenTest`
 
 |`validation.dpop`
 |`DpopConfigTest`, `DpopPipelineIntegrationTest`, `DpopProofValidatorAlgorithmAndClaimTest`,
@@ -108,6 +109,9 @@ Package prefix: `de.cuioss.sheriff.token`.
 |`validation.jwks.parser`
 |`JwksParserLargeArrayTest`, `JwksParserTest`, `KeyProcessorRsaDefaultAlgorithmTest`,
 `KeyProcessorTest`
+
+|`validation.logout`
+|`LogoutTokenReplayGuardTest`, `LogoutTokenValidatorTest`
 
 |`validation.metrics`
 |`MeasurementTypeTest`, `MetricsTickerFactoryTest`, `TokenValidatorMonitorTest`
@@ -267,7 +271,8 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 |`JwtMetricsCollectorRebaselineTest`, `JwtMetricsCollectorTest`, `MetricsIntegrationTest`
 
 |`observability`
-|`ForeignValidatorObservabilityTest`, `ObservedValidatorResolverTest`
+|`ExternalValidatorJwksReportingTest`, `ForeignValidatorObservabilityTest`,
+`ObservedValidatorResolverTest`
 
 |`producer`
 |`BearerTokenProducerTest`, `BearerTokenResponseFactoryTest`, `BearerTokenResultTest`,

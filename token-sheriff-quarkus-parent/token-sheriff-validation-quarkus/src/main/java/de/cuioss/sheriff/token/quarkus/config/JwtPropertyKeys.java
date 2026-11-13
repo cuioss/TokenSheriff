@@ -751,6 +751,33 @@ public final class JwtPropertyKeys {
              */
             public static final String CACHE_SECONDS = BASE + ".cache-seconds";
 
+            /**
+             * Whether the JWKS readiness probe reports the issuers of an externally produced
+             * {@code TokenValidator}.
+             * <p>
+             * Default: {@code false}. With the default, an external validator is reported as
+             * {@code UP} with {@code checkedEndpoints=0} and {@code readiness=EXTERNAL_VALIDATOR}, as
+             * before. When set to {@code true}, the probe reports each enabled issuer of the external
+             * validator through its read-only, non-fetching issuer status view and turns {@code DOWN}
+             * when any of them is not ready. The key has no effect when the extension's own
+             * {@code sheriff.token.issuers.*} namespace is configured.
+             * </p>
+             */
+            public static final String REPORT_EXTERNAL_VALIDATOR = BASE + ".report-external-validator";
+
+            /**
+             * Whether the JWKS readiness probe discloses the identifier of each reported issuer as
+             * {@code issuer.N.url}.
+             * <p>
+             * Default: {@code true}. When set to {@code false}, the {@code issuer.N.url} entries are
+             * omitted from the probe as a whole: for the issuers of the extension's own
+             * {@code sheriff.token.issuers.*} namespace and for the issuers of an external validator
+             * reported through {@link #REPORT_EXTERNAL_VALIDATOR} alike. Only the per-issuer
+             * {@code jwksType} and {@code status}, the counts and the readiness verdict are reported.
+             * </p>
+             */
+            public static final String DISCLOSE_ISSUER = BASE + ".disclose-issuer";
+
         }
     }
 

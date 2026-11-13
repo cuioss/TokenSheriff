@@ -152,7 +152,9 @@ clears them from the server-side lifecycle
 RP-initiated logout *triggering* (above) and token revocation are the in-scope building
 blocks. *Front-channel / back-channel logout receivers* and the *Session-Management iframe*
 are browser-session concerns owned by the BFF application, not this engine
-(xref:../requirements.adoc#CLIENT-19[CLIENT-19]).
+(xref:../requirements.adoc#CLIENT-19[CLIENT-19]). A BFF that implements the back-channel logout
+receiver endpoint validates the received logout token with the `token-sheriff-validation`
+logout-token validator (xref:../../validation/requirements.adoc#VALIDATION-13.4[VALIDATION-13.4]).
 
 * Source: https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OpenID Connect RP-Initiated Logout 1.0], https://www.rfc-editor.org/rfc/rfc7009[RFC 7009] (revocation), https://www.rfc-editor.org/rfc/rfc9700#section-4.1[RFC 9700 §4.1] (open-redirect defence).
 

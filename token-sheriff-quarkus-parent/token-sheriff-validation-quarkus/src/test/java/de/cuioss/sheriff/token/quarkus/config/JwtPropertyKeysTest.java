@@ -167,5 +167,14 @@ class JwtPropertyKeysTest {
             assertEquals("sheriff.token.health.jwks", JwtPropertyKeys.HEALTH.JWKS.BASE);
             assertTrue(JwtPropertyKeys.HEALTH.JWKS.CACHE_SECONDS.startsWith(JwtPropertyKeys.HEALTH.JWKS.BASE));
         }
+
+        @Test
+        @DisplayName("should have correct external-validator reporting properties")
+        void shouldHaveCorrectExternalValidatorReportingProperties() {
+            assertEquals("sheriff.token.health.jwks.report-external-validator",
+                    JwtPropertyKeys.HEALTH.JWKS.REPORT_EXTERNAL_VALIDATOR);
+            assertEquals("sheriff.token.health.jwks.disclose-issuer",
+                    JwtPropertyKeys.HEALTH.JWKS.DISCLOSE_ISSUER);
+        }
     }
 }

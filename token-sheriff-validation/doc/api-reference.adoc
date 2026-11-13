@@ -20,6 +20,44 @@ public class TokenValidator implements Closeable {
     public AccessTokenContent createAccessToken(AccessTokenRequest request);
     public IdTokenContent createIdToken(IdTokenRequest request);
     public UnvalidatedRefreshToken createRefreshToken(RefreshTokenRequest request);
+
+    // Public seams (no claim verdict for verifySignature)
+    public SignatureVerifiedToken verifySignature(String rawToken);
+    public Map<String, Object> getRawClaims(TokenContent token);
+    public List<IssuerStatusView> getIssuerStatuses();
+
+    public void close();
+}
+----
+
+`verifySignature` checks the token string limits, the issuer, the header and the signature and maps the claims, but reaches *no claim verdict*: its result is not an authentication decision. See xref:../../doc/validation/security-reference.adoc#signature-only-verification[Signature-Only Verification] before using it.
+
+=== SignatureVerifiedToken
+
+A token whose signature was verified and whose claims were not. It implements neither `TokenContent` nor `MinimalTokenContent`.
+
+[source,java]
+----
+public final class SignatureVerifiedToken {
+    public Map<String, ClaimValue> getClaims();     // mapped, not validated
+    public Map<String, Object> getRawClaims();      // native JSON, not validated
+    public Set<String> getNullClaimNames();         // top-level null members, omitted from getRawClaims
+    public Optional<String> getTypHeader();         // verbatim, not compared
+    public String getRawToken();
+}
+----
+
+=== IssuerStatusView
+
+A read-only, non-fetching view of one enabled issuer, returned by `TokenValidator.getIssuerStatuses()`.
+
+[source,java]
+----
+public final class IssuerStatusView {
+    public String issuerIdentifier();
+    public JwksType jwksType();
+    public LoaderStatus loaderStatus();   // reads the current status, fetches no keys
+}
 ----
 
 === AccessTokenContent
@@ -80,6 +118,47 @@ public class IssuerConfig implements LoadingStatusProvider {
     }
 }
 ----
+
+== Back-Channel Logout
+
+The `de.cuioss.sheriff.token.validation.logout` package validates logout tokens of OpenID Connect Back-Channel Logout 1.0. The checks and their order are described in xref:../../doc/validation/security-reference.adoc#logout-token-validation[Logout Token Validation].
+
+[source,java]
+----
+public final class LogoutTokenValidator {
+    public static final String BACKCHANNEL_LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout";
+
+    public static LogoutTokenValidatorBuilder builder() { ... }
+
+    public static class LogoutTokenValidatorBuilder {
+        public LogoutTokenValidatorBuilder tokenValidator(TokenValidator tokenValidator);
+        public LogoutTokenValidatorBuilder expectedIssuer(String issuer);
+        public LogoutTokenValidatorBuilder expectedAudience(String audience);
+        public LogoutTokenValidatorBuilder freshnessWindow(Duration window);  // positive
+        public LogoutTokenValidatorBuilder replayGuardCapacity(int capacity);  // > 0, live jti entries
+        public LogoutTokenValidatorBuilder clock(Clock clock);  // read once per token
+        public LogoutTokenValidator build();
+    }
+
+    public LogoutTokenValidationResult validate(String rawToken);
+}
+
+public final class LogoutTokenValidationResult {
+    public boolean isAccepted();
+    public Optional<LogoutTokenCheck> getFailedCheck();
+    public Optional<String> getIssuer();
+    public Optional<String> getSubject();
+    public Optional<String> getSessionId();
+    public Optional<String> getJwtId();
+}
+
+public enum LogoutTokenCheck {
+    SIGNATURE, TYPE, ISSUER, AUDIENCE, ISSUED_AT, EXPIRATION, EVENTS, NONCE,
+    SUBJECT_OR_SESSION, JWT_ID, REPLAYED, REPLAY_GUARD_FULL
+}
+----
+
+The replay guard, `LogoutTokenReplayGuard`, is internal to the package. Each `LogoutTokenValidator` builds its own guard from `replayGuardCapacity`; no caller constructs a guard. The guard reads no clock: the validator reads its `clock` once per token and passes that one instant to the guard, so the guard purges expired entries on exactly the instant `iat` freshness was judged on. See xref:../../doc/validation/security-reference.adoc#logout-replay-guard[Logout Replay Guard].
 
 == Configuration Classes
 
@@ -162,6 +241,11 @@ public interface ClaimMapper {
 public class TokenValidationException extends RuntimeException {
     public EventType getEventType();
     public EventCategory getCategory();
+}
+
+// A claim mapper failed on a malformed value, e.g. a non-numeric exp; event type MISSING_CLAIM
+public class ClaimMappingException extends TokenValidationException {
+    public String getClaimName();
 }
 ----
 

@@ -425,6 +425,206 @@ class JwksEndpointHealthCheckTest {
                         "readiness must name the not-configured outcome"));
     }
 
+    @Test
+    @DisplayName("Opted-in external validator with ready issuers reports UP with per-issuer data")
+    void optedInExternalValidatorUp() {
+        try (TokenValidator external = externalValidator(
+                     new IssuerSpec("ext-issuer-a", LoaderStatus.OK), new IssuerSpec("ext-issuer-b", LoaderStatus.OK))) {
+            HealthCheckResponse response = new JwksEndpointHealthCheck(reportingExternal(external), 30).call();
+
+            Map<String, Object> data = response.getData().orElseThrow();
+            assertAll("opted-in external readiness, all ready",
+                    () -> assertEquals(HealthCheckResponse.Status.UP, response.getStatus()),
+                    () -> assertEquals(2, ((Number) data.get("checkedEndpoints")).intValue()),
+                    () -> assertEquals("READY", data.get("readiness")),
+                    () -> assertEquals("COMPLETE", data.get("loading")),
+                    () -> assertEquals("ext-issuer-a", data.get("issuer.0.url")),
+                    () -> assertEquals("memory", data.get("issuer.0.jwksType")),
+                    () -> assertEquals("UP", data.get("issuer.0.status")),
+                    () -> assertEquals("ext-issuer-b", data.get("issuer.1.url")),
+                    () -> assertEquals("UP", data.get("issuer.1.status")));
+        }
+    }
+
+    @Test
+    @DisplayName("Opted-in external validator with a failed issuer reports DOWN")
+    void optedInExternalValidatorDown() {
+        try (TokenValidator external = externalValidator(
+                     new IssuerSpec("ext-healthy", LoaderStatus.OK), new IssuerSpec("ext-failed", LoaderStatus.ERROR))) {
+            HealthCheckResponse response = new JwksEndpointHealthCheck(reportingExternal(external), 30).call();
+
+            Map<String, Object> data = response.getData().orElseThrow();
+            assertAll("opted-in external readiness, one failed",
+                    () -> assertEquals(HealthCheckResponse.Status.DOWN, response.getStatus()),
+                    () -> assertEquals(2, ((Number) data.get("checkedEndpoints")).intValue()),
+                    () -> assertEquals("NOT_READY", data.get("readiness")),
+                    () -> assertEquals("COMPLETE", data.get("loading")),
+                    () -> assertEquals("UP", data.get("issuer.0.status")),
+                    () -> assertEquals("ext-failed", data.get("issuer.1.url")),
+                    () -> assertEquals("DOWN", data.get("issuer.1.status")));
+        }
+    }
+
+    @Test
+    @DisplayName("Opted-in external validator with a still-loading issuer reports DOWN and IN_PROGRESS")
+    void optedInExternalValidatorInProgress() {
+        try (TokenValidator external = externalValidator(new IssuerSpec("ext-loading", LoaderStatus.UNDEFINED))) {
+            HealthCheckResponse response = new JwksEndpointHealthCheck(reportingExternal(external), 30).call();
+
+            Map<String, Object> data = response.getData().orElseThrow();
+            assertAll("opted-in external readiness, still loading",
+                    () -> assertEquals(HealthCheckResponse.Status.DOWN, response.getStatus()),
+                    () -> assertEquals(1, ((Number) data.get("checkedEndpoints")).intValue()),
+                    () -> assertEquals("NOT_READY", data.get("readiness")),
+                    () -> assertEquals("IN_PROGRESS", data.get("loading")),
+                    () -> assertEquals("DOWN", data.get("issuer.0.status")));
+        }
+    }
+
+    @Test
+    @DisplayName("disclose-issuer=false omits issuer.N.url for an external validator, the default discloses it")
+    void nonDisclosingPayloadForExternalValidator() {
+        try (TokenValidator external = externalValidator(new IssuerSpec("ext-secret", LoaderStatus.OK))) {
+            HealthCheckResponse nonDisclosing =
+                    new JwksEndpointHealthCheck(reportingExternal(external), 30, false).call();
+            HealthCheckResponse disclosing =
+                    new JwksEndpointHealthCheck(reportingExternal(external), 30, true).call();
+
+            Map<String, Object> nonDisclosingData = nonDisclosing.getData().orElseThrow();
+            Map<String, Object> disclosingData = disclosing.getData().orElseThrow();
+            assertAll("non-disclosing external payload",
+                    () -> assertEquals(HealthCheckResponse.Status.UP, nonDisclosing.getStatus()),
+                    () -> assertFalse(nonDisclosingData.containsKey("issuer.0.url"),
+                            "the external issuer identifier must not be disclosed"),
+                    () -> assertFalse(nonDisclosingData.containsValue("ext-secret"),
+                            "the external issuer identifier must appear nowhere in the payload"),
+                    () -> assertEquals("memory", nonDisclosingData.get("issuer.0.jwksType")),
+                    () -> assertEquals("UP", nonDisclosingData.get("issuer.0.status")),
+                    () -> assertEquals(1, ((Number) nonDisclosingData.get("checkedEndpoints")).intValue()),
+                    () -> assertEquals("READY", nonDisclosingData.get("readiness")),
+                    () -> assertEquals("COMPLETE", nonDisclosingData.get("loading")),
+                    () -> assertEquals("ext-secret", disclosingData.get("issuer.0.url"),
+                            "positive control: the default discloses the external issuer identifier"));
+        }
+    }
+
+    @Test
+    @DisplayName("disclose-issuer=false omits issuer.N.url for configured issuers, the default discloses it")
+    void nonDisclosingPayloadForConfiguredIssuers() {
+        IssuerConfig healthy = IssuerConfig.builder()
+                .issuerIdentifier("configured-secret")
+                .jwksLoader(new HealthyJwksLoader())
+                .audienceValidationDisabled(true)
+                .build();
+        IssuerConfig unhealthy = IssuerConfig.builder()
+                .issuerIdentifier("configured-failing")
+                .jwksLoader(new UnhealthyJwksLoader())
+                .audienceValidationDisabled(true)
+                .build();
+
+        HealthCheckResponse nonDisclosing =
+                new JwksEndpointHealthCheck(observing(healthy, unhealthy), 30, false).call();
+        HealthCheckResponse disclosing =
+                new JwksEndpointHealthCheck(observing(healthy, unhealthy), 30, true).call();
+
+        Map<String, Object> nonDisclosingData = nonDisclosing.getData().orElseThrow();
+        Map<String, Object> disclosingData = disclosing.getData().orElseThrow();
+        assertAll("non-disclosing configured payload",
+                () -> assertEquals(HealthCheckResponse.Status.DOWN, nonDisclosing.getStatus()),
+                () -> assertFalse(nonDisclosingData.containsKey("issuer.0.url"),
+                        "the configured issuer identifier must not be disclosed"),
+                () -> assertFalse(nonDisclosingData.containsKey("issuer.1.url"),
+                        "the configured issuer identifier must not be disclosed"),
+                () -> assertFalse(nonDisclosingData.containsValue("configured-secret"),
+                        "the configured issuer identifier must appear nowhere in the payload"),
+                () -> assertFalse(nonDisclosingData.containsValue("configured-failing"),
+                        "the configured issuer identifier must appear nowhere in the payload"),
+                () -> assertEquals("memory", nonDisclosingData.get("issuer.0.jwksType")),
+                () -> assertEquals("UP", nonDisclosingData.get("issuer.0.status")),
+                () -> assertEquals("DOWN", nonDisclosingData.get("issuer.1.status")),
+                () -> assertEquals(2, ((Number) nonDisclosingData.get("checkedEndpoints")).intValue()),
+                () -> assertEquals("NOT_READY", nonDisclosingData.get("readiness")),
+                () -> assertEquals("COMPLETE", nonDisclosingData.get("loading")),
+                () -> assertEquals("configured-secret", disclosingData.get("issuer.0.url"),
+                        "positive control: the default discloses the configured issuer identifier"),
+                () -> assertEquals("configured-failing", disclosingData.get("issuer.1.url"),
+                        "positive control: the default discloses the configured issuer identifier"));
+    }
+
+    @Test
+    @DisplayName("An external validator without the opt-in, and NOT_CONFIGURED even with it, report zero endpoints")
+    void zeroEndpointsWithoutObservableIssuerStatuses() {
+        try (TokenValidator external = externalValidator(new IssuerSpec("ext-issuer", LoaderStatus.OK))) {
+            HealthCheckResponse notOptedIn = new JwksEndpointHealthCheck(
+                    new ObservedValidatorResolver(ObservedValidatorResolver.Outcome.EXTERNAL_VALIDATOR,
+                            external, List.of(), null),
+                    30, false).call();
+            HealthCheckResponse notConfigured = new JwksEndpointHealthCheck(
+                    new ObservedValidatorResolver(ObservedValidatorResolver.Outcome.NOT_CONFIGURED,
+                            null, List.of(), null, true),
+                    30).call();
+
+            assertAll("zero endpoints",
+                    () -> assertEquals(HealthCheckResponse.Status.UP, notOptedIn.getStatus()),
+                    () -> assertEquals(0, ((Number) notOptedIn.getData().orElseThrow().get("checkedEndpoints")).intValue()),
+                    () -> assertEquals("EXTERNAL_VALIDATOR", notOptedIn.getData().orElseThrow().get("readiness")),
+                    () -> assertEquals(HealthCheckResponse.Status.UP, notConfigured.getStatus()),
+                    () -> assertEquals(0, ((Number) notConfigured.getData().orElseThrow().get("checkedEndpoints")).intValue()),
+                    () -> assertEquals("NOT_CONFIGURED", notConfigured.getData().orElseThrow().get("readiness")));
+        }
+    }
+
+    @Test
+    @DisplayName("The opt-in leaves the PROPERTY_CONFIGURED payload unchanged")
+    void optInLeavesPropertyConfiguredPayloadUnchanged() {
+        IssuerConfig healthy = IssuerConfig.builder()
+                .issuerIdentifier("healthy-issuer")
+                .jwksLoader(new HealthyJwksLoader())
+                .audienceValidationDisabled(true)
+                .build();
+        IssuerConfig unhealthy = IssuerConfig.builder()
+                .issuerIdentifier("unhealthy-issuer")
+                .jwksLoader(new UnhealthyJwksLoader())
+                .audienceValidationDisabled(true)
+                .build();
+
+        HealthCheckResponse byDefault = new JwksEndpointHealthCheck(observing(healthy, unhealthy), 30).call();
+        HealthCheckResponse optedIn = new JwksEndpointHealthCheck(
+                new ObservedValidatorResolver(ObservedValidatorResolver.Outcome.PROPERTY_CONFIGURED,
+                        createNiceMock(TokenValidator.class), List.of(healthy, unhealthy), null, true),
+                30).call();
+
+        assertEquals(byDefault.getStatus(), optedIn.getStatus());
+        assertEquals(byDefault.getData().orElseThrow(), optedIn.getData().orElseThrow(),
+                "the opt-in must not change the payload of configured issuers");
+    }
+
+    /**
+     * Pins a resolver to the external-validator outcome over the given validator with the reporting opt-in set.
+     */
+    private static ObservedValidatorResolver reportingExternal(TokenValidator external) {
+        return new ObservedValidatorResolver(ObservedValidatorResolver.Outcome.EXTERNAL_VALIDATOR,
+                external, List.of(), null, true);
+    }
+
+    /**
+     * Builds a real validator, standing in for an embedder's own, over in-memory issuers with fixed loader statuses.
+     */
+    private static TokenValidator externalValidator(IssuerSpec... issuers) {
+        TokenValidator.TokenValidatorBuilder builder = TokenValidator.builder();
+        for (IssuerSpec issuer : issuers) {
+            builder.issuerConfig(IssuerConfig.builder()
+                    .issuerIdentifier(issuer.identifier())
+                    .jwksLoader(new FixedStatusJwksLoader(issuer.status()))
+                    .audienceValidationDisabled(true)
+                    .build());
+        }
+        return builder.build();
+    }
+
+    private record IssuerSpec(String identifier, LoaderStatus status) {
+    }
+
     /**
      * Pins a resolver to the property-configured outcome over the supplied issuer configurations.
      */
@@ -516,6 +716,42 @@ class JwksEndpointHealthCheckTest {
             return LoaderStatus.OK;
         }
 
+    }
+
+    /**
+     * In-memory JwksLoader reporting a fixed status.
+     */
+    private record FixedStatusJwksLoader(LoaderStatus status) implements JwksLoader {
+
+        @Override
+        public Optional<KeyInfo> getKeyInfo(String kid) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Set<String> getKeyIds() {
+            return Set.of();
+        }
+
+        @Override
+        public JwksType getJwksType() {
+            return JwksType.MEMORY;
+        }
+
+        @Override
+        public Optional<String> getIssuerIdentifier() {
+            return Optional.empty();
+        }
+
+        @Override
+        public CompletableFuture<LoaderStatus> initJWKSLoader(@NonNull SecurityEventCounter securityEventCounter) {
+            return CompletableFuture.completedFuture(status);
+        }
+
+        @Override
+        public LoaderStatus getLoaderStatus() {
+            return status;
+        }
     }
 
     /**
