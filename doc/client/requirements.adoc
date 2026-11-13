@@ -79,9 +79,13 @@ xref:specification/step-up-and-logout.adoc[Step-up & logout specification]._
 The engine MUST implement the OAuth 2.0 authorization-code flow as a *confidential client*,
 entirely server-side: the authorization request is constructed with `response_type=code`,
 and the resulting code is exchanged for tokens at the token endpoint *by the backend*. No
-token is ever exposed to the browser. `response_mode=form_post` (or plain query on the
-back-channel exchange) is used so tokens never appear in a URL. This is the recommended
-pattern for browser-based apps (the BFF), superseding in-browser public-client OAuth.
+token is ever exposed to the browser. By default the authorization request asks for
+`response_mode=form_post`, so the authorization response never appears in a URL, and the code is
+exchanged on the back channel so tokens never do. `response_mode=query` is an explicit per-call
+caller opt-in (xref:#CLIENT-27[]) that re-opens
+xref:threat-model.adoc#T-URL-LEAK[T-URL-LEAK] and leaves its mitigation to the caller. This is
+the recommended pattern for browser-based apps (the BFF), superseding in-browser public-client
+OAuth.
 
 * Source: https://www.rfc-editor.org/rfc/rfc6749#section-4.1[RFC 6749 §4.1], https://www.rfc-editor.org/rfc/rfc9700#section-2.1[RFC 9700 §2.1], https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps[OAuth 2.0 for Browser-Based Apps].
 
@@ -186,10 +190,17 @@ The engine MUST provide PAR as a *building block*: a client that pushes the auth
 parameters to the authorization server's `pushed_authorization_request_endpoint` over the
 authenticated back channel and returns the issued `request_uri`, so a front-channel redirect that
 carries only that `request_uri` keeps the authorization parameters from being exposed or tampered
-with in the browser. The built-in authorization-code flow does *not* use PAR, whether or not the
-authorization server advertises it; a caller that needs PAR — FAPI 2.0 requires it, and the BCP
-prefers it — composes the PAR client itself and builds the redirect from the returned
-`request_uri`.
+with in the browser. PAR stays such a building block, and a caller may still compose the PAR
+client itself and build the redirect from the returned `request_uri`.
+
+The built-in authorization-code flow additionally offers an *opt-in pushed path*
+(`AuthorizationCodeFlow.authorizePushed`, xref:#CLIENT-27[]): it pushes the same validated
+parameters the front-channel request would carry, and returns a redirect that carries only
+`client_id` and `request_uri`. When the authorization server advertises no
+`pushed_authorization_request_endpoint` the pushed path MUST refuse with a typed error before any
+HTTP request; it MUST NOT fall back to a front-channel request. The plain `authorize` entry points
+never push, whether or not the authorization server advertises PAR. FAPI 2.0 requires PAR and the
+BCP prefers it; a deployment that needs it calls the pushed path or composes the PAR client.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0] (PAR mandatory), https://www.rfc-editor.org/rfc/rfc9700#section-2.1[RFC 9700 §2.1].
 
@@ -255,10 +266,12 @@ implements the back-channel logout receiver endpoint validates the received logo
 
 The engine MUST validate the token-endpoint response before use: the `token_type`, the
 presence of the expected artifacts, and — where the authorization server supports it — the
-issuer identity of the response. Tokens and authorization codes MUST NOT be transmitted in
-URL query or fragment components; the code is exchanged at the token endpoint and the
-authorization response uses `form_post`. All token-endpoint traffic relies on the transport
-TLS enforcement owned by commons (`COMMONS-2`).
+issuer identity of the response. Tokens MUST NOT be transmitted in URL query or fragment
+components; the code is exchanged at the token endpoint and the authorization response uses
+`form_post` by default. `response_mode=query` is an explicit per-call caller opt-in
+(xref:#CLIENT-27[]) that places `code`, `state` and `iss` in the redirect URL and re-opens
+xref:threat-model.adoc#T-URL-LEAK[T-URL-LEAK]; its mitigation is the caller's. All
+token-endpoint traffic relies on the transport TLS enforcement owned by commons (`COMMONS-2`).
 
 The engine MUST refuse a back-channel response whose media type it does not expect. The
 discovery, token and PAR responses MUST carry `application/json`, and the userinfo response
@@ -394,6 +407,43 @@ token, does not widen or request any scope, and does not parse the `invalid_toke
 guard reads the RFC 9470 step-up challenge (xref:#CLIENT-12[]).
 
 * Source: https://www.rfc-editor.org/rfc/rfc6750#section-3.1[RFC 6750 §3.1] (`insufficient_scope`, `scope`, `realm`, `error_description`), https://www.rfc-editor.org/rfc/rfc6749#section-3.3[RFC 6749 §3.3] (`scope-token` grammar), https://www.rfc-editor.org/rfc/rfc9110#section-11.2[RFC 9110 §11.2] (`auth-param` syntax).
+
+[#CLIENT-27]
+=== CLIENT-27: Gateway authorization-request seams
+
+The engine MUST let a caller that fronts the flow — a gateway or a BFF — shape one authorization
+request at a time without changing the shared client configuration. Every option is opt-in and
+applies to the one call only; with no option set the request is exactly the request the option-less
+entry points send.
+
+*Ordered, immutable parameter map.* The engine MUST expose the validated parameters of an
+authorization request as an unmodifiable map whose iteration order is the order the request is
+emitted in (`AuthorizationRequestBuilder.parameters`). The map is built by the same checks as the
+front-channel URL — an advertised TLS authorization endpoint and PKCE `S256`
+(xref:#CLIENT-2[]) — and an absent optional parameter is omitted, never present with an empty value.
+
+*Closed-set `response_mode`.* The request MUST carry `response_mode=form_post` by default
+(xref:#CLIENT-1[], xref:#CLIENT-14[]). The only other value is `query`, an explicit per-call
+caller opt-in that places `code`, `state` and `iss` in the redirect URL and re-opens
+xref:threat-model.adoc#T-URL-LEAK[T-URL-LEAK]; the caller owns the mitigation. No other value can
+be requested.
+
+*Closed-set `prompt`.* A call MAY request one OpenID Connect `prompt` value out of `none`, `login`,
+`consent` and `select_account`. Any other value, another letter case, or a value carrying a
+delimiter is refused; with no `prompt` option the parameter is not sent.
+
+*Per-call scope override.* A call MAY replace the configured scopes on the front-channel
+authorization request, on the pushed request (xref:#CLIENT-10[]), on a step-up re-authorization
+(xref:#CLIENT-12[]) and on a refresh (xref:#CLIENT-17[]). The override MUST be validated by the same
+scope-token rule as the configured scopes (each entry exactly one RFC 6749 §3.3 `scope-token`,
+whose characters are printable ASCII except space, double quote and backslash; `null`, blank and
+multi-token entries and entries holding any other character refused), and an empty override MUST be refused — a caller that
+wants the configured scopes omits the override. On a refresh the per-call scopes are both the
+requested `scope` and the baseline the granted scope is reconciled against, so a grant equal to the
+per-call scopes is reconciled as equal even where it differs from the configured scopes. The
+two-argument refresh keeps the configured scopes as both.
+
+* Source: https://www.rfc-editor.org/rfc/rfc6749#section-3.3[RFC 6749 §3.3] (`scope`), https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html[OAuth 2.0 Form Post Response Mode], https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#ResponseModes[OAuth 2.0 Multiple Response Type Encoding Practices §2.1] (`response_mode`), https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest[OIDC Core §3.1.2.1] (`prompt`), https://www.rfc-editor.org/rfc/rfc9126[RFC 9126].
 
 == Token requirements
 
@@ -627,6 +677,7 @@ sourced xref:best-practices.adoc[best-practices] checklist, and realized in a sp
 | CLIENT-23 | T-TLS-TOKEN (per-client trust material for the delegated TLS primitive) | retrieval-flow
 | CLIENT-24 | T-SSRF-ADVERTISED, T-TLS-TOKEN (back-channel routing without identity or TLS relaxation) | xref:../commons/specification/transport.adoc#client_back_channel_origin[transport (client back-channel origin)]
 | CLIENT-25 | T-CHALLENGE-INJECTION | step-up-and-logout
+| CLIENT-27 | T-URL-LEAK (opt-in `query` re-opens it), T-PARAM-INTEGRITY (pushed path) | retrieval-flow
 | CLIENT-15 | T-AUD-CONFUSION | xref:specification/token-handling.adoc[token-handling]
 | CLIENT-16 | T-IDTOKEN-INTEGRITY | token-handling
 | CLIENT-17 | T-REFRESH-THEFT, T-LOGOUT | token-handling

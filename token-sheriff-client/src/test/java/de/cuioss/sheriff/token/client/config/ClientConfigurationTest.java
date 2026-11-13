@@ -23,6 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.net.ssl.SSLContext;
@@ -30,6 +31,8 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -45,6 +48,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @EnableGeneratorController
 @DisplayName("ClientConfiguration value object")
 class ClientConfigurationTest {
+
+    /** The message prefix every scope-token rejection keeps. */
+    private static final String SCOPE_TOKEN_MESSAGE_PREFIX =
+            "scopes must hold one scope-token per entry (RFC 6749 section 3.3)";
 
     private static String issuer() {
         return "https://" + Generators.letterStrings(3, 12).next() + ".example.com";
@@ -571,6 +578,92 @@ class ClientConfigurationTest {
             assertEquals(List.of("openid", "read", "write"), config.getScopes(),
                     "single scope-token entries stay accepted unchanged");
         }
+
+        @ParameterizedTest(name = "rejects entry #{index}")
+        @MethodSource("de.cuioss.sheriff.token.client.config.ClientConfigurationTest#nonScopeTokenEntries")
+        @DisplayName("Should reject an entry holding a character outside the RFC 6749 §3.3 scope-token set, without echoing it")
+        void shouldRejectNonScopeTokenCharacter(String entry) {
+            var builder = builderWithIssuer(issuer()).scope("openid").scope(entry);
+
+            var exception = assertThrows(IllegalArgumentException.class, builder::build,
+                    "only %x21 / %x23-5B / %x5D-7E may appear in a scope-token");
+
+            String message = exception.getMessage();
+            assertAll("the rejection names the rule and the entry index, never the entry",
+                    () -> assertTrue(message.startsWith(SCOPE_TOKEN_MESSAGE_PREFIX),
+                            "the message must keep the scope-token prefix, but was: " + message),
+                    () -> assertTrue(message.contains("entry 1"),
+                            "the message must name the zero-based index of the rejected entry, but was: " + message),
+                    () -> assertFalse(message.contains(entry),
+                            "the rejected entry must never be echoed into the exception message"));
+        }
+
+        @Test
+        @DisplayName("Should name a rejected control character by code point and keep it out of the message")
+        void shouldNotEchoControlCharacterEntry() {
+            String entry = "openid\r\nX-Injected: " + Generators.letterStrings(8, 16).next() + "\u0000";
+            var builder = builderWithIssuer(issuer()).scope(entry);
+
+            var exception = assertThrows(IllegalArgumentException.class, builder::build);
+
+            String message = exception.getMessage();
+            assertAll("a control character never reaches the exception message",
+                    () -> assertFalse(message.contains(entry), "the raw entry must not be echoed"),
+                    () -> assertTrue(message.chars().noneMatch(Character::isISOControl),
+                            "the message must not carry any control character, but was: " + message),
+                    () -> assertTrue(message.contains("entry 0"), "the entry index must be named: " + message),
+                    () -> assertTrue(message.contains("U+000D"),
+                            "the first offending character must be named by code point: " + message));
+        }
+
+        @Test
+        @DisplayName("Should accept every printable ASCII character of the scope-token set, alone and combined")
+        void shouldAcceptEveryScopeTokenCharacter() {
+            List<String> singleCharacterScopes = IntStream.rangeClosed(0x21, 0x7E)
+                    .filter(codePoint -> codePoint != '"' && codePoint != '\\')
+                    .mapToObj(Character::toString)
+                    .toList();
+            String allCharacters = String.join("", singleCharacterScopes);
+
+            var single = builderWithIssuer(issuer()).scopes(singleCharacterScopes).build();
+            var combined = builderWithIssuer(issuer()).scope(allCharacters).build();
+
+            assertAll("the whole %x21 / %x23-5B / %x5D-7E range is a valid scope-token",
+                    () -> assertEquals(92, singleCharacterScopes.size(), "the set holds 92 characters"),
+                    () -> assertTrue(singleCharacterScopes.containsAll(List.of("&", "=", "#", "%", "+", "/")),
+                            "delimiter-like characters are inside the range and are percent-encoded, not refused"),
+                    () -> assertEquals(singleCharacterScopes, single.getScopes()),
+                    () -> assertEquals(List.of(allCharacters), combined.getScopes()));
+        }
+
+        @Test
+        @DisplayName("Should keep accepting realistic URL, URN and punctuated scope values")
+        void shouldAcceptRealisticScopes() {
+            List<String> realistic = List.of("openid", "https://api.example.com/read", "urn:example:scope", "a.b-c_d");
+
+            var config = builderWithIssuer(issuer()).scopes(realistic).build();
+
+            assertEquals(realistic, config.getScopes(), "realistic scope values stay accepted unchanged");
+        }
+    }
+
+    /**
+     * Entries that each hold at least one character outside the RFC 6749 §3.3 scope-token set
+     * {@code %x21 / %x23-5B / %x5D-7E}, none of them blank.
+     */
+    static Stream<String> nonScopeTokenEntries() {
+        return Stream.of(
+                "read write",
+                "read\twrite",
+                "read\r\nwrite",
+                "say\"hello",
+                "back\\slash",
+                "nul\u0000byte",
+                "del\u007Fbyte",
+                "ctl\u0001byte",
+                "café",
+                "smile😀",
+                "non breaking");
     }
 
     @Nested

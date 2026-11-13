@@ -74,11 +74,13 @@ record that boundary.
 | xref:requirements.adoc#CLIENT-8[CLIENT-8] / xref:threat-model.adoc#T-MIXUP[T-MIXUP]
 
 | *Prefer PAR* where advertised — push authorization parameters over the back channel; drive
-  the redirect with `request_uri`. Mandatory under FAPI 2.0. The engine provides PAR as the
-  `ParClient` building block, which the built-in authorization-code flow does not use; a
-  deployment that follows this practice composes `ParClient` itself.
+  the redirect with `request_uri`. Mandatory under FAPI 2.0. The built-in authorization-code
+  flow offers this as the opt-in pushed path `AuthorizationCodeFlow.authorizePushed`, whose
+  redirect carries only `client_id` and `request_uri` and which refuses, never falls back, when
+  the AS advertises no PAR endpoint; a deployment may still compose the `ParClient` building block
+  itself.
 | https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0]
-| xref:requirements.adoc#CLIENT-10[CLIENT-10] / xref:threat-model.adoc#T-PARAM-INTEGRITY[T-PARAM-INTEGRITY]
+| xref:requirements.adoc#CLIENT-10[CLIENT-10], xref:requirements.adoc#CLIENT-27[CLIENT-27] / xref:threat-model.adoc#T-PARAM-INTEGRITY[T-PARAM-INTEGRITY]
 
 | *Sender-constrain retrieved tokens* with DPoP wherever the AS supports it; reject at issuance a
   response the AS did not bind to the proof key (`token_type` other than `DPoP`, or, for a JWT
@@ -100,9 +102,11 @@ record that boundary.
 | xref:requirements.adoc#CLIENT-13[CLIENT-13] / xref:threat-model.adoc#T-LOGOUT[T-LOGOUT]
 
 | *Validate the token-endpoint response* (`token_type`, expected artifacts, response `iss`
-  where supported); keep tokens / codes out of URLs — `form_post` + token-endpoint exchange.
+  where supported); keep tokens / codes out of URLs — `form_post` by default + token-endpoint
+  exchange. `response_mode=query` is an explicit per-call caller opt-in that places the code in
+  the redirect URL and re-opens T-URL-LEAK; its mitigation is the caller's.
 | https://www.rfc-editor.org/rfc/rfc9700#section-4.3[RFC 9700 §4.3], https://www.rfc-editor.org/rfc/rfc9207[RFC 9207]
-| xref:requirements.adoc#CLIENT-14[CLIENT-14] / xref:threat-model.adoc#T-URL-LEAK[T-URL-LEAK]
+| xref:requirements.adoc#CLIENT-14[CLIENT-14], xref:requirements.adoc#CLIENT-27[CLIENT-27] / xref:threat-model.adoc#T-URL-LEAK[T-URL-LEAK]
 |===
 
 == Token

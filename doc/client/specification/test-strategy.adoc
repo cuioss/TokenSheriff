@@ -98,9 +98,12 @@ leaf validator), a wired-flow test MUST drive the *real orchestrator* —
 This tier also asserts the *produced Quarkus bean graph* can perform a *guarded* exchange — the
 edge wiring, not only the engine's constructors.
 
-PAR (xref:../requirements.adoc#CLIENT-10[CLIENT-10]) is not in this tier: no built-in
-orchestrator uses it, so there is no flow path to drive. `ParClient` is a building block a caller
-composes, and it is covered at the component level.
+PAR (xref:../requirements.adoc#CLIENT-10[CLIENT-10]) is in this tier through the opt-in pushed
+path of the built-in orchestrator: `AuthorizationCodeFlowPushedTest` drives
+`AuthorizationCodeFlow.authorizePushed` and asserts that the redirect carries only `client_id` and
+`request_uri`, and that a provider advertising no PAR endpoint is refused before any request
+reaches the authorization server. `ParClient` itself remains a building block a caller may compose,
+and it is also covered at the component level.
 
 [IMPORTANT]
 ====
@@ -220,7 +223,16 @@ test asserts rejection:
 | xref:../threat-model.adoc#T-PARAM-INTEGRITY[T-PARAM-INTEGRITY]
 | `ParDispatcher` accepts the parameters `ParClient` pushes on the back channel and returns a
   `request_uri`; the returned `request_uri` is asserted to carry none of the pushed parameters,
-  and an error response is refused.
+  and an error response is refused. `AuthorizationCodeFlowPushedTest` asserts that the pushed body
+  is exactly the validated parameter set and that the redirect carries only `client_id` and
+  `request_uri`.
+
+| xref:../threat-model.adoc#T-URL-LEAK[T-URL-LEAK]
+| `AuthorizationRequestBuilderParametersTest`, `AuthorizationCodeFlowOptionsTest` and
+  `StepUpHandlerOptionsTest` assert `response_mode=form_post` on every entry point without options
+  and `query` only under the explicit opt-in; `AuthorizationRequestInjectionAttackDatabaseTest`
+  drives parameter-injection payloads through `response_mode`, `prompt` and the scope override and
+  asserts that none can add, duplicate or split a request parameter.
 
 | xref:../threat-model.adoc#T-AUD-CONFUSION[T-AUD-CONFUSION] / xref:../threat-model.adoc#T-IDTOKEN-INTEGRITY[T-IDTOKEN-INTEGRITY]
 | `TokenDispatcher` / `UserInfoDispatcher` emit tampered claims (via `JwtTokenTamperingUtil`)
@@ -368,7 +380,9 @@ an isolated-component or server-capability test alone does not qualify the row a
 | Req | Threat(s) | Unit (MockWebServer) | Integration (real OP) | Inc.
 
 | xref:../requirements.adoc#CLIENT-1[CLIENT-1] | T-URL-LEAK
-| `form_post`; code exchanged on the back channel; no token in any URL
+| `form_post` by default on every entry point, `query` only under the explicit opt-in
+  (`AuthorizationRequestBuilderParametersTest`, `AuthorizationCodeFlowOptionsTest`,
+  `StepUpHandlerOptionsTest`); code exchanged on the back channel; no token in any URL
 | Full KC login + code exchange | 5, 11
 
 | xref:../requirements.adoc#CLIENT-2[CLIENT-2] | T-CODE-INJECTION, T-PKCE-DOWNGRADE
@@ -406,10 +420,13 @@ an isolated-component or server-capability test alone does not qualify the row a
 | (covered by the PKCE login) | 5
 
 | xref:../requirements.adoc#CLIENT-10[CLIENT-10] | T-PARAM-INTEGRITY
-| *Component:* `ParClient` pushes the params on the authenticated back channel and returns a
-  `request_uri` that carries none of them (no built-in flow uses PAR, so there is no wired-flow
-  path)
-| PAR against KC (capability-gated) | 6
+| *Wired-flow:* `AuthorizationCodeFlowPushedTest` — `authorizePushed` pushes exactly the validated
+  parameters and returns a redirect carrying only `client_id` and `request_uri`; a provider
+  advertising no PAR endpoint is refused before any request. *Component:* `ParClient` pushes the
+  params on the authenticated back channel and returns a `request_uri` that carries none of them
+| PAR against KC (capability-gated, `ParSpecIT`); `PushedAuthorizationFlowSpecIT`: the
+  `authorizePushed` redirect carries only `client_id` and `request_uri`, Keycloak serves the login
+  page for it, and the `request_uri` is single-use (RFC 9126 §4) | 6
 
 | xref:../requirements.adoc#CLIENT-11[CLIENT-11] | T-TOKEN-REPLAY
 | *Wired-flow:* a `DPoP` header (with `ath` on resource requests) reaches the recorded token /
@@ -505,6 +522,22 @@ an isolated-component or server-capability test alone does not qualify the row a
 | `ClientNativeImageSpecIT`: inside the native executable, `credential_rejected` for Keycloak's
   `invalid_grant`, `jkt_mismatch` for a `cnf.jkt` naming another key, `accepted` for the matching
   key | all
+
+| xref:../requirements.adoc#CLIENT-27[CLIENT-27] | T-URL-LEAK, T-PARAM-INTEGRITY
+| `AuthorizationRequestBuilderParametersTest`: the ordered, unmodifiable parameter map equals what
+  `build` emits, and a request without options is unchanged; `AuthorizationRequestOptionsTest`: the
+  closed `response_mode` / `prompt` sets and the scope-override validation, empty and
+  non-scope-token characters refused; `ClientConfigurationTest` (`IssuerAndScopeValidation`): the
+  shared scope-token rule accepts exactly the RFC 6749 §3.3 character set and never echoes a rejected
+  entry;
+  `AuthorizationRequestInjectionAttackDatabaseTest`: no payload adds, duplicates or splits a
+  parameter; `AuthorizationCodeFlowOptionsTest`, `StepUpHandlerOptionsTest` and
+  `AuthorizationCodeFlowPushedTest`: the options reach the front-channel, step-up and pushed
+  requests; `RefreshFlowScopeOverrideTest`: the per-call refresh scopes are sent and are the
+  reconciliation baseline, invalid overrides are refused before any request, the configuration is
+  not mutated, concurrent calls keep their own sets,
+  and the two-argument refresh form is unchanged
+| `PushedAuthorizationFlowSpecIT`: the pushed path against real Keycloak (capability-gated) | all
 |===
 
 == Per-increment definition of done (test view)

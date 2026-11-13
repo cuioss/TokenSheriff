@@ -8,7 +8,7 @@
 == Overview
 
 _Realizes xref:../requirements.adoc#CLIENT-1[CLIENT-1]–xref:../requirements.adoc#CLIENT-11[CLIENT-11],
-xref:../requirements.adoc#CLIENT-14[CLIENT-14] and xref:../requirements.adoc#CLIENT-23[CLIENT-23]. See xref:../threat-model.adoc[Threat Model],
+xref:../requirements.adoc#CLIENT-14[CLIENT-14], xref:../requirements.adoc#CLIENT-23[CLIENT-23] and xref:../requirements.adoc#CLIENT-27[CLIENT-27]. See xref:../threat-model.adoc[Threat Model],
 xref:../best-practices.adoc[Best Practices] and xref:../architecture.adoc[Architecture]._
 
 This specification covers the net-new aspect the client capability owns: the
@@ -40,18 +40,57 @@ The engine constructs a single authorization request as a confidential client
 | Parameter | Rule
 
 | `response_type` | `code` only — never `token` or a hybrid combination (exclusions).
-| `response_mode` | `form_post` so the response (code, `state`, `iss`) never rides in a URL (xref:../requirements.adoc#CLIENT-14[CLIENT-14]).
+| `response_mode` | `form_post` by default, so the response (code, `state`, `iss`) never rides in a URL (xref:../requirements.adoc#CLIENT-14[CLIENT-14]). `query` is an explicit per-call opt-in that places the response in the redirect URL and re-opens xref:../threat-model.adoc#T-URL-LEAK[T-URL-LEAK]; the caller owns the mitigation (xref:../requirements.adoc#CLIENT-27[CLIENT-27]). No other value can be requested.
 | `code_challenge` / `code_challenge_method` | PKCE with `S256`; the AS must advertise `S256` support, or the request is refused (xref:../requirements.adoc#CLIENT-2[CLIENT-2]).
 | `state` | Unguessable, bound to the initiating session; verified on callback (xref:../requirements.adoc#CLIENT-5[CLIENT-5]).
 | `nonce` | For OIDC: fresh, session-bound; verified against the ID token (xref:../requirements.adoc#CLIENT-6[CLIENT-6]).
 | `redirect_uri` | A single pre-registered value, matched by exact string comparison (xref:../requirements.adoc#CLIENT-7[CLIENT-7]).
 | `acr_values` / `max_age` | Optional step-up parameters (xref:step-up-and-logout.adoc[step-up spec], xref:../requirements.adoc#CLIENT-12[CLIENT-12]).
-| `scope` | The requested scopes (incl. `openid` for OIDC).
+| `scope` | The configured scopes (incl. `openid` for OIDC), or a per-call scope override validated by the same scope-token rule; an empty override is refused (xref:../requirements.adoc#CLIENT-27[CLIENT-27]). Omitted when no scope is configured or overridden.
+| `prompt` | Optional, per call: one of `none`, `login`, `consent`, `select_account`; not sent without the option (xref:../requirements.adoc#CLIENT-27[CLIENT-27]).
 |===
+
+=== [[_per_call_authorization_request_options]] Per-call authorization-request options
+
+`AuthorizationRequestOptions` carries the per-call options — a scope override, the
+`response_mode` (`ResponseMode.FORM_POST`, the default, or `ResponseMode.QUERY`) and a `prompt`
+(`Prompt`). The options are immutable and validated when they are built; they apply to one call and
+never change the shared `ClientConfiguration`
+(xref:../requirements.adoc#CLIENT-27[CLIENT-27]). `AuthorizationRequestOptions.DEFAULTS` sets none of
+them. The entry points that take options are:
+
+[cols="2,3", options="header"]
+|===
+| Entry point | Behaviour
+
+| `AuthorizationRequestBuilder.parameters(configuration, metadata, context, options)`
+| Returns the validated request parameters as an unmodifiable, insertion-ordered map — exactly the
+  names and values the matching `build` call emits, after the same endpoint and PKCE `S256` checks.
+| `AuthorizationCodeFlow.authorize(metadata, options)`
+| Builds the front-channel authorization URL with the options applied. With `DEFAULTS` the URL is the
+  one `authorize(metadata)` builds.
+| `AuthorizationCodeFlow.authorizePushed(metadata, clientAuthentication, options)`
+| Pushes the parameters `parameters(...)` returns to the PAR endpoint and returns a redirect carrying
+  only `client_id` and `request_uri` (xref:#_pushed_authorization_requests[]).
+| `StepUpHandler.initiate(configuration, metadata, challenge, options)`
+| The step-up opt-in: the challenge's `acr_values` / `max_age` are carried as by the three-argument
+  `initiate`, with the options applied. The three-argument `initiate(configuration, metadata,
+  challenge)` is unchanged and always requests `form_post`.
+| `RefreshFlow.refresh(metadata, refreshToken, scopes)`
+| Refreshes with the given scopes as the `scope` parameter and as the reconciliation baseline
+  (xref:token-handling.adoc[token handling]). The two-argument `refresh(metadata, refreshToken)` keeps
+  the configured scopes as both and remains the one entry point the lifecycle calls.
+|===
+
+The request parameters are emitted in this order, which is the order the request had before the
+options existed, so a request without options is byte-for-byte unchanged: `max_age`, `scope`,
+`acr_values`, `response_type`, `redirect_uri`, `state`, `code_challenge_method`, `nonce`,
+`client_id`, `code_challenge`, `response_mode`, followed by the opt-in `prompt`. An absent optional
+parameter (`max_age`, `scope`, `acr_values`, `prompt`) is omitted.
 
 === [[_pushed_authorization_requests]] Pushed authorization requests (PAR)
 
-PAR is a *building block*, not a step of the built-in flow
+PAR is a *building block*, and the built-in flow offers it as an opt-in path
 (xref:../requirements.adoc#CLIENT-10[CLIENT-10],
 xref:../threat-model.adoc#T-PARAM-INTEGRITY[T-PARAM-INTEGRITY]). `ParClient` pushes a set of
 authorization parameters to the AS's `pushed_authorization_request_endpoint` over the back
@@ -59,16 +98,23 @@ channel, authenticated per xref:#_client_authentication[], and returns the AS-is
 A front-channel redirect that carries only `client_id` and that `request_uri` keeps the
 authorization parameters off the browser and tamper-proof.
 
-The built-in `AuthorizationCodeFlow` does *not* use PAR: it builds the authorization URL with
-the parameters above on the front channel, whether or not the AS advertises a PAR endpoint. A
-caller that needs PAR — FAPI 2.0 makes it mandatory — composes `ParClient` itself: it pushes the
-parameters and builds the redirect from the returned `request_uri`. The PAR request travels the
-same owned back channel as every other call
-(xref:../architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]).
+`AuthorizationCodeFlow.authorizePushed(metadata, clientAuthentication, options)` is the opt-in
+pushed path of the built-in flow (xref:../requirements.adoc#CLIENT-27[CLIENT-27]). It mints the flow
+context, pushes exactly the parameters `AuthorizationRequestBuilder.parameters(...)` returns — so the
+authorization-endpoint TLS check and the PKCE `S256` check apply unchanged — and returns a redirect to
+the authorization endpoint that carries only `client_id` and the issued `request_uri`. When the AS
+advertises no `pushed_authorization_request_endpoint` the call is refused with
+`ClientProtocolException` before any HTTP request; it never falls back to a front-channel request.
+The plain `authorize` entry points build the authorization URL with the parameters above on the
+front channel, whether or not the AS advertises a PAR endpoint. A caller that needs PAR — FAPI 2.0
+makes it mandatory — calls the pushed path, or composes `ParClient` itself and builds the redirect
+from the returned `request_uri`. The PAR request travels the same owned back channel as every other
+call (xref:../architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]).
 
 == The callback and code exchange
 
-On the redirect callback (delivered by `form_post`) the engine performs *ordered checks
+On the redirect callback (delivered by `form_post`, or in the redirect query under the `query`
+opt-in) the engine performs *ordered checks
 before it exchanges the code*:
 
 . *`state`* matches the session-bound value — else reject (CSRF,
@@ -175,9 +221,10 @@ Before any token is used (xref:../requirements.adoc#CLIENT-14[CLIENT-14]):
 * every token is then validated through the validation pipeline
   (xref:token-handling.adoc[token handling], xref:../requirements.adoc#CLIENT-15[CLIENT-15]).
 
-Tokens and codes are never transmitted in URL query or fragment components — the engine emits
-`response_mode=form_post` on the authorization request and the code is exchanged at the token
-endpoint (xref:../threat-model.adoc#T-URL-LEAK[T-URL-LEAK]). All token-endpoint traffic is TLS
+Tokens are never transmitted in URL query or fragment components, and by default neither are
+codes — the engine emits `response_mode=form_post` on the authorization request unless the caller
+opts into `query` (xref:#_per_call_authorization_request_options[]), and the code is exchanged at
+the token endpoint (xref:../threat-model.adoc#T-URL-LEAK[T-URL-LEAK]). All token-endpoint traffic is TLS
 (non-TLS endpoints are refused by the engine's own back-channel transport, which uses the
 `cui-http` TLS primitive; xref:../threat-model.adoc#T-TLS-TOKEN[T-TLS-TOKEN], `COMMONS-2`) and
 passes the in-module egress / path control before the fetch

@@ -75,6 +75,10 @@ public class StepUpHandler {
 
     /**
      * Starts a step-up re-authorization for the given challenge.
+     * <p>
+     * The request always carries {@code response_mode=form_post}. Use
+     * {@link #initiate(ClientConfiguration, ProviderMetadata, StepUpChallenge, AuthorizationRequestOptions)}
+     * to opt into {@code query}, a {@code prompt} or a per-call scope override.
      *
      * @param configuration the client configuration; must not be {@code null}, and must declare a
      *                      redirect URI for the interactive flow
@@ -87,6 +91,45 @@ public class StepUpHandler {
      */
     public StepUpRequest initiate(ClientConfiguration configuration, ProviderMetadata metadata,
             StepUpChallenge challenge) {
+        FlowContext context = stepUpContext(configuration, metadata, challenge);
+        String authorizationUrl = authorizationRequestBuilder.build(configuration, metadata, context);
+        return new StepUpRequest(authorizationUrl, context);
+    }
+
+    /**
+     * Starts a step-up re-authorization for the given challenge with per-call options.
+     * <p>
+     * The options are the opt-in for {@code response_mode=query}, a {@code prompt} and a per-call
+     * scope override; the challenge's {@code acr_values} and {@code max_age} are carried exactly as by
+     * {@link #initiate(ClientConfiguration, ProviderMetadata, StepUpChallenge)}. {@link ResponseMode#QUERY}
+     * places {@code code}, {@code state} and {@code iss} in the step-up redirect URL and re-opens
+     * {@code T-URL-LEAK} for that redirect too; the mitigation is left to the caller.
+     *
+     * @param configuration the client configuration; must not be {@code null}, and must declare a
+     *                      redirect URI for the interactive flow
+     * @param metadata      the resolved provider metadata; must not be {@code null}
+     * @param challenge     the parsed step-up challenge; must not be {@code null}
+     * @param options       the per-call options; must not be {@code null}
+     * @return the elevated authorization request (URL + fresh flow context)
+     * @throws IllegalArgumentException if the client declares no redirect URI
+     * @throws ClientProtocolException if the AS advertises no authorization endpoint, the endpoint is
+     *                                  not a TLS URL, or the AS advertises no PKCE {@code S256}
+     * @since 1.0
+     */
+    public StepUpRequest initiate(ClientConfiguration configuration, ProviderMetadata metadata,
+            StepUpChallenge challenge, AuthorizationRequestOptions options) {
+        Objects.requireNonNull(options, "options must not be null");
+        FlowContext context = stepUpContext(configuration, metadata, challenge);
+        String authorizationUrl = authorizationRequestBuilder.build(configuration, metadata, context, options);
+        return new StepUpRequest(authorizationUrl, context);
+    }
+
+    /**
+     * Applies the shared null guards and the redirect-URI check, and mints the fresh step-up context
+     * carrying the challenge's {@code acr_values} and {@code max_age}.
+     */
+    private static FlowContext stepUpContext(ClientConfiguration configuration, ProviderMetadata metadata,
+            StepUpChallenge challenge) {
         Objects.requireNonNull(configuration, "configuration must not be null");
         Objects.requireNonNull(metadata, "metadata must not be null");
         Objects.requireNonNull(challenge, "challenge must not be null");
@@ -94,11 +137,8 @@ public class StepUpHandler {
         if (redirectUri == null || redirectUri.isBlank()) {
             throw new IllegalArgumentException("client declares no redirect URI");
         }
-
-        FlowContext context = FlowContext.create(redirectUri,
+        return FlowContext.create(redirectUri,
                 challenge.getAcrValues().orElse(null), challenge.getMaxAge().orElse(null));
-        String authorizationUrl = authorizationRequestBuilder.build(configuration, metadata, context);
-        return new StepUpRequest(authorizationUrl, context);
     }
 
     /**

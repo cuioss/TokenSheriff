@@ -182,14 +182,18 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 |`DpopProofGeneratorTest`, `SenderConstraintTest`
 
 |`flow`
-|`AuthorizationCodeFlowTest`, `AuthorizationRequestBuilderTest`, `CallbackHandlerTest`,
+|`AuthorizationCodeFlowOptionsTest`, `AuthorizationCodeFlowPushedTest`,
+`AuthorizationCodeFlowTest`, `AuthorizationRequestBuilderParametersTest`,
+`AuthorizationRequestBuilderTest`, `AuthorizationRequestInjectionAttackDatabaseTest`,
+`AuthorizationRequestOptionsTest`, `CallbackHandlerTest`,
 `CallbackParametersAttackDatabaseTest`, `CallbackParametersTest`, `ClientCredentialsFlowTest`,
 `CodeInjectionTest`, `InsufficientScopeChallengeAttackDatabaseTest`,
 `InsufficientScopeChallengeParserTest`, `IssValidatorTest`, `ParClientTest`, `PkceChallengeTest`,
 `PkceDowngradeTest`, `RedeemedRefreshFailureTest`, `RefreshFailureClassificationTest`,
-`RefreshFlowTest`, `RefreshRedemptionTest`, `StepUpChallengeAttackDatabaseTest`,
-`StepUpChallengeParserTest`, `StepUpHandlerTest`, `StepUpResultVerifierTest`,
-`TokenEndpointClientTest`, `WiredFlowHttpsTest`, `WiredFlowNegativePathIT`
+`RefreshFlowScopeOverrideTest`, `RefreshFlowTest`, `RefreshRedemptionTest`,
+`StepUpChallengeAttackDatabaseTest`, `StepUpChallengeParserTest`, `StepUpHandlerOptionsTest`,
+`StepUpHandlerTest`, `StepUpResultVerifierTest`, `TokenEndpointClientTest`, `WiredFlowHttpsTest`,
+`WiredFlowNegativePathIT`
 
 |`internal`
 |`BackChannelEgressPolicyTest`, `BackChannelHostnameVerificationTest`,
@@ -390,7 +394,7 @@ application and identity provider. Package prefix: `de.cuioss.sheriff.token.inte
 |`DpopBoundSpecIT`, `DpopBackChannelOriginSpecIT` (`client`)
 
 |Client: PAR
-|`ParSpecIT` (`client`)
+|`ParSpecIT`, `PushedAuthorizationFlowSpecIT` (`client`)
 
 |Client: mix-up defence
 |`MixUpSpecIT` (`client`)

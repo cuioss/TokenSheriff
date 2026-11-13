@@ -67,6 +67,10 @@ public class ClientConfiguration {
      */
     public static final int DEFAULT_DISCOVERY_DOCUMENT_MAX_SIZE = 64 * 1024;
 
+    /** The prefix of every scope-token rejection message {@link #validateScopes(List)} raises. */
+    private static final String SCOPE_TOKEN_MESSAGE_PREFIX =
+            "scopes must hold one scope-token per entry (RFC 6749 section 3.3)";
+
     /**
      * The authorization server's issuer identifier URL (for example
      * {@code https://issuer.example.com/realms/demo}). Discovery is performed against
@@ -348,9 +352,9 @@ public class ClientConfiguration {
      * All-args constructor invoked by the Lombok-generated builder. It validates the configuration at
      * construction so a malformed client can never be built and later fail obscurely on the wire:
      * {@code issuer} and {@code clientId} must be non-blank, {@code issuer} must be a well-formed
-     * absolute {@code http}/{@code https} URL with a host, every {@code scope} must be non-blank
-     * (a {@code null}/blank scope would otherwise serialise as the literal {@code "null"} in the
-     * {@code scope} request parameter), a provided {@code backChannelOrigin} must be a bare
+     * absolute {@code http}/{@code https} URL with a host, every {@code scope} must be a single
+     * RFC 6749 §3.3 scope-token (see {@link #validateScopes(List)}; a {@code null} scope would otherwise
+     * serialise as the literal {@code "null"} in the {@code scope} request parameter), a provided {@code backChannelOrigin} must be a bare
      * absolute {@code http}/{@code https} origin, and every {@code allowedEgressHosts} entry must be a
      * non-blank host name. This mirrors {@code PostLogoutRedirectValidator}, which validates every entry
      * it accepts (L14).
@@ -535,6 +539,19 @@ public class ClientConfiguration {
     /**
      * Validates that each configured entry is exactly one OAuth scope-token.
      * <p>
+     * This is the shared scope-token rule of the client engine: it validates the configured
+     * {@link #getScopes() scopes} and every per-call scope override (the authorization-request options
+     * and the per-call refresh scopes), so a scope list is accepted or refused identically wherever it
+     * enters.
+     * <p>
+     * Every entry must match the RFC 6749 §3.3 grammar
+     * {@code scope-token = 1*( %x21 / %x23-5B / %x5D-7E )}: each character must be one of the code
+     * points {@code 0x21}, {@code 0x23}–{@code 0x5B} or {@code 0x5D}–{@code 0x7E} — printable ASCII
+     * except space, double quote ({@code "}) and backslash ({@code \}). Whitespace, every control
+     * character (including {@code NUL} and {@code DEL}) and every non-ASCII character are therefore
+     * refused, while {@code &}, {@code =}, {@code #}, {@code %}, {@code +} and {@code /} are accepted
+     * and are percent-encoded when the scope parameter is serialised.
+     * <p>
      * RFC 6749 §3.3 defines {@code scope} as a space-delimited list of individual scope-tokens, so a
      * request joins the configured entries with a single space. An entry carrying embedded whitespace
      * would go out as two or more scope-tokens while still counting as a single configured member,
@@ -542,24 +559,63 @@ public class ClientConfiguration {
      * reconciliation would then compare {@code {"read write"}} against the granted {@code {read,
      * write}} and misreport an exactly-as-requested grant as broadened. Rejecting the entry here keeps
      * the two in agreement, so no malformed scope list can reach the reconciliation logic at all.
+     * <p>
+     * A rejection message never echoes the rejected entry: it names the zero-based entry index, the
+     * class of the offending character and its code point (for example {@code U+0022}), so a control
+     * character such as {@code CR}, {@code LF} or {@code NUL} can never reach an exception message and
+     * from there a log.
      *
-     * @param scopes the configured scopes; must not be {@code null} and must hold one scope-token per
+     * @param scopes the scopes to validate; must not be {@code null} and must hold one scope-token per
      *               entry
      * @return an immutable copy of the validated scopes
-     * @throws IllegalArgumentException if an entry is blank or is not a single scope-token
+     * @throws NullPointerException     if {@code scopes} is {@code null}
+     * @throws IllegalArgumentException if an entry is {@code null} or blank, or holds a character outside
+     *                                  the scope-token character set
      * @see <a href="https://www.rfc-editor.org/rfc/rfc6749#section-3.3">RFC 6749 §3.3</a>
      */
-    private static List<String> validateScopes(List<String> scopes) {
+    public static List<String> validateScopes(List<String> scopes) {
         Objects.requireNonNull(scopes, "scopes must not be null");
+        int index = 0;
         for (String scope : scopes) {
             if (scope == null || scope.isBlank()) {
                 throw new IllegalArgumentException("scopes must not contain null or blank entries");
             }
-            if (scope.codePoints().anyMatch(Character::isWhitespace)) {
-                throw new IllegalArgumentException(
-                        "scopes must hold one scope-token per entry (RFC 6749 §3.3), but was: " + scope);
+            int offending = scope.codePoints()
+                    .filter(codePoint -> !isScopeTokenCharacter(codePoint))
+                    .findFirst()
+                    .orElse(-1);
+            if (offending != -1) {
+                throw new IllegalArgumentException("%s, but entry %d holds a %s (U+%04X)".formatted(
+                        SCOPE_TOKEN_MESSAGE_PREFIX, index, describeRejectedCharacter(offending), offending));
             }
+            index++;
         }
         return List.copyOf(scopes);
+    }
+
+    /**
+     * Whether a code point belongs to the RFC 6749 §3.3 scope-token character set
+     * {@code %x21 / %x23-5B / %x5D-7E}.
+     */
+    private static boolean isScopeTokenCharacter(int codePoint) {
+        return codePoint == 0x21 || (codePoint >= 0x23 && codePoint <= 0x5B)
+                || (codePoint >= 0x5D && codePoint <= 0x7E);
+    }
+
+    /** Names the class of a code point outside the scope-token set, without rendering the character. */
+    private static String describeRejectedCharacter(int codePoint) {
+        if (Character.isWhitespace(codePoint) || Character.isSpaceChar(codePoint)) {
+            return "whitespace character";
+        }
+        if (Character.isISOControl(codePoint)) {
+            return "control character";
+        }
+        if (codePoint == '"') {
+            return "double quote";
+        }
+        if (codePoint == '\\') {
+            return "backslash";
+        }
+        return "non-ASCII character";
     }
 }

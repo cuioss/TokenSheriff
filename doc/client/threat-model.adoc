@@ -75,10 +75,12 @@ The client engine:
 | Push the authorization parameters over the authenticated back channel and drive the
   front-channel redirect with only the returned `request_uri`, so the parameters are neither
   exposed nor tamperable in the browser. The engine provides this as the `ParClient` building
-  block; the built-in authorization-code flow does not use it, so a caller that needs this
-  mitigation composes `ParClient` itself.
+  block and, in the built-in authorization-code flow, as the opt-in pushed path
+  `AuthorizationCodeFlow.authorizePushed`, whose redirect carries only `client_id` and
+  `request_uri`; it refuses, and never falls back to a front-channel request, when the AS
+  advertises no PAR endpoint. The plain `authorize` entry points do not push.
 | https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0], https://www.rfc-editor.org/rfc/rfc9700#section-2.1[RFC 9700 §2.1]
-| xref:requirements.adoc#CLIENT-10[CLIENT-10]
+| xref:requirements.adoc#CLIENT-10[CLIENT-10], xref:requirements.adoc#CLIENT-27[CLIENT-27]
 
 | [[T-MIXUP]]T-MIXUP
 | *Mix-up attack (multiple authorization servers).* With more than one AS configured, an
@@ -165,10 +167,14 @@ The client engine:
 | [[T-URL-LEAK]]T-URL-LEAK
 | *Tokens / codes exposed in URL query or fragment.* Credentials leak through browser
   history, server logs, or the `Referer` header.
-| Use `response_mode=form_post`; exchange the code at the token endpoint over the back
-  channel; never place tokens/codes in a URL.
+| Use `response_mode=form_post` — the default mitigation on every authorization-request entry
+  point; exchange the code at the token endpoint over the back channel; never place tokens in a
+  URL. `response_mode=query` is an explicit per-call caller opt-in: it places `code`, `state` and
+  `iss` in the redirect URL and so re-opens this threat for that request, and the caller owns the
+  mitigation (for example a redirect endpoint that strips the query before it is logged and sends
+  no `Referer`).
 | https://www.rfc-editor.org/rfc/rfc9700#section-4.3[RFC 9700 §4.3]
-| xref:requirements.adoc#CLIENT-1[CLIENT-1], xref:requirements.adoc#CLIENT-14[CLIENT-14]
+| xref:requirements.adoc#CLIENT-1[CLIENT-1], xref:requirements.adoc#CLIENT-14[CLIENT-14], xref:requirements.adoc#CLIENT-27[CLIENT-27]
 
 | [[T-TLS-TOKEN]]T-TLS-TOKEN
 | *Token-endpoint TLS downgrade / MITM.* An on-path attacker downgrades or MITMs a token /
