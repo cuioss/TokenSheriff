@@ -102,6 +102,15 @@ import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
  * serialises the periodic and the unknown-kid fetches; a periodic cycle that finds it held skips its fetch
  * without counting the cycle.
  * <p>
+ * <strong>Initial-load retry (opt-in):</strong> when
+ * {@linkplain HttpJwksLoaderConfig#isInitialLoadRetry() enabled} and the initial load ends without
+ * installed keys and not in the terminal {@code ERROR}, one-shot attempts are scheduled on the refresh
+ * executor after 1 s, the delay doubling up to 30 s and never above the refresh interval, next to the
+ * unchanged fixed-rate task. Each attempt runs one regular refresh cycle under the same in-flight guard,
+ * so the status stays {@link LoaderStatus#UNDEFINED} (never {@code LOADING}) until keys are installed.
+ * The attempts are strictly sequential and stop at the first installed key set, at a terminal
+ * {@code ERROR} and at {@link #close()}.
+ * <p>
  * <strong>Re-discovery:</strong> in well-known mode, after {@value #REDISCOVERY_FAILURE_THRESHOLD}
  * consecutive refresh cycles that installed no keys, the next cycle repeats the well-known discovery
  * before fetching, so a {@code jwks_uri} the IdP has moved is followed. Every re-discovery re-applies
@@ -298,7 +307,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
     /**
      * The in-flight guard shared by every fetch path that runs on the refresh executor: the periodic
-     * refresh cycle and the unknown-kid fetch. Taken by compare-and-set and released in a
+     * refresh cycle (also when run as an initial-load retry attempt) and the unknown-kid fetch. Taken by
+     * compare-and-set and released in a
      * {@code finally} block, so at most one of these fetches runs at a time, whatever the executor's
      * thread count.
      */
@@ -508,7 +518,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         // is already scheduled at this point, so a cycle may have installed keys and published OK in
         // the meantime; that OK is kept.
         LoaderStatus failedStatus = backgroundRefreshEnabled ? LoaderStatus.UNDEFINED : LoaderStatus.ERROR;
-        return publishFailedLoadStatus(failedStatus, startEpoch);
+        LoaderStatus published = publishFailedLoadStatus(failedStatus, startEpoch);
+        startInitialLoadRetry(startEpoch);
+        return published;
     }
 
     /**
@@ -558,6 +570,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                     ? LoaderStatus.UNDEFINED
                     : LoaderStatus.ERROR;
             status.set(failedStatus);
+            startInitialLoadRetry(claimedEpoch);
             return failedStatus;
         } finally {
             lifecycleLock.unlock();
@@ -619,6 +632,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         if (resolution.retryable() && config.isBackgroundRefreshEnabled()) {
             publishStatus(LoaderStatus.UNDEFINED, startEpoch);
             startBackgroundRefresh(startEpoch);
+            startInitialLoadRetry(startEpoch);
             return LoaderStatus.UNDEFINED;
         }
         // Check-and-publish is one step: a close() that ran since the resolution was adopted leaves
@@ -1235,6 +1249,83 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         }
 
         LOGGER.info(INFO.JWKS_BACKGROUND_REFRESH_STARTED, config.getRefreshIntervalSeconds());
+    }
+
+    /**
+     * Starts the opt-in retry of a failed initial load: when
+     * {@linkplain HttpJwksLoaderConfig#isInitialLoadRetry() enabled}, schedules the first attempt after
+     * {@link HttpJwksLoaderConfig#INITIAL_LOAD_RETRY_INITIAL_DELAY}, subject to the conditions of
+     * {@link #scheduleInitialLoadRetry(long, Duration)}. Does nothing when the setting is off, so the
+     * behaviour without it is unchanged.
+     *
+     * @param startEpoch the {@link #epoch} of the initialization whose initial load failed
+     */
+    private void startInitialLoadRetry(long startEpoch) {
+        if (config.isInitialLoadRetry()) {
+            scheduleInitialLoadRetry(startEpoch, cappedRetryDelay(HttpJwksLoaderConfig.INITIAL_LOAD_RETRY_INITIAL_DELAY));
+        }
+    }
+
+    /**
+     * Schedules one retry attempt of a failed initial load after {@code delay} on the refresh executor.
+     * <p>
+     * The decision and the epoch check are one step under {@link #lifecycleLock}: an attempt is scheduled
+     * only while the generation {@code startEpoch} is live, no key set is installed and the status is not
+     * the terminal {@link LoaderStatus#ERROR}. A {@link RejectedExecutionException} of the executor ends
+     * the retries silently, as in {@link #ensureBackgroundRefresh(long)}.
+     *
+     * @param startEpoch the {@link #epoch} of the initialization whose initial load failed
+     * @param delay      the delay before the attempt
+     */
+    private void scheduleInitialLoadRetry(long startEpoch, Duration delay) {
+        lifecycleLock.lock();
+        try {
+            if (!isLive(startEpoch) || currentKeys.get() != null || status.get() == LoaderStatus.ERROR) {
+                return;
+            }
+            config.getScheduledExecutorService().schedule(() -> runInitialLoadRetry(startEpoch, delay),
+                    delay.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            LOGGER.debug("Refresh executor rejected the initial-load retry (%s), no further retries",
+                    e.getClass().getName());
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    /**
+     * One retry attempt of a failed initial load: runs one regular refresh cycle (which takes the
+     * in-flight guard, re-resolves a failed discovery, honours terminal rejections and never publishes
+     * {@link LoaderStatus#LOADING}) and then schedules the next attempt with the doubled delay, also when
+     * the cycle threw. Attempts are strictly sequential, since each schedules its successor only after it
+     * ended.
+     *
+     * @param startEpoch the {@link #epoch} of the initialization whose initial load failed
+     * @param delay      the delay this attempt was scheduled with
+     */
+    private void runInitialLoadRetry(long startEpoch, Duration delay) {
+        try {
+            performBackgroundRefresh(startEpoch);
+        } finally {
+            scheduleInitialLoadRetry(startEpoch,
+                    cappedRetryDelay(delay.multipliedBy(HttpJwksLoaderConfig.INITIAL_LOAD_RETRY_BACKOFF_FACTOR)));
+        }
+    }
+
+    /**
+     * Caps a retry delay at {@link HttpJwksLoaderConfig#INITIAL_LOAD_RETRY_MAX_DELAY} and at the refresh
+     * interval, whichever is smaller.
+     *
+     * @param delay the uncapped delay
+     * @return the capped delay
+     */
+    private Duration cappedRetryDelay(Duration delay) {
+        Duration cap = HttpJwksLoaderConfig.INITIAL_LOAD_RETRY_MAX_DELAY;
+        Duration interval = Duration.ofSeconds(config.getRefreshIntervalSeconds());
+        if (interval.compareTo(cap) < 0) {
+            cap = interval;
+        }
+        return delay.compareTo(cap) > 0 ? cap : delay;
     }
 
     /**
