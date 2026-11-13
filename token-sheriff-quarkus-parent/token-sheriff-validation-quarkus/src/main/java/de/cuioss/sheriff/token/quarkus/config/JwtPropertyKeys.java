@@ -19,6 +19,8 @@ import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
 import lombok.experimental.UtilityClass;
 
+import java.util.List;
+
 /**
  * Constants for JWT property keys used in the Token-Sheriff Quarkus module.
  * <p>
@@ -339,6 +341,21 @@ public final class JwtPropertyKeys {
          */
         public static final String DPOP_NONCE_CACHE_TTL_SECONDS = DPOP_BASE + "nonce-cache-ttl-seconds";
 
+        /**
+         * The {@code dpop.*} sub-property templates that only take effect while {@link #DPOP_ENABLED} is
+         * {@code true}, in declaration order.
+         * <p>
+         * This is the single definition of that set: a configured value of any of them on an issuer whose
+         * DPoP validation is not enabled fails startup instead of being ignored. Every new {@code dpop.*}
+         * key other than {@link #DPOP_ENABLED} must be listed here.
+         * </p>
+         */
+        public static final List<String> DPOP_SUB_PROPERTIES = List.of(
+                DPOP_REQUIRED,
+                DPOP_PROOF_MAX_AGE_SECONDS,
+                DPOP_NONCE_CACHE_SIZE,
+                DPOP_NONCE_CACHE_TTL_SECONDS);
+
         // === JWKS Source Configuration (Mutually Exclusive) ===
 
         /**
@@ -510,6 +527,21 @@ public final class JwtPropertyKeys {
          * @see HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder#initialLoadRetry(boolean)
          */
         public static final String INITIAL_LOAD_RETRY = HTTP_BASE + "initial-load-retry";
+
+        /**
+         * The property templates that only an HTTP-based JWKS loader honours and that fail startup when
+         * configured on an issuer without HTTP JWKS loading (ADR-0026), in declaration order.
+         * <p>
+         * This is the single definition of that set: every property that only an HTTP JWKS loader honours
+         * and that must not be silently ignored on a non-HTTP issuer must be listed here. The source
+         * selectors {@link #JWKS_URL} and {@link #WELL_KNOWN_URL} are not part of it, since they select
+         * HTTP JWKS loading.
+         * </p>
+         */
+        public static final List<String> HTTP_ONLY_PROPERTIES = List.of(
+                MAX_STALENESS_SECONDS,
+                UNKNOWN_KID_REFRESH_WINDOW_SECONDS,
+                INITIAL_LOAD_RETRY);
 
         /**
          * The connection timeout in seconds for HTTP requests.

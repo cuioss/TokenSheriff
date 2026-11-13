@@ -439,13 +439,8 @@ public class IssuerConfigResolver {
      * @throws IllegalStateException naming the offending property when a dpop sub-property is present
      */
     private void validateNoOrphanedDpopProperties(String issuerName) {
-        List<String> dpopSubProperties = List.of(
-                JwtPropertyKeys.ISSUERS.DPOP_REQUIRED.formatted(issuerName),
-                JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS.formatted(issuerName),
-                JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE.formatted(issuerName),
-                JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS.formatted(issuerName));
-
-        for (String property : dpopSubProperties) {
+        for (String template : JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES) {
+            String property = template.formatted(issuerName);
             if (config.getOptionalValue(property, String.class).isPresent()) {
                 throw new IllegalStateException(
                         ("Property '%s' is configured but DPoP validation is not enabled for issuer '%s'. "
@@ -519,20 +514,16 @@ public class IssuerConfigResolver {
 
     /**
      * Fails fast when a property that only an HTTP-based JWKS loader honours is configured for an issuer
-     * without HTTP JWKS loading: the maximum key staleness, the unknown-{@code kid} refresh window and the
-     * initial-load retry. Only an HTTP-based loader refreshes its keys, so such a value would otherwise be
-     * silently ignored (ADR-0026).
+     * without HTTP JWKS loading. The properties checked are those of
+     * {@link JwtPropertyKeys.ISSUERS#HTTP_ONLY_PROPERTIES}, the single definition of that set. Only an
+     * HTTP-based loader refreshes its keys, so such a value would otherwise be silently ignored (ADR-0026).
      *
      * @param issuerName the issuer name
      * @throws IllegalStateException naming the first offending property that is present
      */
     private void validateNoOrphanedHttpProperties(String issuerName) {
-        List<String> httpOnlyProperties = List.of(
-                JwtPropertyKeys.ISSUERS.MAX_STALENESS_SECONDS.formatted(issuerName),
-                JwtPropertyKeys.ISSUERS.UNKNOWN_KID_REFRESH_WINDOW_SECONDS.formatted(issuerName),
-                JwtPropertyKeys.ISSUERS.INITIAL_LOAD_RETRY.formatted(issuerName));
-
-        for (String property : httpOnlyProperties) {
+        for (String template : JwtPropertyKeys.ISSUERS.HTTP_ONLY_PROPERTIES) {
+            String property = template.formatted(issuerName);
             if (config.getOptionalValue(property, String.class).isPresent()) {
                 throw new IllegalStateException(
                         ("Property '%s' is configured but issuer '%s' does not load its JWKS over HTTP. "
