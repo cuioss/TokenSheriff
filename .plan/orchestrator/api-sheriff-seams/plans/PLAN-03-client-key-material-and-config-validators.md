@@ -268,6 +268,7 @@ dismissed with a recorded reason (`unknown` for a failed read, never `0`).
 - HYPOTHESIS: `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/dpop/` — new test classes for the key-to-JWK utility and the PEM loader, including an attack-database-style loader test (to be created) (verify-at-outline)
 - HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/commons/transport/` — new test class for the egress-host entry validator and the three builder call sites (to be created) (verify-at-outline)
 - OBSERVED: `doc/client/requirements.adoc`:313 — `CLIENT-24`
+- OBSERVED: `doc/client/README.adoc`:52 — the Document map states the requirement range (`CLIENT-1`–`CLIENT-26` after PLAN-01 landed) and :79 names the covered requirements in the Test strategy row; both are updated in the same deliverable that adds a new `CLIENT-N` (folded from inbox message client-native-image-registration-001: a new requirement id makes every restated range stale)
 - OBSERVED: `doc/commons/requirements.adoc`:105 — the egress relaxation paragraph (`allowedEgressHosts`)
 - OBSERVED: `doc/commons/threat-model.adoc`:108 — the `allowed-egress-hosts` bypass text
 - OBSERVED: `token-sheriff-validation/doc/configuration/openid-discovery.adoc`:96 — the `allowedEgressHost` example and note

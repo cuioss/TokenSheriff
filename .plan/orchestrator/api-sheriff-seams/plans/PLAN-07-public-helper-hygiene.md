@@ -22,6 +22,8 @@ bytes and either fail or truncate (removing the duplicate in the client module).
 hygiene plan: every deliverable is additive, any change to TokenSheriff's own default behaviour is named
 and decided at outline, and the bounded-body deliverable may be dropped at outline. Target release 0.9.10.
 API Sheriff's matching deletions are a separate API Sheriff plan and are not part of this plan.
+A sixth deliverable, folded in after PLAN-05 shipped, hardens the back-channel logout validator PLAN-05 added
+(a resource-exhaustion defect in `numericDate` and four minor residuals).
 
 ## Deliverables
 
@@ -179,6 +181,54 @@ change it does not want.
   already depends on; whether they sit in `commons` or `validation`, and whether the challenge builder sits
   beside the client's `InsufficientScopeChallengeParser`, which is in the client module that API Sheriff also uses).
 
+6. **Back-channel logout validator hardening (folded from the PLAN-05 landing analysis; code and tests only, its
+   documentation rides deliverable 5).** PLAN-05 shipped `LogoutTokenValidator` (`#899`, merge `fff5befe`); the
+   landing's three-layer read found a resource-exhaustion defect and four minor ones in it. The operator decided to
+   fold them here rather than stage a separate plan. The facts below are OBSERVED at `fff5befe` from a reading; nothing
+   was run, so each is re-verified at outline (a refutation loops back to re-scope this deliverable). Consumer-visible
+   criteria, one each:
+   - `numericDate` (`LogoutTokenValidator:306-320`) scales an attacker-sized exponent: `new BigDecimal("1e99999999")`
+     then `setScale(0, RoundingMode.FLOOR)` multiplies by 10^99999999, and it is called inside
+     `synchronized (decisionLock)` (`:170-186`, via `isFresh:245`, `isUnexpired:252` and `:178`), so one validly signed
+     token with a ten-character `iat` or `exp` stalls every other logout validation on that validator. The fix bounds
+     the magnitude BEFORE any scaling, **for both signs of the exponent** (`1e99999999` and `1e-99999999` take the
+     same path; the lane's proposed `precision()-scale()` bound covers only the positive one), and refuses an
+     out-of-range value as the check that owns the claim (`ISSUED_AT` or `EXPIRATION`), never as a thrown exception.
+     Criteria: both extreme exponents are refused with the owning check and return promptly, asserted by a time bound
+     loose enough not to flake and by a second validation on another thread that is not blocked while the first runs;
+     each positive control (`exp = N + 0.9`, the fractional `iat` window edges, a large but representable value) still
+     passes. Adversarial inputs also include a 16-digit mantissa with a large exponent and an exponent at the
+     `Integer` boundary.
+   - `freshnessWindow` is validated only as positive (`:138-140`); an overflowing `Duration` makes `now.minus` /
+     `now.plus` (`:247-248`) or `iat.plus` (`:178`) throw `DateTimeException` or `ArithmeticException` from `validate`
+     inside the lock, against the documented contract that `validate` returns a `LogoutTokenCheck`. Criterion: the
+     constructor refuses a window the arithmetic cannot represent, or `validate` refuses the token with the owning
+     check; whichever is chosen is asserted with a window at the limit and one just inside it.
+   - A backward wall-clock step after a purge re-admits a purged `jti` whose `iat` is fresh again (`:171` with
+     `LogoutTokenReplayGuard:111`); the lane called it accepted but no document says so. Criterion: the limit is
+     stated once in the class Javadoc, `doc/validation/security-reference.adoc` and ADR-0029 Risks (or ADR-0029 is
+     amended), with no code change unless the operator decides otherwise at outline.
+   - `SignatureVerifiedToken` is `@ToString` with `typHeader` unexcluded (`:51,77`), so a caller that logs the result
+     prints a header value without `ErrorTextSanitizer`. Criterion: the value is excluded from `toString` or sanitised,
+     and `LogRecordSanitizationGuardTest` (or a new guard) covers the type.
+   - Tests: the out-of-range `numericDate` branch gets its own test class (`LogoutTokenValidatorTest` is 1012 lines
+     against the 500-line guideline, so no further growth there).
+   - The remaining PLAN-05 lane advisories, folded on the same word. Each is OBSERVED from the landing and re-verified at
+     outline: (a) the `fromIssuerStatus` catch (`JwksEndpointHealthCheck:222`-, an `IllegalStateException` or
+     `IllegalArgumentException` from a view) has no test that makes a view throw, and its WARN logs the issuer
+     identifier and the loader message without `ErrorTextSanitizer`, as `fromIssuerConfig:208` does; criterion: a test
+     per exception type asserting the endpoint status and the logged text, in a new class (`JwksEndpointHealthCheckTest`
+     is 793 lines); (b) test classes over the 500-line guideline: `LogoutTokenValidatorTest` 1012,
+     `JwksEndpointHealthCheckTest` 793, `TokenValidatorVerifySignatureTest` 553, and `ObservedValidatorResolverTest` at
+     exactly 500; criterion: the three over the line are split along their existing seams with no test lost (the count of
+     test methods is asserted equal before and after) and `ObservedValidatorResolverTest` does not grow; (c) the lane
+     named an "ADR-0029 revision-history style" advisory without saying what; the outline reads ADR-0029 against the
+     sibling ADRs' revision-history convention and either aligns it or records that none was found.
+   Scope-bloat note: this brings the plan to six deliverables, which the guard presumes to split. It is kept whole on a
+   recorded rationale: the item is one class and one package, shares no file with deliverables 1 to 4 except
+   `doc/validation/security-reference.adoc` and ADR-0029 (both already touched by deliverable 5), and the operator chose
+   the fold. The outline may split it back out if it grows.
+
 ## Standing Constraints
 
 - Build and gate: Maven through the wrapper only (`./mvnw`). Before any commit that touches build inputs:
@@ -289,6 +339,16 @@ change it does not want.
 - HYPOTHESIS: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/transport/BoundedBodyHandler.java` — `new public bounded handler, only if OD-5 proceeds, to be created` (verify-at-outline)
 - HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/commons/transport/BoundedBodyHandlerTest.java` — `new test class, only if OD-5 proceeds, to be created` (verify-at-outline)
 - HYPOTHESIS: `doc/adr/` — `one new ADR file, number next free at write time` (verify-at-outline)
+- OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidator.java`:306 — `numericDate` and the `decisionLock` section at :170 (deliverable 6; folded from inbox/landing plan-05-validation-public-seams, PLAN-05 shipped as #899)
+- OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/domain/token/SignatureVerifiedToken.java`:51 — `@ToString` with `typHeader` (deliverable 6)
+- OBSERVED: `doc/validation/security-reference.adoc`:121 — `logout-token section (backward-clock limit, deliverable 6)`
+- OBSERVED: `doc/adr/0029-TokenValidator_publishes_signature-only_verification_native_JSON_claims_and_a_non-fetching_issuer_status_view.adoc`:1 — `Risks section, amended for the backward-clock limit (deliverable 6)`
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/health/JwksEndpointHealthCheck.java`:222 — `fromIssuerStatus` catch and its unsanitised WARN (deliverable 6)
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/test/java/de/cuioss/sheriff/token/quarkus/health/JwksEndpointHealthCheckTest.java` — `793 lines, split (deliverable 6)`
+- OBSERVED: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidatorTest.java` — `1012 lines, split (deliverable 6)`
+- OBSERVED: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorVerifySignatureTest.java` — `553 lines, split (deliverable 6)`
+- HYPOTHESIS: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/test/java/de/cuioss/sheriff/token/quarkus/health/JwksEndpointHealthCheckIssuerStatusFailureTest.java` — `new test class for the fromIssuerStatus catch, to be created (deliverable 6)` (verify-at-outline)
+- HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidatorNumericDateTest.java` — `new test class for the out-of-range numericDate branch and the freshnessWindow limit, to be created (deliverable 6)` (verify-at-outline)
 
 ## Dependencies and Sequencing
 

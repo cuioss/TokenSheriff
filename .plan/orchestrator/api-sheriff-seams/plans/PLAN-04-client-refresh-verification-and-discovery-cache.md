@@ -292,6 +292,7 @@ open-issue read at the PR head is `0` or every remaining issue is dismissed with
 - OBSERVED: `doc/client/threat-model.adoc`:325 — the OIDC Core 12.2 row
 - OBSERVED: `doc/client/specification/retrieval-flow.adoc`:43 — the discovery and request parameter text
 - OBSERVED: `doc/client/requirements.adoc`:415 — `CLIENT-16` (ID-token validation; the verifier amends or extends it)
+- OBSERVED: `doc/client/README.adoc`:52 — the Document map states the requirement range (`CLIENT-1`–`CLIENT-26` after PLAN-01 landed) and :79 names the covered requirements in the Test strategy row; both are updated in the same deliverable that adds a new `CLIENT-N` (folded from inbox message client-native-image-registration-001: a new requirement id makes every restated range stale)
 - OBSERVED: `doc/client/specification/test-strategy.adoc`:1 — `Client Specification — Test Strategy`
 - OBSERVED: `doc/LogMessages.adoc`:1 — only if a new LogRecord is added
 

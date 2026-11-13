@@ -2,10 +2,10 @@
   "id": "PLAN-05",
   "slug": "validation-public-seams",
   "workstream": "WS-02",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-05-validation-public-seams",
+  "pr": "#899",
+  "landing": "landings/PLAN-05.md",
   "seq": 5
 }
