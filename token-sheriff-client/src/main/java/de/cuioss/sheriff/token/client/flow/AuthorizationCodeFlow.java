@@ -79,6 +79,7 @@ public class AuthorizationCodeFlow {
     private static final String PARAM_CODE_VERIFIER = "code_verifier";
     private static final String PARAM_CLIENT_ID = "client_id";
     private static final String PARAM_REQUEST_URI = "request_uri";
+    private static final String MSG_METADATA_NULL = "metadata must not be null";
 
     private final ClientConfiguration configuration;
     private final TokenEndpointClient tokenEndpointClient;
@@ -172,7 +173,7 @@ public class AuthorizationCodeFlow {
      *         authorization endpoint or no PKCE {@code S256}
      */
     public AuthorizationRedirect authorize(ProviderMetadata metadata) {
-        Objects.requireNonNull(metadata, "metadata must not be null");
+        Objects.requireNonNull(metadata, MSG_METADATA_NULL);
         String redirectUri = configuration.getRedirectUri();
         if (redirectUri == null || redirectUri.isBlank()) {
             throw new IllegalArgumentException("client declares no redirect URI");
@@ -200,7 +201,7 @@ public class AuthorizationCodeFlow {
      * @since 1.0
      */
     public AuthorizationRedirect authorize(ProviderMetadata metadata, AuthorizationRequestOptions options) {
-        Objects.requireNonNull(metadata, "metadata must not be null");
+        Objects.requireNonNull(metadata, MSG_METADATA_NULL);
         Objects.requireNonNull(options, "options must not be null");
         FlowContext context = FlowContext.create(requireRedirectUri());
         String url = authorizationRequestBuilder.build(configuration, metadata, context, options);
@@ -233,7 +234,7 @@ public class AuthorizationCodeFlow {
      */
     public AuthorizationRedirect authorizePushed(ProviderMetadata metadata, ClientAuthentication clientAuthentication,
             AuthorizationRequestOptions options) {
-        Objects.requireNonNull(metadata, "metadata must not be null");
+        Objects.requireNonNull(metadata, MSG_METADATA_NULL);
         Objects.requireNonNull(clientAuthentication, "clientAuthentication must not be null");
         Objects.requireNonNull(options, "options must not be null");
         String parEndpoint = metadata.getPushedAuthorizationRequestEndpoint()
@@ -285,7 +286,7 @@ public class AuthorizationCodeFlow {
      */
     public AuthenticationResult exchange(ProviderMetadata metadata, FlowContext context,
             CallbackParameters callback, ClientAuthentication clientAuthentication) {
-        Objects.requireNonNull(metadata, "metadata must not be null");
+        Objects.requireNonNull(metadata, MSG_METADATA_NULL);
         Objects.requireNonNull(context, "context must not be null");
         Objects.requireNonNull(callback, "callback must not be null");
         Objects.requireNonNull(clientAuthentication, "clientAuthentication must not be null");
