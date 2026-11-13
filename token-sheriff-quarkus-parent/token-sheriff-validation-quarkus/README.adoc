@@ -223,6 +223,36 @@ xref:../../doc/adr/0017-A_JWKS_loader_reports_OK_only_with_usable_keys_and_retri
 and
 xref:../../doc/adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_startup_instead_of_being_ignored.adoc[ADR-0026].
 
+=== Unknown-kid Refresh and Initial-load Retry (opt-in)
+
+Two further per-issuer keys sit next to `max-staleness-seconds`. Both are off by default, so an issuer
+without them behaves exactly as before.
+
+* `sheriff.token.issuers.<name>.jwks.http.unknown-kid-refresh-window-seconds` — unset, a token whose `kid`
+  the installed key set does not hold is rejected without any fetch. Set to a whole number of seconds from
+  `5` to `3600`, such a miss schedules at most one background JWKS fetch per window for this issuer. The
+  token that triggered the fetch is still rejected; a later token with the same `kid` resolves once the
+  fetched key set, holding that `kid`, has been installed.
+* `sheriff.token.issuers.<name>.jwks.http.initial-load-retry` — `false` by default, in which case a failed
+  initial JWKS load is retried only at the refresh interval. `true` retries it after 1 second, the delay
+  doubling up to 30 seconds and never above the refresh interval, until keys are installed.
+
+[source, properties]
+----
+# Pick up a rotated key within 30 seconds of the first token signed with it
+sheriff.token.issuers.my-issuer.jwks.http.unknown-kid-refresh-window-seconds=30
+# Recover quickly when the IdP is not reachable at application startup
+sheriff.token.issuers.my-issuer.jwks.http.initial-load-retry=true
+----
+
+Like `max-staleness-seconds`, both keys apply only to issuers that load their JWKS over HTTP. Application
+startup fails for an unparseable or out-of-range value, for a value combined with
+`jwks.http.refresh-interval-seconds=0`, and for a value on an issuer configured with `jwks.file-path` or
+`jwks.content`. See
+xref:../../doc/adr/0030-An_opt-in_unknown-kid_refresh_claims_one_window_per_loader_and_installs_only_a_key_set_holding_the_kid.adoc[ADR-0030]
+and
+xref:../../doc/adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_startup_instead_of_being_ignored.adoc[ADR-0026].
+
 == Best Practices
 
 === Configuration Management

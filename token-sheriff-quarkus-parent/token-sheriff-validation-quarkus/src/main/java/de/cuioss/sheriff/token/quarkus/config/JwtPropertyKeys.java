@@ -460,6 +460,58 @@ public final class JwtPropertyKeys {
         public static final String MAX_STALENESS_SECONDS = HTTP_BASE + "max-staleness-seconds";
 
         /**
+         * The opt-in unknown-{@code kid} refresh window in seconds for HTTP-based JWKS loading.
+         * Template: "sheriff.token.issuers.%s.jwks.http.unknown-kid-refresh-window-seconds"
+         * <p>
+         * Default: unset, which means off. A token whose {@code kid} is not in the installed key set is
+         * then rejected without any fetch, and new keys are picked up only by the periodic refresh.
+         * </p>
+         * <p>
+         * A set value lets a key lookup that misses the installed and retired key sets schedule at most one
+         * background JWKS fetch per window for this issuer. The lookup itself performs no I/O and does not
+         * wait, so the token that triggered the fetch is still rejected; a later token with the same
+         * {@code kid} resolves once the fetched key set, holding that {@code kid}, has been installed.
+         * </p>
+         * <p>
+         * The value must be a whole number of seconds from {@code 5} to {@code 3600}. An unparseable,
+         * non-positive or out-of-range value fails startup, and so does a value combined with a refresh
+         * interval of {@code 0}.
+         * </p>
+         * <p>
+         * <strong>Only applicable</strong> for {@link #JWKS_URL} and {@link #WELL_KNOWN_URL}: a value on an
+         * issuer without HTTP JWKS loading fails startup instead of being ignored (ADR-0026).
+         * </p>
+         *
+         * @see HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder#unknownKidRefreshWindow(java.time.Duration)
+         */
+        public static final String UNKNOWN_KID_REFRESH_WINDOW_SECONDS = HTTP_BASE + "unknown-kid-refresh-window-seconds";
+
+        /**
+         * Whether a failed initial JWKS load is retried with backoff for HTTP-based JWKS loading.
+         * Template: "sheriff.token.issuers.%s.jwks.http.initial-load-retry"
+         * <p>
+         * Default: {@code false}. A failed initial load is then retried only by the periodic refresh, at the
+         * {@link #REFRESH_INTERVAL_SECONDS refresh interval}.
+         * </p>
+         * <p>
+         * With {@code true}, an initial load that ends without installed keys is retried after 1 second,
+         * the delay doubling up to 30 seconds and never above the refresh interval, until keys are
+         * installed, the loader reaches a terminal error or it is closed. The periodic refresh keeps its
+         * interval.
+         * </p>
+         * <p>
+         * The value is a boolean. {@code true} combined with a refresh interval of {@code 0} fails startup.
+         * </p>
+         * <p>
+         * <strong>Only applicable</strong> for {@link #JWKS_URL} and {@link #WELL_KNOWN_URL}: a value on an
+         * issuer without HTTP JWKS loading fails startup instead of being ignored (ADR-0026).
+         * </p>
+         *
+         * @see HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder#initialLoadRetry(boolean)
+         */
+        public static final String INITIAL_LOAD_RETRY = HTTP_BASE + "initial-load-retry";
+
+        /**
          * The connection timeout in seconds for HTTP requests.
          * Template: "sheriff.token.issuers.%s.jwks.http.connect-timeout-seconds"
          * <p>

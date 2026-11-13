@@ -124,6 +124,38 @@ class JwtPropertyKeysTest {
             assertTrue(JwtPropertyKeys.ISSUERS.MAX_STALENESS_SECONDS.startsWith(httpGroup),
                     "max-staleness-seconds must share the jwks.http key group with refresh-interval-seconds");
         }
+
+        @Test
+        @DisplayName("should format unknown-kid refresh window property correctly")
+        void shouldFormatUnknownKidRefreshWindowPropertyCorrectly() {
+            var issuerName = "keycloak";
+            var expected = "sheriff.token.issuers.keycloak.jwks.http.unknown-kid-refresh-window-seconds";
+            var actual = JwtPropertyKeys.ISSUERS.UNKNOWN_KID_REFRESH_WINDOW_SECONDS.formatted(issuerName);
+
+            assertEquals(expected, actual);
+        }
+
+        @Test
+        @DisplayName("should format initial-load retry property correctly")
+        void shouldFormatInitialLoadRetryPropertyCorrectly() {
+            var issuerName = "keycloak";
+            var expected = "sheriff.token.issuers.keycloak.jwks.http.initial-load-retry";
+            var actual = JwtPropertyKeys.ISSUERS.INITIAL_LOAD_RETRY.formatted(issuerName);
+
+            assertEquals(expected, actual);
+        }
+
+        @Test
+        @DisplayName("should place the unknown-kid and initial-load keys in the same key group as the refresh interval")
+        void shouldPlaceLoaderOptInsBesideRefreshInterval() {
+            var refreshInterval = JwtPropertyKeys.ISSUERS.REFRESH_INTERVAL_SECONDS;
+            var httpGroup = refreshInterval.substring(0, refreshInterval.lastIndexOf('.') + 1);
+
+            assertTrue(JwtPropertyKeys.ISSUERS.UNKNOWN_KID_REFRESH_WINDOW_SECONDS.startsWith(httpGroup),
+                    "unknown-kid-refresh-window-seconds must share the jwks.http key group with refresh-interval-seconds");
+            assertTrue(JwtPropertyKeys.ISSUERS.INITIAL_LOAD_RETRY.startsWith(httpGroup),
+                    "initial-load-retry must share the jwks.http key group with refresh-interval-seconds");
+        }
     }
 
     @Nested
