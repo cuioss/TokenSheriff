@@ -61,6 +61,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -268,16 +269,19 @@ class RefreshFlowScopeOverrideTest {
         var metadata = metadata(uriBuilder);
         String presented = presentedToken();
         List<String> nullEntry = Arrays.asList("openid", null);
+        List<String> blankEntry = List.of("openid", "  ");
+        List<String> multiTokenEntry = List.of("openid email");
+        List<String> empty = List.of();
 
         assertAll("invalid overrides",
                 () -> assertThrows(NullPointerException.class, () -> flow.refresh(metadata, presented, null)),
                 () -> assertThrows(IllegalArgumentException.class, () -> flow.refresh(metadata, presented, nullEntry)),
                 () -> assertThrows(IllegalArgumentException.class,
-                        () -> flow.refresh(metadata, presented, List.of("openid", "  "))),
+                        () -> flow.refresh(metadata, presented, blankEntry)),
                 () -> assertThrows(IllegalArgumentException.class,
-                        () -> flow.refresh(metadata, presented, List.of("openid email"))),
+                        () -> flow.refresh(metadata, presented, multiTokenEntry)),
                 () -> assertThrows(IllegalArgumentException.class,
-                        () -> flow.refresh(metadata, presented, List.of())));
+                        () -> flow.refresh(metadata, presented, empty)));
         moduleDispatcher.assertCallsAnswered(0);
     }
 
@@ -302,6 +306,8 @@ class RefreshFlowScopeOverrideTest {
             Set<Optional<String>> sentScopes = new HashSet<>(List.of(
                     scopeParameter(server.takeRequest()), scopeParameter(server.takeRequest())));
             assertAll("both refreshes were in flight together and kept their own scopes",
+                    () -> assertFalse(moduleDispatcher.timedOut(),
+                            "no arrival wait may have timed out: a timed-out wait means the requests did not overlap"),
                     () -> assertTrue(moduleDispatcher.allArrived(),
                             "both requests must have reached the server before either was answered"),
                     () -> assertEquals(Set.of(Optional.of("openid profile"), Optional.of("openid profile email")),
@@ -357,13 +363,26 @@ class RefreshFlowScopeOverrideTest {
         private volatile CountDownLatch arrivals;
         private volatile boolean allArrived;
 
+        /**
+         * Set once any request's arrival wait timed out or was interrupted; a later arrival never
+         * clears it, so a request that proceeded alone stays visible.
+         */
+        private volatile boolean arrivalTimedOut;
+
         void holdUntilArrived(int parties) {
             this.arrivals = new CountDownLatch(parties);
             this.allArrived = false;
+            this.arrivalTimedOut = false;
         }
 
+        /** Reports whether every held request arrived and no arrival wait timed out. */
         boolean allArrived() {
-            return allArrived;
+            return allArrived && !arrivalTimedOut;
+        }
+
+        /** Reports whether any arrival wait timed out or was interrupted. */
+        boolean timedOut() {
+            return arrivalTimedOut;
         }
 
         @Override
@@ -371,6 +390,7 @@ class RefreshFlowScopeOverrideTest {
             super.reset();
             this.arrivals = null;
             this.allArrived = false;
+            this.arrivalTimedOut = false;
         }
 
         @Override
@@ -381,8 +401,11 @@ class RefreshFlowScopeOverrideTest {
                 try {
                     if (gate.await(ARRIVAL_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                         allArrived = true;
+                    } else {
+                        arrivalTimedOut = true;
                     }
                 } catch (InterruptedException e) {
+                    arrivalTimedOut = true;
                     Thread.currentThread().interrupt();
                 }
             }
