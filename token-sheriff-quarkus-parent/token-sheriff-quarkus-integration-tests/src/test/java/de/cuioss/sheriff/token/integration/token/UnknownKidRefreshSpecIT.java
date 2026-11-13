@@ -17,11 +17,7 @@ package de.cuioss.sheriff.token.integration.token;
 
 import de.cuioss.sheriff.token.integration.BaseIntegrationTest;
 import de.cuioss.sheriff.token.integration.TestRealm;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.*;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;

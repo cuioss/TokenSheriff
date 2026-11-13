@@ -340,7 +340,7 @@ class IssuerConfigResolverJwksLoaderOptInTest {
         @ParameterizedTest(name = "{0}")
         @MethodSource("de.cuioss.sheriff.token.quarkus.config.IssuerConfigResolverJwksLoaderOptInTest#httpOnlyProperties")
         @DisplayName("should fail startup for the property on an issuer with a JWKS file path")
-        void shouldFailWhenOrphanedOnFilePathIssuer(String property, String value) throws IOException {
+        void shouldFailWhenOrphanedOnFilePathIssuer(String property, String value) throws Exception {
             Map<String, String> properties = issuerWithFilePath(jwksFile());
             properties.put(property, value);
             IssuerConfigResolver resolver = resolverFor(properties);
@@ -354,7 +354,7 @@ class IssuerConfigResolverJwksLoaderOptInTest {
 
         @Test
         @DisplayName("should resolve the issuer with a JWKS file path when neither property is set")
-        void shouldResolveFilePathIssuerWithoutProperties() throws IOException {
+        void shouldResolveFilePathIssuerWithoutProperties() throws Exception {
             List<IssuerConfig> result = resolverFor(issuerWithFilePath(jwksFile())).resolveIssuerConfigs();
 
             assertEquals(1, result.size(), "A file-path issuer without the HTTP-only properties must resolve");
