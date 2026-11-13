@@ -15,8 +15,6 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
-import org.jspecify.annotations.Nullable;
-
 /**
  * The closed set of {@code response_mode} values an authorization request may carry.
  * <p>
@@ -72,7 +70,7 @@ public enum ResponseMode {
      *                                  letter case or carries a delimiter ({@code &}, {@code #},
      *                                  {@code =}, space, {@code CR}, {@code LF})
      */
-    public static ResponseMode of(@Nullable String value) {
+    public static ResponseMode of(String value) {
         return WireValues.parse("response_mode", value, values(), ResponseMode::wireValue);
     }
 }

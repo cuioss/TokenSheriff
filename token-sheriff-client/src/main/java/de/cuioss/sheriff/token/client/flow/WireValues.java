@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.token.client.flow;
 
 import de.cuioss.sheriff.token.client.internal.LogSanitizer;
-import org.jspecify.annotations.Nullable;
 
 import java.util.function.Function;
 
@@ -44,7 +43,8 @@ final class WireValues {
      * Resolves the constant whose wire value equals {@code value} exactly.
      *
      * @param parameter the request parameter name, used in the refusal message
-     * @param value     the wire value to resolve; may be {@code null}
+     * @param value     the wire value to resolve; {@code null} is not a valid value and is refused like a
+     *                  blank one
      * @param constants the closed set of constants
      * @param wireValue maps a constant to its wire value
      * @param <E>       the enum type
@@ -52,8 +52,10 @@ final class WireValues {
      * @throws IllegalArgumentException if {@code value} is {@code null}, blank or not an exact match of
      *                                  a supported wire value
      */
-    static <E extends Enum<E>> E parse(String parameter, @Nullable String value, E[] constants,
+    static <E extends Enum<E>> E parse(String parameter, String value, E[] constants,
             Function<E, String> wireValue) {
+        // value is declared non-null because null is never an accepted value; the null check stays as
+        // the defensive boundary check for callers outside null-checked code.
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(parameter + " must not be null or blank");
         }

@@ -15,8 +15,6 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
-import org.jspecify.annotations.Nullable;
-
 /**
  * The closed set of OpenID Connect {@code prompt} values an authorization request may carry.
  * <p>
@@ -64,7 +62,7 @@ public enum Prompt {
      *                                  letter case or carries a delimiter ({@code &}, {@code #},
      *                                  {@code =}, space, {@code CR}, {@code LF})
      */
-    public static Prompt of(@Nullable String value) {
+    public static Prompt of(String value) {
         return WireValues.parse("prompt", value, values(), Prompt::wireValue);
     }
 }
